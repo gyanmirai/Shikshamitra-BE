@@ -1,0 +1,6 @@
+﻿namespace ShikshaMitra;
+
+public static class ShikshaMitraDomainErrorCodes
+{
+    /* You can add your business exception error codes here, as constants */
+}

@@ -13,7 +13,7 @@ public class ShikshaMitraDbContextFactory : IDesignTimeDbContextFactory<ShikshaM
     public ShikshaMitraDbContext CreateDbContext(string[] args)
     {
         // https://www.npgsql.org/efcore/release-notes/6.0.html#opting-out-of-the-new-timestamp-mapping-logic
-        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", isEnabled: false);
 
         ShikshaMitraEfCoreEntityExtensionMappings.Configure();
 

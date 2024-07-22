@@ -1,8 +1,9 @@
 ﻿using System;
+using Volo.Abp.Domain.Entities.Auditing;
 
 namespace ShikshaMitra.Books;
 
-public class Book
+public class Book : AuditedAggregateRoot<Guid>
 {
     public Guid AuthorId { get; set; }
 

@@ -9,6 +9,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="EducationBoards\**" />
+    <EmbeddedResource Remove="EducationBoards\**" />
+    <None Remove="EducationBoards\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\ShikshaMitra.Domain.Shared\ShikshaMitra.Domain.Shared.csproj" />
   </ItemGroup>
 

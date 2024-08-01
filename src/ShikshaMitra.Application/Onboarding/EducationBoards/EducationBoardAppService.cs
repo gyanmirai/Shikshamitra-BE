@@ -5,14 +5,11 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Onboarding.EducationBoards;
 
-public class EducationBoardAppService : CrudAppService<
+public class EducationBoardAppService(IRepository<EducationBoard, Guid> repository) : CrudAppService<
     EducationBoard,
     EducationBoardDto,
     Guid,
     PagedAndSortedResultRequestDto,
-    CreateUpdateEducationBoardDto>, IEducationBoardAppService
+    CreateUpdateEducationBoardDto>(repository), IEducationBoardAppService
 {
-    public EducationBoardAppService(IRepository<EducationBoard, Guid> repository) : base(repository)
-    {
-    }
 }

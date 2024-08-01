@@ -38,7 +38,7 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
         IOpenIddictScopeRepository openIddictScopeRepository,
         IOpenIddictScopeManager scopeManager,
         IPermissionDataSeeder permissionDataSeeder,
-        IStringLocalizer<OpenIddictResponse> l )
+        IStringLocalizer<OpenIddictResponse> l)
     {
         _configuration = configuration;
         _openIddictApplicationRepository = openIddictApplicationRepository;
@@ -60,8 +60,11 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
     {
         if (await _openIddictScopeRepository.FindByNameAsync("ShikshaMitra") == null)
         {
-            await _scopeManager.CreateAsync(new OpenIddictScopeDescriptor {
-                Name = "ShikshaMitra", DisplayName = "ShikshaMitra API", Resources = { "ShikshaMitra" }
+            await _scopeManager.CreateAsync(new OpenIddictScopeDescriptor
+            {
+                Name = "ShikshaMitra",
+                DisplayName = "ShikshaMitra API",
+                Resources = { "ShikshaMitra" }
             });
         }
     }
@@ -84,7 +87,7 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
         var consoleAndAngularClientId = configurationSection["ShikshaMitra_App:ClientId"];
         if (!consoleAndAngularClientId.IsNullOrWhiteSpace())
         {
-            var consoleAndAngularClientRootUrl = configurationSection["ShikshaMitra_App:RootUrl"]?.TrimEnd('/');
+            string? consoleAndAngularClientRootUrl = configurationSection["ShikshaMitra_App:RootUrl"]?.TrimEnd('/');
             await CreateApplicationAsync(
                 name: consoleAndAngularClientId!,
                 type: OpenIddictConstants.ClientTypes.Public,
@@ -103,6 +106,31 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
                 postLogoutRedirectUri: consoleAndAngularClientRootUrl
             );
         }
+
+        // React Client
+        var reactClinetId = configurationSection["ShikshaMitra_Next_App:ClientId"];
+        if (!reactClinetId.IsNullOrWhiteSpace())
+        {
+            string? reactClientRootUrl = configurationSection["ShikshaMitra_Next_App:RootUrl"]?.TrimEnd('/');
+            await CreateApplicationAsync(
+                name: reactClinetId!,
+                type: OpenIddictConstants.ClientTypes.Public,
+                consentType: OpenIddictConstants.ConsentTypes.Implicit,
+                displayName: "React Application",
+                secret: null,
+               grantTypes: new List<string>
+                {
+                    OpenIddictConstants.GrantTypes.AuthorizationCode,
+                    OpenIddictConstants.GrantTypes.RefreshToken
+                },
+                scopes: commonScopes,
+                redirectUri: $"{reactClientRootUrl}/api/auth/callback/openiddict",
+                clientUri: reactClientRootUrl,
+                postLogoutRedirectUri: reactClientRootUrl
+            );
+
+        }
+
 
 
 
@@ -154,7 +182,8 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
 
         var client = await _openIddictApplicationRepository.FindByClientIdAsync(name);
 
-        var application = new AbpApplicationDescriptor {
+        var application = new AbpApplicationDescriptor
+        {
             ClientId = name,
             ClientType = type,
             ClientSecret = secret,

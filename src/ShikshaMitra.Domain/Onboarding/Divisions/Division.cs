@@ -7,9 +7,9 @@ namespace ShikshaMitra.Onboarding.Divisions;
 
 public class Division : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+    public Guid? TenantId { get; set; }
     public string Name { get; set; }
 
-    public Guid? TenantId { get; set; }
 
     // Foreign key
     public Guid StandardId { get; set; }

@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using ShikshaMitra.Onboarding.AcademicYears;
 using ShikshaMitra.Onboarding.Divisions;
 using ShikshaMitra.Onboarding.EducationalMediums;
 using ShikshaMitra.Onboarding.EducationBoards;
@@ -10,9 +11,17 @@ public class OnboardingAutoMapperProfile : Profile
 {
     public OnboardingAutoMapperProfile()
     {
+        // Mapping for AcademicYear
+        CreateMap<AcademicYear, AcademicYearDto>();
+        CreateMap<CreateUpdateAcademicYearDto, AcademicYear>();
+
         // Mapping for EducationBoard
         CreateMap<EducationBoard, EducationBoardDto>();
         CreateMap<CreateUpdateEducationBoardDto, EducationBoard>();
+
+        // Mapping for EducationBoardStage
+        CreateMap<EducationBoardStage, EducationBoardStageDto>();
+        CreateMap<CreateUpdateEducationBoardStageDto, EducationBoardStage>();
 
         // Mapping for EducationalMedium
         CreateMap<EducationalMedium, EducationalMediumDto>();

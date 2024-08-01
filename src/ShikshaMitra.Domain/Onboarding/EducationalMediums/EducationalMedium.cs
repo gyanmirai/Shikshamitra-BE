@@ -7,21 +7,17 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Onboarding.EducationalMediums;
 
-public class EducationalMedium : FullAuditedAggregateRoot<Guid>
+public class EducationalMedium : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
-    public string Name { get; set; }
-    public ICollection<Standard> Standards { get; set; }
+    public Guid? TenantId { get; set; }
 
-    // Foreign key
+    public string Name { get; set; }
+
+    // Foreign key for EducationBoard
     public Guid EducationBoardId { get; set; }
 
     // Navigation property
     public EducationBoard EducationBoard { get; set; }
 
-
-    internal EducationalMedium AddStandard(Standard standard)
-    {
-        Standards.Add(standard);
-        return this;
-    }
+    public ICollection<Standard> Standards { get; set; }
 }

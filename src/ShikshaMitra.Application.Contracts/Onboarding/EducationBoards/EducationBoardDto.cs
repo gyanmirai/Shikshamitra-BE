@@ -9,4 +9,5 @@ public class EducationBoardDto : AuditedEntityDto<Guid>
 {
     public string Name { get; set; }
     public List<EducationalMediumDto> EducationalMediums { get; set; }
+    public List<EducationBoardStageDto> EducationBoardStages { get; set; }
 }

@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
+using ShikshaMitra.Onboarding.AcademicYears;
 using ShikshaMitra.Onboarding.Divisions;
 using ShikshaMitra.Onboarding.EducationalMediums;
 using ShikshaMitra.Onboarding.EducationBoards;
@@ -73,7 +74,9 @@ public class ShikshaMitraDbContext :
 
     # region Onboarding
 
+    public DbSet<AcademicYear> AcademicYears { get; set; }
     public DbSet<EducationBoard> EducationBoards { get; set; }
+    public DbSet<EducationBoardStage> EducationBoardStages { get; set; }
     public DbSet<EducationalMedium> EducationalMediums { get; set; }
     public DbSet<Standard> Standards { get; set; }
     public DbSet<Division> Divisions { get; set; }

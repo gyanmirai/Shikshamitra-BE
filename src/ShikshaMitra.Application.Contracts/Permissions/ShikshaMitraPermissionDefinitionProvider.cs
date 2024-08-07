@@ -1,6 +1,5 @@
-﻿using ShikshaMitra.Localization;
-using Volo.Abp.Authorization.Permissions;
-using Volo.Abp.Localization;
+﻿using Volo.Abp.Authorization.Permissions;
+using static ShikshaMitra.Localization.LocalizationHelper;
 
 namespace ShikshaMitra.Permissions;
 
@@ -8,7 +7,8 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
 {
     public override void Define(IPermissionDefinitionContext context)
     {
-        var bookStoreGroup = context.AddGroup(ShikshaMitraPermissions.GroupName, L("Permission:BookStore"));
+        var bookStoreGroup =
+            context.AddGroup(ShikshaMitraPermissions.GroupName, L("Permission:BookStore"));
 
         var booksPermission =
             bookStoreGroup.AddPermission(ShikshaMitraPermissions.Books.Default, L("Permission:Books"));
@@ -25,10 +25,5 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
             ShikshaMitraPermissions.Authors.Edit, L("Permission:Authors.Edit"));
         authorsPermission.AddChild(
             ShikshaMitraPermissions.Authors.Delete, L("Permission:Authors.Delete"));
-    }
-
-    private static LocalizableString L(string name)
-    {
-        return LocalizableString.Create<ShikshaMitraResource>(name);
     }
 }

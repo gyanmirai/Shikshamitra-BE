@@ -10,7 +10,7 @@ using Volo.Abp.EntityFrameworkCore.Modeling;
 namespace ShikshaMitra.EntityFrameworkCore.Configurations;
 
 
-public class OnboardingConfiguration :
+public class AcademicSetupsConfiguration :
    IEntityTypeConfiguration<EducationBoard>,
     IEntityTypeConfiguration<EducationBoardStage>,
     IEntityTypeConfiguration<EducationalMedium>,

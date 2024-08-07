@@ -71,7 +71,8 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
 
     private async Task CreateApplicationsAsync()
     {
-        var commonScopes = new List<string> {
+        var commonScopes = new List<string>
+        {
             OpenIddictConstants.Permissions.Scopes.Address,
             OpenIddictConstants.Permissions.Scopes.Email,
             OpenIddictConstants.Permissions.Scopes.Phone,
@@ -94,7 +95,8 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
                 consentType: OpenIddictConstants.ConsentTypes.Implicit,
                 displayName: "Console Test / Angular Application",
                 secret: null,
-                grantTypes: new List<string> {
+                grantTypes: new List<string>
+                {
                     OpenIddictConstants.GrantTypes.AuthorizationCode,
                     OpenIddictConstants.GrantTypes.Password,
                     OpenIddictConstants.GrantTypes.ClientCredentials,
@@ -108,31 +110,27 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
         }
 
         // React Client
-        var reactClinetId = configurationSection["ShikshaMitra_Next_App:ClientId"];
+        var reactClinetId = configurationSection["ShikshaMitra_React_App:ClientId"];
         if (!reactClinetId.IsNullOrWhiteSpace())
         {
-            string? reactClientRootUrl = configurationSection["ShikshaMitra_Next_App:RootUrl"]?.TrimEnd('/');
+            string? reactClientRootUrl = configurationSection["ShikshaMitra_React_App:RootUrl"]?.TrimEnd('/');
             await CreateApplicationAsync(
                 name: reactClinetId!,
                 type: OpenIddictConstants.ClientTypes.Public,
                 consentType: OpenIddictConstants.ConsentTypes.Implicit,
                 displayName: "React Application",
                 secret: null,
-               grantTypes: new List<string>
+                grantTypes: new List<string>
                 {
                     OpenIddictConstants.GrantTypes.AuthorizationCode,
                     OpenIddictConstants.GrantTypes.RefreshToken
                 },
                 scopes: commonScopes,
-                redirectUri: $"{reactClientRootUrl}/api/auth/callback/openiddict",
+                redirectUri: $"{reactClientRootUrl}/auth/openiddict",
                 clientUri: reactClientRootUrl,
-                postLogoutRedirectUri: reactClientRootUrl
+                postLogoutRedirectUri: $"{reactClientRootUrl}/login"
             );
-
         }
-
-
-
 
 
         // Swagger Client
@@ -212,7 +210,8 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
             application.Permissions.Add(OpenIddictConstants.Permissions.Endpoints.Logout);
         }
 
-        var buildInGrantTypes = new[] {
+        var buildInGrantTypes = new[]
+        {
             OpenIddictConstants.GrantTypes.Implicit, OpenIddictConstants.GrantTypes.Password,
             OpenIddictConstants.GrantTypes.AuthorizationCode, OpenIddictConstants.GrantTypes.ClientCredentials,
             OpenIddictConstants.GrantTypes.DeviceCode, OpenIddictConstants.GrantTypes.RefreshToken
@@ -285,7 +284,8 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
             }
         }
 
-        var buildInScopes = new[] {
+        var buildInScopes = new[]
+        {
             OpenIddictConstants.Permissions.Scopes.Address, OpenIddictConstants.Permissions.Scopes.Email,
             OpenIddictConstants.Permissions.Scopes.Phone, OpenIddictConstants.Permissions.Scopes.Profile,
             OpenIddictConstants.Permissions.Scopes.Roles
@@ -354,8 +354,10 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
 
         if (!HasSameRedirectUris(client, application))
         {
-            client.RedirectUris = JsonSerializer.Serialize(application.RedirectUris.Select(q => q.ToString().TrimEnd('/')));
-            client.PostLogoutRedirectUris = JsonSerializer.Serialize(application.PostLogoutRedirectUris.Select(q => q.ToString().TrimEnd('/')));
+            client.RedirectUris =
+                JsonSerializer.Serialize(application.RedirectUris.Select(q => q.ToString().TrimEnd('/')));
+            client.PostLogoutRedirectUris =
+                JsonSerializer.Serialize(application.PostLogoutRedirectUris.Select(q => q.ToString().TrimEnd('/')));
 
             await _applicationManager.UpdateAsync(client.ToModel());
         }
@@ -369,11 +371,13 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
 
     private bool HasSameRedirectUris(OpenIddictApplication existingClient, AbpApplicationDescriptor application)
     {
-        return existingClient.RedirectUris == JsonSerializer.Serialize(application.RedirectUris.Select(q => q.ToString().TrimEnd('/')));
+        return existingClient.RedirectUris ==
+               JsonSerializer.Serialize(application.RedirectUris.Select(q => q.ToString().TrimEnd('/')));
     }
 
     private bool HasSameScopes(OpenIddictApplication existingClient, AbpApplicationDescriptor application)
     {
-        return existingClient.Permissions == JsonSerializer.Serialize(application.Permissions.Select(q => q.ToString().TrimEnd('/')));
+        return existingClient.Permissions ==
+               JsonSerializer.Serialize(application.Permissions.Select(q => q.ToString().TrimEnd('/')));
     }
 }

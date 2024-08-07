@@ -43,6 +43,9 @@
     "Authors": "Authors",
     "AuthorDeletionConfirmationMessage": "Are you sure to delete the author '{0}'?",
     "BirthDate": "Birth date",
-    "NewAuthor": "New author"
+    "NewAuthor": "New author",
+    "Features:TenantSettings": "Tenant Settings",
+    "Features:TenantSettings.Onboarding": "Tenant Onboarding",
+    "Features:Security": "Security"
   }
 }

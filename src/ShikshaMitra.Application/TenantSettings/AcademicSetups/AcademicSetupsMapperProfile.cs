@@ -7,9 +7,9 @@ using ShikshaMitra.Onboarding.Standards;
 
 namespace ShikshaMitra.MapperProfile;
 
-public class OnboardingAutoMapperProfile : Profile
+public class AcademicSetupsMapperProfile : Profile
 {
-    public OnboardingAutoMapperProfile()
+    public AcademicSetupsMapperProfile()
     {
         // Mapping for AcademicYear
         CreateMap<AcademicYear, AcademicYearDto>();

@@ -1,0 +1,12 @@
+
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Roslynator.Analyzers" Version="4.12.4" />
+    <PackageReference Include="Roslynator.CodeAnalysis.Analyzers" Version="4.12.4" />
+    <PackageReference Include="Roslynator.Formatting.Analyzers" Version="4.12.4" />
+  </ItemGroup>
+</Project>

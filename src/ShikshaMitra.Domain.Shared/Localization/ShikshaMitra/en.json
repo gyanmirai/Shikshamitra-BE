@@ -46,6 +46,67 @@
     "NewAuthor": "New author",
     "Features:TenantSettings": "Tenant Settings",
     "Features:TenantSettings.Onboarding": "Tenant Onboarding",
-    "Features:Security": "Security"
+    "Features:Security": "Security",
+
+    "Permission:Student": "Student Management",
+    "Permission:Student.IndividualStudentProfile": "Individual Student Profile",
+    "Permission:Student.IndividualStudentProfile.Create": "Create Student Profile",
+    "Permission:Student.IndividualStudentProfile.Edit": "Edit Student Profile",
+    "Permission:Student.IndividualStudentProfile.Delete": "Delete Student Profile",
+
+    "Permission:Student.AttendanceTracker": "Attendance Tracker",
+    "Permission:Student.AttendanceTracker.Create": "Create Attendance Record",
+    "Permission:Student.AttendanceTracker.Edit": "Edit Attendance Record",
+    "Permission:Student.AttendanceTracker.Delete": "Delete Attendance Record",
+
+    "Permission:Student.AcademicPerformance": "Academic Performance",
+    "Permission:Student.AcademicPerformance.Create": "Create Academic Performance Record",
+    "Permission:Student.AcademicPerformance.Edit": "Edit Academic Performance Record",
+    "Permission:Student.AcademicPerformance.Delete": "Delete Academic Performance Record",
+
+    "Permission:Student.BehavioralRecords": "Behavioral Records",
+    "Permission:Student.BehavioralRecords.Create": "Create Behavioral Record",
+    "Permission:Student.BehavioralRecords.Edit": "Edit Behavioral Record",
+    "Permission:Student.BehavioralRecords.Delete": "Delete Behavioral Record",
+
+    "Permission:Student.HealthRecords": "Health Records",
+    "Permission:Student.HealthRecords.Create": "Create Health Record",
+    "Permission:Student.HealthRecords.Edit": "Edit Health Record",
+    "Permission:Student.HealthRecords.Delete": "Delete Health Record",
+
+    "Permission:Student.FinancialInformation": "Financial Information",
+    "Permission:Student.FinancialInformation.Create": "Create Financial Record",
+    "Permission:Student.FinancialInformation.Edit": "Edit Financial Record",
+    "Permission:Student.FinancialInformation.Delete": "Delete Financial Record",
+
+    "Permission:Student.DocumentManagement": "Document Management",
+    "Permission:Student.DocumentManagement.Create": "Create Document",
+    "Permission:Student.DocumentManagement.Edit": "Edit Document",
+    "Permission:Student.DocumentManagement.Delete": "Delete Document",
+
+    "Permission:Student.CommunicationLog": "Communication Log",
+    "Permission:Student.CommunicationLog.Create": "Create Communication Log",
+    "Permission:Student.CommunicationLog.Edit": "Edit Communication Log",
+    "Permission:Student.CommunicationLog.Delete": "Delete Communication Log",
+
+    "Permission:Student.StudentProgressionPlanner": "Student Progression Planner",
+    "Permission:Student.StudentProgressionPlanner.Create": "Create Progression Plan",
+    "Permission:Student.StudentProgressionPlanner.Edit": "Edit Progression Plan",
+    "Permission:Student.StudentProgressionPlanner.Delete": "Delete Progression Plan",
+
+    "Permission:Student.TransportAndLogistics": "Transport and Logistics",
+    "Permission:Student.TransportAndLogistics.Create": "Create Transport and Logistics Record",
+    "Permission:Student.TransportAndLogistics.Edit": "Edit Transport and Logistics Record",
+    "Permission:Student.TransportAndLogistics.Delete": "Delete Transport and Logistics Record",
+
+    "Permission:Student.LibraryInteractions": "Library Interactions",
+    "Permission:Student.LibraryInteractions.Create": "Create Library Interaction",
+    "Permission:Student.LibraryInteractions.Edit": "Edit Library Interaction",
+    "Permission:Student.LibraryInteractions.Delete": "Delete Library Interaction",
+
+    "Permission:Student.SpecialEducationNeeds": "Special Education Needs",
+    "Permission:Student.SpecialEducationNeeds.Create": "Create Special Education Record",
+    "Permission:Student.SpecialEducationNeeds.Edit": "Edit Special Education Record",
+    "Permission:Student.SpecialEducationNeeds.Delete": "Delete Special Education Record"
   }
 }

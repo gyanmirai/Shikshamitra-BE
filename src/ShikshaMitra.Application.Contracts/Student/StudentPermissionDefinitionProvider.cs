@@ -9,7 +9,6 @@ public class StudentPermissionDefinitionProvider : PermissionDefinitionProvider
 	{
 		var studentGroup = context.AddGroup(StudentPermissions.GroupName, L("Permission:Student"));
 
-
 		// Define permissions for IndividualStudentProfile
 		var individualStudentProfilePermission = studentGroup.AddPermission(
 			StudentPermissions.IndividualStudentProfile.Default, L("Permission:Student.IndividualStudentProfile"));

@@ -5,9 +5,13 @@ namespace ShikshaMitra.Onboarding.Divisions;
 
 public class CreateUpdateDivisionDto
 {
-    [Required]
-    [StringLength(DivisionConsts.MaxNameLength)]
-    public string Name { get; set; }
+	[Required]
+	[StringLength(DivisionConsts.MaxNameLength)]
+	public string Name { get; set; }
 
-    public Guid StandardId { get; set; }
+	[Required]
+	[Range(1, DivisionConsts.MaxStrengthCount)]
+	public int Strength { get; set; }
+
+	public Guid StandardId { get; set; }
 }

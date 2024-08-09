@@ -3,7 +3,7 @@ using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
 using ShikshaMitra.Onboarding.AcademicYears;
 using ShikshaMitra.Onboarding.Divisions;
-using ShikshaMitra.Onboarding.EducationalMediums;
+using ShikshaMitra.Onboarding.EducationMediums;
 using ShikshaMitra.Onboarding.EducationBoards;
 using ShikshaMitra.Onboarding.Standards;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
@@ -76,8 +76,8 @@ public class ShikshaMitraDbContext :
 
     public DbSet<AcademicYear> AcademicYears { get; set; }
     public DbSet<EducationBoard> EducationBoards { get; set; }
-    public DbSet<EducationBoardStage> EducationBoardStages { get; set; }
-    public DbSet<EducationalMedium> EducationalMediums { get; set; }
+    public DbSet<EducationMediumStage> EducationBoardStages { get; set; }
+    public DbSet<EducationMedium> EducationMediums { get; set; }
     public DbSet<Standard> Standards { get; set; }
     public DbSet<Division> Divisions { get; set; }
 

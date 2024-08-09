@@ -13,8 +13,8 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20240725104728_onboarding_models_added")]
-    partial class onboarding_models_added
+    [Migration("20240809094834_education-medium-stage")]
+    partial class educationmediumstage
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -148,7 +148,65 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppBooks", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Divisions.Division", b =>
+            modelBuilder.Entity("ShikshaMitra.Onboarding.AcademicYears.AcademicYear", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "StartDate", "EndDate")
+                        .IsUnique();
+
+                    b.ToTable("AppAcademicYears", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Onboarding.Divisions.Division", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -211,12 +269,10 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("StandardId");
 
-                    b.HasIndex("TenantId");
-
                     b.ToTable("AppDivisions", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.EducationBoards.EducationBoard", b =>
+            modelBuilder.Entity("ShikshaMitra.Onboarding.EducationBoards.EducationBoard", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -268,12 +324,75 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
                     b.HasKey("Id");
 
                     b.ToTable("AppEducationBoards", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.EducationalMediums.EducationalMedium", b =>
+            modelBuilder.Entity("ShikshaMitra.Onboarding.EducationBoards.EducationMediumStage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<Guid?>("EducationBoardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EducationMediumId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EducationBoardId");
+
+                    b.HasIndex("EducationMediumId");
+
+                    b.ToTable("AppEducationMediumStages", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Onboarding.EducationMediums.EducationMedium", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -328,16 +447,23 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
                     b.HasKey("Id");
 
                     b.HasIndex("EducationBoardId");
 
-                    b.ToTable("AppEducationalMediums", (string)null);
+                    b.ToTable("AppEducationMediums", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Standards.Standard", b =>
+            modelBuilder.Entity("ShikshaMitra.Onboarding.Standards.Standard", b =>
                 {
                     b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -363,7 +489,13 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
-                    b.Property<Guid>("EducationalMediumId")
+                    b.Property<Guid>("EducationBoardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EducationBoardStageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EducationMediumId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ExtraProperties")
@@ -396,9 +528,16 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EducationalMediumId");
+                    b.HasIndex("AcademicYearId");
 
-                    b.HasIndex("TenantId");
+                    b.HasIndex("EducationBoardId");
+
+                    b.HasIndex("EducationBoardStageId");
+
+                    b.HasIndex("EducationMediumId");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "EducationBoardId", "EducationBoardStageId", "EducationMediumId", "Name")
+                        .IsUnique();
 
                     b.ToTable("AppStandards", (string)null);
                 });
@@ -2195,9 +2334,9 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AbpTenantConnectionStrings", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Divisions.Division", b =>
+            modelBuilder.Entity("ShikshaMitra.Onboarding.Divisions.Division", b =>
                 {
-                    b.HasOne("ShikshaMitra.Standards.Standard", "Standard")
+                    b.HasOne("ShikshaMitra.Onboarding.Standards.Standard", "Standard")
                         .WithMany("Divisions")
                         .HasForeignKey("StandardId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -2206,10 +2345,25 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Standard");
                 });
 
-            modelBuilder.Entity("ShikshaMitra.EducationalMediums.EducationalMedium", b =>
+            modelBuilder.Entity("ShikshaMitra.Onboarding.EducationBoards.EducationMediumStage", b =>
                 {
-                    b.HasOne("ShikshaMitra.EducationBoards.EducationBoard", "EducationBoard")
-                        .WithMany("EducationalMediums")
+                    b.HasOne("ShikshaMitra.Onboarding.EducationBoards.EducationBoard", null)
+                        .WithMany("EducationMediumStages")
+                        .HasForeignKey("EducationBoardId");
+
+                    b.HasOne("ShikshaMitra.Onboarding.EducationMediums.EducationMedium", "EducationMedium")
+                        .WithMany("EducationMediumStages")
+                        .HasForeignKey("EducationMediumId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("EducationMedium");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Onboarding.EducationMediums.EducationMedium", b =>
+                {
+                    b.HasOne("ShikshaMitra.Onboarding.EducationBoards.EducationBoard", "EducationBoard")
+                        .WithMany("EducationMediums")
                         .HasForeignKey("EducationBoardId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -2217,15 +2371,39 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("EducationBoard");
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Standards.Standard", b =>
+            modelBuilder.Entity("ShikshaMitra.Onboarding.Standards.Standard", b =>
                 {
-                    b.HasOne("ShikshaMitra.EducationalMediums.EducationalMedium", "EducationalMedium")
-                        .WithMany("Standards")
-                        .HasForeignKey("EducationalMediumId")
+                    b.HasOne("ShikshaMitra.Onboarding.AcademicYears.AcademicYear", "AcademicYear")
+                        .WithMany()
+                        .HasForeignKey("AcademicYearId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("EducationalMedium");
+                    b.HasOne("ShikshaMitra.Onboarding.EducationBoards.EducationBoard", "EducationBoard")
+                        .WithMany()
+                        .HasForeignKey("EducationBoardId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Onboarding.EducationBoards.EducationMediumStage", "EducationMediumStage")
+                        .WithMany()
+                        .HasForeignKey("EducationBoardStageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Onboarding.EducationMediums.EducationMedium", "EducationMedium")
+                        .WithMany("Standards")
+                        .HasForeignKey("EducationMediumId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AcademicYear");
+
+                    b.Navigation("EducationBoard");
+
+                    b.Navigation("EducationMedium");
+
+                    b.Navigation("EducationMediumStage");
                 });
 
             modelBuilder.Entity("Volo.Abp.AuditLogging.AuditLogAction", b =>
@@ -2370,17 +2548,21 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("ShikshaMitra.EducationBoards.EducationBoard", b =>
+            modelBuilder.Entity("ShikshaMitra.Onboarding.EducationBoards.EducationBoard", b =>
                 {
-                    b.Navigation("EducationalMediums");
+                    b.Navigation("EducationMediumStages");
+
+                    b.Navigation("EducationMediums");
                 });
 
-            modelBuilder.Entity("ShikshaMitra.EducationalMediums.EducationalMedium", b =>
+            modelBuilder.Entity("ShikshaMitra.Onboarding.EducationMediums.EducationMedium", b =>
                 {
+                    b.Navigation("EducationMediumStages");
+
                     b.Navigation("Standards");
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Standards.Standard", b =>
+            modelBuilder.Entity("ShikshaMitra.Onboarding.Standards.Standard", b =>
                 {
                     b.Navigation("Divisions");
                 });

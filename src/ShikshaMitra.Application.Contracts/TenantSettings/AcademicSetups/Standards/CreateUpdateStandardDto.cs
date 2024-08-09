@@ -11,6 +11,6 @@ public class CreateUpdateStandardDto
 
     public Guid AcademicYearId { get; set; }
     public Guid EducationBoardId { get; set; }
-    public Guid EducationBoardStageId { get; set; }
-    public Guid EducationalMediumId { get; set; }
+    public Guid EducationMediumId { get; set; }
+    public Guid EducationMediumStageId { get; set; }
 }

@@ -10,6 +10,10 @@ public class Division : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public Guid? TenantId { get; set; }
     public string Name { get; set; }
 
+    /// <summary>
+    /// Division strength which indicates the number of students in the division.
+    /// </summary>
+    public int Strength { get; set; }
 
     // Foreign key
     public Guid StandardId { get; set; }

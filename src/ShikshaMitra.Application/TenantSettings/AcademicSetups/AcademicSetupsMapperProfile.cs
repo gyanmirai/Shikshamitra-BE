@@ -1,7 +1,7 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Onboarding.AcademicYears;
 using ShikshaMitra.Onboarding.Divisions;
-using ShikshaMitra.Onboarding.EducationalMediums;
+using ShikshaMitra.Onboarding.EducationMediums;
 using ShikshaMitra.Onboarding.EducationBoards;
 using ShikshaMitra.Onboarding.Standards;
 
@@ -20,12 +20,12 @@ public class AcademicSetupsMapperProfile : Profile
         CreateMap<CreateUpdateEducationBoardDto, EducationBoard>();
 
         // Mapping for EducationBoardStage
-        CreateMap<EducationBoardStage, EducationBoardStageDto>();
-        CreateMap<CreateUpdateEducationBoardStageDto, EducationBoardStage>();
+        CreateMap<EducationMediumStage, EducationMediumStageDto>();
+        CreateMap<CreateUpdateEducationMediumStageDto, EducationMediumStage>();
 
-        // Mapping for EducationalMedium
-        CreateMap<EducationalMedium, EducationalMediumDto>();
-        CreateMap<CreateUpdateEducationalMediumDto, EducationalMedium>();
+        // Mapping for EducationMedium
+        CreateMap<EducationMedium, EducationMediumDto>();
+        CreateMap<CreateUpdateEducationMediumDto, EducationMedium>();
 
         // Mapping for Standard
         CreateMap<Standard, StandardDto>();

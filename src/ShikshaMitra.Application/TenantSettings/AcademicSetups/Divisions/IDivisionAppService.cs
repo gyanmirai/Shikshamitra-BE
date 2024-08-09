@@ -1,10 +1,12 @@
-﻿using System;
+﻿using Microsoft.AspNetCore.Authorization;
+using System;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Onboarding.Divisions;
 
+[Authorize]
 public class DivisionAppService : CrudAppService<
         Division,
         DivisionDto,

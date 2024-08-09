@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.AspNetCore.Authorization;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -9,6 +10,7 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Onboarding.AcademicYears;
 
+[Authorize]
 public class AcademicYearAppService :
     CrudAppService<AcademicYear, AcademicYearDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateAcademicYearDto>, IAcademicYearsAppService
 {

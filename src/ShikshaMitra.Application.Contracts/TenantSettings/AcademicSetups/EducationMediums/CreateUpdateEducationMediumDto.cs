@@ -1,12 +1,12 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace ShikshaMitra.Onboarding.EducationalMediums;
+namespace ShikshaMitra.Onboarding.EducationMediums;
 
-public class CreateUpdateEducationalMediumDto
+public class CreateUpdateEducationMediumDto
 {
     [Required]
-    [StringLength(EducationalMediumConsts.MaxNameLength)]
+    [StringLength(EducationMediumConsts.MaxNameLength)]
     public string Name { get; set; }
 
     public Guid EducationBoardId { get; set; }

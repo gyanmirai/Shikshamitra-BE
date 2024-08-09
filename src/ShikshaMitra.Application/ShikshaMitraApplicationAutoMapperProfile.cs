@@ -1,11 +1,6 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
-using ShikshaMitra.Onboarding.Divisions;
-using ShikshaMitra.Onboarding.EducationalMediums;
-using ShikshaMitra.Onboarding.EducationBoards;
-using ShikshaMitra.Onboarding.Standards;
-
 namespace ShikshaMitra;
 
 public class ShikshaMitraApplicationAutoMapperProfile : Profile

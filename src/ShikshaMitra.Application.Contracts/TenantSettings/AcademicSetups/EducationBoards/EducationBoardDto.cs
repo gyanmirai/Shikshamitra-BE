@@ -7,7 +7,8 @@ namespace ShikshaMitra.Onboarding.EducationBoards;
 
 public class EducationBoardDto : AuditedEntityDto<Guid>
 {
-    public string Name { get; set; }
-    public List<EducationMediumDto> EducationMediums { get; set; }
-    public List<EducationMediumStageDto> EducationMediumStages { get; set; }
+	public string Name { get; set; }
+	public Guid AcademicYearId { get; set; }
+
+	public List<EducationMediumDto> EducationMediums { get; set; }
 }

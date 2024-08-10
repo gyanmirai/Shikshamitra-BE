@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace ShikshaMitra.Migrations
 {
     /// <inheritdoc />
-    public partial class educationmediumstage : Migration
+    public partial class b2 : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -479,28 +479,6 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "AppEducationBoards",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Name = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
-                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
-                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AppEducationBoards", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "OpenIddictApplications",
                 columns: table => new
                 {
@@ -796,13 +774,13 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "AppEducationMediums",
+                name: "AppEducationBoards",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
                     Name = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    EducationBoardId = table.Column<Guid>(type: "uuid", nullable: false),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -815,11 +793,11 @@ namespace ShikshaMitra.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_AppEducationMediums", x => x.Id);
+                    table.PrimaryKey("PK_AppEducationBoards", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_AppEducationMediums_AppEducationBoards_EducationBoardId",
-                        column: x => x.EducationBoardId,
-                        principalTable: "AppEducationBoards",
+                        name: "FK_AppEducationBoards_AppAcademicYears_AcademicYearId",
+                        column: x => x.AcademicYearId,
+                        principalTable: "AppAcademicYears",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -880,14 +858,15 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "AppEducationMediumStages",
+                name: "AppEducationMediums",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    EducationMediumId = table.Column<Guid>(type: "uuid", nullable: false),
                     Name = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    EducationBoardId = table.Column<Guid>(type: "uuid", nullable: true),
+                    EducationBoardId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
                     LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -898,16 +877,11 @@ namespace ShikshaMitra.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_AppEducationMediumStages", x => x.Id);
+                    table.PrimaryKey("PK_AppEducationMediums", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_AppEducationMediumStages_AppEducationBoards_EducationBoardId",
+                        name: "FK_AppEducationMediums_AppEducationBoards_EducationBoardId",
                         column: x => x.EducationBoardId,
                         principalTable: "AppEducationBoards",
-                        principalColumn: "Id");
-                    table.ForeignKey(
-                        name: "FK_AppEducationMediumStages_AppEducationMediums_EducationMediu~",
-                        column: x => x.EducationMediumId,
-                        principalTable: "AppEducationMediums",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -954,15 +928,39 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppEducationMediumStages",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    EducationMediumId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppEducationMediumStages", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppEducationMediumStages_AppEducationMediums_EducationMediu~",
+                        column: x => x.EducationMediumId,
+                        principalTable: "AppEducationMediums",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppStandards",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EducationBoardId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EducationBoardStageId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EducationMediumId = table.Column<Guid>(type: "uuid", nullable: false),
+                    EducationMediumStageId = table.Column<Guid>(type: "uuid", nullable: false),
                     Name = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
@@ -978,27 +976,9 @@ namespace ShikshaMitra.Migrations
                 {
                     table.PrimaryKey("PK_AppStandards", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_AppStandards_AppAcademicYears_AcademicYearId",
-                        column: x => x.AcademicYearId,
-                        principalTable: "AppAcademicYears",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_AppStandards_AppEducationBoards_EducationBoardId",
-                        column: x => x.EducationBoardId,
-                        principalTable: "AppEducationBoards",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_AppStandards_AppEducationMediumStages_EducationBoardStageId",
-                        column: x => x.EducationBoardStageId,
+                        name: "FK_AppStandards_AppEducationMediumStages_EducationMediumStageId",
+                        column: x => x.EducationMediumStageId,
                         principalTable: "AppEducationMediumStages",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_AppStandards_AppEducationMediums_EducationMediumId",
-                        column: x => x.EducationMediumId,
-                        principalTable: "AppEducationMediums",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -1010,6 +990,7 @@ namespace ShikshaMitra.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     Name = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    Strength = table.Column<int>(type: "integer", nullable: false),
                     StandardId = table.Column<Guid>(type: "uuid", nullable: false),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
@@ -1263,13 +1244,13 @@ namespace ShikshaMitra.Migrations
                 column: "StandardId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AppEducationMediums_EducationBoardId",
-                table: "AppEducationMediums",
-                column: "EducationBoardId");
+                name: "IX_AppEducationBoards_AcademicYearId",
+                table: "AppEducationBoards",
+                column: "AcademicYearId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AppEducationMediumStages_EducationBoardId",
-                table: "AppEducationMediumStages",
+                name: "IX_AppEducationMediums_EducationBoardId",
+                table: "AppEducationMediums",
                 column: "EducationBoardId");
 
             migrationBuilder.CreateIndex(
@@ -1278,30 +1259,9 @@ namespace ShikshaMitra.Migrations
                 column: "EducationMediumId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AppStandards_AcademicYearId",
+                name: "IX_AppStandards_EducationMediumStageId",
                 table: "AppStandards",
-                column: "AcademicYearId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AppStandards_EducationBoardId",
-                table: "AppStandards",
-                column: "EducationBoardId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AppStandards_EducationBoardStageId",
-                table: "AppStandards",
-                column: "EducationBoardStageId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AppStandards_EducationMediumId",
-                table: "AppStandards",
-                column: "EducationMediumId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AppStandards_TenantId_AcademicYearId_EducationBoardId_Educa~",
-                table: "AppStandards",
-                columns: new[] { "TenantId", "AcademicYearId", "EducationBoardId", "EducationBoardStageId", "EducationMediumId", "Name" },
-                unique: true);
+                column: "EducationMediumStageId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_OpenIddictApplications_ClientId",
@@ -1449,9 +1409,6 @@ namespace ShikshaMitra.Migrations
                 name: "AbpAuditLogs");
 
             migrationBuilder.DropTable(
-                name: "AppAcademicYears");
-
-            migrationBuilder.DropTable(
                 name: "AppEducationMediumStages");
 
             migrationBuilder.DropTable(
@@ -1462,6 +1419,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "AppEducationBoards");
+
+            migrationBuilder.DropTable(
+                name: "AppAcademicYears");
         }
     }
 }

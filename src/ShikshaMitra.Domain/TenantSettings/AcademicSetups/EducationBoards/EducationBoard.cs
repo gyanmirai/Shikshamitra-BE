@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Onboarding.EducationMediums;
+﻿using ShikshaMitra.Onboarding.AcademicYears;
+using ShikshaMitra.Onboarding.EducationMediums;
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -9,6 +10,11 @@ namespace ShikshaMitra.Onboarding.EducationBoards;
 public class EducationBoard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; set; }
+
+	public Guid AcademicYearId { get; set; }
 	public string Name { get; set; }
+
+	// Navigation properties
+	public AcademicYear AcademicYear { get; set; }
 	public ICollection<EducationMedium> EducationMediums { get; set; }
 }

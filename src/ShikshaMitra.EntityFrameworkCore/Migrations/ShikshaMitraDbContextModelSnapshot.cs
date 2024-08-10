@@ -259,7 +259,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<int>("Strength")
-                        .HasMaxLength(500)
                         .HasColumnType("integer");
 
                     b.Property<Guid?>("TenantId")
@@ -276,6 +275,9 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.Onboarding.EducationBoards.EducationBoard", b =>
                 {
                     b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -331,6 +333,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AcademicYearId");
+
                     b.ToTable("AppEducationBoards", (string)null);
                 });
 
@@ -354,9 +358,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTime?>("DeletionTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
-
-                    b.Property<Guid?>("EducationBoardId")
-                        .HasColumnType("uuid");
 
                     b.Property<Guid>("EducationMediumId")
                         .HasColumnType("uuid");
@@ -385,8 +386,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("EducationBoardId");
 
                     b.HasIndex("EducationMediumId");
 
@@ -464,9 +463,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -489,12 +485,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTime?>("DeletionTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
-
-                    b.Property<Guid>("EducationBoardId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("EducationMediumId")
-                        .HasColumnType("uuid");
 
                     b.Property<Guid>("EducationMediumStageId")
                         .HasColumnType("uuid");
@@ -529,16 +519,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AcademicYearId");
-
-                    b.HasIndex("EducationBoardId");
-
-                    b.HasIndex("EducationMediumId");
-
                     b.HasIndex("EducationMediumStageId");
-
-                    b.HasIndex("TenantId", "AcademicYearId", "EducationBoardId", "EducationMediumId", "EducationMediumStageId", "Name")
-                        .IsUnique();
 
                     b.ToTable("AppStandards", (string)null);
                 });
@@ -2346,12 +2327,19 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Standard");
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Onboarding.EducationBoards.EducationBoard", b =>
+                {
+                    b.HasOne("ShikshaMitra.Onboarding.AcademicYears.AcademicYear", "AcademicYear")
+                        .WithMany()
+                        .HasForeignKey("AcademicYearId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AcademicYear");
+                });
+
             modelBuilder.Entity("ShikshaMitra.Onboarding.EducationBoards.EducationMediumStage", b =>
                 {
-                    b.HasOne("ShikshaMitra.Onboarding.EducationBoards.EducationBoard", null)
-                        .WithMany("EducationMediumStages")
-                        .HasForeignKey("EducationBoardId");
-
                     b.HasOne("ShikshaMitra.Onboarding.EducationMediums.EducationMedium", "EducationMedium")
                         .WithMany("EducationMediumStages")
                         .HasForeignKey("EducationMediumId")
@@ -2374,35 +2362,11 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Onboarding.Standards.Standard", b =>
                 {
-                    b.HasOne("ShikshaMitra.Onboarding.AcademicYears.AcademicYear", "AcademicYear")
-                        .WithMany()
-                        .HasForeignKey("AcademicYearId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.Onboarding.EducationBoards.EducationBoard", "EducationBoard")
-                        .WithMany()
-                        .HasForeignKey("EducationBoardId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.Onboarding.EducationMediums.EducationMedium", "EducationMedium")
-                        .WithMany("Standards")
-                        .HasForeignKey("EducationMediumId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("ShikshaMitra.Onboarding.EducationBoards.EducationMediumStage", "EducationMediumStage")
-                        .WithMany()
+                        .WithMany("Standards")
                         .HasForeignKey("EducationMediumStageId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("AcademicYear");
-
-                    b.Navigation("EducationBoard");
-
-                    b.Navigation("EducationMedium");
 
                     b.Navigation("EducationMediumStage");
                 });
@@ -2551,16 +2515,17 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Onboarding.EducationBoards.EducationBoard", b =>
                 {
-                    b.Navigation("EducationMediumStages");
-
                     b.Navigation("EducationMediums");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Onboarding.EducationBoards.EducationMediumStage", b =>
+                {
+                    b.Navigation("Standards");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Onboarding.EducationMediums.EducationMedium", b =>
                 {
                     b.Navigation("EducationMediumStages");
-
-                    b.Navigation("Standards");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Onboarding.Standards.Standard", b =>

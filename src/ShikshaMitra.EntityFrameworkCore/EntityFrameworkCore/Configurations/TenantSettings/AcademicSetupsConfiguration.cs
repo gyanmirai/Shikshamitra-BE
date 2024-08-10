@@ -40,6 +40,10 @@ public class AcademicSetupsConfiguration :
 		// Make the Name property required with a max length
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(EducationBoardConsts.MaxNameLength);
 		builder.Navigation(x => x.EducationMediums).AutoInclude();
+
+		// Define many-to-one relationship:
+		// Many Education can belong to one AcademicYear
+		builder.HasOne(x => x.AcademicYear).WithMany().HasForeignKey(x => x.AcademicYearId);
 	}
 
 	// Configure the EducationMedium entity
@@ -50,8 +54,8 @@ public class AcademicSetupsConfiguration :
 
 		// Make the Name property required with a max length
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(EducationMediumConsts.MaxNameLength);
-		
-		builder.Navigation(x => x.Standards).AutoInclude();
+
+
 		builder.Navigation(x => x.EducationMediumStages).AutoInclude();
 	}
 
@@ -68,6 +72,8 @@ public class AcademicSetupsConfiguration :
 		// One EducationMedium can have many EducationMediumStages
 		builder.HasOne(x => x.EducationMedium).WithMany(x => x.EducationMediumStages)
 			.HasForeignKey(x => x.EducationMediumId);
+
+		builder.Navigation(x => x.Standards).AutoInclude();
 	}
 
 	// Configure the Standard entity
@@ -79,32 +85,12 @@ public class AcademicSetupsConfiguration :
 		// Make the Name property required with a max length
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(StandardConsts.MaxNameLength);
 
-		// Create an index on the TenantId, AcademicYearId, EducationBoardId, EducationMediumStageId, EducationalMediumId, and Name properties
-		builder.HasIndex(x => new
-		{
-			x.TenantId,
-			x.AcademicYearId,
-			x.EducationBoardId,
-			x.EducationMediumId,
-			x.EducationMediumStageId,
-			x.Name
-		}).IsUnique();
-
-		// Define many-to-one relationship:
-		// Many Standards can belong to one AcademicYear
-		builder.HasOne(x => x.AcademicYear).WithMany().HasForeignKey(x => x.AcademicYearId);
-
-		// Define many-to-one relationship:
-		// Many Standards can belong to one EducationMedium
-		builder.HasOne(x => x.EducationMedium).WithMany(x => x.Standards).HasForeignKey(x => x.EducationMediumId);
-
-		// Define many-to-one relationship:
-		// Many Standards can belong to one EducationBoard
-		builder.HasOne(x => x.EducationBoard).WithMany().HasForeignKey(x => x.EducationBoardId);
-
 		// Define many-to-one relationship:
 		// Many Standards can belong to one EducationBoardStage
-		builder.HasOne(x => x.EducationMediumStage).WithMany().HasForeignKey(x => x.EducationMediumStageId);
+		builder.HasOne(x => x.EducationMediumStage).WithMany(x => x.Standards)
+			.HasForeignKey(x => x.EducationMediumStageId);
+
+		builder.Navigation(x => x.Divisions).AutoInclude();
 	}
 
 	// Configure the Division entity
@@ -117,8 +103,8 @@ public class AcademicSetupsConfiguration :
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(DivisionConsts.MaxNameLength);
 
 		// Make the Strength property required with a range
-		builder.Property(x => x.Strength).IsRequired()
-			.HasAnnotation("Range", new { Min = 0, Max = DivisionConsts.MaxStrengthCount });
+		builder.Property(x => x.Strength)
+			.IsRequired();
 
 		// Define many-to-one relationship:
 		// Many Divisions can belong to one Standard

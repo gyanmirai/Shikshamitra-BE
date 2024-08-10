@@ -1,5 +1,7 @@
 ﻿using ShikshaMitra.Onboarding.EducationMediums;
+using ShikshaMitra.Onboarding.Standards;
 using System;
+using System.Collections.Generic;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -13,4 +15,5 @@ public class EducationMediumStage : FullAuditedEntity<Guid>, IMultiTenant
 
 	// Navigation property
 	public EducationMedium EducationMedium { get; set; }
+	public ICollection<Standard> Standards { get; set; }
 }

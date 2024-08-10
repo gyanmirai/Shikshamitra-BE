@@ -18,8 +18,5 @@ public class EducationMedium : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	// Navigation property
 	public EducationBoard EducationBoard { get; set; }
-
-	public ICollection<Standard> Standards { get; set; }
-
 	public ICollection<EducationMediumStage> EducationMediumStages { get; set; }
 }

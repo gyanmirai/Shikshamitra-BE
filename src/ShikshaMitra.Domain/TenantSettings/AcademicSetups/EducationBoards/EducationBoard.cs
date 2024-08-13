@@ -14,8 +14,8 @@ public class EducationBoard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string Name { get; private set; }
 
 	// Foreign key for AcademicYear
-	public Guid AcademicYearId { get;  }
-	
+	public Guid AcademicYearId { get; }
+
 	// Navigation properties
 	public AcademicYear AcademicYear { get; }
 	public ICollection<EducationMedium> EducationMediums { get; }

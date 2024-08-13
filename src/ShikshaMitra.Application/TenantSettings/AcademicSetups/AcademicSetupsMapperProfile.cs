@@ -1,9 +1,9 @@
 ﻿using AutoMapper;
-using ShikshaMitra.Onboarding.AcademicYears;
-using ShikshaMitra.Onboarding.Divisions;
-using ShikshaMitra.Onboarding.EducationMediums;
-using ShikshaMitra.Onboarding.EducationBoards;
-using ShikshaMitra.Onboarding.Standards;
+using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 
 namespace ShikshaMitra.MapperProfile;
 

@@ -1,4 +1,4 @@
-﻿namespace ShikshaMitra.Onboarding.EducationBoards;
+﻿namespace ShikshaMitra.TenantSettings.EducationBoards;
 
 public static class EducationBoardStageConsts
 {

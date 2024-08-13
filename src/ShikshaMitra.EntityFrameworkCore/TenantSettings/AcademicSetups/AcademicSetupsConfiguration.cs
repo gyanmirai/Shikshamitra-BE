@@ -1,10 +1,10 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using ShikshaMitra.Onboarding.AcademicYears;
-using ShikshaMitra.Onboarding.Divisions;
-using ShikshaMitra.Onboarding.EducationMediums;
-using ShikshaMitra.Onboarding.EducationBoards;
-using ShikshaMitra.Onboarding.Standards;
+using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.EntityFrameworkCore.Configurations;
@@ -26,11 +26,10 @@ public class AcademicSetupsConfiguration :
 		// Make the Name property required with a max length
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(AcademicYearConsts.MaxNameLength);
 
-		// Create an index on the TenantId, StartDate, and EndDate properties
-		builder.HasIndex(x => new { x.TenantId, x.StartDate, x.EndDate }).IsUnique(); // Ensuring uniqueness
+		// Create an index on the Name, TenantId, StartDate, and EndDate properties
+		builder.HasIndex(x => new { x.Name, x.TenantId, x.StartDate, x.EndDate }).IsUnique(); // Ensuring uniqueness
 	}
-
-
+	
 	// Configure the EducationBoard entity
 	public void Configure(EntityTypeBuilder<EducationBoard> builder)
 	{
@@ -66,7 +65,7 @@ public class AcademicSetupsConfiguration :
 		builder.ConfigureByConvention();
 
 		// Make the Name property required with a max length
-		builder.Property(x => x.Name).IsRequired().HasMaxLength(EducationBoardStageConsts.MaxNameLength);
+		builder.Property(x => x.Name).IsRequired().HasMaxLength(EducationMediumStageConsts.MaxNameLength);
 
 		// Define one-to-many relationship:
 		// One EducationMedium can have many EducationMediumStages

@@ -59,8 +59,7 @@ public class AuthorAppService : ShikshaMitraAppService, IAuthorAppService
     {
         var author = await _authorManager.CreateAsync(
             input.Name,
-            input.BirthDate,
-            input.ShortBio
+            input.BirthDate
         );
 
         await _authorRepository.InsertAsync(author);
@@ -79,7 +78,6 @@ public class AuthorAppService : ShikshaMitraAppService, IAuthorAppService
         }
 
         author.BirthDate = input.BirthDate;
-        author.ShortBio = input.ShortBio;
 
         await _authorRepository.UpdateAsync(author);
     }

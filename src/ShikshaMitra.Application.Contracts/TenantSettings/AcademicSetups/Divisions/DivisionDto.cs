@@ -2,7 +2,7 @@
 using System.ComponentModel.DataAnnotations;
 using Volo.Abp.Application.Dtos;
 
-namespace ShikshaMitra.Onboarding.Divisions;
+namespace ShikshaMitra.TenantSettings.Divisions;
 
 public class DivisionDto : AuditedEntityDto<Guid>
 {

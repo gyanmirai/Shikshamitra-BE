@@ -53,6 +53,7 @@ public class ShikshaMitraDomainSharedModule : AbpModule
         Configure<AbpExceptionLocalizationOptions>(options =>
         {
             options.MapCodeNamespace("ShikshaMitra", typeof(ShikshaMitraResource));
-        });
+			options.MapCodeNamespace("ShikshaMitra.TenantSettings", typeof(ShikshaMitraResource));
+		});
     }
 }

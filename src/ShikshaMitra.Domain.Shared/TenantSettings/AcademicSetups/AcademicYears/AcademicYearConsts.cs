@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ShikshaMitra.Onboarding.AcademicYears;
+namespace ShikshaMitra.TenantSettings.AcademicYears;
 
 public static class AcademicYearConsts
 {

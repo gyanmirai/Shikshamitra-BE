@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using ShikshaMitra.Onboarding.Divisions;
+using ShikshaMitra.TenantSettings.Divisions;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra.Onboarding.Standards;
+namespace ShikshaMitra.TenantSettings.Standards;
 
 public class StandardDto : AuditedEntityDto<Guid>
 {

@@ -2,7 +2,7 @@
 using Volo.Abp.Features;
 using Volo.Abp.Localization;
 
-namespace ShikshaMitra.Onboarding;
+namespace ShikshaMitra.TenantSettings;
 
 public class TenantSettingsFeatureDefinitionProvider : FeatureDefinitionProvider
 {

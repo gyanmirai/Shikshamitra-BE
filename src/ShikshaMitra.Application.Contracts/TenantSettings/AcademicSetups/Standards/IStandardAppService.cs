@@ -2,7 +2,7 @@
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
-namespace ShikshaMitra.Onboarding.Standards;
+namespace ShikshaMitra.TenantSettings.Standards;
 
 public interface IStandardAppService :
     ICrudAppService<

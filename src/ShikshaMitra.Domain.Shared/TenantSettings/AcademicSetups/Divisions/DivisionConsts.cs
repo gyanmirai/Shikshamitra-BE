@@ -1,4 +1,4 @@
-﻿namespace ShikshaMitra.Onboarding.Divisions;
+﻿namespace ShikshaMitra.TenantSettings.Divisions;
 
 public static class DivisionConsts
 {

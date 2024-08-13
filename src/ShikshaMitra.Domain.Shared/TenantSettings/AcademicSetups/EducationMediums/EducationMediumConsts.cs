@@ -1,4 +1,4 @@
-﻿namespace ShikshaMitra.Onboarding.EducationMediums;
+﻿namespace ShikshaMitra.TenantSettings.EducationMediums;
 
 public static class EducationMediumConsts
 {

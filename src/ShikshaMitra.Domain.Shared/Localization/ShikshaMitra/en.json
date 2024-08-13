@@ -1,4 +1,4 @@
-{
+﻿{
   "Culture": "en",
   "Texts": {
     "Menu:Home": "Home",
@@ -47,6 +47,13 @@
     "Features:TenantSettings": "Tenant Settings",
     "Features:TenantSettings.Onboarding": "Tenant Onboarding",
     "Features:Security": "Security",
+
+    "ShikshaMitra:00001": "The end date '{endDate}' must be greater than the start date '{startDate}'.",
+    "ShikshaMitra:00002": "The number should be greater than 0",
+
+    "ShikshaMitra.TenantSettings:00001": "{entityName} with the name '{name}' already exists.",
+    
+    
 
     "Permission:Student": "Student Management",
     "Permission:Student.IndividualStudentProfile": "Individual Student Profile",

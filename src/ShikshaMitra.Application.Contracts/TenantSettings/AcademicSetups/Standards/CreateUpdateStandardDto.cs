@@ -1,7 +1,7 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace ShikshaMitra.Onboarding.Standards;
+namespace ShikshaMitra.TenantSettings.Standards;
 
 public class CreateUpdateStandardDto
 {

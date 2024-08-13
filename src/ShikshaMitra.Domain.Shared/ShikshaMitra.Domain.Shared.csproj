@@ -29,8 +29,4 @@
     <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="8.0.4" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="TenantSettings\AcademicSetups\" />
-  </ItemGroup>
-
 </Project>

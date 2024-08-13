@@ -1,7 +1,7 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace ShikshaMitra.Onboarding.EducationBoards;
+namespace ShikshaMitra.TenantSettings.EducationBoards;
 
 public class CreateUpdateEducationBoardDto
 {

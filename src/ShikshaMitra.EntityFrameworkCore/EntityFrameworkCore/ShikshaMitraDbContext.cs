@@ -1,11 +1,11 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
-using ShikshaMitra.Onboarding.AcademicYears;
-using ShikshaMitra.Onboarding.Divisions;
-using ShikshaMitra.Onboarding.EducationMediums;
-using ShikshaMitra.Onboarding.EducationBoards;
-using ShikshaMitra.Onboarding.Standards;
+using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
 using Volo.Abp.BackgroundJobs.EntityFrameworkCore;
 using Volo.Abp.Data;
@@ -72,7 +72,7 @@ public class ShikshaMitraDbContext :
 
     #endregion
 
-    # region Onboarding
+    # region Tenant Settings
 
     public DbSet<AcademicYear> AcademicYears { get; set; }
     public DbSet<EducationBoard> EducationBoards { get; set; }

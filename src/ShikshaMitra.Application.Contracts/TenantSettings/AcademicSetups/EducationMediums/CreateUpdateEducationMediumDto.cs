@@ -1,7 +1,7 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace ShikshaMitra.Onboarding.EducationMediums;
+namespace ShikshaMitra.TenantSettings.EducationMediums;
 
 public class CreateUpdateEducationMediumDto
 {

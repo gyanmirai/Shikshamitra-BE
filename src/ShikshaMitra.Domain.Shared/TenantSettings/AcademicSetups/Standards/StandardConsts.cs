@@ -1,4 +1,4 @@
-﻿namespace ShikshaMitra.Onboarding.Standards;
+﻿namespace ShikshaMitra.TenantSettings.Standards;
 
 public static class StandardConsts
 {

@@ -25,8 +25,4 @@
     <PackageReference Include="Volo.Abp.PermissionManagement.Domain.OpenIddict" Version="8.2.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="TenantSettings\AcademicSetups\" />
-  </ItemGroup>
-
 </Project>

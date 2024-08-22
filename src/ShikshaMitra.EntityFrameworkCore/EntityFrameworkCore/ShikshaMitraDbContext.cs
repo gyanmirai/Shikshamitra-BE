@@ -1,6 +1,11 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
+using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
+using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
@@ -27,15 +32,15 @@ namespace ShikshaMitra.EntityFrameworkCore;
 [ReplaceDbContext(typeof(ITenantManagementDbContext))]
 [ConnectionStringName("Default")]
 public class ShikshaMitraDbContext :
-    AbpDbContext<ShikshaMitraDbContext>,
-    IIdentityDbContext,
-    ITenantManagementDbContext
+	AbpDbContext<ShikshaMitraDbContext>,
+	IIdentityDbContext,
+	ITenantManagementDbContext
 {
-    /* Add DbSet properties for your Aggregate Roots / Entities here. */
+	/* Add DbSet properties for your Aggregate Roots / Entities here. */
 
-    #region Entities from the modules
+	#region Entities from the modules
 
-    /* Notice: We only implemented IIdentityDbContext and ITenantManagementDbContext
+	/* Notice: We only implemented IIdentityDbContext and ITenantManagementDbContext
      * and replaced them for this DbContext. This allows you to perform JOIN
      * queries for the entities of these modules over the repositories easily. You
      * typically don't need that for other modules. But, if you need, you can
@@ -46,95 +51,101 @@ public class ShikshaMitraDbContext :
      * uses this DbContext on runtime. Otherwise, it will use its own DbContext class.
      */
 
-    //Identity
-    public DbSet<IdentityUser> Users { get; set; }
-    public DbSet<IdentityRole> Roles { get; set; }
-    public DbSet<IdentityClaimType> ClaimTypes { get; set; }
-    public DbSet<OrganizationUnit> OrganizationUnits { get; set; }
-    public DbSet<IdentitySecurityLog> SecurityLogs { get; set; }
-    public DbSet<IdentityLinkUser> LinkUsers { get; set; }
-    public DbSet<IdentityUserDelegation> UserDelegations { get; set; }
-    public DbSet<IdentitySession> Sessions { get; set; }
+	//Identity
+	public DbSet<IdentityUser> Users { get; set; }
+	public DbSet<IdentityRole> Roles { get; set; }
+	public DbSet<IdentityClaimType> ClaimTypes { get; set; }
+	public DbSet<OrganizationUnit> OrganizationUnits { get; set; }
+	public DbSet<IdentitySecurityLog> SecurityLogs { get; set; }
+	public DbSet<IdentityLinkUser> LinkUsers { get; set; }
+	public DbSet<IdentityUserDelegation> UserDelegations { get; set; }
+	public DbSet<IdentitySession> Sessions { get; set; }
 
-    # region Tenant Management
+	#region Tenant Management
 
-    // Tenant Management
-    public DbSet<Tenant> Tenants { get; set; }
-    public DbSet<TenantConnectionString> TenantConnectionStrings { get; set; }
+	// Tenant Management
+	public DbSet<Tenant> Tenants { get; set; }
+	public DbSet<TenantConnectionString> TenantConnectionStrings { get; set; }
 
-    # endregion
-    # endregion
+	#endregion
+	#endregion
 
-    # region BookStore
+	#region BookStore
 
-    public DbSet<Book> Books { get; set; }
-    public DbSet<Author> Authors { get; set; }
+	public DbSet<Book> Books { get; set; }
+	public DbSet<Author> Authors { get; set; }
 
-    #endregion
+	#endregion
 
-    # region Tenant Settings
+	#region Tenant Settings
 
-    public DbSet<AcademicYear> AcademicYears { get; set; }
-    public DbSet<EducationBoard> EducationBoards { get; set; }
-    public DbSet<EducationMediumStage> EducationBoardStages { get; set; }
-    public DbSet<EducationMedium> EducationMediums { get; set; }
-    public DbSet<Standard> Standards { get; set; }
-    public DbSet<Division> Divisions { get; set; }
+	public DbSet<AcademicYear> AcademicYears { get; set; }
+	public DbSet<AcademicYearPermission> AcademicYearPermissions { get; set; }
+	public DbSet<EducationBoard> EducationBoards { get; set; }
+	public DbSet<EducationBoardPermission> EducationBoardPermissions { get; set; }
+	public DbSet<EducationMediumStage> EducationBoardStages { get; set; }
+	public DbSet<EducationMediumStagePermission> EducationBoardStagePermissions { get; set; }
+	public DbSet<EducationMedium> EducationMediums { get; set; }
+	public DbSet<EducationMediumPermission> EducationMediumPermissions { get; set; }
+	public DbSet<Standard> Standards { get; set; }
+	public DbSet<StandardPermission> StandardPermissions { get; set; }
+	public DbSet<Division> Divisions { get; set; }
+	public DbSet<DivisionPermission> DivisionPermissions { get; set; }
 
-    #endregion
+	#endregion
 
-    public ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> options)
-        : base(options)
-    {
-    }
+	public ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> options)
+		: base(options)
+	{
+	}
 
-    protected override void OnModelCreating(ModelBuilder builder)
-    {
-        base.OnModelCreating(builder);
+	protected override void OnModelCreating(ModelBuilder builder)
+	{
+		base.OnModelCreating(builder);
 
-        /* Include modules to your migration db context */
+		/* Include modules to your migration db context */
 
-        builder.ConfigurePermissionManagement();
-        builder.ConfigureSettingManagement();
-        builder.ConfigureBackgroundJobs();
-        builder.ConfigureAuditLogging();
-        builder.ConfigureIdentity();
-        builder.ConfigureOpenIddict();
-        builder.ConfigureFeatureManagement();
-        builder.ConfigureTenantManagement();
+		builder.ConfigurePermissionManagement();
+		builder.ConfigureSettingManagement();
+		builder.ConfigureBackgroundJobs();
+		builder.ConfigureAuditLogging();
+		builder.ConfigureIdentity();
+		builder.ConfigureOpenIddict();
+		builder.ConfigureFeatureManagement();
+		builder.ConfigureTenantManagement();
 
-        /* Configure your own tables/entities inside here */
+		/* Configure your own tables/entities inside here */
 
-        //builder.Entity<YourEntity>(b =>
-        //{
-        //    b.ToTable(ShikshaMitraConsts.DbTablePrefix + "YourEntities", ShikshaMitraConsts.DbSchema);
-        //    b.ConfigureByConvention(); //auto configure for the base class props
-        //    //...
-        //});
+		//builder.Entity<YourEntity>(b =>
+		//{
+		//    b.ToTable(ShikshaMitraConsts.DbTablePrefix + "YourEntities", ShikshaMitraConsts.DbSchema);
+		//    b.ConfigureByConvention(); //auto configure for the base class props
+		//    //...
+		//});
 
 
-        builder.Entity<Book>(b =>
-        {
-            b.ToTable(ShikshaMitraConsts.DbTablePrefix + "Books",
-                ShikshaMitraConsts.DbSchema);
-            b.ConfigureByConvention(); //auto configure for the base class props
-            b.Property(x => x.Name).IsRequired().HasMaxLength(128);
-        });
+		builder.Entity<Book>(b =>
+		{
+			b.ToTable(ShikshaMitraConsts.DbTablePrefix + "Books",
+				ShikshaMitraConsts.DbSchema);
+			b.ConfigureByConvention(); //auto configure for the base class props
+			b.Property(x => x.Name).IsRequired().HasMaxLength(128);
+		});
 
-        builder.Entity<Author>(b =>
-        {
-            b.ToTable(ShikshaMitraConsts.DbTablePrefix + "Authors",
-                ShikshaMitraConsts.DbSchema);
+		builder.Entity<Author>(b =>
+		{
+			b.ToTable(ShikshaMitraConsts.DbTablePrefix + "Authors",
+				ShikshaMitraConsts.DbSchema);
 
-            b.ConfigureByConvention();
+			b.ConfigureByConvention();
 
-            b.Property(x => x.Name)
-                .IsRequired()
-                .HasMaxLength(AuthorConsts.MaxNameLength);
+			b.Property(x => x.Name)
+				.IsRequired()
+				.HasMaxLength(AuthorConsts.MaxNameLength);
 
-            b.HasIndex(x => x.Name);
-        });
+			b.HasIndex(x => x.Name);
+		});
 
-        builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
-    }
+		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
+	}
 }

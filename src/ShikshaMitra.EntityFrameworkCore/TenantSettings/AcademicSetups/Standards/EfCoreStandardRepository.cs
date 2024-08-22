@@ -15,6 +15,8 @@ public class EfCoreStandardRepository(IDbContextProvider<ShikshaMitraDbContext> 
 	{
 		DbSet<Standard> dbSet = await GetDbSetAsync();
 		return await dbSet.FirstOrDefaultAsync(standard =>
-			standard.Name == name && standard.EducationMediumStageId == educationMediumStageId);
+			EF.Functions.Like(standard.Name.ToLower(), name.ToLower()) && standard.EducationMediumStageId == educationMediumStageId
+		);
 	}
+
 }

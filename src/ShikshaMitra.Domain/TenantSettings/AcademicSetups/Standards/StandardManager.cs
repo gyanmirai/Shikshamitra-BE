@@ -6,10 +6,11 @@ using System;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
+using Volo.Abp.Guids;
 
 namespace ShikshaMitra.TenantSettings.AcademicSetups;
 
-public class StandardManager(IStandardRepository standardRepository) : DomainService
+public class StandardManager(IStandardRepository standardRepository, IGuidGenerator guidGenerator) : DomainService
 {
 	private string EntityName => this.GetType().ToEntityNameFromManager();
 
@@ -18,7 +19,7 @@ public class StandardManager(IStandardRepository standardRepository) : DomainSer
 		await ValidateStandardAsync(name, educationMediumStageId);
 
 		return new Standard(
-			GuidGenerator.Create(),
+			guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
 			name,
 			educationMediumStageId

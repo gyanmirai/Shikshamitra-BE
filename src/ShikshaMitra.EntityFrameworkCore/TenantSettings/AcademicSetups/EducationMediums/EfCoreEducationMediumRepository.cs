@@ -15,6 +15,7 @@ public class EfCoreEducationMediumRepository(IDbContextProvider<ShikshaMitraDbCo
 	{
 		DbSet<EducationMedium> dbSet = await GetDbSetAsync();
 		return await dbSet.FirstOrDefaultAsync(educationMedium =>
-			educationMedium.Name == name && educationMedium.EducationBoardId == educationBoardId);
+			EF.Functions.Like(educationMedium.Name.ToLower(), name.ToLower()) && educationMedium.EducationBoardId == educationBoardId
+		);
 	}
 }

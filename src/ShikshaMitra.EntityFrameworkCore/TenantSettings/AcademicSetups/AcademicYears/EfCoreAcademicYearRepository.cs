@@ -15,6 +15,7 @@ public class EfCoreAcademicYearRepository(IDbContextProvider<ShikshaMitraDbConte
 	public async Task<AcademicYear?> FindByNameAsync(string name)
 	{
 		DbSet<AcademicYear> dbSet = await GetDbSetAsync();
-		return await dbSet.FirstOrDefaultAsync(academicYear => academicYear.Name == name);
+		return await dbSet.FirstOrDefaultAsync(academicYear =>
+			EF.Functions.Like(academicYear.Name.ToLower(), name.ToLower()));
 	}
 }

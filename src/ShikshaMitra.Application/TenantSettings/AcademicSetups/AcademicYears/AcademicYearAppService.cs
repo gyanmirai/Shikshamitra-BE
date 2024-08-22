@@ -17,7 +17,6 @@ public class AcademicYearAppService(
 			CreateUpdateAcademicYearDto>(academicYearRepository),
 		IAcademicYearsAppService
 {
-
 	public override async Task<AcademicYearDto> CreateAsync(CreateUpdateAcademicYearDto input)
 	{
 		AcademicYear academicYear = await academicYearManager.CreateAsync(

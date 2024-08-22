@@ -22,7 +22,7 @@ public class EducationBoardAppService(
 	{
 		EducationBoard educationBoard = await educationBoardManager.CreateAsync(
 			input.AcademicYearId,
-			input.Name
+			input.Type
 		);
 
 		await educationBoardRepository.InsertAsync(educationBoard);
@@ -32,7 +32,7 @@ public class EducationBoardAppService(
 	public override async Task<EducationBoardDto> UpdateAsync(Guid id, CreateUpdateEducationBoardDto input)
 	{
 		EducationBoard educationBoard = await educationBoardRepository.GetAsync(id);
-		await educationBoardManager.UpdateAsync(educationBoard, input.Name);
+		await educationBoardManager.UpdateAsync(educationBoard, input.Type);
 		return ObjectMapper.Map<EducationBoard, EducationBoardDto>(educationBoard);
 	}
 }

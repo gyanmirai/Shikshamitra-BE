@@ -4,7 +4,7 @@ using Volo.Abp.Localization;
 
 namespace ShikshaMitra.TenantSettings;
 
-public class TenantSettingsFeatureDefinitionProvider : FeatureDefinitionProvider
+public class TenantSettingFeatureDefinitionProvider : FeatureDefinitionProvider
 {
     public override void Define(IFeatureDefinitionContext context)
     {

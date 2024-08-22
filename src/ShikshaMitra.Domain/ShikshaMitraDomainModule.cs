@@ -6,6 +6,7 @@ using Volo.Abp.BackgroundJobs;
 using Volo.Abp.Emailing;
 using Volo.Abp.FeatureManagement;
 using Volo.Abp.Features;
+using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Volo.Abp.Localization;
 using Volo.Abp.Modularity;
@@ -19,37 +20,39 @@ using Volo.Abp.TenantManagement;
 namespace ShikshaMitra;
 
 [DependsOn(
-    typeof(ShikshaMitraDomainSharedModule),
-    typeof(AbpAuditLoggingDomainModule),
-    typeof(AbpBackgroundJobsDomainModule),
-    typeof(AbpFeatureManagementDomainModule),
-    typeof(AbpIdentityDomainModule),
-    typeof(AbpOpenIddictDomainModule),
-    typeof(AbpPermissionManagementDomainOpenIddictModule),
-    typeof(AbpPermissionManagementDomainIdentityModule),
-    typeof(AbpSettingManagementDomainModule),
-    typeof(AbpTenantManagementDomainModule),
-    typeof(AbpEmailingModule)
+	typeof(ShikshaMitraDomainSharedModule),
+	typeof(AbpAuditLoggingDomainModule),
+	typeof(AbpBackgroundJobsDomainModule),
+	typeof(AbpFeatureManagementDomainModule),
+	typeof(AbpIdentityDomainModule),
+	typeof(AbpOpenIddictDomainModule),
+	typeof(AbpPermissionManagementDomainOpenIddictModule),
+	typeof(AbpPermissionManagementDomainIdentityModule),
+	typeof(AbpSettingManagementDomainModule),
+	typeof(AbpTenantManagementDomainModule),
+	typeof(AbpEmailingModule)
 )]
 public class ShikshaMitraDomainModule : AbpModule
 {
-    public override void ConfigureServices(ServiceConfigurationContext context)
-    {
-        Configure<AbpLocalizationOptions>(options =>
-        {
-            options.Languages.Add(new LanguageInfo("en", "en", "English"));
-            options.Languages.Add(new LanguageInfo("en-GB", "en-GB", "English (UK)"));
-            options.Languages.Add(new LanguageInfo("hi", "hi", "Hindi"));
-        });
+	public override void ConfigureServices(ServiceConfigurationContext context)
+	{
+		Configure<AbpLocalizationOptions>(options =>
+		{
+			options.Languages.Add(new LanguageInfo("en", "en", "English"));
+			options.Languages.Add(new LanguageInfo("hi", "hi", "Hindi"));
+		});
 
-        Configure<AbpMultiTenancyOptions>(options => { options.IsEnabled = MultiTenancyConsts.IsEnabled; });
+		Configure<AbpMultiTenancyOptions>(options => { options.IsEnabled = MultiTenancyConsts.IsEnabled; });
 
+		Configure<AbpSequentialGuidGeneratorOptions>(options =>
+		{
+			options.DefaultSequentialGuidType = SequentialGuidType.SequentialAsString;
+		});
 
-        //TODO : Configure TenantResolveContributors
-
+		//TODO : Configure TenantResolveContributors
 
 #if DEBUG
-        context.Services.Replace(ServiceDescriptor.Singleton<IEmailSender, NullEmailSender>());
+		context.Services.Replace(ServiceDescriptor.Singleton<IEmailSender, NullEmailSender>());
 #endif
-    }
+	}
 }

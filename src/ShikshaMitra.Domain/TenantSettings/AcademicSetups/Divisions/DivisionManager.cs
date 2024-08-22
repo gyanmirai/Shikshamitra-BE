@@ -7,10 +7,11 @@ using System;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
+using Volo.Abp.Guids;
 
 namespace ShikshaMitra.TenantSettings.AcademicSetups;
 
-public class DivisionManager(IDivisionRepository divisionRepository) : DomainService
+public class DivisionManager(IDivisionRepository divisionRepository, IGuidGenerator guidGenerator) : DomainService
 {
 	private string EntityName => this.GetType().ToEntityNameFromManager();
 
@@ -23,7 +24,7 @@ public class DivisionManager(IDivisionRepository divisionRepository) : DomainSer
 		await ValidateDivisionAsync(name, standardId);
 
 		return new Division(
-			GuidGenerator.Create(),
+			guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
 			name,
 			standardId,

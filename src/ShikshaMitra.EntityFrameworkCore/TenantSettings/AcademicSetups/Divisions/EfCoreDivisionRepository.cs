@@ -14,6 +14,8 @@ public class EfCoreDivisionRepository(IDbContextProvider<ShikshaMitraDbContext> 
 	public async Task<Division?> FindByNameAndStandardIdAsync(string name, Guid standardId)
 	{
 		DbSet<Division> dbSet = await GetDbSetAsync();
-		return await dbSet.FirstOrDefaultAsync(division => division.Name == name && division.StandardId == standardId);
+		return await dbSet.FirstOrDefaultAsync(division =>
+			EF.Functions.Like(division.Name.ToLower(), name.ToLower()) && division.StandardId == standardId
+		);
 	}
 }

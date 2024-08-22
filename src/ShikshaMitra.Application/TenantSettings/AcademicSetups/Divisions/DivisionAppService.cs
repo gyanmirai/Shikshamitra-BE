@@ -5,7 +5,6 @@ using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
-using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.TenantSettings.Divisions;
 

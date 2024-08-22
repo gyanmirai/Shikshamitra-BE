@@ -37,7 +37,6 @@ public class AcademicSetupsConfiguration :
 		builder.ConfigureByConvention();
 
 		// Make the Name property required with a max length
-		builder.Property(x => x.Name).IsRequired().HasMaxLength(EducationBoardConsts.MaxNameLength);
 		builder.Navigation(x => x.EducationMediums).AutoInclude();
 
 		// Define many-to-one relationship:

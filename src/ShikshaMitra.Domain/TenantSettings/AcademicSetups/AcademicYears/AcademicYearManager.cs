@@ -5,13 +5,14 @@ using System;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
+using Volo.Abp.Guids;
 
 namespace ShikshaMitra.TenantSettings.AcademicSetups;
 
 /// <summary>
 /// This abstract class manages the creation and updating of academic years.
 /// </summary>
-public class AcademicYearManager(IAcademicYearRepository academicYearRepository) : DomainService
+public class AcademicYearManager(IAcademicYearRepository academicYearRepository,IGuidGenerator guidGenerator) : DomainService
 {
 	private string EntityName => this.GetType().ToEntityNameFromManager();
 
@@ -36,7 +37,7 @@ public class AcademicYearManager(IAcademicYearRepository academicYearRepository)
 
 		// Create and return a new AcademicYear object.
 		return new AcademicYear(
-			id: GuidGenerator.Create(),
+			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
 			name: name,
 			startDate: startDate,

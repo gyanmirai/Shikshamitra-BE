@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.TenantSettings.AcademicYears;
+﻿using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using System;
 using System.Collections.Generic;
@@ -11,7 +12,7 @@ namespace ShikshaMitra.TenantSettings.EducationBoards;
 public class EducationBoard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; }
-	public string Name { get; private set; }
+	public EducationBoardType Type { get; private set; }
 
 	// Foreign key for AcademicYear
 	public Guid AcademicYearId { get; }
@@ -28,18 +29,18 @@ public class EducationBoard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	internal EducationBoard(
 		Guid id,
 		Guid? tenantId,
-		string name,
+		EducationBoardType educationBoardType,
 		Guid academicYearId)
 		: base(id)
 	{
 		TenantId = Check.NotNull(tenantId, nameof(tenantId));
 		AcademicYearId = Check.NotNull(academicYearId, nameof(academicYearId));
-		SetName(name);
+		SetEducationBoardType(educationBoardType);
 	}
 
-	internal EducationBoard SetName(string name)
+	internal EducationBoard SetEducationBoardType(EducationBoardType educationBoardType)
 	{
-		Name = Check.NotNullOrWhiteSpace(name, nameof(name), maxLength: EducationBoardConsts.MaxNameLength);
+		Type = educationBoardType;
 		return this;
 	}
 }

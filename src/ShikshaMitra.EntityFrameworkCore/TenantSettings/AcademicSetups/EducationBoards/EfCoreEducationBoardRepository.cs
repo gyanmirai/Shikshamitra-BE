@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Threading.Tasks;
@@ -12,16 +13,15 @@ public class EfCoreEducationBoardRepository(IDbContextProvider<ShikshaMitraDbCon
 	: EfCoreRepository<ShikshaMitraDbContext, EducationBoard, Guid>(dbContextProvider),
 		IEducationBoardRepository
 {
-	public async Task<EducationBoard?> FindByNameAsync(string name)
+	public async Task<EducationBoard?> FindByNameAsync(EducationBoardType educationBoardType)
 	{
 		DbSet<EducationBoard> dbSet = await GetDbSetAsync();
-		return await dbSet.FirstOrDefaultAsync(academicYear => academicYear.Name == name);
+		return await dbSet.FirstOrDefaultAsync(academicYear => academicYear.Type == educationBoardType);
 	}
 
-	public async Task<EducationBoard?> FindByNameAndAcademicYearIdAsync(string name, Guid academicYearId)
+	public async Task<EducationBoard?> FindByNameAndAcademicYearIdAsync(EducationBoardType educationBoardType, Guid academicYearId)
 	{
 		DbSet<EducationBoard> dbSet = await GetDbSetAsync();
-		return await dbSet.FirstOrDefaultAsync(academicYear =>
-			academicYear.Name == name && academicYear.AcademicYearId == academicYearId);
+		return await dbSet.FirstOrDefaultAsync(academicYear => academicYear.Type == educationBoardType && academicYear.AcademicYearId == academicYearId);
 	}
 }

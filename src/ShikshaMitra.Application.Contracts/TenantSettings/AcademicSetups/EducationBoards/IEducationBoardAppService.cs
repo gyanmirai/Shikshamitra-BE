@@ -4,11 +4,11 @@ using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.TenantSettings.EducationBoards;
 
-public interface IEducationBoardAppService : 
-    ICrudAppService<
-        EducationBoardDto, // The DTO to return entities
-        Guid, // The primary key of the entity
-        PagedAndSortedResultRequestDto, // Used for paging/sorting
-        CreateUpdateEducationBoardDto> // The DTO to create/update an entity
+public interface IEducationBoardAppService :
+	ICrudAppService<
+		EducationBoardDto, // The DTO to return entities
+		Guid, // The primary key of the entity
+		PagedAndSortedResultRequestDto, // Used for paging/sorting
+		CreateUpdateEducationBoardDto> // The DTO to create/update an entity
 {
 }

@@ -12,4 +12,6 @@ public class AcademicSetupPermissionsDto
 	public List<Guid> EducationMediumStageIds { get; set; } = new List<Guid>();
 	public List<Guid> StandardIds { get; set; } = new List<Guid>();
 	public List<Guid> DivisionIds { get; set; } = new List<Guid>();
+
+	public Guid UserId { get; set; }
 }

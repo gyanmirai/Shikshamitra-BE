@@ -12,77 +12,66 @@ using Volo.Abp.Users;
 namespace ShikshaMitra.TenantSettings.AcademicSetups;
 
 public class AcademicSetupPermissionManager(
-	ICurrentUser currentUser,
 	IGuidGenerator guidGenerator)
 	: DomainService
 {
-	public AcademicYearPermission CreateAcademicYearPermission(Guid academicYearId) => new AcademicYearPermission(
+	public AcademicYearPermission CreateAcademicYearPermission(Guid userId, Guid academicYearId) => new AcademicYearPermission(
 			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
-			userId: currentUser.Id,
+			userId: userId,
 			academicYearId: academicYearId
 		);
 
-	public List<AcademicYearPermission> CreateAcademicYearPermissions(List<Guid> academicYearIds) =>
-		academicYearIds.ConvertAll(CreateAcademicYearPermission);
+	public List<AcademicYearPermission> CreateAcademicYearPermissions(Guid userId, List<Guid> academicYearIds) =>
+		academicYearIds.ConvertAll(academicYearId => CreateAcademicYearPermission(userId, academicYearId));
 
-	public EducationBoardPermission CreateEducationBoardPermission(Guid educationBoardId) => new(
+	public EducationBoardPermission CreateEducationBoardPermission(Guid userId, Guid educationBoardId) => new(
 			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
-			userId: currentUser.Id,
+			userId: userId,
 			educationBoardId: educationBoardId
 		);
 
-	public List<EducationBoardPermission> CreateEducationBoardPermissions(List<Guid> educationBoardIds) =>
-		educationBoardIds.ConvertAll(CreateEducationBoardPermission);
+	public List<EducationBoardPermission> CreateEducationBoardPermissions(Guid userId, List<Guid> educationBoardIds) =>
+		educationBoardIds.ConvertAll(educationBoardIds => CreateEducationBoardPermission(userId, educationBoardIds));
 
-	public EducationMediumPermission CreateEducationMediumPermission(Guid educationMediumId) => new(
+	public EducationMediumPermission CreateEducationMediumPermission(Guid userId, Guid educationMediumId) => new(
 			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
-			userId: currentUser.Id,
+			userId: userId,
 			educationMediumId: educationMediumId
 		);
 
-	public List<EducationMediumPermission> CreateEducationMediumPermissions(List<Guid> educationMediumIds) =>
-		educationMediumIds.ConvertAll(CreateEducationMediumPermission);
+	public List<EducationMediumPermission> CreateEducationMediumPermissions(Guid userId, List<Guid> educationMediumIds) =>
+		educationMediumIds.ConvertAll(educationMediumId => CreateEducationMediumPermission(userId, educationMediumId));
 
-	public EducationMediumStagePermission CreateEducationMediumStagePermission(Guid educationMediumStageId)
-	{
-		return new EducationMediumStagePermission(
+	public EducationMediumStagePermission CreateEducationMediumStagePermission(Guid userId, Guid educationMediumStageId) => new(
 			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
-			userId: currentUser.Id,
+			userId: userId,
 			educationMediumStageId: educationMediumStageId
 		);
-	}
 
-	public List<EducationMediumStagePermission> CreateEducationMediumStagePermissions(
-		List<Guid> educationMediumStageIds) =>
-		educationMediumStageIds.ConvertAll(CreateEducationMediumStagePermission);
+	public List<EducationMediumStagePermission> CreateEducationMediumStagePermissions(Guid userId, List<Guid> educationMediumStageIds) =>
+		educationMediumStageIds.ConvertAll(educationMediumStageId => CreateEducationMediumStagePermission(userId, educationMediumStageId));
 
-	public StandardPermission CreateStandardPermission(Guid standardId)
-	{
-		return new StandardPermission(
+	public StandardPermission CreateStandardPermission(Guid userId, Guid standardId) => new(
 			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
-			userId: currentUser.Id,
+			userId: userId,
 			standardId: standardId
 		);
-	}
 
-	public List<StandardPermission> CreateStandardPermissions(List<Guid> standardIds) =>
-		standardIds.ConvertAll(CreateStandardPermission);
+	public List<StandardPermission> CreateStandardPermissions(Guid userId, List<Guid> standardIds) =>
+		standardIds.ConvertAll(standardId => CreateStandardPermission(userId, standardId));
 
-	public DivisionPermission CreateDivisionPermission(Guid divisionId)
-	{
-		return new DivisionPermission(
+	public DivisionPermission CreateDivisionPermission(Guid userId, Guid divisionId) => new(
 			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
-			userId: currentUser.Id,
+			userId: userId,
 			divisionId: divisionId
 		);
-	}
 
-	public List<DivisionPermission> CreateDivisionPermissions(List<Guid> divisionIds) =>
-		divisionIds.ConvertAll(CreateDivisionPermission);
+	public List<DivisionPermission> CreateDivisionPermissions(Guid userId, List<Guid> divisionIds) =>
+		divisionIds.ConvertAll(divisionId => CreateDivisionPermission(userId, divisionId));
 }

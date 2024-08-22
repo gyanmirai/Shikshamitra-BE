@@ -25,21 +25,21 @@ public class AcademicSetupPermissionAppService(
 	public async Task AssignPermissionsAsync(AcademicSetupPermissionsDto input)
 	{
 		await academicYearPermissionRepository.InsertManyAsync(
-			academicSetupPermissionManager.CreateAcademicYearPermissions(input.AcademicYearIds));
+			academicSetupPermissionManager.CreateAcademicYearPermissions(input.UserId, input.AcademicYearIds));
 
 		await educationBoardPermissionRepository.InsertManyAsync(
-			academicSetupPermissionManager.CreateEducationBoardPermissions(input.EducationBoardIds));
+			academicSetupPermissionManager.CreateEducationBoardPermissions(input.UserId, input.EducationBoardIds));
 
 		await educationMediumPermissionRepository.InsertManyAsync(
-			academicSetupPermissionManager.CreateEducationMediumPermissions(input.EducationMediumIds));
+			academicSetupPermissionManager.CreateEducationMediumPermissions(input.UserId, input.EducationMediumIds));
 
 		await educationMediumStagePermissionRepository.InsertManyAsync(
-			academicSetupPermissionManager.CreateEducationMediumStagePermissions(input.EducationMediumStageIds));
+			academicSetupPermissionManager.CreateEducationMediumStagePermissions(input.UserId, input.EducationMediumStageIds));
 
 		await standardPermissionRepository.InsertManyAsync(
-			academicSetupPermissionManager.CreateStandardPermissions(input.StandardIds));
+			academicSetupPermissionManager.CreateStandardPermissions(input.UserId, input.StandardIds));
 
 		await divisionPermissionRepository.InsertManyAsync(
-			academicSetupPermissionManager.CreateDivisionPermissions(input.DivisionIds));
+			academicSetupPermissionManager.CreateDivisionPermissions(input.UserId, input.DivisionIds));
 	}
 }

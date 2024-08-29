@@ -1,8 +1,8 @@
 ﻿using System;
 
-namespace ShikshaMitra.Student;
+namespace ShikshaMitra.Students;
 
-public class StudentPermissions
+public static class StudentPermissions
 {
 	public const string GroupName = "Student";
 

@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
+using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
@@ -41,15 +42,15 @@ public class ShikshaMitraDbContext :
 	#region Entities from the modules
 
 	/* Notice: We only implemented IIdentityDbContext and ITenantManagementDbContext
-     * and replaced them for this DbContext. This allows you to perform JOIN
-     * queries for the entities of these modules over the repositories easily. You
-     * typically don't need that for other modules. But, if you need, you can
-     * implement the DbContext interface of the needed module and use ReplaceDbContext
-     * attribute just like IIdentityDbContext and ITenantManagementDbContext.
-     *
-     * More info: Replacing a DbContext of a module ensures that the related module
-     * uses this DbContext on runtime. Otherwise, it will use its own DbContext class.
-     */
+	 * and replaced them for this DbContext. This allows you to perform JOIN
+	 * queries for the entities of these modules over the repositories easily. You
+	 * typically don't need that for other modules. But, if you need, you can
+	 * implement the DbContext interface of the needed module and use ReplaceDbContext
+	 * attribute just like IIdentityDbContext and ITenantManagementDbContext.
+	 *
+	 * More info: Replacing a DbContext of a module ensures that the related module
+	 * uses this DbContext on runtime. Otherwise, it will use its own DbContext class.
+	 */
 
 	//Identity
 	public DbSet<IdentityUser> Users { get; set; }
@@ -68,6 +69,7 @@ public class ShikshaMitraDbContext :
 	public DbSet<TenantConnectionString> TenantConnectionStrings { get; set; }
 
 	#endregion
+
 	#endregion
 
 	#region BookStore
@@ -91,6 +93,13 @@ public class ShikshaMitraDbContext :
 	public DbSet<StandardPermission> StandardPermissions { get; set; }
 	public DbSet<Division> Divisions { get; set; }
 	public DbSet<DivisionPermission> DivisionPermissions { get; set; }
+
+	#endregion
+
+	#region Student
+
+	DbSet<Student> Students { get; set; }
+	DbSet<ParentDetails> ParentDetails { get; set; }
 
 	#endregion
 

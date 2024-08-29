@@ -2,60 +2,121 @@
 using System.Threading.Tasks;
 using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
+using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
+using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Guids;
+using Volo.Abp.TenantManagement;
+using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra;
-
-public class ShikshaMitraSeederContributor(
-	IRepository<Book, Guid> bookRepository,
-	IAuthorRepository authorRepository,
-	AuthorManager authorManager) : IDataSeedContributor, ITransientDependency
+namespace ShikshaMitra
 {
-	public async Task SeedAsync(DataSeedContext context)
+	public class ShikshaMitraSeederContributor(
+		IAcademicYearRepository academicYearRepository,
+		IEducationBoardRepository educationBoardRepository,
+		IEducationMediumRepository educationMediumRepository,
+		IEducationMediumStageRepository educationMediumStageRepository,
+		IStandardRepository standardRepository,
+		IDivisionRepository divisionRepository,
+		ITenantManager tenantManager,
+		ITenantRepository tenantRepository,
+		IIdentityUserRepository userRepository,
+		IGuidGenerator guidGenerator,
+		IdentityUserManager userManager) : IDataSeedContributor, ITransientDependency
 	{
-		if (await bookRepository.GetCountAsync() > 0)
+		public async Task SeedAsync(DataSeedContext context)
 		{
-			return;
+			if (await tenantRepository.GetCountAsync() > 0)
+			{
+				return;
+			}
+			
+			// Create a tenant if it doesn't exist
+			var tenantName = "DDVS";
+			var tenant = await tenantRepository.FindByNameAsync(tenantName);
+			if (tenant == null)
+			{
+				tenant = await tenantManager.CreateAsync(tenantName);
+				await tenantRepository.InsertAsync(tenant);
+			}
+
+			// Create a user for the tenant
+			var userName = "adminddvs";
+			var user = await userRepository.FindByNormalizedUserNameAsync(userName.ToUpperInvariant());
+			if (user == null)
+			{
+				user = new IdentityUser(
+					guidGenerator.Create(),
+					userName,
+					"admin@ddvs.com",
+					tenant.Id
+				);
+
+				user.Name = "DDVSAdmin";
+				user.Surname = "Ahir";
+
+				var result = await userManager.CreateAsync(user, "Temp@123");
+				if (!result.Succeeded)
+				{
+					throw new Exception($"Could not create user: {result.Errors}");
+				}
+
+				await userManager.AddDefaultRolesAsync(user);
+			}
+
+			var academicYear = await academicYearRepository.InsertAsync(new AcademicYear(
+				guidGenerator.Create(),
+				tenant.Id,
+				"2021-2022",
+				new DateTime(2024, 4, 1),
+				new DateTime(2025, 3, 31)
+			));
+
+			var educationBoard = await educationBoardRepository.InsertAsync(new EducationBoard(
+				guidGenerator.Create(),
+				tenant.Id,
+				EducationBoardType.CBSE,
+				academicYear.Id
+			));
+
+			var educationMedium = await educationMediumRepository.InsertAsync(new EducationMedium(
+				guidGenerator.Create(),
+				tenant.Id,
+				"English",
+				educationBoard.Id
+			));
+
+			var educationMediumStage = await educationMediumStageRepository.InsertAsync(new EducationMediumStage(
+				guidGenerator.Create(),
+				tenant.Id,
+				"Primary",
+				educationMedium.Id
+			));
+
+			var standard = await standardRepository.InsertAsync(new Standard(
+				guidGenerator.Create(),
+				tenant.Id,
+				"1",
+				educationMediumStage.Id
+			));
+
+			var division = await divisionRepository.InsertAsync(new Division(
+				guidGenerator.Create(),
+				tenant.Id,
+				"A",
+				standard.Id,
+				30
+			));
 		}
-
-		var orwell = await authorRepository.InsertAsync(
-			await authorManager.CreateAsync(
-				"George Orwell",
-				new DateTime(1903, 06, 25)
-			)
-		);
-
-		var douglas = await authorRepository.InsertAsync(
-			await authorManager.CreateAsync(
-				"Douglas Adams",
-				new DateTime(1952, 03, 11)
-			)
-		);
-
-		await bookRepository.InsertAsync(
-			new Book
-			{
-				AuthorId = orwell.Id, // SET THE AUTHOR
-				Name = "1984",
-				Type = BookType.Dystopia,
-				PublishDate = new DateTime(1949, 6, 8),
-				Price = 19.84f
-			},
-			autoSave: true
-		);
-
-		await bookRepository.InsertAsync(
-			new Book
-			{
-				AuthorId = douglas.Id, // SET THE AUTHOR
-				Name = "The Hitchhiker's Guide to the Galaxy",
-				Type = BookType.ScienceFiction,
-				PublishDate = new DateTime(1995, 9, 27),
-				Price = 42.0f
-			},
-			autoSave: true
-		);
 	}
 }

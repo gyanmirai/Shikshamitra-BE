@@ -29,7 +29,7 @@ public class AcademicSetupsConfiguration :
 		// Create an index on the Name, TenantId, StartDate, and EndDate properties
 		builder.HasIndex(x => new { x.Name, x.TenantId, x.StartDate, x.EndDate }).IsUnique(); // Ensuring uniqueness
 	}
-	
+
 	// Configure the EducationBoard entity
 	public void Configure(EntityTypeBuilder<EducationBoard> builder)
 	{
@@ -52,8 +52,7 @@ public class AcademicSetupsConfiguration :
 
 		// Make the Name property required with a max length
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(EducationMediumConsts.MaxNameLength);
-
-
+		
 		builder.Navigation(x => x.EducationMediumStages).AutoInclude();
 	}
 

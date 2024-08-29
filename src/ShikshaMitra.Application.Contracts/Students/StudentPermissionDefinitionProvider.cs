@@ -1,7 +1,7 @@
 ﻿using Volo.Abp.Authorization.Permissions;
 using static ShikshaMitra.Localization.LocalizationHelper;
 
-namespace ShikshaMitra.Student;
+namespace ShikshaMitra.Students;
 
 public class StudentPermissionDefinitionProvider : PermissionDefinitionProvider
 {

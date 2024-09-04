@@ -15,6 +15,9 @@ public class Address : ValueObject
 	public string PermanentAddress { get; private set; }
 	public string EmergencyAddress { get; private set; }
 
+	// Constructor for ORM
+	private Address() { }
+
 	// Constructor for Value Object
 	internal Address(
 		string religion,

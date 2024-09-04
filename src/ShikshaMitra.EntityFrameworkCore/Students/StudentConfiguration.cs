@@ -19,14 +19,11 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 
 		// Value objects
 		builder.ComplexProperty(s => s.Address);
-		// builder.ComplexProperty(s => s.AdmissionDetails, a =>
-		// {
-		// 	a.IsRequired();
-		// });
-		// builder.ComplexProperty(s => s.CommunicationDetails, a =>
-		// {
-		// 	a.IsRequired();
-		// });
+		builder.ComplexProperty(s => s.FatherDetails);
+		builder.ComplexProperty(s => s.MotherDetails);
+		builder.ComplexProperty(s => s.AdmissionDetails);
+		builder.ComplexProperty(s => s.CommunicationDetails);
+
 
 		builder.HasOne<IdentityUser>()
 			.WithMany()

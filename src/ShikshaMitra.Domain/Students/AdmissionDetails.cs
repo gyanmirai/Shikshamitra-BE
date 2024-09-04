@@ -7,24 +7,24 @@ namespace ShikshaMitra.Students;
 
 public class AdmissionDetails : ValueObject
 {
-	public DateTime? AdmissionDate { get; private set; }
-	public string AdmissionStandard { get; private set; }
-	public string AdmissionFormNumber { get; private set; }
-	public string AdmissionQuota { get; private set; }
-	public string PreviousSchool { get; private set; }
-	public DateTime? PreviousSchoolLeftDate { get; private set; }
-	public DateTime? PreviousLcDate { get; private set; }
-	public string PreviousLcNumber { get; private set; }
+	public DateOnly? AdmissionDate { get; private set; }
+	public string? AdmissionStandard { get; private set; }
+	public string? AdmissionFormNumber { get; private set; }
+	public string? AdmissionQuota { get; private set; }
+	public string? PreviousSchool { get; private set; }
+	public DateOnly? PreviousSchoolLeftDate { get; private set; }
+	public DateOnly? PreviousLcDate { get; private set; }
+	public string? PreviousLcNumber { get; private set; }
 
 	// Constructor for Value Object
 	internal AdmissionDetails(
-		DateTime? admissionDate,
+		DateOnly? admissionDate,
 		string admissionStandard,
 		string admissionFormNumber,
 		string admissionQuota,
 		string previousSchool,
-		DateTime? previousSchoolLeftDate,
-		DateTime? previousLcDate,
+		DateOnly? previousSchoolLeftDate,
+		DateOnly? previousLcDate,
 		string previousLcNumber)
 	{
 		AdmissionDate = admissionDate;

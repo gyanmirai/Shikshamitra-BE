@@ -152,17 +152,11 @@ public static class ShikshaMitraModuleExtensionConfigurator
 					property.Attributes.Add(new RequiredAttribute());
 				}
 			);
-		
+
 		ObjectExtensionManager.Instance
 			.AddOrUpdateProperty<byte[]>(
-				new[]
-				{
-					typeof(TenantDto),
-					typeof(TenantCreateDto),
-					typeof(TenantUpdateDto),
-					typeof(Tenant)
-				},
-				"Logo" 
+				new[] { typeof(TenantDto), typeof(TenantCreateDto), typeof(TenantUpdateDto), typeof(Tenant) },
+				"Logo"
 			);
 
 		#endregion

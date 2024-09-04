@@ -1,6 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
+using ShikshaMitra.Employees;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
@@ -99,7 +101,12 @@ public class ShikshaMitraDbContext :
 	#region Student
 
 	DbSet<Student> Students { get; set; }
-	DbSet<ParentDetails> ParentDetails { get; set; }
+
+	#endregion
+
+	#region Employee
+	DbSet<Employee> Employees { get; set; }
+	DbSet<WorkExperience> WorkExperiences { get; set; }
 
 	#endregion
 

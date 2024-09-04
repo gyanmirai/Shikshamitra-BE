@@ -5,11 +5,11 @@ namespace ShikshaMitra.Students;
 
 public class CommunicationDetails : ValueObject
 {
-	public string ParentContactNumber { get; private set; }
-	public string ParentEmail { get; private set; }
-	public string StudentContactNumber { get; private set; }
-	public string StudentEmail { get; private set; }
-	public string WhatsAppContactNumber { get; private set; }
+	public string? ParentContactNumber { get; private set; }
+	public string? ParentEmail { get; private set; }
+	public string? StudentContactNumber { get; private set; }
+	public string? StudentEmail { get; private set; }
+	public string? WhatsAppContactNumber { get; private set; }
 
 	// Constructor for Value Object
 	internal CommunicationDetails(

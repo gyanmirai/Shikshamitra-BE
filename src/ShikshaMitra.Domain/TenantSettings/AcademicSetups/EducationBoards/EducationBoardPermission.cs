@@ -1,5 +1,4 @@
-﻿using ShikshaMitra.Permissions;
-using System;
+﻿using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;

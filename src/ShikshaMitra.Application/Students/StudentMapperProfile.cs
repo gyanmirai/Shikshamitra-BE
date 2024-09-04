@@ -9,8 +9,10 @@ public class StudentMapperProfile : Profile
 		// Mapping for Student
 		CreateMap<Student, StudentDto>();
 		CreateMap<CreateUpdateStudentDto, Student>();
-		
+
 		CreateMap<Address, AddressDto>().ReverseMap();
-		CreateMap<ParentDetails, ParentDetailsDto>().ReverseMap();
+		CreateMap<StudentParentDetails, StudentParentDetailsDto>().ReverseMap();
+		CreateMap<CommunicationDetails, CommunicationDetailsDto>().ReverseMap();
+		CreateMap<AdmissionDetails, AdmissionDetailsDto>().ReverseMap();
 	}
 }

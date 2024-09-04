@@ -15,7 +15,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string Surname { get; private set; }
 	public string Name { get; private set; }
 	public string MiddleName { get; private set; }
-	public DateTime? DateOfBirth { get; private set; }
+	public DateOnly DateOfBirth { get; private set; }
 	public string Gender { get; private set; }
 
 	// Foreign keys
@@ -27,13 +27,11 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Division Division { get; private set; }
 
 	// Value objects
-	public Address Address { get;  set; }
-	// public AdmissionDetails AdmissionDetails { get;  set; }
-	// public CommunicationDetails CommunicationDetails { get; set; }
-
-	// Entities
-	public ParentDetails FatherDetails { get; private set; }
-	public ParentDetails MotherDetails { get; private set; }
+	public Address Address { get; private set; }
+	public AdmissionDetails AdmissionDetails { get; private set; }
+	public CommunicationDetails CommunicationDetails { get; private set; }
+	public StudentParentDetails FatherDetails { get; private set; }
+	public StudentParentDetails MotherDetails { get; private set; }
 
 	// Profile Picture
 	public byte[]? ProfilePicture { get; private set; }
@@ -49,15 +47,15 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string surname,
 		string name,
 		string middleName,
-		DateTime? dateOfBirth,
+		DateOnly dateOfBirth,
 		string gender,
 		Guid standardId,
 		Guid divisionId,
 		Address address,
 		// AdmissionDetails admissionDetails,
 		// CommunicationDetails communicationDetails,
-		ParentDetails fatherDetails,
-		ParentDetails motherDetails,
+		StudentParentDetails fatherDetails,
+		StudentParentDetails motherDetails,
 		byte[]? profilePicture = null) : base(id)
 	{
 		TenantId = Check.NotNull(tenantId, nameof(tenantId));

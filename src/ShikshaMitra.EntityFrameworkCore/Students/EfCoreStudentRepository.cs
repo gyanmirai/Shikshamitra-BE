@@ -16,7 +16,7 @@ public class EfCoreStudentRepository(IDbContextProvider<ShikshaMitraDbContext> d
 		DbSet<Student> students = await GetDbSetAsync();
 		return await students
 			.Include(s => s.FatherDetails)
-			.Include(s => s.MotherDetails)
+			// .Include(s => s.MotherDetails)
 			.FirstOrDefaultAsync(s => s.Id == studentId);
 	}
 
@@ -26,7 +26,7 @@ public class EfCoreStudentRepository(IDbContextProvider<ShikshaMitraDbContext> d
 		return includeDetails
 			? await students
 				.Include(s => s.FatherDetails)
-				.Include(s => s.MotherDetails)
+				// .Include(s => s.MotherDetails)
 				.ToListAsync()
 			: await students
 				.ToListAsync();

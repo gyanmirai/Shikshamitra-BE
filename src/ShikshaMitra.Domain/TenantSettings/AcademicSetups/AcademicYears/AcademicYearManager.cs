@@ -12,7 +12,8 @@ namespace ShikshaMitra.TenantSettings.AcademicSetups;
 /// <summary>
 /// This abstract class manages the creation and updating of academic years.
 /// </summary>
-public class AcademicYearManager(IAcademicYearRepository academicYearRepository,IGuidGenerator guidGenerator) : DomainService
+public class AcademicYearManager(IAcademicYearRepository academicYearRepository, IGuidGenerator guidGenerator)
+	: DomainService
 {
 	private string EntityName => this.GetType().ToEntityNameFromManager();
 
@@ -33,7 +34,7 @@ public class AcademicYearManager(IAcademicYearRepository academicYearRepository,
 		Check.NotNullOrWhiteSpace(name, nameof(name));
 
 		// Validate the academic year details.
-		await ValidateAcademicYearAsync(name, startDate, endDate);
+		await ValidateAcademicYearAsync(name);
 
 		// Create and return a new AcademicYear object.
 		return new AcademicYear(
@@ -62,7 +63,7 @@ public class AcademicYearManager(IAcademicYearRepository academicYearRepository,
 		Check.NotNullOrWhiteSpace(newName, nameof(newName));
 
 		// Validate the academic year details.
-		await ValidateAcademicYearAsync(newName, startDate, endDate, academicYear.Name);
+		await ValidateAcademicYearAsync(newName, academicYear.Name);
 
 		// Change the name if it's different from the current one.
 		if (academicYear.Name != newName)
@@ -83,12 +84,10 @@ public class AcademicYearManager(IAcademicYearRepository academicYearRepository,
 	/// Validates the academic year details to ensure uniqueness and correct dates.
 	/// </summary>
 	/// <param name="name">The name of the academic year.</param>
-	/// <param name="startDate">The start date of the academic year.</param>
-	/// <param name="endDate">The end date of the academic year.</param>
 	/// <param name="currentName">The current name of the academic year, if any (optional).</param>
 	/// <exception cref="AlreadyExistsException">Thrown if an academic year with the same name already exists.</exception>
 	/// <exception cref="InvalidAcademicYearDatesException">Thrown if the end date is before the start date.</exception>
-	private async Task ValidateAcademicYearAsync(string name, DateTime startDate, DateTime endDate, string currentName = null)
+	private async Task ValidateAcademicYearAsync(string name, string currentName = null)
 	{
 		// Check if the name is unique (if it's different from the current name).
 		if (currentName != name && await academicYearRepository.FindByNameAsync(name) != null)

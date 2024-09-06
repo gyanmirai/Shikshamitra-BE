@@ -6,7 +6,7 @@ namespace ShikshaMitra.HR.Employees;
 
 public class CreateUpdateEmployeeDto
 {
-	public Guid? UserId { get; set; }
+	public Guid UserId { get; set; }
 
 	// Basic Details
 	public string? OrganizationName { get; set; }

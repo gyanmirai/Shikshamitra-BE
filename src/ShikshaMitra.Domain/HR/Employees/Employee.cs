@@ -11,7 +11,7 @@ namespace ShikshaMitra.HR.Employees;
 public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
-	public Guid? UserId { get; private set; }
+	public Guid UserId { get; private set; }
 
 	// Basic Details
 	public string? OrganizationName { get; private set; }
@@ -60,7 +60,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	internal Employee(
 		Guid id,
 		Guid? tenantId,
-		Guid? userId,
+		Guid userId,
 		string? organizationName,
 		string? code,
 		string? lastName,

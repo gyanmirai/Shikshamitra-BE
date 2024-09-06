@@ -1,0 +1,23 @@
+﻿using System;
+using System.ComponentModel.DataAnnotations;
+using Volo.Abp.Domain.Entities.Auditing;
+
+namespace ShikshaMitra.HR.AttendanceAndLeaves;
+
+public class EmployeeCreateUpdateLeaveDto
+{
+	[Required] public Guid UserId { get; set; }
+
+	[Required] public Guid EmployeeId { get; set; }
+
+	[Required] public string LeaveType { get; set; }
+
+	[Required] public string Color { get; set; }
+
+	[Required] public bool HalfDay { get; set; }
+
+	[Required] public DateTimeOffset StartDate { get; set; }
+	public DateTimeOffset EndDate { get; set; }
+
+	[Required] public string Description { get; set; }
+}

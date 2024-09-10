@@ -1,4 +1,4 @@
-{
+﻿{
   "iisSettings": {
     "windowsAuthentication": false,
     "anonymousAuthentication": true,
@@ -15,7 +15,15 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
-    "ShikshaMitra.HttpApi.Host": {
+    "ShikshaMitra.HttpApi.Host (Local)": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "applicationUrl": "http://localhost:44332",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Local"
+      }
+    },
+    "ShikshaMitra.HttpApi.Host (Development)": {
       "commandName": "Project",
       "launchBrowser": true,
       "applicationUrl": "https://localhost:44332",

@@ -106,7 +106,7 @@ public static class ShikshaMitraModuleExtensionConfigurator
 		ObjectExtensionManager.Instance
 			.AddOrUpdateProperty<string>(
 				new[] { typeof(TenantDto), typeof(TenantCreateDto), typeof(TenantUpdateDto), typeof(Tenant) },
-				"StateProvince",
+				"State",
 				property =>
 				{
 					property.Attributes.Add(new RequiredAttribute());
@@ -116,7 +116,7 @@ public static class ShikshaMitraModuleExtensionConfigurator
 		ObjectExtensionManager.Instance
 			.AddOrUpdateProperty<string>(
 				new[] { typeof(TenantDto), typeof(TenantCreateDto), typeof(TenantUpdateDto), typeof(Tenant) },
-				"ZipPostalCode",
+				"PostalCode",
 				property =>
 				{
 					property.Attributes.Add(new RequiredAttribute());
@@ -142,17 +142,7 @@ public static class ShikshaMitraModuleExtensionConfigurator
 					property.Attributes.Add(new RequiredAttribute());
 				}
 			);
-
-		ObjectExtensionManager.Instance
-			.AddOrUpdateProperty<string>(
-				new[] { typeof(TenantDto), typeof(TenantCreateDto), typeof(TenantUpdateDto), typeof(Tenant) },
-				"EmailAddress",
-				property =>
-				{
-					property.Attributes.Add(new RequiredAttribute());
-				}
-			);
-
+		
 		ObjectExtensionManager.Instance
 			.AddOrUpdateProperty<byte[]>(
 				new[] { typeof(TenantDto), typeof(TenantCreateDto), typeof(TenantUpdateDto), typeof(Tenant) },

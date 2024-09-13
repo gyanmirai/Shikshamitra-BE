@@ -17,7 +17,7 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public bool HalfDay { get; private set; }
 	public DateTimeOffset StartDate { get; private set; }
 	public DateTimeOffset EndDate { get; private set; }
-	public EmployeeLeaveStatus Status { get; private set; }
+	public EmployeeLeaveStatusType Status { get; private set; }
 	public string Description { get; private set; }
 	public string? RejectionReason { get; private set; }
 
@@ -48,10 +48,10 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EndDate = endDate;
 		Description = description;
 		RejectionReason = rejectionReason;
-		Status = EmployeeLeaveStatus.Pending;
+		Status = EmployeeLeaveStatusType.Pending;
 	}
 
-	internal EmployeeLeave UpdateLeaveStatus(EmployeeLeaveStatus status, string? rejectionReason)
+	internal EmployeeLeave UpdateLeaveStatus(EmployeeLeaveStatusType status, string? rejectionReason)
 	{
 		Status = status;
 		RejectionReason = rejectionReason;

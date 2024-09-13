@@ -12,7 +12,7 @@ public class EmployeeLeaveDto : FullAuditedEntityDto<Guid>
 	public bool HalfDay { get; set; }
 	public DateTimeOffset StartDate { get; set; }
 	public DateTimeOffset EndDate { get; set; }
-	public EmployeeLeaveStatus Status { get; set; }
+	public EmployeeLeaveStatusType Status { get; set; }
 	public string Description { get; set; }
 	public string? RejectionReason { get; set; }
 }

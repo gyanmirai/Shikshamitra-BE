@@ -2,6 +2,6 @@
 
 public class EmployeeLeaveApprovalDto
 {
-	public EmployeeLeaveStatus Status { get; set; }
+	public EmployeeLeaveStatusType Status { get; set; }
 	public string? RejectionReason { get; set; }
 }

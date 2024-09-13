@@ -10,7 +10,7 @@ public class EmployeeLeaveManager(IEmployeeLeaveRepository employeeLeaveReposito
 {
 	public EmployeeLeave IsLeaveStatusIsPending(EmployeeLeave employeeLeave)
 	{
-		if (employeeLeave.Status != EmployeeLeaveStatus.Pending)
+		if (employeeLeave.Status != EmployeeLeaveStatusType.Pending)
 		{
 			throw new BusinessException("Leave request is already approved or rejected");
 		}
@@ -19,7 +19,7 @@ public class EmployeeLeaveManager(IEmployeeLeaveRepository employeeLeaveReposito
 	}
 
 	public async Task<EmployeeLeave> UpdateLeaveRequestStatusAsync(EmployeeLeave employeeLeave,
-		EmployeeLeaveStatus status, string? rejectionReason)
+		EmployeeLeaveStatusType status, string? rejectionReason)
 	{
 		employeeLeave.UpdateLeaveStatus(status, rejectionReason);
 		return await employeeLeaveRepository.UpdateAsync(employeeLeave);

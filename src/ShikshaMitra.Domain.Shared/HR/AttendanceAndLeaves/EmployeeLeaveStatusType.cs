@@ -1,6 +1,6 @@
 ﻿namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
-public enum EmployeeLeaveStatus
+public enum EmployeeLeaveStatusType
 {
 	Pending,
 	Approved,

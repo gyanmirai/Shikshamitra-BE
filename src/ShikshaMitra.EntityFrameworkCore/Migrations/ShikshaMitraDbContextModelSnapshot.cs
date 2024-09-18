@@ -343,9 +343,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("MobileNo")
                         .HasColumnType("text");
 
-                    b.Property<string>("OrganizationName")
-                        .HasColumnType("text");
-
                     b.Property<string>("Photo")
                         .HasColumnType("text");
 
@@ -450,45 +447,6 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("AppEmployees", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.HR.Employees.WorkExperience", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Department")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Designation")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("EmployeeId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateOnly?>("FromDate")
-                        .HasColumnType("date");
-
-                    b.Property<string>("OrganizationAddress")
-                        .HasColumnType("text");
-
-                    b.Property<string>("OrganizationName")
-                        .HasColumnType("text");
-
-                    b.Property<string>("References")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Responsibilities")
-                        .HasColumnType("text");
-
-                    b.Property<DateOnly?>("ToDate")
-                        .HasColumnType("date");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EmployeeId");
-
-                    b.ToTable("WorkExperiences");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.Student", b =>
@@ -3201,15 +3159,51 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-                });
 
-            modelBuilder.Entity("ShikshaMitra.HR.Employees.WorkExperience", b =>
-                {
-                    b.HasOne("ShikshaMitra.HR.Employees.Employee", null)
-                        .WithMany("WorkExperiences")
-                        .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.OwnsMany("ShikshaMitra.HR.Employees.WorkExperience", "WorkExperiences", b1 =>
+                        {
+                            b1.Property<Guid>("EmployeeId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("Id")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("Department")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Designation")
+                                .HasColumnType("text");
+
+                            b1.Property<DateOnly?>("FromDate")
+                                .HasColumnType("date");
+
+                            b1.Property<string>("OrganizationAddress")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("OrganizationName")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("References")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Responsibilities")
+                                .HasColumnType("text");
+
+                            b1.Property<DateOnly?>("ToDate")
+                                .HasColumnType("date");
+
+                            b1.HasKey("EmployeeId", "Id");
+
+                            b1.ToTable("AppEmployees");
+
+                            b1.ToJson("WorkExperiences");
+
+                            b1.WithOwner()
+                                .HasForeignKey("EmployeeId");
+                        });
+
+                    b.Navigation("WorkExperiences");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.Student", b =>
@@ -3429,11 +3423,6 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
-                {
-                    b.Navigation("WorkExperiences");
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", b =>

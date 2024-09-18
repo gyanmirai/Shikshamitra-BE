@@ -4,7 +4,7 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.HR.Employees;
 
-public class WorkExperience : Entity<Guid>
+public class WorkExperience
 {
 	// Foreign Key
 	public Guid EmployeeId { get; private set; }
@@ -29,7 +29,7 @@ public class WorkExperience : Entity<Guid>
 		string? department,
 		string? designation,
 		string? responsibilities,
-		string? references) : base(id)
+		string? references)
 	{
 		EmployeeId = employeeId;
 		OrganizationName = organizationName;

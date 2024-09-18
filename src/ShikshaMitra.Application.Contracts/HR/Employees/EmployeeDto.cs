@@ -10,7 +10,6 @@ public class EmployeeDto : EntityDto<Guid>
 	public Guid UserId { get; set; }
 
 	// Basic Details
-	public string? OrganizationName { get; set; }
 	public string? Code { get; set; }
 	public string? LastName { get; set; }
 	public string? FirstName { get; set; }

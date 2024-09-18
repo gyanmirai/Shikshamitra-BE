@@ -882,7 +882,6 @@ namespace ShikshaMitra.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    OrganizationName = table.Column<string>(type: "text", nullable: true),
                     Code = table.Column<string>(type: "text", nullable: true),
                     LastName = table.Column<string>(type: "text", nullable: true),
                     FirstName = table.Column<string>(type: "text", nullable: true),
@@ -935,7 +934,8 @@ namespace ShikshaMitra.Migrations
                     LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
                     IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    WorkExperiences = table.Column<string>(type: "jsonb", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1073,32 +1073,6 @@ namespace ShikshaMitra.Migrations
                         principalTable: "AppEmployees",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "WorkExperiences",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    OrganizationName = table.Column<string>(type: "text", nullable: true),
-                    OrganizationAddress = table.Column<string>(type: "text", nullable: true),
-                    FromDate = table.Column<DateOnly>(type: "date", nullable: true),
-                    ToDate = table.Column<DateOnly>(type: "date", nullable: true),
-                    Department = table.Column<string>(type: "text", nullable: true),
-                    Designation = table.Column<string>(type: "text", nullable: true),
-                    Responsibilities = table.Column<string>(type: "text", nullable: true),
-                    References = table.Column<string>(type: "text", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_WorkExperiences", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_WorkExperiences_AppEmployees_EmployeeId",
-                        column: x => x.EmployeeId,
-                        principalTable: "AppEmployees",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -1667,11 +1641,6 @@ namespace ShikshaMitra.Migrations
                 name: "IX_OpenIddictTokens_ReferenceId",
                 table: "OpenIddictTokens",
                 column: "ReferenceId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_WorkExperiences_EmployeeId",
-                table: "WorkExperiences",
-                column: "EmployeeId");
         }
 
         /// <inheritdoc />
@@ -1786,9 +1755,6 @@ namespace ShikshaMitra.Migrations
                 name: "OpenIddictTokens");
 
             migrationBuilder.DropTable(
-                name: "WorkExperiences");
-
-            migrationBuilder.DropTable(
                 name: "AbpEntityChanges");
 
             migrationBuilder.DropTable(
@@ -1801,25 +1767,25 @@ namespace ShikshaMitra.Migrations
                 name: "AbpRoles");
 
             migrationBuilder.DropTable(
+                name: "AppEmployees");
+
+            migrationBuilder.DropTable(
                 name: "AppDivisions");
 
             migrationBuilder.DropTable(
                 name: "OpenIddictAuthorizations");
 
             migrationBuilder.DropTable(
-                name: "AppEmployees");
+                name: "AbpAuditLogs");
 
             migrationBuilder.DropTable(
-                name: "AbpAuditLogs");
+                name: "AbpUsers");
 
             migrationBuilder.DropTable(
                 name: "AppStandards");
 
             migrationBuilder.DropTable(
                 name: "OpenIddictApplications");
-
-            migrationBuilder.DropTable(
-                name: "AbpUsers");
 
             migrationBuilder.DropTable(
                 name: "AppEducationMediumStages");

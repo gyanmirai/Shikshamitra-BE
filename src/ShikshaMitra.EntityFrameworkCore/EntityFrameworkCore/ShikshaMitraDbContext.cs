@@ -106,7 +106,7 @@ public class ShikshaMitraDbContext :
 
 	#region Employee
 	DbSet<Employee> Employees { get; set; }
-	DbSet<WorkExperience> WorkExperiences { get; set; }
+	// DbSet<WorkExperience> WorkExperiences { get; set; }
 
 	#endregion
 

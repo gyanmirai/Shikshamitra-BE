@@ -14,7 +14,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid UserId { get; private set; }
 
 	// Basic Details
-	public string? OrganizationName { get; private set; }
 	public string? Code { get; private set; }
 	public string? LastName { get; private set; }
 	public string? FirstName { get; private set; }
@@ -98,7 +97,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		TenantId = tenantId;
 		UserId = userId;
-		OrganizationName = organizationName;
 		Code = code;
 		LastName = lastName;
 		FirstName = firstName;

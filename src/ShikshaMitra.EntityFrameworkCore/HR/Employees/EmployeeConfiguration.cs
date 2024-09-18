@@ -19,15 +19,13 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 		builder.ComplexProperty(e => e.SpouseDetails);
 		builder.ComplexProperty(e => e.BankDetails);
 
+		// json column
+		builder.OwnsMany(e => e.WorkExperiences, ew => ew.ToJson());
+
 		builder.HasOne<IdentityUser>()
 			.WithMany()
 			.HasForeignKey(s => s.UserId)
 			.OnDelete(DeleteBehavior.Restrict);
 
-		builder.HasMany(e => e.WorkExperiences).WithOne()
-			.HasForeignKey(e => e.EmployeeId);
-
-		// TODO: Remove this when we write custom repository methods
-		builder.Navigation(e => e.WorkExperiences).AutoInclude();
 	}
 }

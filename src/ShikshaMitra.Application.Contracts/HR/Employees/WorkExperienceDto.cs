@@ -3,10 +3,8 @@ using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.HR.Employees;
 
-public class WorkExperienceDto : EntityDto<Guid>
+public class WorkExperienceDto
 {
-	// Foreign Key
-	public Guid EmployeeId { get; set; }
 	public string? OrganizationName { get; set; }
 	public string? OrganizationAddress { get; set; }
 	public DateOnly? FromDate { get; set; }

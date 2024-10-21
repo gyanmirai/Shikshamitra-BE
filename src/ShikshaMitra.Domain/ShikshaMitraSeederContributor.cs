@@ -199,8 +199,6 @@ namespace ShikshaMitra
 					new List<WorkExperience>
 					{
 						new WorkExperience(
-							guidGenerator.Create(),
-							employeeId,
 							"XYZ Technologies",
 							"789, Tech Park, Bangalore",
 							DateOnly.FromDateTime(new DateTime(2015, 6, 1)),

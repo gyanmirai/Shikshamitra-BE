@@ -6,8 +6,6 @@ namespace ShikshaMitra.HR.Employees;
 
 public class WorkExperience
 {
-	// Foreign Key
-	public Guid EmployeeId { get; private set; }
 	public string? OrganizationName { get; private set; }
 	public string? OrganizationAddress { get; private set; }
 	public DateOnly? FromDate { get; private set; }
@@ -20,8 +18,6 @@ public class WorkExperience
 	private WorkExperience() { } // For ORM
 
 	public WorkExperience(
-		Guid id,
-		Guid employeeId,
 		string? organizationName,
 		string? organizationAddress,
 		DateOnly? fromDate,
@@ -31,7 +27,6 @@ public class WorkExperience
 		string? responsibilities,
 		string? references)
 	{
-		EmployeeId = employeeId;
 		OrganizationName = organizationName;
 		OrganizationAddress = organizationAddress;
 		FromDate = fromDate;

@@ -4,7 +4,6 @@ namespace ShikshaMitra.HR.Employees;
 
 public class CreateUpdateWorkExperienceDto
 {
-	public Guid EmployeeId { get; set; }
 	public string? OrganizationName { get; set; }
 	public string? OrganizationAddress { get; set; }
 	public DateOnly? FromDate { get; set; }

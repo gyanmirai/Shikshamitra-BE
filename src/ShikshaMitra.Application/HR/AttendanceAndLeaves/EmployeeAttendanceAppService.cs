@@ -8,11 +8,11 @@ using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.HR.Employees;
 
-public class EmployeeEmployeeAttendanceAppService(IEmployeeAttendanceRepository employeeAttendanceRepository)
+public class EmployeeAttendanceAppService(IEmployeeAttendanceRepository employeeAttendanceRepository)
 	: CrudAppService<EmployeeAttendance, EmployeeAttendanceDto, Guid, PagedAndSortedResultRequestDto,
 		CreateUpdateEmployeeAttendanceDto>(employeeAttendanceRepository), IEmployeeAttendanceAppService
 {
-	public async Task<PagedResultDto<EmployeeAttendanceDto>> GetEmployeesByDateAsync(DateTime date)
+	public async Task<PagedResultDto<EmployeeAttendanceDto>> GetEmployeesByDate(DateTime date)
 	{
 		List<EmployeeAttendance> employees =
 			await employeeAttendanceRepository.GetListAsync(e => e.CreationTime.Date == date.Date,
@@ -25,7 +25,7 @@ public class EmployeeEmployeeAttendanceAppService(IEmployeeAttendanceRepository 
 		};
 	}
 
-	public async Task<List<EmployeeAttendanceSummaryDto>> GetEmployeeAttendanceSummaryAsync(List<Guid> employeeIds,
+	public async Task<List<EmployeeAttendanceSummaryDto>> GetEmployeeAttendanceSummary(List<Guid> employeeIds,
 		DateTime month)
 	{
 		var startOfMonth = new DateOnly(month.Year, month.Month, 1);
@@ -49,10 +49,17 @@ public class EmployeeEmployeeAttendanceAppService(IEmployeeAttendanceRepository 
 			summary.Add(new EmployeeAttendanceSummaryDto
 			{
 				EmployeeId = employeeId,
-				EmployeeName = employee?.FirstName + " " + employee?.LastName,
+				EmployeeName = employee?.EmployeeName ?? string.Empty,
+				TotalWorkingDays = totalWorkingDays + totalFullDayLeaves + totalHalfDayLeaves,
 				PresentDays = totalWorkingDays,
 				LeaveDays = totalFullDayLeaves,
-				HalfDayLeaves = totalHalfDayLeaves
+				HalfDayLeaves = totalHalfDayLeaves,
+				EmployeeAttendances = new PagedResultDto<EmployeeAttendanceDto>
+				{
+					TotalCount = employeeAttendance.Count,
+					Items = ObjectMapper.Map<List<EmployeeAttendance>, List<EmployeeAttendanceDto>>(
+						employeeAttendance)
+				}
 			});
 		}
 

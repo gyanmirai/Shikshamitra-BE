@@ -1,4 +1,5 @@
 ﻿using System;
+using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.HR.Employees;
 
@@ -15,4 +16,6 @@ public class EmployeeAttendanceSummaryDto
 	public int LeaveDays { get; set; }
 
 	public int HalfDayLeaves { get; set; }
+	
+	public PagedResultDto<EmployeeAttendanceDto> EmployeeAttendances { get; set; }
 }

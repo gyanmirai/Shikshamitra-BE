@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -11,4 +10,9 @@ public class EmployeeAppService(IEmployeeRepository employeeRepository) :
 		employeeRepository),
 	IEmployeeService
 {
+	public async Task<Employee> GetEmployeeByUserId(Guid userId)
+	{
+		Employee? employee = await employeeRepository.GetEmployeeByUserIdAsync(userId);
+		return employee;
+	}
 }

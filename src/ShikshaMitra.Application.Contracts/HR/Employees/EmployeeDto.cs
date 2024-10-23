@@ -7,8 +7,6 @@ namespace ShikshaMitra.HR.Employees;
 
 public class EmployeeDto : EntityDto<Guid>
 {
-	public Guid UserId { get; set; }
-
 	// Basic Details
 	public string? Code { get; set; }
 	public string? LastName { get; set; }

@@ -104,6 +104,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
         {
             options.IsDynamicClaimsEnabled = true;
         });
+        
     }
 
     private void ConfigureBundles()

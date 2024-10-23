@@ -9,8 +9,8 @@ namespace ShikshaMitra.HR.Employees;
 public interface IEmployeeAttendanceAppService : ICrudAppService<EmployeeAttendanceDto, Guid, PagedAndSortedResultRequestDto,
 	CreateUpdateEmployeeAttendanceDto>
 {
-	Task<PagedResultDto<EmployeeAttendanceDto>> GetEmployeesByDateAsync(DateTime date);
+	Task<PagedResultDto<EmployeeAttendanceDto>> GetEmployeesByDate(DateTime date);
 
-	Task<List<EmployeeAttendanceSummaryDto>> GetEmployeeAttendanceSummaryAsync(List<Guid> employeeIds,
+	Task<List<EmployeeAttendanceSummaryDto>> GetEmployeeAttendanceSummary(List<Guid> employeeIds,
 		DateTime month);
 }

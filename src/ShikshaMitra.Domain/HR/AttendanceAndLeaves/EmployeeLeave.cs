@@ -10,7 +10,6 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
-	public Guid UserId { get; private set; }
 	public Guid EmployeeId { get; private set; }
 	public string LeaveType { get; private set; }
 	public string Color { get; private set; }
@@ -20,9 +19,6 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public EmployeeLeaveStatusType Status { get; private set; }
 	public string Description { get; private set; }
 	public string? RejectionReason { get; private set; }
-
-	// Navigation properties
-	public IdentityUser? User { get; private set; }
 	
 	public Employee? Employee { get; private set; }
 
@@ -31,7 +27,6 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	internal EmployeeLeave(
 		Guid id,
 		Guid tenantId,
-		Guid userId,
 		string leaveType,
 		string color,
 		bool halfDay,
@@ -40,7 +35,6 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string description, string rejectionReason) : base(id)
 	{
 		TenantId = Check.NotNull(tenantId, nameof(tenantId));
-		UserId = Check.NotNull(userId, nameof(userId));
 		Color = color;
 		LeaveType = leaveType;
 		HalfDay = halfDay;

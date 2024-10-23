@@ -26,7 +26,53 @@ public class AcademicSetupPermissionAppService(
 	AcademicSetupPermissionManager academicSetupPermissionManager)
 	: ApplicationService
 {
-	public async Task<AcademicSetupPermissionsDto> GetPermissionsAsync(Guid userId)
+	// create one api that retrivers all employee with permissions
+	public async Task<List<AcademicSetupPermissionsDto>> GetAllPermissions()
+	{
+		//TODO: Fix this API 
+
+		// Fetch all data for each repository asynchronously
+		var academicYearQueryable = await academicYearPermissionRepository.GetQueryableAsync();
+		var educationBoardQueryable = await educationBoardPermissionRepository.GetQueryableAsync();
+		var educationMediumQueryable = await educationMediumPermissionRepository.GetQueryableAsync();
+		var educationMediumStageQueryable = await educationMediumStagePermissionRepository.GetQueryableAsync();
+		var standardQueryable = await standardPermissionRepository.GetQueryableAsync();
+		var divisionQueryable = await divisionPermissionRepository.GetQueryableAsync();
+
+		// Execute queries to get all permissions
+		var academicYearPermissions = await asyncQueryableExecuter.ToListAsync(academicYearQueryable);
+		var educationBoardPermissions = await asyncQueryableExecuter.ToListAsync(educationBoardQueryable);
+		var educationMediumPermissions = await asyncQueryableExecuter.ToListAsync(educationMediumQueryable);
+		var educationMediumStagePermissions = await asyncQueryableExecuter.ToListAsync(educationMediumStageQueryable);
+		var standardPermissions = await asyncQueryableExecuter.ToListAsync(standardQueryable);
+		var divisionPermissions = await asyncQueryableExecuter.ToListAsync(divisionQueryable);
+
+		// Group permissions by UserId
+		var groupedPermissions = academicYearPermissions
+			.GroupBy(x => x.UserId)
+			.Select(group => new AcademicSetupPermissionsDto
+			{
+				UserId = group.Key.Value,
+				AcademicYearIds =
+					group.Where(x => x.AcademicYearId != Guid.Empty).Select(x => x.AcademicYearId).ToList(),
+				EducationBoardIds =
+					educationBoardPermissions.Where(x => x.UserId == group.Key).Select(x => x.EducationBoardId)
+						.ToList(),
+				EducationMediumIds =
+					educationMediumPermissions.Where(x => x.UserId == group.Key).Select(x => x.EducationMediumId)
+						.ToList(),
+				EducationMediumStageIds =
+					educationMediumStagePermissions.Where(x => x.UserId == group.Key)
+						.Select(x => x.EducationMediumStageId).ToList(),
+				StandardIds = standardPermissions.Where(x => x.UserId == group.Key).Select(x => x.StandardId).ToList(),
+				DivisionIds = divisionPermissions.Where(x => x.UserId == group.Key).Select(x => x.DivisionId).ToList(),
+			}).ToList();
+
+		return groupedPermissions;
+	}
+
+
+	public async Task<AcademicSetupPermissionsDto> GetPermissionsByUserId(Guid userId)
 	{
 		// Get IQueryable for each repository
 		var academicYearQueryable = await academicYearPermissionRepository.GetQueryableAsync();
@@ -89,7 +135,7 @@ public class AcademicSetupPermissionAppService(
 	/// </summary>
 	/// <param name="input">academic setup permissions dto</param>
 	/// <returns></returns>
-	public async Task AssignPermissionsAsync(AcademicSetupPermissionsDto input)
+	public async Task AssignPermissions(AcademicSetupPermissionsDto input)
 	{
 		await academicYearPermissionRepository.InsertManyAsync(
 			academicSetupPermissionManager.CreateAcademicYearPermissions(input.UserId, input.AcademicYearIds));

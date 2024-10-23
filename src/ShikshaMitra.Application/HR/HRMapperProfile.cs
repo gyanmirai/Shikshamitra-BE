@@ -21,18 +21,18 @@ public class HRMapperProfile : Profile
 		CreateMap<ContactDetails, ContactDetailsDto>().ReverseMap();
 		CreateMap<BankDetails, BankDetailsDto>().ReverseMap();
 
+		# endregion
+
+		# region Attendeance and Leaves
+
 		# region Employee Attendance
 
 		CreateMap<EmployeeAttendance, EmployeeAttendanceDto>()
 			.ForMember(x => x.EmployeeName,
-				opt => opt.MapFrom(x => x.Employee.FirstName + x.Employee.LastName));
+				opt => opt.MapFrom(x => x.Employee.FirstName + " " + x.Employee.LastName));
 		CreateMap<CreateUpdateEmployeeAttendanceDto, EmployeeAttendance>();
 
 		#endregion
-
-		# endregion
-
-		# region Attendeance and Leaves
 
 		CreateMap<EmployeeLeave, EmployeeLeaveDto>();
 		CreateMap<EmployeeCreateUpdateLeaveDto, EmployeeLeave>();

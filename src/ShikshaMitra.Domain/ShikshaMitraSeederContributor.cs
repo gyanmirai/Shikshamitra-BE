@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
@@ -42,6 +43,7 @@ namespace ShikshaMitra
 		IGuidGenerator guidGenerator,
 		IStudentRepository studentRepository,
 		IEmployeeRepository employeeRepository,
+		IEmployeeAttendanceRepository employeeAttendanceRepository,
 		IdentityUserManager userManager) : IDataSeedContributor, ITransientDependency
 	{
 		public async Task SeedAsync(DataSeedContext context)
@@ -216,6 +218,24 @@ namespace ShikshaMitra
 				await employeeRepository.InsertAsync(employee);
 
 				#endregion
+
+				# region Create cuurent month attendance for employee
+
+				var startOfMonth = new DateOnly(DateTime.Now.Year, DateTime.Now.Month, 3);
+
+				var employeeAttendance = new EmployeeAttendance()
+				{
+					TenantId = tenant.Id,
+					EmployeeId = employeeId,
+					AttendanceDate = startOfMonth,
+					TimeIn = new TimeOnly(9, 0),
+					TimeOut = new TimeOnly(18, 0),
+					Status = EmployeeAttendanceStatus.Present,
+				};
+
+				await employeeAttendanceRepository.InsertAsync(employeeAttendance);
+
+				# endregion
 			}
 		}
 	}

@@ -1,6 +1,7 @@
 ﻿using ShikshaMitra.Common;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -50,6 +51,28 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	// Profile Picture
 	public byte[]? ProfilePicture { get; private set; }
+
+	// Full name including middle name
+	public string EmployeeNameWithFather
+	{
+		get
+		{
+			var names = new[] { FirstName, MiddleName, LastName }
+				.Where(x => !string.IsNullOrWhiteSpace(x));
+			return string.Join(" ", names);
+		}
+	}
+
+	// Full name without middle name
+	public string EmployeeName
+	{
+		get
+		{
+			var names = new[] { FirstName, LastName }
+				.Where(x => !string.IsNullOrWhiteSpace(x));
+			return string.Join(" ", names);
+		}
+	}
 
 	// Constructor for creating a new employee
 	private Employee() { } // For ORM

@@ -9,10 +9,14 @@ public class EmployeeDto : EntityDto<Guid>
 {
 	// Basic Details
 	public string? Code { get; set; }
+
 	public string? LastName { get; set; }
 	public string? FirstName { get; set; }
 	public string? MiddleName { get; set; }
 	public string? ShortName { get; set; }
+
+	public string? EmployeeNameWithFather { get; set; }
+	public string? EmployeeName { get; set; }
 	public string? Status { get; set; }
 
 	public DateOnly? DateOfBirth { get; set; }

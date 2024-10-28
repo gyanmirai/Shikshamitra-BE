@@ -16,5 +16,5 @@ public class CreateUpdateEmployeeAttendanceDto
 
 	public TimeOnly? TimeOut { get; set; }
 
-	public EmployeeAttendanceStatus Status { get; set; }
+	public EmployeeAttendanceStatusType StatusType { get; set; }
 }

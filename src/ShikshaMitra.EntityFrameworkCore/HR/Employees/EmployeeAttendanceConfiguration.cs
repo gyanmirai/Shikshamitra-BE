@@ -14,7 +14,7 @@ public class EmployeeAttendanceConfiguration : IEntityTypeConfiguration<Employee
 
 		builder.HasKey(e => e.Id);
 
-		builder.Property(e => e.Status)
+		builder.Property(e => e.StatusType)
 			.IsRequired()
 			.HasConversion<string>()
 			.HasMaxLength(20);

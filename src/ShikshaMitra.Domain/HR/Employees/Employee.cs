@@ -18,6 +18,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? FirstName { get; private set; }
 	public string? MiddleName { get; private set; }
 	public string? ShortName { get; private set; }
+	
 	public string? Status { get; private set; }
 
 	public DateOnly? DateOfBirth { get; private set; }

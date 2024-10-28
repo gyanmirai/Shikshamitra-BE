@@ -2,6 +2,8 @@
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
@@ -16,6 +18,7 @@ using ShikshaMitra.TenantSettings.Standards;
 using System.Collections.Generic;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.EventBus.Distributed;
 using Volo.Abp.Guids;
 using Volo.Abp.TenantManagement;
@@ -44,6 +47,8 @@ namespace ShikshaMitra
 		IStudentRepository studentRepository,
 		IEmployeeRepository employeeRepository,
 		IEmployeeAttendanceRepository employeeAttendanceRepository,
+		ICustomAttendanceRuleRepository customAttendanceRuleRepository,
+		IRepository<AutomatedNotificationsSettings, Guid> automatedNotificationsSettingsRepository,
 		IdentityUserManager userManager) : IDataSeedContributor, ITransientDependency
 	{
 		public async Task SeedAsync(DataSeedContext context)
@@ -159,7 +164,9 @@ namespace ShikshaMitra
 
 				#endregion
 
-				#region CreateEmployee
+				# region HR
+
+				#region Create Employee
 
 				var employeeId = guidGenerator.Create();
 
@@ -219,7 +226,7 @@ namespace ShikshaMitra
 
 				#endregion
 
-				# region Create cuurent month attendance for employee
+				# region Create current month attendance for employee
 
 				var startOfMonth = new DateOnly(DateTime.Now.Year, DateTime.Now.Month, 3);
 
@@ -230,10 +237,46 @@ namespace ShikshaMitra
 					AttendanceDate = startOfMonth,
 					TimeIn = new TimeOnly(9, 0),
 					TimeOut = new TimeOnly(18, 0),
-					Status = EmployeeAttendanceStatus.Present,
+					StatusType = EmployeeAttendanceStatusType.Present,
 				};
 
 				await employeeAttendanceRepository.InsertAsync(employeeAttendance);
+
+				#endregion
+
+				# region Create Custom Rules for Employee
+
+				var customAttendanceRule = new CustomAttendanceRule(
+					id: guidGenerator.Create(),
+					tenantId: tenant.Id,
+					name: "Custom Rule 1",
+					type: EmployeeAttendanceStatusType.FullDayLeave,
+					lateThreshold: 20,
+					lateThresholdUnit: TimeUnitType.Minutes,
+					halfDayThreshold: 20,
+					halfDayThresholdUnit: TimeUnitType.Minutes,
+					enableNotificationForUpperAuthority: true
+				);
+
+				await customAttendanceRuleRepository.InsertAsync(customAttendanceRule);
+
+				#endregion
+
+				# region Create Automated Notification Settings
+
+				var automatedNotificationsSettings = new AutomatedNotificationsSettings(
+					id: guidGenerator.Create(),
+					tenantId: tenant.Id,
+					employeeAttendanceStatusType: EmployeeAttendanceStatusType.FullDayLeave,
+					notificationMethods: new List<NotificationMethodType>
+					{
+						NotificationMethodType.Email, NotificationMethodType.SMS
+					}
+				);
+
+				await automatedNotificationsSettingsRepository.InsertAsync(automatedNotificationsSettings);
+
+				# endregion
 
 				# endregion
 			}

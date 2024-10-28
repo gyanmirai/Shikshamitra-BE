@@ -40,10 +40,10 @@ public class EmployeeAttendanceAppService(IEmployeeAttendanceRepository employee
 		foreach (var employeeId in employeeIds)
 		{
 			var employeeAttendance = employeeAttendances.Where(e => e.EmployeeId == employeeId).ToList();
-			var totalWorkingDays = employeeAttendance.Count(e => e.Status == EmployeeAttendanceStatus.Present);
+			var totalWorkingDays = employeeAttendance.Count(e => e.StatusType == EmployeeAttendanceStatusType.Present);
 			var totalFullDayLeaves =
-				employeeAttendance.Count(e => e.Status == EmployeeAttendanceStatus.FullDayLeave);
-			var totalHalfDayLeaves = employeeAttendance.Count(e => e.Status == EmployeeAttendanceStatus.HalfDayLeave);
+				employeeAttendance.Count(e => e.StatusType == EmployeeAttendanceStatusType.FullDayLeave);
+			var totalHalfDayLeaves = employeeAttendance.Count(e => e.StatusType == EmployeeAttendanceStatusType.HalfDayLeave);
 
 			var employee = employeeAttendance.Find(e => e.EmployeeId == employeeId)?.Employee;
 			summary.Add(new EmployeeAttendanceSummaryDto

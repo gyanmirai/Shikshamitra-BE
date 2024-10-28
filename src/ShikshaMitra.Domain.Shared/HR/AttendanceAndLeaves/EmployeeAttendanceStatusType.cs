@@ -1,6 +1,6 @@
 ﻿namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
-public enum EmployeeAttendanceStatus
+public enum EmployeeAttendanceStatusType
 {
 	Present,
 	HalfDayLeave,

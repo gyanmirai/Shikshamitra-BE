@@ -13,19 +13,19 @@ public class EmployeeAttendance : FullAuditedEntity<Guid>, IMultiTenant
 	public TimeOnly? TimeIn { get; set; }
 	public TimeOnly? TimeOut { get; set; }
 
-	public EmployeeAttendanceStatus Status { get; set; }
+	public EmployeeAttendanceStatusType StatusType { get; set; }
 
 	public double? TotalHoursWorked
 	{
 		get
 		{
-			switch (Status)
+			switch (StatusType)
 			{
-				case EmployeeAttendanceStatus.FullDayLeave:
+				case EmployeeAttendanceStatusType.FullDayLeave:
 					return 0.0;
-				case EmployeeAttendanceStatus.HalfDayLeave:
+				case EmployeeAttendanceStatusType.HalfDayLeave:
 					return 4.0;
-				case EmployeeAttendanceStatus.Present:
+				case EmployeeAttendanceStatusType.Present:
 					if (!TimeIn.HasValue || !TimeOut.HasValue)
 					{
 						return null;

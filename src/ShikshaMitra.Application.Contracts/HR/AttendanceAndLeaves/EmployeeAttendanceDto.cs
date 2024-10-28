@@ -19,5 +19,5 @@ public class EmployeeAttendanceDto : EntityDto<Guid>
 
 	public double? TotalHoursWorked { get; set; }
 
-	public EmployeeAttendanceStatus Status { get; set; }
+	public EmployeeAttendanceStatusType StatusType { get; set; }
 }

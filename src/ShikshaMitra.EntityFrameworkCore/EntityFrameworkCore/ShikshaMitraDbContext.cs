@@ -2,6 +2,7 @@
 using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
 using ShikshaMitra.Employees;
+using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
@@ -104,10 +105,25 @@ public class ShikshaMitraDbContext :
 
 	#endregion
 
+	# region HR
+
 	#region Employee
 
 	DbSet<Employee> Employees { get; set; }
+
+	# region AttedenceAndLeaves
+
 	DbSet<EmployeeAttendance> EmployeeAttendances { get; set; }
+
+	DbSet<CustomAttendanceRule> CustomAttendanceRules { get; set; }
+
+	DbSet<AutomatedNotificationsSettings> AutomatedNotificationsSettings { get; set; }
+
+	DbSet<NotificationInfo> NotificationInfos { get; set; }
+
+	#endregion
+
+	#endregion
 
 	#endregion
 

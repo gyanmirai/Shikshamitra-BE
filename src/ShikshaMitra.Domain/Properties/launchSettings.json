@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "ShikshaMitra.Domain": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT ": "Staging"
+      }
+    }
+  }
+}

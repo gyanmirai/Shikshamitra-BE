@@ -32,38 +32,39 @@ using Volo.Abp.VirtualFileSystem;
 using Microsoft.Extensions.Hosting.Internal;
 using Volo.Abp.OpenIddict;
 using Microsoft.AspNetCore.Hosting;
+using QuestPDF.Infrastructure;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography;
 
 namespace ShikshaMitra;
 
 [DependsOn(
-    typeof(ShikshaMitraHttpApiModule),
-    typeof(AbpAutofacModule),
-    typeof(AbpAspNetCoreMultiTenancyModule),
-    typeof(ShikshaMitraApplicationModule),
-    typeof(ShikshaMitraEntityFrameworkCoreModule),
-    typeof(AbpAspNetCoreMvcUiLeptonXLiteThemeModule),
-    typeof(AbpAccountWebOpenIddictModule),
-    typeof(AbpAspNetCoreSerilogModule),
-    typeof(AbpSwashbuckleModule)
+	typeof(ShikshaMitraHttpApiModule),
+	typeof(AbpAutofacModule),
+	typeof(AbpAspNetCoreMultiTenancyModule),
+	typeof(ShikshaMitraApplicationModule),
+	typeof(ShikshaMitraEntityFrameworkCoreModule),
+	typeof(AbpAspNetCoreMvcUiLeptonXLiteThemeModule),
+	typeof(AbpAccountWebOpenIddictModule),
+	typeof(AbpAspNetCoreSerilogModule),
+	typeof(AbpSwashbuckleModule)
 )]
 public class ShikshaMitraHttpApiHostModule : AbpModule
 {
-    public override void PreConfigureServices(ServiceConfigurationContext context)
-    {
+	public override void PreConfigureServices(ServiceConfigurationContext context)
+	{
 		var hostingEnvironment = context.Services.GetHostingEnvironment();
 		var configuration = context.Services.GetConfiguration();
 
 		PreConfigure<OpenIddictBuilder>(builder =>
-        {
-            builder.AddValidation(options =>
-            {
-                options.AddAudiences("ShikshaMitra");
-                options.UseLocalServer();
+		{
+			builder.AddValidation(options =>
+			{
+				options.AddAudiences("ShikshaMitra");
+				options.UseLocalServer();
 				options.UseAspNetCore();
-            });
-        });
+			});
+		});
 
 		if (!hostingEnvironment.IsDevelopment())
 		{
@@ -76,133 +77,131 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 				// In production, it is recommended to use two RSA certificates, 
 				// one for encryption, one for signing.
 				builder.AddEncryptionCertificate(
-						GetEncryptionCertificate(hostingEnvironment, context.Services.GetConfiguration()));
+					GetEncryptionCertificate(hostingEnvironment, context.Services.GetConfiguration()));
 				builder.AddSigningCertificate(
-						GetSigningCertificate(hostingEnvironment, context.Services.GetConfiguration()));
+					GetSigningCertificate(hostingEnvironment, context.Services.GetConfiguration()));
+			});
+		}
+	}
+
+	public override void ConfigureServices(ServiceConfigurationContext context)
+	{
+		var configuration = context.Services.GetConfiguration();
+		var hostingEnvironment = context.Services.GetHostingEnvironment();
+
+		ConfigureAuthentication(context);
+		ConfigureBundles();
+		ConfigureUrls(configuration);
+		ConfigureConventionalControllers();
+		ConfigureVirtualFileSystem(context);
+		ConfigureCors(context, configuration);
+		ConfigureSwaggerServices(context, configuration);
+	}
+
+	private void ConfigureAuthentication(ServiceConfigurationContext context)
+	{
+		context.Services.ForwardIdentityAuthenticationForBearer(OpenIddictValidationAspNetCoreDefaults
+			.AuthenticationScheme);
+		context.Services.Configure<AbpClaimsPrincipalFactoryOptions>(options =>
+		{
+			options.IsDynamicClaimsEnabled = true;
+		});
+	}
+
+	private void ConfigureBundles()
+	{
+		Configure<AbpBundlingOptions>(options =>
+		{
+			options.StyleBundles.Configure(
+				LeptonXLiteThemeBundles.Styles.Global,
+				bundle =>
+				{
+					bundle.AddFiles("/global-styles.css");
+				}
+			);
+		});
+	}
+
+	private void ConfigureUrls(IConfiguration configuration)
+	{
+		Configure<AppUrlOptions>(options =>
+		{
+			options.Applications["MVC"].RootUrl = configuration["App:SelfUrl"];
+			options.RedirectAllowedUrls.AddRange(configuration["App:RedirectAllowedUrls"]?.Split(',') ??
+			                                     Array.Empty<string>());
+
+			options.Applications["Angular"].RootUrl = configuration["App:ClientUrl"];
+			options.Applications["Angular"].Urls[AccountUrlNames.PasswordReset] = "account/reset-password";
+		});
+	}
+
+	private void ConfigureVirtualFileSystem(ServiceConfigurationContext context)
+	{
+		var hostingEnvironment = context.Services.GetHostingEnvironment();
+
+		if (hostingEnvironment.IsDevelopment())
+		{
+			Configure<AbpVirtualFileSystemOptions>(options =>
+			{
+				options.FileSets.ReplaceEmbeddedByPhysical<ShikshaMitraDomainSharedModule>(
+					Path.Combine(hostingEnvironment.ContentRootPath,
+						$"..{Path.DirectorySeparatorChar}ShikshaMitra.Domain.Shared"));
+				options.FileSets.ReplaceEmbeddedByPhysical<ShikshaMitraDomainModule>(
+					Path.Combine(hostingEnvironment.ContentRootPath,
+						$"..{Path.DirectorySeparatorChar}ShikshaMitra.Domain"));
+				options.FileSets.ReplaceEmbeddedByPhysical<ShikshaMitraApplicationContractsModule>(
+					Path.Combine(hostingEnvironment.ContentRootPath,
+						$"..{Path.DirectorySeparatorChar}ShikshaMitra.Application.Contracts"));
+				options.FileSets.ReplaceEmbeddedByPhysical<ShikshaMitraApplicationModule>(
+					Path.Combine(hostingEnvironment.ContentRootPath,
+						$"..{Path.DirectorySeparatorChar}ShikshaMitra.Application"));
+			});
+		}
+	}
+
+	private void ConfigureConventionalControllers()
+	{
+		Configure<AbpAspNetCoreMvcOptions>(options =>
+		{
+			options.ConventionalControllers.Create(typeof(ShikshaMitraApplicationModule).Assembly);
+		});
+	}
+
+	private static void ConfigureSwaggerServices(ServiceConfigurationContext context, IConfiguration configuration)
+	{
+		context.Services.AddAbpSwaggerGenWithOAuth(
+			configuration["AuthServer:Authority"]!,
+			new Dictionary<string, string> { { "ShikshaMitra", "ShikshaMitra API" } },
+			options =>
+			{
+				options.SwaggerDoc("v1", new OpenApiInfo { Title = "ShikshaMitra API", Version = "v1" });
+				options.DocInclusionPredicate((docName, description) => true);
+				options.CustomSchemaIds(type => type.FullName);
 			});
 	}
-}
 
-    public override void ConfigureServices(ServiceConfigurationContext context)
-    {
-        var configuration = context.Services.GetConfiguration();
-        var hostingEnvironment = context.Services.GetHostingEnvironment();
-
-        ConfigureAuthentication(context);
-        ConfigureBundles();
-        ConfigureUrls(configuration);
-        ConfigureConventionalControllers();
-        ConfigureVirtualFileSystem(context);
-        ConfigureCors(context, configuration);
-        ConfigureSwaggerServices(context, configuration);
-    }
-
-    private void ConfigureAuthentication(ServiceConfigurationContext context)
-    {
-        context.Services.ForwardIdentityAuthenticationForBearer(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
-        context.Services.Configure<AbpClaimsPrincipalFactoryOptions>(options =>
-        {
-            options.IsDynamicClaimsEnabled = true;
-        });
-        
-    }
-
-    private void ConfigureBundles()
-    {
-        Configure<AbpBundlingOptions>(options =>
-        {
-            options.StyleBundles.Configure(
-                LeptonXLiteThemeBundles.Styles.Global,
-                bundle =>
-                {
-                    bundle.AddFiles("/global-styles.css");
-                }
-            );
-        });
-    }
-
-    private void ConfigureUrls(IConfiguration configuration)
-    {
-        Configure<AppUrlOptions>(options =>
-        {
-            options.Applications["MVC"].RootUrl = configuration["App:SelfUrl"];
-            options.RedirectAllowedUrls.AddRange(configuration["App:RedirectAllowedUrls"]?.Split(',') ?? Array.Empty<string>());
-
-            options.Applications["Angular"].RootUrl = configuration["App:ClientUrl"];
-            options.Applications["Angular"].Urls[AccountUrlNames.PasswordReset] = "account/reset-password";
-        });
-    }
-
-    private void ConfigureVirtualFileSystem(ServiceConfigurationContext context)
-    {
-        var hostingEnvironment = context.Services.GetHostingEnvironment();
-
-        if (hostingEnvironment.IsDevelopment())
-        {
-            Configure<AbpVirtualFileSystemOptions>(options =>
-            {
-                options.FileSets.ReplaceEmbeddedByPhysical<ShikshaMitraDomainSharedModule>(
-                    Path.Combine(hostingEnvironment.ContentRootPath,
-                        $"..{Path.DirectorySeparatorChar}ShikshaMitra.Domain.Shared"));
-                options.FileSets.ReplaceEmbeddedByPhysical<ShikshaMitraDomainModule>(
-                    Path.Combine(hostingEnvironment.ContentRootPath,
-                        $"..{Path.DirectorySeparatorChar}ShikshaMitra.Domain"));
-                options.FileSets.ReplaceEmbeddedByPhysical<ShikshaMitraApplicationContractsModule>(
-                    Path.Combine(hostingEnvironment.ContentRootPath,
-                        $"..{Path.DirectorySeparatorChar}ShikshaMitra.Application.Contracts"));
-                options.FileSets.ReplaceEmbeddedByPhysical<ShikshaMitraApplicationModule>(
-                    Path.Combine(hostingEnvironment.ContentRootPath,
-                        $"..{Path.DirectorySeparatorChar}ShikshaMitra.Application"));
-            });
-        }
-    }
-
-    private void ConfigureConventionalControllers()
-    {
-        Configure<AbpAspNetCoreMvcOptions>(options =>
-        {
-            options.ConventionalControllers.Create(typeof(ShikshaMitraApplicationModule).Assembly);
-        });
-    }
-
-    private static void ConfigureSwaggerServices(ServiceConfigurationContext context, IConfiguration configuration)
-    {
-        context.Services.AddAbpSwaggerGenWithOAuth(
-            configuration["AuthServer:Authority"]!,
-            new Dictionary<string, string>
-            {
-                    {"ShikshaMitra", "ShikshaMitra API"}
-            },
-            options =>
-            {
-                options.SwaggerDoc("v1", new OpenApiInfo { Title = "ShikshaMitra API", Version = "v1" });
-                options.DocInclusionPredicate((docName, description) => true);
-                options.CustomSchemaIds(type => type.FullName);
-            });
-    }
-
-    private void ConfigureCors(ServiceConfigurationContext context, IConfiguration configuration)
-    {
-        context.Services.AddCors(options =>
-        {
-            options.AddDefaultPolicy(builder =>
-            {
-                builder
-                    .WithOrigins(configuration["App:CorsOrigins"]?
-                        .Split(",", StringSplitOptions.RemoveEmptyEntries)
-                        .Select(o => o.RemovePostFix("/"))
-                        .ToArray() ?? Array.Empty<string>())
-                    .WithAbpExposedHeaders()
-                    .SetIsOriginAllowedToAllowWildcardSubdomains()
-                    .AllowAnyHeader()
-                    .AllowAnyMethod()
-                    .AllowCredentials();
-            });
-        });
-    }
+	private void ConfigureCors(ServiceConfigurationContext context, IConfiguration configuration)
+	{
+		context.Services.AddCors(options =>
+		{
+			options.AddDefaultPolicy(builder =>
+			{
+				builder
+					.WithOrigins(configuration["App:CorsOrigins"]?
+						.Split(",", StringSplitOptions.RemoveEmptyEntries)
+						.Select(o => o.RemovePostFix("/"))
+						.ToArray() ?? Array.Empty<string>())
+					.WithAbpExposedHeaders()
+					.SetIsOriginAllowedToAllowWildcardSubdomains()
+					.AllowAnyHeader()
+					.AllowAnyMethod()
+					.AllowCredentials();
+			});
+		});
+	}
 
 	private X509Certificate2 GetSigningCertificate(IWebHostEnvironment hostingEnv,
-							IConfiguration configuration)
+		IConfiguration configuration)
 	{
 		var fileName = $"cert-signing.pfx";
 		var passPhrase = configuration["MyAppCertificate:X590:PassPhrase"];
@@ -215,23 +214,25 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 				File.Delete(file);
 			else
 				return new X509Certificate2(file, passPhrase,
-							 X509KeyStorageFlags.MachineKeySet);
+					X509KeyStorageFlags.MachineKeySet);
 		}
+
 		// file doesn't exist or was deleted because it expired
 		using var algorithm = RSA.Create(keySizeInBits: 2048);
 		var subject = new X500DistinguishedName("CN=Fabrikam Signing Certificate");
 		var request = new CertificateRequest(subject, algorithm,
-							HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+			HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
 		request.CertificateExtensions.Add(new X509KeyUsageExtension(
-							X509KeyUsageFlags.DigitalSignature, critical: true));
+			X509KeyUsageFlags.DigitalSignature, critical: true));
 		var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow,
-							DateTimeOffset.UtcNow.AddYears(2));
+			DateTimeOffset.UtcNow.AddYears(2));
 		File.WriteAllBytes(file, certificate.Export(X509ContentType.Pfx, string.Empty));
 		return new X509Certificate2(file, passPhrase,
-							X509KeyStorageFlags.MachineKeySet);
+			X509KeyStorageFlags.MachineKeySet);
 	}
+
 	private X509Certificate2 GetEncryptionCertificate(IWebHostEnvironment hostingEnv,
-								 IConfiguration configuration)
+		IConfiguration configuration)
 	{
 		var fileName = $"cert-encryption.pfx";
 		var passPhrase = configuration["MyAppCertificate:X590:PassPhrase"];
@@ -244,65 +245,69 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 				File.Delete(file);
 			else
 				return new X509Certificate2(file, passPhrase,
-								X509KeyStorageFlags.MachineKeySet);
+					X509KeyStorageFlags.MachineKeySet);
 		}
+
 		// file doesn't exist or was deleted because it expired
 		using var algorithm = RSA.Create(keySizeInBits: 2048);
 		var subject = new X500DistinguishedName("CN=Fabrikam Encryption Certificate");
 		var request = new CertificateRequest(subject, algorithm,
-							HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+			HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
 		request.CertificateExtensions.Add(new X509KeyUsageExtension(
-							X509KeyUsageFlags.KeyEncipherment, critical: true));
+			X509KeyUsageFlags.KeyEncipherment, critical: true));
 		var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow,
-							DateTimeOffset.UtcNow.AddYears(2));
+			DateTimeOffset.UtcNow.AddYears(2));
 		File.WriteAllBytes(file, certificate.Export(X509ContentType.Pfx, string.Empty));
 		return new X509Certificate2(file, passPhrase, X509KeyStorageFlags.MachineKeySet);
 	}
 
 	public override void OnApplicationInitialization(ApplicationInitializationContext context)
-    {
-        var app = context.GetApplicationBuilder();
-        var env = context.GetEnvironment();
+	{
+		var app = context.GetApplicationBuilder();
+		var env = context.GetEnvironment();
 
-        if (env.IsDevelopment())
-        {
-            app.UseDeveloperExceptionPage();
-        }
+		QuestPDF.Settings.License = LicenseType.Community;
 
-        app.UseAbpRequestLocalization();
+		if (env.IsDevelopment())
+		{
+			app.UseDeveloperExceptionPage();
+		}
 
-        if (!env.IsDevelopment())
-        {
-            app.UseErrorPage();
-        }
+		app.UseAbpRequestLocalization();
 
-        app.UseCorrelationId();
-        app.UseStaticFiles();
-        app.UseRouting();
-        app.UseCors();
-        app.UseAuthentication();
-        app.UseAbpOpenIddictValidation();
+		if (!env.IsDevelopment())
+		{
+			app.UseErrorPage();
+		}
 
-        if (MultiTenancyConsts.IsEnabled)
-        {
-            app.UseMultiTenancy();
-        }
-        app.UseUnitOfWork();
-        app.UseDynamicClaims();
-        app.UseAuthorization();
+		app.UseCorrelationId();
+		app.UseStaticFiles();
+		app.UseRouting();
+		app.UseCors();
+		app.UseAuthentication();
+		app.UseAbpOpenIddictValidation();
 
-        app.UseSwagger();
-        app.UseAbpSwaggerUI(c =>
-        {
-            c.SwaggerEndpoint("/swagger/v1/swagger.json", "ShikshaMitra API");
+		if (MultiTenancyConsts.IsEnabled)
+		{
+			app.UseMultiTenancy();
+		}
 
-            var configuration = context.ServiceProvider.GetRequiredService<IConfiguration>();
-            c.OAuthClientId(configuration["AuthServer:SwaggerClientId"]);
-            c.OAuthScopes("ShikshaMitra");
-        });
+		app.UseUnitOfWork();
+		app.UseDynamicClaims();
+		app.UseAuthorization();
 
-        app.UseAuditing();
-        app.UseAbpSerilogEnrichers();
-        app.UseConfiguredEndpoints();
-    }
+		app.UseSwagger();
+		app.UseAbpSwaggerUI(c =>
+		{
+			c.SwaggerEndpoint("/swagger/v1/swagger.json", "ShikshaMitra API");
+
+			var configuration = context.ServiceProvider.GetRequiredService<IConfiguration>();
+			c.OAuthClientId(configuration["AuthServer:SwaggerClientId"]);
+			c.OAuthScopes("ShikshaMitra");
+		});
+
+		app.UseAuditing();
+		app.UseAbpSerilogEnrichers();
+		app.UseConfiguredEndpoints();
+	}
 }

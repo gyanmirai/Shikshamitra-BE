@@ -48,7 +48,7 @@ namespace ShikshaMitra
 		IEmployeeRepository employeeRepository,
 		IEmployeeAttendanceRepository employeeAttendanceRepository,
 		ICustomAttendanceRuleRepository customAttendanceRuleRepository,
-		IRepository<AutomatedNotificationsSettings, Guid> automatedNotificationsSettingsRepository,
+		//IRepository<AutomatedNotificationsSettings, Guid> automatedNotificationsSettingsRepository,
 		IdentityUserManager userManager) : IDataSeedContributor, ITransientDependency
 	{
 		public async Task SeedAsync(DataSeedContext context)
@@ -274,7 +274,7 @@ namespace ShikshaMitra
 					}
 				);
 
-				await automatedNotificationsSettingsRepository.InsertAsync(automatedNotificationsSettings);
+				//await automatedNotificationsSettingsRepository.InsertAsync(automatedNotificationsSettings);
 
 				# endregion
 

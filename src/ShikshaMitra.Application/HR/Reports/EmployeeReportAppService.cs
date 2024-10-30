@@ -2,6 +2,7 @@
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using ShikshaMitra.Common;
+using ShikshaMitra.Common.PDF;
 using ShikshaMitra.HR.Employees;
 using System.Collections.Generic;
 using System.IO;
@@ -49,7 +50,8 @@ public class EmployeeReportAppService(IEmployeeRepository employeeRepository, IP
 		return employeeContactList;
 	}
 
-	public async Task<byte[]> GetExportEmployeeReportToPdf(EmployeeReportFilterDto input)
+	public async Task<byte[]> GetExportEmployeeReportToPdf(EmployeeReportFilterDto input,
+		ExportOptionType exportOptionType)
 	{
 		IEnumerable<EmployeeContactDto> employeeReport = await GetEmployeeContactReport(input);
 

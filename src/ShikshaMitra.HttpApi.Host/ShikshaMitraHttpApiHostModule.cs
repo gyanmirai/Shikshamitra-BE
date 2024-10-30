@@ -23,13 +23,11 @@ using Volo.Abp.AspNetCore.Mvc.UI.Bundling;
 using Volo.Abp.AspNetCore.Mvc.UI.Theme.Shared;
 using Volo.Abp.AspNetCore.Serilog;
 using Volo.Abp.Autofac;
-using Volo.Abp.Localization;
 using Volo.Abp.Modularity;
 using Volo.Abp.Security.Claims;
 using Volo.Abp.Swashbuckle;
 using Volo.Abp.UI.Navigation.Urls;
 using Volo.Abp.VirtualFileSystem;
-using Microsoft.Extensions.Hosting.Internal;
 using Volo.Abp.OpenIddict;
 using Microsoft.AspNetCore.Hosting;
 using QuestPDF.Infrastructure;
@@ -66,22 +64,18 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			});
 		});
 
-		if (!hostingEnvironment.IsDevelopment())
+		if (hostingEnvironment.IsDevelopment()) return;
+
+		PreConfigure<AbpOpenIddictAspNetCoreOptions>(options => options.AddDevelopmentEncryptionAndSigningCertificate = false);
+		PreConfigure<OpenIddictServerBuilder>(builder =>
 		{
-			PreConfigure<AbpOpenIddictAspNetCoreOptions>(options =>
-			{
-				options.AddDevelopmentEncryptionAndSigningCertificate = false;
-			});
-			PreConfigure<OpenIddictServerBuilder>(builder =>
-			{
-				// In production, it is recommended to use two RSA certificates, 
-				// one for encryption, one for signing.
-				builder.AddEncryptionCertificate(
-					GetEncryptionCertificate(hostingEnvironment, context.Services.GetConfiguration()));
-				builder.AddSigningCertificate(
-					GetSigningCertificate(hostingEnvironment, context.Services.GetConfiguration()));
-			});
-		}
+			builder.AddEncryptionCertificate(
+				GetEncryptionCertificate(hostingEnvironment, context.Services.GetConfiguration()));
+			builder.AddSigningCertificate(
+				GetSigningCertificate(hostingEnvironment, context.Services.GetConfiguration()));
+			builder.SetIssuer(new Uri(configuration["AuthServer:Authority"]!));
+		});
+
 	}
 
 	public override void ConfigureServices(ServiceConfigurationContext context)
@@ -114,10 +108,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		{
 			options.StyleBundles.Configure(
 				LeptonXLiteThemeBundles.Styles.Global,
-				bundle =>
-				{
-					bundle.AddFiles("/global-styles.css");
-				}
+				bundle => bundle.AddFiles("/global-styles.css")
 			);
 		});
 	}
@@ -128,7 +119,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		{
 			options.Applications["MVC"].RootUrl = configuration["App:SelfUrl"];
 			options.RedirectAllowedUrls.AddRange(configuration["App:RedirectAllowedUrls"]?.Split(',') ??
-			                                     Array.Empty<string>());
+												 Array.Empty<string>());
 
 			options.Applications["Angular"].RootUrl = configuration["App:ClientUrl"];
 			options.Applications["Angular"].Urls[AccountUrlNames.PasswordReset] = "account/reset-password";
@@ -199,56 +190,27 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			});
 		});
 	}
-
-	private X509Certificate2 GetSigningCertificate(IWebHostEnvironment hostingEnv,
-		IConfiguration configuration)
+	private X509Certificate2 GetEncryptionCertificate(IWebHostEnvironment environment, IConfiguration config)
 	{
-		var fileName = $"cert-signing.pfx";
-		var passPhrase = configuration["MyAppCertificate:X590:PassPhrase"];
-		var file = Path.Combine(hostingEnv.ContentRootPath, fileName);
+		var fileName = "encryption-certificate.pfx";
+		var password = config["MyAppCertificate:X590:Password"];
+
+		var file = Path.Combine(environment.ContentRootPath, fileName);
 		if (File.Exists(file))
 		{
 			var created = File.GetCreationTime(file);
 			var days = (DateTime.Now - created).TotalDays;
 			if (days > 180)
+			{
 				File.Delete(file);
+			}
 			else
-				return new X509Certificate2(file, passPhrase,
-					X509KeyStorageFlags.MachineKeySet);
+			{
+				return new X509Certificate2(file, password, X509KeyStorageFlags.MachineKeySet);
+			}
 		}
 
-		// file doesn't exist or was deleted because it expired
-		using var algorithm = RSA.Create(keySizeInBits: 2048);
-		var subject = new X500DistinguishedName("CN=Fabrikam Signing Certificate");
-		var request = new CertificateRequest(subject, algorithm,
-			HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-		request.CertificateExtensions.Add(new X509KeyUsageExtension(
-			X509KeyUsageFlags.DigitalSignature, critical: true));
-		var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow,
-			DateTimeOffset.UtcNow.AddYears(2));
-		File.WriteAllBytes(file, certificate.Export(X509ContentType.Pfx, string.Empty));
-		return new X509Certificate2(file, passPhrase,
-			X509KeyStorageFlags.MachineKeySet);
-	}
 
-	private X509Certificate2 GetEncryptionCertificate(IWebHostEnvironment hostingEnv,
-		IConfiguration configuration)
-	{
-		var fileName = $"cert-encryption.pfx";
-		var passPhrase = configuration["MyAppCertificate:X590:PassPhrase"];
-		var file = Path.Combine(hostingEnv.ContentRootPath, fileName);
-		if (File.Exists(file))
-		{
-			var created = File.GetCreationTime(file);
-			var days = (DateTime.Now - created).TotalDays;
-			if (days > 180)
-				File.Delete(file);
-			else
-				return new X509Certificate2(file, passPhrase,
-					X509KeyStorageFlags.MachineKeySet);
-		}
-
-		// file doesn't exist or was deleted because it expired
 		using var algorithm = RSA.Create(keySizeInBits: 2048);
 		var subject = new X500DistinguishedName("CN=Fabrikam Encryption Certificate");
 		var request = new CertificateRequest(subject, algorithm,
@@ -257,8 +219,40 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			X509KeyUsageFlags.KeyEncipherment, critical: true));
 		var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow,
 			DateTimeOffset.UtcNow.AddYears(2));
-		File.WriteAllBytes(file, certificate.Export(X509ContentType.Pfx, string.Empty));
-		return new X509Certificate2(file, passPhrase, X509KeyStorageFlags.MachineKeySet);
+		File.WriteAllBytes(file, certificate.Export(X509ContentType.Pfx, password));
+		return new X509Certificate2(file, password, X509KeyStorageFlags.MachineKeySet);
+	}
+
+	private X509Certificate2 GetSigningCertificate(IWebHostEnvironment environment, IConfiguration config)
+	{
+		var fileName = "signing-certificate.pfx";
+		var password = config["MyAppCertificate:X590:Password"];
+		var file = Path.Combine(environment.ContentRootPath, fileName);
+
+		if (File.Exists(file))
+		{
+			var created = File.GetCreationTime(file);
+			var days = (DateTime.Now - created).TotalDays;
+			if (days > 180)
+			{
+				File.Delete(file);
+			}
+			else
+			{
+				return new X509Certificate2(file, password, X509KeyStorageFlags.MachineKeySet);
+			}
+		}
+
+		using var algorithm = RSA.Create(keySizeInBits: 2048);
+		var subject = new X500DistinguishedName("CN=Fabrikam Signing Certificate");
+		var request = new CertificateRequest(subject, algorithm, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+		request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature,
+			critical: true));
+
+		var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddYears(2));
+
+		File.WriteAllBytes(file, certificate.Export(X509ContentType.Pfx, password));
+		return new X509Certificate2(file, password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet);
 	}
 
 	public override void OnApplicationInitialization(ApplicationInitializationContext context)

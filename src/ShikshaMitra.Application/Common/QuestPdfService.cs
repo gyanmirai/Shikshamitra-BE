@@ -1,17 +1,257 @@
 ﻿using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
+using ShikshaMitra.Common.Extensions;
+using ShikshaMitra.Common.PDF;
+using ShikshaMitra.Common.PDF.Elements;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp.DependencyInjection;
-using Volo.Abp.TextTemplating;
+using IElement = ShikshaMitra.Common.PDF.Elements.IElement;
+using QImage = QuestPDF.Infrastructure.Image;
 
 namespace ShikshaMitra.Common;
 
-public class QuestPdfService : IPdfService, ITransientDependency
+public class QuestPdfService(IFontService fontService, IImageService imageService) : IPdfService, ITransientDependency
 {
+	private readonly Dictionary<int, QImage> _images = [];
+
 	public byte[] GeneratePdf(Action<IDocumentContainer> documentAction)
 	{
 		return Document.Create(documentAction).GeneratePdf();
+	}
+
+	/// <summary>
+	/// Generates a PDF as a stream based on the provided request.
+	/// </summary>
+	/// <param name="request">The request containing the specifications for the PDF creation.</param>
+	/// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+	/// <returns>A stream containing the generated PDF.</returns>
+	public async Task<Stream> GeneratePdfAsStreamAsync(CreatePDF request, CancellationToken cancellationToken)
+	{
+		var stream = await InternalGeneratePdfStreamAsync(request, cancellationToken);
+		stream.Position = 0;
+		return stream;
+	}
+
+	/// <summary>
+	/// Generates a PDF as a byte array based on the provided request.
+	/// </summary>
+	/// <param name="request">The request containing the specifications for the PDF creation.</param>
+	/// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+	/// <returns>A byte array containing the generated PDF.</returns>
+	public async Task<byte[]> GeneratePdfAsBytes(CreatePDF request, CancellationToken cancellationToken)
+	{
+		await using var stream = await InternalGeneratePdfStreamAsync(request, cancellationToken);
+		return stream.ToArray();
+	}
+
+	/// <summary>
+	/// Helper method to generate a PDF as a MemoryStream.
+	/// </summary>
+	/// <param name="request">The request containing the specifications for the PDF creation.</param>
+	/// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+	/// <returns>A MemoryStream containing the generated PDF.</returns>
+	private async Task<MemoryStream> InternalGeneratePdfStreamAsync(CreatePDF request, CancellationToken cancellationToken)
+	{
+		await LoadImagesAsync(request, cancellationToken);
+		await LoadFontAsync(request, cancellationToken);
+
+		var stream = new MemoryStream();
+		Document.Create(container =>
+			container.Page(page =>
+			{
+				page.FromSpecs(request.Page);
+				if (request.Header is not null)
+				{
+					page.Header().Element(request.Header);
+				}
+
+				page.Content().Element(request.Content);
+				if (request.Footer is not null)
+				{
+					page.Footer().Element(request.Footer);
+				}
+			})
+		).GeneratePdf(stream);
+
+		return stream;
+	}
+
+
+	private async Task LoadFontAsync(CreatePDF request, CancellationToken cancellationToken)
+	{
+		if (request.Page.FontUris?.Length > 0)
+		{
+			var tasks = request.Page.FontUris.Select(uri => fontService.LoadFontAsync(uri, cancellationToken));
+			await Task.WhenAll(tasks);
+		}
+	}
+
+	private async Task LoadImagesAsync(CreatePDF request, CancellationToken cancellationToken)
+	{
+		if (request.Header is not null)
+		{
+			await LoadImagesAsync(request.Header, cancellationToken);
+		}
+
+		if (request.Footer is not null)
+		{
+			await LoadImagesAsync(request.Footer, cancellationToken);
+		}
+
+		await LoadImageAsync(request.Page, cancellationToken);
+		await LoadImagesAsync(request.Content, cancellationToken);
+	}
+
+	private async Task LoadImagesAsync(IElement element, CancellationToken cancellationToken)
+	{
+		if (element is ImageElement imageElement)
+		{
+			await LoadImageAsync(imageElement, cancellationToken);
+		}
+		else if (element is ColumnElement columnElement)
+		{
+			await LoadImagesAsync(columnElement, cancellationToken);
+		}
+		else if (element is RowElement rowElement)
+		{
+			await LoadImagesAsync(rowElement, cancellationToken);
+		}
+		else if (element is Cell cellElement)
+		{
+			await LoadImagesAsync(cellElement, cancellationToken);
+		}
+		else if (element is TableElement tableElement)
+		{
+			await LoadImagesAsync(tableElement, cancellationToken);
+		}
+	}
+
+	private async Task LoadImagesAsync(ColumnElement columnElement, CancellationToken cancellationToken)
+	{
+		foreach (var element in columnElement.Elements)
+		{
+			switch (element)
+			{
+				case ImageElement imageElement:
+					await LoadImageAsync(imageElement, cancellationToken);
+					break;
+				case ColumnElement columnElement1:
+					await LoadImagesAsync(columnElement1, cancellationToken);
+					break;
+				case RowElement rowElement:
+					await LoadImagesAsync(rowElement, cancellationToken);
+					break;
+				case Cell cellElement:
+					await LoadImagesAsync(cellElement, cancellationToken);
+					break;
+				case TableElement tableElement:
+					await LoadImagesAsync(tableElement, cancellationToken);
+					break;
+			}
+		}
+	}
+
+	private async Task LoadImagesAsync(RowElement rowElement, CancellationToken cancellationToken)
+	{
+		foreach (var element in rowElement.Elements)
+		{
+			if (element is ImageElement imageElement)
+			{
+				await LoadImageAsync(imageElement, cancellationToken);
+			}
+			else if (element is ColumnElement columnElement)
+			{
+				await LoadImagesAsync(columnElement, cancellationToken);
+			}
+			else if (element is RowElement rowElement1)
+			{
+				await LoadImagesAsync(rowElement1, cancellationToken);
+			}
+			else if (element is Cell cellElement)
+			{
+				await LoadImagesAsync(cellElement, cancellationToken);
+			}
+			else if (element is TableElement tableElement)
+			{
+				await LoadImagesAsync(tableElement, cancellationToken);
+			}
+		}
+	}
+
+	private async Task LoadImagesAsync(Cell cellElement, CancellationToken cancellationToken)
+	{
+		if (cellElement.Element is ImageElement imageElement)
+		{
+			await LoadImageAsync(imageElement, cancellationToken);
+		}
+		else if (cellElement.Element is ColumnElement columnElement)
+		{
+			await LoadImagesAsync(columnElement, cancellationToken);
+		}
+		else if (cellElement.Element is RowElement rowElement1)
+		{
+			await LoadImagesAsync(rowElement1, cancellationToken);
+		}
+	}
+
+	private async Task LoadImagesAsync(TableElement tableElement, CancellationToken cancellationToken)
+	{
+		foreach (var cell in tableElement.Cells)
+		{
+			await LoadImagesAsync(cell, cancellationToken);
+		}
+	}
+
+	private async Task LoadImageAsync(ImageElement imageElement, CancellationToken cancellationToken)
+	{
+		if (imageElement.Image is not null)
+		{
+			return;
+		}
+
+		if (_images.TryGetValue(imageElement.GetHashCode(), out var image))
+		{
+			imageElement.Image = image;
+			return;
+		}
+
+		var bytes = await imageService.LoadImageAsync(imageElement, cancellationToken);
+		if (bytes is null || bytes.Length < 1)
+		{
+			throw new InvalidOperationException("Image bytes are not loaded");
+		}
+
+		image = QImage.FromBinaryData(bytes);
+		_images[imageElement.GetHashCode()] = image;
+		imageElement.Image = image;
+	}
+
+	private async Task LoadImageAsync(PageSpecs pageSpecs, CancellationToken cancellationToken)
+	{
+		if (pageSpecs.BackgroundImage is not null || pageSpecs.BackgroundImageUri is null)
+		{
+			return;
+		}
+
+		if (_images.TryGetValue(pageSpecs.BackgroundImageUri.GetHashCode(), out var image))
+		{
+			pageSpecs.BackgroundImage = image;
+			return;
+		}
+
+		var bytes = await imageService.LoadImageAsync(pageSpecs.BackgroundImageUri, cancellationToken);
+		if (bytes is null || bytes.Length < 1)
+		{
+			throw new InvalidOperationException("Image bytes are not loaded");
+		}
+
+		image = QImage.FromBinaryData(bytes);
+		_images[pageSpecs.BackgroundImageUri.GetHashCode()] = image;
+		pageSpecs.BackgroundImage = image;
 	}
 }

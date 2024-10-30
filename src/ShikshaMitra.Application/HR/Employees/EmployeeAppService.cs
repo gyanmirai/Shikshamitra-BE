@@ -10,9 +10,10 @@ public class EmployeeAppService(IEmployeeRepository employeeRepository) :
 		employeeRepository),
 	IEmployeeService
 {
-	public async Task<Employee> GetEmployeeByUserId(Guid userId)
+	public async Task<EmployeeDto?> GetEmployeeByUserId(Guid userId)
 	{
 		Employee? employee = await employeeRepository.GetEmployeeByUserIdAsync(userId);
-		return employee;
+
+		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
 	}
 }

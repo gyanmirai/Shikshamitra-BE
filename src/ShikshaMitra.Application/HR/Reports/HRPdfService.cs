@@ -1,10 +1,8 @@
 ﻿using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
-using ShikshaMitra.Common;
-using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Common.PDF;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace ShikshaMitra.HR.Reports;
 

@@ -1,0 +1,396 @@
+﻿using ShikshaMitra.Common.PDF.Elements;
+using System;
+using QuestPDF.Fluent;
+using QuestPDF.Helpers;
+using QuestPDF.Infrastructure;
+using IElement = ShikshaMitra.Common.PDF.Elements.IElement;
+
+namespace ShikshaMitra.Common.Extensions;
+
+internal static class QuestExtensions
+{
+	internal static IContainer Element(this IContainer container, IElement element)
+	{
+		switch (element)
+		{
+			case TextElement textElement:
+				container.Text(textElement);
+				break;
+			case ImageElement imageElement:
+				container.Image(imageElement);
+				break;
+			case ColumnElement columnElement:
+				container.Column(columnElement);
+				break;
+			case RowElement rowElement:
+				container.Row(rowElement);
+				break;
+			case TableElement tableElement:
+				container.Table(tableElement);
+				break;
+			default:
+				throw new ArgumentException($"Element type {element.GetType()} is not supported");
+		}
+
+		return container;
+	}
+
+	internal static PageDescriptor FromSpecs(this PageDescriptor page, PageSpecs specs)
+	{
+		if (specs.Direction == PageSpecs.ContentDirection.RTL)
+		{
+			page.ContentFromRightToLeft();
+		}
+
+		if (specs.ContinuousSize is not null)
+		{
+			page.ContinuousSize(specs.ContinuousSize.Width, specs.ContinuousSize.Unit ?? Unit.Point);
+		}
+		else
+		{
+			if (specs.Orientation == PageSpecs.PageOrientation.Landscape)
+			{
+				page.Size(specs.ParsedPageSize.Landscape());
+			}
+			else
+			{
+				page.Size(specs.ParsedPageSize.Portrait());
+			}
+		}
+
+		if (specs.BackgroundImage is not null)
+		{
+			page.Background().ExtendHorizontal().ExtendVertical().AlignMiddle().AlignCenter()
+				.Image(specs.BackgroundImage).FitArea();
+		}
+
+		if (specs.Margin.HasValue && specs.MarginUnit.HasValue)
+		{
+			page.Margin(specs.Margin.Value, specs.MarginUnit.Value);
+		}
+
+		page.PageColor(specs.BackgroundColor);
+		page.DefaultTextStyle(x =>
+		{
+			x = x.FontSize(specs.DefaultFontSize);
+			if (!string.IsNullOrWhiteSpace(specs.FontFamily))
+			{
+				x = x.FontFamily(specs.FontFamily);
+			}
+
+			return x;
+		});
+
+		return page;
+	}
+
+	private static void Text(this IContainer container, TextElement textElement)
+	{
+		var borderTop = textElement.BorderTopWidth ?? textElement.BorderWidth ?? 0;
+		var borderBottom = textElement.BorderBottomWidth ?? textElement.BorderWidth ?? 0;
+		var borderLeft = textElement.BorderLeftWidth ?? textElement.BorderWidth ?? 0;
+		var borderRight = textElement.BorderRightWidth ?? textElement.BorderWidth ?? 0;
+
+		container
+			.BorderTop(borderTop, textElement.BorderUnit ?? Unit.Point)
+			.BorderBottom(borderBottom, textElement.BorderUnit ?? Unit.Point)
+			.BorderLeft(borderLeft, textElement.BorderUnit ?? Unit.Point)
+			.BorderRight(borderRight, textElement.BorderUnit ?? Unit.Point)
+			.BorderColor(textElement.BorderColor ?? "#000000")
+			.Padding(textElement.Padding ?? 0, textElement.PaddingUnit ?? Unit.Point)
+			.Text(x =>
+			{
+				var text = x
+					.Span(textElement.Text)
+					.LetterSpacing(textElement.LetterSpacing ?? 0);
+
+				if (textElement.FontFamily is not null)
+				{
+					text.FontFamily(textElement.FontFamily);
+				}
+
+				if (textElement.Alignment.HasValue)
+				{
+					switch (textElement.Alignment.Value)
+					{
+						case TextAlignment.Start:
+							x.AlignStart();
+							break;
+						case TextAlignment.Center:
+							x.AlignCenter();
+							break;
+						case TextAlignment.End:
+							x.AlignEnd();
+							break;
+						case TextAlignment.Justify:
+							x.Justify();
+							break;
+						default:
+							throw new ArgumentOutOfRangeException();
+					}
+				}
+
+				if (textElement.FontSize is not null)
+				{
+					text.FontSize(textElement.FontSize.Value);
+				}
+
+				if (textElement.Color is not null)
+				{
+					text.FontColor(textElement.Color);
+				}
+
+				switch (textElement.TextDecoration)
+				{
+					case TextDecoration.Underline:
+						text.Underline();
+						break;
+					case TextDecoration.Strike:
+						text.Strikethrough();
+						break;
+					case TextDecoration.None:
+						break;
+					default:
+						throw new ArgumentOutOfRangeException();
+				}
+
+				switch (textElement.Script)
+				{
+					case Script.Sub:
+						text.Subscript();
+						break;
+					case Script.Super:
+						text.Superscript();
+						break;
+					case Script.Normal:
+						break;
+					default:
+						throw new ArgumentOutOfRangeException();
+				}
+
+				if (textElement.LineHeight.HasValue)
+				{
+					text.LineHeight(textElement.LineHeight.Value);
+				}
+
+				if (textElement.IsItalic.HasValue && textElement.IsItalic.Value)
+				{
+					text.Italic();
+				}
+			});
+	}
+
+	internal static TextSpanDescriptor ProcessFontWeight(this TextSpanDescriptor text, FontWeight fontWeight) =>
+		fontWeight switch
+		{
+			FontWeight.Thin => text.Thin(),
+			FontWeight.ExtraLight => text.ExtraLight(),
+			FontWeight.Light => text.Light(),
+			FontWeight.Normal => text.NormalWeight(),
+			FontWeight.Medium => text.Medium(),
+			FontWeight.SemiBold => text.SemiBold(),
+			FontWeight.Bold => text.Bold(),
+			FontWeight.ExtraBold => text.ExtraBold(),
+			FontWeight.Black => text.Black(),
+			FontWeight.ExtraBlack => text.ExtraBlack(),
+			_ => throw new ArgumentException($"Font weight {fontWeight} is not supported"),
+		};
+
+	private static void Image(this IContainer container, ImageElement imageElement)
+	{
+		var borderTop = imageElement.BorderTopWidth ?? imageElement.BorderWidth ?? 0;
+		var borderBottom = imageElement.BorderBottomWidth ?? imageElement.BorderWidth ?? 0;
+		var borderLeft = imageElement.BorderLeftWidth ?? imageElement.BorderWidth ?? 0;
+		var borderRight = imageElement.BorderRightWidth ?? imageElement.BorderWidth ?? 0;
+
+		container = container
+			.BorderTop(borderTop, imageElement.BorderUnit ?? Unit.Point)
+			.BorderBottom(borderBottom, imageElement.BorderUnit ?? Unit.Point)
+			.BorderLeft(borderLeft, imageElement.BorderUnit ?? Unit.Point)
+			.BorderRight(borderRight, imageElement.BorderUnit ?? Unit.Point)
+			.BorderColor(imageElement.BorderColor ?? "#000000");
+		var image = (imageElement.Width, imageElement.Height) switch
+		{
+			(not null, not null) => container.Container().Height(imageElement.Height.Value)
+				.Width(imageElement.Width.Value).Image(imageElement.Image ??
+				                                       throw new InvalidOperationException(
+					                                       "Image bytes are not loaded")),
+			(not null, null) => container.Container().Width(imageElement.Width.Value).Image(imageElement.Image ??
+				throw new InvalidOperationException("Image bytes are not loaded")),
+			(null, not null) => container.Container().Height(imageElement.Height.Value)
+				.Image(imageElement.Image ?? throw new InvalidOperationException("Image bytes are not loaded")),
+			_ => container.Image(
+				imageElement.Image ?? throw new InvalidOperationException("Image bytes are not loaded")),
+		};
+
+		switch (imageElement.Fit)
+		{
+			case ImageFit.Width:
+				image.FitWidth();
+				break;
+			case ImageFit.Height:
+				image.FitHeight();
+				break;
+			case ImageFit.Area:
+				image.FitArea();
+				break;
+			case ImageFit.Unproportional:
+				image.FitUnproportionally();
+				break;
+		}
+
+		if (imageElement.CompressionQuality.HasValue)
+		{
+			image.WithCompressionQuality(imageElement.CompressionQuality.Value);
+		}
+
+		if (imageElement.Dpi.HasValue)
+		{
+			image.WithRasterDpi(imageElement.Dpi.Value);
+		}
+	}
+
+	private static void Column(this IContainer container, ColumnElement columnElement) =>
+		container.Column(column =>
+		{
+			if (columnElement.Spacing.HasValue)
+			{
+				column.Spacing(columnElement.Spacing.Value);
+			}
+
+			foreach (var childElement in columnElement.Elements)
+			{
+				Element(column.Item(), childElement);
+			}
+		});
+
+	private static void Row(this IContainer container, RowElement rowElement) =>
+		container.Row(row =>
+		{
+			if (rowElement.Spacing.HasValue)
+			{
+				row.Spacing(rowElement.Spacing.Value);
+			}
+
+			foreach (var childElement in rowElement.Elements)
+			{
+				if (childElement.RowItemConfig is null || childElement.RowItemConfig?.Type == TypeInRow.Auto)
+				{
+					Element(row.AutoItem(), childElement);
+				}
+				else if (childElement.RowItemConfig?.Type == TypeInRow.Relative)
+				{
+					Element(row.RelativeItem(childElement.RowItemConfig.Size ?? 1), childElement);
+				}
+				else if (childElement.RowItemConfig?.Type == TypeInRow.Constant)
+				{
+					Element(row.ConstantItem(childElement.RowItemConfig.Size ?? 1), childElement);
+				}
+				else
+				{
+					throw new ArgumentException($"Row item type {childElement.RowItemConfig?.Type} is not supported");
+				}
+			}
+		});
+
+	private static void Table(this IContainer container, TableElement tableElement) =>
+		container.Table(table => table.ColumnsDefinition(tableElement).Cells(tableElement));
+
+	private static TableDescriptor ColumnsDefinition(this TableDescriptor table, TableElement tableElement)
+	{
+		table.ColumnsDefinition((x) =>
+		{
+			foreach (var column in tableElement.Columns)
+			{
+				if (column.Type == TableElement.Column.ColumnType.Constant)
+				{
+					x.ConstantColumn(column.Size);
+				}
+				else if (column.Type == TableElement.Column.ColumnType.Relative)
+				{
+					x.RelativeColumn(column.Size);
+				}
+				else
+				{
+					throw new ArgumentException($"Column type {column.Type} is not supported");
+				}
+			}
+		});
+		return table;
+	}
+
+	internal static TableDescriptor Cells(this TableDescriptor table, TableElement tableElement)
+	{
+		foreach (var cellElement in tableElement.Cells)
+		{
+			var cell = table.Cell();
+			if (cellElement.Row.HasValue)
+			{
+				cell.Row(cellElement.Row.Value);
+			}
+
+			if (cellElement.Column.HasValue)
+			{
+				cell.Column(cellElement.Column.Value);
+			}
+
+			if (cellElement.RowSpan.HasValue)
+			{
+				cell.RowSpan(cellElement.RowSpan.Value);
+			}
+
+			if (cellElement.ColumnSpan.HasValue)
+			{
+				cell.ColumnSpan(cellElement.ColumnSpan.Value);
+			}
+
+			Element(cell.Element((cellContainer) => Cell(cellContainer, cellElement)), cellElement.Element);
+		}
+
+		return table;
+	}
+
+	private static IContainer Cell(IContainer cellContainer, Cell cellElement)
+	{
+		if (cellElement.Padding.HasValue)
+		{
+			cellContainer = cellContainer.Padding(cellElement.Padding.Value);
+		}
+
+		if (cellElement.BorderWidth.HasValue)
+		{
+			cellContainer = cellContainer.Border(cellElement.BorderWidth.Value);
+		}
+
+		if (!string.IsNullOrWhiteSpace(cellElement.BackgroundColor))
+		{
+			cellContainer = cellContainer.Background(cellElement.BackgroundColor);
+		}
+
+		if (cellElement.MinHeight.HasValue)
+		{
+			cellContainer = cellContainer.MinHeight(cellElement.MinHeight.Value);
+		}
+
+		if (cellElement.MaxHeight.HasValue)
+		{
+			cellContainer = cellContainer.MaxHeight(cellElement.MaxHeight.Value);
+		}
+
+		cellContainer = cellElement.VerticalAlign switch
+		{
+			CellAlignment.Top => cellContainer.AlignTop(),
+			CellAlignment.Bottom => cellContainer.AlignBottom(),
+			CellAlignment.Middle => cellContainer.AlignMiddle(),
+			_ => cellContainer,
+		};
+		cellContainer = cellElement.HorizontalAlign switch
+		{
+			CellAlignment.Center => cellContainer.AlignCenter(),
+			CellAlignment.Left => cellContainer.AlignLeft(),
+			CellAlignment.Right => cellContainer.AlignRight(),
+			_ => cellContainer,
+		};
+		return cellContainer;
+	}
+}

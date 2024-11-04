@@ -224,16 +224,135 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
                     b.HasKey("Id");
 
                     b.HasIndex("EmployeeId");
 
-                    b.HasIndex("UserId");
-
                     b.ToTable("AppEmployeeLeaves", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories.AutomatedNotificationsSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<int>("EmployeeAttendanceStatusType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<int[]>("NotificationMethods")
+                        .IsRequired()
+                        .HasColumnType("integer[]");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AppAutomatedNotificationsSettings", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories.CustomAttendanceRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<bool>("EnableNotificationForUpperAuthority")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<int>("HalfDayThreshold")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("HalfDayThresholdUnit")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LateThreshold")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LateThresholdUnit")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AppCustomAttendanceRules", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories.NotificationInfo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDelivered")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("NotificationTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("NotificationType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReceiverName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReceiverRole")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AppNotificationInfos", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
@@ -490,7 +609,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<string>("Status")
+                    b.Property<string>("StatusType")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
@@ -504,9 +623,6 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<TimeOnly?>("TimeOut")
                         .HasColumnType("time");
-
-                    b.Property<double?>("TotalHoursWorked")
-                        .HasColumnType("double precision");
 
                     b.HasKey("Id");
 
@@ -3207,15 +3323,7 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Volo.Abp.Identity.IdentityUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.Navigation("Employee");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>

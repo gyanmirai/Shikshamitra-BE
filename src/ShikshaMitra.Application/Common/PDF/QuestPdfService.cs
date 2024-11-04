@@ -50,7 +50,7 @@ public class QuestPdfService(IFontService fontService, IImageService imageServic
 
 	public async Task<byte[]> GenerateSimplePdf<T>(IEnumerable<T> items)
 	{
-		var properties = typeof(T).GetProperties();
+		PropertyInfo[] properties = typeof(T).GetProperties();
 
 		// Construct the PDF document
 		var pdfDocument = new PDFDocument

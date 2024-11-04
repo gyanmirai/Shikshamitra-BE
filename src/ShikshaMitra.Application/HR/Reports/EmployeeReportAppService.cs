@@ -12,7 +12,10 @@ using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.HR.Reports;
 
-public class EmployeeReportAppService(IEmployeeRepository employeeRepository, IPdfService pdfService)
+public class EmployeeReportAppService(
+	IEmployeeRepository employeeRepository,
+	IPdfService pdfService,
+	IExcelService excelService)
 	: ApplicationService
 {
 	public async Task<IEnumerable<EmployeeDto>> GetEmployeeReport(EmployeeReportFilterDto input)
@@ -50,13 +53,22 @@ public class EmployeeReportAppService(IEmployeeRepository employeeRepository, IP
 		return employeeContactList;
 	}
 
-	public async Task<byte[]> GetExportEmployeeReportToPdf(EmployeeReportFilterDto input,
+	public async Task<byte[]> GetExportEmployeeReport(EmployeeReportFilterDto input,
 		ExportOptionType exportOptionType)
 	{
 		IEnumerable<EmployeeContactDto> employeeReport = await GetEmployeeContactReport(input);
 
-		HRPdfService hrPdfService = new HRPdfService(pdfService);
+		if (exportOptionType == ExportOptionType.PDF)
+		{
+			HRPdfService hrPdfService = new HRPdfService(pdfService);
 
-		return hrPdfService.GenerateEmployeeContactReport(employeeReport);
+			return await hrPdfService.GenerateEmployeeContactReport(employeeReport);
+		}
+		else
+		{
+			HRExcelService hrExcelService = new HRExcelService(excelService);
+
+			return hrExcelService.GenerateEmployeeContactExcel(employeeReport);
+		}
 	}
 }

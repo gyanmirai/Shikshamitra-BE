@@ -1,5 +1,6 @@
 ﻿using QuestPDF.Infrastructure;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,9 +9,10 @@ namespace ShikshaMitra.Common.PDF;
 
 public interface IPdfService
 {
-	byte[] GeneratePdf(Action<IDocumentContainer> documentAction);
+	Task<Stream> GeneratePdfAsStreamAsync(PDFDocument request, CancellationToken cancellationToken = default);
 
-	Task<Stream> GeneratePdfAsStreamAsync(CreatePDF request, CancellationToken cancellationToken);
+	Task<byte[]> GeneratePdfAsBytes(PDFDocument request, CancellationToken cancellationToken = default);
 
-	Task<byte[]> GeneratePdfAsBytes(CreatePDF request, CancellationToken cancellationToken);
+	Task<byte[]> GenerateSimplePdf<T>(IEnumerable<T> items);
+
 }

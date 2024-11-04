@@ -7,6 +7,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp.DependencyInjection;
@@ -19,10 +21,6 @@ public class QuestPdfService(IFontService fontService, IImageService imageServic
 {
 	private readonly Dictionary<int, QImage> _images = [];
 
-	public byte[] GeneratePdf(Action<IDocumentContainer> documentAction)
-	{
-		return Document.Create(documentAction).GeneratePdf();
-	}
 
 	/// <summary>
 	/// Generates a PDF as a stream based on the provided request.
@@ -30,7 +28,8 @@ public class QuestPdfService(IFontService fontService, IImageService imageServic
 	/// <param name="request">The request containing the specifications for the PDF creation.</param>
 	/// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
 	/// <returns>A stream containing the generated PDF.</returns>
-	public async Task<Stream> GeneratePdfAsStreamAsync(CreatePDF request, CancellationToken cancellationToken)
+	public async Task<Stream> GeneratePdfAsStreamAsync(PDFDocument request,
+		CancellationToken cancellationToken = default)
 	{
 		var stream = await InternalGeneratePdfStreamAsync(request, cancellationToken);
 		stream.Position = 0;
@@ -43,11 +42,87 @@ public class QuestPdfService(IFontService fontService, IImageService imageServic
 	/// <param name="request">The request containing the specifications for the PDF creation.</param>
 	/// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
 	/// <returns>A byte array containing the generated PDF.</returns>
-	public async Task<byte[]> GeneratePdfAsBytes(CreatePDF request, CancellationToken cancellationToken)
+	public async Task<byte[]> GeneratePdfAsBytes(PDFDocument request, CancellationToken cancellationToken = default)
 	{
 		await using var stream = await InternalGeneratePdfStreamAsync(request, cancellationToken);
 		return stream.ToArray();
 	}
+
+	public async Task<byte[]> GenerateSimplePdf<T>(IEnumerable<T> items)
+	{
+		var properties = typeof(T).GetProperties();
+
+		// Construct the PDF document
+		var pdfDocument = new PDFDocument
+		{
+			Page = new PageSpecs { BackgroundColor = "#ffffff", Margin = 20, MarginUnit = Unit.Point },
+			Header = new TextElement
+			{
+				Text = $"{typeof(T).Name} Report",
+				FontSize = 24,
+				FontWeight = FontWeight.Bold,
+				Alignment = TextAlignment.Center,
+				Padding = 10,
+				PaddingUnit = Unit.Point
+			},
+			Content = new ColumnElement
+			{
+				Elements = new List<IElement>
+					{
+						// Add column headers with formatted names
+						new RowElement
+						{
+							Elements = properties.Select(prop => (IElement) new TextElement
+							{
+								Text = SplitCamelCase(prop.Name),
+								FontWeight = FontWeight.Bold,
+								Padding = 5,
+								PaddingUnit = Unit.Point
+							}).ToList(),
+							Spacing = 10
+						}
+					}
+					.Concat(items.Select(item => (IElement) new RowElement
+					{
+						Elements = properties.Select(prop => (IElement) new TextElement
+						{
+							Text = FormatPropertyValue(prop, item), Padding = 5, PaddingUnit = Unit.Point
+						}).ToList(),
+						Spacing = 10
+					})).ToList(),
+				Spacing = 20
+			}
+		};
+		return await GeneratePdfAsBytes(pdfDocument);
+	}
+
+// Helper method to format property values
+	private string FormatPropertyValue<T>(PropertyInfo prop, T item)
+	{
+		var value = prop.GetValue(item, null);
+		if (value == null)
+			return "N/A";
+
+		// Custom formatting for specific types
+		if (prop.PropertyType == typeof(DateTime) || prop.PropertyType == typeof(DateTime?))
+			return ((DateTime) value).ToString("dd-MM-yyyy");
+
+
+		return value.ToString();
+	}
+
+
+	private string SplitCamelCase(string input) =>
+		Regex.Replace(
+			Regex.Replace(
+				input,
+				@"(\P{Ll})(\P{Ll}\p{Ll})",
+				"$1 $2"
+			),
+			@"(\p{Ll})(\P{Ll})",
+			"$1 $2"
+		);
+
 
 	/// <summary>
 	/// Helper method to generate a PDF as a MemoryStream.
@@ -55,7 +130,8 @@ public class QuestPdfService(IFontService fontService, IImageService imageServic
 	/// <param name="request">The request containing the specifications for the PDF creation.</param>
 	/// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
 	/// <returns>A MemoryStream containing the generated PDF.</returns>
-	private async Task<MemoryStream> InternalGeneratePdfStreamAsync(CreatePDF request, CancellationToken cancellationToken)
+	private async Task<MemoryStream> InternalGeneratePdfStreamAsync(PDFDocument request,
+		CancellationToken cancellationToken)
 	{
 		await LoadImagesAsync(request, cancellationToken);
 		await LoadFontAsync(request, cancellationToken);
@@ -82,7 +158,7 @@ public class QuestPdfService(IFontService fontService, IImageService imageServic
 	}
 
 
-	private async Task LoadFontAsync(CreatePDF request, CancellationToken cancellationToken)
+	private async Task LoadFontAsync(PDFDocument request, CancellationToken cancellationToken)
 	{
 		if (request.Page.FontUris?.Length > 0)
 		{
@@ -91,7 +167,7 @@ public class QuestPdfService(IFontService fontService, IImageService imageServic
 		}
 	}
 
-	private async Task LoadImagesAsync(CreatePDF request, CancellationToken cancellationToken)
+	private async Task LoadImagesAsync(PDFDocument request, CancellationToken cancellationToken)
 	{
 		if (request.Header is not null)
 		{

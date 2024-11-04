@@ -82,6 +82,8 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 	{
 		var configuration = context.Services.GetConfiguration();
 		var hostingEnvironment = context.Services.GetHostingEnvironment();
+		var services = context.Services;
+		services.AddHttpClient();
 
 		ConfigureAuthentication(context);
 		ConfigureBundles();
@@ -89,6 +91,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		ConfigureConventionalControllers();
 		ConfigureVirtualFileSystem(context);
 		ConfigureCors(context, configuration);
+
 		ConfigureSwaggerServices(context, configuration);
 	}
 

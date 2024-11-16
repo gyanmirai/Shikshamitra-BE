@@ -12,19 +12,22 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; private set; }
 	public Guid UserId { get; private set; }
 
+	// Profile Picture
+	public byte[]? ProfilePicture { get; private set; }
+
 	// Basic Details
-	public string? Code { get; private set; }
+	public string? EmployeeCode { get; private set; }
 	public string? LastName { get; private set; }
 	public string? FirstName { get; private set; }
 	public string? MiddleName { get; private set; }
 	public string? ShortName { get; private set; }
-	
-	public string? Status { get; private set; }
+
+	public EmployeeStatusType? EmployeeEmployeeStatusTypeType { get; set; }
 
 	public DateOnly? DateOfBirth { get; private set; }
 	public string? FamilyCast { get; private set; }
-	public CastType? CastType { get; private set; }
-	public GenderType? Gender { get; private set; }
+	public EmployeeCastType? CastType { get; private set; }
+	public GenderType? GenderType { get; private set; }
 	public string? Religion { get; private set; }
 	public MaritalStatusType? MaritalStatus { get; private set; }
 	public string? BloodGroup { get; private set; }
@@ -34,10 +37,9 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? Department { get; private set; }
 	public string? Designation { get; private set; }
 	public DateOnly? DateOfJoining { get; private set; }
-	public string? Photo { get; private set; }
 	public string? EmployeeGroup { get; private set; }
 	public string? Qualification { get; private set; }
-	public string? Role { get; private set; }
+	public Guid? RoleId { get; private set; }
 	public string? IdentificationMark1 { get; private set; }
 	public string? IdentificationMark2 { get; private set; }
 	public string? IdentificationMark3 { get; private set; }
@@ -50,8 +52,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public List<WorkExperience> WorkExperiences { get; private set; } = new List<WorkExperience>();
 
-	// Profile Picture
-	public byte[]? ProfilePicture { get; private set; }
 
 	// Full name including middle name
 	public string EmployeeNameWithFather
@@ -82,17 +82,17 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid id,
 		Guid? tenantId,
 		Guid userId,
-		string? organizationName,
-		string? code,
+		byte[]? profilePicture,
+		string? employeeCode,
 		string? lastName,
 		string? firstName,
 		string? middleName,
 		string? shortName,
-		string? status,
+		EmployeeStatusType? employeeStatusType,
 		DateOnly? dateOfBirth,
 		string? familyCast,
-		CastType? castType,
-		GenderType? gender,
+		EmployeeCastType? castType,
+		GenderType? genderType,
 		string? religion,
 		MaritalStatusType? maritalStatus,
 		string? bloodGroup,
@@ -102,10 +102,9 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? department,
 		string? designation,
 		DateOnly? dateOfJoining,
-		string? photo,
 		string? employeeGroup,
 		string? qualification,
-		string? role,
+		Guid? roleId,
 		string? identificationMark1,
 		string? identificationMark2,
 		string? identificationMark3,
@@ -113,22 +112,22 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ContactDetails? motherDetails,
 		ContactDetails? spouseDetails,
 		BankDetails? bankDetails,
-		List<WorkExperience>? workExperiences,
-		byte[]? profilePicture = null
+		List<WorkExperience>? workExperiences
 	) : base(id)
 	{
 		TenantId = tenantId;
 		UserId = userId;
-		Code = code;
+		ProfilePicture = profilePicture;
+		EmployeeCode = employeeCode;
 		LastName = lastName;
 		FirstName = firstName;
 		MiddleName = middleName;
 		ShortName = shortName;
-		Status = status;
+		EmployeeEmployeeStatusTypeType = employeeStatusType;
 		DateOfBirth = dateOfBirth;
 		FamilyCast = familyCast;
 		CastType = castType;
-		Gender = gender;
+		GenderType = genderType;
 		Religion = religion;
 		MaritalStatus = maritalStatus;
 		BloodGroup = bloodGroup;
@@ -138,10 +137,9 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Department = department;
 		Designation = designation;
 		DateOfJoining = dateOfJoining;
-		Photo = photo;
 		EmployeeGroup = employeeGroup;
 		Qualification = qualification;
-		Role = role;
+		RoleId = roleId;
 		IdentificationMark1 = identificationMark1;
 		IdentificationMark2 = identificationMark2;
 		IdentificationMark3 = identificationMark3;
@@ -150,6 +148,31 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SpouseDetails = spouseDetails;
 		BankDetails = bankDetails;
 		WorkExperiences = workExperiences ?? new List<WorkExperience>();
-		ProfilePicture = profilePicture;
+	}
+
+	internal Employee UpdateFamilyDetails(
+		ContactDetails fatherDetails,
+		ContactDetails motherDetails,
+		ContactDetails spouseDetails)
+	{
+		this.FatherDetails = fatherDetails;
+		this.MotherDetails = motherDetails;
+		this.SpouseDetails = spouseDetails;
+
+		return this;
+	}
+
+	internal Employee UpdateWorkExperiences(List<WorkExperience> workExperiences)
+	{
+		this.WorkExperiences = workExperiences;
+
+		return this;
+	}
+
+	internal Employee UpdateBankDetails(BankDetails bankDetails)
+	{
+		this.BankDetails = bankDetails;
+
+		return this;
 	}
 }

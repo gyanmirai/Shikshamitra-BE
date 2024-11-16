@@ -7,16 +7,17 @@ namespace ShikshaMitra.HR.Employees;
 public class CreateUpdateEmployeeDto
 {
 	// Basic Details
-	public string? Code { get; set; }
+	public string? EmployeeCode { get; set; }
 	public string? LastName { get; set; }
 	public string? FirstName { get; set; }
 	public string? MiddleName { get; set; }
 	public string? ShortName { get; set; }
-	public string? Status { get; set; }
+	
+	public EmployeeStatusType? EmployeeStatusType { get; set; }
 
 	public DateOnly? DateOfBirth { get; set; }
 	public string? FamilyCast { get; set; }
-	public CastType? CastType { get; set; }
+	public EmployeeCastType? CastType { get; set; }
 	public GenderType? Gender { get; set; }
 	public string? Religion { get; set; }
 	public MaritalStatusType? MaritalStatus { get; set; }

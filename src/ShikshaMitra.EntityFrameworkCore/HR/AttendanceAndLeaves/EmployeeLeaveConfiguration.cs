@@ -24,5 +24,8 @@ public class EmployeeLeaveConfiguration : IEntityTypeConfiguration<EmployeeLeave
 
 		// Auto Include 
 		// builder.Navigation(e => e.User).AutoInclude();
+
+		// Auto Include 
+		builder.Navigation(e => e.Employee).AutoInclude();
 	}
 }

@@ -36,7 +36,7 @@ public class HRExcelService(IExcelService excelService)
 				new ExcelCell { Value = employee.Email ?? "N/A" },
 				new ExcelCell { Value = employee.MobileNo ?? "N/A" },
 				new ExcelCell { Value = employee.DateOfBirth?.ToString("dd-MM-yyyy") ?? "N/A" },
-				new ExcelCell { Value = employee.Code ?? "N/A" }
+				new ExcelCell { Value = employee.EmployeeCode ?? "N/A" }
 			]
 		}));
 

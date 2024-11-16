@@ -110,7 +110,7 @@ public class HRPdfService(IPdfService pdfService)
 							},
 							new TextElement
 							{
-								Text = employee.Code ?? "N/A",
+								Text = employee.EmployeeCode ?? "N/A",
 								Padding = 5,
 								PaddingUnit = Unit.Point
 							}

@@ -1,6 +1,6 @@
 ﻿namespace ShikshaMitra.Common;
 
-public enum CastType
+public enum EmployeeCastType
 {
 	General,
 	OBC,

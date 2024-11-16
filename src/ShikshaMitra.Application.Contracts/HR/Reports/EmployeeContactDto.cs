@@ -8,5 +8,5 @@ public class EmployeeContactDto
 	public string? Email { get; set; }
 	public string? MobileNo { get; set; }
 	public DateOnly? DateOfBirth { get; set; }
-	public string? Code { get; set; }
+	public string? EmployeeCode { get; set; }
 }

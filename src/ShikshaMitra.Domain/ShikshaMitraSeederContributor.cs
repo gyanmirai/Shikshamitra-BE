@@ -16,6 +16,7 @@ using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using System.Collections.Generic;
+using System.Linq;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
@@ -33,6 +34,7 @@ namespace ShikshaMitra
 		IDistributedEventBus distributedEventBus,
 		ICurrentTenant currentTenant,
 		ITenantManager tenantManager,
+		IIdentityRoleRepository roleRepository,
 		ITenantRepository tenantRepository,
 		IUnitOfWork currentUnitOfWork,
 		IDataSeeder dataSeeder,
@@ -114,6 +116,17 @@ namespace ShikshaMitra
 				// Get the user id with email address
 				var user = users.Find(u => u.Email == input.AdminEmailAddress);
 
+				# region create roles
+
+				List<IdentityRole> roles = [new IdentityRole(guidGenerator.Create(), "Teacher", tenant.Id)];
+
+				// Add roles to the database
+				foreach (var role in roles)
+				{
+					await roleRepository.InsertAsync(role);
+				}
+
+				# endregion
 
 				#region TenantSettings
 
@@ -171,36 +184,36 @@ namespace ShikshaMitra
 				var employeeId = guidGenerator.Create();
 
 				var employee = new Employee(
-					employeeId,
-					tenant.Id,
-					user.Id,
-					"DDVS",
-					"EMP001",
-					"Doe",
-					"John",
-					"Michael",
-					"JM",
-					"Active",
-					DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
-					"Smith",
-					CastType.General,
-					GenderType.Male,
-					"Christianity",
-					MaritalStatusType.Married,
-					"O+",
-					"+91-9876543210",
-					"john.doe@ddvs.com",
-					"123 Main Street, Mumbai",
-					"IT",
-					"Software Engineer",
-					DateOnly.FromDateTime(new DateTime(2021, 6, 1)),
-					null,
-					"Group A",
-					"B.Tech in Computer Science",
-					"Developer",
-					"Mole on right cheek",
-					"Scar on left hand",
-					null,
+					id: employeeId,
+					tenantId: tenant.Id,
+					userId: user.Id,
+					profilePicture: Convert.FromBase64String(
+						"Qk1CAAAAAAAAADYAAAAoAAAAAQAAAAD4AAABABgAAAAAACgAAAEDAAEAAAAAAAAAAADEDgAAxA4AAAAAAAAAAAAA//8A/wAA//8A/wD/"),
+					employeeCode: "EMP001",
+					lastName: "Vadher",
+					firstName: "Hiren",
+					middleName: "Dineshbhai",
+					shortName: "HVD",
+					employeeStatusType: EmployeeStatusType.Active,
+					dateOfBirth: DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
+					familyCast: "Ahir",
+					castType: EmployeeCastType.General,
+					genderType: GenderType.Male,
+					religion: "Hindu",
+					maritalStatus: MaritalStatusType.Married,
+					bloodGroup: "O+",
+					mobileNo: "+91-9876543210",
+					email: "hvadher@ddvs.com",
+					address: "123 Main Street, Mumbai",
+					department: "IT",
+					designation: "Software Engineer",
+					dateOfJoining: DateOnly.FromDateTime(new DateTime(2021, 6, 1)),
+					employeeGroup: null,
+					qualification: "Group A",
+					roleId: roles.Find(r => r.Name == "Teacher")?.Id,
+					"Wear glasses",
+					"N/A",
+					"N/A",
 					new ContactDetails("Robert Smith", "Engineer", "+91-9876543211", "456, Elm Street, Mumbai"),
 					new ContactDetails("Mary Smith", "Teacher", "+91-9876543212", "456, Elm Street, Mumbai"),
 					new ContactDetails("Jane Doe", "Doctor", "+91-9876543213", "789, Maple Street, Mumbai"),
@@ -217,9 +230,7 @@ namespace ShikshaMitra
 							"Developed web applications and maintained databases",
 							"Jane Doe, Senior Manager"
 						)
-					},
-					Convert.FromBase64String(
-						"Qk1CAAAAAAAAADYAAAAoAAAAAQAAAAD4AAABABgAAAAAACgAAAEDAAEAAAAAAAAAAADEDgAAxA4AAAAAAAAAAAAA//8A/wAA//8A/wD/")
+					}
 				);
 
 				await employeeRepository.InsertAsync(employee);

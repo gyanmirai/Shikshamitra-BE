@@ -8,7 +8,7 @@ namespace ShikshaMitra.HR.Employees;
 public class EmployeeDto : EntityDto<Guid>
 {
 	// Basic Details
-	public string? Code { get; set; }
+	public string? EmployeeCode { get; set; }
 
 	public string? LastName { get; set; }
 	public string? FirstName { get; set; }
@@ -17,11 +17,11 @@ public class EmployeeDto : EntityDto<Guid>
 
 	public string? EmployeeNameWithFather { get; set; }
 	public string? EmployeeName { get; set; }
-	public string? Status { get; set; }
+	public EmployeeStatusType? EmployeeStatusType { get; set; }
 
 	public DateOnly? DateOfBirth { get; set; }
 	public string? FamilyCast { get; set; }
-	public CastType? CastType { get; set; }
+	public EmployeeCastType? CastType { get; set; }
 	public GenderType? Gender { get; set; }
 	public string? Religion { get; set; }
 	public MaritalStatusType? MaritalStatus { get; set; }

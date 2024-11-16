@@ -6,8 +6,6 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 public class EmployeeCreateUpdateLeaveDto
 {
-	[Required] public Guid UserId { get; set; }
-
 	[Required] public Guid EmployeeId { get; set; }
 
 	[Required] public string LeaveType { get; set; }

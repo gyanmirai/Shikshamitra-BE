@@ -369,9 +369,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<int?>("CastType")
                         .HasColumnType("integer");
 
-                    b.Property<string>("Code")
-                        .HasColumnType("text");
-
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -410,6 +407,12 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("Email")
                         .HasColumnType("text");
 
+                    b.Property<string>("EmployeeCode")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("EmployeeEmployeeStatusTypeType")
+                        .HasColumnType("integer");
+
                     b.Property<string>("EmployeeGroup")
                         .HasColumnType("text");
 
@@ -424,7 +427,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("FirstName")
                         .HasColumnType("text");
 
-                    b.Property<int?>("Gender")
+                    b.Property<int?>("GenderType")
                         .HasColumnType("integer");
 
                     b.Property<string>("IdentificationMark1")
@@ -462,9 +465,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("MobileNo")
                         .HasColumnType("text");
 
-                    b.Property<string>("Photo")
-                        .HasColumnType("text");
-
                     b.Property<byte[]>("ProfilePicture")
                         .HasColumnType("bytea");
 
@@ -474,13 +474,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("Religion")
                         .HasColumnType("text");
 
-                    b.Property<string>("Role")
-                        .HasColumnType("text");
+                    b.Property<Guid?>("RoleId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("ShortName")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Status")
                         .HasColumnType("text");
 
                     b.Property<Guid?>("TenantId")

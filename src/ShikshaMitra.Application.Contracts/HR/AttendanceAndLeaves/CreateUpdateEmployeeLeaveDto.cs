@@ -4,7 +4,7 @@ using Volo.Abp.Domain.Entities.Auditing;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
-public class EmployeeCreateUpdateLeaveDto
+public class CreateUpdateEmployeeLeaveDto
 {
 	[Required] public Guid EmployeeId { get; set; }
 

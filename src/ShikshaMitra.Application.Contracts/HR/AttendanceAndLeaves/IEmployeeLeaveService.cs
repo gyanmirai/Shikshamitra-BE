@@ -5,6 +5,6 @@ using Volo.Abp.Application.Services;
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 public interface IEmployeeLeaveService : ICrudAppService<EmployeeLeaveDto, Guid, PagedAndSortedResultRequestDto,
-	EmployeeCreateUpdateLeaveDto>
+	CreateUpdateEmployeeLeaveDto>
 {
 }

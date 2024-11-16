@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <Import Project="..\..\common.props" />
 
@@ -30,7 +30,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Volo.Abp.Autofac" Version="8.2.0" />
+    <PackageReference Include="Volo.Abp.Autofac" Version="8.3.3" />
     <ProjectReference Include="..\ShikshaMitra.Application.Contracts\ShikshaMitra.Application.Contracts.csproj" />
     <ProjectReference Include="..\ShikshaMitra.EntityFrameworkCore\ShikshaMitra.EntityFrameworkCore.csproj" />
   </ItemGroup>

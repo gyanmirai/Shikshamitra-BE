@@ -10,19 +10,17 @@ public class AutomatedNotificationsSettings : AggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; }
 	public EmployeeAttendanceStatusType EmployeeAttendanceStatusType { get; set; }
-	public ICollection<NotificationMethodType> NotificationMethods { get; set; }
-	
-	
+	public List<NotificationMethodType> NotificationMethods { get; set; }
+
 	private AutomatedNotificationsSettings()
 	{
 	}
-	
-	
+
 	internal AutomatedNotificationsSettings(
 		Guid id,
 		Guid tenantId,
 		EmployeeAttendanceStatusType employeeAttendanceStatusType,
-		ICollection<NotificationMethodType> notificationMethods) : base(id)
+		List<NotificationMethodType> notificationMethods) : base(id)
 	{
 		TenantId = tenantId;
 		EmployeeAttendanceStatusType = employeeAttendanceStatusType;

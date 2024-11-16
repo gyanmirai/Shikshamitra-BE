@@ -8,11 +8,11 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 public class EmployeeLeaveAppService(
 	EmployeeLeaveManager employeeLeaveManager,
 	IEmployeeLeaveRepository employeeLeaveRepository) :
-	CrudAppService<EmployeeLeave, EmployeeLeaveDto, Guid, PagedAndSortedResultRequestDto, EmployeeCreateUpdateLeaveDto>(
+	CrudAppService<EmployeeLeave, EmployeeLeaveDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeLeaveDto>(
 		employeeLeaveRepository),
 	IEmployeeLeaveService
 {
-	public override async Task<EmployeeLeaveDto> UpdateAsync(Guid id, EmployeeCreateUpdateLeaveDto input)
+	public override async Task<EmployeeLeaveDto> UpdateAsync(Guid id, CreateUpdateEmployeeLeaveDto input)
 	{
 		EmployeeLeave employeeLeave = await employeeLeaveRepository.GetAsync(id);
 

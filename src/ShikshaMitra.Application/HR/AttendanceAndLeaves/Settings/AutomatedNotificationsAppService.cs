@@ -6,7 +6,7 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
-public class AutomatedNotificationsAppService(IRepository<AutomatedNotificationsSettings, Guid> repository) :
+public class AutomatedNotificationsAppService(IAutomatedNotificationsRepository repository) :
 	CrudAppService<AutomatedNotificationsSettings, AutomatedNotificationsSettingsDto, Guid,
 		PagedAndSortedResultRequestDto, AutomatedNotificationsSettingsDto>(repository)
 {

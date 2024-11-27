@@ -12,7 +12,7 @@ public class EmployeeAttendanceAppService(IEmployeeAttendanceRepository employee
 	: CrudAppService<EmployeeAttendance, EmployeeAttendanceDto, Guid, PagedAndSortedResultRequestDto,
 		CreateUpdateEmployeeAttendanceDto>(employeeAttendanceRepository), IEmployeeAttendanceAppService
 {
-	public async Task<PagedResultDto<EmployeeAttendanceDto>> GetEmployeesByDate(DateTime date)
+	public async Task<PagedResultDto<EmployeeAttendanceDto>> GetEmployeesByDate(DateTimeOffset date)
 	{
 		List<EmployeeAttendance> employees =
 			await employeeAttendanceRepository.GetListAsync(e => e.CreationTime.Date == date.Date,

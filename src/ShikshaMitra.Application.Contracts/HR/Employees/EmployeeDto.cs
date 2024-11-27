@@ -33,7 +33,7 @@ public class EmployeeDto : EntityDto<Guid>
 	public string? Designation { get; set; }
 	public DateOnly? DateOfJoining { get; set; }
 	public string? Photo { get; set; }
-	public string? EmployeeGroup { get; set; }
+	public EmployeeGroupType? EmployeeGroup { get; private set; }
 	public string? Qualification { get; set; }
 	public string? Role { get; set; }
 	public string? IdentificationMark1 { get; set; }

@@ -29,7 +29,7 @@ public class CreateUpdateEmployeeDto
 	public string? Designation { get; set; }
 	public DateOnly? DateOfJoining { get; set; }
 	public string? Photo { get; set; }
-	public string? EmployeeGroup { get; set; }
+	public EmployeeGroupType? EmployeeGroup { get; set; }
 	public string? Qualification { get; set; }
 	public string? Role { get; set; }
 	public string? IdentificationMark1 { get; set; }

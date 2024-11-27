@@ -73,7 +73,7 @@ public class EmployeeManager(
         string? department = null,
         string? designation = null,
         DateOnly? dateOfJoining = null,
-        string? employeeGroup = null,
+        EmployeeGroupType? employeeGroup = null,
         string? qualification = null,
         string? identificationMark1 = null,
         string? identificationMark2 = null,

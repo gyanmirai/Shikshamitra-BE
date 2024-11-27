@@ -37,7 +37,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? Department { get; private set; }
 	public string? Designation { get; private set; }
 	public DateOnly? DateOfJoining { get; private set; }
-	public string? EmployeeGroup { get; private set; }
+	public EmployeeGroupType? EmployeeGroup { get; private set; }
 	public string? Qualification { get; private set; }
 	public Guid? RoleId { get; private set; }
 	public string? IdentificationMark1 { get; private set; }
@@ -102,7 +102,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? department,
 		string? designation,
 		DateOnly? dateOfJoining,
-		string? employeeGroup,
+		EmployeeGroupType? employeeGroup,
 		string? qualification,
 		Guid? roleId,
 		string? identificationMark1,

@@ -36,7 +36,7 @@ public class CreateEmployeeBasicInfoDto
 	public string? Designation { get; set; }
 	public DateOnly? DateOfJoining { get; set; }
 
-	public string? EmployeeGroup { get; set; }
+	public EmployeeGroupType? EmployeeGroup { get; set; }
 	public string? Qualification { get; set; }
 
 	[Required(ErrorMessage = "Role is required.")]

@@ -1,14 +1,13 @@
 ﻿using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.Onboarding.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
-using Volo.Abp.Domain.Repositories;
 
-namespace ShikshaMitra.TenantSettings.EducationMediums;
+namespace ShikshaMitra.TenantSettings.AcademicSetups.EducationalMediums;
 
 [Authorize]
 public class EducationMediumAppService(
@@ -23,7 +22,7 @@ public class EducationMediumAppService(
 {
 	public override async Task<EducationMediumDto> CreateAsync(CreateUpdateEducationMediumDto input)
 	{
-		EducationMedium educationMedium = await educationMediumManager.CreateAsync(
+		var educationMedium = await educationMediumManager.CreateAsync(
 			input.EducationBoardId,
 			input.Name
 		);
@@ -34,7 +33,7 @@ public class EducationMediumAppService(
 
 	public override async Task<EducationMediumDto> UpdateAsync(Guid id, CreateUpdateEducationMediumDto input)
 	{
-		EducationMedium educationMedium = await educationMediumRepository.GetAsync(id);
+		var educationMedium = await educationMediumRepository.GetAsync(id);
 		await educationMediumManager.UpdateAsync(educationMedium, input.Name);
 		return ObjectMapper.Map<EducationMedium, EducationMediumDto>(educationMedium);
 	}

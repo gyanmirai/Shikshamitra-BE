@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
-namespace ShikshaMitra.Onboarding.EducationBoards;
+namespace ShikshaMitra.TenantSettings.AcademicSetups.EducationalMediums;
 
 [Authorize]
 public class EducationMediumStageAppService(
@@ -21,7 +21,7 @@ public class EducationMediumStageAppService(
 {
 	public override async Task<EducationMediumStageDto> CreateAsync(CreateUpdateEducationMediumStageDto input)
 	{
-		EducationMediumStage educationMediumStage = await educationMediumStageManager.CreateAsync(
+		EducationMediumStage? educationMediumStage = await educationMediumStageManager.CreateAsync(
 			input.EducationMediumId,
 			input.Name
 		);
@@ -32,7 +32,7 @@ public class EducationMediumStageAppService(
 
 	public override async Task<EducationMediumStageDto> UpdateAsync(Guid id, CreateUpdateEducationMediumStageDto input)
 	{
-		EducationMediumStage educationMediumStage = await educationMediumStageRepository.GetAsync(id);
+		EducationMediumStage? educationMediumStage = await educationMediumStageRepository.GetAsync(id);
 		await educationMediumStageManager.UpdateAsync(educationMediumStage, input.Name);
 		return ObjectMapper.Map<EducationMediumStage, EducationMediumStageDto>(educationMediumStage);
 	}

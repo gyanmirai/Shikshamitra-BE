@@ -1,8 +1,9 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ShikshaMitra.MultiTenancy;
 using Volo.Abp.AuditLogging;
 using Volo.Abp.BackgroundJobs;
+using Volo.Abp.BlobStoring;
 using Volo.Abp.Emailing;
 using Volo.Abp.FeatureManagement;
 using Volo.Abp.Features;
@@ -16,6 +17,7 @@ using Volo.Abp.PermissionManagement.Identity;
 using Volo.Abp.PermissionManagement.OpenIddict;
 using Volo.Abp.SettingManagement;
 using Volo.Abp.TenantManagement;
+using Volo.Abp.BlobStoring.Database;
 
 namespace ShikshaMitra;
 
@@ -32,7 +34,8 @@ namespace ShikshaMitra;
 	typeof(AbpTenantManagementDomainModule),
 	typeof(AbpEmailingModule)
 )]
-public class ShikshaMitraDomainModule : AbpModule
+[DependsOn(typeof(BlobStoringDatabaseDomainModule))]
+    public class ShikshaMitraDomainModule : AbpModule
 {
 	public override void ConfigureServices(ServiceConfigurationContext context)
 	{
@@ -47,6 +50,14 @@ public class ShikshaMitraDomainModule : AbpModule
 		Configure<AbpSequentialGuidGeneratorOptions>(options =>
 		{
 			options.DefaultSequentialGuidType = SequentialGuidType.SequentialAsString;
+		});
+
+		Configure<AbpBlobStoringOptions>(options =>
+		{
+			options.Containers.ConfigureDefault(container =>
+			{
+				container.UseDatabase();
+			});
 		});
 
 		//TODO : Configure TenantResolveContributors

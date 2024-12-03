@@ -212,11 +212,12 @@ namespace ShikshaMitra
 					qualification: "Group A",
 					roleId: roles.Find(r => r.Name == "Teacher")?.Id,
 					"Wear glasses",
-					"N/A",
-					"N/A",
-					new ContactDetails("Robert Smith", "Engineer", "+91-9876543211", "456, Elm Street, Mumbai"),
-					new ContactDetails("Mary Smith", "Teacher", "+91-9876543212", "456, Elm Street, Mumbai"),
-					new ContactDetails("Jane Doe", "Doctor", "+91-9876543213", "789, Maple Street, Mumbai"),
+					new ContactDetails("Robert Smith", "Engineer", "+91-9876543211", "456, Elm Street", city: "Mumbai",
+						state: "Maharashtra", pinCode: "400001"),
+					new ContactDetails("Mary Smith", "Teacher", "+91-9876543212", "Parvat Patiya", city: "Surat",
+						state: "Gujarat", pinCode: "395010"),
+					new ContactDetails("Jane Doe", "Doctor", "+91-9876543213", "ATPL, Trimandir Road", city: "Adalaj",
+						state: "Gujarat", pinCode: "382421"),
 					new BankDetails("ABC Bank", "Mumbai Main Branch", "John Doe", "123456789012", "ABC123456"),
 					new List<WorkExperience>
 					{

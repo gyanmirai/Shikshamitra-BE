@@ -37,8 +37,6 @@ public class EmployeeDto : EntityDto<Guid>
 	public string? Qualification { get; set; }
 	public string? Role { get; set; }
 	public string? IdentificationMark1 { get; set; }
-	public string? IdentificationMark2 { get; set; }
-	public string? IdentificationMark3 { get; set; }
 
 	// Value Objects
 	public ContactDetailsDto FatherDetails { get; set; }

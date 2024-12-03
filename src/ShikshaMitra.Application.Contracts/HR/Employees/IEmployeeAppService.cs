@@ -7,7 +7,7 @@ using Volo.Abp.Application.Services;
 namespace ShikshaMitra.HR.Employees;
 
 public interface
-	IEmployeeService : ICrudAppService<EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>
+	IEmployeeAppService : ICrudAppService<EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>
 {
 	/// <summary>
 	/// Retrieves an employee by the associated user ID.
@@ -37,7 +37,7 @@ public interface
 	/// <param name="employeeId">The ID of the employee to update.</param>
 	/// <param name="input">A list of DTOs containing work experience details.</param>
 	/// <returns>The updated Employee DTO.</returns>
-	Task<EmployeeDto> UpdateExperienceInfo(Guid employeeId, List<WorkExperienceDto> input);
+	Task<EmployeeDto> UpdateExperienceInfo(Guid employeeId, List<CreateUpdateWorkExperienceDto> input);
 
 	/// <summary>
 	/// Updates the bank details of an existing employee.
@@ -46,4 +46,8 @@ public interface
 	/// <param name="input">The DTO containing bank details.</param>
 	/// <returns>The updated Employee DTO.</returns>
 	Task<EmployeeDto> UpdateBankDetails(Guid employeeId, BankDetailsDto input);
+
+	Task UploadDocumentsAsync(Guid employeeId, List<DocumentDto> documentDtos);
+	Task<DocumentDto> GetDocumentAsync(Guid employeeId, Guid documentId);
+	Task<List<DocumentDto>> GetDocumentsAsync(Guid employeeId);
 }

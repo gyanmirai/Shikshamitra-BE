@@ -1,163 +1,237 @@
 ﻿using ShikshaMitra.Common;
-using ShikshaMitra.TenantSettings.AcademicYears;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp;
+using Volo.Abp.BlobStoring;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
-using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.HR.Employees;
 
 public class EmployeeManager(
-    IEmployeeRepository employeeRepository,
-    IGuidGenerator guidGenerator,
-    IIdentityUserRepository userRepository,
-    IIdentityRoleRepository roleRepository) : DomainService
+	IEmployeeRepository employeeRepository,
+	IGuidGenerator guidGenerator,
+	IIdentityUserRepository userRepository,
+	IIdentityRoleRepository roleRepository,
+	IBlobContainer blobContainer,
+	IEmployeeDocumentRepository employeeDocumentRepository
+) : DomainService
 {
-    // Private helper method to get an employee by ID
-    private async Task<Employee> GetEmployeeAsync(Guid employeeId)
-    {
-        var employee = await employeeRepository.GetAsync(employeeId);
-        if (employee == null)
-        {
-            throw new BusinessException($"Employee with ID {employeeId} does not exist.");
-        }
-        return employee;
-    }
+	// Private helper method to get an employee by ID
+	private async Task<Employee> GetEmployeeAsync(Guid employeeId)
+	{
+		var employee = await employeeRepository.GetAsync(employeeId);
+		return employee ?? throw new BusinessException($"Employee with ID {employeeId} does not exist.");
+	}
 
-    // Private helper method to get a user by ID
-    private async Task<IdentityUser> GetUserAsync(Guid userId)
-    {
-        var user = await userRepository.GetAsync(userId);
-        if (user == null)
-        {
-            throw new BusinessException($"User with ID {userId} does not exist.");
-        }
-        return user;
-    }
+	// Private helper method to get a user by ID
+	private async Task<IdentityUser> GetUserAsync(Guid userId)
+	{
+		var user = await userRepository.GetAsync(userId);
+		return user ?? throw new BusinessException($"User with ID {userId} does not exist.");
+	}
 
-    // Private helper method to get a role by ID
-    private async Task<IdentityRole> GetRoleAsync(Guid roleId)
-    {
-        var role = await roleRepository.GetAsync(roleId);
-        if (role == null)
-        {
-            throw new BusinessException($"Role with ID {roleId} does not exist.");
-        }
-        return role;
-    }
+	// Private helper method to get a role by ID
+	private async Task<IdentityRole> GetRoleAsync(Guid roleId)
+	{
+		var role = await roleRepository.GetAsync(roleId);
+		return role ?? throw new BusinessException($"Role with ID {roleId} does not exist.");
+	}
 
-    public async Task<Employee> CreateEmployeeAsync(
-        Guid userId,
-        Guid roleId,
-        string employeeCode,
-        string firstName,
-        string lastName,
-        string? middleName,
-        string shortName,
-        EmployeeStatusType employeeStatusType,
-        DateOnly? dateOfBirth,
-        byte[]? profilePicture = null,
-        string? familyCast = null,
-        EmployeeCastType? castType = null,
-        GenderType? gender = null,
-        string? religion = null,
-        MaritalStatusType? maritalStatus = null,
-        string? bloodGroup = null,
-        string? mobileNo = null,
-        string? email = null,
-        string? address = null,
-        string? department = null,
-        string? designation = null,
-        DateOnly? dateOfJoining = null,
-        EmployeeGroupType? employeeGroup = null,
-        string? qualification = null,
-        string? identificationMark1 = null,
-        string? identificationMark2 = null,
-        string? identificationMark3 = null)
-    {
-        // Validate user existence
-        var user = await GetUserAsync(userId);
+	public async Task<Employee> CreateEmployeeAsync(
+		Guid userId,
+		Guid roleId,
+		string employeeCode,
+		string firstName,
+		string lastName,
+		string? middleName,
+		string shortName,
+		EmployeeStatusType employeeStatusType,
+		DateOnly? dateOfBirth,
+		byte[]? profilePicture = null,
+		string? familyCast = null,
+		EmployeeCastType? castType = null,
+		GenderType? gender = null,
+		string? religion = null,
+		MaritalStatusType? maritalStatus = null,
+		string? bloodGroup = null,
+		string? mobileNo = null,
+		string? email = null,
+		string? address = null,
+		string? department = null,
+		string? designation = null,
+		DateOnly? dateOfJoining = null,
+		EmployeeGroupType? employeeGroup = null,
+		string? qualification = null,
+		string? identificationMark1 = null)
+	{
+		// Validate user existence
+		var user = await GetUserAsync(userId);
 
-        // Validate role existence
-        var role = await GetRoleAsync(roleId);
+		// Validate role existence
+		var role = await GetRoleAsync(roleId);
 
-        // Create employee entity
-        var employee = new Employee(
-            id: GuidGenerator.Create(),
-            tenantId: CurrentTenant.Id,
-            userId: userId,
-            profilePicture: profilePicture,
-            employeeCode: employeeCode,
-            lastName: lastName,
-            firstName: firstName,
-            middleName: middleName,
-            shortName: shortName,
-            employeeStatusType: employeeStatusType,
-            dateOfBirth: dateOfBirth,
-            familyCast: familyCast,
-            castType: castType,
-            genderType: gender,
-            religion: religion,
-            maritalStatus: maritalStatus,
-            bloodGroup: bloodGroup,
-            mobileNo: mobileNo,
-            email: email,
-            address: address,
-            department: department,
-            designation: designation,
-            dateOfJoining: dateOfJoining,
-            employeeGroup: employeeGroup,
-            qualification: qualification,
-            roleId: roleId,
-            identificationMark1: identificationMark1,
-            identificationMark2: identificationMark2,
-            identificationMark3: identificationMark3,
-            fatherDetails: null,
-            motherDetails: null,
-            spouseDetails: null,
-            bankDetails: null,
-            workExperiences: null
-        );
+		// Create employee entity
+		var employee = new Employee(
+			id: GuidGenerator.Create(),
+			tenantId: CurrentTenant.Id,
+			userId: userId,
+			profilePicture: profilePicture,
+			employeeCode: employeeCode,
+			lastName: lastName,
+			firstName: firstName,
+			middleName: middleName,
+			shortName: shortName,
+			employeeStatusType: employeeStatusType,
+			dateOfBirth: dateOfBirth,
+			familyCast: familyCast,
+			castType: castType,
+			genderType: gender,
+			religion: religion,
+			maritalStatus: maritalStatus,
+			bloodGroup: bloodGroup,
+			mobileNo: mobileNo,
+			email: email,
+			address: address,
+			department: department,
+			designation: designation,
+			dateOfJoining: dateOfJoining,
+			employeeGroup: employeeGroup,
+			qualification: qualification,
+			roleId: roleId,
+			identificationMark1: identificationMark1,
+			fatherDetails:
+			new ContactDetails(
+				name: null,
+				occupation: null,
+				contactNo: null,
+				address: null,
+				city: null,
+				state: null,
+				pinCode: null),
+			motherDetails: new ContactDetails(
+				name: null,
+				occupation: null,
+				contactNo: null,
+				address: null,
+				city: null,
+				state: null,
+				pinCode: null),
+			spouseDetails: new ContactDetails(
+				name: null,
+				occupation: null,
+				contactNo: null,
+				address: null,
+				city: null,
+				state: null,
+				pinCode: null),
+			bankDetails: new BankDetails(
+				bankName: null,
+				branchName: null,
+				accountHolderName: null,
+				accountNumber: null,
+				ifscCode: null
+			),
+			workExperiences: null
+		);
 
-        return employee;
-    }
+		return employee;
+	}
 
-    public async Task<Employee> UpdateFamilyInfoByEmployeeIdAsync(Guid employeeId, ContactDetails fatherDetails,
-        ContactDetails motherDetails, ContactDetails spouseDetails)
-    {
-        // Get the employee
-        var employee = await GetEmployeeAsync(employeeId);
+	public async Task<Employee> UpdateFamilyInfoByEmployeeIdAsync(Guid employeeId, ContactDetails fatherDetails,
+		ContactDetails motherDetails, ContactDetails spouseDetails)
+	{
+		// Get the employee
+		var employee = await GetEmployeeAsync(employeeId);
 
-        // Update the family details
-        employee.UpdateFamilyDetails(fatherDetails, motherDetails, spouseDetails);
+		// Update the family details
+		employee.UpdateFamilyDetails(fatherDetails, motherDetails, spouseDetails);
 
-        return employee;
-    }
+		return employee;
+	}
 
-    public async Task<Employee> UpdateExperienceInfoByEmployeeIdAsync(Guid employeeId,
-        List<WorkExperience> workExperiences)
-    {
-        // Get the employee
-        var employee = await GetEmployeeAsync(employeeId);
+	public async Task AddDocumentAsync(Guid employeeId, EmployeeDocument document)
+	{
+		// Retrieve the employee aggregate
+		var employee = await employeeRepository.GetAsync(employeeId);
 
-        // Update the work experiences
-        employee.UpdateWorkExperiences(workExperiences);
+		// Add the document to the employee
+		employee.AddDocument(document);
 
-        return employee;
-    }
+		// Save changes
+		await employeeRepository.UpdateAsync(employee);
+	}
 
-    public async Task<Employee> UpdateBankDetailsByEmployeeIdAsync(Guid employeeId, BankDetails bankDetails)
-    {
-        // Get the employee
-        var employee = await GetEmployeeAsync(employeeId);
+	public async Task<Employee> UpdateExperienceInfoByEmployeeIdAsync(Guid employeeId,
+		List<WorkExperience> workExperiences)
+	{
+		// Get the employee
+		var employee = await GetEmployeeAsync(employeeId);
 
-        // Update the bank details
-        employee.UpdateBankDetails(bankDetails);
+		// Update the work experiences
+		employee.UpdateWorkExperiences(workExperiences);
 
-        return employee;
-    }
+		return employee;
+	}
+
+	public async Task<Employee> UpdateBankDetailsByEmployeeIdAsync(Guid employeeId, BankDetails bankDetails)
+	{
+		// Get the employee
+		var employee = await GetEmployeeAsync(employeeId);
+
+		// Update the bank details
+		employee.UpdateBankDetails(bankDetails);
+
+		return employee;
+	}
+
+	public async Task AddDocumentsAsync(Guid employeeId, List<EmployeeDocumentData> documents)
+	{
+		var employee = await employeeRepository.GetAsync(employeeId);
+
+		foreach (var docData in documents)
+		{
+			var documentId = GuidGenerator.Create();
+			var blobName = $"{documentId}_{docData.FileName}";
+
+			// Save the file content to blob storage
+			await blobContainer.SaveAsync(blobName, docData.Content, overrideExisting: true);
+
+			// Create and save the EmployeeDocument entity (metadata)
+			var document = new EmployeeDocument(
+				id: documentId,
+				tenantId: CurrentTenant.Id,
+				employeeId: employeeId,
+				documentName: docData.FileName,
+				contentType: docData.ContentType,
+				size: docData.Size
+,
+				blobName: blobName);
+
+			await employeeDocumentRepository.InsertAsync(document);
+
+			// Associate the document with the employee, if needed
+			employee.AddDocument(document);
+		}
+
+		// Update the employee entity
+		await employeeRepository.UpdateAsync(employee);
+	}
+
+	public async Task<EmployeeDocument> GetDocumentAsync(Guid employeeId, Guid documentId)
+	{
+		var document =
+			await employeeDocumentRepository.FirstOrDefaultAsync(d => d.EmployeeId == employeeId && d.Id == documentId);
+		return document ?? throw new BusinessException($"Document with ID {documentId} does not exist.");
+	}
+
+	public async Task<List<EmployeeDocument>> GetDocumentsAsync(Guid employeeId)
+	{
+		List<EmployeeDocument>
+			documents = await employeeDocumentRepository.GetListAsync(d => d.EmployeeId == employeeId);
+		return documents;
+	}
 }

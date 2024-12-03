@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
 using ShikshaMitra.Employees;
@@ -29,6 +29,7 @@ using Volo.Abp.PermissionManagement.EntityFrameworkCore;
 using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.TenantManagement;
 using Volo.Abp.TenantManagement.EntityFrameworkCore;
+using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -110,8 +111,9 @@ public class ShikshaMitraDbContext :
 	#region Employee
 
 	DbSet<Employee> Employees { get; set; }
+	DbSet<EmployeeDocument> EmployeeDocuments { get; set; }
 
-	# region AttedenceAndLeaves
+	#region AttedenceAndLeaves
 
 	DbSet<EmployeeAttendance> EmployeeAttendances { get; set; }
 
@@ -180,5 +182,6 @@ public class ShikshaMitraDbContext :
 		});
 
 		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
-	}
+	    builder.ConfigureBlobStoring();
+        }
 }

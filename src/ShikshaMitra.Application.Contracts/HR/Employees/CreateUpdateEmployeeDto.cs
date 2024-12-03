@@ -12,7 +12,7 @@ public class CreateUpdateEmployeeDto
 	public string? FirstName { get; set; }
 	public string? MiddleName { get; set; }
 	public string? ShortName { get; set; }
-	
+
 	public EmployeeStatusType? EmployeeStatusType { get; set; }
 
 	public DateOnly? DateOfBirth { get; set; }
@@ -33,8 +33,6 @@ public class CreateUpdateEmployeeDto
 	public string? Qualification { get; set; }
 	public string? Role { get; set; }
 	public string? IdentificationMark1 { get; set; }
-	public string? IdentificationMark2 { get; set; }
-	public string? IdentificationMark3 { get; set; }
 
 	// Value Objects
 	public ContactDetailsDto FatherDetails { get; set; }

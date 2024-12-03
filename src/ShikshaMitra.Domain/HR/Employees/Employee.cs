@@ -41,8 +41,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? Qualification { get; private set; }
 	public Guid? RoleId { get; private set; }
 	public string? IdentificationMark1 { get; private set; }
-	public string? IdentificationMark2 { get; private set; }
-	public string? IdentificationMark3 { get; private set; }
 
 	// Value Objects
 	public ContactDetails FatherDetails { get; private set; }
@@ -51,7 +49,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public BankDetails BankDetails { get; private set; }
 
 	public List<WorkExperience> WorkExperiences { get; private set; } = new List<WorkExperience>();
-
+	public List<EmployeeDocument> Documents { get; private set; } = new List<EmployeeDocument>();
 
 	// Full name including middle name
 	public string EmployeeNameWithFather
@@ -106,8 +104,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? qualification,
 		Guid? roleId,
 		string? identificationMark1,
-		string? identificationMark2,
-		string? identificationMark3,
 		ContactDetails? fatherDetails,
 		ContactDetails? motherDetails,
 		ContactDetails? spouseDetails,
@@ -141,13 +137,11 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Qualification = qualification;
 		RoleId = roleId;
 		IdentificationMark1 = identificationMark1;
-		IdentificationMark2 = identificationMark2;
-		IdentificationMark3 = identificationMark3;
 		FatherDetails = fatherDetails;
 		MotherDetails = motherDetails;
 		SpouseDetails = spouseDetails;
 		BankDetails = bankDetails;
-		WorkExperiences = workExperiences ?? new List<WorkExperience>();
+		WorkExperiences = workExperiences ?? [];
 	}
 
 	internal Employee UpdateFamilyDetails(
@@ -175,4 +169,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		return this;
 	}
+
+	internal void AddDocument(EmployeeDocument document) => Documents.Add(document);
 }

@@ -30,6 +30,7 @@ using Volo.Abp.UI.Navigation.Urls;
 using Volo.Abp.VirtualFileSystem;
 using Volo.Abp.OpenIddict;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
 using QuestPDF.Infrastructure;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography;
@@ -97,11 +98,17 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 	private void ConfigureAuthentication(ServiceConfigurationContext context)
 	{
+
 		context.Services.ForwardIdentityAuthenticationForBearer(OpenIddictValidationAspNetCoreDefaults
 			.AuthenticationScheme);
 		context.Services.Configure<AbpClaimsPrincipalFactoryOptions>(options =>
 		{
 			options.IsDynamicClaimsEnabled = true;
+		});
+
+		context.Services.AddControllers(options =>
+		{
+			options.Filters.Add(new IgnoreAntiforgeryTokenAttribute());
 		});
 	}
 

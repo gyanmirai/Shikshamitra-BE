@@ -1,0 +1,40 @@
+﻿using System;
+using Volo.Abp.Auditing;
+using Volo.Abp.Domain.Entities;
+using Volo.Abp.MultiTenancy;
+
+namespace ShikshaMitra.HR.Employees;
+
+public class EmployeeDocument : Entity<Guid>, IMultiTenant, IHasCreationTime
+{
+	public Guid? TenantId { get; private set; }
+	public Guid EmployeeId { get; private set; }
+	public string DocumentName { get; private set; }
+	public string ContentType { get; private set; }
+	public long Size { get; private set; }
+	public DateTime CreationTime { get; private set; }
+
+	// Stores the Blob name if using Blob Storage
+	public string BlobName { get; private set; }
+
+	private EmployeeDocument() { } // For ORM
+
+	public EmployeeDocument(
+		Guid id,
+		Guid? tenantId,
+		Guid employeeId,
+		string documentName,
+		string contentType,
+		long size,
+		string blobName)
+	{
+		Id = id;
+		TenantId = tenantId;
+		EmployeeId = employeeId;
+		DocumentName = documentName;
+		ContentType = contentType;
+		Size = size;
+		BlobName = blobName;
+		CreationTime = DateTime.Now;
+	}
+}

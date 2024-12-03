@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.BlobStoring;
 using Volo.Abp.Identity;
 
 namespace ShikshaMitra.HR.Employees;
@@ -12,10 +15,11 @@ public class EmployeeAppService(
 	IEmployeeRepository employeeRepository,
 	EmployeeManager employeeManager,
 	IIdentityUserRepository userRepository,
+	IBlobContainer blobContainer,
 	IIdentityRoleRepository roleRepository) :
 	CrudAppService<Employee, EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>(
 		employeeRepository),
-	IEmployeeService
+	IEmployeeAppService
 {
 	public async Task<EmployeeDto?> GetEmployeeByUserId(Guid userId)
 	{
@@ -46,16 +50,13 @@ public class EmployeeAppService(
 			bloodGroup: input.BloodGroup,
 			mobileNo: input.MobileNo,
 			email: input.Email,
+			address: input.Address,
 			department: input.Department,
 			designation: input.Designation,
 			dateOfJoining: input.DateOfJoining,
 			employeeGroup: input.EmployeeGroup,
 			qualification: input.Qualification,
-			identificationMark1: input.IdentificationMark1,
-			identificationMark2: input.IdentificationMark2,
-			identificationMark3: input.IdentificationMark3,
-			address: input.Address
-		);
+			identificationMark1: input.IdentificationMark1);
 
 		// Save the employee
 		employee = await employeeRepository.InsertAsync(employee);
@@ -68,11 +69,11 @@ public class EmployeeAppService(
 	{
 		// convert the input to domain model and update the employee
 
-		var fatherDetails = ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input.FatherDetails);
-		var motherDetails = ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input.MotherDetails);
-		var spouseDetails = ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input.SpouseDetails);
+		ContactDetails? fatherDetails = ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input.FatherDetails);
+		ContactDetails? motherDetails = ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input.MotherDetails);
+		ContactDetails? spouseDetails = ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input.SpouseDetails);
 
-		var employee =
+		Employee? employee =
 			await employeeManager.UpdateFamilyInfoByEmployeeIdAsync(employeeId, fatherDetails, motherDetails,
 				spouseDetails);
 
@@ -83,11 +84,63 @@ public class EmployeeAppService(
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
 	}
 
-	public async Task<EmployeeDto> UpdateExperienceInfo(Guid employeeId, List<WorkExperienceDto> input)
+	public async Task UploadDocumentsAsync(Guid employeeId, List<DocumentDto> documents)
+	{
+		// Map the DTOs to domain entities or value objects
+		List<EmployeeDocumentData> employeeDocuments = documents.ConvertAll(doc => new EmployeeDocumentData
+		{
+			FileName = doc.FileName, ContentType = doc.ContentType, Content = doc.Content, Size = doc.Size
+		});
+
+		// Call the domain service
+		await employeeManager.AddDocumentsAsync(employeeId, employeeDocuments);
+	}
+
+	public async Task<DocumentDto> GetDocumentAsync(Guid employeeId, Guid documentId)
+	{
+		EmployeeDocument document = await employeeManager.GetDocumentAsync(employeeId, documentId);
+
+		await using var stream = await blobContainer.GetAsync(document.BlobName);
+		await using var memoryStream = new MemoryStream();
+		await stream.CopyToAsync(memoryStream);
+		return new DocumentDto
+		{
+			FileName = document.DocumentName,
+			ContentType = document.ContentType,
+			Content = memoryStream.ToArray(),
+			Size = document.Size
+		};
+	}
+
+	public async Task<List<DocumentDto>> GetDocumentsAsync(Guid employeeId)
+	{
+		List<EmployeeDocument> documents = await employeeManager.GetDocumentsAsync(employeeId);
+
+		var documentDtos = new List<DocumentDto>();
+
+		foreach (var document in documents)
+		{
+			await using var stream = await blobContainer.GetAsync(document.BlobName);
+			await using var memoryStream = new MemoryStream();
+			await stream.CopyToAsync(memoryStream);
+			documentDtos.Add(new DocumentDto
+			{
+				FileName = document.DocumentName,
+				ContentType = document.ContentType,
+				Content = memoryStream.ToArray(),
+				Size = document.Size
+			});
+		}
+
+		return documentDtos;
+	}
+
+	public async Task<EmployeeDto> UpdateExperienceInfo(Guid employeeId, List<CreateUpdateWorkExperienceDto> input)
 	{
 		// convert the input to domain model and update the employee
 
-		List<WorkExperience> workExperiences = ObjectMapper.Map<List<WorkExperienceDto>, List<WorkExperience>>(input);
+		List<WorkExperience> workExperiences =
+			ObjectMapper.Map<List<CreateUpdateWorkExperienceDto>, List<WorkExperience>>(input);
 
 		Employee employee =
 			await employeeManager.UpdateExperienceInfoByEmployeeIdAsync(employeeId, workExperiences);
@@ -114,5 +167,4 @@ public class EmployeeAppService(
 		// Return the DTO
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
 	}
-	
 }

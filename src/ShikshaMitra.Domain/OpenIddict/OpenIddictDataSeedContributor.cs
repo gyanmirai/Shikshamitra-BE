@@ -21,35 +21,17 @@ namespace ShikshaMitra.OpenIddict;
 /* Creates initial data that is needed to property run the application
  * and make client-to-server communication possible.
  */
-public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDependency
+public class OpenIddictDataSeedContributor(
+	IConfiguration configuration,
+	IOpenIddictApplicationRepository openIddictApplicationRepository,
+	IAbpApplicationManager applicationManager,
+	IOpenIddictScopeRepository openIddictScopeRepository,
+	IOpenIddictScopeManager scopeManager,
+	IPermissionDataSeeder permissionDataSeeder,
+	IStringLocalizer<OpenIddictResponse> l)
+	: IDataSeedContributor, ITransientDependency
 {
-    private readonly IConfiguration _configuration;
-    private readonly IOpenIddictApplicationRepository _openIddictApplicationRepository;
-    private readonly IAbpApplicationManager _applicationManager;
-    private readonly IOpenIddictScopeRepository _openIddictScopeRepository;
-    private readonly IOpenIddictScopeManager _scopeManager;
-    private readonly IPermissionDataSeeder _permissionDataSeeder;
-    private readonly IStringLocalizer<OpenIddictResponse> L;
-
-    public OpenIddictDataSeedContributor(
-        IConfiguration configuration,
-        IOpenIddictApplicationRepository openIddictApplicationRepository,
-        IAbpApplicationManager applicationManager,
-        IOpenIddictScopeRepository openIddictScopeRepository,
-        IOpenIddictScopeManager scopeManager,
-        IPermissionDataSeeder permissionDataSeeder,
-        IStringLocalizer<OpenIddictResponse> l)
-    {
-        _configuration = configuration;
-        _openIddictApplicationRepository = openIddictApplicationRepository;
-        _applicationManager = applicationManager;
-        _openIddictScopeRepository = openIddictScopeRepository;
-        _scopeManager = scopeManager;
-        _permissionDataSeeder = permissionDataSeeder;
-        L = l;
-    }
-
-    [UnitOfWork]
+	[UnitOfWork]
     public virtual async Task SeedAsync(DataSeedContext context)
     {
         await CreateScopesAsync();
@@ -58,9 +40,9 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
 
     private async Task CreateScopesAsync()
     {
-        if (await _openIddictScopeRepository.FindByNameAsync("ShikshaMitra") == null)
+        if (await openIddictScopeRepository.FindByNameAsync("ShikshaMitra") == null)
         {
-            await _scopeManager.CreateAsync(new OpenIddictScopeDescriptor
+            await scopeManager.CreateAsync(new OpenIddictScopeDescriptor
             {
                 Name = "ShikshaMitra",
                 DisplayName = "ShikshaMitra API",
@@ -81,7 +63,7 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
             "ShikshaMitra"
         };
 
-        var configurationSection = _configuration.GetSection("OpenIddict:Applications");
+        var configurationSection = configuration.GetSection("OpenIddict:Applications");
 
 
         //Console Test / Angular Client
@@ -169,16 +151,16 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
         if (!string.IsNullOrEmpty(secret) && string.Equals(type, OpenIddictConstants.ClientTypes.Public,
                 StringComparison.OrdinalIgnoreCase))
         {
-            throw new BusinessException(L["NoClientSecretCanBeSetForPublicApplications"]);
+            throw new BusinessException(l["NoClientSecretCanBeSetForPublicApplications"]);
         }
 
         if (string.IsNullOrEmpty(secret) && string.Equals(type, OpenIddictConstants.ClientTypes.Confidential,
                 StringComparison.OrdinalIgnoreCase))
         {
-            throw new BusinessException(L["TheClientSecretIsRequiredForConfidentialApplications"]);
+            throw new BusinessException(l["TheClientSecretIsRequiredForConfidentialApplications"]);
         }
 
-        var client = await _openIddictApplicationRepository.FindByClientIdAsync(name);
+        var client = await openIddictApplicationRepository.FindByClientIdAsync(name);
 
         var application = new AbpApplicationDescriptor
         {
@@ -309,7 +291,7 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
             {
                 if (!Uri.TryCreate(redirectUri, UriKind.Absolute, out var uri) || !uri.IsWellFormedOriginalString())
                 {
-                    throw new BusinessException(L["InvalidRedirectUri", redirectUri]);
+                    throw new BusinessException(l["InvalidRedirectUri", redirectUri]);
                 }
 
                 if (application.RedirectUris.All(x => x != uri))
@@ -326,7 +308,7 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
                 if (!Uri.TryCreate(postLogoutRedirectUri, UriKind.Absolute, out var uri) ||
                     !uri.IsWellFormedOriginalString())
                 {
-                    throw new BusinessException(L["InvalidPostLogoutRedirectUri", postLogoutRedirectUri]);
+                    throw new BusinessException(l["InvalidPostLogoutRedirectUri", postLogoutRedirectUri]);
                 }
 
                 if (application.PostLogoutRedirectUris.All(x => x != uri))
@@ -338,7 +320,7 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
 
         if (permissions != null)
         {
-            await _permissionDataSeeder.SeedAsync(
+            await permissionDataSeeder.SeedAsync(
                 ClientPermissionValueProvider.ProviderName,
                 name,
                 permissions,
@@ -348,7 +330,7 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
 
         if (client == null)
         {
-            await _applicationManager.CreateAsync(application);
+            await applicationManager.CreateAsync(application);
             return;
         }
 
@@ -359,13 +341,13 @@ public class OpenIddictDataSeedContributor : IDataSeedContributor, ITransientDep
             client.PostLogoutRedirectUris =
                 JsonSerializer.Serialize(application.PostLogoutRedirectUris.Select(q => q.ToString().TrimEnd('/')));
 
-            await _applicationManager.UpdateAsync(client.ToModel());
+            await applicationManager.UpdateAsync(client.ToModel());
         }
 
         if (!HasSameScopes(client, application))
         {
             client.Permissions = JsonSerializer.Serialize(application.Permissions.Select(q => q.ToString()));
-            await _applicationManager.UpdateAsync(client.ToModel());
+            await applicationManager.UpdateAsync(client.ToModel());
         }
     }
 

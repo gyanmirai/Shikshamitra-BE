@@ -7,20 +7,13 @@ using Volo.Abp;
 
 namespace ShikshaMitra.HttpApi.Client.ConsoleTestApp;
 
-public class ConsoleTestAppHostedService : IHostedService
+public class ConsoleTestAppHostedService(IConfiguration configuration) : IHostedService
 {
-    private readonly IConfiguration _configuration;
-
-    public ConsoleTestAppHostedService(IConfiguration configuration)
-    {
-        _configuration = configuration;
-    }
-
-    public async Task StartAsync(CancellationToken cancellationToken)
+	public async Task StartAsync(CancellationToken cancellationToken)
     {
         using (var application = await AbpApplicationFactory.CreateAsync<ShikshaMitraConsoleApiClientModule>(options =>
         {
-           options.Services.ReplaceConfiguration(_configuration);
+           options.Services.ReplaceConfiguration(configuration);
            options.UseAutofac();
         }))
         {

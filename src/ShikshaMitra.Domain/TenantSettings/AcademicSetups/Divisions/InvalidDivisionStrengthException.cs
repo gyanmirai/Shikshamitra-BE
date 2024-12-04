@@ -2,9 +2,4 @@
 
 namespace ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 
-public class InvalidDivisionStrengthException :   BusinessException
-{
-	public InvalidDivisionStrengthException() : base(ShikshaMitraDomainErrorCodes.MustBeGreaterThanZero)
-	{
-	}
-}
+public class InvalidDivisionStrengthException() : BusinessException(ShikshaMitraDomainErrorCodes.MustBeGreaterThanZero);

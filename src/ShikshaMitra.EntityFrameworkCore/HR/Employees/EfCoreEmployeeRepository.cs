@@ -2,6 +2,7 @@
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.HR.Employees;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
@@ -17,5 +18,14 @@ public class EfCoreEmployeeRepository(IDbContextProvider<ShikshaMitraDbContext> 
 
 		return await employees
 			.FirstOrDefaultAsync(e => e.UserId == userId);
+	}
+
+	public async Task<Employee?> GetLastEmployeeAsync()
+	{
+		DbSet<Employee?> employees = await GetDbSetAsync();
+
+		return await employees
+			.OrderByDescending(e => Convert.ToInt32(e.EmployeeCode.Substring(3)))
+			.FirstOrDefaultAsync();
 	}
 }

@@ -36,8 +36,8 @@ namespace ShikshaMitra.EntityFrameworkCore;
 [ReplaceDbContext(typeof(IIdentityDbContext))]
 [ReplaceDbContext(typeof(ITenantManagementDbContext))]
 [ConnectionStringName("Default")]
-public class ShikshaMitraDbContext :
-	AbpDbContext<ShikshaMitraDbContext>,
+public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> options) :
+	AbpDbContext<ShikshaMitraDbContext>(options),
 	IIdentityDbContext,
 	ITenantManagementDbContext
 {
@@ -128,11 +128,6 @@ public class ShikshaMitraDbContext :
 	#endregion
 
 	#endregion
-
-	public ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> options)
-		: base(options)
-	{
-	}
 
 	protected override void OnModelCreating(ModelBuilder builder)
 	{

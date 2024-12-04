@@ -7,18 +7,10 @@ using Volo.Abp.DependencyInjection;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
-public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator
-    : IShikshaMitraDbSchemaMigrator, ITransientDependency
+public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider serviceProvider)
+	: IShikshaMitraDbSchemaMigrator, ITransientDependency
 {
-    private readonly IServiceProvider _serviceProvider;
-
-    public EntityFrameworkCoreShikshaMitraDbSchemaMigrator(
-        IServiceProvider serviceProvider)
-    {
-        _serviceProvider = serviceProvider;
-    }
-
-    public async Task MigrateAsync()
+	public async Task MigrateAsync()
     {
         /* We intentionally resolve the ShikshaMitraDbContext
          * from IServiceProvider (instead of directly injecting it)
@@ -26,7 +18,7 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator
          * current scope.
          */
 
-        await _serviceProvider
+        await serviceProvider
             .GetRequiredService<ShikshaMitraDbContext>()
             .Database
             .MigrateAsync();

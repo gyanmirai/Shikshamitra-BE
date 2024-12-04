@@ -34,7 +34,6 @@ public class EmployeeAppService(
 		Employee employee = await employeeManager.CreateEmployeeAsync(
 			userId: input.UserId,
 			roleId: input.RoleId,
-			employeeCode: input.EmployeeCode,
 			firstName: input.FirstName,
 			lastName: input.LastName,
 			middleName: input.MiddleName,

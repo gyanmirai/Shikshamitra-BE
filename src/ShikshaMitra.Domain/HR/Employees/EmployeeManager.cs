@@ -44,7 +44,6 @@ public class EmployeeManager(
 	public async Task<Employee> CreateEmployeeAsync(
 		Guid userId,
 		Guid roleId,
-		string employeeCode,
 		string firstName,
 		string lastName,
 		string? middleName,
@@ -73,6 +72,9 @@ public class EmployeeManager(
 
 		// Validate role existence
 		var role = await GetRoleAsync(roleId);
+
+		// Generate employee code
+		string employeeCode = await GenerateEmployeeCodeAsync();
 
 		// Create employee entity
 		var employee = new Employee(
@@ -208,7 +210,7 @@ public class EmployeeManager(
 				documentName: docData.FileName,
 				contentType: docData.ContentType,
 				size: docData.Size
-,
+				,
 				blobName: blobName);
 
 			await employeeDocumentRepository.InsertAsync(document);
@@ -233,5 +235,29 @@ public class EmployeeManager(
 		List<EmployeeDocument>
 			documents = await employeeDocumentRepository.GetListAsync(d => d.EmployeeId == employeeId);
 		return documents;
+	}
+
+	private async Task<string> GenerateEmployeeCodeAsync()
+	{
+		// Get the last EmployeeCode
+		Employee? lastEmployee = await employeeRepository.GetLastEmployeeAsync();
+
+		int nextNumber = 1;
+
+		if (lastEmployee != null)
+		{
+			var lastCode = lastEmployee.EmployeeCode;
+
+			// Extract the numeric part from the last code (e.g., "EMP001" -> 1)
+			if (int.TryParse(lastCode[3..], out int lastNumber))
+			{
+				nextNumber = lastNumber + 1;
+			}
+		}
+
+		// Format the new EmployeeCode as "EMP" followed by a 3-digit number with leading zeros
+		var newEmployeeCode = $"EMP{nextNumber:D3}";
+
+		return newEmployeeCode;
 	}
 }

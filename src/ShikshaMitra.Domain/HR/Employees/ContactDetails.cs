@@ -4,27 +4,23 @@ using Volo.Abp.Domain.Values;
 
 namespace ShikshaMitra.HR.Employees;
 
-public class ContactDetails : ValueObject
+public class ContactDetails(
+	string? name,
+	string? occupation,
+	string? contactNo,
+	string? address,
+	string? city,
+	string? state,
+	string? pinCode)
+	: ValueObject
 {
-	public string? Name { get; private set; }
-	public string? Occupation { get; private set; }
-	public string? ContactNo { get; private set; }
-	public string? Address { get; private set; }
-	public string? City { get; private set; }
-	public string? State { get; private set; }
-	public string? PinCode { get; private set; }
-
-	public ContactDetails(string? name, string? occupation, string? contactNo, string? address, string? city,
-		string? state, string? pinCode)
-	{
-		Name = name;
-		Occupation = occupation;
-		ContactNo = contactNo;
-		Address = address;
-		City = city;
-		State = state;
-		PinCode = pinCode;
-	}
+	public string? Name { get; private set; } = name;
+	public string? Occupation { get; private set; } = occupation;
+	public string? ContactNo { get; private set; } = contactNo;
+	public string? Address { get; private set; } = address;
+	public string? City { get; private set; } = city;
+	public string? State { get; private set; } = state;
+	public string? PinCode { get; private set; } = pinCode;
 
 	protected override IEnumerable<object> GetAtomicValues()
 	{

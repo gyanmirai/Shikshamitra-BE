@@ -9,23 +9,14 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Authors;
 
 [Authorize(ShikshaMitraPermissions.Authors.Default)]
-public class AuthorAppService : ShikshaMitraAppService, IAuthorAppService
+public class AuthorAppService(
+	IAuthorRepository authorRepository,
+	AuthorManager authorManager)
+	: ShikshaMitraAppService, IAuthorAppService
 {
-    private readonly IAuthorRepository _authorRepository;
-    private readonly AuthorManager _authorManager;
-
-    public AuthorAppService(
-        IAuthorRepository authorRepository,
-        AuthorManager authorManager)
+	public async Task<AuthorDto> GetAsync(Guid id)
     {
-        _authorRepository = authorRepository;
-        _authorManager = authorManager;
-
-    }
-
-    public async Task<AuthorDto> GetAsync(Guid id)
-    {
-        var author = await _authorRepository.GetAsync(id);
+        var author = await authorRepository.GetAsync(id);
         return ObjectMapper.Map<Author, AuthorDto>(author);
     }
 
@@ -36,7 +27,7 @@ public class AuthorAppService : ShikshaMitraAppService, IAuthorAppService
             input.Sorting = nameof(Author.Name);
         }
 
-        var authors = await _authorRepository.GetListAsync(
+        var authors = await authorRepository.GetListAsync(
             input.SkipCount,
             input.MaxResultCount,
             input.Sorting,
@@ -44,8 +35,8 @@ public class AuthorAppService : ShikshaMitraAppService, IAuthorAppService
         );
 
         var totalCount = input.Filter == null
-            ? await _authorRepository.CountAsync()
-            : await _authorRepository.CountAsync(
+            ? await authorRepository.CountAsync()
+            : await authorRepository.CountAsync(
                 author => author.Name.Contains(input.Filter));
 
         return new PagedResultDto<AuthorDto>(
@@ -57,12 +48,12 @@ public class AuthorAppService : ShikshaMitraAppService, IAuthorAppService
     [Authorize(ShikshaMitraPermissions.Authors.Create)]
     public async Task<AuthorDto> CreateAsync(CreateAuthorDto input)
     {
-        var author = await _authorManager.CreateAsync(
+        var author = await authorManager.CreateAsync(
             input.Name,
             input.BirthDate
         );
 
-        await _authorRepository.InsertAsync(author);
+        await authorRepository.InsertAsync(author);
 
         return ObjectMapper.Map<Author, AuthorDto>(author);
     }
@@ -70,21 +61,21 @@ public class AuthorAppService : ShikshaMitraAppService, IAuthorAppService
     [Authorize(ShikshaMitraPermissions.Authors.Edit)]
     public async Task UpdateAsync(Guid id, UpdateAuthorDto input)
     {
-        var author = await _authorRepository.GetAsync(id);
+        var author = await authorRepository.GetAsync(id);
 
         if (author.Name != input.Name)
         {
-            await _authorManager.ChangeNameAsync(author, input.Name);
+            await authorManager.ChangeNameAsync(author, input.Name);
         }
 
         author.BirthDate = input.BirthDate;
 
-        await _authorRepository.UpdateAsync(author);
+        await authorRepository.UpdateAsync(author);
     }
 
     [Authorize(ShikshaMitraPermissions.Authors.Delete)]
     public async Task DeleteAsync(Guid id)
     {
-        await _authorRepository.DeleteAsync(id);
+        await authorRepository.DeleteAsync(id);
     }
 }

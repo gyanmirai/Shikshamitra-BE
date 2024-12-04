@@ -15,28 +15,14 @@ using Volo.Abp.TenantManagement;
 
 namespace ShikshaMitra.Data;
 
-public class ShikshaMitraDbMigrationService : ITransientDependency
+public class ShikshaMitraDbMigrationService(
+	IDataSeeder dataSeeder,
+	IEnumerable<IShikshaMitraDbSchemaMigrator> dbSchemaMigrators,
+	ITenantRepository tenantRepository,
+	ICurrentTenant currentTenant)
+	: ITransientDependency
 {
-    public ILogger<ShikshaMitraDbMigrationService> Logger { get; set; }
-
-    private readonly IDataSeeder _dataSeeder;
-    private readonly IEnumerable<IShikshaMitraDbSchemaMigrator> _dbSchemaMigrators;
-    private readonly ITenantRepository _tenantRepository;
-    private readonly ICurrentTenant _currentTenant;
-
-    public ShikshaMitraDbMigrationService(
-        IDataSeeder dataSeeder,
-        IEnumerable<IShikshaMitraDbSchemaMigrator> dbSchemaMigrators,
-        ITenantRepository tenantRepository,
-        ICurrentTenant currentTenant)
-    {
-        _dataSeeder = dataSeeder;
-        _dbSchemaMigrators = dbSchemaMigrators;
-        _tenantRepository = tenantRepository;
-        _currentTenant = currentTenant;
-
-        Logger = NullLogger<ShikshaMitraDbMigrationService>.Instance;
-    }
+    public ILogger<ShikshaMitraDbMigrationService> Logger { get; set; } = NullLogger<ShikshaMitraDbMigrationService>.Instance;
 
     public async Task MigrateAsync()
     {
@@ -54,12 +40,12 @@ public class ShikshaMitraDbMigrationService : ITransientDependency
 
         Logger.LogInformation($"Successfully completed host database migrations.");
 
-        var tenants = await _tenantRepository.GetListAsync(includeDetails: true);
+        var tenants = await tenantRepository.GetListAsync(includeDetails: true);
 
         var migratedDatabaseSchemas = new HashSet<string>();
         foreach (var tenant in tenants)
         {
-            using (_currentTenant.Change(tenant.Id))
+            using (currentTenant.Change(tenant.Id))
             {
                 if (tenant.ConnectionStrings.Any())
                 {
@@ -90,7 +76,7 @@ public class ShikshaMitraDbMigrationService : ITransientDependency
         Logger.LogInformation(
             $"Migrating schema for {(tenant == null ? "host" : tenant.Name + " tenant")} database...");
 
-        foreach (var migrator in _dbSchemaMigrators)
+        foreach (var migrator in dbSchemaMigrators)
         {
             await migrator.MigrateAsync();
         }
@@ -100,7 +86,7 @@ public class ShikshaMitraDbMigrationService : ITransientDependency
     {
         Logger.LogInformation($"Executing {(tenant == null ? "host" : tenant.Name + " tenant")} database seed...");
 
-        await _dataSeeder.SeedAsync(new DataSeedContext(tenant?.Id)
+        await dataSeeder.SeedAsync(new DataSeedContext(tenant?.Id)
             .WithProperty(IdentityDataSeedContributor.AdminEmailPropertyName, IdentityDataSeedContributor.AdminEmailDefaultValue)
             .WithProperty(IdentityDataSeedContributor.AdminPasswordPropertyName, IdentityDataSeedContributor.AdminPasswordDefaultValue)
         );

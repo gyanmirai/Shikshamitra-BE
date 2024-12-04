@@ -7,4 +7,5 @@ namespace ShikshaMitra.HR.Employees;
 public interface IEmployeeRepository : IRepository<Employee, Guid>
 {
 	public Task<Employee?> GetEmployeeByUserIdAsync(Guid userId);
+	Task<Employee?> GetLastEmployeeAsync();
 }

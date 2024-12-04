@@ -11,9 +11,6 @@ public class CreateEmployeeBasicInfoDto
 	// Profile Picture
 	public byte[]? ProfilePicture { get; set; }
 
-	// Employee Code
-	public string? EmployeeCode { get; set; }
-
 	public string? LastName { get; set; }
 	public string? FirstName { get; set; }
 	public string? MiddleName { get; set; }

@@ -143,6 +143,86 @@ public class EmployeeManager(
 		return employee;
 	}
 
+	public async Task<Employee> UpdateEmployeeAsync(
+		Guid employeeId,
+		string firstName,
+		string lastName,
+		string? middleName,
+		string shortName,
+		EmployeeStatusType employeeStatusType,
+		DateOnly? dateOfBirth,
+		byte[]? profilePicture = null,
+		string? familyCast = null,
+		EmployeeCastType? castType = null,
+		GenderType? gender = null,
+		string? religion = null,
+		MaritalStatusType? maritalStatus = null,
+		string? bloodGroup = null,
+		string? mobileNo = null,
+		string? email = null,
+		string? address = null,
+		string? department = null,
+		string? designation = null,
+		DateOnly? dateOfJoining = null,
+		EmployeeGroupType? employeeGroup = null,
+		string? qualification = null,
+		Guid? roleId = null,
+		string? identificationMark1 = null)
+	{
+		// Get the employee
+		Employee employee = await GetEmployeeAsync(employeeId);
+
+		// Update the employee
+		employee.UpdateBasicInfo(
+			lastName: lastName,
+			firstName: firstName,
+			middleName: middleName,
+			shortName: shortName,
+			employeeStatusType: employeeStatusType,
+			dateOfBirth: dateOfBirth,
+			profilePicture: profilePicture,
+			familyCast: familyCast,
+			castType: castType,
+			genderType: gender,
+			religion: religion,
+			maritalStatus: maritalStatus,
+			bloodGroup: bloodGroup,
+			mobileNo: mobileNo,
+			email: email,
+			address: address,
+			department: department,
+			designation: designation,
+			dateOfJoining: dateOfJoining,
+			employeeGroup: employeeGroup,
+			qualification: qualification,
+			roleId: roleId,
+			identificationMark1: identificationMark1
+		);
+
+		// Validate the updated employee if needed
+		await ValidateEmployeeAsync(employee);
+
+		return employee;
+	}
+
+	private async Task ValidateEmployeeAsync(Employee employee)
+	{
+		// Add any domain-specific validation rules here
+
+		// Example validations:
+		if (employee.DateOfBirth >= DateOnly.FromDateTime(DateTime.UtcNow))
+		{
+			throw new BusinessException("Date of birth cannot be in the future");
+		}
+
+		if (employee.DateOfJoining.HasValue && employee.DateOfJoining.Value <= employee.DateOfBirth)
+		{
+			throw new BusinessException("Date of joining must be after date of birth");
+		}
+
+		// Add more validations as needed
+	}
+
 	public async Task<Employee> UpdateFamilyInfoByEmployeeIdAsync(Guid employeeId, ContactDetails fatherDetails,
 		ContactDetails motherDetails, ContactDetails spouseDetails)
 	{

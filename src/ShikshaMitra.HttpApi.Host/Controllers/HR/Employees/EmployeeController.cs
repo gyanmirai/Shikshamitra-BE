@@ -12,7 +12,7 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 [Route("api/employee")]
 public class EmployeeController(IEmployeeAppService employeeAppService) : AbpController
 {
-	[HttpPost("{employeeId}/documents")]
+	[HttpPut("{employeeId}/documents")]
 	public async Task<IActionResult> UploadDocuments(Guid employeeId, [FromForm] IList<IFormFile>? files)
 	{
 		if (files == null || files.Count == 0)
@@ -24,21 +24,21 @@ public class EmployeeController(IEmployeeAppService employeeAppService) : AbpCon
 
 		foreach (var file in files)
 		{
-			if (file.Length > 0)
+			if (file.Length <= 0)
 			{
-				using (var memoryStream = new MemoryStream())
-				{
-					await file.CopyToAsync(memoryStream);
-
-					documentDtos.Add(new DocumentDto
-					{
-						FileName = file.FileName,
-						ContentType = file.ContentType,
-						Content = memoryStream.ToArray(),
-						Size = file.Length
-					});
-				}
+				continue;
 			}
+
+			await using var memoryStream = new MemoryStream();
+			await file.CopyToAsync(memoryStream);
+
+			documentDtos.Add(new DocumentDto
+			{
+				FileName = file.FileName,
+				ContentType = file.ContentType,
+				Content = memoryStream.ToArray(),
+				Size = file.Length
+			});
 		}
 
 		// Pass the data to the application service
@@ -59,10 +59,6 @@ public class EmployeeController(IEmployeeAppService employeeAppService) : AbpCon
 	public async Task<IActionResult> GetDocuments(Guid employeeId)
 	{
 		List<DocumentDto> documents = await employeeAppService.GetDocumentsAsync(employeeId);
-		if (documents.Count == 0)
-		{
-			return NotFound();
-		}
 
 		return Ok(documents);
 	}

@@ -3,6 +3,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Students;
 
 namespace ShikshaMitra.HR;
@@ -39,7 +40,7 @@ public class HRMapperProfile : Profile
 		# region Employee Settings
 
 		CreateMap<AutomatedNotificationsSettings, AutomatedNotificationsSettingsDto>().ReverseMap();
-		
+
 		CreateMap<CustomAttendanceRule, CustomAttendanceRuleDto>();
 		CreateMap<CreateUpdateCustomAttendanceRuleDto, CustomAttendanceRule>();
 
@@ -53,5 +54,18 @@ public class HRMapperProfile : Profile
 		# endregion
 
 		# endregion
+
+		#region Payroll
+
+		#region Settings
+
+		CreateMap<PayElement, PayElementDto>();
+		CreateMap<PayElement.DependentProperties, DependentPropertiesDto>();
+		CreateMap<CreateUpdatePayElementDto, PayElement>();
+		CreateMap<DependentPropertiesDto, PayElement.DependentProperties>();
+
+		#endregion
+
+		#endregion
 	}
 }

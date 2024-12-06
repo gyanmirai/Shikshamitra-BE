@@ -144,6 +144,58 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		WorkExperiences = workExperiences ?? [];
 	}
 
+	internal Employee UpdateBasicInfo(
+		string? lastName,
+		string? firstName,
+		string? middleName,
+		string? shortName,
+		EmployeeStatusType? employeeStatusType,
+		DateOnly? dateOfBirth,
+		byte[]? profilePicture,
+		string? familyCast,
+		EmployeeCastType? castType,
+		GenderType? genderType,
+		string? religion,
+		MaritalStatusType? maritalStatus,
+		string? bloodGroup,
+		string? mobileNo,
+		string? email,
+		string? address,
+		string? department,
+		string? designation,
+		DateOnly? dateOfJoining,
+		EmployeeGroupType? employeeGroup,
+		string? qualification,
+		Guid? roleId,
+		string? identificationMark1)
+	{
+		LastName = lastName;
+		FirstName = firstName;
+		MiddleName = middleName;
+		ShortName = shortName;
+		EmployeeEmployeeStatusTypeType = employeeStatusType;
+		DateOfBirth = dateOfBirth;
+		ProfilePicture = profilePicture;
+		FamilyCast = familyCast;
+		CastType = castType;
+		GenderType = genderType;
+		Religion = religion;
+		MaritalStatus = maritalStatus;
+		BloodGroup = bloodGroup;
+		MobileNo = mobileNo;
+		Email = email;
+		Address = address;
+		Department = department;
+		Designation = designation;
+		DateOfJoining = dateOfJoining;
+		EmployeeGroup = employeeGroup;
+		Qualification = qualification;
+		RoleId = roleId;
+		IdentificationMark1 = identificationMark1;
+		
+		return this;
+	}
+
 	internal Employee UpdateFamilyDetails(
 		ContactDetails fatherDetails,
 		ContactDetails motherDetails,

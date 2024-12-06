@@ -4,6 +4,7 @@ using ShikshaMitra.Books;
 using ShikshaMitra.Employees;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
@@ -127,6 +128,12 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#endregion
 
+	# region Payroll
+
+	DbSet<PayElement> PayElements { get; set; }
+
+	#endregion
+
 	#endregion
 
 	protected override void OnModelCreating(ModelBuilder builder)
@@ -177,6 +184,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 		});
 
 		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
-	    builder.ConfigureBlobStoring();
-        }
+		builder.ConfigureBlobStoring();
+	}
 }

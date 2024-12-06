@@ -64,6 +64,41 @@ public class EmployeeAppService(
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
 	}
 
+	public async Task<EmployeeDto> UpdateBasicInfoAsync(Guid employeeId, UpdateEmployeeBasicInfoDto input)
+	{
+		// Update employee using EmployeeManager
+		Employee employee = await employeeManager.UpdateEmployeeAsync(
+			employeeId,
+			firstName: input.FirstName,
+			lastName: input.LastName,
+			middleName: input.MiddleName,
+			shortName: input.ShortName,
+			employeeStatusType: input.EmployeeStatusType,
+			dateOfBirth: input.DateOfBirth,
+			profilePicture: input.ProfilePicture,
+			familyCast: input.FamilyCast,
+			castType: input.CastType,
+			gender: input.Gender,
+			religion: input.Religion,
+			maritalStatus: input.MaritalStatus,
+			bloodGroup: input.BloodGroup,
+			mobileNo: input.MobileNo,
+			email: input.Email,
+			address: input.Address,
+			department: input.Department,
+			designation: input.Designation,
+			dateOfJoining: input.DateOfJoining,
+			employeeGroup: input.EmployeeGroup,
+			qualification: input.Qualification,
+			identificationMark1: input.IdentificationMark1);
+
+		// Save the updated employee
+		employee = await employeeRepository.UpdateAsync(employee);
+
+		// Return the updated DTO
+		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
+	}
+
 	public async Task<EmployeeDto> UpdateFamilyInfo(Guid employeeId, UpdateEmployeeFamilyDetailsDto input)
 	{
 		// convert the input to domain model and update the employee

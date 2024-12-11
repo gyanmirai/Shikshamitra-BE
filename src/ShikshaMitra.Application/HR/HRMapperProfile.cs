@@ -4,6 +4,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Settings;
+using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Students;
 
@@ -26,9 +27,11 @@ public class HRMapperProfile : Profile
 		CreateMap<BankDetails, BankDetailsDto>().ReverseMap();
 
 		#region settings
-		CreateMap<DocumentSetting,DocumentSettingDto>();
+
+		CreateMap<DocumentSetting, DocumentSettingDto>();
 		CreateMap<CreateUpdateDocumentSettingDto, DocumentSetting>();
-		#endregion 
+
+		#endregion
 
 		#endregion
 
@@ -62,6 +65,13 @@ public class HRMapperProfile : Profile
 		# endregion
 
 		#region Payroll
+
+		#region Payroll Structure
+
+		CreateMap<PayrollStructure, PayrollStructureDto>();
+		CreateMap<CreateUpdatePayrollStructureDto, PayrollStructure>();
+
+		#endregion
 
 		#region Settings
 

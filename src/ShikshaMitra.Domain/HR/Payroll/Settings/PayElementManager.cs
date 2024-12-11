@@ -3,10 +3,11 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
+using Volo.Abp.Guids;
 
 namespace ShikshaMitra.HR.Payroll.Settings;
 
-public class PayElementManager(IPayElementRepository repository) : DomainService
+public class PayElementManager(IPayElementRepository repository, IGuidGenerator guidGenerator) : DomainService
 {
 	/// <summary>
 	/// Creates a new Pay Element, ensuring the Code and Name are unique.
@@ -37,14 +38,16 @@ public class PayElementManager(IPayElementRepository repository) : DomainService
 		}
 
 		// Create and return a new PayElement
-		return new PayElement(CurrentTenant.Id,
-			code, name, type)
-		{
-			IsEmployeeSpecific = isEmployeeSpecific,
-			IsDependent = isDependent,
-			Dependent = dependent,
-			IsVisibleInPaySlip = isVisibleInPaySlip
-		};
+		return new PayElement(
+			id: guidGenerator.Create(),
+			tenantId: CurrentTenant.Id,
+			code,
+			name,
+			type,
+			isEmployeeSpecific,
+			isDependent,
+			dependent,
+			isVisibleInPaySlip);
 	}
 
 	public async Task UpdateAsync(

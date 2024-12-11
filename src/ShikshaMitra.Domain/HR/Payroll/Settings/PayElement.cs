@@ -57,17 +57,28 @@ public class PayElement : AuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Initializes a new instance of the PayElement class.
 	/// </summary>
+	/// <param name="id">Unique identifier of the pay element.</param>
 	/// <param name="tenantId">TenantId of the pay element.</param>
 	/// <param name="code">Unique code for the pay element.</param>
 	/// <param name="name">Name of the pay element.</param>
 	/// <param name="type">Type of the pay element.</param>
-	public PayElement(Guid? tenantId, string code, string name, PayElementType type)
+	/// <param name="isEmployeeSpecific">Indicates whether the pay element is specific to an employee.</param>
+	/// <param name="isDependent">Indicates whether the pay element is dependent on another element.</param>
+	/// <param name="dependent">Dependent properties, applicable only if IsDependent is true.</param>
+	/// <param name="isVisibleInPaySlip">Indicates whether the pay element is visible in the pay slip.</param>
+	public PayElement(Guid id, Guid? tenantId, string code, string name, PayElementType type, bool isEmployeeSpecific,
+		bool isDependent, DependentProperties? dependent, bool isVisibleInPaySlip) : base(id)
 	{
 		TenantId = tenantId ?? throw new ArgumentNullException(nameof(tenantId));
 		Code = code ?? throw new ArgumentNullException(nameof(code));
 		Name = name ?? throw new ArgumentNullException(nameof(name));
 		Type = type;
+		IsEmployeeSpecific = isEmployeeSpecific;
+		IsDependent = isDependent;
+		Dependent = dependent;
+		IsVisibleInPaySlip = isVisibleInPaySlip;
 	}
+
 
 	public class DependentProperties
 	{

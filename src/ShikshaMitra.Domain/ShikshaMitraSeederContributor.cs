@@ -5,6 +5,8 @@ using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Payroll.PayrollStructures;
+using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
@@ -50,6 +52,8 @@ namespace ShikshaMitra
 		IEmployeeRepository employeeRepository,
 		IEmployeeAttendanceRepository employeeAttendanceRepository,
 		ICustomAttendanceRuleRepository customAttendanceRuleRepository,
+		IPayElementRepository payElementRepository,
+		IPayrollStructureRepository payrollStructureRepository,
 		//IRepository<AutomatedNotificationsSettings, Guid> automatedNotificationsSettingsRepository,
 		IdentityUserManager userManager) : IDataSeedContributor, ITransientDependency
 	{
@@ -178,6 +182,40 @@ namespace ShikshaMitra
 				#endregion
 
 				# region HR
+
+				#region Create PayElement
+
+				PayElement payElement = new PayElement(
+					id: guidGenerator.Create(),
+					tenantId: tenant.Id,
+					code: "BE001",
+					name: "Basic",
+					type: PayElementType.Credit,
+					isEmployeeSpecific: false,
+					isDependent: false,
+					dependent: null,
+					isVisibleInPaySlip: true
+				);
+
+				payElement = await payElementRepository.InsertAsync(payElement);
+
+				#endregion
+
+				#region Create PayRollStructure
+
+				var payrollStructure = new PayrollStructure(
+					id: guidGenerator.Create(),
+					tenantId: tenant.Id,
+					educationMediumStageId: educationMediumStage.Id,
+					payElementId: payElement.Id,
+					payrollStructureType: PayrollStructureType.Earnings,
+					amount: 10000
+				);
+
+
+				await payrollStructureRepository.InsertAsync(payrollStructure);
+
+				#endregion
 
 				#region Create Employee
 

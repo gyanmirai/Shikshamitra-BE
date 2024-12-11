@@ -751,6 +751,67 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppDocumentSettings", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("Amount")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<Guid>("EducationMediumStageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<Guid>("PayElementId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("PayrollStructureType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EducationMediumStageId");
+
+                    b.HasIndex("PayElementId");
+
+                    b.ToTable("AppPayrollStructures", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.PayElement", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3598,6 +3659,25 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", b =>
+                {
+                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
+                        .WithMany()
+                        .HasForeignKey("EducationMediumStageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.HR.Payroll.Settings.PayElement", "PayElement")
+                        .WithMany()
+                        .HasForeignKey("PayElementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("EducationMediumStage");
+
+                    b.Navigation("PayElement");
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.PayElement", b =>

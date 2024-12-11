@@ -78,7 +78,7 @@ public class EmployeeManager(
 
 		// Create employee entity
 		var employee = new Employee(
-			id: GuidGenerator.Create(),
+			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
 			userId: userId,
 			profilePicture: profilePicture,

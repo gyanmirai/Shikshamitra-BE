@@ -3,6 +3,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Students;
 
@@ -12,7 +13,7 @@ public class HRMapperProfile : Profile
 {
 	public HRMapperProfile()
 	{
-		# region employees
+		# region Employees
 
 		// Mapping for Employee
 		CreateMap<Employee, EmployeeDto>();
@@ -24,11 +25,16 @@ public class HRMapperProfile : Profile
 		CreateMap<ContactDetails, ContactDetailsDto>().ReverseMap();
 		CreateMap<BankDetails, BankDetailsDto>().ReverseMap();
 
-		# endregion
+		#region settings
+		CreateMap<DocumentSetting,DocumentSettingDto>();
+		CreateMap<CreateUpdateDocumentSettingDto, DocumentSetting>();
+		#endregion 
 
-		# region Attendeance and Leaves
+		#endregion
 
-		# region Employee Attendance
+		#region Attendeance and Leaves
+
+		#region Employee Attendance
 
 		CreateMap<EmployeeAttendance, EmployeeAttendanceDto>()
 			.ForMember(x => x.EmployeeName,

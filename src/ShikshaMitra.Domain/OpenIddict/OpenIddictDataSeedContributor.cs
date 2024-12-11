@@ -44,7 +44,9 @@ public class OpenIddictDataSeedContributor(
 		{
 			await scopeManager.CreateAsync(new OpenIddictScopeDescriptor
 			{
-				Name = "ShikshaMitra", DisplayName = "ShikshaMitra API", Resources = { "ShikshaMitra" }
+				Name = "ShikshaMitra",
+				DisplayName = "ShikshaMitra API",
+				Resources = { "ShikshaMitra" }
 			});
 		}
 	}
@@ -146,13 +148,13 @@ public class OpenIddictDataSeedContributor(
 		List<string>? permissions = null)
 	{
 		if (!string.IsNullOrEmpty(secret) && string.Equals(type, OpenIddictConstants.ClientTypes.Public,
-			    StringComparison.OrdinalIgnoreCase))
+				StringComparison.OrdinalIgnoreCase))
 		{
 			throw new BusinessException(l["NoClientSecretCanBeSetForPublicApplications"]);
 		}
 
 		if (string.IsNullOrEmpty(secret) && string.Equals(type, OpenIddictConstants.ClientTypes.Confidential,
-			    StringComparison.OrdinalIgnoreCase))
+				StringComparison.OrdinalIgnoreCase))
 		{
 			throw new BusinessException(l["TheClientSecretIsRequiredForConfidentialApplications"]);
 		}
@@ -173,7 +175,7 @@ public class OpenIddictDataSeedContributor(
 		Check.NotNullOrEmpty(scopes, nameof(scopes));
 
 		if (new[] { OpenIddictConstants.GrantTypes.AuthorizationCode, OpenIddictConstants.GrantTypes.Implicit }.All(
-			    grantTypes.Contains))
+				grantTypes.Contains))
 		{
 			application.Permissions.Add(OpenIddictConstants.Permissions.ResponseTypes.CodeIdToken);
 
@@ -205,16 +207,16 @@ public class OpenIddictDataSeedContributor(
 			}
 
 			if (grantType == OpenIddictConstants.GrantTypes.AuthorizationCode ||
-			    grantType == OpenIddictConstants.GrantTypes.Implicit)
+				grantType == OpenIddictConstants.GrantTypes.Implicit)
 			{
 				application.Permissions.Add(OpenIddictConstants.Permissions.Endpoints.Authorization);
 			}
 
 			if (grantType == OpenIddictConstants.GrantTypes.AuthorizationCode ||
-			    grantType == OpenIddictConstants.GrantTypes.ClientCredentials ||
-			    grantType == OpenIddictConstants.GrantTypes.Password ||
-			    grantType == OpenIddictConstants.GrantTypes.RefreshToken ||
-			    grantType == OpenIddictConstants.GrantTypes.DeviceCode)
+				grantType == OpenIddictConstants.GrantTypes.ClientCredentials ||
+				grantType == OpenIddictConstants.GrantTypes.Password ||
+				grantType == OpenIddictConstants.GrantTypes.RefreshToken ||
+				grantType == OpenIddictConstants.GrantTypes.DeviceCode)
 			{
 				application.Permissions.Add(OpenIddictConstants.Permissions.Endpoints.Token);
 				application.Permissions.Add(OpenIddictConstants.Permissions.Endpoints.Revocation);
@@ -294,7 +296,10 @@ public class OpenIddictDataSeedContributor(
 				if (application.RedirectUris.All(x => x != uri))
 				{
 					application.RedirectUris.Add(uri);
-					// application.RedirectUris.Add(new Uri("http://localhost:3000/auth/openiddict"));
+					if (uri.ToString().Contains($"https://shikshamitra-dev.netlify.app/auth/openiddict"))
+					{
+						application.RedirectUris.Add(new Uri("http://localhost:3000/auth/openiddict"));
+					}
 				}
 			}
 		}
@@ -304,7 +309,7 @@ public class OpenIddictDataSeedContributor(
 			if (!postLogoutRedirectUri.IsNullOrEmpty())
 			{
 				if (!Uri.TryCreate(postLogoutRedirectUri, UriKind.Absolute, out var uri) ||
-				    !uri.IsWellFormedOriginalString())
+					!uri.IsWellFormedOriginalString())
 				{
 					throw new BusinessException(l["InvalidPostLogoutRedirectUri", postLogoutRedirectUri]);
 				}
@@ -312,6 +317,11 @@ public class OpenIddictDataSeedContributor(
 				if (application.PostLogoutRedirectUris.All(x => x != uri))
 				{
 					application.PostLogoutRedirectUris.Add(uri);
+
+					if (uri.ToString().Contains($"https://shikshamitra-dev.netlify.app/login"))
+					{
+						application.PostLogoutRedirectUris.Add(new Uri("http://localhost:3000/login"));
+					}
 				}
 			}
 		}
@@ -344,20 +354,17 @@ public class OpenIddictDataSeedContributor(
 
 		if (!HasSameScopes(client, application))
 		{
-			client.Permissions = JsonSerializer.Serialize(application.Permissions.Select(q => q.ToString()));
+			client.Permissions = JsonSerializer.Serialize(application.Permissions.Select(q => q));
 			await applicationManager.UpdateAsync(client.ToModel());
 		}
 	}
 
-	private bool HasSameRedirectUris(OpenIddictApplication existingClient, AbpApplicationDescriptor application)
-	{
-		return existingClient.RedirectUris ==
-		       JsonSerializer.Serialize(application.RedirectUris.Select(q => q.ToString().TrimEnd('/')));
-	}
+	private bool HasSameRedirectUris(OpenIddictApplication existingClient, AbpApplicationDescriptor application) => existingClient.RedirectUris ==
+			   JsonSerializer.Serialize(application.RedirectUris.Select(q => q.ToString().TrimEnd('/')));
 
 	private bool HasSameScopes(OpenIddictApplication existingClient, AbpApplicationDescriptor application)
 	{
 		return existingClient.Permissions ==
-		       JsonSerializer.Serialize(application.Permissions.Select(q => q.ToString().TrimEnd('/')));
+			   JsonSerializer.Serialize(application.Permissions.Select(q => q.ToString().TrimEnd('/')));
 	}
 }

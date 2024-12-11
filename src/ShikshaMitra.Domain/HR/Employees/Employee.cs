@@ -22,7 +22,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? MiddleName { get; private set; }
 	public string? ShortName { get; private set; }
 
-	public EmployeeStatusType? EmployeeEmployeeStatusTypeType { get; set; }
+	public EmployeeStatusType? EmployeeStatusType { get; set; }
 
 	public DateOnly? DateOfBirth { get; private set; }
 	public string? FamilyCast { get; private set; }
@@ -119,7 +119,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		FirstName = firstName;
 		MiddleName = middleName;
 		ShortName = shortName;
-		EmployeeEmployeeStatusTypeType = employeeStatusType;
+		EmployeeStatusType = employeeStatusType;
 		DateOfBirth = dateOfBirth;
 		FamilyCast = familyCast;
 		CastType = castType;
@@ -173,7 +173,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		FirstName = firstName;
 		MiddleName = middleName;
 		ShortName = shortName;
-		EmployeeEmployeeStatusTypeType = employeeStatusType;
+		EmployeeStatusType = employeeStatusType;
 		DateOfBirth = dateOfBirth;
 		ProfilePicture = profilePicture;
 		FamilyCast = familyCast;

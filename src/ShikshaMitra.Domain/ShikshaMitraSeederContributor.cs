@@ -246,9 +246,8 @@ namespace ShikshaMitra
 				{
 					TenantId = tenant.Id,
 					EmployeeId = employeeId,
-					AttendanceDate = startOfMonth,
-					TimeIn = new TimeOnly(9, 0),
-					TimeOut = new TimeOnly(18, 0),
+					TimeIn = new DateTimeOffset(new DateTime(2024, 6, 1, 9, 0, 0)),
+					TimeOut = new DateTimeOffset(new DateTime(2024, 6, 1, 18, 0, 0)),
 					StatusType = EmployeeAttendanceStatusType.Present,
 				};
 

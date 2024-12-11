@@ -14,8 +14,8 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20241206104148_v3")]
-    partial class v3
+    [Migration("20241211070855_v2")]
+    partial class v2
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -414,10 +414,10 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int?>("EmployeeEmployeeStatusTypeType")
+                    b.Property<int?>("EmployeeGroup")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("EmployeeGroup")
+                    b.Property<int?>("EmployeeStatusType")
                         .HasColumnType("integer");
 
                     b.Property<string>("ExtraProperties")
@@ -595,9 +595,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<DateOnly>("AttendanceDate")
-                        .HasColumnType("date");
-
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("CreationTime");
@@ -640,15 +637,15 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
-                    b.Property<TimeOnly?>("TimeIn")
-                        .HasColumnType("time");
+                    b.Property<DateTimeOffset>("TimeIn")
+                        .HasColumnType("timestamptz");
 
-                    b.Property<TimeOnly?>("TimeOut")
-                        .HasColumnType("time");
+                    b.Property<DateTimeOffset?>("TimeOut")
+                        .HasColumnType("timestamptz");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EmployeeId", "AttendanceDate");
+                    b.HasIndex("EmployeeId");
 
                     b.ToTable("AppEmployeeAttendances", (string)null);
                 });
@@ -689,6 +686,72 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("EmployeeId");
 
                     b.ToTable("AppEmployeeDocuments", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.Employees.Settings.DocumentSetting", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("DocumentName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.PrimitiveCollection<int[]>("DocumentTypes")
+                        .IsRequired()
+                        .HasColumnType("integer[]");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AppDocumentSettings", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.PayElement", b =>

@@ -20,18 +20,16 @@ public class EmployeeAttendanceConfiguration : IEntityTypeConfiguration<Employee
 			.HasMaxLength(20);
 
 
-		// Configure DateOnly and TimeOnly properties
-		builder.Property(e => e.AttendanceDate)
-			.HasColumnType("date");
-
+		// Modify TimeIn and TimeOut to use DateTimeOffset
 		builder.Property(e => e.TimeIn)
-			.HasColumnType("time");
+			.IsRequired()
+			.HasColumnType("timestamptz");
 
 		builder.Property(e => e.TimeOut)
-			.HasColumnType("time");
+			.HasColumnType("timestamptz");
 
 		// Indexes
-		builder.HasIndex(e => new { e.EmployeeId, e.AttendanceDate });
+		builder.HasIndex(e => new { e.EmployeeId });
 
 		// Relationships
 		builder.HasOne(e => e.Employee)

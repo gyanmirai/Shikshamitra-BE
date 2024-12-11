@@ -9,9 +9,10 @@ public class EmployeeAttendance : FullAuditedEntity<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; set; }
 	public Guid EmployeeId { get; set; }
-	public DateOnly AttendanceDate { get; set; }
-	public TimeOnly? TimeIn { get; set; }
-	public TimeOnly? TimeOut { get; set; }
+
+	// Store only TimeIn and TimeOut as DateTimeOffset values
+	public DateTimeOffset? TimeIn { get; set; }
+	public DateTimeOffset? TimeOut { get; set; }
 
 	public EmployeeAttendanceStatusType StatusType { get; set; }
 
@@ -31,10 +32,8 @@ public class EmployeeAttendance : FullAuditedEntity<Guid>, IMultiTenant
 						return null;
 					}
 
-					var timeIn = TimeIn.Value.ToTimeSpan();
-					var timeOut = TimeOut.Value.ToTimeSpan();
-
-					return Math.Round((timeOut - timeIn).TotalHours, 2);
+					var duration = TimeOut.Value - TimeIn.Value;
+					return Math.Round(duration.TotalHours, 2);
 
 				default:
 					return null;
@@ -42,6 +41,5 @@ public class EmployeeAttendance : FullAuditedEntity<Guid>, IMultiTenant
 		}
 	}
 
-	// Navigation properties
 	public virtual Employee Employee { get; set; }
 }

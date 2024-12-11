@@ -11,11 +11,8 @@ public class EmployeeAttendanceDto : EntityDto<Guid>
 
 	public string EmployeeName { get; set; }
 
-	public DateOnly AttendanceDate { get; set; }
-
-	public TimeOnly? TimeIn { get; set; }
-
-	public TimeOnly? TimeOut { get; set; }
+	public DateTimeOffset? TimeIn { get; set; }
+	public DateTimeOffset? TimeOut { get; set; }
 
 	public double? TotalHoursWorked { get; set; }
 

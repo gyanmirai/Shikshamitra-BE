@@ -565,6 +565,29 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppDocumentSettings",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DocumentName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    DocumentTypes = table.Column<int[]>(type: "integer[]", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppDocumentSettings", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppEducationBoardPermissions",
                 columns: table => new
                 {
@@ -634,6 +657,32 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AppNotificationInfos", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppPayElements",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Code = table.Column<string>(type: "text", nullable: false),
+                    Name = table.Column<string>(type: "text", nullable: false),
+                    IsEmployeeSpecific = table.Column<bool>(type: "boolean", nullable: false),
+                    IsDependent = table.Column<bool>(type: "boolean", nullable: false),
+                    Dependent_ElementCode = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    Dependent_Percentage = table.Column<float>(type: "real", nullable: true),
+                    Dependent_Amount = table.Column<float>(type: "real", nullable: true),
+                    IsVisibleInPaySlip = table.Column<bool>(type: "boolean", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppPayElements", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -978,7 +1027,7 @@ namespace ShikshaMitra.Migrations
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     UserId = table.Column<Guid>(type: "uuid", nullable: false),
                     ProfilePicture = table.Column<byte[]>(type: "bytea", nullable: true),
-                    EmployeeCode = table.Column<string>(type: "text", nullable: true),
+                    EmployeeCode = table.Column<string>(type: "text", nullable: false),
                     LastName = table.Column<string>(type: "text", nullable: true),
                     FirstName = table.Column<string>(type: "text", nullable: true),
                     MiddleName = table.Column<string>(type: "text", nullable: true),
@@ -1001,25 +1050,32 @@ namespace ShikshaMitra.Migrations
                     Qualification = table.Column<string>(type: "text", nullable: true),
                     RoleId = table.Column<Guid>(type: "uuid", nullable: true),
                     IdentificationMark1 = table.Column<string>(type: "text", nullable: true),
-                    IdentificationMark2 = table.Column<string>(type: "text", nullable: true),
-                    IdentificationMark3 = table.Column<string>(type: "text", nullable: true),
                     BankDetails_AccountHolderName = table.Column<string>(type: "text", nullable: true),
                     BankDetails_AccountNumber = table.Column<string>(type: "text", nullable: true),
                     BankDetails_BankName = table.Column<string>(type: "text", nullable: true),
                     BankDetails_BranchName = table.Column<string>(type: "text", nullable: true),
                     BankDetails_IfscCode = table.Column<string>(type: "text", nullable: true),
                     FatherDetails_Address = table.Column<string>(type: "text", nullable: true),
+                    FatherDetails_City = table.Column<string>(type: "text", nullable: true),
                     FatherDetails_ContactNo = table.Column<string>(type: "text", nullable: true),
                     FatherDetails_Name = table.Column<string>(type: "text", nullable: true),
                     FatherDetails_Occupation = table.Column<string>(type: "text", nullable: true),
+                    FatherDetails_PinCode = table.Column<string>(type: "text", nullable: true),
+                    FatherDetails_State = table.Column<string>(type: "text", nullable: true),
                     MotherDetails_Address = table.Column<string>(type: "text", nullable: true),
+                    MotherDetails_City = table.Column<string>(type: "text", nullable: true),
                     MotherDetails_ContactNo = table.Column<string>(type: "text", nullable: true),
                     MotherDetails_Name = table.Column<string>(type: "text", nullable: true),
                     MotherDetails_Occupation = table.Column<string>(type: "text", nullable: true),
+                    MotherDetails_PinCode = table.Column<string>(type: "text", nullable: true),
+                    MotherDetails_State = table.Column<string>(type: "text", nullable: true),
                     SpouseDetails_Address = table.Column<string>(type: "text", nullable: true),
+                    SpouseDetails_City = table.Column<string>(type: "text", nullable: true),
                     SpouseDetails_ContactNo = table.Column<string>(type: "text", nullable: true),
                     SpouseDetails_Name = table.Column<string>(type: "text", nullable: true),
                     SpouseDetails_Occupation = table.Column<string>(type: "text", nullable: true),
+                    SpouseDetails_PinCode = table.Column<string>(type: "text", nullable: true),
+                    SpouseDetails_State = table.Column<string>(type: "text", nullable: true),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -1126,9 +1182,8 @@ namespace ShikshaMitra.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    AttendanceDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    TimeIn = table.Column<TimeOnly>(type: "time", nullable: true),
-                    TimeOut = table.Column<TimeOnly>(type: "time", nullable: true),
+                    TimeIn = table.Column<DateTimeOffset>(type: "timestamptz", nullable: false),
+                    TimeOut = table.Column<DateTimeOffset>(type: "timestamptz", nullable: true),
                     StatusType = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
@@ -1143,6 +1198,30 @@ namespace ShikshaMitra.Migrations
                     table.PrimaryKey("PK_AppEmployeeAttendances", x => x.Id);
                     table.ForeignKey(
                         name: "FK_AppEmployeeAttendances_AppEmployees_EmployeeId",
+                        column: x => x.EmployeeId,
+                        principalTable: "AppEmployees",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppEmployeeDocuments",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DocumentName = table.Column<string>(type: "text", nullable: false),
+                    ContentType = table.Column<string>(type: "text", nullable: false),
+                    Size = table.Column<long>(type: "bigint", nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    BlobName = table.Column<string>(type: "text", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppEmployeeDocuments", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppEmployeeDocuments_AppEmployees_EmployeeId",
                         column: x => x.EmployeeId,
                         principalTable: "AppEmployees",
                         principalColumn: "Id",
@@ -1183,30 +1262,6 @@ namespace ShikshaMitra.Migrations
                         principalTable: "AppEmployees",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "EmployeeDocuments",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    DocumentName = table.Column<string>(type: "text", nullable: false),
-                    ContentType = table.Column<string>(type: "text", nullable: false),
-                    Size = table.Column<long>(type: "bigint", nullable: false),
-                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    BlobName = table.Column<string>(type: "text", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_EmployeeDocuments", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_EmployeeDocuments_AppEmployees_EmployeeId",
-                        column: x => x.EmployeeId,
-                        principalTable: "AppEmployees",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -1720,9 +1775,14 @@ namespace ShikshaMitra.Migrations
                 column: "EducationMediumId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AppEmployeeAttendances_EmployeeId_AttendanceDate",
+                name: "IX_AppEmployeeAttendances_EmployeeId",
                 table: "AppEmployeeAttendances",
-                columns: new[] { "EmployeeId", "AttendanceDate" });
+                column: "EmployeeId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppEmployeeDocuments_EmployeeId",
+                table: "AppEmployeeDocuments",
+                column: "EmployeeId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AppEmployeeLeaves_EmployeeId",
@@ -1753,11 +1813,6 @@ namespace ShikshaMitra.Migrations
                 name: "IX_AppStudents_UserId",
                 table: "AppStudents",
                 column: "UserId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_EmployeeDocuments_EmployeeId",
-                table: "EmployeeDocuments",
-                column: "EmployeeId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_OpenIddictApplications_ClientId",
@@ -1887,6 +1942,9 @@ namespace ShikshaMitra.Migrations
                 name: "AppDivisionPermissions");
 
             migrationBuilder.DropTable(
+                name: "AppDocumentSettings");
+
+            migrationBuilder.DropTable(
                 name: "AppEducationBoardPermissions");
 
             migrationBuilder.DropTable(
@@ -1899,19 +1957,22 @@ namespace ShikshaMitra.Migrations
                 name: "AppEmployeeAttendances");
 
             migrationBuilder.DropTable(
+                name: "AppEmployeeDocuments");
+
+            migrationBuilder.DropTable(
                 name: "AppEmployeeLeaves");
 
             migrationBuilder.DropTable(
                 name: "AppNotificationInfos");
 
             migrationBuilder.DropTable(
+                name: "AppPayElements");
+
+            migrationBuilder.DropTable(
                 name: "AppStandardPermissions");
 
             migrationBuilder.DropTable(
                 name: "AppStudents");
-
-            migrationBuilder.DropTable(
-                name: "EmployeeDocuments");
 
             migrationBuilder.DropTable(
                 name: "OpenIddictScopes");
@@ -1935,10 +1996,10 @@ namespace ShikshaMitra.Migrations
                 name: "AbpRoles");
 
             migrationBuilder.DropTable(
-                name: "AppDivisions");
+                name: "AppEmployees");
 
             migrationBuilder.DropTable(
-                name: "AppEmployees");
+                name: "AppDivisions");
 
             migrationBuilder.DropTable(
                 name: "OpenIddictAuthorizations");
@@ -1947,10 +2008,10 @@ namespace ShikshaMitra.Migrations
                 name: "AbpAuditLogs");
 
             migrationBuilder.DropTable(
-                name: "AppStandards");
+                name: "AbpUsers");
 
             migrationBuilder.DropTable(
-                name: "AbpUsers");
+                name: "AppStandards");
 
             migrationBuilder.DropTable(
                 name: "OpenIddictApplications");

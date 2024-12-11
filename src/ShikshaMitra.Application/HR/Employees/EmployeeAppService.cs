@@ -43,7 +43,7 @@ public class EmployeeAppService(
 			profilePicture: input.ProfilePicture,
 			familyCast: input.FamilyCast,
 			castType: input.CastType,
-			gender: input.Gender,
+			gender: input.GenderType,
 			religion: input.Religion,
 			maritalStatus: input.MaritalStatus,
 			bloodGroup: input.BloodGroup,

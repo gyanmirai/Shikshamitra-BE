@@ -26,14 +26,16 @@ public class EmployeeAttendanceAppService(IEmployeeAttendanceRepository employee
 	}
 
 	public async Task<List<EmployeeAttendanceSummaryDto>> GetEmployeeAttendanceSummary(List<Guid> employeeIds,
-		DateTime month)
+		DateTimeOffset month)
 	{
-		var startOfMonth = new DateOnly(month.Year, month.Month, 1);
-		var endOfMonth = startOfMonth.AddMonths(1).AddDays(-1);
+		// Calculate start and end of the month as DateTimeOffset for filtering based on TimeIn
+		var startOfMonth = new DateTimeOffset(month.Year, month.Month, 1, 0, 0, 0, month.Offset);
+		var endOfMonth = startOfMonth.AddMonths(1).AddTicks(-1);
 
+		// Retrieve attendance records within the given time range
 		List<EmployeeAttendance> employeeAttendances = await employeeAttendanceRepository.GetListAsync(
-			e => employeeIds.Contains(e.EmployeeId) && e.AttendanceDate >= startOfMonth &&
-			     e.AttendanceDate <= endOfMonth, includeDetails: true);
+			e => employeeIds.Contains(e.EmployeeId) && e.TimeIn >= startOfMonth && e.TimeIn <= endOfMonth,
+			includeDetails: true);
 
 		var summary = new List<EmployeeAttendanceSummaryDto>();
 

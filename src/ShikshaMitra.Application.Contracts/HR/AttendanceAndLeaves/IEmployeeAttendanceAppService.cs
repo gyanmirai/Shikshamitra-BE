@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.HR.AttendanceAndLeaves;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
@@ -12,5 +13,5 @@ public interface IEmployeeAttendanceAppService : ICrudAppService<EmployeeAttenda
 	Task<PagedResultDto<EmployeeAttendanceDto>> GetEmployeesByDate(DateTimeOffset date);
 
 	Task<List<EmployeeAttendanceSummaryDto>> GetEmployeeAttendanceSummary(List<Guid> employeeIds,
-		DateTime month);
+		DateTimeOffset month);
 }

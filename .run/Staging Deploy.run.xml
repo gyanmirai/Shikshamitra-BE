@@ -1,0 +1,17 @@
+﻿<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Staging Deploy" type="AzureWebAppDeploy">
+    <option name="appServicePlanName" value="shikshamitragroup" />
+    <option name="appServicePlanResourceGroupName" value="shikshamitra_group" />
+    <option name="operatingSystem" value="Linux" />
+    <option name="pricingSize" value="B1" />
+    <option name="pricingTier" value="Basic" />
+    <option name="projectConfiguration" value="Release" />
+    <option name="projectPlatform" value="Any CPU" />
+    <option name="publishableProjectPath" value="$PROJECT_DIR$/src/ShikshaMitra.HttpApi.Host/ShikshaMitra.HttpApi.Host.csproj" />
+    <option name="region" value="westindia" />
+    <option name="resourceGroupName" value="be-staging-shikshamitra_group" />
+    <option name="subscriptionId" value="3dfbf7c8-7c59-4eba-979b-6510df423fc9" />
+    <option name="webAppName" value="be-staging-shikshamitra" />
+    <method v="2" />
+  </configuration>
+</component>

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Identity;
 
 namespace ShikshaMitra.HR.Employees;
 
@@ -32,11 +33,13 @@ public class EmployeeDto : EntityDto<Guid>
 	public string? Department { get; set; }
 	public string? Designation { get; set; }
 	public DateOnly? DateOfJoining { get; set; }
-	public string? Photo { get; set; }
 	public EmployeeGroupType? EmployeeGroup { get; private set; }
 	public string? Qualification { get; set; }
-	public string? Role { get; set; }
+	public IdentityRoleDto? Role { get; set; }
 	public string? IdentificationMark1 { get; set; }
+	public string? City { get;  set; }
+	public string? State { get;  set; }
+	public string? PinCode { get;  set; }
 
 	// Value Objects
 	public ContactDetailsDto FatherDetails { get; set; }

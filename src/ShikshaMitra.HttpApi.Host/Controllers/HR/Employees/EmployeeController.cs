@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.HR.Employees;
 using System;
@@ -10,6 +11,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.Controllers.HR.Employees;
 
 [Route("api/employee")]
+[Authorize]
 public class EmployeeController(IEmployeeAppService employeeAppService) : AbpController
 {
 	[HttpPut("{employeeId}/documents")]
@@ -58,8 +60,33 @@ public class EmployeeController(IEmployeeAppService employeeAppService) : AbpCon
 	[HttpGet("{employeeId}/documents")]
 	public async Task<IActionResult> GetDocuments(Guid employeeId)
 	{
-		List<DocumentDto> documents = await employeeAppService.GetDocumentsAsync(employeeId);
+		List<DocumentMetadataDto> documents = await employeeAppService.GetDocumentMetadataAsync(employeeId);
 
 		return Ok(documents);
+	}
+
+	[HttpPut("{employeeId}/documents/{documentId}")]
+	[Consumes("multipart/form-data")]
+	public async Task<IActionResult> UpdateDocument(Guid employeeId, Guid documentId, IFormFile file)
+	{
+		if (file.Length <= 0)
+		{
+			return BadRequest("No file was uploaded.");
+		}
+
+		await using var memoryStream = new MemoryStream();
+		await file.CopyToAsync(memoryStream);
+
+		var documentDto = new DocumentDto
+		{
+			FileName = file.FileName,
+			ContentType = file.ContentType,
+			Content = memoryStream.ToArray(),
+			Size = file.Length
+		};
+
+		await employeeAppService.UpdateDocumentAsync(employeeId, documentId, documentDto);
+
+		return Ok(new { Message = "File updated successfully." });
 	}
 }

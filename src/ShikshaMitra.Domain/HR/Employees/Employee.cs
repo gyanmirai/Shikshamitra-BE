@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Volo.Abp.Domain.Entities.Auditing;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.HR.Employees;
@@ -42,6 +43,10 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? RoleId { get; private set; }
 	public string? IdentificationMark1 { get; private set; }
 
+	public string? City { get; private set; }
+	public string? State { get; private set; }
+	public string? PinCode { get; private set; }
+
 	// Value Objects
 	public ContactDetails FatherDetails { get; private set; }
 	public ContactDetails MotherDetails { get; private set; }
@@ -50,6 +55,10 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public List<WorkExperience> WorkExperiences { get; private set; } = new List<WorkExperience>();
 	public List<EmployeeDocument> Documents { get; private set; } = new List<EmployeeDocument>();
+
+
+	// Navigation Property for Role
+	public virtual IdentityRole? Role { get; private set; }
 
 	// Full name including middle name
 	public string EmployeeNameWithFather
@@ -104,6 +113,9 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? qualification,
 		Guid? roleId,
 		string? identificationMark1,
+		string? city,
+		string? state,
+		string? pinCode,
 		ContactDetails? fatherDetails,
 		ContactDetails? motherDetails,
 		ContactDetails? spouseDetails,
@@ -137,6 +149,9 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Qualification = qualification;
 		RoleId = roleId;
 		IdentificationMark1 = identificationMark1;
+		City = city;
+		State = state;
+		PinCode = pinCode;
 		FatherDetails = fatherDetails;
 		MotherDetails = motherDetails;
 		SpouseDetails = spouseDetails;
@@ -192,7 +207,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Qualification = qualification;
 		RoleId = roleId;
 		IdentificationMark1 = identificationMark1;
-		
 		return this;
 	}
 

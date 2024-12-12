@@ -1,9 +1,10 @@
-﻿namespace ShikshaMitra.HR.Employees;
+﻿using System;
+using Volo.Abp.Application.Dtos;
+using Volo.Abp.Domain.Entities;
 
-public class DocumentDto
+namespace ShikshaMitra.HR.Employees;
+
+public class DocumentDto : DocumentMetadataDto
 {
-	public string FileName { get; set; }
-	public string ContentType { get; set; }
 	public byte[] Content { get; set; }
-	public long Size { get; set; }
 }

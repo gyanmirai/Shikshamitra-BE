@@ -14,9 +14,7 @@ namespace ShikshaMitra.HR.Employees;
 public class EmployeeAppService(
 	IEmployeeRepository employeeRepository,
 	EmployeeManager employeeManager,
-	IIdentityUserRepository userRepository,
-	IBlobContainer blobContainer,
-	IIdentityRoleRepository roleRepository) :
+	IBlobContainer blobContainer) :
 	CrudAppService<Employee, EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>(
 		employeeRepository),
 	IEmployeeAppService
@@ -146,28 +144,36 @@ public class EmployeeAppService(
 		};
 	}
 
-	public async Task<List<DocumentDto>> GetDocumentsAsync(Guid employeeId)
+	public async Task<List<DocumentMetadataDto>> GetDocumentMetadataAsync(Guid employeeId)
 	{
-		List<EmployeeDocument> documents = await employeeManager.GetDocumentsAsync(employeeId);
-
-		var documentDtos = new List<DocumentDto>();
-
-		foreach (var document in documents)
+		var documents = await employeeManager.GetDocumentsAsync(employeeId);
+		return documents.Select(doc => new DocumentMetadataDto
 		{
-			await using var stream = await blobContainer.GetAsync(document.BlobName);
-			await using var memoryStream = new MemoryStream();
-			await stream.CopyToAsync(memoryStream);
-			documentDtos.Add(new DocumentDto
-			{
-				FileName = document.DocumentName,
-				ContentType = document.ContentType,
-				Content = memoryStream.ToArray(),
-				Size = document.Size
-			});
-		}
-
-		return documentDtos;
+			Id = doc.Id, FileName = doc.DocumentName, Size = doc.Size, ContentType = doc.ContentType
+		}).ToList();
 	}
+
+	public async Task<DocumentDto> UpdateDocumentAsync(Guid employeeId, Guid documentId, DocumentDto documentDto)
+	{
+		var updatedDocument = await employeeManager.UpdateDocumentAsync(
+			employeeId,
+			documentId,
+			documentDto.FileName,
+			documentDto.ContentType,
+			documentDto.Size,
+			documentDto.Content
+		);
+
+		return new DocumentDto
+		{
+			FileName = updatedDocument.DocumentName,
+			ContentType = updatedDocument.ContentType,
+			Content = documentDto.Content,
+			Size = updatedDocument.Size,
+			Id = updatedDocument.Id
+		};
+	}
+
 
 	public async Task<EmployeeDto> UpdateExperienceInfo(Guid employeeId, List<CreateUpdateWorkExperienceDto> input)
 	{
@@ -188,8 +194,6 @@ public class EmployeeAppService(
 
 	public async Task<EmployeeDto> UpdateBankDetails(Guid employeeId, BankDetailsDto input)
 	{
-		// convert the input to domain model and update the employee
-
 		BankDetails bankDetails = ObjectMapper.Map<BankDetailsDto, BankDetails>(input);
 
 		Employee employee =

@@ -1,17 +1,20 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
-using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.TenantSettings.Standards;
 
 [Authorize]
 public class StandardAppService(
 	IStandardRepository standardRepository,
+	IEducationMediumStageRepository educationMediumRepository,
 	StandardManager standardManager) : CrudAppService<
 	Standard,
 	StandardDto,
@@ -35,5 +38,32 @@ public class StandardAppService(
 		Standard standard = await standardRepository.GetAsync(id);
 		await standardManager.UpdateAsync(standard, input.Name);
 		return ObjectMapper.Map<Standard, StandardDto>(standard);
+	}
+
+
+	public async Task<List<StandardDto>> GetStandardsByEducationMediumId(Guid educationMediumId)
+	{
+		List<EducationMediumStage> educationMediumsStages =
+			await educationMediumRepository.GetEducationMediumStagesByEducationMediumIdAsync(educationMediumId);
+
+		if (educationMediumsStages.Count == 0)
+		{
+			return [];
+		}
+
+		// Find out all standards for the given education medium stage
+
+		List<Standard> standards = [];
+
+		foreach (EducationMediumStage educationMediumStage in educationMediumsStages)
+		{
+			List<Standard> standardsForEducationMedium =
+				await standardRepository.GetStandardsByEducationMediumStageIdAsync(
+					educationMediumStage.Id
+				);
+			standards.AddRange(standardsForEducationMedium);
+		}
+
+		return ObjectMapper.Map<List<Standard>, List<StandardDto>>(standards);
 	}
 }

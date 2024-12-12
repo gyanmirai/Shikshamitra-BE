@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
@@ -11,4 +13,5 @@ public interface IStandardAppService :
         PagedAndSortedResultRequestDto,
         CreateUpdateStandardDto>
 {
+	Task<List<StandardDto>> GetStandardsByEducationMediumId(Guid educationMediumId);
 }

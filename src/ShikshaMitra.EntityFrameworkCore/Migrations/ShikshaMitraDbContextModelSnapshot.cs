@@ -369,6 +369,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<int?>("CastType")
                         .HasColumnType("integer");
 
+                    b.Property<string>("City")
+                        .HasColumnType("text");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -460,6 +463,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("MobileNo")
                         .HasColumnType("text");
 
+                    b.Property<string>("PinCode")
+                        .HasColumnType("text");
+
                     b.Property<byte[]>("ProfilePicture")
                         .HasColumnType("bytea");
 
@@ -473,6 +479,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("ShortName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("State")
                         .HasColumnType("text");
 
                     b.Property<Guid?>("TenantId")
@@ -582,6 +591,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("RoleId");
+
                     b.HasIndex("UserId");
 
                     b.ToTable("AppEmployees", (string)null);
@@ -688,7 +699,6 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Settings.DocumentSetting", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -3589,6 +3599,11 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
                 {
+                    b.HasOne("Volo.Abp.Identity.IdentityRole", "Role")
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Volo.Abp.Identity.IdentityUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -3637,6 +3652,8 @@ namespace ShikshaMitra.Migrations
                             b1.WithOwner()
                                 .HasForeignKey("EmployeeId");
                         });
+
+                    b.Navigation("Role");
 
                     b.Navigation("WorkExperiences");
                 });

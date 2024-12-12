@@ -65,7 +65,10 @@ public class EmployeeManager(
 		DateOnly? dateOfJoining = null,
 		EmployeeGroupType? employeeGroup = null,
 		string? qualification = null,
-		string? identificationMark1 = null)
+		string? identificationMark1 = null,
+		string? city = null,
+		string? state = null,
+		string? pinCode = null)
 	{
 		// Validate user existence
 		var user = await GetUserAsync(userId);
@@ -105,6 +108,9 @@ public class EmployeeManager(
 			qualification: qualification,
 			roleId: roleId,
 			identificationMark1: identificationMark1,
+			city: city,
+			state: state,
+			pinCode: pinCode,
 			fatherDetails:
 			new ContactDetails(
 				name: null,
@@ -235,18 +241,6 @@ public class EmployeeManager(
 		return employee;
 	}
 
-	public async Task AddDocumentAsync(Guid employeeId, EmployeeDocument document)
-	{
-		// Retrieve the employee aggregate
-		var employee = await employeeRepository.GetAsync(employeeId);
-
-		// Add the document to the employee
-		employee.AddDocument(document);
-
-		// Save changes
-		await employeeRepository.UpdateAsync(employee);
-	}
-
 	public async Task<Employee> UpdateExperienceInfoByEmployeeIdAsync(Guid employeeId,
 		List<WorkExperience> workExperiences)
 	{
@@ -315,6 +309,27 @@ public class EmployeeManager(
 		List<EmployeeDocument>
 			documents = await employeeDocumentRepository.GetListAsync(d => d.EmployeeId == employeeId);
 		return documents;
+	}
+
+	public async Task<EmployeeDocument> UpdateDocumentAsync(
+		Guid employeeId,
+		Guid documentId,
+		string fileName,
+		string contentType,
+		long size,
+		byte[] content
+	)
+	{
+		EmployeeDocument document = await GetDocumentAsync(employeeId, documentId);
+
+		// Update blob
+		await blobContainer.SaveAsync(document.BlobName, content, overrideExisting: true);
+
+		// Update metadata
+		document.UpdateDocumentMetadata(fileName, contentType, size);
+
+		await employeeDocumentRepository.UpdateAsync(document);
+		return document;
 	}
 
 	private async Task<string> GenerateEmployeeCodeAsync()

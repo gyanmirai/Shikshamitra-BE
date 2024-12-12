@@ -4,6 +4,7 @@ using ShikshaMitra.Books;
 using ShikshaMitra.Employees;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
@@ -113,6 +114,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	DbSet<Employee> Employees { get; set; }
 	DbSet<EmployeeDocument> EmployeeDocuments { get; set; }
+	DbSet<DocumentSetting> DocumentSettings { get; set; }
 
 	#region AttedenceAndLeaves
 

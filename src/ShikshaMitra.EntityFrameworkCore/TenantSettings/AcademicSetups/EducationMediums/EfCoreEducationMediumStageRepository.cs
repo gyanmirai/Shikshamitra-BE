@@ -2,6 +2,8 @@
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
@@ -17,7 +19,18 @@ public class EfCoreEducationMediumStageRepository(IDbContextProvider<ShikshaMitr
 		DbSet<EducationMediumStage> dbSet = await GetDbSetAsync();
 
 		return await dbSet.FirstOrDefaultAsync(educationalMediumStage =>
-			EF.Functions.Like(educationalMediumStage.Name.ToLower(), name.ToLower()) && educationalMediumStage.EducationMediumId == educationMediumId
+			EF.Functions.Like(educationalMediumStage.Name.ToLower(), name.ToLower()) &&
+			educationalMediumStage.EducationMediumId == educationMediumId
 		);
+	}
+
+	public async Task<List<EducationMediumStage>> GetEducationMediumStagesByEducationMediumIdAsync(
+		Guid educationMediumId)
+	{
+		DbSet<EducationMediumStage> dbSet = await GetDbSetAsync();
+
+		return await dbSet
+			.Where(educationalMediumStage => educationalMediumStage.EducationMediumId == educationMediumId)
+			.ToListAsync();
 	}
 }

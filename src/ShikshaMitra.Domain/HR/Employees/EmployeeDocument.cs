@@ -37,4 +37,12 @@ public class EmployeeDocument : Entity<Guid>, IMultiTenant, IHasCreationTime
 		BlobName = blobName;
 		CreationTime = DateTime.Now;
 	}
+
+	public EmployeeDocument UpdateDocumentMetadata(string documentName, string contentType, long size)
+	{
+		DocumentName = documentName;
+		ContentType = contentType;
+		Size = size;
+		return this;
+	}
 }

@@ -40,5 +40,8 @@ public class CreateEmployeeBasicInfoDto
 	public Guid RoleId { get; set; }
 
 	public string? IdentificationMark1 { get; set; }
+	public string? City { get; set; }
+	public string? State { get; set; }
+	public string? PinCode { get; set; }
 	public string? Address { get; set; }
 }

@@ -4,7 +4,7 @@ using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.HR.Employees.Settings;
 
-public class DocumentModelConfiguration : IEntityTypeConfiguration<DocumentSetting>
+public class DocumentSettingConfiguration : IEntityTypeConfiguration<DocumentSetting>
 {
 	public void Configure(EntityTypeBuilder<DocumentSetting> builder)
 	{

@@ -35,4 +35,8 @@ public class UpdateEmployeeBasicInfoDto
 	public string? Qualification { get; set; }
 	public string? IdentificationMark1 { get; set; }
 	public string? Address { get; set; }
+
+	public string? City { get; set; }
+	public string? State { get; set; }
+	public string? PinCode { get; set; }
 }

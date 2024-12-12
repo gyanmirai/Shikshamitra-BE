@@ -49,5 +49,6 @@ public interface
 
 	Task UploadDocumentsAsync(Guid employeeId, List<DocumentDto> documentDtos);
 	Task<DocumentDto> GetDocumentAsync(Guid employeeId, Guid documentId);
-	Task<List<DocumentDto>> GetDocumentsAsync(Guid employeeId);
+	Task<List<DocumentMetadataDto>> GetDocumentMetadataAsync(Guid employeeId);
+	Task<DocumentDto> UpdateDocumentAsync(Guid employeeId, Guid documentId, DocumentDto documentDto);
 }

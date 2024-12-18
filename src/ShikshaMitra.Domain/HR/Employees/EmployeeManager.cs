@@ -217,6 +217,16 @@ public class EmployeeManager(
 		return employee;
 	}
 
+	public async Task<Employee> UpdateEmployeeStatusAsync(Guid employeeId, EmployeeStatusType employeeStatusType)
+	{
+		// Get the employee
+		var employee = await GetEmployeeAsync(employeeId);
+
+		// Update the employee status
+		employee = employee.UpdateEmployeeStatus(employeeStatusType);
+		return employee;
+	}
+
 	private static void ValidateEmployee(Employee employee)
 	{
 		// Add any domain-specific validation rules here

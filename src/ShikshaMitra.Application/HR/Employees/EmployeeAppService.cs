@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.Common;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -95,7 +96,7 @@ public class EmployeeAppService(
 			city: input.City,
 			state: input.State,
 			pinCode: input.PinCode
-			);
+		);
 
 		// Save the updated employee
 		employee = await employeeRepository.UpdateAsync(employee);
@@ -205,6 +206,17 @@ public class EmployeeAppService(
 
 		Employee employee =
 			await employeeManager.UpdateBankDetailsByEmployeeIdAsync(employeeId, bankDetails);
+
+		// Save the employee
+		employee = await employeeRepository.UpdateAsync(employee);
+
+		// Return the DTO
+		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
+	}
+
+	public async Task<EmployeeDto> UpdateEmployeeStatus(Guid employeeId, EmployeeStatusType employeeStatusType)
+	{
+		Employee employee = await employeeManager.UpdateEmployeeStatusAsync(employeeId, employeeStatusType);
 
 		// Save the employee
 		employee = await employeeRepository.UpdateAsync(employee);

@@ -24,7 +24,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? MiddleName { get; private set; }
 	public string? ShortName { get; private set; }
 
-	public EmployeeStatusType? EmployeeStatusType { get; set; }
+	public EmployeeStatusType? EmployeeStatusType { get; private set; }
 
 	public DateOnly? DateOfBirth { get; private set; }
 	public string? FamilyCast { get; private set; }
@@ -240,6 +240,12 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		this.BankDetails = bankDetails;
 
+		return this;
+	}
+	
+	internal Employee UpdateEmployeeStatus(EmployeeStatusType employeeStatusType)
+	{
+		EmployeeStatusType = employeeStatusType;
 		return this;
 	}
 

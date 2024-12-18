@@ -8,7 +8,7 @@ namespace ShikshaMitra.HR.Payroll.PayrollStructures;
 
 public class PayrollStructure : FullAuditedEntity<Guid>, IMultiTenant
 {
-	public Guid? TenantId { get; }
+	public Guid? TenantId { get; set; }
 
 	public Guid EducationMediumStageId { get; init; }
 

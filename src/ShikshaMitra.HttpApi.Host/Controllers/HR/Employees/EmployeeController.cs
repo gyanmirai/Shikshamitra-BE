@@ -54,7 +54,7 @@ public class EmployeeController(IEmployeeAppService employeeAppService) : AbpCon
 	{
 		var document = await employeeAppService.GetDocumentAsync(employeeId, documentId);
 
-		return File(document.Content, document.ContentType, document.FileName);
+		return Ok(document);
 	}
 
 	[HttpGet("{employeeId}/documents")]

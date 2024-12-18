@@ -4,5 +4,5 @@ namespace ShikshaMitra.HR.Reports;
 
 public class EmployeeReportFilterDto
 {
-	public GenderType? Gender { get; set; }
+	public GenderType? GenderType { get; set; }
 }

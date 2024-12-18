@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.TenantSettings.Divisions;
+﻿using ShikshaMitra.Common;
+using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
 using System;
 using Volo.Abp;
@@ -16,7 +17,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string Name { get; private set; }
 	public string MiddleName { get; private set; }
 	public DateOnly DateOfBirth { get; private set; }
-	public string Gender { get; private set; }
+	public GenderType GenderType { get; private set; }
 
 	// Foreign keys
 	public Guid StandardId { get; private set; }
@@ -48,7 +49,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string name,
 		string middleName,
 		DateOnly dateOfBirth,
-		string gender,
+		GenderType genderType,
 		Guid standardId,
 		Guid divisionId,
 		Address address,
@@ -65,7 +66,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Name = Check.NotNullOrWhiteSpace(name, nameof(name));
 		MiddleName = middleName;
 		DateOfBirth = dateOfBirth;
-		Gender = Check.NotNullOrWhiteSpace(gender, nameof(gender));
+		GenderType = genderType;
 		StandardId = standardId;
 		DivisionId = divisionId;
 		Address = Check.NotNull(address, nameof(address));

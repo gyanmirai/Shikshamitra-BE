@@ -31,7 +31,7 @@ public class CreateUpdateEmployeeDto
 	public string? Photo { get; set; }
 	public EmployeeGroupType? EmployeeGroup { get; set; }
 	public string? Qualification { get; set; }
-	public string? Role { get; set; }
+	public string? RoleRoleId { get; set; }
 	public string? IdentificationMark1 { get; set; }
 
 	// Value Objects

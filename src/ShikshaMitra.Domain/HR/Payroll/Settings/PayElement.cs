@@ -85,7 +85,7 @@ public class PayElement : AuditedAggregateRoot<Guid>, IMultiTenant
 		/// <summary>
 		/// Code of the dependent element.
 		/// </summary>
-		public string ElementCode { get; set; } = string.Empty;
+		public string ElementId { get; set; } = string.Empty;
 
 		private float? percentage;
 		private float? amount;

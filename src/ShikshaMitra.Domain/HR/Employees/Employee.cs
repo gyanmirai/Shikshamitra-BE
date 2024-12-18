@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
@@ -40,7 +41,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public DateOnly? DateOfJoining { get; private set; }
 	public EmployeeGroupType? EmployeeGroup { get; private set; }
 	public string? Qualification { get; private set; }
-	public Guid? RoleId { get; private set; }
+	public Guid RoleId { get; private set; }
 	public string? IdentificationMark1 { get; private set; }
 
 	public string? City { get; private set; }
@@ -147,7 +148,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DateOfJoining = dateOfJoining;
 		EmployeeGroup = employeeGroup;
 		Qualification = qualification;
-		RoleId = roleId;
+		RoleId = Check.NotNull(roleId, nameof(roleId)) ?? throw new ArgumentNullException(nameof(roleId));
 		IdentificationMark1 = identificationMark1;
 		City = city;
 		State = state;
@@ -182,7 +183,10 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EmployeeGroupType? employeeGroup,
 		string? qualification,
 		Guid? roleId,
-		string? identificationMark1)
+		string? identificationMark1,
+		string? city,
+		string? state,
+		string? pinCode)
 	{
 		LastName = lastName;
 		FirstName = firstName;
@@ -205,8 +209,11 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DateOfJoining = dateOfJoining;
 		EmployeeGroup = employeeGroup;
 		Qualification = qualification;
-		RoleId = roleId;
+		RoleId = Check.NotNull(roleId, nameof(roleId)) ?? throw new ArgumentNullException(nameof(roleId));
 		IdentificationMark1 = identificationMark1;
+		City = city;
+		State = state;
+		PinCode = pinCode;
 		return this;
 	}
 

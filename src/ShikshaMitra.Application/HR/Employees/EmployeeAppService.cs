@@ -3,11 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.BlobStoring;
-using Volo.Abp.Identity;
 
 namespace ShikshaMitra.HR.Employees;
 
@@ -41,7 +39,7 @@ public class EmployeeAppService(
 			profilePicture: input.ProfilePicture,
 			familyCast: input.FamilyCast,
 			castType: input.CastType,
-			gender: input.GenderType,
+			genderType: input.GenderType,
 			religion: input.Religion,
 			maritalStatus: input.MaritalStatus,
 			bloodGroup: input.BloodGroup,
@@ -53,7 +51,11 @@ public class EmployeeAppService(
 			dateOfJoining: input.DateOfJoining,
 			employeeGroup: input.EmployeeGroup,
 			qualification: input.Qualification,
-			identificationMark1: input.IdentificationMark1);
+			identificationMark1: input.IdentificationMark1,
+			city: input.City,
+			state: input.State,
+			pinCode: input.PinCode
+		);
 
 		// Save the employee
 		employee = await employeeRepository.InsertAsync(employee);
@@ -76,7 +78,7 @@ public class EmployeeAppService(
 			profilePicture: input.ProfilePicture,
 			familyCast: input.FamilyCast,
 			castType: input.CastType,
-			gender: input.Gender,
+			genderType: input.GenderType,
 			religion: input.Religion,
 			maritalStatus: input.MaritalStatus,
 			bloodGroup: input.BloodGroup,
@@ -88,7 +90,12 @@ public class EmployeeAppService(
 			dateOfJoining: input.DateOfJoining,
 			employeeGroup: input.EmployeeGroup,
 			qualification: input.Qualification,
-			identificationMark1: input.IdentificationMark1);
+			roleId: input.RoleId,
+			identificationMark1: input.IdentificationMark1,
+			city: input.City,
+			state: input.State,
+			pinCode: input.PinCode
+			);
 
 		// Save the updated employee
 		employee = await employeeRepository.UpdateAsync(employee);

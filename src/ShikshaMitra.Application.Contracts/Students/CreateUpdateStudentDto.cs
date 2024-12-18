@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.Common;
+using System;
 
 namespace ShikshaMitra.Students;
 
@@ -10,7 +11,7 @@ public class CreateUpdateStudentDto
 	public string Name { get; set; }
 	public string MiddleName { get; set; }
 	public DateOnly? DateOfBirth { get; set; }
-	public string Gender { get; set; }
+	public GenderType GenderType { get; set; }
 	public Guid StandardId { get; set; }
 	public Guid DivisionId { get; set; }
 	public AddressDto Address { get; set; }

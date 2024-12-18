@@ -53,7 +53,7 @@ public class EmployeeManager(
 		byte[]? profilePicture = null,
 		string? familyCast = null,
 		EmployeeCastType? castType = null,
-		GenderType? gender = null,
+		GenderType? genderType = null,
 		string? religion = null,
 		MaritalStatusType? maritalStatus = null,
 		string? bloodGroup = null,
@@ -71,10 +71,10 @@ public class EmployeeManager(
 		string? pinCode = null)
 	{
 		// Validate user existence
-		var user = await GetUserAsync(userId);
+		await GetUserAsync(userId);
 
 		// Validate role existence
-		var role = await GetRoleAsync(roleId);
+		await GetRoleAsync(roleId);
 
 		// Generate employee code
 		string employeeCode = await GenerateEmployeeCodeAsync();
@@ -94,7 +94,7 @@ public class EmployeeManager(
 			dateOfBirth: dateOfBirth,
 			familyCast: familyCast,
 			castType: castType,
-			genderType: gender,
+			genderType: genderType,
 			religion: religion,
 			maritalStatus: maritalStatus,
 			bloodGroup: bloodGroup,
@@ -160,7 +160,7 @@ public class EmployeeManager(
 		byte[]? profilePicture = null,
 		string? familyCast = null,
 		EmployeeCastType? castType = null,
-		GenderType? gender = null,
+		GenderType? genderType = null,
 		string? religion = null,
 		MaritalStatusType? maritalStatus = null,
 		string? bloodGroup = null,
@@ -173,7 +173,10 @@ public class EmployeeManager(
 		EmployeeGroupType? employeeGroup = null,
 		string? qualification = null,
 		Guid? roleId = null,
-		string? identificationMark1 = null)
+		string? identificationMark1 = null,
+		string? city = null,
+		string? state = null,
+		string? pinCode = null)
 	{
 		// Get the employee
 		Employee employee = await GetEmployeeAsync(employeeId);
@@ -189,7 +192,7 @@ public class EmployeeManager(
 			profilePicture: profilePicture,
 			familyCast: familyCast,
 			castType: castType,
-			genderType: gender,
+			genderType: genderType,
 			religion: religion,
 			maritalStatus: maritalStatus,
 			bloodGroup: bloodGroup,
@@ -202,16 +205,19 @@ public class EmployeeManager(
 			employeeGroup: employeeGroup,
 			qualification: qualification,
 			roleId: roleId,
-			identificationMark1: identificationMark1
+			identificationMark1: identificationMark1,
+			city: city,
+			state: state,
+			pinCode: pinCode
 		);
 
 		// Validate the updated employee if needed
-		await ValidateEmployeeAsync(employee);
+		ValidateEmployee(employee);
 
 		return employee;
 	}
 
-	private async Task ValidateEmployeeAsync(Employee employee)
+	private static void ValidateEmployee(Employee employee)
 	{
 		// Add any domain-specific validation rules here
 

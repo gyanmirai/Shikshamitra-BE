@@ -7,4 +7,5 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 public interface IEmployeeLeaveService : ICrudAppService<EmployeeLeaveDto, Guid, PagedAndSortedResultRequestDto,
 	CreateUpdateEmployeeLeaveDto>
 {
+	
 }

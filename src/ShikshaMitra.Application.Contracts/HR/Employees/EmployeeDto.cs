@@ -37,9 +37,9 @@ public class EmployeeDto : EntityDto<Guid>
 	public string? Qualification { get; set; }
 	public IdentityRoleDto? Role { get; set; }
 	public string? IdentificationMark1 { get; set; }
-	public string? City { get;  set; }
-	public string? State { get;  set; }
-	public string? PinCode { get;  set; }
+	public string? City { get; set; }
+	public string? State { get; set; }
+	public string? PinCode { get; set; }
 
 	// Value Objects
 	public ContactDetailsDto FatherDetails { get; set; }

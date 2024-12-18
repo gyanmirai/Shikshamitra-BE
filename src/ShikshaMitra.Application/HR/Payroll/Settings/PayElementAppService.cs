@@ -24,7 +24,7 @@ public class PayElementAppService(IPayElementRepository payElementRepository, Pa
 				? null
 				: new PayElement.DependentProperties
 				{
-					ElementCode = input.Dependent.ElementCode,
+					ElementId = input.Dependent.ElementId,
 					Percentage = input.Dependent.Percentage,
 					Amount = input.Dependent.Amount
 				},
@@ -50,7 +50,7 @@ public class PayElementAppService(IPayElementRepository payElementRepository, Pa
 				? null
 				: new PayElement.DependentProperties
 				{
-					ElementCode = input.Dependent.ElementCode,
+					ElementId = input.Dependent.ElementId,
 					Percentage = input.Dependent.Percentage,
 					Amount = input.Dependent.Amount
 				},

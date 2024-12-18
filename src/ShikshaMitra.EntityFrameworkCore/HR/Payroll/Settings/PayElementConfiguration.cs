@@ -14,7 +14,7 @@ public class PayElementConfiguration : IEntityTypeConfiguration<PayElement>
 		// Configure the DependentProperties as an owned type
 		builder.OwnsOne(e => e.Dependent, dp =>
 		{
-			dp.Property(p => p.ElementCode)
+			dp.Property(p => p.ElementId)
 				.IsRequired()
 				.HasMaxLength(50);
 			dp.Property(p => p.Percentage);

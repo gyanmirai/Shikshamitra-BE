@@ -764,7 +764,6 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<double>("Amount")
@@ -3707,7 +3706,7 @@ namespace ShikshaMitra.Migrations
                             b1.Property<float?>("Amount")
                                 .HasColumnType("real");
 
-                            b1.Property<string>("ElementCode")
+                            b1.Property<string>("ElementId")
                                 .IsRequired()
                                 .HasMaxLength(50)
                                 .HasColumnType("character varying(50)");

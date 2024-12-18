@@ -18,7 +18,7 @@ public class CreateUpdatePayElementDto
 
 public class DependentPropertiesDto
 {
-	public string ElementCode { get; set; } // Code of the dependent element
+	public string ElementId { get; set; } // Code of the dependent element
 	public float? Percentage { get; set; } // Percentage of the dependent element
 	public float? Amount { get; set; } // Fixed amount of the dependent element
 }

@@ -19,7 +19,7 @@ public class UpdateEmployeeBasicInfoDto
 	public DateOnly? DateOfBirth { get; set; }
 	public string? FamilyCast { get; set; }
 	public EmployeeCastType? CastType { get; set; }
-	public GenderType? Gender { get; set; }
+	public GenderType? GenderType { get; set; }
 	public string? Religion { get; set; }
 	public MaritalStatusType? MaritalStatus { get; set; }
 	public string? BloodGroup { get; set; }
@@ -35,6 +35,9 @@ public class UpdateEmployeeBasicInfoDto
 	public string? Qualification { get; set; }
 	public string? IdentificationMark1 { get; set; }
 	public string? Address { get; set; }
+
+	[Required(ErrorMessage = "Role is required.")]
+	public Guid RoleId { get; set; }
 
 	public string? City { get; set; }
 	public string? State { get; set; }

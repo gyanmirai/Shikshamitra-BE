@@ -22,7 +22,7 @@ public class EmployeeReportAppService(
 	{
 		// Using GetQueryable() method to retrieve the queryable collection
 		IQueryable<Employee> query = (await employeeRepository.GetQueryableAsync())
-			.WhereIf(input.Gender != null, e => e.GenderType == input.Gender);
+			.WhereIf(input.GenderType != null, e => e.GenderType == input.GenderType);
 
 
 		// Execute the query asynchronously and return the results
@@ -35,7 +35,7 @@ public class EmployeeReportAppService(
 	{
 		// Using GetQueryable() method to retrieve the queryable collection
 		IQueryable<Employee> query = (await employeeRepository.GetQueryableAsync())
-			.WhereIf(input.Gender != null, e => e.GenderType == input.Gender);
+			.WhereIf(input.GenderType != null, e => e.GenderType == input.GenderType);
 
 		// select only the required properties
 		var employeeContactQuery = query.Select(e => new EmployeeContactDto

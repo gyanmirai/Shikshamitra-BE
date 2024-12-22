@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
@@ -33,8 +34,13 @@ public class EmployeeDto : EntityDto<Guid>
 	public string? Department { get; set; }
 	public string? Designation { get; set; }
 	public DateOnly? DateOfJoining { get; set; }
-	public EmployeeGroupType? EmployeeGroup { get; private set; }
+
+	public EmployeeGroupType? EmployeeGroup { get; set; }
+	public string? ChangeReason { get; set; }
+	public DateTimeOffset? StatusLastChangedAt { get; set; }
+
 	public string? Qualification { get; set; }
+	public Guid RoleId { get; set; }
 	public IdentityRoleDto? Role { get; set; }
 	public string? IdentificationMark1 { get; set; }
 	public string? City { get; set; }
@@ -48,6 +54,9 @@ public class EmployeeDto : EntityDto<Guid>
 	public BankDetailsDto BankDetails { get; set; }
 
 	public List<WorkExperienceDto> WorkExperiences { get; set; } = [];
+
+	public Guid EducationMediumStageId { get; set; }
+	public EducationMediumStageDto EducationMediumStage { get; set; }
 
 	// Profile Picture
 	public byte[]? ProfilePicture { get; set; }

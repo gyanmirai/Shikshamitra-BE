@@ -32,6 +32,7 @@ public class UpdateEmployeeBasicInfoDto
 	public DateOnly? DateOfJoining { get; set; }
 
 	public EmployeeGroupType? EmployeeGroup { get; set; }
+
 	public string? Qualification { get; set; }
 	public string? IdentificationMark1 { get; set; }
 	public string? Address { get; set; }
@@ -42,4 +43,7 @@ public class UpdateEmployeeBasicInfoDto
 	public string? City { get; set; }
 	public string? State { get; set; }
 	public string? PinCode { get; set; }
+
+	[Required(ErrorMessage = "Education Medium Stage is required.")]
+	public Guid EducationMediumStageId { get; set; }
 }

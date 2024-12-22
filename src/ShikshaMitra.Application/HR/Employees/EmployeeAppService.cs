@@ -31,6 +31,7 @@ public class EmployeeAppService(
 		Employee employee = await employeeManager.CreateEmployeeAsync(
 			userId: input.UserId,
 			roleId: input.RoleId,
+			educationMediumStageId: input.EducationMediumStageId,
 			firstName: input.FirstName,
 			lastName: input.LastName,
 			middleName: input.MiddleName,
@@ -92,6 +93,7 @@ public class EmployeeAppService(
 			employeeGroup: input.EmployeeGroup,
 			qualification: input.Qualification,
 			roleId: input.RoleId,
+			educationMediumStageId: input.EducationMediumStageId,
 			identificationMark1: input.IdentificationMark1,
 			city: input.City,
 			state: input.State,
@@ -214,9 +216,11 @@ public class EmployeeAppService(
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
 	}
 
-	public async Task<EmployeeDto> UpdateEmployeeStatus(Guid employeeId, EmployeeStatusType employeeStatusType)
+	public async Task<EmployeeDto> UpdateEmployeeStatus(Guid employeeId, EmployeeStatusType employeeStatusType,
+		string? changeReason)
 	{
-		Employee employee = await employeeManager.UpdateEmployeeStatusAsync(employeeId, employeeStatusType);
+		Employee employee =
+			await employeeManager.UpdateEmployeeStatusAsync(employeeId, employeeStatusType, changeReason);
 
 		// Save the employee
 		employee = await employeeRepository.UpdateAsync(employee);

@@ -44,6 +44,7 @@ public class EmployeeManager(
 	public async Task<Employee> CreateEmployeeAsync(
 		Guid userId,
 		Guid roleId,
+		Guid educationMediumStageId,
 		string firstName,
 		string lastName,
 		string? middleName,
@@ -111,6 +112,7 @@ public class EmployeeManager(
 			city: city,
 			state: state,
 			pinCode: pinCode,
+			educationMediumStageId: educationMediumStageId,
 			fatherDetails:
 			new ContactDetails(
 				name: null,
@@ -151,6 +153,7 @@ public class EmployeeManager(
 
 	public async Task<Employee> UpdateEmployeeAsync(
 		Guid employeeId,
+		Guid educationMediumStageId,
 		string firstName,
 		string lastName,
 		string? middleName,
@@ -176,7 +179,8 @@ public class EmployeeManager(
 		string? identificationMark1 = null,
 		string? city = null,
 		string? state = null,
-		string? pinCode = null)
+		string? pinCode = null
+	)
 	{
 		// Get the employee
 		Employee employee = await GetEmployeeAsync(employeeId);
@@ -208,7 +212,8 @@ public class EmployeeManager(
 			identificationMark1: identificationMark1,
 			city: city,
 			state: state,
-			pinCode: pinCode
+			pinCode: pinCode,
+			educationMediumStageId: educationMediumStageId
 		);
 
 		// Validate the updated employee if needed
@@ -217,13 +222,14 @@ public class EmployeeManager(
 		return employee;
 	}
 
-	public async Task<Employee> UpdateEmployeeStatusAsync(Guid employeeId, EmployeeStatusType employeeStatusType)
+	public async Task<Employee> UpdateEmployeeStatusAsync(Guid employeeId, EmployeeStatusType employeeStatusType,
+		string? changeReason)
 	{
 		// Get the employee
 		var employee = await GetEmployeeAsync(employeeId);
 
 		// Update the employee status
-		employee = employee.UpdateEmployeeStatus(employeeStatusType);
+		employee = employee.UpdateEmployeeStatus(employeeStatusType, changeReason);
 		return employee;
 	}
 

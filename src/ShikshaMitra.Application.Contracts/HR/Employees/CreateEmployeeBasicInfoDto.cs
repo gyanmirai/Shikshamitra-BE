@@ -39,6 +39,9 @@ public class CreateEmployeeBasicInfoDto
 	[Required(ErrorMessage = "Role is required.")]
 	public Guid RoleId { get; set; }
 
+	[Required(ErrorMessage = "Education Medium Stage is required.")]
+	public Guid EducationMediumStageId { get; set; }
+
 	public string? IdentificationMark1 { get; set; }
 	public string? City { get; set; }
 	public string? State { get; set; }

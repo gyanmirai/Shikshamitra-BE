@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +14,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 	public Guid UserId { get; private set; }
+	public Guid EducationMediumStageId { get; private set; }
 
 	// Profile Picture
 	public byte[]? ProfilePicture { get; private set; }
@@ -25,6 +27,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? ShortName { get; private set; }
 
 	public EmployeeStatusType? EmployeeStatusType { get; private set; }
+	public string? ChangeReason { get; private set; }
+	public DateTimeOffset? StatusLastChangedAt { get; private set; }
 
 	public DateOnly? DateOfBirth { get; private set; }
 	public string? FamilyCast { get; private set; }
@@ -61,6 +65,9 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	// Navigation Property for Role
 	public virtual IdentityRole? Role { get; private set; }
 
+	// Navigation Property for EducationMediumStage
+	public virtual EducationMediumStage? EducationMediumStage { get; private set; }
+
 	// Full name including middle name
 	public string EmployeeNameWithFather
 	{
@@ -90,6 +97,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid id,
 		Guid? tenantId,
 		Guid userId,
+		Guid educationMediumStageId,
 		byte[]? profilePicture,
 		string? employeeCode,
 		string? lastName,
@@ -126,6 +134,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		TenantId = tenantId;
 		UserId = userId;
+		EducationMediumStageId = educationMediumStageId;
 		ProfilePicture = profilePicture;
 		EmployeeCode = employeeCode;
 		LastName = lastName;
@@ -186,7 +195,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? identificationMark1,
 		string? city,
 		string? state,
-		string? pinCode)
+		string? pinCode,
+		Guid educationMediumStageId)
 	{
 		LastName = lastName;
 		FirstName = firstName;
@@ -214,6 +224,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		City = city;
 		State = state;
 		PinCode = pinCode;
+		EducationMediumStageId = educationMediumStageId;
 		return this;
 	}
 
@@ -242,12 +253,16 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		return this;
 	}
-	
-	internal Employee UpdateEmployeeStatus(EmployeeStatusType employeeStatusType)
+
+	internal Employee UpdateEmployeeStatus(EmployeeStatusType employeeStatusType, string changeReason)
 	{
 		EmployeeStatusType = employeeStatusType;
+		ChangeReason = changeReason;
+		StatusLastChangedAt  = DateTimeOffset.Now;
+
 		return this;
 	}
+
 
 	internal void AddDocument(EmployeeDocument document) => Documents.Add(document);
 }

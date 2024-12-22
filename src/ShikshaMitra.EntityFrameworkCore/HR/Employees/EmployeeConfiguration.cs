@@ -33,7 +33,11 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 			.HasForeignKey(s => s.RoleId)
 			.OnDelete(DeleteBehavior.Restrict);
 
-		builder.Navigation(x => x.Role).AutoInclude();
+		builder.HasOne(e => e.EducationMediumStage)
+			.WithMany()
+			.HasForeignKey(s => s.EducationMediumStageId)
+			.OnDelete(DeleteBehavior.Restrict);
 
+		builder.Navigation(x => x.Role).AutoInclude();
 	}
 }

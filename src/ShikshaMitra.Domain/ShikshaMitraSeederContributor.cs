@@ -225,6 +225,7 @@ namespace ShikshaMitra
 					id: employeeId,
 					tenantId: tenant.Id,
 					userId: user.Id,
+					educationMediumStageId: educationMediumStage.Id,
 					profilePicture: Convert.FromBase64String(
 						"Qk1CAAAAAAAAADYAAAAoAAAAAQAAAAD4AAABABgAAAAAACgAAAEDAAEAAAAAAAAAAADEDgAAxA4AAAAAAAAAAAAA//8A/wAA//8A/wD/"),
 					employeeCode: "EMP001",

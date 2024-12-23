@@ -59,6 +59,8 @@ public class HRMapperProfile : Profile
 
 		CreateMap<EmployeeLeave, EmployeeLeaveDto>();
 		CreateMap<CreateUpdateEmployeeLeaveDto, EmployeeLeave>();
+		CreateMap<LeavePolicy, LeavePolicyDto>();
+		CreateMap<CreateUpdateLeavePolicyDto, LeavePolicy>();
 
 		# endregion
 

@@ -3,7 +3,6 @@ using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
 using ShikshaMitra.Employees;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
-using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
@@ -127,13 +126,11 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	DbSet<AutomatedNotificationsSettings> AutomatedNotificationsSettings { get; set; }
 
 	DbSet<NotificationInfo> NotificationInfos { get; set; }
-	
-	DbSet<LeavePolicy> LeavePolicies { get; set; }
-
 
 	#endregion
 
 	#endregion
+
 	# region Payroll
 
 	DbSet<PayElement> PayElements { get; set; }

@@ -6,19 +6,19 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
-public class LeavePolicy : FullAuditedEntity<Guid>, IMultiTenant
+public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
-	public Guid? TenantId { get; }
+	public Guid? TenantId { get; private set; }
 	
-	public string LeaveType { get; set; }
-	public int LeaveDays { get; set; }
-	public bool CarryForward { get; set; }
-	public AccrualRate AccrualRate { get; set; }
-	public string Color { get; set; }
+	public string LeaveType { get; private set; }
+	public int LeaveDays { get; private set; }
+	public bool CarryForward { get; private set; }
+	public AccrualRate AccrualRate { get; private set; }
+	public string Color { get; private set; }
 	
 	protected LeavePolicy() { } // For ORM
 	
-	public LeavePolicy(Guid id, Guid? tenantId,string leaveType, int leaveDays, bool carryForward,
+	internal LeavePolicy(Guid id, Guid? tenantId,string leaveType, int leaveDays, bool carryForward,
 		 AccrualRate accrualRate, string color) : base(id)
 	{
 		TenantId = tenantId ?? throw new ArgumentNullException(nameof(tenantId));

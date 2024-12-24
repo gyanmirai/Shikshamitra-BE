@@ -39,5 +39,6 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 			.OnDelete(DeleteBehavior.Restrict);
 
 		builder.Navigation(x => x.Role).AutoInclude();
+		builder.Navigation(x => x.EducationMediumStage).AutoInclude();
 	}
 }

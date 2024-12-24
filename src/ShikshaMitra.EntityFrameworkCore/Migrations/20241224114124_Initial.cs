@@ -652,6 +652,8 @@ namespace ShikshaMitra.Migrations
                     CarryForward = table.Column<bool>(type: "boolean", nullable: false),
                     AccrualRate = table.Column<int>(type: "integer", nullable: false),
                     Color = table.Column<string>(type: "text", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
                     LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -1434,7 +1436,7 @@ namespace ShikshaMitra.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    LeaveType = table.Column<string>(type: "text", nullable: false),
+                    LeaveTypeId = table.Column<Guid>(type: "uuid", nullable: false),
                     Color = table.Column<string>(type: "text", nullable: false),
                     HalfDay = table.Column<bool>(type: "boolean", nullable: false),
                     StartDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
@@ -1459,6 +1461,12 @@ namespace ShikshaMitra.Migrations
                         name: "FK_AppEmployeeLeaves_AppEmployees_EmployeeId",
                         column: x => x.EmployeeId,
                         principalTable: "AppEmployees",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_AppEmployeeLeaves_AppLeavePolicies_LeaveTypeId",
+                        column: x => x.LeaveTypeId,
+                        principalTable: "AppLeavePolicies",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -1868,6 +1876,11 @@ namespace ShikshaMitra.Migrations
                 column: "EmployeeId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_AppEmployeeLeaves_LeaveTypeId",
+                table: "AppEmployeeLeaves",
+                column: "LeaveTypeId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AppEmployees_EducationMediumStageId",
                 table: "AppEmployees",
                 column: "EducationMediumStageId");
@@ -2061,9 +2074,6 @@ namespace ShikshaMitra.Migrations
                 name: "AppEmployeeLeaves");
 
             migrationBuilder.DropTable(
-                name: "AppLeavePolicies");
-
-            migrationBuilder.DropTable(
                 name: "AppNotificationInfos");
 
             migrationBuilder.DropTable(
@@ -2095,6 +2105,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "AppEmployees");
+
+            migrationBuilder.DropTable(
+                name: "AppLeavePolicies");
 
             migrationBuilder.DropTable(
                 name: "AppPayElements");

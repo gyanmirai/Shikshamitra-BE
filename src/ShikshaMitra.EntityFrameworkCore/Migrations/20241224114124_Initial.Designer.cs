@@ -14,7 +14,7 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20241223085153_Initial")]
+    [Migration("20241224114124_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -210,9 +210,8 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<string>("LeaveType")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<Guid>("LeaveTypeId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("RejectionReason")
                         .HasColumnType("text");
@@ -230,6 +229,8 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("EmployeeId");
+
+                    b.HasIndex("LeaveTypeId");
 
                     b.ToTable("AppEmployeeLeaves", (string)null);
                 });
@@ -373,6 +374,13 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("CreationTime");
@@ -388,6 +396,11 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTime?>("DeletionTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -3670,7 +3683,15 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicy", "LeavePolicy")
+                        .WithMany()
+                        .HasForeignKey("LeaveTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Employee");
+
+                    b.Navigation("LeavePolicy");
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>

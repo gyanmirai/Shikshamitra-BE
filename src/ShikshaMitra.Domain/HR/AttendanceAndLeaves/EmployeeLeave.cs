@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.HR.Employees;
+﻿using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Employees;
 using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -11,7 +12,7 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 	public Guid EmployeeId { get; private set; }
-	public string LeaveType { get; private set; }
+	public Guid LeaveTypeId { get; private set; }  // Foreign key to LeavePolicy
 	public string Color { get; private set; }
 	public bool HalfDay { get; private set; }
 	public DateTimeOffset StartDate { get; private set; }
@@ -21,13 +22,15 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? RejectionReason { get; private set; }
 	
 	public Employee? Employee { get; private set; }
+	public LeavePolicy? LeavePolicy { get; private set; } // Navigation property
+
 
 	private EmployeeLeave() { } // For ORM
 
 	internal EmployeeLeave(
 		Guid id,
 		Guid tenantId,
-		string leaveType,
+		Guid leaveTypeId,
 		string color,
 		bool halfDay,
 		DateTimeOffset startDate,
@@ -36,7 +39,7 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		TenantId = Check.NotNull(tenantId, nameof(tenantId));
 		Color = color;
-		LeaveType = leaveType;
+		LeaveTypeId = leaveTypeId;
 		HalfDay = halfDay;
 		StartDate = startDate;
 		EndDate = endDate;

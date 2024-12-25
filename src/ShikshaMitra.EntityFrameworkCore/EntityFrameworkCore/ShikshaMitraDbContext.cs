@@ -6,6 +6,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Settings;
+using ShikshaMitra.HR.EventAndHolidays;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Students;
@@ -134,6 +135,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#endregion
 
 	#endregion
+	
 	# region Payroll
 
 	DbSet<PayElement> PayElements { get; set; }
@@ -141,6 +143,12 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#endregion
 
+	#region  Events & Holidays
+	
+	DbSet<EventAndHoliday> EventAndHolidays { get; set; }
+	
+	#endregion
+	
 	#endregion
 
 	protected override void OnModelCreating(ModelBuilder builder)

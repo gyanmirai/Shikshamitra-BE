@@ -4,6 +4,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Settings;
+using ShikshaMitra.HR.EventAndHolidays;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Students;
@@ -65,6 +66,13 @@ public class HRMapperProfile : Profile
 		# endregion
 
 		# endregion
+
+		#region Events & Holidays
+		
+		CreateMap<EventAndHoliday, EventAndHolidayDto>();
+		CreateMap<CreateUpdateEventAndHolidayDto, EventAndHoliday>();
+		
+		#endregion
 
 		#region Payroll
 

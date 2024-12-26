@@ -89,6 +89,8 @@ public class HRMapperProfile : Profile
 		CreateMap<PayElement.DependentProperties, DependentPropertiesDto>();
 		CreateMap<CreateUpdatePayElementDto, PayElement>();
 		CreateMap<DependentPropertiesDto, PayElement.DependentProperties>();
+		CreateMap<ProvidentFund, ProvidentFundDto>();
+		CreateMap<CreateUpdateProvidentFundDto, ProvidentFund>();
 
 		#endregion
 

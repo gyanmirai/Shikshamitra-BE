@@ -642,6 +642,30 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppEventAndHolidays",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    StartDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    EndDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    Reason = table.Column<string>(type: "text", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppEventAndHolidays", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppLeavePolicies",
                 columns: table => new
                 {
@@ -710,6 +734,31 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AppPayElements", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppProvidentFunds",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Code = table.Column<string>(type: "text", nullable: false),
+                    Name = table.Column<string>(type: "text", nullable: false),
+                    EmployeePercentage = table.Column<float>(type: "real", nullable: false),
+                    EmployerPercentage = table.Column<float>(type: "real", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppProvidentFunds", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -1437,13 +1486,13 @@ namespace ShikshaMitra.Migrations
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
                     LeaveTypeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Color = table.Column<string>(type: "text", nullable: false),
                     HalfDay = table.Column<bool>(type: "boolean", nullable: false),
                     StartDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     EndDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
                     Description = table.Column<string>(type: "text", nullable: false),
                     RejectionReason = table.Column<string>(type: "text", nullable: true),
+                    Attachment = table.Column<byte[]>(type: "bytea", nullable: true),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -2074,10 +2123,16 @@ namespace ShikshaMitra.Migrations
                 name: "AppEmployeeLeaves");
 
             migrationBuilder.DropTable(
+                name: "AppEventAndHolidays");
+
+            migrationBuilder.DropTable(
                 name: "AppNotificationInfos");
 
             migrationBuilder.DropTable(
                 name: "AppPayrollStructures");
+
+            migrationBuilder.DropTable(
+                name: "AppProvidentFunds");
 
             migrationBuilder.DropTable(
                 name: "AppStandardPermissions");

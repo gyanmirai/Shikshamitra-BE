@@ -7,5 +7,4 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
 public class EfCoreLeavePolicyRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider) : EfCoreRepository<ShikshaMitraDbContext, LeavePolicy,Guid>(dbContextProvider), ILeavePolicyRepository
 {
-	
 }

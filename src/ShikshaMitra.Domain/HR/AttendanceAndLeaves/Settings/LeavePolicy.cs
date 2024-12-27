@@ -9,7 +9,6 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
-	
 	public string LeaveType { get; private set; }
 	public int LeaveDays { get; private set; }
 	public bool CarryForward { get; private set; }

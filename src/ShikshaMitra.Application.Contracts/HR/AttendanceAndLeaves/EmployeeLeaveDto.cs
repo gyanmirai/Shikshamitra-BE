@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.HR.Employees;
+﻿using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Employees;
 using System;
 using Volo.Abp.Application.Dtos;
 
@@ -9,6 +10,7 @@ public class EmployeeLeaveDto : FullAuditedEntityDto<Guid>
 	public Guid EmployeeId { get; set; }
 	public EmployeeDto Employee { get; set; }
 	public Guid LeaveTypeId { get; set; } // Reference to LeavePolicy
+	public LeavePolicyDto LeavePolicy { get; set; }
 	public bool HalfDay { get; set; }
 	public DateTimeOffset StartDate { get; set; }
 	public DateTimeOffset EndDate { get; set; }

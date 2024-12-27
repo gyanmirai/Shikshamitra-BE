@@ -28,11 +28,13 @@ public class EmployeeLeaveConfiguration : IEntityTypeConfiguration<EmployeeLeave
 		// Auto Include 
 		builder.Navigation(e => e.Employee).AutoInclude();
 		
-		
 		// reference to the leavePolicy
 		builder.HasOne(e => e.LeavePolicy)
 			.WithMany()
 			.HasForeignKey(e => e.LeaveTypeId)
 			.OnDelete(DeleteBehavior.Restrict);
+		
+		// Auto Include 
+		builder.Navigation(e => e.LeavePolicy).AutoInclude();
 	}
 }

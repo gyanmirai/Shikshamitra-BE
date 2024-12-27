@@ -141,6 +141,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	DbSet<PayElement> PayElements { get; set; }
 	DbSet<PayrollStructure> PayrollStructures { get; set; }
 	DbSet<ProvidentFund> ProvidentFunds { get; set; }
+	DbSet<ProfessionalTax> ProfessionalTaxes { get; set; }
 
 	#endregion
 

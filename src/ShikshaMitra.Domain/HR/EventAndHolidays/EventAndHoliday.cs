@@ -10,15 +10,16 @@ public class EventAndHoliday : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public DateTimeOffset StartDate { get; private set; }
 	public DateTimeOffset EndDate { get; private set; }
 	public string Reason { get; private set; }
-	
+	public bool IsHoliday { get; private set; }
 	protected EventAndHoliday() { }
 	
-	internal EventAndHoliday(Guid id, Guid? tenantId, DateTimeOffset  startDate, DateTimeOffset endDate, string reason ) : base(id)
+	internal EventAndHoliday(Guid id, Guid? tenantId, DateTimeOffset  startDate, DateTimeOffset endDate, string reason, bool isHoliday ) : base(id)
 	{
 		TenantId = tenantId ?? throw new ArgumentNullException(nameof(tenantId));
 		StartDate = startDate;
 		EndDate = endDate;
 		Reason = reason;
+		IsHoliday = isHoliday;
 	}
 }
 

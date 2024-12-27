@@ -13,6 +13,7 @@ public class CreateUpdateEmployeeLeaveDto
 	[Required] public bool HalfDay { get; set; }
 
 	[Required] public DateTimeOffset StartDate { get; set; }
+	
 	public DateTimeOffset EndDate { get; set; }
 
 	[Required] public string Description { get; set; }

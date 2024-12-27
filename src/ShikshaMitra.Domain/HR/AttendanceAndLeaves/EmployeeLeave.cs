@@ -30,14 +30,12 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	internal EmployeeLeave(
 		Guid id,
 		Guid tenantId,
-		Guid leaveTypeId,
 		bool halfDay,
 		DateTimeOffset startDate,
 		DateTimeOffset endDate,
 		string description, string rejectionReason) : base(id)
 	{
 		TenantId = Check.NotNull(tenantId, nameof(tenantId));
-		LeaveTypeId = leaveTypeId;
 		HalfDay = halfDay;
 		StartDate = startDate;
 		EndDate = endDate;

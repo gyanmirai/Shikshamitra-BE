@@ -10,6 +10,7 @@ using ShikshaMitra.HR.EventAndHolidays;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Students;
+using ShikshaMitra.Students.Attendance.settings;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
@@ -108,6 +109,18 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Student
 
 	DbSet<Student> Students { get; set; }
+
+	#region Attendance
+
+	#region Settings
+
+	DbSet<AttendanceType> AttendanceTypes { get; set; }
+	DbSet<StudentAttendanceRule> StudentAttendanceRules { get; set; }
+
+
+	#endregion
+
+	#endregion
 
 	#endregion
 

@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.Students.StudentEnrollment.Settings;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
@@ -26,13 +27,14 @@ public class StudentInquiryDto : AuditedEntityDto<Guid>
 	public string State { get; set; }
 	public int PinCode { get; set; }
 	public string Address { get; set; }
-	public string InquiryPreferences { get; set; }
 	
 	// value Object
 	public Guid EducationMediumId { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public Guid StanderdId { get; set; }
+	public Guid InquiryPreferenceId { get; set; }
 	public EducationMediumDto EducationMedium { get; set; }
 	public AcademicYearDto AcademicYear { get; set; }
 	public StandardDto Standard { get; set; }
+	public InquiryPreferenceDto InquiryPreference { get; set; }
 }

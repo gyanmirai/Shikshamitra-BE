@@ -116,7 +116,11 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	DbSet<StudentInquiry> StudentInquiries { get; set; }
 
 	#region Settings
+	
 	DbSet<StudentDocumentSetting> StudentDocumentSettings { get; set; }
+	DbSet<InquiryPreference> InquiryPreferences { get; set; }
+
+	
 	#endregion
 
 	#endregion

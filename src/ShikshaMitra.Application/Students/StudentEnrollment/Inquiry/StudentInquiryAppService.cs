@@ -29,10 +29,11 @@ public class StudentInquiryAppService(
 			state: input.State,
 			pinCode: input.PinCode,
 			address: input.Address,
-			inquiryPreferences: input.InquiryPreferences,
 			educationMediumId: input.EducationMediumId,
 			academicYearId: input.AcademicYearId,
-			standerdId: input.StanderdId
+			standerdId: input.StanderdId,
+			inquiryPreferenceId : input.InquiryPreferenceId
+			
 		);
 
 		await studentInquiryRepository.InsertAsync(studentInquiry);

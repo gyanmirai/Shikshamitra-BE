@@ -468,6 +468,29 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppAttendanceTypes",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Type = table.Column<string>(type: "text", nullable: false),
+                    Color = table.Column<string>(type: "text", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppAttendanceTypes", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppAuthors",
                 columns: table => new
                 {
@@ -650,6 +673,7 @@ namespace ShikshaMitra.Migrations
                     StartDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     EndDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     Reason = table.Column<string>(type: "text", nullable: false),
+                    IsHoliday = table.Column<bool>(type: "boolean", nullable: false),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -737,6 +761,31 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppProfessionalTaxes",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    GenderType = table.Column<int>(type: "integer", nullable: false),
+                    FromSalary = table.Column<double>(type: "double precision", nullable: false),
+                    ToSalary = table.Column<double>(type: "double precision", nullable: false),
+                    TaxAmount = table.Column<double>(type: "double precision", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppProfessionalTaxes", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppProvidentFunds",
                 columns: table => new
                 {
@@ -775,6 +824,56 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AppStandardPermissions", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppStudentAttendanceRules",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Name = table.Column<string>(type: "text", nullable: false),
+                    Type = table.Column<int>(type: "integer", nullable: false),
+                    LateThreshold = table.Column<int>(type: "integer", nullable: false),
+                    LateThresholdUnit = table.Column<int>(type: "integer", nullable: false),
+                    HalfDayThreshold = table.Column<int>(type: "integer", nullable: false),
+                    HalfDayThresholdUnit = table.Column<int>(type: "integer", nullable: false),
+                    EnableNotificationForUpperAuthority = table.Column<bool>(type: "boolean", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppStudentAttendanceRules", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "InquiryPreferences",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    PreferenceName = table.Column<string>(type: "text", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_InquiryPreferences", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -838,6 +937,30 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_OpenIddictScopes", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "StudentDocumentSettings",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DocumentName = table.Column<string>(type: "text", nullable: false),
+                    isRequired = table.Column<bool>(type: "boolean", nullable: false),
+                    DocumentTypes = table.Column<int[]>(type: "integer[]", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_StudentDocumentSettings", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -1551,6 +1674,71 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppStudentInquiries",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    InquiryNumber = table.Column<string>(type: "text", nullable: false),
+                    FirstName = table.Column<string>(type: "text", nullable: false),
+                    MiddleName = table.Column<string>(type: "text", nullable: false),
+                    LastName = table.Column<string>(type: "text", nullable: false),
+                    FormNumber = table.Column<string>(type: "text", nullable: false),
+                    PreviousSchoolName = table.Column<string>(type: "text", nullable: false),
+                    DateOfBirth = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    Age = table.Column<int>(type: "integer", nullable: false),
+                    DateOfInquiry = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    GenderType = table.Column<int>(type: "integer", nullable: false),
+                    ParentContactNumber = table.Column<string>(type: "text", nullable: false),
+                    AlternativeContactNumber = table.Column<string>(type: "text", nullable: false),
+                    City = table.Column<string>(type: "text", nullable: false),
+                    State = table.Column<string>(type: "text", nullable: false),
+                    PinCode = table.Column<int>(type: "integer", nullable: false),
+                    Address = table.Column<string>(type: "text", nullable: false),
+                    EducationMediumId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
+                    StanderdId = table.Column<Guid>(type: "uuid", nullable: false),
+                    InquiryPreferenceId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppStudentInquiries", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppStudentInquiries_AppAcademicYears_AcademicYearId",
+                        column: x => x.AcademicYearId,
+                        principalTable: "AppAcademicYears",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_AppStudentInquiries_AppEducationMediums_EducationMediumId",
+                        column: x => x.EducationMediumId,
+                        principalTable: "AppEducationMediums",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_AppStudentInquiries_AppStandards_StanderdId",
+                        column: x => x.StanderdId,
+                        principalTable: "AppStandards",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_AppStudentInquiries_InquiryPreferences_InquiryPreferenceId",
+                        column: x => x.InquiryPreferenceId,
+                        principalTable: "InquiryPreferences",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppStudents",
                 columns: table => new
                 {
@@ -1960,6 +2148,26 @@ namespace ShikshaMitra.Migrations
                 column: "EducationMediumStageId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_AppStudentInquiries_AcademicYearId",
+                table: "AppStudentInquiries",
+                column: "AcademicYearId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppStudentInquiries_EducationMediumId",
+                table: "AppStudentInquiries",
+                column: "EducationMediumId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppStudentInquiries_InquiryPreferenceId",
+                table: "AppStudentInquiries",
+                column: "InquiryPreferenceId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppStudentInquiries_StanderdId",
+                table: "AppStudentInquiries",
+                column: "StanderdId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AppStudents_DivisionId",
                 table: "AppStudents",
                 column: "DivisionId");
@@ -2087,6 +2295,9 @@ namespace ShikshaMitra.Migrations
                 name: "AppAcademicYearPermissions");
 
             migrationBuilder.DropTable(
+                name: "AppAttendanceTypes");
+
+            migrationBuilder.DropTable(
                 name: "AppAuthors");
 
             migrationBuilder.DropTable(
@@ -2132,10 +2343,19 @@ namespace ShikshaMitra.Migrations
                 name: "AppPayrollStructures");
 
             migrationBuilder.DropTable(
+                name: "AppProfessionalTaxes");
+
+            migrationBuilder.DropTable(
                 name: "AppProvidentFunds");
 
             migrationBuilder.DropTable(
                 name: "AppStandardPermissions");
+
+            migrationBuilder.DropTable(
+                name: "AppStudentAttendanceRules");
+
+            migrationBuilder.DropTable(
+                name: "AppStudentInquiries");
 
             migrationBuilder.DropTable(
                 name: "AppStudents");
@@ -2145,6 +2365,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "OpenIddictTokens");
+
+            migrationBuilder.DropTable(
+                name: "StudentDocumentSettings");
 
             migrationBuilder.DropTable(
                 name: "AbpBlobContainers");
@@ -2166,6 +2389,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "AppPayElements");
+
+            migrationBuilder.DropTable(
+                name: "InquiryPreferences");
 
             migrationBuilder.DropTable(
                 name: "AppDivisions");

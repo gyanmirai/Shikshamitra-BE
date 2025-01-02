@@ -27,5 +27,10 @@ public class StudentInquiryConfiguration : IEntityTypeConfiguration<StudentInqui
 			.WithMany()
 			.HasForeignKey(s => s.StanderdId)
 			.OnDelete(DeleteBehavior.Restrict);
+		
+		builder.HasOne(e => e.InquiryPreference)
+			.WithMany()
+			.HasForeignKey(s => s.InquiryPreferenceId)
+			.OnDelete(DeleteBehavior.Restrict);
 	}
 }

@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.Students.StudentEnrollment.Settings;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
@@ -27,21 +28,23 @@ public class StudentInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string State { get; private set; }
 	public int PinCode { get; private set; }
 	public string Address { get; private set; }
-	public string InquiryPreferences { get; private set; }
+	// public string InquiryPreferences { get; private set; }
 	
 	// Foreign Key 
 	public Guid EducationMediumId { get; private set; }
 	public Guid AcademicYearId { get; private set; }
 	public Guid StanderdId { get; private set; }
 	
+	public Guid InquiryPreferenceId { get; private set; }
+	
 	// Navigation Property for Role 
 	public EducationMedium EducationMedium { get; private set; }
 	public AcademicYear AcademicYear { get; private set; }
 	public Standard Standard { get; private set; }	
 	
+	public InquiryPreference InquiryPreference { get; private set; }
 	
 	private StudentInquiry() {} // For ORM
-	
 	
 	internal StudentInquiry(
 		Guid id,
@@ -62,13 +65,14 @@ public class StudentInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string state,
 		int pinCode,
 		string address,
-		string inquiryPreferences,
 		Guid educationMediumId,
 		Guid academicYearId,
-		Guid standerdId
+		Guid standerdId,
+		Guid inquiryPreferenceId
 		) :  base(id)
 	{
 		TenantId = tenantId ?? throw new ArgumentNullException(nameof(tenantId));
+		InquiryNumber = inquiryNumber;
 		FirstName = firstName;
 		MiddleName = middleName;
 		LastName = lastName;
@@ -84,11 +88,10 @@ public class StudentInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		State = state;
 		PinCode = pinCode;
 		Address = address;
-		InquiryPreferences = inquiryPreferences;
 		EducationMediumId = educationMediumId;
 		AcademicYearId = academicYearId;
 		StanderdId = standerdId;
-		InquiryNumber = inquiryNumber;
+		InquiryPreferenceId = inquiryPreferenceId;
 	}
 }
 

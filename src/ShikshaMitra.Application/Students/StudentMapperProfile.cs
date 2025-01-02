@@ -26,9 +26,15 @@ public class StudentMapperProfile : Profile
 		CreateMap<CreateUpdateStudentInquiryDto, StudentInquiry>();
 		
 		#region settings
+		
 		// Document settings
 		CreateMap<StudentDocumentSetting, StudentDocumentSettingDto>();
 		CreateMap<CreateUpdateStudentDocumentSettingDto, StudentDocumentSetting>();
+		
+		// Inquiry Preference
+		CreateMap<InquiryPreference, InquiryPreferenceDto>();
+		CreateMap<CreateUpdateInquiryPreferenceDto, InquiryPreference>();
+		
 		#endregion
 	
 		#endregion

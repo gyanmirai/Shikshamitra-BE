@@ -7,7 +7,6 @@ namespace ShikshaMitra.Students.Attendance.Settings;
 
 public class StudentAttendanceRuleDto : AuditedEntityDto<Guid>
 {
-	public Guid? TenantId { get; set; }
 	[Required] public string Name { get; set; }
 	public StudentAttendanceStatusType Type { get; set; }
 	public int LateThreshold { get; set; }

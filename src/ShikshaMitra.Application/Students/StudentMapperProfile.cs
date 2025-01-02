@@ -1,6 +1,8 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Students.Attendance.settings;
 using ShikshaMitra.Students.Attendance.Settings;
+using ShikshaMitra.Students.studentenrollment.Inquiry;
+using ShikshaMitra.Students.StudentEnrollment.Inquiry;
 
 namespace ShikshaMitra.Students;
 
@@ -29,6 +31,13 @@ public class StudentMapperProfile : Profile
 
 		#endregion
 		
+		#endregion
+
+		#region Inquiry
+
+		CreateMap<StudentInquiry, StudentInquiryDto>();
+		CreateMap<CreateUpdateStudentInquiryDto, StudentInquiry>();
+
 		#endregion
 	}
 }

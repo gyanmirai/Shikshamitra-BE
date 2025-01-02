@@ -25,7 +25,7 @@ public class StudentAttendanceRule : FullAuditedAggregateRoot<Guid>, IMultiTenan
 
 	internal StudentAttendanceRule(
 		Guid id,
-		Guid tenantId,
+		Guid? tenantId,
 		string name,
 		StudentAttendanceStatusType type,
 		int lateThreshold,
@@ -34,7 +34,7 @@ public class StudentAttendanceRule : FullAuditedAggregateRoot<Guid>, IMultiTenan
 		TimeUnitType halfDayThresholdUnit,
 		bool enableNotificationForUpperAuthority) : base(id)
 	{
-		TenantId = tenantId;
+		TenantId = tenantId ?? throw new ArgumentNullException(nameof(tenantId));;
 		Name = name;
 		Type = type;
 		LateThreshold = lateThreshold;

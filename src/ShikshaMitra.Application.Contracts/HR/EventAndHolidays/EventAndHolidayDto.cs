@@ -5,7 +5,6 @@ namespace ShikshaMitra.HR.EventAndHolidays;
 
 public class EventAndHolidayDto : AuditedEntityDto<Guid>
 {
-	public Guid? TenantId { get; set; }
 	public DateTimeOffset StartDate { get; set; }
 	public DateTimeOffset EndDate { get; set; }
 	public string Reason { get; set; }

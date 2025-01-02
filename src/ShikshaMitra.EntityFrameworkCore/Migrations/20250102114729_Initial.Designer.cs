@@ -14,8 +14,8 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20250102071859_v4")]
-    partial class v4
+    [Migration("20250102114729_Initial")]
+    partial class Initial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -1599,6 +1599,66 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppStudents", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollment.Settings.InquiryPreference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("PreferenceName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("InquiryPreferences");
+                });
+
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollment.Settings.StudentDocumentSetting", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1741,9 +1801,8 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("InquiryPreferences")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<Guid>("InquiryPreferenceId")
+                        .HasColumnType("uuid");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -1794,6 +1853,8 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("AcademicYearId");
 
                     b.HasIndex("EducationMediumId");
+
+                    b.HasIndex("InquiryPreferenceId");
 
                     b.HasIndex("StanderdId");
 
@@ -4419,6 +4480,12 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ShikshaMitra.Students.StudentEnrollment.Settings.InquiryPreference", "InquiryPreference")
+                        .WithMany()
+                        .HasForeignKey("InquiryPreferenceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
                         .WithMany()
                         .HasForeignKey("StanderdId")
@@ -4428,6 +4495,8 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("AcademicYear");
 
                     b.Navigation("EducationMedium");
+
+                    b.Navigation("InquiryPreference");
 
                     b.Navigation("Standard");
                 });

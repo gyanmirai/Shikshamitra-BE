@@ -20,11 +20,12 @@ public class CreateUpdateStudentInquiryDto
 	public string State { get; set; }
 	public int PinCode { get; set; }
 	public string Address { get; set; }
-	public string InquiryPreferences { get; set; }
 	
 	// value Object
 	public Guid EducationMediumId { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public Guid StanderdId { get; set; }
+	
+	public Guid InquiryPreferenceId { get; set; }
 	
 }

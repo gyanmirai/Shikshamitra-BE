@@ -24,10 +24,10 @@ public class StudentInquiryManager(IStudentInquiryRepository studentInquiryRepos
 		string state,
 		int pinCode,
 		string address,
-		string inquiryPreferences,
 		Guid educationMediumId,
 		Guid academicYearId,
-		Guid standerdId
+		Guid standerdId,
+		Guid inquiryPreferenceId
 		)
 	{
 		string inquiryNumber = await GenerateInquiryNumberAsync();
@@ -51,10 +51,10 @@ public class StudentInquiryManager(IStudentInquiryRepository studentInquiryRepos
 			state: state,
 			pinCode: pinCode,
 			address: address,
-			inquiryPreferences: inquiryPreferences,
 			educationMediumId: educationMediumId,
 			academicYearId: academicYearId,
-			standerdId: standerdId
+			standerdId: standerdId,
+			inquiryPreferenceId: inquiryPreferenceId
 		);
 	}
 	

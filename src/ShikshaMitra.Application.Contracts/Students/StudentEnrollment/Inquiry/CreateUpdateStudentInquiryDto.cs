@@ -10,9 +10,9 @@ public class CreateUpdateStudentInquiryDto
 	public string LastName { get; set; }
 	public string FormNumber { get; set; }
 	public string PreviousSchoolName { get; set; }
-	public DateTimeOffset DateOfBirth { get; set; }
-	public int Age { get; set; }
-	public DateTimeOffset DateOfInquiry { get; set; }
+	public DateOnly DateOfBirth { get; set; }
+	public string Age { get; set; }
+	public DateOnly DateOfInquiry { get; set; }
 	public GenderType GenderType { get; set; }
 	public string ParentContactNumber { get; set; }
 	public string AlternativeContactNumber { get; set; }
@@ -23,6 +23,7 @@ public class CreateUpdateStudentInquiryDto
 	
 	// value Object
 	public Guid EducationMediumId { get; set; }
+	public Guid EducationBoardId { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public Guid StanderdId { get; set; }
 	

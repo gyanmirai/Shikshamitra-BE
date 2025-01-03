@@ -14,9 +14,9 @@ public class StudentInquiryManager(IStudentInquiryRepository studentInquiryRepos
 		string lastName,
 		string formNumber,
 		string previousSchoolName,
-		DateTimeOffset dateOfBirth,
-		int age,
-		DateTimeOffset dateOfInquiry,
+		DateOnly dateOfBirth,
+		string age,
+		DateOnly dateOfInquiry,
 		GenderType genderType,
 		string parentContactNumber,
 		string alternativeContactNumber,
@@ -25,6 +25,7 @@ public class StudentInquiryManager(IStudentInquiryRepository studentInquiryRepos
 		int pinCode,
 		string address,
 		Guid educationMediumId,
+		Guid educationBoardId,
 		Guid academicYearId,
 		Guid standerdId,
 		Guid inquiryPreferenceId
@@ -52,6 +53,7 @@ public class StudentInquiryManager(IStudentInquiryRepository studentInquiryRepos
 			pinCode: pinCode,
 			address: address,
 			educationMediumId: educationMediumId,
+			educationBoardId: educationBoardId,
 			academicYearId: academicYearId,
 			standerdId: standerdId,
 			inquiryPreferenceId: inquiryPreferenceId

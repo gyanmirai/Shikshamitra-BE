@@ -1,6 +1,7 @@
 ﻿using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollment.Settings;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using System;
@@ -17,9 +18,9 @@ public class StudentInquiryDto : AuditedEntityDto<Guid>
 	public string LastName { get; set; }
 	public string FormNumber { get; set; }
 	public string PreviousSchoolName { get; set; }
-	public DateTimeOffset DateOfBirth { get; set; }
-	public int Age { get; set; }
-	public DateTimeOffset DateOfInquiry { get; set; }
+	public DateOnly DateOfBirth { get; set; }
+	public string Age { get; set; }
+	public DateOnly DateOfInquiry { get; set; }
 	public GenderType GenderType { get; set; }
 	public string ParentContactNumber { get; set; }
 	public string AlternativeContactNumber { get; set; }
@@ -30,10 +31,12 @@ public class StudentInquiryDto : AuditedEntityDto<Guid>
 	
 	// value Object
 	public Guid EducationMediumId { get; set; }
+	public Guid EducationBoardId { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public Guid StanderdId { get; set; }
 	public Guid InquiryPreferenceId { get; set; }
 	public EducationMediumDto EducationMedium { get; set; }
+	public EducationBoardDto EducationBoard { get; set; }
 	public AcademicYearDto AcademicYear { get; set; }
 	public StandardDto Standard { get; set; }
 	public InquiryPreferenceDto InquiryPreference { get; set; }

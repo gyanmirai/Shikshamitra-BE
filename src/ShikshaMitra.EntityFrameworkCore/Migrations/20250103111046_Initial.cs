@@ -1686,7 +1686,6 @@ namespace ShikshaMitra.Migrations
                     FormNumber = table.Column<string>(type: "text", nullable: false),
                     PreviousSchoolName = table.Column<string>(type: "text", nullable: false),
                     DateOfBirth = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    Age = table.Column<int>(type: "integer", nullable: false),
                     DateOfInquiry = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     GenderType = table.Column<int>(type: "integer", nullable: false),
                     ParentContactNumber = table.Column<string>(type: "text", nullable: false),
@@ -1696,6 +1695,7 @@ namespace ShikshaMitra.Migrations
                     PinCode = table.Column<int>(type: "integer", nullable: false),
                     Address = table.Column<string>(type: "text", nullable: false),
                     EducationMediumId = table.Column<Guid>(type: "uuid", nullable: false),
+                    EducationBoardId = table.Column<Guid>(type: "uuid", nullable: false),
                     AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
                     StanderdId = table.Column<Guid>(type: "uuid", nullable: false),
                     InquiryPreferenceId = table.Column<Guid>(type: "uuid", nullable: false),
@@ -1716,6 +1716,12 @@ namespace ShikshaMitra.Migrations
                         name: "FK_AppStudentInquiries_AppAcademicYears_AcademicYearId",
                         column: x => x.AcademicYearId,
                         principalTable: "AppAcademicYears",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_AppStudentInquiries_AppEducationBoards_EducationBoardId",
+                        column: x => x.EducationBoardId,
+                        principalTable: "AppEducationBoards",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
@@ -2151,6 +2157,11 @@ namespace ShikshaMitra.Migrations
                 name: "IX_AppStudentInquiries_AcademicYearId",
                 table: "AppStudentInquiries",
                 column: "AcademicYearId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppStudentInquiries_EducationBoardId",
+                table: "AppStudentInquiries",
+                column: "EducationBoardId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AppStudentInquiries_EducationMediumId",

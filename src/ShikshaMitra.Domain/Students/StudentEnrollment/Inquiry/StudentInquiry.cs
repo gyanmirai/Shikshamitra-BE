@@ -1,6 +1,7 @@
 ﻿using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollment.Settings;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using System;
@@ -19,7 +20,6 @@ public class StudentInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string FormNumber { get; private set; }
 	public string PreviousSchoolName { get; private set; }
 	public DateTimeOffset DateOfBirth { get; private set; }
-	public int Age { get; private set; }
 	public DateTimeOffset DateOfInquiry { get; private set; }
 	public GenderType GenderType { get; private set; }
 	public string ParentContactNumber { get; private set; }
@@ -32,13 +32,15 @@ public class StudentInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	
 	// Foreign Key 
 	public Guid EducationMediumId { get; private set; }
+	public Guid EducationBoardId { get; private set; }
 	public Guid AcademicYearId { get; private set; }
 	public Guid StanderdId { get; private set; }
-	
 	public Guid InquiryPreferenceId { get; private set; }
 	
 	// Navigation Property for Role 
 	public EducationMedium EducationMedium { get; private set; }
+	
+	public EducationBoard EducationBoard { get; private set; }
 	public AcademicYear AcademicYear { get; private set; }
 	public Standard Standard { get; private set; }	
 	
@@ -56,7 +58,6 @@ public class StudentInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string formNumber,
 		string previousSchoolName,
 		DateTimeOffset dateOfBirth,
-		int age,
 		DateTimeOffset dateOfInquiry,
 		GenderType genderType,
 		string parentContactNumber,
@@ -66,6 +67,7 @@ public class StudentInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		int pinCode,
 		string address,
 		Guid educationMediumId,
+		Guid educationBoardId,
 		Guid academicYearId,
 		Guid standerdId,
 		Guid inquiryPreferenceId
@@ -79,7 +81,6 @@ public class StudentInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		FormNumber = formNumber;
 		PreviousSchoolName = previousSchoolName;
 		DateOfBirth = dateOfBirth;
-		Age = age;
 		DateOfInquiry = dateOfInquiry;
 		GenderType = genderType;
 		ParentContactNumber = parentContactNumber;
@@ -89,6 +90,7 @@ public class StudentInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PinCode = pinCode;
 		Address = address;
 		EducationMediumId = educationMediumId;
+		EducationBoardId = educationBoardId;
 		AcademicYearId = academicYearId;
 		StanderdId = standerdId;
 		InquiryPreferenceId = inquiryPreferenceId;

@@ -1735,9 +1735,6 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("Age")
-                        .HasColumnType("integer");
-
                     b.Property<string>("AlternativeContactNumber")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1774,6 +1771,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTime?>("DeletionTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
+
+                    b.Property<Guid>("EducationBoardId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("EducationMediumId")
                         .HasColumnType("uuid");
@@ -1848,6 +1848,8 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AcademicYearId");
+
+                    b.HasIndex("EducationBoardId");
 
                     b.HasIndex("EducationMediumId");
 
@@ -4471,6 +4473,12 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", "EducationBoard")
+                        .WithMany()
+                        .HasForeignKey("EducationBoardId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "EducationMedium")
                         .WithMany()
                         .HasForeignKey("EducationMediumId")
@@ -4490,6 +4498,8 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
 
                     b.Navigation("AcademicYear");
+
+                    b.Navigation("EducationBoard");
 
                     b.Navigation("EducationMedium");
 

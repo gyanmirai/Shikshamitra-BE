@@ -20,7 +20,6 @@ public class StudentInquiryAppService(
 			formNumber: input.FormNumber,
 			previousSchoolName: input.PreviousSchoolName,
 			dateOfBirth: input.DateOfBirth,
-			age: input.Age,
 			dateOfInquiry: input.DateOfInquiry,
 			genderType: input.GenderType,
 			parentContactNumber: input.ParentContactNumber,
@@ -30,6 +29,7 @@ public class StudentInquiryAppService(
 			pinCode: input.PinCode,
 			address: input.Address,
 			educationMediumId: input.EducationMediumId,
+			educationBoardId: input.EducationBoardId,
 			academicYearId: input.AcademicYearId,
 			standerdId: input.StanderdId,
 			inquiryPreferenceId : input.InquiryPreferenceId

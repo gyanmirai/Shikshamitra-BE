@@ -18,6 +18,11 @@ public class StudentInquiryConfiguration : IEntityTypeConfiguration<StudentInqui
 			.HasForeignKey(s => s.AcademicYearId)
 			.OnDelete(DeleteBehavior.Restrict);
 		
+		builder.HasOne(e => e.EducationBoard)
+			.WithMany()
+			.HasForeignKey(s => s.EducationBoardId)
+			.OnDelete(DeleteBehavior.Restrict);
+		
 		builder.HasOne(e => e.EducationMedium)
 			.WithMany()
 			.HasForeignKey(s => s.EducationMediumId)

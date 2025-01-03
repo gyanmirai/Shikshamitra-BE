@@ -1735,10 +1735,6 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("Age")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("AlternativeContactNumber")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1762,11 +1758,11 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
-                    b.Property<DateOnly>("DateOfBirth")
-                        .HasColumnType("date");
+                    b.Property<DateTimeOffset>("DateOfBirth")
+                        .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateOnly>("DateOfInquiry")
-                        .HasColumnType("date");
+                    b.Property<DateTimeOffset>("DateOfInquiry")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("DeleterId")
                         .HasColumnType("uuid")

@@ -20,7 +20,6 @@ public class StudentInquiryAppService(
 			formNumber: input.FormNumber,
 			previousSchoolName: input.PreviousSchoolName,
 			dateOfBirth: input.DateOfBirth,
-			age: input.Age,
 			dateOfInquiry: input.DateOfInquiry,
 			genderType: input.GenderType,
 			parentContactNumber: input.ParentContactNumber,

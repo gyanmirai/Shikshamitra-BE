@@ -19,9 +19,8 @@ public class StudentInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string LastName { get; private set; }
 	public string FormNumber { get; private set; }
 	public string PreviousSchoolName { get; private set; }
-	public DateOnly DateOfBirth { get; private set; }
-	public string Age { get; private set; }
-	public DateOnly DateOfInquiry { get; private set; }
+	public DateTimeOffset DateOfBirth { get; private set; }
+	public DateTimeOffset DateOfInquiry { get; private set; }
 	public GenderType GenderType { get; private set; }
 	public string ParentContactNumber { get; private set; }
 	public string AlternativeContactNumber { get; private set; }
@@ -58,9 +57,8 @@ public class StudentInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string lastName,
 		string formNumber,
 		string previousSchoolName,
-		DateOnly dateOfBirth,
-		string age,
-		DateOnly dateOfInquiry,
+		DateTimeOffset dateOfBirth,
+		DateTimeOffset dateOfInquiry,
 		GenderType genderType,
 		string parentContactNumber,
 		string alternativeContactNumber,
@@ -83,7 +81,6 @@ public class StudentInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		FormNumber = formNumber;
 		PreviousSchoolName = previousSchoolName;
 		DateOfBirth = dateOfBirth;
-		Age = age;
 		DateOfInquiry = dateOfInquiry;
 		GenderType = genderType;
 		ParentContactNumber = parentContactNumber;

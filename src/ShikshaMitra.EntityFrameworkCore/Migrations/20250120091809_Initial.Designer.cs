@@ -14,7 +14,7 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20250110090220_Initial")]
+    [Migration("20250120091809_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -1909,9 +1909,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("AadhaarNo")
-                        .HasColumnType("text");
-
                     b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uuid");
 
@@ -1920,12 +1917,6 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<string>("AlternativeContactNumber")
                         .HasColumnType("text");
-
-                    b.Property<string>("BirthPlace")
-                        .HasColumnType("text");
-
-                    b.Property<int?>("CastType")
-                        .HasColumnType("integer");
 
                     b.Property<string>("City")
                         .HasColumnType("text");
@@ -1970,9 +1961,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
-                    b.Property<string>("FamilyCast")
-                        .HasColumnType("text");
-
                     b.Property<string>("FirstName")
                         .HasColumnType("text");
 
@@ -2012,12 +2000,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("MiddleName")
                         .HasColumnType("text");
 
-                    b.Property<string>("MotherTongue")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Nationality")
-                        .HasColumnType("text");
-
                     b.Property<string>("ParentContactNumber")
                         .HasColumnType("text");
 
@@ -2027,22 +2009,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("PreviousSchoolName")
                         .HasColumnType("text");
 
-                    b.Property<byte[]>("ProfilePicture")
-                        .HasColumnType("bytea");
-
-                    b.Property<string>("RegistrationCode")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Religion")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Remarks")
-                        .HasColumnType("text");
-
-                    b.Property<Guid?>("RoleId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid>("StandardId")
                         .HasColumnType("uuid");
 
@@ -2051,9 +2017,6 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<int>("StudentEnrollmentState")
                         .HasColumnType("integer");
-
-                    b.Property<string>("TemporaryGr")
-                        .HasColumnType("text");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
@@ -2281,6 +2244,44 @@ namespace ShikshaMitra.Migrations
                                 .HasColumnType("text");
                         });
 
+                    b.ComplexProperty<Dictionary<string, object>>("StudentBasicDetails", "ShikshaMitra.Students.StudentEnrollments.StudentEnrollment.StudentBasicDetails#StudentBasicDetails", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<string>("AadhaarNo")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("BirthPlace")
+                                .HasColumnType("text");
+
+                            b1.Property<int?>("CastType")
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("FamilyCast")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("MotherTongue")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Nationality")
+                                .HasColumnType("text");
+
+                            b1.Property<byte[]>("ProfilePicture")
+                                .HasColumnType("bytea");
+
+                            b1.Property<string>("Religion")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Remarks")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("TemporaryGr")
+                                .HasColumnType("text");
+
+                            b1.Property<Guid?>("UserId")
+                                .HasColumnType("uuid");
+                        });
+
                     b.ComplexProperty<Dictionary<string, object>>("StudentCommunicationDetails", "ShikshaMitra.Students.StudentEnrollments.StudentEnrollment.StudentCommunicationDetails#StudentCommunicationDetails", b1 =>
                         {
                             b1.IsRequired();
@@ -2381,8 +2382,6 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("EducationMediumId");
 
                     b.HasIndex("InquiryPreferenceId");
-
-                    b.HasIndex("RoleId");
 
                     b.HasIndex("StandardId");
 
@@ -5070,10 +5069,6 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Volo.Abp.Identity.IdentityRole", "Role")
-                        .WithMany()
-                        .HasForeignKey("RoleId");
-
                     b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
                         .WithMany()
                         .HasForeignKey("StandardId")
@@ -5087,8 +5082,6 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("EducationMedium");
 
                     b.Navigation("InquiryPreference");
-
-                    b.Navigation("Role");
 
                     b.Navigation("Standard");
                 });

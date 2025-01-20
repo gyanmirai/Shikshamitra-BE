@@ -22,7 +22,7 @@ public class StudentMedicalRecords(
 	public string? CovidVaccination { get; private set; } = covidVaccination;
 	public string? ChildImmunisation { get; private set; } = childImmunisation;
 	public string? ImmunisationRemarks { get; private set; } = immunisationRemarks;
-	
+
 	protected override IEnumerable<object> GetAtomicValues()
 	{
 		yield return Weight;

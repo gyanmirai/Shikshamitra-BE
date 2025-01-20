@@ -13,6 +13,7 @@ public class StudentEnrollmentConfiguration : IEntityTypeConfiguration<StudentEn
 		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();
 
+		builder.ComplexProperty(e => e.StudentBasicDetails);
 		builder.ComplexProperty(e => e.FatherDetails);
 		builder.ComplexProperty(e => e.MotherDetails);
 		builder.ComplexProperty(e => e.GuardianDetails);
@@ -52,7 +53,6 @@ public class StudentEnrollmentConfiguration : IEntityTypeConfiguration<StudentEn
 			.HasForeignKey(s => s.InquiryPreferenceId)
 			.OnDelete(DeleteBehavior.Restrict);
 		
-		builder.Navigation(x => x.Role).AutoInclude();
 		builder.Navigation(x => x.EducationMedium).AutoInclude();
 		builder.Navigation(x => x.EducationBoard).AutoInclude();
 		builder.Navigation(x => x.AcademicYear).AutoInclude();

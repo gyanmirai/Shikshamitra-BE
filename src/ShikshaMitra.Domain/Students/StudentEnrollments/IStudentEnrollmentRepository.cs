@@ -7,7 +7,6 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 
 public interface IStudentEnrollmentRepository : IRepository<StudentEnrollment, Guid>
 {
-	
 	// public Task<StudentEnrollment?> GetStudentEnrollmentByUserIdAsync(Guid userId);
 
 	Task<StudentEnrollment?> GetLastStudentInquiryAsync();

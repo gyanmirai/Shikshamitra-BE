@@ -18,14 +18,9 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
-	// public Guid UserId { get; private set; }
-	// public Guid RoleId { get; private set; }
-
 	public StudentEnrollmentState StudentEnrollmentState { get; private set; }
-
-	// Inquiry and Registration Form
+	// Student Inquiry payload
 	public string InquiryNumber { get; private set; }
-	public string RegistrationCode { get; private set; }
 	public string? FormNumber { get; private set; }
 	public string? FirstName { get; private set; }
 	public string? MiddleName { get; private set; }
@@ -53,26 +48,11 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public AcademicYear AcademicYear { get; private set; }
 	public EducationBoard EducationBoard { get; private set; }
 	public EducationMedium EducationMedium { get; private set; }
-	public Standard Standard { get; private set; }	
+	public Standard Standard { get; private set; }
 	public InquiryPreference InquiryPreference { get; private set; }
-	
-	// Navigation Property for Role
-	public virtual IdentityRole? Role { get; private set; }
-
-	// For Registration
-	public byte[]? ProfilePicture { get; private set; }
-	public string? AadhaarNo { get; private set; }
-	public string? Religion { get; private set; }
-	public string? FamilyCast { get; private set; }
-	public CastType? CastType { get; private set; }
-	public string? MotherTongue { get; private set; }
-	public string? Nationality { get; private set; }
-	public string? BirthPlace { get; private set; }
-	public string? TemporaryGr { get; private set; }
-	public string? Remarks { get; private set; }
-	
 	// Value Object
 	public List<StudentDocument> Documents { get; private set; } = new List<StudentDocument>();
+	public StudentBasicDetails StudentBasicDetails { get; private set; }
 	public StudentContactDetails FatherDetails { get; private set; }
 	public StudentContactDetails MotherDetails { get; private set; }
 	public StudentContactDetails GuardianDetails { get; private set; }
@@ -87,11 +67,8 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	internal StudentEnrollment(
 		Guid id,
 		Guid? tenantId,
-		// Guid userId,
-		// Guid? roleId,
 		StudentEnrollmentState studentEnrollmentState,
 		string inquiryNumber,
-		string registrationCode,
 		string? formNumber,
 		string? firstName,
 		string? middleName,
@@ -113,17 +90,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid standardId,
 		Guid inquiryPreferenceId,
 		// registration
-		byte[]? profilePicture,
-		string? aadhaarNo,
-		string? religion,
-		string? familyCast,
-		CastType? castType,
-		string? motherTongue,
-		string? nationality,
-		string? birthPlace,
-		string? temporaryGr,
-		string? remarks,
-		
+		StudentBasicDetails studentBasicDetails,
 		StudentContactDetails fatherDetails,
 		StudentContactDetails motherDetails,
 		StudentContactDetails guardianDetails,
@@ -135,11 +102,8 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	) : base(id)
 	{
 		TenantId = tenantId;
-		// UserId = userId;
-		// RoleId = Check.NotNull(roleId, nameof(roleId)) ?? throw new ArgumentNullException(nameof(roleId));;
 		StudentEnrollmentState = studentEnrollmentState;
 		InquiryNumber = inquiryNumber;
-		RegistrationCode = registrationCode;
 		FormNumber = formNumber;
 		FirstName = firstName;
 		MiddleName = middleName;
@@ -160,17 +124,8 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EducationMediumId = educationMediumId;
 		StandardId = standardId;
 		InquiryPreferenceId = inquiryPreferenceId;
-		// enrollment
-		ProfilePicture = profilePicture;
-		AadhaarNo = aadhaarNo;
-		Religion = religion;
-		FamilyCast = familyCast;
-		CastType = castType;
-		MotherTongue = motherTongue;
-		Nationality = nationality;
-		BirthPlace = birthPlace;
-		TemporaryGr = temporaryGr;
-		Remarks = remarks;
+		// registration
+		StudentBasicDetails = studentBasicDetails;
 		FatherDetails = fatherDetails;
 		MotherDetails = motherDetails;
 		GuardianDetails = guardianDetails;
@@ -181,8 +136,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ParentBankDetails = parentBankDetails;
 	}
 
-	internal StudentEnrollment UpdateGeneralInfo(
-		Guid? roleId,
+	internal StudentEnrollment UpdateStudentInquiry(
 		StudentEnrollmentState studentEnrollmentState,
 		string? formNumber,
 		string? firstName,
@@ -203,21 +157,9 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid educationBoardId,
 		Guid educationMediumId,
 		Guid standardId,
-		Guid inquiryPreferenceId,
-		// registration
-		byte[]? profilePicture,
-		string? aadhaarNo,
-		string? religion,
-		string? familyCast,
-		CastType? castType,
-		string? motherTongue,
-		string? nationality,
-		string? birthPlace,
-		string? temporaryGr,
-		string? remarks
+		Guid inquiryPreferenceId
 	)
 	{
-		// RoleId = Check.NotNull(roleId, nameof(roleId)) ?? throw new ArgumentNullException(nameof(roleId));
 		StudentEnrollmentState = studentEnrollmentState;
 		FormNumber = formNumber;
 		FirstName = firstName;
@@ -239,19 +181,17 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EducationMediumId = educationMediumId;
 		StandardId = standardId;
 		InquiryPreferenceId = inquiryPreferenceId;
-		ProfilePicture = profilePicture;
-		AadhaarNo = aadhaarNo;
-		Religion = religion;
-		FamilyCast = familyCast;
-		CastType = castType;
-		MotherTongue = motherTongue;
-		Nationality = nationality;
-		BirthPlace = birthPlace;
-		TemporaryGr = temporaryGr;
-		Remarks = remarks;
 		return this;
 	}
 	
+	// ++++++++ Update Student Basic Details +++++++
+	internal StudentEnrollment UpdateStudentBasicDetails(
+		StudentBasicDetails studentBasicDetails
+	)
+	{
+		this.StudentBasicDetails = studentBasicDetails;
+		return this;
+	}
 	
 	// +++++++++++ Update Family Details ++++++++++++
 	internal StudentEnrollment UpdateFamilyDetails(
@@ -309,6 +249,13 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	)
 	{
 		this.ParentBankDetails = parentBankDetails;
+		return this;
+	}
+
+	// +++++++++ Update Student Enrollment State to registration +++++++++
+	internal StudentEnrollment UpdateStudentEnrollmentState(StudentEnrollmentState studentEnrollmentState)
+	{
+		StudentEnrollmentState = studentEnrollmentState;
 		return this;
 	}
 

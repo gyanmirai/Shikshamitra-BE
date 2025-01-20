@@ -16,11 +16,10 @@ public class StudentDocument : Entity<Guid>, IMultiTenant, IHasCreationTime
 
 	// Stores the Blob name if using Blob Storage
 	public string BlobName { get; private set; }
-	
-	
+
 	// For ORM
 	private StudentDocument(){}
-	
+
 	public StudentDocument(
 		Guid id,
 		Guid? tenantId,

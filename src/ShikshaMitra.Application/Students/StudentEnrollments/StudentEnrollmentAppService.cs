@@ -28,19 +28,148 @@ public class StudentEnrollmentAppService(
 
 	#endregion
 
-	#region Create Basic Information
-
-	public async Task<StudentEnrollmentDto> CreateBasicInfoAsync(CreateStudentEnrollmentBasicInfoDto input)
+	#region Move To Registration
+	public async Task<StudentEnrollmentDto> MoveToRegistration(Guid studentEnrollmentId)
 	{
-		Console.WriteLine("Creating Student Enrollment called");
-		
-		Console.WriteLine($"input++++++++++++++++++++++++++++++++ {input}");
-		// use studentEnrollmentManager to create the student enrollment with domain logic
-		StudentEnrollment studentEnrollment = await studentEnrollmentManager.CreateStudentEnrollmentAsync(
-			// userId: input.UserId,
-			// roleId:input.RoleId,      
-			studentEnrollmentState: input.StudentEnrollmentState,
+		StudentEnrollment studentEnrollment = await studentEnrollmentManager.MoveToRegistrationAsync(studentEnrollmentId);
 
+		// Save the student enrollment
+		studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
+
+		// Return the DTO
+		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);	}
+
+	#endregion
+
+	#region Move To Addmission
+	public async Task<StudentEnrollmentDto> MoveToAdmission(Guid studentEnrollmentId)
+	{
+
+		StudentEnrollment studentEnrollment = await studentEnrollmentManager.MoveToAdmissionAsync(studentEnrollmentId);
+
+		// Save the student enrollment
+		studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
+
+		// Return the DTO
+		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);	}
+
+	#endregion
+
+	#region Move To Addmission Fees
+	public async Task<StudentEnrollmentDto> MoveToAdmissionFees(Guid studentEnrollmentId)
+	{
+
+		StudentEnrollment studentEnrollment = await studentEnrollmentManager.MoveToAdmissionFeesAsync(studentEnrollmentId);
+
+		// Save the student enrollment
+		studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
+
+		// Return the DTO
+		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);	}
+
+	#endregion
+
+	#region Get Student Inquiries list
+	
+	public async Task<PagedResultDto<StudentEnrollmentDto>> GetStudentInquiry()
+	{
+		List<StudentEnrollment> studentInquiry =
+			await studentEnrollmentRepository.GetListAsync(
+				e => e.StudentEnrollmentState == StudentEnrollmentState.Inquiry,
+				includeDetails: true
+			);
+		
+		return new PagedResultDto<StudentEnrollmentDto>
+		{
+			TotalCount = studentInquiry.Count,
+			Items = ObjectMapper.Map<List<StudentEnrollment>, List<StudentEnrollmentDto>>(studentInquiry)
+		};
+	}
+	
+	#endregion
+
+	#region Get Student Registration form list
+	public async Task<PagedResultDto<StudentEnrollmentDto>> GetStudentRegistrationFormAsync()
+	{
+		List<StudentEnrollment> studentInquiry =
+			await studentEnrollmentRepository.GetListAsync(
+				e => e.StudentEnrollmentState == StudentEnrollmentState.RegistrationForm,
+				includeDetails: true
+			);
+
+		return new PagedResultDto<StudentEnrollmentDto>
+		{
+			TotalCount = studentInquiry.Count,
+			Items = ObjectMapper.Map<List<StudentEnrollment>, List<StudentEnrollmentDto>>(studentInquiry)
+		};
+	}
+	
+	#endregion
+
+	#region Get Student Registration list
+	public async Task<PagedResultDto<StudentEnrollmentDto>> GetStudentRegistrationAsync()
+	{
+		List<StudentEnrollment> studentInquiry =
+			await studentEnrollmentRepository.GetListAsync(
+				e => e.StudentEnrollmentState == StudentEnrollmentState.Registration,
+				includeDetails: true
+			);
+		
+		return new PagedResultDto<StudentEnrollmentDto>
+		{
+			TotalCount = studentInquiry.Count,
+			Items = ObjectMapper.Map<List<StudentEnrollment>, List<StudentEnrollmentDto>>(studentInquiry)
+		};
+	}
+	#endregion
+
+	#region Get Student Admission list
+	public async Task<PagedResultDto<StudentEnrollmentDto>> GetStudentAdmissionAsync()
+	{
+		List<StudentEnrollment> studentInquiry =
+			await studentEnrollmentRepository.GetListAsync(
+				e => e.StudentEnrollmentState == StudentEnrollmentState.Admission,
+				includeDetails: true
+			);
+		
+		return new PagedResultDto<StudentEnrollmentDto>
+		{
+			TotalCount = studentInquiry.Count,
+			Items = ObjectMapper.Map<List<StudentEnrollment>, List<StudentEnrollmentDto>>(studentInquiry)
+		};
+	}
+	#endregion
+
+	#region Get Student Admission fees list
+	public async Task<PagedResultDto<StudentEnrollmentDto>> GetStudentAdmissionFeesAsync()
+	{
+		List<StudentEnrollment> studentInquiry =
+			await studentEnrollmentRepository.GetListAsync(
+				e => e.StudentEnrollmentState == StudentEnrollmentState.AdmissionFees,
+				includeDetails: true
+			);
+		
+		return new PagedResultDto<StudentEnrollmentDto>
+		{
+			TotalCount = studentInquiry.Count,
+			Items = ObjectMapper.Map<List<StudentEnrollment>, List<StudentEnrollmentDto>>(studentInquiry)
+		};
+	}
+	#endregion
+
+	#region Create student inquiry
+
+	public async Task<StudentEnrollmentDto> CreateStudentInquiryAsync(CreateStudentInquiryDto input)
+	{
+	StudentEnrollmentState studentEnrollmentState = StudentEnrollmentState.Inquiry;
+	if ( input.FormNumber != null)
+	{
+		studentEnrollmentState = StudentEnrollmentState.RegistrationForm;
+	}
+		// use studentEnrollmentManager to create the student enrollment with domain logic
+		StudentEnrollment studentEnrollment = await studentEnrollmentManager.CreateStudentInquiryAsync(
+
+			studentEnrollmentState: studentEnrollmentState,
 			// Inquiry
 			formNumber: input.FormNumber,
 			firstName: input.FirstName,
@@ -61,19 +190,7 @@ public class StudentEnrollmentAppService(
 			educationBoardId: input.EducationBoardId,
 			educationMediumId: input.EducationMediumId,
 			standardId: input.StandardId,
-			inquiryPreferenceId: input.InquiryPreferenceId,
-
-			// For Registration
-			profilePicture: input.ProfilePicture,
-			aadhaarNo: input.AadhaarNo,
-			religion: input.Religion,
-			familyCast: input.FamilyCast,
-			castType: input.CastType,
-			motherTongue: input.MotherTongue,
-			nationality: input.Nationality,
-			birthPlace: input.BirthPlace,
-			temporaryGr: input.TemporaryGr,
-			remarks: input.Remarks
+			inquiryPreferenceId: input.InquiryPreferenceId
 		);
 
 		// Save the student enrollment
@@ -83,17 +200,23 @@ public class StudentEnrollmentAppService(
 		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);
 	}
 
+
+
 	#endregion
 
-	#region Update basic Information
+	#region Update Student Inquiry
 
-	public async Task<StudentEnrollmentDto> UpdateBasicInfoAsync(Guid studentEnrollmentId, UpdateStudentEnrollmentBasicInfoDto input)
+	public async Task<StudentEnrollmentDto> UpdateStudentInquiryAsync(Guid studentEnrollmentId, UpdateStudentInquiryDto input)
 	{
+		StudentEnrollmentState studentEnrollmentState = StudentEnrollmentState.Inquiry;
+		if ( input.FormNumber != null)
+		{
+			studentEnrollmentState = StudentEnrollmentState.RegistrationForm;
+		}
 		// Update student enrollment using StudentEnrollment manager 
-		StudentEnrollment studentEnrollment = await studentEnrollmentManager.UpdateStudentEnrollmentAsync(
+		StudentEnrollment studentEnrollment = await studentEnrollmentManager.UpdateStudentInquiryAsync(
 			studentEnrollmentId,
-			roleId: input.RoleId,
-			studentEnrollmentState: input.StudentEnrollmentState,
+			studentEnrollmentState: studentEnrollmentState,
 			formNumber: input.FormNumber,
 			firstName: input.FirstName,
 			middleName: input.MiddleName,
@@ -113,23 +236,26 @@ public class StudentEnrollmentAppService(
 			educationBoardId: input.EducationBoardId,
 			educationMediumId: input.EducationMediumId,
 			standardId: input.StandardId,
-			inquiryPreferenceId: input.InquiryPreferenceId,
-
-			// registration
-			profilePicture: input.ProfilePicture,
-			aadhaarNo: input.AadhaarNo,
-			religion: input.Religion,
-			familyCast: input.FamilyCast,
-			castType: input.CastType,
-			motherTongue: input.MotherTongue,
-			nationality: input.Nationality,
-			birthPlace: input.BirthPlace,
-			temporaryGr: input.TemporaryGr,
-			remarks: input.Remarks
+			inquiryPreferenceId: input.InquiryPreferenceId
 		);
-		
 		studentEnrollment  = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
-		
+		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);
+	}
+
+	#endregion
+
+	#region Update Student basic information
+	public async Task<StudentEnrollmentDto> UpdateStudentBasicDetails(Guid studentEnrollmentId, UpdateStudentBasicDetailsDto input)
+	{
+		StudentBasicDetails studentBasicDetails = ObjectMapper.Map<UpdateStudentBasicDetailsDto, StudentBasicDetails>(input);
+
+		StudentEnrollment studentEnrollment =
+			await studentEnrollmentManager.UpdateStudentBasicDetailsByEnrollmentIdAsync(studentEnrollmentId, studentBasicDetails);
+
+		// Save the employee
+		studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
+
+		// Return the DTO
 		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);
 	}
 
@@ -137,7 +263,7 @@ public class StudentEnrollmentAppService(
 
 	#region Update Family Information
 
-	public async Task<StudentEnrollmentDto> UpdateFamilyInfo(Guid studentEnrollmentId, UpdateStudentFamilyDetailsDto input)
+	public async Task<StudentEnrollmentDto> UpdateFamilyDetails(Guid studentEnrollmentId, UpdateStudentFamilyDetailsDto input)
 	{
 		// convert the input to domain model and update the student enrollment
 		StudentContactDetails? fatherDetails =
@@ -151,7 +277,7 @@ public class StudentEnrollmentAppService(
 
 		// Save the student enrollment
 		studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
-		
+
 		// return the DTO
 		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);
 	}
@@ -244,7 +370,7 @@ public class StudentEnrollmentAppService(
 	}
 	#endregion
 
-	#region  Student Dociments APIs
+	#region  Student Documents APIs
 
 	public async Task UploadDocumentsAsync(Guid studentEnrollmentId, List<DocumentDto> documents)
 	{
@@ -257,8 +383,8 @@ public class StudentEnrollmentAppService(
 		// Call the domain service
 		await studentEnrollmentManager.AddDocumentsAsync(studentEnrollmentId, studentDocuments);
 	}
-	
-	
+
+
 	public async Task<DocumentDto> GetDocumentAsync(Guid studentEnrollmentId, Guid documentId)
 	{
 		StudentDocument document = await studentEnrollmentManager.GetDocumentAsync(studentEnrollmentId, documentId);
@@ -274,8 +400,7 @@ public class StudentEnrollmentAppService(
 			Size = document.Size
 		};
 	}
-	
-	
+
 	public async Task<List<DocumentMetadataDto>> GetDocumentMetadataAsync(Guid studentEnrollmentId)
 	{
 		var documents = await studentEnrollmentManager.GetDocumentsAsync(studentEnrollmentId);
@@ -284,7 +409,7 @@ public class StudentEnrollmentAppService(
 			Id = doc.Id, FileName = doc.DocumentName, Size = doc.Size, ContentType = doc.ContentType
 		}).ToList();
 	}
-	
+
 	public async Task<DocumentDto> UpdateDocumentAsync(Guid studentEnrollmentId, Guid documentId, DocumentDto documentDto)
 	{
 		var updatedDocument = await studentEnrollmentManager.UpdateDocumentAsync(

@@ -4,15 +4,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
-public class UpdateStudentEnrollmentBasicInfoDto
+public class CreateStudentInquiryDto
 {
-	[Required(ErrorMessage = "Role is required.")]
-	public Guid RoleId { get; set; }
-	public StudentEnrollmentState StudentEnrollmentState { get; set; }
 
-	// Inquiry and Registration Form
-	public string InquiryNumber { get; set; }
-	public string RegistrationCode { get; set; }
 	public string? FormNumber { get; set; }
 	public string? FirstName { get; set; }
 	public string? MiddleName { get; set; }
@@ -27,8 +21,8 @@ public class UpdateStudentEnrollmentBasicInfoDto
 	public string? State { get; set; }
 	public int? PinCode { get; set; }
 	public string? Address { get; set; }
-	
-	public InquiryStatusType? InquiryStatusType { get; set; }
+
+	public string InquiryStatusType { get; set; }
 
 	// Foreign Key 
 	public Guid AcademicYearId { get; set; }
@@ -36,16 +30,5 @@ public class UpdateStudentEnrollmentBasicInfoDto
 	public Guid EducationMediumId { get; set; }
 	public Guid StandardId { get; set; }
 	public Guid InquiryPreferenceId { get; set; }
-
-	// For Registration
-	public byte[]? ProfilePicture { get; set; }
-	public string? AadhaarNo { get; set; }
-	public string? Religion { get; set; }
-	public string? FamilyCast { get; set; }
-	public CastType? CastType { get; set; }
-	public string? MotherTongue { get; set; }
-	public string? Nationality { get; set; }
-	public string? BirthPlace { get; set; }
-	public string? TemporaryGr { get; set; }
-	public string? Remarks { get; set; }
+	
 }

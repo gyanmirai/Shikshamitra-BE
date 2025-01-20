@@ -12,14 +12,15 @@ public interface IStudentEnrollmentAppService : ICrudAppService<StudentEnrollmen
 {
 	// Task<StudentEnrollmentDto> GetStudentEnrollmentByUserId(Guid userId);
 	
-	Task<StudentEnrollmentDto> CreateBasicInfoAsync(CreateStudentEnrollmentBasicInfoDto input);
-	Task<StudentEnrollmentDto> UpdateFamilyInfo(Guid studentEnrollmentId, UpdateStudentFamilyDetailsDto input);
+	Task<StudentEnrollmentDto> CreateStudentInquiryAsync(CreateStudentInquiryDto input);
+	Task<StudentEnrollmentDto> UpdateStudentBasicDetails(Guid studentEnrollmentId, UpdateStudentBasicDetailsDto input);
+	Task<StudentEnrollmentDto> UpdateFamilyDetails(Guid studentEnrollmentId, UpdateStudentFamilyDetailsDto input);
 	Task<StudentEnrollmentDto> UpdateParentBankDetails(Guid studentEnrollmentId, ParentBankDetailsDto input);
 	Task<StudentEnrollmentDto> UpdatePreviousSchoolDetails(Guid studentEnrollmentId, PreviousSchoolDetailsDto input);
 	Task<StudentEnrollmentDto> UpdateStudentAdditionalDetails(Guid studentEnrollmentId, StudentAdditionalDetailsDto input);
 	Task<StudentEnrollmentDto> UpdateStudentCommunicationDetails(Guid studentEnrollmentId, StudentCommunicationDetailsDto input);
 	Task<StudentEnrollmentDto> UpdateStudentMedicalRecords(Guid studentEnrollmentId, StudentMedicalRecordsDto input);
-	
+
 	
 	// For the documents
 	Task UploadDocumentsAsync(Guid studentEnrollmentId, List<DocumentDto> documentDtos);

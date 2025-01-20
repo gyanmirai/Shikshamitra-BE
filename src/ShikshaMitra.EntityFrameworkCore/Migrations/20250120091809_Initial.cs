@@ -1681,7 +1681,6 @@ namespace ShikshaMitra.Migrations
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     StudentEnrollmentState = table.Column<int>(type: "integer", nullable: false),
                     InquiryNumber = table.Column<string>(type: "text", nullable: false),
-                    RegistrationCode = table.Column<string>(type: "text", nullable: false),
                     FormNumber = table.Column<string>(type: "text", nullable: true),
                     FirstName = table.Column<string>(type: "text", nullable: true),
                     MiddleName = table.Column<string>(type: "text", nullable: true),
@@ -1702,17 +1701,6 @@ namespace ShikshaMitra.Migrations
                     EducationMediumId = table.Column<Guid>(type: "uuid", nullable: false),
                     StandardId = table.Column<Guid>(type: "uuid", nullable: false),
                     InquiryPreferenceId = table.Column<Guid>(type: "uuid", nullable: false),
-                    RoleId = table.Column<Guid>(type: "uuid", nullable: true),
-                    ProfilePicture = table.Column<byte[]>(type: "bytea", nullable: true),
-                    AadhaarNo = table.Column<string>(type: "text", nullable: true),
-                    Religion = table.Column<string>(type: "text", nullable: true),
-                    FamilyCast = table.Column<string>(type: "text", nullable: true),
-                    CastType = table.Column<int>(type: "integer", nullable: true),
-                    MotherTongue = table.Column<string>(type: "text", nullable: true),
-                    Nationality = table.Column<string>(type: "text", nullable: true),
-                    BirthPlace = table.Column<string>(type: "text", nullable: true),
-                    TemporaryGr = table.Column<string>(type: "text", nullable: true),
-                    Remarks = table.Column<string>(type: "text", nullable: true),
                     FatherDetails_AadhaarNo = table.Column<string>(type: "text", nullable: true),
                     FatherDetails_Address = table.Column<string>(type: "text", nullable: true),
                     FatherDetails_ContactNo = table.Column<string>(type: "text", nullable: true),
@@ -1777,6 +1765,17 @@ namespace ShikshaMitra.Migrations
                     StudentAdditionalDetails_SingleChild = table.Column<int>(type: "integer", nullable: true),
                     StudentAdditionalDetails_SingleParentChild = table.Column<int>(type: "integer", nullable: true),
                     StudentAdditionalDetails_SponsorName = table.Column<string>(type: "text", nullable: true),
+                    StudentBasicDetails_AadhaarNo = table.Column<string>(type: "text", nullable: true),
+                    StudentBasicDetails_BirthPlace = table.Column<string>(type: "text", nullable: true),
+                    StudentBasicDetails_CastType = table.Column<int>(type: "integer", nullable: true),
+                    StudentBasicDetails_FamilyCast = table.Column<string>(type: "text", nullable: true),
+                    StudentBasicDetails_MotherTongue = table.Column<string>(type: "text", nullable: true),
+                    StudentBasicDetails_Nationality = table.Column<string>(type: "text", nullable: true),
+                    StudentBasicDetails_ProfilePicture = table.Column<byte[]>(type: "bytea", nullable: true),
+                    StudentBasicDetails_Religion = table.Column<string>(type: "text", nullable: true),
+                    StudentBasicDetails_Remarks = table.Column<string>(type: "text", nullable: true),
+                    StudentBasicDetails_TemporaryGr = table.Column<string>(type: "text", nullable: true),
+                    StudentBasicDetails_UserId = table.Column<Guid>(type: "uuid", nullable: true),
                     StudentCommunicationDetails_EmergencyAddress = table.Column<string>(type: "text", nullable: true),
                     StudentCommunicationDetails_EmergencyCity = table.Column<string>(type: "text", nullable: true),
                     StudentCommunicationDetails_EmergencyPinCode = table.Column<string>(type: "text", nullable: true),
@@ -1817,11 +1816,6 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AppStudentEnrollments", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AppStudentEnrollments_AbpRoles_RoleId",
-                        column: x => x.RoleId,
-                        principalTable: "AbpRoles",
-                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_AppStudentEnrollments_AppAcademicYears_AcademicYearId",
                         column: x => x.AcademicYearId,
@@ -2384,11 +2378,6 @@ namespace ShikshaMitra.Migrations
                 column: "InquiryPreferenceId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AppStudentEnrollments_RoleId",
-                table: "AppStudentEnrollments",
-                column: "RoleId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_AppStudentEnrollments_StandardId",
                 table: "AppStudentEnrollments",
                 column: "StandardId");
@@ -2657,10 +2646,10 @@ namespace ShikshaMitra.Migrations
                 name: "AbpAuditLogs");
 
             migrationBuilder.DropTable(
-                name: "AbpUsers");
+                name: "AbpRoles");
 
             migrationBuilder.DropTable(
-                name: "AbpRoles");
+                name: "AbpUsers");
 
             migrationBuilder.DropTable(
                 name: "InquiryPreferences");

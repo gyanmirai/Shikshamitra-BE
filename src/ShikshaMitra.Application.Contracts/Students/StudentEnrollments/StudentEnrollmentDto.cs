@@ -13,14 +13,9 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 public class StudentEnrollmentDto : EntityDto<Guid>
 
 {
-	// Basic Information
-	public Guid RoleId { get;  set; }
-	// public IdentityRoleDto? Role { get; set; }
 	public StudentEnrollmentState StudentEnrollmentState { get; set; }
-
-	// Inquiry and Registration Form
+	// Inquiry Information
 	public string InquiryNumber { get; set; }
-	public string RegistrationCode { get; set; }
 	public string? FormNumber { get; set; }
 	public string? FirstName { get; set; }
 	public string? MiddleName { get; set; }
@@ -49,20 +44,8 @@ public class StudentEnrollmentDto : EntityDto<Guid>
 	public Guid InquiryPreferenceId { get;  set; }
 	public InquiryPreferenceDto InquiryPreference { get; set; }
 	
-	// For Registration
-	public byte[]? ProfilePicture { get;  set; }
-	public string? AadhaarNo { get;  set; }
-	public string? Religion { get;  set; }
-	public string? FamilyCast { get;  set; }
-	public CastType? CastType { get;  set; }
-	public string? MotherTongue { get;  set; }
-	public string? Nationality { get;  set; }
-	public string? BirthPlace { get;  set; }
-	public string? TemporaryGr { get;  set; }
-	public string? Remarks { get;  set; }
-	
-	
 	// Value Object
+	public StudentBasicDetailsDto StudentBasicDetails { get; private set; }
 	public StudentContactDetailsDto FatherDetails { get; private set; }
 	public StudentContactDetailsDto MotherDetails { get; private set; }
 	public StudentContactDetailsDto GuardianDetails { get; private set; }

@@ -25,28 +25,29 @@ public class StudentMapperProfile : Profile
 
 		CreateMap<StudentEnrollment, StudentEnrollmentDto>();
 		CreateMap<CreateUpdateStudentEnrollmentDto, StudentEnrollment>();
-
+		CreateMap<StudentBasicDetails, StudentBasicDetailsDto>().ReverseMap();
+		CreateMap<UpdateStudentBasicDetailsDto, StudentBasicDetails>();
 		CreateMap<StudentContactDetails, StudentContactDetailsDto>().ReverseMap();
 		CreateMap<StudentCommunicationDetails, StudentCommunicationDetailsDto>().ReverseMap();
 		CreateMap<StudentAdditionalDetails, StudentAdditionalDetailsDto>().ReverseMap();
 		CreateMap<StudentMedicalRecords, StudentMedicalRecordsDto>().ReverseMap();
 		CreateMap<PreviousSchoolDetails, PreviousSchoolDetailsDto>().ReverseMap();
-		CreateMap<ParentBankDetails, ParentBankDetailsDto>();
+		CreateMap<ParentBankDetails, ParentBankDetailsDto>().ReverseMap();
 
 		// Inquiry
 		CreateMap<StudentInquiry, StudentInquiryDto>();
 		CreateMap<CreateUpdateStudentInquiryDto, StudentInquiry>();
 
 		#region settings
-		
+
 		// Document settings
 		CreateMap<StudentDocumentSetting, StudentDocumentSettingDto>();
 		CreateMap<CreateUpdateStudentDocumentSettingDto, StudentDocumentSetting>();
-		
+
 		// Inquiry Preference
 		CreateMap<InquiryPreference, InquiryPreferenceDto>();
 		CreateMap<CreateUpdateInquiryPreferenceDto, InquiryPreference>();
-		
+
 		#endregion
 
 		#endregion
@@ -61,8 +62,8 @@ public class StudentMapperProfile : Profile
 		CreateMap<CreateUpdateStudentAttendanceRuleDto, StudentAttendanceRule>();
 
 		#endregion
-		
+
 		#endregion
-		
+
 	}
 }

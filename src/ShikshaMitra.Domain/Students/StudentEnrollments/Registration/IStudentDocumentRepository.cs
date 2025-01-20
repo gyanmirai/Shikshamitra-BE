@@ -6,5 +6,5 @@ namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
 public interface IStudentDocumentRepository : IRepository<StudentDocument, Guid>
 {
-	
+
 }

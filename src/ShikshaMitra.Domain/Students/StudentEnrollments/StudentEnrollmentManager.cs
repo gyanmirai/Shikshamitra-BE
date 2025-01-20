@@ -25,9 +25,10 @@ public class StudentEnrollmentManager(
 	private async Task<StudentEnrollment> GetStudentEnrollmentAsync(Guid enrollmentId)
 	{
 		var studentEnrollment = await studentEnrollmentRepository.GetAsync(enrollmentId);
-		return studentEnrollment ?? throw new BusinessException($"Registration with ID {enrollmentId} does not exist.");
+		return studentEnrollment ?? throw new BusinessException($"Student Enrollment with ID {enrollmentId} does not exist.");
 	}
 
+	// Private helper method to get a user by ID
 	private async Task<IdentityUser> GetUserAsync(Guid userId)
 	{
 		var user = await userRepository.GetAsync(userId);
@@ -40,12 +41,10 @@ public class StudentEnrollmentManager(
 		var role = await roleRepository.GetAsync(roleId);
 		return role ?? throw new BusinessException($"Role with ID {roleId} does not exist.");
 	}
-	
-	#region Create Student Enrollment basic information
-	
-	public async Task<StudentEnrollment> CreateStudentEnrollmentAsync(
-			// Guid userId,
-			// Guid roleId,
+
+	#region Create Student Inquiry
+
+	public async Task<StudentEnrollment> CreateStudentInquiryAsync(
 			StudentEnrollmentState studentEnrollmentState,
 			// Inquiry
 			string? formNumber,
@@ -67,45 +66,19 @@ public class StudentEnrollmentManager(
 			Guid educationBoardId,
 			Guid educationMediumId,
 			Guid standardId,
-			Guid inquiryPreferenceId,
-
-			// registration
-			byte[]? profilePicture,
-			string? aadhaarNo,
-			string? religion,
-			string? familyCast,
-			CastType? castType,
-			string? motherTongue,
-			string? nationality,
-			string? birthPlace,
-			string? temporaryGr,
-			string? remarks
+			Guid inquiryPreferenceId
 			)
 		{
-			// Validate user existence
-			// await GetUserAsync(userId);
-
-			// Validate role existence
-			// await GetRoleAsync(roleId);
-
 			// Generate Inquiry Number
 			string inquiryNumber = await GenerateInquiryNumberAsync();
-			
-			
-			Console.WriteLine($"Generate Inquiry Number ++++++++++++++++++: {inquiryNumber}");
 
-			string registrationCode = "test101";
-			
 			// create registration entity
 			var registration = new StudentEnrollment(
 				id: guidGenerator.Create(),
 				tenantId: CurrentTenant.Id,
-				// userId: userId,
-				// roleId: roleId,
 				studentEnrollmentState : studentEnrollmentState,
 				// Inquiry details
 				inquiryNumber: inquiryNumber,
-				registrationCode:registrationCode,
 				formNumber: formNumber,
 				firstName: firstName,
 				middleName: middleName,
@@ -127,16 +100,19 @@ public class StudentEnrollmentManager(
 				standardId: standardId,
 				inquiryPreferenceId: inquiryPreferenceId,
 				// registration
-				profilePicture: profilePicture,
-				aadhaarNo : aadhaarNo,
-				religion : religion,
-				familyCast : familyCast,
-				castType : castType,
-				motherTongue:motherTongue,
-				nationality : nationality,
-				birthPlace : birthPlace,
-				temporaryGr : temporaryGr,
-				remarks : remarks,
+				studentBasicDetails : new StudentBasicDetails(
+					userId: null,
+					profilePicture: null,
+					aadhaarNo : null,
+					religion : null,
+					familyCast : null,
+					castType : null,
+					motherTongue : null,
+					nationality : null,
+					birthPlace : null,
+					temporaryGr : null,
+					remarks : null
+					),
 				fatherDetails: new StudentContactDetails(
 					name: null,
 					dateOfBirth: null,
@@ -249,12 +225,11 @@ public class StudentEnrollmentManager(
 		}
 	#endregion
 
-	#region Update General Information
+	#region Update Student Inquiry
 
-	public async Task<StudentEnrollment> UpdateStudentEnrollmentAsync
+	public async Task<StudentEnrollment> UpdateStudentInquiryAsync
 	(
 		Guid studentEnrollmentId,
-		Guid roleId,
 		StudentEnrollmentState studentEnrollmentState,
 		// Inquiry
 		string? formNumber,
@@ -276,27 +251,14 @@ public class StudentEnrollmentManager(
 		Guid educationBoardId,
 		Guid educationMediumId,
 		Guid standardId,
-		Guid inquiryPreferenceId,
-
-		// registration
-		byte[]? profilePicture,
-		string? aadhaarNo,
-		string? religion,
-		string? familyCast,
-		CastType? castType,
-		string? motherTongue,
-		string? nationality,
-		string? birthPlace,
-		string? temporaryGr,
-		string? remarks
+		Guid inquiryPreferenceId
 	)
 	{
 		// Get the student enrollment details
 		StudentEnrollment studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
 
-		// Update the general details
-		studentEnrollment.UpdateGeneralInfo(
-			roleId: roleId,
+		// Update the student inquiry details
+		studentEnrollment.UpdateStudentInquiry(
 			studentEnrollmentState: studentEnrollmentState,
 			formNumber: formNumber,
 			firstName: firstName,
@@ -317,19 +279,7 @@ public class StudentEnrollmentManager(
 			educationBoardId: educationBoardId,
 			educationMediumId: educationMediumId,
 			standardId: standardId,
-			inquiryPreferenceId: inquiryPreferenceId,
-			
-			// registration
-			profilePicture: profilePicture,
-			aadhaarNo: aadhaarNo,
-			religion: religion,
-			familyCast: familyCast,
-			castType: castType,
-			motherTongue: motherTongue,
-			nationality: nationality,
-			birthPlace: birthPlace,
-			temporaryGr: temporaryGr,
-			remarks: remarks
+			inquiryPreferenceId: inquiryPreferenceId
 		);
 
 		// Validate the updated student enrollment if needed
@@ -338,7 +288,24 @@ public class StudentEnrollmentManager(
 	}
 	#endregion
 
-	#region Update Family Information
+	#region Update Student Basic details
+
+	public async Task<StudentEnrollment> UpdateStudentBasicDetailsByEnrollmentIdAsync(
+		Guid studentEnrollmentId,
+		StudentBasicDetails studentBasicDetails
+	)
+	{
+		// Validate user existence 
+		await GetUserAsync((Guid)studentBasicDetails.UserId);
+		// Get the Registration details
+		var studentEnrollment =  await GetStudentEnrollmentAsync(studentEnrollmentId);
+		// Update the registration details
+		studentEnrollment.UpdateStudentBasicDetails(studentBasicDetails);
+		return studentEnrollment;
+	}
+	#endregion
+
+	#region Update Family details
 
 	public async Task<StudentEnrollment> UpdateFamilyDetailsByStudentEnrollmentIdAsync(
 
@@ -351,14 +318,14 @@ public class StudentEnrollmentManager(
 		// Get the Registration details
 		var studentEnrollment =  await GetStudentEnrollmentAsync(studentEnrollmentId);
 
-		// Update the Family information
+		// Update the Family details
 		studentEnrollment.UpdateFamilyDetails(fatherDetails, motherDetails, guardianDetails);
 		return studentEnrollment;
 	}
 
 	#endregion
 
-	#region Update Communication Information
+	#region Update Communication details
 
 	public async Task<StudentEnrollment> UpdateCommunicationDetailsByStudentEnrollmentIdAsync(
 		Guid studentEnrollmentId,
@@ -375,7 +342,7 @@ public class StudentEnrollmentManager(
 
 	#endregion
 
-	#region Update Additional Information
+	#region Update Additional details
 
 	public async Task<StudentEnrollment> UpdateAdditionalDetailsByStudentEnrollmentIdAsync(
 		Guid studentEnrollmentId,
@@ -392,7 +359,7 @@ public class StudentEnrollmentManager(
 
 	#endregion
 
-	#region Update Medical Information
+	#region Update Medical details
 
 	public async Task<StudentEnrollment> UpdateMedicalDetailsByStudentEnrollmentIdAsync(
 		Guid studentEnrollmentId,
@@ -409,7 +376,7 @@ public class StudentEnrollmentManager(
 
 	#endregion
 
-	#region Update Previous School Information
+	#region Update Previous School details
 
 	public async Task<StudentEnrollment> UpdatePreviousSchoolDetailsByStudentEnrollmentIdAsync(
 		Guid studentEnrollmentId,
@@ -426,7 +393,7 @@ public class StudentEnrollmentManager(
 
 	#endregion
 
-	#region Update Parent Bank Information
+	#region Update Parent Bank details
 
 	public async Task<StudentEnrollment> UpdateParentBankDetailsByStudentEnrollmentIdAsync(
 		Guid studentEnrollmentId,
@@ -528,7 +495,6 @@ public class StudentEnrollmentManager(
 		// Add any domain-specific validation rules here
 
 		// Example validations:
-		// Example validations:
 		if (studentEnrollment.DateOfBirth.HasValue && DateOnly.FromDateTime(studentEnrollment.DateOfBirth.Value.Date) >= DateOnly.FromDateTime(DateTime.UtcNow))
 		{
 			throw new BusinessException("Date of birth cannot be in the future");
@@ -544,8 +510,6 @@ public class StudentEnrollmentManager(
 		// Get the last Student Inquiry
 		StudentEnrollment? lastInquiry = await studentEnrollmentRepository.GetLastStudentInquiryAsync();
 
-		
-		Console.WriteLine($"lastInquiry ++++++++++++++++++: {lastInquiry}");
 		int nextNumber = 1;
 
 		if (lastInquiry != null)
@@ -564,6 +528,48 @@ public class StudentEnrollmentManager(
 
 		return newInquiryNumber;
 	}
+	#endregion
+	
+	#region Move to Registration
+
+	public async Task<StudentEnrollment> MoveToRegistrationAsync(Guid studentEnrollmentId)
+	{
+		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
+
+		// Update the employee status
+		studentEnrollment = studentEnrollment.UpdateStudentEnrollmentState(StudentEnrollmentState.Registration);
+		return studentEnrollment;
+	}
+	
+
+	#endregion
+	
+	#region Move to Admission
+
+	public async Task<StudentEnrollment> MoveToAdmissionAsync(Guid studentEnrollmentId)
+	{
+		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
+
+		// Update the employee status
+		studentEnrollment = studentEnrollment.UpdateStudentEnrollmentState(StudentEnrollmentState.Admission);
+		return studentEnrollment;
+	}
+	
+
+	#endregion
+	
+	#region Move to Admission Fess
+
+	public async Task<StudentEnrollment> MoveToAdmissionFeesAsync(Guid studentEnrollmentId)
+	{
+		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
+
+		// Update the employee status
+		studentEnrollment = studentEnrollment.UpdateStudentEnrollmentState(StudentEnrollmentState.AdmissionFees);
+		return studentEnrollment;
+	}
+	
+
 	#endregion
 
 }

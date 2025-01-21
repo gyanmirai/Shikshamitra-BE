@@ -1,9 +1,11 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Students.Attendance.settings;
 using ShikshaMitra.Students.Attendance.Settings;
-using ShikshaMitra.Students.studentenrollment.Inquiry;
 using ShikshaMitra.Students.StudentEnrollment.Inquiry;
-using ShikshaMitra.Students.StudentEnrollment.Settings;
+using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.StudentEnrollments.Inquiry;
+using ShikshaMitra.Students.StudentEnrollments.Registration;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
 
 namespace ShikshaMitra.Students;
 
@@ -21,22 +23,34 @@ public class StudentMapperProfile : Profile
 		CreateMap<AdmissionDetails, AdmissionDetailsDto>().ReverseMap();
 
 		#region Student Enrollment
+
+		CreateMap<StudentEnrollments.StudentEnrollment, StudentEnrollmentDto>();
+		CreateMap<CreateUpdateStudentEnrollmentDto, StudentEnrollments.StudentEnrollment>();
+		CreateMap<StudentBasicDetails, StudentBasicDetailsDto>().ReverseMap();
+		CreateMap<UpdateStudentBasicDetailsDto, StudentBasicDetails>();
+		CreateMap<StudentContactDetails, StudentContactDetailsDto>().ReverseMap();
+		CreateMap<StudentCommunicationDetails, StudentCommunicationDetailsDto>().ReverseMap();
+		CreateMap<StudentAdditionalDetails, StudentAdditionalDetailsDto>().ReverseMap();
+		CreateMap<StudentMedicalRecords, StudentMedicalRecordsDto>().ReverseMap();
+		CreateMap<PreviousSchoolDetails, PreviousSchoolDetailsDto>().ReverseMap();
+		CreateMap<ParentBankDetails, ParentBankDetailsDto>().ReverseMap();
+
 		// Inquiry
 		CreateMap<StudentInquiry, StudentInquiryDto>();
 		CreateMap<CreateUpdateStudentInquiryDto, StudentInquiry>();
-		
+
 		#region settings
-		
+
 		// Document settings
 		CreateMap<StudentDocumentSetting, StudentDocumentSettingDto>();
 		CreateMap<CreateUpdateStudentDocumentSettingDto, StudentDocumentSetting>();
-		
+
 		// Inquiry Preference
 		CreateMap<InquiryPreference, InquiryPreferenceDto>();
 		CreateMap<CreateUpdateInquiryPreferenceDto, InquiryPreference>();
-		
+
 		#endregion
-	
+
 		#endregion
 
 		#region Attendance
@@ -49,8 +63,8 @@ public class StudentMapperProfile : Profile
 		CreateMap<CreateUpdateStudentAttendanceRuleDto, StudentAttendanceRule>();
 
 		#endregion
-		
+
 		#endregion
-		
+
 	}
 }

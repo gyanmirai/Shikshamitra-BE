@@ -1,0 +1,265 @@
+﻿using ShikshaMitra.Common;
+using ShikshaMitra.Students.StudentEnrollments.Registration;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
+using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
+using System;
+using System.Collections.Generic;
+using Volo.Abp;
+using Volo.Abp.Domain.Entities;
+using Volo.Abp.Domain.Entities.Auditing;
+using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
+
+namespace ShikshaMitra.Students.StudentEnrollments;
+
+public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
+{
+	public Guid? TenantId { get; private set; }
+	public StudentEnrollmentState StudentEnrollmentState { get; private set; }
+	// Student Inquiry payload
+	public string InquiryNumber { get; private set; }
+	public string? FormNumber { get; private set; }
+	public string? FirstName { get; private set; }
+	public string? MiddleName { get; private set; }
+	public string? LastName { get; private set; }
+	public string? PreviousSchoolName { get; private set; }
+	public DateTimeOffset? DateOfBirth { get; private set; }
+	public DateTimeOffset DateOfInquiry { get; private set; }
+	public GenderType GenderType { get; private set; }
+	public string? ParentContactNumber { get; private set; }
+	public string? AlternativeContactNumber { get; private set; }
+	public string? City { get; private set; }
+	public string? State { get; private set; }
+	public int? PinCode { get; private set; }
+	public string? Address { get; private set; }
+	public InquiryStatusType? InquiryStatusType { get; private set; }
+	
+	// Foreign Key 
+	public Guid AcademicYearId { get; private set; }
+	public Guid EducationBoardId { get; private set; }
+	public Guid EducationMediumId { get; private set; }
+	public Guid StandardId { get; private set; }
+	public Guid InquiryPreferenceId { get; private set; }
+
+	// Navigation Property for student enrollment
+	public AcademicYear AcademicYear { get; private set; }
+	public EducationBoard EducationBoard { get; private set; }
+	public EducationMedium EducationMedium { get; private set; }
+	public Standard Standard { get; private set; }
+	public InquiryPreference InquiryPreference { get; private set; }
+	// Value Object
+	public List<StudentDocument> Documents { get; private set; } = new List<StudentDocument>();
+	public StudentBasicDetails StudentBasicDetails { get; private set; }
+	public StudentContactDetails FatherDetails { get; private set; }
+	public StudentContactDetails MotherDetails { get; private set; }
+	public StudentContactDetails GuardianDetails { get; private set; }
+	public StudentCommunicationDetails StudentCommunicationDetails { get; private set; }
+	public StudentAdditionalDetails StudentAdditionalDetails { get; private set; }
+	public StudentMedicalRecords StudentMedicalRecords { get; private set; }
+	public PreviousSchoolDetails PreviousSchoolDetails { get; private set; }
+	public ParentBankDetails ParentBankDetails { get; private set; }
+
+	private StudentEnrollment() {} // For ORM
+
+	internal StudentEnrollment(
+		Guid id,
+		Guid? tenantId,
+		StudentEnrollmentState studentEnrollmentState,
+		string inquiryNumber,
+		string? formNumber,
+		string? firstName,
+		string? middleName,
+		string? lastName,
+		string? previousSchoolName,
+		DateTimeOffset dateOfBirth,
+		DateTimeOffset dateOfInquiry,
+		GenderType genderType,
+		string? parentContactNumber,
+		string? alternativeContactNumber,
+		string? city,
+		string? state,
+		int? pinCode,
+		string? address,
+		InquiryStatusType? inquiryStatusType,
+		Guid academicYearId,
+		Guid educationBoardId,
+		Guid educationMediumId,
+		Guid standardId,
+		Guid inquiryPreferenceId,
+		// registration
+		StudentBasicDetails studentBasicDetails,
+		StudentContactDetails fatherDetails,
+		StudentContactDetails motherDetails,
+		StudentContactDetails guardianDetails,
+		StudentCommunicationDetails studentCommunicationDetails,
+		StudentAdditionalDetails studentAdditionalDetails,
+		StudentMedicalRecords studentMedicalRecords,
+		PreviousSchoolDetails previousSchoolDetails,
+		ParentBankDetails parentBankDetails
+	) : base(id)
+	{
+		TenantId = tenantId;
+		StudentEnrollmentState = studentEnrollmentState;
+		InquiryNumber = inquiryNumber;
+		FormNumber = formNumber;
+		FirstName = firstName;
+		MiddleName = middleName;
+		LastName = lastName;
+		PreviousSchoolName = previousSchoolName;
+		DateOfBirth = dateOfBirth;
+		DateOfInquiry = dateOfInquiry;
+		GenderType = genderType;
+		ParentContactNumber = parentContactNumber;
+		AlternativeContactNumber = alternativeContactNumber;
+		City = city;
+		State = state;
+		PinCode = pinCode;
+		Address = address;
+		InquiryStatusType = inquiryStatusType;
+		AcademicYearId = academicYearId;
+		EducationBoardId = educationBoardId;
+		EducationMediumId = educationMediumId;
+		StandardId = standardId;
+		InquiryPreferenceId = inquiryPreferenceId;
+		// registration
+		StudentBasicDetails = studentBasicDetails;
+		FatherDetails = fatherDetails;
+		MotherDetails = motherDetails;
+		GuardianDetails = guardianDetails;
+		StudentCommunicationDetails = studentCommunicationDetails;
+		StudentAdditionalDetails = studentAdditionalDetails;
+		StudentMedicalRecords = studentMedicalRecords;
+		PreviousSchoolDetails = previousSchoolDetails;
+		ParentBankDetails = parentBankDetails;
+	}
+
+	internal StudentEnrollment UpdateStudentInquiry(
+		StudentEnrollmentState studentEnrollmentState,
+		string? formNumber,
+		string? firstName,
+		string? middleName,
+		string? lastName,
+		string? previousSchoolName,
+		DateTimeOffset dateOfBirth,
+		DateTimeOffset dateOfInquiry,
+		GenderType genderType,
+		string? parentContactNumber,
+		string? alternativeContactNumber,
+		string? city,
+		string? state,
+		int? pinCode,
+		string? address,
+		InquiryStatusType? inquiryStatusType,
+		Guid academicYearId,
+		Guid educationBoardId,
+		Guid educationMediumId,
+		Guid standardId,
+		Guid inquiryPreferenceId
+	)
+	{
+		StudentEnrollmentState = studentEnrollmentState;
+		FormNumber = formNumber;
+		FirstName = firstName;
+		MiddleName = middleName;
+		LastName = lastName;
+		PreviousSchoolName = previousSchoolName;
+		DateOfBirth = dateOfBirth;
+		DateOfInquiry = dateOfInquiry;
+		GenderType = genderType;
+		ParentContactNumber = parentContactNumber;
+		AlternativeContactNumber = alternativeContactNumber;
+		City = city;
+		State = state;
+		PinCode = pinCode;
+		Address = address;
+		InquiryStatusType = inquiryStatusType;
+		AcademicYearId = academicYearId;
+		EducationBoardId = educationBoardId;
+		EducationMediumId = educationMediumId;
+		StandardId = standardId;
+		InquiryPreferenceId = inquiryPreferenceId;
+		return this;
+	}
+	
+	// ++++++++ Update Student Basic Details +++++++
+	internal StudentEnrollment UpdateStudentBasicDetails(
+		StudentBasicDetails studentBasicDetails
+	)
+	{
+		this.StudentBasicDetails = studentBasicDetails;
+		return this;
+	}
+	
+	// +++++++++++ Update Family Details ++++++++++++
+	internal StudentEnrollment UpdateFamilyDetails(
+		StudentContactDetails fatherDetails,
+		StudentContactDetails motherDetails,
+		StudentContactDetails guardianDetails
+	)
+	{
+		this.FatherDetails = fatherDetails;
+		this.MotherDetails = motherDetails;
+		this.GuardianDetails = guardianDetails;
+		return this;
+	}
+
+	// ++++++++ Update Communication Details +++++++
+	internal StudentEnrollment UpdateCommunicationDetails(
+		StudentCommunicationDetails studentCommunicationDetails
+	)
+	{
+		this.StudentCommunicationDetails = studentCommunicationDetails;
+		return this;
+	}
+	
+
+	// +++++++++ Update Additional Details ++++++++++++
+	internal StudentEnrollment UpdateAdditionalDetails(
+		StudentAdditionalDetails  studentAdditionalDetails
+	)
+	{
+		this.StudentAdditionalDetails = studentAdditionalDetails;
+		return this; 
+	}
+
+	// +++++++++ Update Medical Details +++++++
+	internal StudentEnrollment UpdateMedicalReports(
+		StudentMedicalRecords studentMedicalRecords
+	)
+	{
+		this.StudentMedicalRecords = studentMedicalRecords;
+		return this;
+	}
+
+	// +++++++++ Update Previous School Details +++++++
+	internal StudentEnrollment UpdatePreviousSchoolDetails(
+		PreviousSchoolDetails previousSchoolDetails
+	)
+	{
+		this.PreviousSchoolDetails = previousSchoolDetails;
+		return this;
+	}
+
+	// +++++++++ Update Parent Bank Details +++++++++
+	internal StudentEnrollment UpdateParenBankDetails(
+		ParentBankDetails parentBankDetails
+	)
+	{
+		this.ParentBankDetails = parentBankDetails;
+		return this;
+	}
+
+	// +++++++++ Update Student Enrollment State to registration +++++++++
+	internal StudentEnrollment UpdateStudentEnrollmentState(StudentEnrollmentState studentEnrollmentState)
+	{
+		StudentEnrollmentState = studentEnrollmentState;
+		return this;
+	}
+
+	// +++++++++ Add Student Documeent +++++++++
+	internal void AddDocument(StudentDocument document) => Documents.Add(document);
+}
+

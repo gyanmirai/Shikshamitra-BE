@@ -20,7 +20,7 @@ public class CreateEmployeeBasicInfoDto
 
 	public DateOnly? DateOfBirth { get; set; }
 	public string? FamilyCast { get; set; }
-	public EmployeeCastType? CastType { get; set; }
+	public CastType? CastType { get; set; }
 	public GenderType? GenderType { get; set; }
 	public string? Religion { get; set; }
 	public MaritalStatusType? MaritalStatus { get; set; }

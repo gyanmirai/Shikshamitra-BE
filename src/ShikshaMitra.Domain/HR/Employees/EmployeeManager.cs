@@ -53,7 +53,7 @@ public class EmployeeManager(
 		DateOnly? dateOfBirth,
 		byte[]? profilePicture = null,
 		string? familyCast = null,
-		EmployeeCastType? castType = null,
+		CastType? castType = null,
 		GenderType? genderType = null,
 		string? religion = null,
 		MaritalStatusType? maritalStatus = null,
@@ -162,7 +162,7 @@ public class EmployeeManager(
 		DateOnly? dateOfBirth,
 		byte[]? profilePicture = null,
 		string? familyCast = null,
-		EmployeeCastType? castType = null,
+		CastType? castType = null,
 		GenderType? genderType = null,
 		string? religion = null,
 		MaritalStatusType? maritalStatus = null,
@@ -271,7 +271,6 @@ public class EmployeeManager(
 
 		// Update the work experiences
 		employee.UpdateWorkExperiences(workExperiences);
-
 		return employee;
 	}
 
@@ -282,7 +281,6 @@ public class EmployeeManager(
 
 		// Update the bank details
 		employee.UpdateBankDetails(bankDetails);
-
 		return employee;
 	}
 

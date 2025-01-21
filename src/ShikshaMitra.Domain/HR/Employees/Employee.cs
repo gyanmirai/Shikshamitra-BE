@@ -32,7 +32,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public DateOnly? DateOfBirth { get; private set; }
 	public string? FamilyCast { get; private set; }
-	public EmployeeCastType? CastType { get; private set; }
+	public CastType? CastType { get; private set; }
 	public GenderType? GenderType { get; private set; }
 	public string? Religion { get; private set; }
 	public MaritalStatusType? MaritalStatus { get; private set; }
@@ -107,7 +107,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EmployeeStatusType? employeeStatusType,
 		DateOnly? dateOfBirth,
 		string? familyCast,
-		EmployeeCastType? castType,
+		CastType? castType,
 		GenderType? genderType,
 		string? religion,
 		MaritalStatusType? maritalStatus,
@@ -178,7 +178,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DateOnly? dateOfBirth,
 		byte[]? profilePicture,
 		string? familyCast,
-		EmployeeCastType? castType,
+		CastType? castType,
 		GenderType? genderType,
 		string? religion,
 		MaritalStatusType? maritalStatus,
@@ -196,7 +196,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? city,
 		string? state,
 		string? pinCode,
-		Guid educationMediumStageId)
+		Guid educationMediumStageId
+		)
 	{
 		LastName = lastName;
 		FirstName = firstName;
@@ -262,7 +263,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		return this;
 	}
-
-
+	
 	internal void AddDocument(EmployeeDocument document) => Documents.Add(document);
 }

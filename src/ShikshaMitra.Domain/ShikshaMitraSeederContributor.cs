@@ -236,7 +236,7 @@ namespace ShikshaMitra
 					employeeStatusType: EmployeeStatusType.Active,
 					dateOfBirth: DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
 					familyCast: "Ahir",
-					castType: EmployeeCastType.General,
+					castType: CastType.General,
 					genderType: GenderType.Male,
 					religion: "Hindu",
 					maritalStatus: MaritalStatusType.Married,

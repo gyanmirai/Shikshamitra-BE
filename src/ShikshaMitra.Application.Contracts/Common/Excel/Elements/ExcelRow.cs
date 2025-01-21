@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace ShikshaMitra.Common.Elements;
+namespace ShikshaMitra.Common.Excel.Elements;
 
 public class ExcelRow
 {

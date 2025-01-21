@@ -1,8 +1,4 @@
-﻿using System;
-using Volo.Abp.Application.Dtos;
-using Volo.Abp.Domain.Entities;
-
-namespace ShikshaMitra.HR.Employees;
+﻿namespace ShikshaMitra.Common;
 
 public class DocumentDto : DocumentMetadataDto
 {

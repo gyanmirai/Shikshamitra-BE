@@ -1,9 +1,9 @@
-﻿using ShikshaMitra.TenantSettings.Standards;
+﻿using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
 
-namespace ShikshaMitra.TenantSettings.EducationBoards;
+namespace ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 
 public class EducationMediumStageDto : AuditedEntityDto<Guid>
 {

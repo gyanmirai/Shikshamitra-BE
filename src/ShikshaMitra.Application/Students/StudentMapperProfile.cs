@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Students.Attendance.settings;
 using ShikshaMitra.Students.Attendance.Settings;
+using ShikshaMitra.Students.StudentEnrollment.Inquiry;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Inquiry;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
@@ -23,8 +24,8 @@ public class StudentMapperProfile : Profile
 
 		#region Student Enrollment
 
-		CreateMap<StudentEnrollment, StudentEnrollmentDto>();
-		CreateMap<CreateUpdateStudentEnrollmentDto, StudentEnrollment>();
+		CreateMap<StudentEnrollments.StudentEnrollment, StudentEnrollmentDto>();
+		CreateMap<CreateUpdateStudentEnrollmentDto, StudentEnrollments.StudentEnrollment>();
 		CreateMap<StudentBasicDetails, StudentBasicDetailsDto>().ReverseMap();
 		CreateMap<UpdateStudentBasicDetailsDto, StudentBasicDetails>();
 		CreateMap<StudentContactDetails, StudentContactDetailsDto>().ReverseMap();

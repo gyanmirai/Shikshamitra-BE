@@ -1,7 +1,7 @@
-﻿using ShikshaMitra.Common.Elements;
+﻿using ShikshaMitra.Common.Excel.Elements;
 using System.Collections.Generic;
 
-namespace ShikshaMitra.Common;
+namespace ShikshaMitra.Common.Excel;
 
 public class ExcelDocument
 {

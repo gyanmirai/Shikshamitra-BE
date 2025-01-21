@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace ShikshaMitra.TenantSettings.EducationBoards;
+namespace ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 
 public class CreateUpdateEducationMediumStageDto
 {

@@ -1,8 +1,7 @@
 ﻿using System;
-using System.ComponentModel.DataAnnotations;
 using Volo.Abp.Application.Dtos;
 
-namespace ShikshaMitra.TenantSettings.Divisions;
+namespace ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 
 public class DivisionDto : AuditedEntityDto<Guid>
 {

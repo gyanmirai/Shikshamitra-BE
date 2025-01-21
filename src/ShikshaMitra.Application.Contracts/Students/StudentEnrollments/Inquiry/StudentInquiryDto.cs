@@ -1,14 +1,14 @@
 ﻿using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
-using ShikshaMitra.TenantSettings.AcademicYears;
-using ShikshaMitra.TenantSettings.EducationBoards;
-using ShikshaMitra.TenantSettings.EducationMediums;
-using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
+
 using System;
 using Volo.Abp.Application.Dtos;
-using Volo.Abp.Domain.Entities.Auditing;
 
-namespace ShikshaMitra.Students.StudentEnrollments.Inquiry;
+namespace ShikshaMitra.Students.StudentEnrollment.Inquiry;
 
 public class StudentInquiryDto : AuditedEntityDto<Guid>
 {

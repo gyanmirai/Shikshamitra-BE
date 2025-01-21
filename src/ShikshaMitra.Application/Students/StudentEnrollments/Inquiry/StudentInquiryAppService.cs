@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.Students.StudentEnrollment.Inquiry;
+using System;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using System.Threading.Tasks;

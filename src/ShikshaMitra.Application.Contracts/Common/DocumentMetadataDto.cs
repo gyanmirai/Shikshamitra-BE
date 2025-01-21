@@ -1,7 +1,7 @@
 ﻿using System;
 using Volo.Abp.Application.Dtos;
 
-namespace ShikshaMitra.HR.Employees;
+namespace ShikshaMitra.Common;
 
 public class DocumentMetadataDto : EntityDto<Guid>
 {

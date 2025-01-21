@@ -2,7 +2,7 @@
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
-namespace ShikshaMitra.TenantSettings.EducationMediums;
+namespace ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 
 public interface IEducationMediumAppService :
     ICrudAppService<

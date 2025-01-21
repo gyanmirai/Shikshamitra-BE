@@ -9,7 +9,7 @@ using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Security.OrganizationUnits;
 
-[Microsoft.AspNetCore.Components.Route("OrganizationUnits")]
+[Route("api/organization-unit")]
 public class OrganizationUnitController(IOrganizationUnitAppService organizationUnitAppService) : AbpController, IOrganizationUnitAppService
 {
 	[HttpGet("tree")]

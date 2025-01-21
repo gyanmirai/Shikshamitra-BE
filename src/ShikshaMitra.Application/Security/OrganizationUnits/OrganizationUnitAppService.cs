@@ -9,6 +9,7 @@ using Volo.Abp.Identity;
 
 namespace ShikshaMitra.Security.OrganizationUnits;
 
+[RemoteService(false)]
 public class OrganizationUnitAppService(
 	OrganizationUnitManager organizationUnitManager,
 	IdentityUserManager identityUserManager,

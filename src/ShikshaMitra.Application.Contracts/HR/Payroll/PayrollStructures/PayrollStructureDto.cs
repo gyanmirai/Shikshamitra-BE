@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using Volo.Abp.Application.Dtos;

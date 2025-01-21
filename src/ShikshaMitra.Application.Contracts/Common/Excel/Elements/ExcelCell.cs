@@ -1,4 +1,4 @@
-﻿namespace ShikshaMitra.Common.Elements;
+﻿namespace ShikshaMitra.Common.Excel.Elements;
 
 public class ExcelCell
 {

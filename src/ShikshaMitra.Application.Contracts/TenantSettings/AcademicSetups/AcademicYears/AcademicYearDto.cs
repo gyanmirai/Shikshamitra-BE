@@ -1,7 +1,7 @@
 ﻿using System;
 using Volo.Abp.Application.Dtos;
 
-namespace ShikshaMitra.TenantSettings.AcademicYears;
+namespace ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
 
 public class AcademicYearDto : AuditedEntityDto<Guid>
 {

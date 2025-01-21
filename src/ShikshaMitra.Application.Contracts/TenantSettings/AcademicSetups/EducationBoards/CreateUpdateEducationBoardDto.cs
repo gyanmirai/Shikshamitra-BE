@@ -1,8 +1,6 @@
-﻿using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
-using System;
-using System.ComponentModel.DataAnnotations;
+﻿using System;
 
-namespace ShikshaMitra.TenantSettings.EducationBoards;
+namespace ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 
 public class CreateUpdateEducationBoardDto
 {

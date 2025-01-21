@@ -2,7 +2,7 @@
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
-namespace ShikshaMitra.TenantSettings.Divisions;
+namespace ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 
 public interface IDivisionAppService :
     ICrudAppService<

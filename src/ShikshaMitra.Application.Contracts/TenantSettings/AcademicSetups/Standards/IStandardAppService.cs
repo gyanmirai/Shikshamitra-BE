@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
-namespace ShikshaMitra.TenantSettings.Standards;
+namespace ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 
 public interface IStandardAppService :
     ICrudAppService<

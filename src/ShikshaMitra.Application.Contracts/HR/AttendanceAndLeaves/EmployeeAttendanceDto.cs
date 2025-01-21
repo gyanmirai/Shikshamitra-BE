@@ -1,9 +1,7 @@
-﻿using ShikshaMitra.HR.AttendanceAndLeaves;
-using System;
-using System.ComponentModel.DataAnnotations;
+﻿using System;
 using Volo.Abp.Application.Dtos;
 
-namespace ShikshaMitra.HR.Employees;
+namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 public class EmployeeAttendanceDto : EntityDto<Guid>
 {

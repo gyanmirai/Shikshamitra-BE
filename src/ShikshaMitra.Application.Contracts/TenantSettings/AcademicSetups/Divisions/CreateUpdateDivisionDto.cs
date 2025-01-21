@@ -1,7 +1,8 @@
-﻿using System;
+﻿using ShikshaMitra.TenantSettings.Divisions;
+using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace ShikshaMitra.TenantSettings.Divisions;
+namespace ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 
 public class CreateUpdateDivisionDto
 {

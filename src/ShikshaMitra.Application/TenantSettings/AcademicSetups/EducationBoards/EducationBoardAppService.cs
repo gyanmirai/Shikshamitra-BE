@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;

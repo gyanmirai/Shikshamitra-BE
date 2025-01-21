@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace ShikshaMitra.TenantSettings.AcademicYears;
+namespace ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
 
 public class CreateUpdateAcademicYearDto
 {

@@ -9,77 +9,78 @@ using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Security.OrganizationUnits;
 
-[Route("api/organization-unit")]
-public class OrganizationUnitController(IOrganizationUnitAppService organizationUnitAppService) : AbpController, IOrganizationUnitAppService
+[Route("api/organization-units")]
+public class OrganizationUnitController(IOrganizationUnitAppService organizationUnitAppService)
+	: AbpController
 {
 	[HttpGet("tree")]
-	public Task<List<TreeOutput>> GetTreeAsync()
+	public Task<List<TreeOutput>> GetOrganizationUnitTreeAsync()
 	{
 		return organizationUnitAppService.GetTreeAsync();
 	}
 
 	[HttpPost("create")]
-	public Task CreateAsync(CreateOrganizationUnitInput input)
+	public Task CreateOrganizationUnitAsync(CreateOrganizationUnitInput input)
 	{
 		return organizationUnitAppService.CreateAsync(input);
 	}
 
-	[HttpDelete("delete")]
-	public Task DeleteAsync(Guid input)
+	[HttpDelete("delete/{id}")]
+	public Task DeleteOrganizationUnitAsync(Guid id)
 	{
-		return organizationUnitAppService.DeleteAsync(input);
+		return organizationUnitAppService.DeleteAsync(id);
 	}
 
 	[HttpPut("update")]
-	public Task UpdateAsync(UpdateOrganizationUnitInput input)
+	public Task UpdateOrganizationUnitAsync(UpdateOrganizationUnitInput input)
 	{
 		return organizationUnitAppService.UpdateAsync(input);
 	}
 
-	[HttpPost("add-role-to-organization-unit")]
+	[HttpPost("roles/add")]
 	public Task AddRoleToOrganizationUnitAsync(AddRoleToOrganizationUnitInput input)
 	{
 		return organizationUnitAppService.AddRoleToOrganizationUnitAsync(input);
 	}
 
-	[HttpPost("remove-role-from-organization-unit")]
+	[HttpPost("roles/remove")]
 	public Task RemoveRoleFromOrganizationUnitAsync(RemoveRoleToOrganizationUnitInput input)
 	{
 		return organizationUnitAppService.RemoveRoleFromOrganizationUnitAsync(input);
 	}
 
-	[HttpPost("add-user-to-organization-unit")]
+	[HttpPost("users/add")]
 	public Task AddUserToOrganizationUnitAsync(AddUserToOrganizationUnitInput input)
 	{
 		return organizationUnitAppService.AddUserToOrganizationUnitAsync(input);
 	}
 
-	[HttpPost("remove-user-from-organization-unit")]
+	[HttpPost("users/remove")]
 	public Task RemoveUserFromOrganizationUnitAsync(RemoveUserToOrganizationUnitInput input)
 	{
 		return organizationUnitAppService.RemoveUserFromOrganizationUnitAsync(input);
 	}
 
-	[HttpPost("getUsers")]
-	public Task<PagedResultDto<GetOrganizationUnitUserOutput>> GetUsersAsync(GetOrganizationUnitUserInput input)
+	[HttpPost("users")]
+	public Task<PagedResultDto<GetOrganizationUnitUserOutput>> GetOrganizationUnitUsersAsync(GetOrganizationUnitUserInput input)
 	{
 		return organizationUnitAppService.GetUsersAsync(input);
 	}
 
-	[HttpPost("getRoles")]
-	public Task<PagedResultDto<GetOrganizationUnitRoleOutput>> GetRolesAsync(GetOrganizationUnitRoleInput input)
+	[HttpPost("roles")]
+	public Task<PagedResultDto<GetOrganizationUnitRoleOutput>> GetOrganizationUnitRolesAsync(GetOrganizationUnitRoleInput input)
 	{
 		return organizationUnitAppService.GetRolesAsync(input);
 	}
 
-	[HttpPost("getUnAddUsers")]
-	public Task<PagedResultDto<GetUnAddUserOutput>> GetUnAddUsersAsync(GetUnAddUserInput input)
+	[HttpPost("users/unadded")]
+	public Task<PagedResultDto<GetUnAddUserOutput>> GetUnaddedOrganizationUnitUsersAsync(GetUnAddUserInput input)
 	{
 		return organizationUnitAppService.GetUnAddUsersAsync(input);
 	}
 
-	[HttpPost("getUnAddRoles")]
-	public Task<PagedResultDto<GetUnAddRoleOutput>> GetUnAddRolessAsync(GetUnAddRoleInput input)
+	[HttpPost("roles/unadded")]
+	public Task<PagedResultDto<GetUnAddRoleOutput>> GetUnaddedOrganizationUnitRolesAsync(GetUnAddRoleInput input)
 	{
 		return organizationUnitAppService.GetUnAddRolessAsync(input);
 	}

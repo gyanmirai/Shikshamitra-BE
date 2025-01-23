@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.Permissions;
+using ShikshaMitra.Security.Permissions;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Domain.Repositories;
 

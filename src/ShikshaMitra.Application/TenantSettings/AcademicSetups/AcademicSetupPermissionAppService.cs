@@ -1,5 +1,4 @@
-﻿using ShikshaMitra.Permissions;
-using ShikshaMitra.TenantSettings.AcademicSetups;
+﻿using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;

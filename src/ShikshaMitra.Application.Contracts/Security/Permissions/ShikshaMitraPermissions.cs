@@ -1,4 +1,4 @@
-﻿namespace ShikshaMitra.Permissions;
+﻿namespace ShikshaMitra.Security.Permissions;
 
 public static class ShikshaMitraPermissions
 {

@@ -1,6 +1,8 @@
-﻿using ShikshaMitra.Common;
+﻿using Microsoft.AspNetCore.Identity;
+using ShikshaMitra.Common;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.BlobStoring;
@@ -17,7 +19,8 @@ public class EmployeeManager(
 	IIdentityUserRepository userRepository,
 	IIdentityRoleRepository roleRepository,
 	IBlobContainer blobContainer,
-	IEmployeeDocumentRepository employeeDocumentRepository
+	IEmployeeDocumentRepository employeeDocumentRepository,
+	UserManager<IdentityUser> userManager
 ) : DomainService
 {
 	// Private helper method to get an employee by ID
@@ -42,7 +45,6 @@ public class EmployeeManager(
 	}
 
 	public async Task<Employee> CreateEmployeeAsync(
-		Guid userId,
 		Guid roleId,
 		Guid educationMediumStageId,
 		string firstName,
@@ -71,11 +73,32 @@ public class EmployeeManager(
 		string? state = null,
 		string? pinCode = null)
 	{
-		// Validate user existence
-		await GetUserAsync(userId);
-
 		// Validate role existence
-		await GetRoleAsync(roleId);
+		IdentityRole role = await GetRoleAsync(roleId);
+
+		// 1. Create the IdentityUser
+		var user = new IdentityUser(guidGenerator.Create(), email, email, CurrentTenant.Id);
+		user.SetPhoneNumber(mobileNo, false);
+		user.Name = firstName;
+		user.Surname = lastName;
+		var password = "Temp@123"; // Implement a method to generate a random password
+		var userCreateResult = await userManager.CreateAsync(user, password);
+
+		if (!userCreateResult.Succeeded)
+		{
+			// Handle user creation errors (e.g., duplicate email, weak password)
+			throw new UserFriendlyException("Failed to create user: " + string.Join(", ", userCreateResult.Errors.Select(e => e.Description)));
+		}
+
+		// 2. Assign the role to the user
+		var roleAddResult = await userManager.AddToRoleAsync(user, role.Name);
+		if (!roleAddResult.Succeeded)
+		{
+			// Handle role assignment errors
+			await userManager.DeleteAsync(user); // Rollback user creation
+			throw new UserFriendlyException("Failed to add user to role: " + string.Join(", ", roleAddResult.Errors.Select(e => e.Description)));
+		}
+
 
 		// Generate employee code
 		string employeeCode = await GenerateEmployeeCodeAsync();
@@ -84,7 +107,7 @@ public class EmployeeManager(
 		var employee = new Employee(
 			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
-			userId: userId,
+			userId: user.Id,
 			profilePicture: profilePicture,
 			employeeCode: employeeCode,
 			lastName: lastName,
@@ -185,6 +208,21 @@ public class EmployeeManager(
 		// Get the employee
 		Employee employee = await GetEmployeeAsync(employeeId);
 
+		// Update user roles if roleId is provided and changed
+		if (roleId.HasValue && employee.RoleId != roleId.Value)
+		{
+			// Get the associated user
+			IdentityUser user = await GetUserAsync(employee.UserId);
+
+			// Remove the user from the old role
+			IdentityRole? oldRole = await roleRepository.GetAsync(employee.RoleId);
+			IdentityResult? removeResult = await userManager.RemoveFromRoleAsync(user, oldRole.Name);
+			// Add the user to the new role
+			IdentityRole? newRole = await roleRepository.GetAsync(roleId.Value);
+			IdentityResult? addResult = await userManager.AddToRoleAsync(user, newRole.Name);
+		}
+
+
 		// Update the employee
 		employee.UpdateBasicInfo(
 			lastName: lastName,
@@ -215,7 +253,6 @@ public class EmployeeManager(
 			pinCode: pinCode,
 			educationMediumStageId: educationMediumStageId
 		);
-
 		// Validate the updated employee if needed
 		ValidateEmployee(employee);
 

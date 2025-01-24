@@ -29,7 +29,6 @@ public class EmployeeAppService(
 	{
 		// Use EmployeeManager to create the employee with domain logic
 		Employee employee = await employeeManager.CreateEmployeeAsync(
-			userId: input.UserId,
 			roleId: input.RoleId,
 			educationMediumStageId: input.EducationMediumStageId,
 			firstName: input.FirstName,

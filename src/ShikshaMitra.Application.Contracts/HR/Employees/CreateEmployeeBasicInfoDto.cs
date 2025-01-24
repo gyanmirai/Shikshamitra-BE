@@ -6,8 +6,6 @@ namespace ShikshaMitra.HR.Employees;
 
 public class CreateEmployeeBasicInfoDto
 {
-	public Guid UserId { get; set; }
-
 	// Profile Picture
 	public byte[]? ProfilePicture { get; set; }
 

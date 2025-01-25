@@ -2222,8 +2222,8 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("BPLCardNo")
                                 .HasColumnType("text");
 
-                            b1.Property<int?>("BPLStudent")
-                                .HasColumnType("integer");
+                            b1.Property<bool?>("BPLStudent")
+                                .HasColumnType("boolean");
 
                             b1.Property<int?>("Category")
                                 .HasColumnType("integer");
@@ -2231,20 +2231,20 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("EmergencyContactNo")
                                 .HasColumnType("text");
 
-                            b1.Property<int?>("PersonWithDisability")
-                                .HasColumnType("integer");
+                            b1.Property<bool?>("PersonWithDisability")
+                                .HasColumnType("boolean");
 
-                            b1.Property<int?>("RightToEducation")
-                                .HasColumnType("integer");
+                            b1.Property<bool?>("RightToEducation")
+                                .HasColumnType("boolean");
 
                             b1.Property<string>("SecondLanguage")
                                 .HasColumnType("text");
 
-                            b1.Property<int?>("SingleChild")
-                                .HasColumnType("integer");
+                            b1.Property<bool?>("SingleChild")
+                                .HasColumnType("boolean");
 
-                            b1.Property<int?>("SingleParentChild")
-                                .HasColumnType("integer");
+                            b1.Property<bool?>("SingleParentChild")
+                                .HasColumnType("boolean");
 
                             b1.Property<string>("SponsorName")
                                 .HasColumnType("text");

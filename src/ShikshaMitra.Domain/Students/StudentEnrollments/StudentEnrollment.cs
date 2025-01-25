@@ -27,14 +27,17 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? LastName { get; private set; }
 	public string? PreviousSchoolName { get; private set; }
 	public DateTimeOffset? DateOfBirth { get; private set; }
-	public DateTimeOffset DateOfInquiry { get; private set; }
-	public GenderType GenderType { get; private set; }
+	public DateTimeOffset? DateOfInquiry { get; private set; }
+	public GenderType? GenderType { get; private set; }
 	public string? ParentContactNumber { get; private set; }
 	public string? AlternativeContactNumber { get; private set; }
+	public string? AddressLine1 { get; private set; }
+	public string? AddressLine2 { get; private set; }
+	public string? AddressLine3 { get; private set; }
+	public string? Country { get; private set; }
 	public string? City { get; private set; }
 	public string? State { get; private set; }
-	public int? PinCode { get; private set; }
-	public string? Address { get; private set; }
+	public string? PinCode { get; private set; }
 	public InquiryStatusType? InquiryStatusType { get; private set; }
 	
 	// Foreign Key 
@@ -42,7 +45,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid EducationBoardId { get; private set; }
 	public Guid EducationMediumId { get; private set; }
 	public Guid StandardId { get; private set; }
-	public Guid InquiryPreferenceId { get; private set; }
+	public Guid? InquiryPreferenceId { get; private set; }
 
 	// Navigation Property for student enrollment
 	public AcademicYear AcademicYear { get; private set; }
@@ -74,21 +77,24 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? middleName,
 		string? lastName,
 		string? previousSchoolName,
-		DateTimeOffset dateOfBirth,
-		DateTimeOffset dateOfInquiry,
-		GenderType genderType,
+		DateTimeOffset? dateOfBirth,
+		DateTimeOffset? dateOfInquiry,
+		GenderType? genderType,
 		string? parentContactNumber,
 		string? alternativeContactNumber,
-		string? city,
+		string? addressLine1,
+		string? addressLine2,
+		string? addressLine3,
+		string? country,
 		string? state,
-		int? pinCode,
-		string? address,
+		string? city,
+		string? pinCode,
 		InquiryStatusType? inquiryStatusType,
 		Guid academicYearId,
 		Guid educationBoardId,
 		Guid educationMediumId,
 		Guid standardId,
-		Guid inquiryPreferenceId,
+		Guid? inquiryPreferenceId,
 		// registration
 		StudentBasicDetails studentBasicDetails,
 		StudentContactDetails fatherDetails,
@@ -114,10 +120,13 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		GenderType = genderType;
 		ParentContactNumber = parentContactNumber;
 		AlternativeContactNumber = alternativeContactNumber;
+		AddressLine1 = addressLine1;
+		AddressLine2 = addressLine2;
+		AddressLine3 = addressLine3;
+		Country = country;
 		City = city;
 		State = state;
 		PinCode = pinCode;
-		Address = address;
 		InquiryStatusType = inquiryStatusType;
 		AcademicYearId = academicYearId;
 		EducationBoardId = educationBoardId;
@@ -143,21 +152,24 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? middleName,
 		string? lastName,
 		string? previousSchoolName,
-		DateTimeOffset dateOfBirth,
-		DateTimeOffset dateOfInquiry,
-		GenderType genderType,
+		DateTimeOffset? dateOfBirth,
+		DateTimeOffset? dateOfInquiry,
+		GenderType? genderType,
 		string? parentContactNumber,
 		string? alternativeContactNumber,
-		string? city,
+		string? addressLine1,
+		string? addressLine2,
+		string? addressLine3,
+		string? country,
 		string? state,
-		int? pinCode,
-		string? address,
+		string? city,
+		string? pinCode,
 		InquiryStatusType? inquiryStatusType,
 		Guid academicYearId,
 		Guid educationBoardId,
 		Guid educationMediumId,
 		Guid standardId,
-		Guid inquiryPreferenceId
+		Guid? inquiryPreferenceId
 	)
 	{
 		StudentEnrollmentState = studentEnrollmentState;
@@ -171,10 +183,13 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		GenderType = genderType;
 		ParentContactNumber = parentContactNumber;
 		AlternativeContactNumber = alternativeContactNumber;
+		AddressLine1 = addressLine1;
+		AddressLine2 = addressLine2;
+		AddressLine3 = addressLine3;
+		Country = country;
 		City = city;
 		State = state;
 		PinCode = pinCode;
-		Address = address;
 		InquiryStatusType = inquiryStatusType;
 		AcademicYearId = academicYearId;
 		EducationBoardId = educationBoardId;

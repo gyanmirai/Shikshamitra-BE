@@ -8,6 +8,7 @@ public class UpdateStudentBasicDetailsDto
 {
 	public Guid? UserId { get; set; }
 	public byte[]? ProfilePicture { get; set; }
+	public string? Email { get; set; }
 	public string? AadhaarNo { get; set; }
 	public string? Religion { get; set; }
 	public string? FamilyCast { get; set; }

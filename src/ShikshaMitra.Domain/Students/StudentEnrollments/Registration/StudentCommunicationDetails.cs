@@ -10,15 +10,24 @@ public class StudentCommunicationDetails(
 	string? studentContactNo,
 	string? studentEmail,
 	string? whatsAppNo,
-	string? localAddress,
+	string? localAddressLine1,
+	string? localAddressLine2,
+	string? localAddressLine3,
+	string? localCountry,
 	string? localState,
 	string? localCity,
 	string? localPinCode,
-	string? permanentAddress,
+	string? permanentAddressLine1,
+	string? permanentAddressLine2,
+	string? permanentAddressLine3,
+	string? permanentCountry,
 	string? permanentState,
 	string? permanentCity,
 	string? permanentPinCode,
-	string? emergencyAddress,
+	string? emergencyAddressLine1,
+	string? emergencyAddressLine2,
+	string? emergencyAddressLine3,
+	string? emergencyCountry,
 	string? emergencyState,
 	string? emergencyCity,
 	string? emergencyPinCode,
@@ -31,15 +40,24 @@ public class StudentCommunicationDetails(
 	public string? StudentContactNo { get; private  set; } = studentContactNo;
 	public string? StudentEmail { get; private  set; } = studentEmail;
 	public string? WhatsAppNo { get; private  set; } = whatsAppNo;
-	public string? LocalAddress { get; private  set; } = localAddress;
+	public string? LocalAddressLine1 { get; private  set; } = localAddressLine1;
+	public string? LocalAddressLine2 { get; private  set; } = localAddressLine2;
+	public string? LocalAddressLine3 { get; private  set; } = localAddressLine3;
+	public string? LocalCountry { get; private  set; } = localCountry;
 	public string? LocalState { get; private  set; } = localState;
 	public string? LocalCity { get; private  set; } = localCity;
 	public string? LocalPinCode { get; private  set; } = localPinCode;
-	public string? PermanentAddress { get; private  set; } = permanentAddress;
+	public string? PermanentAddressLine1 { get; private  set; } = permanentAddressLine1;
+	public string? PermanentAddressLine2 { get; private  set; } = permanentAddressLine2;
+	public string? PermanentAddressLine3 { get; private  set; } = permanentAddressLine3;
+	public string? PermanentCountry { get; private  set; } = permanentCountry;
 	public string? PermanentState { get; private  set; } = permanentState;
 	public string? PermanentCity { get; private  set; } = permanentCity;
 	public string? PermanentPinCode { get; private  set; } = permanentPinCode;
-	public string? EmergencyAddress { get; private  set; } = emergencyAddress;
+	public string? EmergencyAddressLine1 { get; private  set; } = emergencyAddressLine1;
+	public string? EmergencyAddressLine2 { get; private  set; } = emergencyAddressLine2;
+	public string? EmergencyAddressLine3 { get; private  set; } = emergencyAddressLine3;
+	public string? EmergencyCountry { get; private  set; } = emergencyCountry;
 	public string? EmergencyState { get; private  set; } = emergencyState;
 	public string? EmergencyCity { get; private  set; } = emergencyCity;
 	public string? EmergencyPinCode { get; private  set; } = emergencyPinCode;
@@ -53,15 +71,24 @@ public class StudentCommunicationDetails(
 		yield return StudentContactNo;
 		yield return StudentEmail;
 		yield return WhatsAppNo;
-		yield return LocalAddress;
+		yield return LocalAddressLine1;
+		yield return LocalAddressLine2;
+		yield return LocalAddressLine3;
+		yield return LocalCountry;
 		yield return LocalState;
 		yield return LocalCity;
 		yield return LocalPinCode;
-		yield return PermanentAddress;
+		yield return PermanentAddressLine1;
+		yield return PermanentAddressLine2;
+		yield return PermanentAddressLine3;
+		yield return PermanentCountry;
 		yield return PermanentState;
 		yield return PermanentCity;
 		yield return PermanentPinCode;
-		yield return EmergencyAddress;
+		yield return EmergencyAddressLine1;
+		yield return EmergencyAddressLine2;
+		yield return EmergencyAddressLine3;
+		yield return EmergencyCountry;
 		yield return EmergencyState;
 		yield return EmergencyCity;
 		yield return EmergencyPinCode;

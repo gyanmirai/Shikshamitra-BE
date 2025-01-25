@@ -26,7 +26,7 @@ public class StudentInquiryManager(IStudentInquiryRepository studentInquiryRepos
 		Guid educationMediumId,
 		Guid educationBoardId,
 		Guid academicYearId,
-		Guid standerdId,
+		Guid standardId,
 		Guid inquiryPreferenceId
 		)
 	{
@@ -53,7 +53,7 @@ public class StudentInquiryManager(IStudentInquiryRepository studentInquiryRepos
 			educationMediumId: educationMediumId,
 			educationBoardId: educationBoardId,
 			academicYearId: academicYearId,
-			standerdId: standerdId,
+			standardId: standardId,
 			inquiryPreferenceId: inquiryPreferenceId
 		);
 	}

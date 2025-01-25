@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
-using ShikshaMitra.Employees;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
@@ -9,10 +8,8 @@ using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.EventAndHolidays;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
-using ShikshaMitra.Students;
 using ShikshaMitra.Students.Attendance.settings;
 using ShikshaMitra.Students.StudentEnrollments;
-using ShikshaMitra.Students.StudentEnrollments.Inquiry;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
@@ -112,20 +109,13 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region Student
 
-	DbSet<Student> Students { get; set; }
-
 	#region Student Enrollment
-	DbSet<StudentInquiry> StudentInquiries { get; set; }
 	DbSet<StudentEnrollment> StudentEnrollments { get; set; }
 	DbSet<StudentDocument> StudentDocuments { get; set; }
-	
-	
+
 	#region Settings
-	
 	DbSet<StudentDocumentSetting> StudentDocumentSettings { get; set; }
 	DbSet<InquiryPreference> InquiryPreferences { get; set; }
-
-	
 	#endregion
 
 	#endregion

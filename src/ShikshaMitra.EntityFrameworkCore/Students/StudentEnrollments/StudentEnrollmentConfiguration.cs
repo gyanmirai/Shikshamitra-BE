@@ -52,7 +52,7 @@ public class StudentEnrollmentConfiguration : IEntityTypeConfiguration<StudentEn
 			.WithMany()
 			.HasForeignKey(s => s.InquiryPreferenceId)
 			.OnDelete(DeleteBehavior.Restrict);
-		
+
 		builder.Navigation(x => x.EducationMedium).AutoInclude();
 		builder.Navigation(x => x.EducationBoard).AutoInclude();
 		builder.Navigation(x => x.AcademicYear).AutoInclude();

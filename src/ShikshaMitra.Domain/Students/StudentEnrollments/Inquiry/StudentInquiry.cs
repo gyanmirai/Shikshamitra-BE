@@ -34,7 +34,7 @@ public class StudentInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid EducationMediumId { get; private set; }
 	public Guid EducationBoardId { get; private set; }
 	public Guid AcademicYearId { get; private set; }
-	public Guid StanderdId { get; private set; }
+	public Guid StandardId { get; private set; }
 	public Guid InquiryPreferenceId { get; private set; }
 	
 	// Navigation Property for student inquiry 
@@ -69,7 +69,7 @@ public class StudentInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid educationMediumId,
 		Guid educationBoardId,
 		Guid academicYearId,
-		Guid standerdId,
+		Guid standardId,
 		Guid inquiryPreferenceId
 		) :  base(id)
 	{
@@ -92,7 +92,7 @@ public class StudentInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EducationMediumId = educationMediumId;
 		EducationBoardId = educationBoardId;
 		AcademicYearId = academicYearId;
-		StanderdId = standerdId;
+		StandardId = standardId;
 		InquiryPreferenceId = inquiryPreferenceId;
 	}
 }

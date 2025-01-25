@@ -9,6 +9,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 public class StudentBasicDetails(
 	Guid? userId,
 	byte[]? profilePicture,
+	string? email,
 	string? aadhaarNo,
 	string? religion,
 	string? familyCast,
@@ -23,6 +24,7 @@ public class StudentBasicDetails(
 
 	public Guid? UserId { get; private set; } = userId;
 	public byte[]? ProfilePicture { get; private set; } = profilePicture;
+	public string? Email { get; private set; } = email;
 	public string? AadhaarNo { get; private set; } = aadhaarNo;
 	public string? Religion { get; private set; } = religion;
 	public string? FamilyCast { get; private set; } = familyCast;
@@ -37,6 +39,7 @@ public class StudentBasicDetails(
 	{
 		yield return UserId;
 		yield return ProfilePicture;
+		yield return Email;
 		yield return AadhaarNo;
 		yield return Religion;
 		yield return FamilyCast;

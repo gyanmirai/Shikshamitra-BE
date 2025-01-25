@@ -31,9 +31,8 @@ public class StudentInquiryAppService(
 			educationMediumId: input.EducationMediumId,
 			educationBoardId: input.EducationBoardId,
 			academicYearId: input.AcademicYearId,
-			standerdId: input.StanderdId,
+			standardId: input.StandardId,
 			inquiryPreferenceId : input.InquiryPreferenceId
-			
 		);
 
 		await studentInquiryRepository.InsertAsync(studentInquiry);

@@ -5,10 +5,6 @@ using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
-using ShikshaMitra.TenantSettings.AcademicYears;
-using ShikshaMitra.TenantSettings.EducationBoards;
-using ShikshaMitra.TenantSettings.EducationMediums;
-using ShikshaMitra.TenantSettings.Standards;
 using System;
 using Volo.Abp.Application.Dtos;
 
@@ -30,10 +26,13 @@ public class StudentEnrollmentDto : EntityDto<Guid>
 	public GenderType GenderType { get; set; }
 	public string? ParentContactNumber { get; set; }
 	public string? AlternativeContactNumber { get; set; }
+	public string? AddressLine1 { get; set; }
+	public string? AddressLine2 { get; set; }
+	public string? AddressLine3 { get; set; }
+	public string? Country { get; set; }
 	public string? City { get; set; }
 	public string? State { get; set; }
-	public int? PinCode { get; set; }
-	public string? Address { get; set; }
+	public string? PinCode { get; set; }
 	public InquiryStatusType? InquiryStatusType { get; set; }
 
 	// Foreign Key 
@@ -45,7 +44,7 @@ public class StudentEnrollmentDto : EntityDto<Guid>
 	public AcademicYearDto AcademicYear { get; set; }
 	public Guid StandardId { get;  set; }
 	public StandardDto Standard { get; set; }
-	public Guid InquiryPreferenceId { get;  set; }
+	public Guid? InquiryPreferenceId { get;  set; }
 	public InquiryPreferenceDto InquiryPreference { get; set; }
 	
 	// Value Object

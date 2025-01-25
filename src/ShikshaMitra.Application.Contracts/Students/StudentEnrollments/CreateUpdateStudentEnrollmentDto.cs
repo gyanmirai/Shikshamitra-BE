@@ -15,14 +15,17 @@ public class CreateUpdateStudentEnrollmentDto
 	public string? LastName { get; set; }
 	public string? PreviousSchoolName { get; set; }
 	public DateTimeOffset? DateOfBirth { get; set; }
-	public DateTimeOffset DateOfInquiry { get; set; }
-	public GenderType GenderType { get; set; }
+	public DateTimeOffset? DateOfInquiry { get; set; }
+	public GenderType? GenderType { get; set; }
 	public string? ParentContactNumber { get; set; }
 	public string? AlternativeContactNumber { get; set; }
+	public string? addressLine1 {get; set; }
+	public string? addressLine2 {get; set; }
+	public string? addressLine3 {get; set; }
+	public string? country {get; set; }
 	public string? City { get; set; }
 	public string? State { get; set; }
-	public int? PinCode { get; set; }
-	public string? Address { get; set; }
+	public string? PinCode { get; set; }
 	public InquiryStatusType? InquiryStatusType { get; set; }
 
 	// Foreign Key 
@@ -30,7 +33,6 @@ public class CreateUpdateStudentEnrollmentDto
 	public Guid EducationBoardId { get; set; }
 	public Guid EducationMediumId { get; set; }
 	public Guid StandardId { get; set; }
-	public Guid InquiryPreferenceId { get; set; }
 
 	// Value Object
 	public StudentBasicDetailsDto StudentBasicDetails { get; private set; }

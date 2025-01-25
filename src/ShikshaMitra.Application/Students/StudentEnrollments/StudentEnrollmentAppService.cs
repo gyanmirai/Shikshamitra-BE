@@ -158,15 +158,63 @@ public class StudentEnrollmentAppService(
 	}
 	#endregion
 
+	#region Create student registration
+
+	public async Task<StudentEnrollmentDto> CreateStudentRegistrationAsync(CreateStudentRegistrationDto input)
+	{
+		StudentEnrollment studentEnrollment = await studentEnrollmentManager.CreateStudentRegistrationAsync(
+			formNumber: input.FormNumber,
+			firstName: input.FirstName,
+			middleName: input.MiddleName,
+			lastName: input.LastName,
+			previousSchoolName: input.PreviousSchoolName,
+			dateOfBirth: input.DateOfBirth,
+			genderType : input.GenderType,
+			parentContactNumber: input.ParentContactNumber,
+			alternativeContactNumber: input.AlternativeContactNumber,
+			addressLine1: input.addressLine1,
+			addressLine2: input.addressLine2,
+			addressLine3: input.addressLine3,
+			country: input.country,
+			city: input.City,
+			state: input.State,
+			pinCode: input.PinCode,
+			academicYearId: input.AcademicYearId,
+			educationBoardId: input.EducationBoardId,
+			educationMediumId: input.EducationMediumId,
+			standardId: input.StandardId,
+			inquiryPreferenceId: input.InquiryPreferenceId,
+			userId: input.UserId,
+			profilePicture: input.ProfilePicture,
+			email:input.Email,
+			aadhaarNo : input.AadhaarNo,
+			religion : input.Religion,
+			familyCast : input.FamilyCast,
+			castType : input.CastType,
+			motherTongue : input.MotherTongue,
+			nationality : input.Nationality,
+			birthPlace : input.BirthPlace,
+			temporaryGr : input.TemporaryGr,
+			remarks : input.Remarks
+		);
+
+		// Save the student enrollment
+		studentEnrollment = await studentEnrollmentRepository.InsertAsync(studentEnrollment);
+
+		// return the DTO
+		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);
+	}
+	#endregion
+
 	#region Create student inquiry
 
 	public async Task<StudentEnrollmentDto> CreateStudentInquiryAsync(CreateStudentInquiryDto input)
 	{
-	StudentEnrollmentState studentEnrollmentState = StudentEnrollmentState.Inquiry;
-	if ( input.FormNumber != null)
-	{
-		studentEnrollmentState = StudentEnrollmentState.RegistrationForm;
-	}
+		StudentEnrollmentState studentEnrollmentState = StudentEnrollmentState.Inquiry;
+		if ( input.FormNumber != null)
+		{
+			studentEnrollmentState = StudentEnrollmentState.RegistrationForm;
+		}
 		// use studentEnrollmentManager to create the student enrollment with domain logic
 		StudentEnrollment studentEnrollment = await studentEnrollmentManager.CreateStudentInquiryAsync(
 
@@ -182,10 +230,13 @@ public class StudentEnrollmentAppService(
 			genderType : input.GenderType,
 			parentContactNumber: input.ParentContactNumber,
 			alternativeContactNumber: input.AlternativeContactNumber,
+			addressLine1: input.AddressLine1,
+			addressLine2: input.AddressLine2,
+			addressLine3: input.AddressLine3,
+			country: input.Country,
 			city: input.City,
 			state: input.State,
 			pinCode: input.PinCode,
-			address: input.Address,
 			inquiryStatusType: InquiryStatusType.Pending,
 			academicYearId: input.AcademicYearId,
 			educationBoardId: input.EducationBoardId,
@@ -200,8 +251,6 @@ public class StudentEnrollmentAppService(
 		// return the DTO
 		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);
 	}
-
-
 
 	#endregion
 
@@ -228,10 +277,13 @@ public class StudentEnrollmentAppService(
 			genderType: input.GenderType,
 			parentContactNumber: input.ParentContactNumber,
 			alternativeContactNumber: input.AlternativeContactNumber,
+			addressLine1: input.AddressLine1,
+			addressLine2: input.AddressLine2,
+			addressLine3: input.AddressLine3,
+			country: input.Country,
 			city: input.City,
 			state: input.State,
 			pinCode: input.PinCode,
-			address: input.Address,
 			inquiryStatusType: input.InquiryStatusType,
 			academicYearId: input.AcademicYearId,
 			educationBoardId: input.EducationBoardId,

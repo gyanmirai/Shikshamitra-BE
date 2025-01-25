@@ -30,7 +30,7 @@ public class StudentInquiryConfiguration : IEntityTypeConfiguration<StudentInqui
 		
 		builder.HasOne(e => e.Standard)
 			.WithMany()
-			.HasForeignKey(s => s.StanderdId)
+			.HasForeignKey(s => s.StandardId)
 			.OnDelete(DeleteBehavior.Restrict);
 		
 		builder.HasOne(e => e.InquiryPreference)

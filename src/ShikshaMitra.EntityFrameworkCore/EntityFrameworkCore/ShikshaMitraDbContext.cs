@@ -10,6 +10,7 @@ using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Students.Attendance.settings;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.StudentEnrollments.EntranceExam;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
@@ -112,10 +113,14 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Student Enrollment
 	DbSet<StudentEnrollment> StudentEnrollments { get; set; }
 	DbSet<StudentDocument> StudentDocuments { get; set; }
+	DbSet<EntranceExam> EntranceExams { get; set; }
+
 
 	#region Settings
 	DbSet<StudentDocumentSetting> StudentDocumentSettings { get; set; }
 	DbSet<InquiryPreference> InquiryPreferences { get; set; }
+	DbSet<EntranceExamSlot> EntranceExamSlots { get; set; }
+
 	#endregion
 
 	#endregion

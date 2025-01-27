@@ -46,7 +46,7 @@ public class StudentEnrollmentDto : EntityDto<Guid>
 	public StandardDto Standard { get; set; }
 	public Guid? InquiryPreferenceId { get;  set; }
 	public InquiryPreferenceDto InquiryPreference { get; set; }
-	
+
 	// Value Object
 	public StudentBasicDetailsDto StudentBasicDetails { get; private set; }
 	public StudentContactDetailsDto FatherDetails { get; private set; }

@@ -8,9 +8,9 @@ public class InquiryPreference : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 	public string PreferenceName { get; private set; }
-	
+
 	protected InquiryPreference() { } // For ORM
-	
+
 	internal InquiryPreference(Guid id, Guid? tenantId, string preferenceName) : base(id)
 	{
 		TenantId = tenantId ?? throw new ArgumentNullException(nameof(tenantId));

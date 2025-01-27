@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
@@ -171,10 +171,23 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region  Events & Holidays
 	
 	DbSet<EventAndHoliday> EventAndHolidays { get; set; }
-	
+
 	#endregion
-	
-	
+
+
+	#endregion
+
+	#region Finance
+
+	#region Setting
+
+	#region GeneralSetting
+	#region FeeHead
+	DbSet<FeeHead> FeeHeads { get; set; }
+	#endregion
+
+	#endregion
+	#endregion
 	#endregion
 
 	protected override void OnModelCreating(ModelBuilder builder)

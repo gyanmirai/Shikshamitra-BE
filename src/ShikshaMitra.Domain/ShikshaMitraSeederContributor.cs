@@ -48,7 +48,6 @@ namespace ShikshaMitra
 		IDivisionRepository divisionRepository,
 		IIdentityUserRepository userRepository,
 		IGuidGenerator guidGenerator,
-		IStudentRepository studentRepository,
 		IEmployeeRepository employeeRepository,
 		IEmployeeAttendanceRepository employeeAttendanceRepository,
 		ICustomAttendanceRuleRepository customAttendanceRuleRepository,

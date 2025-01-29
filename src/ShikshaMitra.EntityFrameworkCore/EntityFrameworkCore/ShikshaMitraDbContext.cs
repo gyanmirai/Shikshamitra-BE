@@ -37,6 +37,8 @@ using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.TenantManagement;
 using Volo.Abp.TenantManagement.EntityFrameworkCore;
 using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
+using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
+using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -186,6 +188,10 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	DbSet<FeeHead> FeeHeads { get; set; }
 	#endregion
 
+
+	#region PaymentStatusOption
+	DbSet<PaymentStatusOption> PaymentStatusOptions { get; set; }
+	#endregion
 	#endregion
 	#endregion
 	#endregion

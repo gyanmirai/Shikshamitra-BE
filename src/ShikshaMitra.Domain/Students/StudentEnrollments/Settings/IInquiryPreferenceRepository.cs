@@ -4,7 +4,7 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Settings;
 
-public interface IInquiryPreferenceRepository  : IRepository<FeeHead, Guid>
+public interface IInquiryPreferenceRepository  : IRepository<InquiryPreference, Guid>
 {
 	
 }

@@ -1,8 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using AutoMapper;
+using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
+using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
+
 
 namespace ShikshaMitra.Finance;
 
@@ -14,14 +13,20 @@ namespace ShikshaMitra.Finance;
 		#region GeneralSetting
 		#region FeeHead
 
-		// Map from Entity to DTO
+		
 		CreateMap<FeeHead, FeeHeadDto>();
 
-		// Map from DTO to Entity
-		CreateMap<CreateFeeHeadDto, FeeHead>();
+		CreateMap<CreateUpdateFeeHeadDto, FeeHead>();
 
 
 
+		#endregion
+
+
+		#region
+		CreateMap<PaymentStatusOption, PaymentStatusOptionDto>();
+
+		CreateMap<CreateUpdatePaymentStatusOptionDto, PaymentStatusOption>();
 		#endregion
 		#endregion
 		#endregion

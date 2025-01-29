@@ -61,13 +61,13 @@ public class OrganizationUnitController(IOrganizationUnitAppService organization
 		return organizationUnitAppService.RemoveUserFromOrganizationUnitAsync(input);
 	}
 
-	[HttpPost("users")]
+	[HttpGet("users")]
 	public Task<PagedResultDto<GetOrganizationUnitUserOutput>> GetOrganizationUnitUsersAsync(GetOrganizationUnitUserInput input)
 	{
 		return organizationUnitAppService.GetUsersAsync(input);
 	}
 
-	[HttpPost("roles")]
+	[HttpGet("roles")]
 	public Task<PagedResultDto<GetOrganizationUnitRoleOutput>> GetOrganizationUnitRolesAsync(GetOrganizationUnitRoleInput input)
 	{
 		return organizationUnitAppService.GetRolesAsync(input);

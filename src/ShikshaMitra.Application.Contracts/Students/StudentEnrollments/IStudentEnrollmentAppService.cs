@@ -1,5 +1,6 @@
 ﻿using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Students.FollowUps;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using System;
 using System.Collections.Generic;
@@ -12,7 +13,7 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 public interface IStudentEnrollmentAppService : ICrudAppService<StudentEnrollmentDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateStudentEnrollmentDto>
 {
 	// Task<StudentEnrollmentDto> GetStudentEnrollmentByUserId(Guid userId);
-	
+
 	Task<StudentEnrollmentDto> CreateStudentInquiryAsync(CreateStudentInquiryDto input);
 	Task<StudentEnrollmentDto> UpdateStudentBasicDetails(Guid studentEnrollmentId, UpdateStudentBasicDetailsDto input);
 	Task<StudentEnrollmentDto> UpdateFamilyDetails(Guid studentEnrollmentId, UpdateStudentFamilyDetailsDto input);
@@ -22,11 +23,15 @@ public interface IStudentEnrollmentAppService : ICrudAppService<StudentEnrollmen
 	Task<StudentEnrollmentDto> UpdateStudentCommunicationDetails(Guid studentEnrollmentId, StudentCommunicationDetailsDto input);
 	Task<StudentEnrollmentDto> UpdateStudentMedicalRecords(Guid studentEnrollmentId, StudentMedicalRecordsDto input);
 
-	
+
 	// For the documents
 	Task UploadDocumentsAsync(Guid studentEnrollmentId, List<DocumentDto> documentDtos);
 	Task<DocumentDto> GetDocumentAsync(Guid studentEnrollmentId, Guid documentId);
 	Task<List<DocumentMetadataDto>> GetDocumentMetadataAsync(Guid studentEnrollmentId);
 	Task<DocumentDto> UpdateDocumentAsync(Guid studentEnrollmentId, Guid documentId, DocumentDto documentDto);
 
+
+	Task<FollowUpWithStatusAndDateDto> AddFollowUpAsync(Guid studentEnrollmentId, AddFollowUpDto input);
+	Task<FollowUpWithStatusAndDateDto> GetFollowUpDetailsAsync(Guid studentEnrollmentId);
+	Task UpdateStatusAndDueDateAsync(Guid studentEnrollmentId, InquiryStatusType status, DateTimeOffset? dueDate);
 }

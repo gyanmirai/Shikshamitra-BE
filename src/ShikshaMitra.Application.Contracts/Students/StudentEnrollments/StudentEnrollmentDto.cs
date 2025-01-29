@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.Students.FollowUps;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
@@ -6,6 +7,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using System;
+using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
@@ -46,6 +48,11 @@ public class StudentEnrollmentDto : EntityDto<Guid>
 	public StandardDto Standard { get; set; }
 	public Guid? InquiryPreferenceId { get;  set; }
 	public InquiryPreferenceDto InquiryPreference { get; set; }
+
+
+	public DateTimeOffset? DueDate { get; set; }
+	public List<FollowUpMessageDto> FollowUps { get; set; } = new();
+
 
 	// Value Object
 	public StudentBasicDetailsDto StudentBasicDetails { get; private set; }

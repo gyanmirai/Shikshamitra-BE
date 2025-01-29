@@ -71,177 +71,177 @@ public class StudentEnrollmentManager(
 			Guid standardId,
 			Guid? inquiryPreferenceId
 			)
-		{
-			// Generate Inquiry Number
-			string inquiryNumber = await GenerateInquiryNumberAsync();
+	{
+		// Generate Inquiry Number
+		string inquiryNumber = await GenerateInquiryNumberAsync();
 
-			// create registration entity
-			var registration = new StudentEnrollment(
-				id: guidGenerator.Create(),
-				tenantId: CurrentTenant.Id,
-				studentEnrollmentState : studentEnrollmentState,
-				// Inquiry details
-				inquiryNumber: inquiryNumber,
-				formNumber: formNumber,
-				firstName: firstName,
-				middleName: middleName,
-				lastName: lastName,
-				previousSchoolName: previousSchoolName,
-				dateOfBirth: dateOfBirth,
-				dateOfInquiry: dateOfInquiry,
-				genderType: genderType,
-				parentContactNumber: parentContactNumber,
-				alternativeContactNumber: alternativeContactNumber,
-				addressLine1: addressLine1,
-				addressLine2: addressLine2,
-				addressLine3: addressLine3,
-				country: country,
-				city: city,
-				state: state,
-				pinCode: pinCode,
-				inquiryStatusType: inquiryStatusType,
-				academicYearId: academicYearId,
-				educationBoardId: educationBoardId,
-				educationMediumId: educationMediumId,
-				standardId: standardId,
-				inquiryPreferenceId: inquiryPreferenceId,
-				// registration
-				studentBasicDetails : new StudentBasicDetails(
-					userId: null,
-					profilePicture: null,
-					email:null,
-					aadhaarNo : null,
-					religion : null,
-					familyCast : null,
-					castType : null,
-					motherTongue : null,
-					nationality : null,
-					birthPlace : null,
-					temporaryGr : null,
-					remarks : null
-					),
-				fatherDetails: new StudentContactDetails(
-					name: null,
-					dateOfBirth: null,
-					occupation: null,
-					qualification: null,
-					contactNo: null,
-					email: null,
-					passOutYear: null,
-					officeNo: null,
-					officeAddress: null,
-					designation: null,
-					organisation: null,
-					aadhaarNo: null,
-					remarks: null,
-					address: null
+		// create registration entity
+		var registration = new StudentEnrollment(
+			id: guidGenerator.Create(),
+			tenantId: CurrentTenant.Id,
+			studentEnrollmentState: studentEnrollmentState,
+			// Inquiry details
+			inquiryNumber: inquiryNumber,
+			formNumber: formNumber,
+			firstName: firstName,
+			middleName: middleName,
+			lastName: lastName,
+			previousSchoolName: previousSchoolName,
+			dateOfBirth: dateOfBirth,
+			dateOfInquiry: dateOfInquiry,
+			genderType: genderType,
+			parentContactNumber: parentContactNumber,
+			alternativeContactNumber: alternativeContactNumber,
+			addressLine1: addressLine1,
+			addressLine2: addressLine2,
+			addressLine3: addressLine3,
+			country: country,
+			city: city,
+			state: state,
+			pinCode: pinCode,
+			inquiryStatusType: inquiryStatusType,
+			academicYearId: academicYearId,
+			educationBoardId: educationBoardId,
+			educationMediumId: educationMediumId,
+			standardId: standardId,
+			inquiryPreferenceId: inquiryPreferenceId,
+			// registration
+			studentBasicDetails: new StudentBasicDetails(
+				userId: null,
+				profilePicture: null,
+				email: null,
+				aadhaarNo: null,
+				religion: null,
+				familyCast: null,
+				castType: null,
+				motherTongue: null,
+				nationality: null,
+				birthPlace: null,
+				temporaryGr: null,
+				remarks: null
 				),
-				motherDetails:  new StudentContactDetails(
-					name: null,
-					dateOfBirth: null,
-					occupation: null,
-					qualification: null,
-					contactNo: null,
-					email: null,
-					passOutYear: null,
-					officeNo: null,
-					officeAddress: null,
-					designation: null,
-					organisation: null,
-					aadhaarNo: null,
-					remarks: null,
-					address: null
+			fatherDetails: new StudentContactDetails(
+				name: null,
+				dateOfBirth: null,
+				occupation: null,
+				qualification: null,
+				contactNo: null,
+				email: null,
+				passOutYear: null,
+				officeNo: null,
+				officeAddress: null,
+				designation: null,
+				organisation: null,
+				aadhaarNo: null,
+				remarks: null,
+				address: null
+			),
+			motherDetails: new StudentContactDetails(
+				name: null,
+				dateOfBirth: null,
+				occupation: null,
+				qualification: null,
+				contactNo: null,
+				email: null,
+				passOutYear: null,
+				officeNo: null,
+				officeAddress: null,
+				designation: null,
+				organisation: null,
+				aadhaarNo: null,
+				remarks: null,
+				address: null
+			),
+			guardianDetails: new StudentContactDetails(
+				name: null,
+				dateOfBirth: null,
+				occupation: null,
+				qualification: null,
+				contactNo: null,
+				email: null,
+				passOutYear: null,
+				officeNo: null,
+				officeAddress: null,
+				designation: null,
+				organisation: null,
+				aadhaarNo: null,
+				remarks: null,
+				address: null
+			),
+			studentCommunicationDetails: new StudentCommunicationDetails(
+				primaryContactNo: null,
+				parentContactNo: null,
+				parentEmail: null,
+				studentContactNo: null,
+				studentEmail: null,
+				whatsAppNo: null,
+				localAddressLine1: null,
+				localAddressLine2: null,
+				localAddressLine3: null,
+				localCountry: null,
+				localState: null,
+				localCity: null,
+				localPinCode: null,
+				permanentAddressLine1: null,
+				permanentAddressLine2: null,
+				permanentAddressLine3: null,
+				permanentCountry: null,
+				permanentState: null,
+				permanentCity: null,
+				permanentPinCode: null,
+				emergencyAddressLine1: null,
+				emergencyAddressLine2: null,
+				emergencyAddressLine3: null,
+				emergencyCountry: null,
+				emergencyState: null,
+				emergencyCity: null,
+				emergencyPinCode: null,
+				remarks: null
+			),
+			studentAdditionalDetails: new StudentAdditionalDetails(
+				category: null,
+				rightToEducation: null,
+				bPLStudent: null,
+				bPLCardNo: null,
+				personWithDisability: null,
+				secondLanguage: null,
+				emergencyContactNo: null,
+				singleParentChild: null,
+				singleChild: null,
+				sponsorName: null
 				),
-				guardianDetails:   new StudentContactDetails(
-					name: null,
-					dateOfBirth: null,
-					occupation: null,
-					qualification: null,
-					contactNo: null,
-					email: null,
-					passOutYear: null,
-					officeNo: null,
-					officeAddress: null,
-					designation: null,
-					organisation: null,
-					aadhaarNo: null,
-					remarks: null,
-					address: null
+			studentMedicalRecords: new StudentMedicalRecords(
+				weight: null,
+				height: null,
+				bodyMassIndex: null,
+				haemoglobin: null,
+				allergies: null,
+				covidVaccination: null,
+				pulseRate: null,
+				childImmunisation: null,
+				immunisationRemarks: null
 				),
-				studentCommunicationDetails: new StudentCommunicationDetails(
-					primaryContactNo: null,
-					parentContactNo: null,
-					parentEmail: null,
-					studentContactNo: null,
-					studentEmail: null,
-					whatsAppNo: null,
-					localAddressLine1: null,
-					localAddressLine2: null,
-					localAddressLine3: null,
-					localCountry: null,
-					localState: null,
-					localCity: null,
-					localPinCode:null,
-					permanentAddressLine1: null,
-					permanentAddressLine2: null,
-					permanentAddressLine3: null,
-					permanentCountry: null,
-					permanentState: null,
-					permanentCity: null,
-					permanentPinCode: null,
-					emergencyAddressLine1: null,
-					emergencyAddressLine2: null,
-					emergencyAddressLine3: null,
-					emergencyCountry: null,
-					emergencyState: null,
-					emergencyCity: null,
-					emergencyPinCode: null,
-					remarks: null
-				),
-				studentAdditionalDetails: new StudentAdditionalDetails(
-					category: null,
-					rightToEducation: null,
-					bPLStudent: null,
-					bPLCardNo: null,
-					personWithDisability: null,
-					secondLanguage: null,
-					emergencyContactNo: null,
-					singleParentChild: null,
-					singleChild: null,
-					sponsorName: null
-					),
-				studentMedicalRecords: new StudentMedicalRecords(
-					weight: null,
-					height: null,
-					bodyMassIndex: null,
-					haemoglobin: null,
-					allergies: null,
-					covidVaccination: null,
-					pulseRate: null,
-					childImmunisation: null,
-					immunisationRemarks: null
-					),
-				previousSchoolDetails: new PreviousSchoolDetails(
-					previousSchoolName: null,
-					previousSchoolAddress: null,
-					previousSchoolBoard: null,
-					previousSchoolMedium: null,
-					tcNo: null,
-					lastClassPassed: null,
-					percentage: null
-				),
-				parentBankDetails: new ParentBankDetails(
-					bankName: null,
-					branchName: null,
-					accountHolderName: null,
-					accountNumber: null,
-					ifscCode: null
-					)
-			);
-			return registration;
-		}
+			previousSchoolDetails: new PreviousSchoolDetails(
+				previousSchoolName: null,
+				previousSchoolAddress: null,
+				previousSchoolBoard: null,
+				previousSchoolMedium: null,
+				tcNo: null,
+				lastClassPassed: null,
+				percentage: null
+			),
+			parentBankDetails: new ParentBankDetails(
+				bankName: null,
+				branchName: null,
+				accountHolderName: null,
+				accountNumber: null,
+				ifscCode: null
+				)
+		);
+		return registration;
+	}
 	#endregion
-	
+
 	#region Create Student Inquiry
 
 	public async Task<StudentEnrollment> CreateStudentRegistrationAsync(
@@ -280,175 +280,175 @@ public class StudentEnrollmentManager(
 			string? temporaryGr,
 			string? remarks
 			)
-		{
-			// Generate Inquiry Number
-			string inquiryNumber = await GenerateInquiryNumberAsync();
+	{
+		// Generate Inquiry Number
+		string inquiryNumber = await GenerateInquiryNumberAsync();
 
-			// create registration entity
-			var registration = new StudentEnrollment(
-				id: guidGenerator.Create(),
-				tenantId: CurrentTenant.Id,
-				studentEnrollmentState : StudentEnrollmentState.Registration,
-				// Inquiry details
-				inquiryNumber: inquiryNumber,
-				formNumber: formNumber,
-				firstName: firstName,
-				middleName: middleName,
-				lastName: lastName,
-				previousSchoolName: previousSchoolName,
-				dateOfBirth: dateOfBirth,
-				dateOfInquiry: null,
-				genderType: genderType,
-				parentContactNumber: parentContactNumber,
-				alternativeContactNumber: alternativeContactNumber,
-				addressLine1: addressLine1,
-				addressLine2: addressLine2,
-				addressLine3: addressLine3,
-				country: country,
-				city: city,
-				state: state,
-				pinCode: pinCode,
-				inquiryStatusType: null,
-				academicYearId: academicYearId,
-				educationBoardId: educationBoardId,
-				educationMediumId: educationMediumId,
-				standardId: standardId,
-				inquiryPreferenceId: inquiryPreferenceId,
-				// registration
-				studentBasicDetails : new StudentBasicDetails(
-					userId: userId,
-					profilePicture: profilePicture,
-					email: email,
-					aadhaarNo : aadhaarNo,
-					religion : religion,
-					familyCast : familyCast,
-					castType : castType,
-					motherTongue : motherTongue,
-					nationality : nationality,
-					birthPlace : birthPlace,
-					temporaryGr : temporaryGr,
-					remarks : remarks
-					),
-				fatherDetails: new StudentContactDetails(
-					name: null,
-					dateOfBirth: null,
-					occupation: null,
-					qualification: null,
-					contactNo: null,
-					email: null,
-					passOutYear: null,
-					officeNo: null,
-					officeAddress: null,
-					designation: null,
-					organisation: null,
-					aadhaarNo: null,
-					remarks: null,
-					address: null
+		// create registration entity
+		var registration = new StudentEnrollment(
+			id: guidGenerator.Create(),
+			tenantId: CurrentTenant.Id,
+			studentEnrollmentState: StudentEnrollmentState.Registration,
+			// Inquiry details
+			inquiryNumber: inquiryNumber,
+			formNumber: formNumber,
+			firstName: firstName,
+			middleName: middleName,
+			lastName: lastName,
+			previousSchoolName: previousSchoolName,
+			dateOfBirth: dateOfBirth,
+			dateOfInquiry: null,
+			genderType: genderType,
+			parentContactNumber: parentContactNumber,
+			alternativeContactNumber: alternativeContactNumber,
+			addressLine1: addressLine1,
+			addressLine2: addressLine2,
+			addressLine3: addressLine3,
+			country: country,
+			city: city,
+			state: state,
+			pinCode: pinCode,
+			inquiryStatusType: null,
+			academicYearId: academicYearId,
+			educationBoardId: educationBoardId,
+			educationMediumId: educationMediumId,
+			standardId: standardId,
+			inquiryPreferenceId: inquiryPreferenceId,
+			// registration
+			studentBasicDetails: new StudentBasicDetails(
+				userId: userId,
+				profilePicture: profilePicture,
+				email: email,
+				aadhaarNo: aadhaarNo,
+				religion: religion,
+				familyCast: familyCast,
+				castType: castType,
+				motherTongue: motherTongue,
+				nationality: nationality,
+				birthPlace: birthPlace,
+				temporaryGr: temporaryGr,
+				remarks: remarks
 				),
-				motherDetails:  new StudentContactDetails(
-					name: null,
-					dateOfBirth: null,
-					occupation: null,
-					qualification: null,
-					contactNo: null,
-					email: null,
-					passOutYear: null,
-					officeNo: null,
-					officeAddress: null,
-					designation: null,
-					organisation: null,
-					aadhaarNo: null,
-					remarks: null,
-					address: null
+			fatherDetails: new StudentContactDetails(
+				name: null,
+				dateOfBirth: null,
+				occupation: null,
+				qualification: null,
+				contactNo: null,
+				email: null,
+				passOutYear: null,
+				officeNo: null,
+				officeAddress: null,
+				designation: null,
+				organisation: null,
+				aadhaarNo: null,
+				remarks: null,
+				address: null
+			),
+			motherDetails: new StudentContactDetails(
+				name: null,
+				dateOfBirth: null,
+				occupation: null,
+				qualification: null,
+				contactNo: null,
+				email: null,
+				passOutYear: null,
+				officeNo: null,
+				officeAddress: null,
+				designation: null,
+				organisation: null,
+				aadhaarNo: null,
+				remarks: null,
+				address: null
+			),
+			guardianDetails: new StudentContactDetails(
+				name: null,
+				dateOfBirth: null,
+				occupation: null,
+				qualification: null,
+				contactNo: null,
+				email: null,
+				passOutYear: null,
+				officeNo: null,
+				officeAddress: null,
+				designation: null,
+				organisation: null,
+				aadhaarNo: null,
+				remarks: null,
+				address: null
+			),
+			studentCommunicationDetails: new StudentCommunicationDetails(
+				primaryContactNo: null,
+				parentContactNo: null,
+				parentEmail: null,
+				studentContactNo: null,
+				studentEmail: null,
+				whatsAppNo: null,
+				localAddressLine1: null,
+				localAddressLine2: null,
+				localAddressLine3: null,
+				localCountry: null,
+				localState: null,
+				localCity: null,
+				localPinCode: null,
+				permanentAddressLine1: null,
+				permanentAddressLine2: null,
+				permanentAddressLine3: null,
+				permanentCountry: null,
+				permanentState: null,
+				permanentCity: null,
+				permanentPinCode: null,
+				emergencyAddressLine1: null,
+				emergencyAddressLine2: null,
+				emergencyAddressLine3: null,
+				emergencyCountry: null,
+				emergencyState: null,
+				emergencyCity: null,
+				emergencyPinCode: null,
+				remarks: null
+			),
+			studentAdditionalDetails: new StudentAdditionalDetails(
+				category: null,
+				rightToEducation: null,
+				bPLStudent: null,
+				bPLCardNo: null,
+				personWithDisability: null,
+				secondLanguage: null,
+				emergencyContactNo: null,
+				singleParentChild: null,
+				singleChild: null,
+				sponsorName: null
 				),
-				guardianDetails:   new StudentContactDetails(
-					name: null,
-					dateOfBirth: null,
-					occupation: null,
-					qualification: null,
-					contactNo: null,
-					email: null,
-					passOutYear: null,
-					officeNo: null,
-					officeAddress: null,
-					designation: null,
-					organisation: null,
-					aadhaarNo: null,
-					remarks: null,
-					address: null
+			studentMedicalRecords: new StudentMedicalRecords(
+				weight: null,
+				height: null,
+				bodyMassIndex: null,
+				haemoglobin: null,
+				allergies: null,
+				covidVaccination: null,
+				pulseRate: null,
+				childImmunisation: null,
+				immunisationRemarks: null
 				),
-				studentCommunicationDetails: new StudentCommunicationDetails(
-					primaryContactNo: null,
-					parentContactNo: null,
-					parentEmail: null,
-					studentContactNo: null,
-					studentEmail: null,
-					whatsAppNo: null,
-					localAddressLine1: null,
-					localAddressLine2: null,
-					localAddressLine3: null,
-					localCountry: null,
-					localState: null,
-					localCity: null,
-					localPinCode:null,
-					permanentAddressLine1: null,
-					permanentAddressLine2: null,
-					permanentAddressLine3: null,
-					permanentCountry: null,
-					permanentState: null,
-					permanentCity: null,
-					permanentPinCode: null,
-					emergencyAddressLine1: null,
-					emergencyAddressLine2: null,
-					emergencyAddressLine3: null,
-					emergencyCountry: null,
-					emergencyState: null,
-					emergencyCity: null,
-					emergencyPinCode: null,
-					remarks: null
-				),
-				studentAdditionalDetails: new StudentAdditionalDetails(
-					category: null,
-					rightToEducation: null,
-					bPLStudent: null,
-					bPLCardNo: null,
-					personWithDisability: null,
-					secondLanguage: null,
-					emergencyContactNo: null,
-					singleParentChild: null,
-					singleChild: null,
-					sponsorName: null
-					),
-				studentMedicalRecords: new StudentMedicalRecords(
-					weight: null,
-					height: null,
-					bodyMassIndex: null,
-					haemoglobin: null,
-					allergies: null,
-					covidVaccination: null,
-					pulseRate: null,
-					childImmunisation: null,
-					immunisationRemarks: null
-					),
-				previousSchoolDetails: new PreviousSchoolDetails(
-					previousSchoolName: null,
-					previousSchoolAddress: null,
-					previousSchoolBoard: null,
-					previousSchoolMedium: null,
-					tcNo: null,
-					lastClassPassed: null,
-					percentage: null
-				),
-				parentBankDetails: new ParentBankDetails(
-					bankName: null,
-					branchName: null,
-					accountHolderName: null,
-					accountNumber: null,
-					ifscCode: null
-					)
-			);
-			return registration;
-		}
+			previousSchoolDetails: new PreviousSchoolDetails(
+				previousSchoolName: null,
+				previousSchoolAddress: null,
+				previousSchoolBoard: null,
+				previousSchoolMedium: null,
+				tcNo: null,
+				lastClassPassed: null,
+				percentage: null
+			),
+			parentBankDetails: new ParentBankDetails(
+				bankName: null,
+				branchName: null,
+				accountHolderName: null,
+				accountNumber: null,
+				ifscCode: null
+				)
+		);
+		return registration;
+	}
 	#endregion
 
 	#region Update Student Inquiry
@@ -499,10 +499,10 @@ public class StudentEnrollmentManager(
 			genderType: genderType,
 			parentContactNumber: parentContactNumber,
 			alternativeContactNumber: alternativeContactNumber,
-			addressLine1 : addressLine1,
-			addressLine2 : addressLine2,
-			addressLine3 : addressLine3,
-			country : country,
+			addressLine1: addressLine1,
+			addressLine2: addressLine2,
+			addressLine3: addressLine3,
+			country: country,
 			city: city,
 			state: state,
 			pinCode: pinCode,
@@ -528,9 +528,9 @@ public class StudentEnrollmentManager(
 	)
 	{
 		// Validate user existence 
-		await GetUserAsync((Guid)studentBasicDetails.UserId);
+		await GetUserAsync((Guid) studentBasicDetails.UserId);
 		// Get the Registration details
-		var studentEnrollment =  await GetStudentEnrollmentAsync(studentEnrollmentId);
+		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
 		// Update the registration details
 		studentEnrollment.UpdateStudentBasicDetails(studentBasicDetails);
 		return studentEnrollment;
@@ -548,7 +548,7 @@ public class StudentEnrollmentManager(
 	)
 	{
 		// Get the Registration details
-		var studentEnrollment =  await GetStudentEnrollmentAsync(studentEnrollmentId);
+		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
 
 		// Update the Family details
 		studentEnrollment.UpdateFamilyDetails(fatherDetails, motherDetails, guardianDetails);
@@ -565,7 +565,7 @@ public class StudentEnrollmentManager(
 	)
 	{
 		// Get the Registration details
-		var studentEnrollment =  await GetStudentEnrollmentAsync(studentEnrollmentId);
+		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
 
 		// Update the Communication details
 		studentEnrollment.UpdateCommunicationDetails(studentCommunicationDetails);
@@ -582,7 +582,7 @@ public class StudentEnrollmentManager(
 	)
 	{
 		// Get the Registration details
-		var studentEnrollment =  await GetStudentEnrollmentAsync(studentEnrollmentId);
+		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
 
 		// Update the Communication details
 		studentEnrollment.UpdateAdditionalDetails(studentAdditionalDetails);
@@ -599,7 +599,7 @@ public class StudentEnrollmentManager(
 	)
 	{
 		// Get the Registration details
-		var studentEnrollment =  await GetStudentEnrollmentAsync(studentEnrollmentId);
+		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
 
 		// Update the Communication details
 		studentEnrollment.UpdateMedicalReports(studentMedicalRecords);
@@ -616,7 +616,7 @@ public class StudentEnrollmentManager(
 	)
 	{
 		// Get the Registration details
-		var studentEnrollment =  await GetStudentEnrollmentAsync(studentEnrollmentId);
+		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
 
 		// Update Previous School Details
 		studentEnrollment.UpdatePreviousSchoolDetails(previousSchoolDetails);
@@ -633,7 +633,7 @@ public class StudentEnrollmentManager(
 	)
 	{
 		// Get the Registration details
-		var studentEnrollment =  await GetStudentEnrollmentAsync(studentEnrollmentId);
+		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
 
 		// Update Parent Bank Details
 		studentEnrollment.UpdateParenBankDetails(parentBankDetails);
@@ -643,7 +643,7 @@ public class StudentEnrollmentManager(
 	#endregion
 
 	#region Add documents
-	
+
 	public async Task AddDocumentsAsync(Guid registrationId, List<StudentDocumentData> documents)
 	{
 		var studentEnrollment = await studentEnrollmentRepository.GetAsync(registrationId);
@@ -697,7 +697,7 @@ public class StudentEnrollmentManager(
 	#endregion
 
 	#region Update Document
-	
+
 	public async Task<StudentDocument> UpdateDocumentAsync(
 		Guid studentId,
 		Guid documentId,
@@ -761,7 +761,7 @@ public class StudentEnrollmentManager(
 		return newInquiryNumber;
 	}
 	#endregion
-	
+
 	#region Move to Registration
 
 	public async Task<StudentEnrollment> MoveToRegistrationAsync(Guid studentEnrollmentId)
@@ -772,10 +772,10 @@ public class StudentEnrollmentManager(
 		studentEnrollment = studentEnrollment.UpdateStudentEnrollmentState(StudentEnrollmentState.Registration);
 		return studentEnrollment;
 	}
-	
+
 
 	#endregion
-	
+
 	#region Move to Admission
 
 	public async Task<StudentEnrollment> MoveToAdmissionAsync(Guid studentEnrollmentId)
@@ -786,10 +786,10 @@ public class StudentEnrollmentManager(
 		studentEnrollment = studentEnrollment.UpdateStudentEnrollmentState(StudentEnrollmentState.Admission);
 		return studentEnrollment;
 	}
-	
+
 
 	#endregion
-	
+
 	#region Move to Admission Fess
 
 	public async Task<StudentEnrollment> MoveToAdmissionFeesAsync(Guid studentEnrollmentId)
@@ -800,8 +800,9 @@ public class StudentEnrollmentManager(
 		studentEnrollment = studentEnrollment.UpdateStudentEnrollmentState(StudentEnrollmentState.AdmissionFees);
 		return studentEnrollment;
 	}
-	
+
 
 	#endregion
 
+	
 }

@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
@@ -38,6 +38,7 @@ using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.TenantManagement;
 using Volo.Abp.TenantManagement.EntityFrameworkCore;
 using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
+using ShikshaMitra.Students.StudentEnrollments.FollowUps;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -112,6 +113,9 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region Student Enrollment
 	DbSet<StudentEnrollment> StudentEnrollments { get; set; }
+	DbSet<FollowUpMessage> FollowUpMessages { get; set; }
+
+
 	DbSet<StudentDocument> StudentDocuments { get; set; }
 	DbSet<EntranceExam> EntranceExams { get; set; }
 

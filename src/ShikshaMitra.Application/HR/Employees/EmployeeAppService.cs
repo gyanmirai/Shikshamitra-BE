@@ -1,18 +1,23 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.HR.Payroll.PayrollStructures;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.BlobStoring;
+using Volo.Abp.Domain.Entities;
 
 namespace ShikshaMitra.HR.Employees;
 
 public class EmployeeAppService(
 	IEmployeeRepository employeeRepository,
+	IPayrollStructureRepository payrollStructureRepository,
 	EmployeeManager employeeManager,
+	PayrollStructureManager payrollStructureManager,
 	IBlobContainer blobContainer) :
 	CrudAppService<Employee, EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>(
 		employeeRepository),
@@ -20,7 +25,7 @@ public class EmployeeAppService(
 {
 	public async Task<EmployeeDto?> GetEmployeeByUserId(Guid userId)
 	{
-		Employee? employee = await employeeRepository.GetEmployeeByUserIdAsync(userId);
+		Employee employee = await employeeRepository.GetEmployeeByUserIdAsync(userId) ?? throw new EntityNotFoundException(typeof(Employee), userId);
 
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
 	}
@@ -130,7 +135,10 @@ public class EmployeeAppService(
 		// Map the DTOs to domain entities or value objects
 		List<EmployeeDocumentData> employeeDocuments = documents.ConvertAll(doc => new EmployeeDocumentData
 		{
-			FileName = doc.FileName, ContentType = doc.ContentType, Content = doc.Content, Size = doc.Size
+			FileName = doc.FileName,
+			ContentType = doc.ContentType,
+			Content = doc.Content,
+			Size = doc.Size
 		});
 
 		// Call the domain service
@@ -158,7 +166,10 @@ public class EmployeeAppService(
 		var documents = await employeeManager.GetDocumentsAsync(employeeId);
 		return documents.Select(doc => new DocumentMetadataDto
 		{
-			Id = doc.Id, FileName = doc.DocumentName, Size = doc.Size, ContentType = doc.ContentType
+			Id = doc.Id,
+			FileName = doc.DocumentName,
+			Size = doc.Size,
+			ContentType = doc.ContentType
 		}).ToList();
 	}
 
@@ -226,5 +237,24 @@ public class EmployeeAppService(
 
 		// Return the DTO
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
+	}
+
+
+	[RemoteService(false)]
+
+	public async Task SetEmployeePayrollStructure(Guid employeeId, Guid payrollStructureId)
+	{
+		await payrollStructureManager.SetEmployeePayrollStructureAsync(employeeId, payrollStructureId);
+	}
+
+	[RemoteService(false)]
+	public async Task RemoveEmployeePayrollStructure(Guid employeeId)
+	{
+		await payrollStructureManager.RemoveEmployeePayrollStructureAsync(employeeId);
+	}
+
+	public async Task UpdatePayrollStructureAsync(Guid employeeId, CreateUpdateEmployeePayrollStructureDto input)
+	{
+
 	}
 }

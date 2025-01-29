@@ -9,7 +9,7 @@ public class StudentEnrollmentConfiguration : IEntityTypeConfiguration<StudentEn
 	public void Configure(EntityTypeBuilder<StudentEnrollment> builder)
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StudentEnrollments", ShikshaMitraConsts.DbSchema);
-	
+
 		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();
 
@@ -53,10 +53,28 @@ public class StudentEnrollmentConfiguration : IEntityTypeConfiguration<StudentEn
 			.HasForeignKey(s => s.InquiryPreferenceId)
 			.OnDelete(DeleteBehavior.Restrict);
 
+		builder.Property(i => i.InquiryStatusType)
+		   .HasDefaultValue(InquiryStatusType.Pending);
+
+		builder.Property(i => i.DueDate);
+
+		//builder.OwnsMany(e => e.FollowUps, b =>
+		//{
+		//	b.ToTable("StudentEnrollmentFollowUps");
+		//	b.WithOwner().HasForeignKey(x=>x.InquiryId);
+		//	b.Property(f => f.Message).HasColumnName("Message");
+		//});
+
+		builder.HasMany(e => e.FollowUps)
+				  .WithOne(f => f.StudentEnrollment)                 // the navigation property on FollowUpMessage
+				  .HasForeignKey(f => f.StudentEnrollmentId)         // foreign key on FollowUpMessage
+				  .OnDelete(DeleteBehavior.Cascade);
+
 		builder.Navigation(x => x.EducationMedium).AutoInclude();
 		builder.Navigation(x => x.EducationBoard).AutoInclude();
 		builder.Navigation(x => x.AcademicYear).AutoInclude();
 		builder.Navigation(x => x.Standard).AutoInclude();
 		builder.Navigation(x => x.InquiryPreference).AutoInclude();
+		builder.Navigation(x => x.FollowUps).AutoInclude();
 	}
 }

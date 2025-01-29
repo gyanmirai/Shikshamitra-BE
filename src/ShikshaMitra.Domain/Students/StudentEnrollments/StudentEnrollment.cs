@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.Students.StudentEnrollments.FollowUps;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -7,10 +8,7 @@ using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using System;
 using System.Collections.Generic;
-using Volo.Abp;
-using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Entities.Auditing;
-using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
@@ -39,13 +37,18 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? State { get; private set; }
 	public string? PinCode { get; private set; }
 	public InquiryStatusType? InquiryStatusType { get; private set; }
-	
+
+	public DateTimeOffset? DueDate { get; private set; }
+	public virtual ICollection<FollowUpMessage> FollowUps { get; private set; }
+
+
 	// Foreign Key 
 	public Guid AcademicYearId { get; private set; }
 	public Guid EducationBoardId { get; private set; }
 	public Guid EducationMediumId { get; private set; }
 	public Guid StandardId { get; private set; }
 	public Guid? InquiryPreferenceId { get; private set; }
+
 
 	// Navigation Property for student enrollment
 	public AcademicYear AcademicYear { get; private set; }
@@ -196,7 +199,8 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EducationMediumId = educationMediumId;
 		StandardId = standardId;
 		InquiryPreferenceId = inquiryPreferenceId;
-		return this;
+        FollowUps = new List<FollowUpMessage>();
+        return this;
 	}
 	
 	// ++++++++ Update Student Basic Details +++++++
@@ -276,5 +280,24 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	// +++++++++ Add Student Documeent +++++++++
 	internal void AddDocument(StudentDocument document) => Documents.Add(document);
-}
 
+
+	public StudentEnrollment AddFollowUpMessage(FollowUpMessage followUpMessage)
+	{
+		FollowUps.Add(followUpMessage);
+		return this;
+	}
+
+
+	public StudentEnrollment ChnageDueDate(DateTimeOffset? dueDate)
+	{
+		DueDate = dueDate;
+		return this;
+	}
+
+	public StudentEnrollment ChangeInquiryStatus(InquiryStatusType inquiryStatusType)
+	{
+		InquiryStatusType = inquiryStatusType;
+		return this;
+	}
+}

@@ -1,8 +1,10 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Students.Attendance.settings;
 using ShikshaMitra.Students.Attendance.Settings;
+using ShikshaMitra.Students.FollowUps;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.EntranceExam;
+using ShikshaMitra.Students.StudentEnrollments.FollowUps;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 
@@ -14,7 +16,7 @@ public class StudentMapperProfile : Profile
 	{
 		#region Student Enrollment
 
-		CreateMap<StudentEnrollments.StudentEnrollment, StudentEnrollmentDto>();
+		CreateMap<StudentEnrollments.StudentEnrollment, StudentEnrollmentDto>().ReverseMap();
 		CreateMap<CreateUpdateStudentEnrollmentDto, StudentEnrollments.StudentEnrollment>();
 		CreateMap<StudentBasicDetails, StudentBasicDetailsDto>().ReverseMap();
 		CreateMap<UpdateStudentBasicDetailsDto, StudentBasicDetails>();
@@ -24,6 +26,8 @@ public class StudentMapperProfile : Profile
 		CreateMap<StudentMedicalRecords, StudentMedicalRecordsDto>().ReverseMap();
 		CreateMap<PreviousSchoolDetails, PreviousSchoolDetailsDto>().ReverseMap();
 		CreateMap<ParentBankDetails, ParentBankDetailsDto>().ReverseMap();
+
+		CreateMap<FollowUpMessage, FollowUpMessageDto>().ReverseMap();
 
 		#region Entrance Exam
 		CreateMap<StudentEnrollments.EntranceExam.EntranceExam, EntranceExamDto>();

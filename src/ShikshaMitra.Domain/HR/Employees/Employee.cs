@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Collections.Generic;
@@ -61,12 +62,17 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public List<WorkExperience> WorkExperiences { get; private set; } = new List<WorkExperience>();
 	public List<EmployeeDocument> Documents { get; private set; } = new List<EmployeeDocument>();
 
+	// Payroll Structure
+	public Guid? PayrollStructureId { get; private set; }
 
 	// Navigation Property for Role
 	public virtual IdentityRole? Role { get; private set; }
 
 	// Navigation Property for EducationMediumStage
 	public virtual EducationMediumStage? EducationMediumStage { get; private set; }
+
+	// Navigation property for PayrollStructure
+	public virtual PayrollStructure? PayrollStructure { get; private set; }
 
 	// Full name including middle name
 	public string EmployeeNameWithFather
@@ -259,10 +265,20 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		EmployeeStatusType = employeeStatusType;
 		ChangeReason = changeReason;
-		StatusLastChangedAt  = DateTimeOffset.Now;
+		StatusLastChangedAt = DateTimeOffset.Now;
 
 		return this;
 	}
-	
+
 	internal void AddDocument(EmployeeDocument document) => Documents.Add(document);
+
+	internal void SetPayrollStructure(Guid payrollStructureId)
+	{
+		PayrollStructureId = payrollStructureId;
+	}
+
+	internal void RemovePayrollStructure()
+	{
+		PayrollStructureId = null;
+	}
 }

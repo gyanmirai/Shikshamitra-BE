@@ -542,6 +542,12 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("MobileNo")
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("PayrollStructureId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PayrollStructureId1")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("PinCode")
                         .HasColumnType("text");
 
@@ -674,6 +680,8 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("EducationMediumStageId");
+
+                    b.HasIndex("PayrollStructureId1");
 
                     b.HasIndex("RoleId");
 
@@ -941,7 +949,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
-                    b.Property<Guid>("EducationMediumStageId")
+                    b.Property<Guid?>("EducationMediumStageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("EmployeeId")
                         .HasColumnType("uuid");
 
                     b.Property<bool>("IsDeleted")
@@ -961,7 +972,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("PayElementId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("PayrollStructureType")
+                    b.Property<int>("PayElementType")
                         .HasColumnType("integer");
 
                     b.Property<Guid?>("TenantId")
@@ -1319,7 +1330,6 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.EntranceExam.EntranceExam", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -1396,6 +1406,79 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppEntranceExams", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.FollowUps.FollowUpMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Author")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("StudentEnrollmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<DateTimeOffset>("Timestamp")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentEnrollmentId");
+
+                    b.ToTable("AppFollowUpMessages", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Registration.StudentDocument", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1440,7 +1523,6 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.EntranceExamSlot", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -1682,6 +1764,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
+                    b.Property<DateTimeOffset?>("DueDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("EducationBoardId")
                         .HasColumnType("uuid");
 
@@ -1710,7 +1795,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<int?>("InquiryStatusType")
-                        .HasColumnType("integer");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -4604,6 +4691,10 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", "PayrollStructure")
+                        .WithMany()
+                        .HasForeignKey("PayrollStructureId1");
+
                     b.HasOne("Volo.Abp.Identity.IdentityRole", "Role")
                         .WithMany()
                         .HasForeignKey("RoleId")
@@ -4661,6 +4752,8 @@ namespace ShikshaMitra.Migrations
 
                     b.Navigation("EducationMediumStage");
 
+                    b.Navigation("PayrollStructure");
+
                     b.Navigation("Role");
 
                     b.Navigation("WorkExperiences");
@@ -4690,9 +4783,7 @@ namespace ShikshaMitra.Migrations
                 {
                     b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
                         .WithMany()
-                        .HasForeignKey("EducationMediumStageId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .HasForeignKey("EducationMediumStageId");
 
                     b.HasOne("ShikshaMitra.HR.Payroll.Settings.PayElement", "PayElement")
                         .WithMany()
@@ -4749,6 +4840,17 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
 
                     b.Navigation("EntranceExamSlot");
+
+                    b.Navigation("StudentEnrollment");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.FollowUps.FollowUpMessage", b =>
+                {
+                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", "StudentEnrollment")
+                        .WithMany("FollowUps")
+                        .HasForeignKey("StudentEnrollmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("StudentEnrollment");
                 });
@@ -5014,6 +5116,8 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", b =>
                 {
                     b.Navigation("Documents");
+
+                    b.Navigation("FollowUps");
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", b =>

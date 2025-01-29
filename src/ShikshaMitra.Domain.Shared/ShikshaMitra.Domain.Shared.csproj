@@ -44,5 +44,10 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="HR\Payroll\PayrollStructures\" />
+    <Folder Include="Students\FollowUps\" />
+  </ItemGroup>
+
 
 </Project>

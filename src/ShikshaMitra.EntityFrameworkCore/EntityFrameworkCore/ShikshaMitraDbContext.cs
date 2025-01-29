@@ -10,6 +10,7 @@ using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Students.Attendance.settings;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.StudentEnrollments.EntranceExam;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
@@ -39,6 +40,7 @@ using Volo.Abp.TenantManagement.EntityFrameworkCore;
 using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
 using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
 using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
+using ShikshaMitra.Students.StudentEnrollments.FollowUps;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -113,11 +115,18 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region Student Enrollment
 	DbSet<StudentEnrollment> StudentEnrollments { get; set; }
+	DbSet<FollowUpMessage> FollowUpMessages { get; set; }
+
+
 	DbSet<StudentDocument> StudentDocuments { get; set; }
+	DbSet<EntranceExam> EntranceExams { get; set; }
+
 
 	#region Settings
 	DbSet<StudentDocumentSetting> StudentDocumentSettings { get; set; }
 	DbSet<InquiryPreference> InquiryPreferences { get; set; }
+	DbSet<EntranceExamSlot> EntranceExamSlots { get; set; }
+
 	#endregion
 
 	#endregion

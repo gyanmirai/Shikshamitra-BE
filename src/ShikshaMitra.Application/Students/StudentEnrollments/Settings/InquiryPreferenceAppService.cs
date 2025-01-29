@@ -6,5 +6,4 @@ namespace ShikshaMitra.Students.StudentEnrollments.Settings;
 
 public class InquiryPreferenceAppService(IInquiryPreferenceRepository InquiryPreferenceRepository) : CrudAppService<InquiryPreference, InquiryPreferenceDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateInquiryPreferenceDto>((Volo.Abp.Domain.Repositories.IRepository<InquiryPreference, Guid>) InquiryPreferenceRepository), IInquiryPreferenceAppService
 {
-	
 }

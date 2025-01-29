@@ -90,4 +90,12 @@ public class EmployeeController(IEmployeeAppService employeeAppService) : AbpCon
 
 		return Ok(new { Message = "File updated successfully." });
 	}
+
+	[HttpPut("{employeeId}/payroll-structure")]
+	public async Task<IActionResult> UpdatePayrollStructure(Guid employeeId, [FromBody] CreateUpdateEmployeePayrollStructureDto input)
+	{
+		await employeeAppService.UpdatePayrollStructureAsync(employeeId, input);
+		return Ok(new { Message = "Payroll structure updated successfully." });
+	}
+
 }

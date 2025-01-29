@@ -9,6 +9,11 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.BlobStoring;
 using System.Threading.Tasks;
+using ShikshaMitra.Students.FollowUps;
+using ShikshaMitra.Students.StudentEnrollments.FollowUps;
+using Volo.Abp.Guids;
+using Volo.Abp;
+using Volo.Abp.ObjectMapping;
 
 
 namespace ShikshaMitra.Students.StudentEnrollments;
@@ -16,7 +21,10 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 public class StudentEnrollmentAppService(
 	IStudentEnrollmentRepository studentEnrollmentRepository,
 	StudentEnrollmentManager studentEnrollmentManager,
-	IBlobContainer blobContainer) : CrudAppService<StudentEnrollment, StudentEnrollmentDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateStudentEnrollmentDto>(studentEnrollmentRepository), IStudentEnrollmentAppService
+	IGuidGenerator guidGenerator,
+	IBlobContainer blobContainer) :
+	CrudAppService<StudentEnrollment, StudentEnrollmentDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateStudentEnrollmentDto>(studentEnrollmentRepository),
+	IStudentEnrollmentAppService
 {
 	#region Get Student Enrollment by Enrollment Id
 
@@ -38,7 +46,8 @@ public class StudentEnrollmentAppService(
 		studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
 
 		// Return the DTO
-		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);	}
+		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);
+	}
 
 	#endregion
 
@@ -52,7 +61,8 @@ public class StudentEnrollmentAppService(
 		studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
 
 		// Return the DTO
-		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);	}
+		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);
+	}
 
 	#endregion
 
@@ -66,12 +76,13 @@ public class StudentEnrollmentAppService(
 		studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
 
 		// Return the DTO
-		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);	}
+		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);
+	}
 
 	#endregion
 
 	#region Get Student Inquiries list
-	
+
 	public async Task<PagedResultDto<StudentEnrollmentDto>> GetStudentInquiry()
 	{
 		List<StudentEnrollment> studentInquiry =
@@ -79,14 +90,14 @@ public class StudentEnrollmentAppService(
 				e => e.StudentEnrollmentState == StudentEnrollmentState.Inquiry,
 				includeDetails: true
 			);
-		
+
 		return new PagedResultDto<StudentEnrollmentDto>
 		{
 			TotalCount = studentInquiry.Count,
 			Items = ObjectMapper.Map<List<StudentEnrollment>, List<StudentEnrollmentDto>>(studentInquiry)
 		};
 	}
-	
+
 	#endregion
 
 	#region Get Student Registration form list
@@ -104,7 +115,7 @@ public class StudentEnrollmentAppService(
 			Items = ObjectMapper.Map<List<StudentEnrollment>, List<StudentEnrollmentDto>>(studentInquiry)
 		};
 	}
-	
+
 	#endregion
 
 	#region Get Student Registration list
@@ -115,7 +126,7 @@ public class StudentEnrollmentAppService(
 				e => e.StudentEnrollmentState == StudentEnrollmentState.Registration,
 				includeDetails: true
 			);
-		
+
 		return new PagedResultDto<StudentEnrollmentDto>
 		{
 			TotalCount = studentInquiry.Count,
@@ -132,7 +143,7 @@ public class StudentEnrollmentAppService(
 				e => e.StudentEnrollmentState == StudentEnrollmentState.Admission,
 				includeDetails: true
 			);
-		
+
 		return new PagedResultDto<StudentEnrollmentDto>
 		{
 			TotalCount = studentInquiry.Count,
@@ -149,7 +160,7 @@ public class StudentEnrollmentAppService(
 				e => e.StudentEnrollmentState == StudentEnrollmentState.AdmissionFees,
 				includeDetails: true
 			);
-		
+
 		return new PagedResultDto<StudentEnrollmentDto>
 		{
 			TotalCount = studentInquiry.Count,
@@ -169,7 +180,7 @@ public class StudentEnrollmentAppService(
 			lastName: input.LastName,
 			previousSchoolName: input.PreviousSchoolName,
 			dateOfBirth: input.DateOfBirth,
-			genderType : input.GenderType,
+			genderType: input.GenderType,
 			parentContactNumber: input.ParentContactNumber,
 			alternativeContactNumber: input.AlternativeContactNumber,
 			addressLine1: input.AddressLine1,
@@ -186,16 +197,16 @@ public class StudentEnrollmentAppService(
 			inquiryPreferenceId: input.InquiryPreferenceId,
 			userId: input.UserId,
 			profilePicture: input.ProfilePicture,
-			email:input.Email,
-			aadhaarNo : input.AadhaarNo,
-			religion : input.Religion,
-			familyCast : input.FamilyCast,
-			castType : input.CastType,
-			motherTongue : input.MotherTongue,
-			nationality : input.Nationality,
-			birthPlace : input.BirthPlace,
-			temporaryGr : input.TemporaryGr,
-			remarks : input.Remarks
+			email: input.Email,
+			aadhaarNo: input.AadhaarNo,
+			religion: input.Religion,
+			familyCast: input.FamilyCast,
+			castType: input.CastType,
+			motherTongue: input.MotherTongue,
+			nationality: input.Nationality,
+			birthPlace: input.BirthPlace,
+			temporaryGr: input.TemporaryGr,
+			remarks: input.Remarks
 		);
 
 		// Save the student enrollment
@@ -211,7 +222,7 @@ public class StudentEnrollmentAppService(
 	public async Task<StudentEnrollmentDto> CreateStudentInquiryAsync(CreateStudentInquiryDto input)
 	{
 		StudentEnrollmentState studentEnrollmentState = StudentEnrollmentState.Inquiry;
-		if ( input.FormNumber != null)
+		if (input.FormNumber != null)
 		{
 			studentEnrollmentState = StudentEnrollmentState.RegistrationForm;
 		}
@@ -226,8 +237,8 @@ public class StudentEnrollmentAppService(
 			lastName: input.LastName,
 			previousSchoolName: input.PreviousSchoolName,
 			dateOfBirth: input.DateOfBirth,
-			dateOfInquiry : input.DateOfInquiry,
-			genderType : input.GenderType,
+			dateOfInquiry: input.DateOfInquiry,
+			genderType: input.GenderType,
 			parentContactNumber: input.ParentContactNumber,
 			alternativeContactNumber: input.AlternativeContactNumber,
 			addressLine1: input.AddressLine1,
@@ -259,7 +270,7 @@ public class StudentEnrollmentAppService(
 	public async Task<StudentEnrollmentDto> UpdateStudentInquiryAsync(Guid studentEnrollmentId, UpdateStudentInquiryDto input)
 	{
 		StudentEnrollmentState studentEnrollmentState = StudentEnrollmentState.Inquiry;
-		if ( input.FormNumber != null)
+		if (input.FormNumber != null)
 		{
 			studentEnrollmentState = StudentEnrollmentState.RegistrationForm;
 		}
@@ -291,7 +302,7 @@ public class StudentEnrollmentAppService(
 			standardId: input.StandardId,
 			inquiryPreferenceId: input.InquiryPreferenceId
 		);
-		studentEnrollment  = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
+		studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
 		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);
 	}
 
@@ -430,7 +441,10 @@ public class StudentEnrollmentAppService(
 		// Map the DTOs to domain entities or value objects
 		List<StudentDocumentData> studentDocuments = documents.ConvertAll(doc => new StudentDocumentData
 		{
-			FileName = doc.FileName, ContentType = doc.ContentType, Content = doc.Content, Size = doc.Size
+			FileName = doc.FileName,
+			ContentType = doc.ContentType,
+			Content = doc.Content,
+			Size = doc.Size
 		});
 
 		// Call the domain service
@@ -459,7 +473,10 @@ public class StudentEnrollmentAppService(
 		var documents = await studentEnrollmentManager.GetDocumentsAsync(studentEnrollmentId);
 		return documents.Select(doc => new DocumentMetadataDto
 		{
-			Id = doc.Id, FileName = doc.DocumentName, Size = doc.Size, ContentType = doc.ContentType
+			Id = doc.Id,
+			FileName = doc.DocumentName,
+			Size = doc.Size,
+			ContentType = doc.ContentType
 		}).ToList();
 	}
 
@@ -484,5 +501,75 @@ public class StudentEnrollmentAppService(
 		};
 	}
 
-	#endregion	
+
+	#endregion
+
+
+	[RemoteService(false)]
+	public async Task<FollowUpWithStatusAndDateDto> AddFollowUpAsync(Guid studentEnrollmentId, AddFollowUpDto input)
+	{
+		// Fetch the StudentEnrollment by InquiryNumber (as before)
+		StudentEnrollment studentEnrollment = await studentEnrollmentRepository.GetAsync(studentEnrollmentId);
+
+		// Create a new FollowUpMessage entity
+		var followUpMessage = new FollowUpMessage(
+			id: guidGenerator.Create(),          // new Guid if your entity expects an ID
+			tenantId: CurrentTenant.Id,           // current tenant ID
+			studentEnrollmentId: studentEnrollment.Id,     // foreign key property in FollowUpMessage
+			message: input.Message,
+			author: CurrentUser?.Name ?? "System",
+			timestamp: Clock.Now
+		);
+
+		// Add the new follow-up to the StudentEnrollment's collection
+		studentEnrollment.FollowUps.Add(followUpMessage);
+
+		// Update status if provided
+		if (input.InquiryStatusType.HasValue)
+		{
+			studentEnrollment = studentEnrollment.ChangeInquiryStatus(input.InquiryStatusType.Value);
+		}
+
+		// Update due date if provided
+		if (input.DueDate.HasValue)
+		{
+			studentEnrollment = studentEnrollment.ChnageDueDate(input.DueDate.Value);
+		}
+
+		// Save changes
+		studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
+
+		// Return the updated DTO
+		return new FollowUpWithStatusAndDateDto
+		{
+			FollowUps = ObjectMapper.Map<List<FollowUpMessage>, List<FollowUpMessageDto>>(studentEnrollment.FollowUps.ToList()),
+			InquiryStatusType = studentEnrollment.InquiryStatusType,
+			DueDate = studentEnrollment.DueDate
+		};
+	}
+
+	[RemoteService(false)]
+	public async Task<FollowUpWithStatusAndDateDto> GetFollowUpDetailsAsync(Guid studentEnrollmentId)
+	{
+		StudentEnrollment? inquiry = await studentEnrollmentRepository.GetAsync(studentEnrollmentId);
+
+		List<FollowUpMessageDto> followUpMessageDtolist = ObjectMapper.Map<List<FollowUpMessage>, List<FollowUpMessageDto>>([.. inquiry.FollowUps]);
+
+		return new FollowUpWithStatusAndDateDto
+		{
+			FollowUps = followUpMessageDtolist,
+			InquiryStatusType = inquiry.InquiryStatusType,
+			DueDate = inquiry.DueDate
+		};
+
+	}
+
+	[RemoteService(false)]
+	public async Task UpdateStatusAndDueDateAsync(Guid studentEnrollmentId, InquiryStatusType status, DateTimeOffset? dueDate)
+	{
+		var inquiry = await studentEnrollmentRepository.GetAsync(studentEnrollmentId);
+		inquiry = inquiry.ChangeInquiryStatus(status);
+		inquiry = inquiry.ChnageDueDate(dueDate);
+		await studentEnrollmentRepository.UpdateAsync(inquiry);
+	}
 }

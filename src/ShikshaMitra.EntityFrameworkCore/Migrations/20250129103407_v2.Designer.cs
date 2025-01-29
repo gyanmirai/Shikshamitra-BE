@@ -14,8 +14,8 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20250125102828_Initial")]
-    partial class Initial
+    [Migration("20250129103407_v2")]
+    partial class v2
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -545,6 +545,12 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("MobileNo")
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("PayrollStructureId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PayrollStructureId1")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("PinCode")
                         .HasColumnType("text");
 
@@ -677,6 +683,8 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("EducationMediumStageId");
+
+                    b.HasIndex("PayrollStructureId1");
 
                     b.HasIndex("RoleId");
 
@@ -944,7 +952,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
-                    b.Property<Guid>("EducationMediumStageId")
+                    b.Property<Guid?>("EducationMediumStageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("EmployeeId")
                         .HasColumnType("uuid");
 
                     b.Property<bool>("IsDeleted")
@@ -964,7 +975,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("PayElementId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("PayrollStructureType")
+                    b.Property<int>("PayElementType")
                         .HasColumnType("integer");
 
                     b.Property<Guid?>("TenantId")
@@ -1319,7 +1330,7 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppStudentAttendanceRules", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Students.Student", b =>
+            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.EntranceExam.EntranceExam", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -1339,9 +1350,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
-                    b.Property<DateOnly>("DateOfBirth")
-                        .HasColumnType("date");
-
                     b.Property<Guid?>("DeleterId")
                         .HasColumnType("uuid")
                         .HasColumnName("DeleterId");
@@ -1350,20 +1358,23 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
-                    b.Property<Guid>("DivisionId")
+                    b.Property<Guid>("EntranceExamSlotId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ExamDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ExamScheduleType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ExamType")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
-
-                    b.Property<int>("GenderType")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("GrNo")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -1379,243 +1390,31 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<string>("MiddleName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<byte[]>("ProfilePicture")
-                        .HasColumnType("bytea");
-
-                    b.Property<Guid>("StandardId")
+                    b.Property<Guid>("StudentEnrollmentId")
                         .HasColumnType("uuid");
-
-                    b.Property<string>("Surname")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.ComplexProperty<Dictionary<string, object>>("Address", "ShikshaMitra.Students.Student.Address#Address", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("BirthPlace")
-                                .IsRequired()
-                                .HasColumnType("text");
-
-                            b1.Property<string>("CasteCategory")
-                                .IsRequired()
-                                .HasColumnType("text");
-
-                            b1.Property<string>("EmergencyAddress")
-                                .IsRequired()
-                                .HasColumnType("text");
-
-                            b1.Property<string>("FamilyCaste")
-                                .IsRequired()
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalAddress")
-                                .IsRequired()
-                                .HasColumnType("text");
-
-                            b1.Property<string>("MotherTongue")
-                                .IsRequired()
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Nationality")
-                                .IsRequired()
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentAddress")
-                                .IsRequired()
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Religion")
-                                .IsRequired()
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("AdmissionDetails", "ShikshaMitra.Students.Student.AdmissionDetails#AdmissionDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<DateOnly?>("AdmissionDate")
-                                .HasColumnType("date");
-
-                            b1.Property<string>("AdmissionFormNumber")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("AdmissionQuota")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("AdmissionStandard")
-                                .HasColumnType("text");
-
-                            b1.Property<DateOnly?>("PreviousLcDate")
-                                .HasColumnType("date");
-
-                            b1.Property<string>("PreviousLcNumber")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PreviousSchool")
-                                .HasColumnType("text");
-
-                            b1.Property<DateOnly?>("PreviousSchoolLeftDate")
-                                .HasColumnType("date");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("CommunicationDetails", "ShikshaMitra.Students.Student.CommunicationDetails#CommunicationDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("ParentContactNumber")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("ParentEmail")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("StudentContactNumber")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("StudentEmail")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("WhatsAppContactNumber")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("FatherDetails", "ShikshaMitra.Students.Student.FatherDetails#StudentParentDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("AadharNo")
-                                .HasColumnType("text");
-
-                            b1.Property<decimal?>("AnnualIncome")
-                                .HasColumnType("numeric");
-
-                            b1.Property<string>("ContactNumber")
-                                .HasColumnType("text");
-
-                            b1.Property<DateOnly?>("DateOfBirth")
-                                .HasColumnType("date");
-
-                            b1.Property<string>("Designation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Email")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("ExStudent")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Name")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Occupation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeContactNumber")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Organization")
-                                .HasColumnType("text");
-
-                            b1.Property<int?>("PassOutYear")
-                                .HasColumnType("integer");
-
-                            b1.Property<string>("Qualification")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("MotherDetails", "ShikshaMitra.Students.Student.MotherDetails#StudentParentDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("AadharNo")
-                                .HasColumnType("text");
-
-                            b1.Property<decimal?>("AnnualIncome")
-                                .HasColumnType("numeric");
-
-                            b1.Property<string>("ContactNumber")
-                                .HasColumnType("text");
-
-                            b1.Property<DateOnly?>("DateOfBirth")
-                                .HasColumnType("date");
-
-                            b1.Property<string>("Designation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Email")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("ExStudent")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Name")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Occupation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeContactNumber")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Organization")
-                                .HasColumnType("text");
-
-                            b1.Property<int?>("PassOutYear")
-                                .HasColumnType("integer");
-
-                            b1.Property<string>("Qualification")
-                                .HasColumnType("text");
-                        });
+                    b.Property<float>("TotalMarks")
+                        .HasColumnType("real");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DivisionId");
+                    b.HasIndex("EntranceExamSlotId");
 
-                    b.HasIndex("StandardId");
+                    b.HasIndex("StudentEnrollmentId");
 
-                    b.HasIndex("UserId");
-
-                    b.ToTable("AppStudents", (string)null);
+                    b.ToTable("AppEntranceExams", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Inquiry.StudentInquiry", b =>
+            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.FollowUps.FollowUpMessage", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Address")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("AlternativeContactNumber")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("City")
+                    b.Property<string>("Author")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -1634,12 +1433,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
-                    b.Property<DateTimeOffset>("DateOfBirth")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("DateOfInquiry")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<Guid?>("DeleterId")
                         .HasColumnType("uuid")
                         .HasColumnName("DeleterId");
@@ -1648,34 +1441,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
-                    b.Property<Guid>("EducationBoardId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("EducationMediumId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
-
-                    b.Property<string>("FirstName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("FormNumber")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("GenderType")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("InquiryNumber")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("InquiryPreferenceId")
-                        .HasColumnType("uuid");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -1691,49 +1460,26 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<string>("LastName")
+                    b.Property<string>("Message")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
-                    b.Property<string>("MiddleName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ParentContactNumber")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("PinCode")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("PreviousSchoolName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("StandardId")
+                    b.Property<Guid>("StudentEnrollmentId")
                         .HasColumnType("uuid");
-
-                    b.Property<string>("State")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
+                    b.Property<DateTimeOffset>("Timestamp")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("AcademicYearId");
+                    b.HasIndex("StudentEnrollmentId");
 
-                    b.HasIndex("EducationBoardId");
-
-                    b.HasIndex("EducationMediumId");
-
-                    b.HasIndex("InquiryPreferenceId");
-
-                    b.HasIndex("StandardId");
-
-                    b.ToTable("AppStudentInquiries", (string)null);
+                    b.ToTable("AppFollowUpMessages", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Registration.StudentDocument", b =>
@@ -1775,6 +1521,68 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("StudentEnrollmentId");
 
                     b.ToTable("AppStudentDocuments", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.EntranceExamSlot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<DateTimeOffset>("EndDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<DateTimeOffset>("StartDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AppEntranceExamSlots", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.InquiryPreference", b =>
@@ -1959,6 +1767,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
+                    b.Property<DateTimeOffset?>("DueDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("EducationBoardId")
                         .HasColumnType("uuid");
 
@@ -1987,7 +1798,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<int?>("InquiryStatusType")
-                        .HasColumnType("integer");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -4881,6 +4694,10 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", "PayrollStructure")
+                        .WithMany()
+                        .HasForeignKey("PayrollStructureId1");
+
                     b.HasOne("Volo.Abp.Identity.IdentityRole", "Role")
                         .WithMany()
                         .HasForeignKey("RoleId")
@@ -4938,6 +4755,8 @@ namespace ShikshaMitra.Migrations
 
                     b.Navigation("EducationMediumStage");
 
+                    b.Navigation("PayrollStructure");
+
                     b.Navigation("Role");
 
                     b.Navigation("WorkExperiences");
@@ -4967,9 +4786,7 @@ namespace ShikshaMitra.Migrations
                 {
                     b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
                         .WithMany()
-                        .HasForeignKey("EducationMediumStageId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .HasForeignKey("EducationMediumStageId");
 
                     b.HasOne("ShikshaMitra.HR.Payroll.Settings.PayElement", "PayElement")
                         .WithMany()
@@ -5011,71 +4828,34 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Dependent");
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Students.Student", b =>
+            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.EntranceExam.EntranceExam", b =>
                 {
-                    b.HasOne("ShikshaMitra.TenantSettings.Divisions.Division", "Division")
+                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.Settings.EntranceExamSlot", "EntranceExamSlot")
                         .WithMany()
-                        .HasForeignKey("DivisionId")
+                        .HasForeignKey("EntranceExamSlotId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
+                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", "StudentEnrollment")
                         .WithMany()
-                        .HasForeignKey("StandardId")
+                        .HasForeignKey("StudentEnrollmentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Volo.Abp.Identity.IdentityUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                    b.Navigation("EntranceExamSlot");
 
-                    b.Navigation("Division");
-
-                    b.Navigation("Standard");
+                    b.Navigation("StudentEnrollment");
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Inquiry.StudentInquiry", b =>
+            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.FollowUps.FollowUpMessage", b =>
                 {
-                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", "AcademicYear")
-                        .WithMany()
-                        .HasForeignKey("AcademicYearId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", "StudentEnrollment")
+                        .WithMany("FollowUps")
+                        .HasForeignKey("StudentEnrollmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", "EducationBoard")
-                        .WithMany()
-                        .HasForeignKey("EducationBoardId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "EducationMedium")
-                        .WithMany()
-                        .HasForeignKey("EducationMediumId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.Settings.InquiryPreference", "InquiryPreference")
-                        .WithMany()
-                        .HasForeignKey("InquiryPreferenceId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
-                        .WithMany()
-                        .HasForeignKey("StandardId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("AcademicYear");
-
-                    b.Navigation("EducationBoard");
-
-                    b.Navigation("EducationMedium");
-
-                    b.Navigation("InquiryPreference");
-
-                    b.Navigation("Standard");
+                    b.Navigation("StudentEnrollment");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Registration.StudentDocument", b =>
@@ -5339,6 +5119,8 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", b =>
                 {
                     b.Navigation("Documents");
+
+                    b.Navigation("FollowUps");
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", b =>

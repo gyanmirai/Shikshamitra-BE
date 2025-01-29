@@ -6,5 +6,5 @@ public class GetOrganizationUnitUserInput : PagingBase
 {
     public Guid OrganizationUnitId { get; set; }
 
-    public string Filter { get; set; }
+    public string? Filter { get; set; }
 }

@@ -10,11 +10,13 @@ public class PayrollStructure : FullAuditedEntity<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; set; }
 
-	public Guid EducationMediumStageId { get; init; }
+	public Guid? EmployeeId { get; set; }
+
+	//public Guid EducationMediumStageId { get; init; }
 
 	public Guid PayElementId { get; init; }
 
-	public PayrollStructureType PayrollStructureType { get; init; }
+	public PayElementType PayElementType { get; init; }
 
 	public double Amount { get; init; }
 
@@ -27,13 +29,17 @@ public class PayrollStructure : FullAuditedEntity<Guid>, IMultiTenant
 	{
 	}
 
-	public PayrollStructure(Guid id, Guid? tenantId, Guid educationMediumStageId, Guid payElementId,
-		PayrollStructureType payrollStructureType, double amount) : base(id)
+	public PayrollStructure(Guid id,
+		Guid? tenantId,
+		//Guid educationMediumStageId, 
+		Guid payElementId,
+		PayElementType payElementType,
+		double amount) : base(id)
 	{
 		TenantId = tenantId;
-		EducationMediumStageId = educationMediumStageId;
+		//EducationMediumStageId = educationMediumStageId;
 		PayElementId = payElementId;
-		PayrollStructureType = payrollStructureType;
+		PayElementType = payElementType;
 		Amount = amount;
 	}
 }

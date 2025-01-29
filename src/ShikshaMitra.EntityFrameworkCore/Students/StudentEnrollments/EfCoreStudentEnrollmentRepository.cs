@@ -6,6 +6,7 @@ using System.Linq;
 using Volo.Abp.EntityFrameworkCore;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
+using Volo.Abp;
 
 
 public class EfCoreStudentEnrollmentRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider) : EfCoreRepository<ShikshaMitraDbContext, StudentEnrollment, Guid>(dbContextProvider), IStudentEnrollmentRepository
@@ -21,12 +22,20 @@ public class EfCoreStudentEnrollmentRepository(IDbContextProvider<ShikshaMitraDb
 	{
 		DbSet<StudentEnrollment?> studentEnrollments = await GetDbSetAsync();
 
-		var stud =  await studentEnrollments
+		var stud = await studentEnrollments
 			.OrderByDescending(e => Convert.ToInt32(e.InquiryNumber.Substring(3)))
 			.FirstOrDefaultAsync();
 
-		Console.WriteLine($"studstudstudstudstudstudstud ++++++++++++++++++: {stud}");
 		return stud;
+	}
+
+	public async Task<StudentEnrollment> GetInquiryByNumber(string inquiryNumber)
+	{
+		DbSet<StudentEnrollment?> studentEnrollments = await GetDbSetAsync();
+
+		return await studentEnrollments
+			.FirstOrDefaultAsync(e => e.InquiryNumber == inquiryNumber)
+			?? throw new UserFriendlyException("Inquiry not found");
 	}
 
 }

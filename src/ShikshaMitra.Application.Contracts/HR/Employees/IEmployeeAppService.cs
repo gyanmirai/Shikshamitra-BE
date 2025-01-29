@@ -52,4 +52,5 @@ public interface
 	Task<DocumentDto> GetDocumentAsync(Guid employeeId, Guid documentId);
 	Task<List<DocumentMetadataDto>> GetDocumentMetadataAsync(Guid employeeId);
 	Task<DocumentDto> UpdateDocumentAsync(Guid employeeId, Guid documentId, DocumentDto documentDto);
+	Task UpdatePayrollStructureAsync(Guid employeeId, CreateUpdateEmployeePayrollStructureDto input);
 }

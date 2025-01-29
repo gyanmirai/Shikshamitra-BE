@@ -205,9 +205,9 @@ namespace ShikshaMitra
 				var payrollStructure = new PayrollStructure(
 					id: guidGenerator.Create(),
 					tenantId: tenant.Id,
-					educationMediumStageId: educationMediumStage.Id,
+					//educationMediumStageId: educationMediumStage.Id,
 					payElementId: payElement.Id,
-					payrollStructureType: PayrollStructureType.Earnings,
+					payElementType: PayElementType.Credit,
 					amount: 10000
 				);
 

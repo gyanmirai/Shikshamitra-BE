@@ -9,6 +9,8 @@ namespace ShikshaMitra.HR.Payroll.PayrollStructures;
 public interface IPayrollStructureAppService : ICrudAppService<PayrollStructureDto, Guid, PagedAndSortedResultRequestDto
 	, CreateUpdatePayrollStructureDto>
 {
-	Task<List<PayrollStructureDto>> GetPayrollStructuresByEducationMediumStageId(
-		Guid educationMediumStageId);
+	//Task<List<PayrollStructureDto>> GetPayrollStructuresByEducationMediumStageId(
+	//	Guid educationMediumStageId);
+
+	Task<List<PayrollStructureDto>> GetPayrollStructuresByEmployeeId(Guid employeeId);
 }

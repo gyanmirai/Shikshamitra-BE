@@ -7,7 +7,6 @@ using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
-using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
@@ -18,10 +17,8 @@ using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using System.Collections.Generic;
-using System.Linq;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
-using Volo.Abp.Domain.Repositories;
 using Volo.Abp.EventBus.Distributed;
 using Volo.Abp.Guids;
 using Volo.Abp.TenantManagement;
@@ -29,6 +26,9 @@ using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.ObjectExtending;
 using Volo.Abp.Uow;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
+using ShikshaMitra.Students.StudentEnrollments;
+using Volo.Abp;
 
 namespace ShikshaMitra
 {
@@ -53,6 +53,9 @@ namespace ShikshaMitra
 		ICustomAttendanceRuleRepository customAttendanceRuleRepository,
 		IPayElementRepository payElementRepository,
 		IPayrollStructureRepository payrollStructureRepository,
+		IInquiryPreferenceRepository inquiryPreferenceRepository,
+		IStudentEnrollmentRepository studentEnrollmentRepository,
+		StudentEnrollmentManager studentEnrollmentManager,
 		//IRepository<AutomatedNotificationsSettings, Guid> automatedNotificationsSettingsRepository,
 		IdentityUserManager userManager) : IDataSeedContributor, ITransientDependency
 	{
@@ -103,7 +106,7 @@ namespace ShikshaMitra
 					}
 				});
 
-			# endregion
+			#endregion
 
 			using (currentTenant.Change(tenant.Id))
 			{
@@ -119,7 +122,8 @@ namespace ShikshaMitra
 				// Get the user id with email address
 				var user = users.Find(u => u.Email == input.AdminEmailAddress);
 
-				# region create roles
+
+				#region create roles
 
 				List<IdentityRole> roles = [new IdentityRole(guidGenerator.Create(), "Teacher", tenant.Id)];
 
@@ -129,7 +133,7 @@ namespace ShikshaMitra
 					await roleRepository.InsertAsync(role);
 				}
 
-				# endregion
+				#endregion
 
 				#region TenantSettings
 
@@ -180,7 +184,7 @@ namespace ShikshaMitra
 
 				#endregion
 
-				# region HR
+				#region HR
 
 				#region Create PayElement
 
@@ -220,10 +224,37 @@ namespace ShikshaMitra
 
 				var employeeId = guidGenerator.Create();
 
+				// Create user for employee
+				var employeeUser = new IdentityUser(
+					id: guidGenerator.Create(),
+					userName: "hvadher",
+					email: "Hiren.vadher@ddvs.com",
+					tenantId: tenant.Id
+					);
+
+				employeeUser.Name = "Hiren";
+				employeeUser.Surname = "Vadher";
+
+
+				var password = "Temp@123"; // Implement a method to generate a random password
+				var employeeUserCreateResult = await userManager.CreateAsync(user, password);
+
+
+				//// 2. Assign the role to the user
+				//var roleAddResult = await userManager.AddToRoleAsync(user, "Teacher");
+				//if (!roleAddResult.Succeeded)
+				//{
+				//	// Handle role assignment errors
+				//	await userManager.DeleteAsync(user); // Rollback user creation
+				//	throw new UserFriendlyException("Failed to add user to role: " + string.Join(", ", roleAddResult.Errors.Select(e => e.Description)));
+				//}
+
+				// insert role
+
 				var employee = new Employee(
 					id: employeeId,
 					tenantId: tenant.Id,
-					userId: user.Id,
+					userId: employeeUser.Id,
 					educationMediumStageId: educationMediumStage.Id,
 					profilePicture: Convert.FromBase64String(
 						"Qk1CAAAAAAAAADYAAAAoAAAAAQAAAAD4AAABABgAAAAAACgAAAEDAAEAAAAAAAAAAADEDgAAxA4AAAAAAAAAAAAA//8A/wAA//8A/wD/"),
@@ -279,7 +310,7 @@ namespace ShikshaMitra
 
 				#endregion
 
-				# region Create current month attendance for employee
+				#region Create current month attendance for employee
 
 				var startOfMonth = new DateOnly(DateTime.Now.Year, DateTime.Now.Month, 3);
 
@@ -296,7 +327,7 @@ namespace ShikshaMitra
 
 				#endregion
 
-				# region Create Custom Rules for Employee
+				#region Create Custom Rules for Employee
 
 				var customAttendanceRule = new CustomAttendanceRule(
 					id: guidGenerator.Create(),
@@ -314,7 +345,7 @@ namespace ShikshaMitra
 
 				#endregion
 
-				# region Create Automated Notification Settings
+				#region Create Automated Notification Settings
 
 				var automatedNotificationsSettings = new AutomatedNotificationsSettings(
 					id: guidGenerator.Create(),
@@ -328,9 +359,61 @@ namespace ShikshaMitra
 
 				//await automatedNotificationsSettingsRepository.InsertAsync(automatedNotificationsSettings);
 
-				# endregion
+				#endregion
 
-				# endregion
+				#endregion
+
+				#region Student 
+
+				#region Create Inquiery Preference
+				var inquiryPreference = await inquiryPreferenceRepository.InsertAsync(new InquiryPreference(
+					guidGenerator.Create(),
+					tenant.Id,
+					"Online"));
+
+				#endregion
+
+				#region Seed Student Inquiry
+
+				#region Seed Student Inquiry
+
+				var newStudentInquiry = await studentEnrollmentManager.CreateStudentInquiryAsync(
+					studentEnrollmentState: StudentEnrollmentState.Inquiry, // Use the relevant state
+					formNumber: null,
+					firstName: "John",
+					middleName: "Michael",
+					lastName: "Doe",
+					previousSchoolName: "Springfield Public School",
+					dateOfBirth: new DateTimeOffset(new DateTime(2015, 3, 15)),
+					dateOfInquiry: new DateTimeOffset(DateTime.UtcNow),
+					genderType: GenderType.Male,
+					parentContactNumber: "+91-9988776655",
+					alternativeContactNumber: "+91-9876543210",
+					addressLine1: "Trimandir",
+					addressLine2: "Trimandir",
+					addressLine3: null,
+					country: "India",
+					city: "Adalaj",
+					state: "Gujarat",
+					pinCode: "382421",
+					inquiryStatusType: InquiryStatusType.Pending,
+					academicYearId: academicYear.Id,
+					educationBoardId: educationBoard.Id,
+					educationMediumId: educationMedium.Id,
+					standardId: standard.Id,
+					inquiryPreferenceId: inquiryPreference.Id
+				);
+
+				await studentEnrollmentRepository.InsertAsync(newStudentInquiry);
+
+				#endregion
+
+
+				#endregion
+
+
+
+				#endregion
 			}
 		}
 	}

@@ -53,8 +53,6 @@
 
     "ShikshaMitra.TenantSettings:00001": "{entityName} with the name '{name}' already exists.",
     
-    
-
     "Permission:Student": "Student Management",
     "Permission:Student.IndividualStudentProfile": "Individual Student Profile",
     "Permission:Student.IndividualStudentProfile.Create": "Create Student Profile",

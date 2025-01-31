@@ -1507,6 +1507,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<float?>("MarksObtained")
+                        .HasColumnType("real");
+
                     b.Property<Guid>("StudentEnrollmentId")
                         .HasColumnType("uuid");
 
@@ -1690,8 +1693,14 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<int>("RoomNo")
+                        .HasColumnType("integer");
+
                     b.Property<DateTimeOffset>("StartDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("StudentLimit")
+                        .HasColumnType("integer");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")

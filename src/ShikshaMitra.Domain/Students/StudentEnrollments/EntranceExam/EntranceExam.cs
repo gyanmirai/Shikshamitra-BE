@@ -6,21 +6,24 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Students.StudentEnrollments.EntranceExam;
 
-public class EntranceExam :  FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class EntranceExam : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 	public Guid EntranceExamSlotId { get; private set; }
 	public Guid StudentEnrollmentId { get; private set; }
 	public DateTimeOffset ExamDate { get; private set; }
 	public string ExamType { get; private set; }
+
+	public float? MarksObtained { get; private set; }
 	public float TotalMarks { get; private set; }
 	public ExamScheduleType ExamScheduleType { get; private set; }
 	public EntranceExamSlot EntranceExamSlot { get; private set; }
 	public StudentEnrollment StudentEnrollment { get; private set; }
 
-	protected EntranceExam() {}
+	protected EntranceExam() { }
 
 	internal EntranceExam(Guid id, Guid tenantId, Guid entranceExamSlotId, Guid studentEnrollmentId, DateTimeOffset examDate, string examType,
+		float? marksObtained,
 		float totalMarks, ExamScheduleType examScheduleType) : base(id)
 	{
 		TenantId = tenantId;
@@ -28,6 +31,7 @@ public class EntranceExam :  FullAuditedAggregateRoot<Guid>, IMultiTenant
 		StudentEnrollmentId = studentEnrollmentId;
 		ExamDate = examDate;
 		ExamType = examType;
+		MarksObtained = marksObtained;
 		TotalMarks = totalMarks;
 		ExamScheduleType = examScheduleType;
 	}

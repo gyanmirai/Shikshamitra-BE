@@ -3,7 +3,7 @@ using System;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
-public class CreateStudentRegistrationDto
+public class CreateUpdateStudentRegistrationDto
 {
 	public string? FormNumber { get; set; }
 	public string? FirstName { get; set; }

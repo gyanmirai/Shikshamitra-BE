@@ -205,13 +205,79 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	
 	// ++++++++ Update Student Basic Details +++++++
 	internal StudentEnrollment UpdateStudentBasicDetails(
-		StudentBasicDetails studentBasicDetails
+		string? formNumber,
+		string? firstName,
+		string? middleName,
+		string? lastName,
+		string? previousSchoolName,
+		DateTimeOffset? dateOfBirth,
+		GenderType? genderType,
+		string? parentContactNumber,
+		string? alternativeContactNumber,
+		string? addressLine1,
+		string? addressLine2,
+		string? addressLine3,
+		string? country,
+		string? city,
+		string? state,
+		string? pinCode,
+		Guid academicYearId,
+		Guid educationBoardId,
+		Guid educationMediumId,
+		Guid standardId,
+		Guid? inquiryPreferenceId,
+		// basic details
+		Guid? userId,
+		byte[]? profilePicture,
+		string? email,
+		string? aadhaarNo,
+		string? religion,
+		string? familyCast,
+		CastType? castType,
+		string? motherTongue,
+		string? nationality,
+		string? birthPlace,
+		string? temporaryGr,
+		string? remarks
 	)
 	{
-		this.StudentBasicDetails = studentBasicDetails;
+		FormNumber = formNumber;
+		FirstName = firstName;
+		MiddleName = middleName;
+		LastName = lastName;
+		PreviousSchoolName = previousSchoolName;
+		DateOfBirth = dateOfBirth;
+		GenderType = genderType;
+		ParentContactNumber = parentContactNumber;
+		AlternativeContactNumber = alternativeContactNumber;
+		AddressLine1 = addressLine1;
+		AddressLine2 = addressLine2;
+		AddressLine3 = addressLine3;
+		Country = country;
+		City = city;
+		State = state;
+		PinCode = pinCode;
+		AcademicYearId = academicYearId;
+		EducationBoardId = educationBoardId;
+		EducationMediumId = educationMediumId;
+		StandardId = standardId;
+		InquiryPreferenceId = inquiryPreferenceId;
+		StudentBasicDetails = new StudentBasicDetails(
+			userId: userId,
+			profilePicture: profilePicture,
+			email: email,
+			aadhaarNo: aadhaarNo,
+			religion: religion,
+			familyCast: familyCast,
+			castType: castType,
+			motherTongue: motherTongue,
+			nationality: nationality,
+			birthPlace: birthPlace,
+			temporaryGr: temporaryGr,
+			remarks: remarks
+		);
 		return this;
-	}
-	
+}
 	// +++++++++++ Update Family Details ++++++++++++
 	internal StudentEnrollment UpdateFamilyDetails(
 		StudentContactDetails fatherDetails,

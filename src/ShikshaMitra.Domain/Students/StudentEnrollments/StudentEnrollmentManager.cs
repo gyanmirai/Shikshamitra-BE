@@ -242,7 +242,7 @@ public class StudentEnrollmentManager(
 	}
 	#endregion
 
-	#region Create Student Inquiry
+	#region Create Student Registration
 
 	public async Task<StudentEnrollment> CreateStudentRegistrationAsync(
 			string? formNumber,
@@ -524,15 +524,82 @@ public class StudentEnrollmentManager(
 
 	public async Task<StudentEnrollment> UpdateStudentBasicDetailsByEnrollmentIdAsync(
 		Guid studentEnrollmentId,
-		StudentBasicDetails studentBasicDetails
+		string? formNumber,
+		string? firstName,
+		string? middleName,
+		string? lastName,
+		string? previousSchoolName,
+		DateTimeOffset? dateOfBirth,
+		GenderType? genderType,
+		string? parentContactNumber,
+		string? alternativeContactNumber,
+		string? addressLine1,
+		string? addressLine2,
+		string? addressLine3,
+		string? country,
+		string? city,
+		string? state,
+		string? pinCode,
+		Guid academicYearId,
+		Guid educationBoardId,
+		Guid educationMediumId,
+		Guid standardId,
+		Guid? inquiryPreferenceId,
+		// basic details
+		Guid? userId,
+		byte[]? profilePicture,
+		string? email,
+		string? aadhaarNo,
+		string? religion,
+		string? familyCast,
+		CastType? castType,
+		string? motherTongue,
+		string? nationality,
+		string? birthPlace,
+		string? temporaryGr,
+		string? remarks
 	)
 	{
 		// Validate user existence 
-		await GetUserAsync((Guid) studentBasicDetails.UserId);
+		await GetUserAsync((Guid)userId);
 		// Get the Registration details
 		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
 		// Update the registration details
-		studentEnrollment.UpdateStudentBasicDetails(studentBasicDetails);
+		studentEnrollment.UpdateStudentBasicDetails(
+			formNumber: formNumber,
+			firstName: firstName,
+			middleName: middleName,
+			lastName: lastName,
+			previousSchoolName: previousSchoolName, 
+			dateOfBirth: dateOfBirth,
+			genderType: genderType,
+			parentContactNumber: parentContactNumber,
+			alternativeContactNumber: alternativeContactNumber,
+			addressLine1: addressLine1,
+			addressLine2: addressLine2,
+			addressLine3: addressLine3,
+			country: country,
+			city: city,
+			state: state,
+			pinCode: pinCode,
+			academicYearId: academicYearId,
+			educationBoardId: educationBoardId,
+			educationMediumId: educationMediumId,
+			standardId: standardId,
+			inquiryPreferenceId: inquiryPreferenceId,
+			userId: userId,
+			profilePicture: profilePicture,
+			email: email,
+			aadhaarNo: aadhaarNo,
+			religion: religion,
+			familyCast: familyCast,
+			castType: castType,
+			motherTongue: motherTongue,
+			nationality: nationality,
+			birthPlace: birthPlace,
+			temporaryGr: temporaryGr,
+			remarks: remarks
+		);
 		return studentEnrollment;
 	}
 	#endregion

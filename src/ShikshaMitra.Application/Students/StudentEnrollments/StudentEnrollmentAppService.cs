@@ -171,7 +171,7 @@ public class StudentEnrollmentAppService(
 
 	#region Create student registration
 
-	public async Task<StudentEnrollmentDto> CreateStudentRegistrationAsync(CreateStudentRegistrationDto input)
+	public async Task<StudentEnrollmentDto> CreateStudentRegistrationAsync(CreateUpdateStudentRegistrationDto input)
 	{
 		StudentEnrollment studentEnrollment = await studentEnrollmentManager.CreateStudentRegistrationAsync(
 			formNumber: input.FormNumber,
@@ -309,12 +309,45 @@ public class StudentEnrollmentAppService(
 	#endregion
 
 	#region Update Student basic information
-	public async Task<StudentEnrollmentDto> UpdateStudentBasicDetails(Guid studentEnrollmentId, UpdateStudentBasicDetailsDto input)
+	public async Task<StudentEnrollmentDto> UpdateStudentBasicDetails(Guid studentEnrollmentId, CreateUpdateStudentRegistrationDto input)
 	{
-		StudentBasicDetails studentBasicDetails = ObjectMapper.Map<UpdateStudentBasicDetailsDto, StudentBasicDetails>(input);
-
-		StudentEnrollment studentEnrollment =
-			await studentEnrollmentManager.UpdateStudentBasicDetailsByEnrollmentIdAsync(studentEnrollmentId, studentBasicDetails);
+		StudentEnrollment studentEnrollment = await studentEnrollmentManager.UpdateStudentBasicDetailsByEnrollmentIdAsync(
+			studentEnrollmentId,
+			formNumber: input.FormNumber,
+			firstName: input.FirstName,
+			middleName: input.MiddleName,
+			lastName: input.LastName,
+			previousSchoolName: input.PreviousSchoolName,
+			dateOfBirth: input.DateOfBirth,
+			genderType: input.GenderType,
+			parentContactNumber: input.ParentContactNumber,
+			alternativeContactNumber: input.AlternativeContactNumber,
+			addressLine1: input.AddressLine1,
+			addressLine2: input.AddressLine2,
+			addressLine3: input.AddressLine3,
+			country: input.Country,
+			city: input.City,
+			state: input.State,
+			pinCode: input.PinCode,
+			academicYearId: input.AcademicYearId,
+			educationBoardId: input.EducationBoardId,
+			educationMediumId: input.EducationMediumId,
+			standardId: input.StandardId,
+			inquiryPreferenceId: input.InquiryPreferenceId,
+			// basic details
+			userId: input.UserId,
+			profilePicture: input.ProfilePicture,
+			email: input.Email,
+			aadhaarNo: input.AadhaarNo,
+			religion: input.Religion,
+			familyCast: input.FamilyCast,
+			castType: input.CastType,
+			motherTongue: input.MotherTongue,
+			nationality: input.Nationality,
+			birthPlace: input.BirthPlace,
+			temporaryGr: input.TemporaryGr,
+			remarks: input.Remarks
+		);
 
 		// Save the employee
 		studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);

@@ -15,7 +15,7 @@ public interface IStudentEnrollmentAppService : ICrudAppService<StudentEnrollmen
 	// Task<StudentEnrollmentDto> GetStudentEnrollmentByUserId(Guid userId);
 
 	Task<StudentEnrollmentDto> CreateStudentInquiryAsync(CreateStudentInquiryDto input);
-	Task<StudentEnrollmentDto> UpdateStudentBasicDetails(Guid studentEnrollmentId, UpdateStudentBasicDetailsDto input);
+	Task<StudentEnrollmentDto> UpdateStudentBasicDetails(Guid studentEnrollmentId, CreateUpdateStudentRegistrationDto input);
 	Task<StudentEnrollmentDto> UpdateFamilyDetails(Guid studentEnrollmentId, UpdateStudentFamilyDetailsDto input);
 	Task<StudentEnrollmentDto> UpdateParentBankDetails(Guid studentEnrollmentId, ParentBankDetailsDto input);
 	Task<StudentEnrollmentDto> UpdatePreviousSchoolDetails(Guid studentEnrollmentId, PreviousSchoolDetailsDto input);

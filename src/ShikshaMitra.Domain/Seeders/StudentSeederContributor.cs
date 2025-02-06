@@ -7,35 +7,25 @@ using Volo.Abp.Data;
 using Volo.Abp.Guids;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
+using ShikshaMitra.Students.StudentRecords;
 
 namespace ShikshaMitra.Seeders;
 
-public class StudentSeederContributor : BaseSeederContributor
+public class StudentSeederContributor(
+	ICurrentTenant currentTenant,
+	IGuidGenerator guidGenerator,
+	IUnitOfWork unitOfWork,
+	IStudentEnrollmentRepository studentEnrollmentRepository,
+	IStudentRepository studentRepository,
+	StudentEnrollmentManager studentEnrollmentManager,
+	IInquiryPreferenceRepository inquiryPreferenceRepository) : BaseSeederContributor(currentTenant, guidGenerator, unitOfWork)
 {
-	private readonly IStudentEnrollmentRepository _studentEnrollmentRepository;
-	private readonly StudentEnrollmentManager _studentEnrollmentManager;
-	private readonly IInquiryPreferenceRepository _inquiryPreferenceRepository;
-
-	public StudentSeederContributor(
-		ICurrentTenant currentTenant,
-		IGuidGenerator guidGenerator,
-		IUnitOfWork unitOfWork,
-		IStudentEnrollmentRepository studentEnrollmentRepository,
-		StudentEnrollmentManager studentEnrollmentManager,
-		IInquiryPreferenceRepository inquiryPreferenceRepository)
-		: base(currentTenant, guidGenerator, unitOfWork)
-	{
-		_studentEnrollmentRepository = studentEnrollmentRepository;
-		_studentEnrollmentManager = studentEnrollmentManager;
-		_inquiryPreferenceRepository = inquiryPreferenceRepository;
-	}
-
 	public override async Task SeedAsync(DataSeedContext context)
 	{
 		var tenantId = CurrentTenant.Id;
 
 		// Create Inquiry Preference.
-		var inquiryPreference = await _inquiryPreferenceRepository.InsertAsync(new InquiryPreference(
+		var inquiryPreference = await inquiryPreferenceRepository.InsertAsync(new InquiryPreference(
 			GuidGenerator.Create(),
 			tenantId,
 			"Online"
@@ -56,7 +46,7 @@ public class StudentSeederContributor : BaseSeederContributor
 		var standardId = (Guid) context.Properties["StandardId"];
 
 		// Create a student inquiry.
-		var newStudentInquiry = await _studentEnrollmentManager.CreateStudentInquiryAsync(
+		var newStudentInquiry = await studentEnrollmentManager.CreateStudentInquiryAsync(
 			studentEnrollmentState: StudentEnrollmentState.Inquiry,
 			formNumber: null,
 			firstName: "John",
@@ -83,6 +73,12 @@ public class StudentSeederContributor : BaseSeederContributor
 			inquiryPreferenceId: inquiryPreference.Id
 		);
 
-		await _studentEnrollmentRepository.InsertAsync(newStudentInquiry);
+		await studentEnrollmentRepository.InsertAsync(newStudentInquiry);
+
+		// Create Student
+		var student = new Student(GuidGenerator.Create(), "Hiren Student");
+
+		await studentRepository.InsertAsync(student);
+
 	}
 }

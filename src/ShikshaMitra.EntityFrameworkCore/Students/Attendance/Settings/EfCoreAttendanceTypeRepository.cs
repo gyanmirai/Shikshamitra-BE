@@ -6,7 +6,7 @@ using Volo.Abp.EntityFrameworkCore;
 
 namespace ShikshaMitra.Students.Attendance.Settings;
 
-public class EfCoreIAttendanceTypeRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider) : EfCoreRepository<ShikshaMitraDbContext, AttendanceType, Guid>(dbContextProvider), IAttendanceTypeRepository
+public class EfCoreAttendanceTypeRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider) : EfCoreRepository<ShikshaMitraDbContext, AttendanceType, Guid>(dbContextProvider), IAttendanceTypeRepository
 {
 	
 }

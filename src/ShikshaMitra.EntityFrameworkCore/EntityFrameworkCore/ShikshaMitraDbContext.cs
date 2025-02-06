@@ -41,6 +41,9 @@ using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
 using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
 using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
 using ShikshaMitra.Students.StudentEnrollments.FollowUps;
+using ShikshaMitra.Students.Attendance.Settings;
+using ShikshaMitra.Students.StudentRecords;
+using ShikshaMitra.Students.Attendance;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -131,6 +134,12 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#endregion
 
+	#region Student Record
+	DbSet<Student> Students { get; set; }
+	DbSet<StudentAttendance> StudentAttendances { get; set; }
+
+	#endregion
+
 	#region Attendance
 
 	#region Settings
@@ -145,7 +154,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#endregion
 
-	# region HR
+	#region HR
 
 	#region Employee
 
@@ -162,15 +171,15 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	DbSet<AutomatedNotificationsSettings> AutomatedNotificationsSettings { get; set; }
 
 	DbSet<NotificationInfo> NotificationInfos { get; set; }
-	
+
 	DbSet<LeavePolicy> LeavePolicies { get; set; }
 
 
 	#endregion
 
 	#endregion
-	
-	# region Payroll
+
+	#region Payroll
 
 	DbSet<PayElement> PayElements { get; set; }
 	DbSet<PayrollStructure> PayrollStructures { get; set; }
@@ -180,7 +189,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#endregion
 
 	#region  Events & Holidays
-	
+
 	DbSet<EventAndHoliday> EventAndHolidays { get; set; }
 
 	#endregion

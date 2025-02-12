@@ -13,7 +13,6 @@ using Volo.Abp.Application.Dtos;
 namespace ShikshaMitra.Students.StudentEnrollments;
 
 public class StudentEnrollmentDto : EntityDto<Guid>
-
 {
 	public StudentEnrollmentState StudentEnrollmentState { get; set; }
 	// Inquiry Information
@@ -35,33 +34,44 @@ public class StudentEnrollmentDto : EntityDto<Guid>
 	public string? City { get; set; }
 	public string? State { get; set; }
 	public string? PinCode { get; set; }
-	public InquiryStatusType? InquiryStatusType { get; set; }
 
-	// Foreign Key 
-	public Guid EducationMediumId { get;  set; }
+	// Foreign Key
+	public Guid EducationMediumId { get; set; }
 	public EducationMediumDto EducationMedium { get; set; }
-	public Guid EducationBoardId { get;  set; }
+	public Guid EducationBoardId { get; set; }
 	public EducationBoardDto EducationBoard { get; set; }
-	public Guid AcademicYearId { get;  set; }
+	public Guid AcademicYearId { get; set; }
 	public AcademicYearDto AcademicYear { get; set; }
-	public Guid StandardId { get;  set; }
+	public Guid StandardId { get; set; }
 	public StandardDto Standard { get; set; }
-	public Guid? InquiryPreferenceId { get;  set; }
+	public Guid? InquiryPreferenceId { get; set; }
 	public InquiryPreferenceDto InquiryPreference { get; set; }
 
-
 	public DateTimeOffset? DueDate { get; set; }
-	public List<FollowUpMessageDto> FollowUps { get; set; } = new();
+    public InquiryStatusType? InquiryStatusType { get; set; }
+    public List<FollowUpMessageDto> FollowUps { get; set; } = new();
 
+	//  StudentBasicDetails properties moved directly into StudentEnrollmentDto
+	public Guid? UserId { get; set; }
+	public byte[]? ProfilePicture { get; set; }
+	public string? Email { get; set; }
+	public string? AadhaarNo { get; set; }
+	public string? Religion { get; set; }
+	public string? FamilyCast { get; set; }
+	public CastType? CastType { get; set; }
+	public string? MotherTongue { get; set; }
+	public string? Nationality { get; set; }
+	public string? BirthPlace { get; set; }
+	public string? TemporaryGr { get; set; }
+	public string? Remarks { get; set; }
 
-	// Value Object
-	public StudentBasicDetailsDto StudentBasicDetails { get; private set; }
-	public StudentContactDetailsDto FatherDetails { get; private set; }
-	public StudentContactDetailsDto MotherDetails { get; private set; }
-	public StudentContactDetailsDto GuardianDetails { get; private set; }
-	public StudentCommunicationDetailsDto StudentCommunicationDetails { get; private set; }
-	public StudentAdditionalDetailsDto StudentAdditionalDetails { get; private set; }
-	public StudentMedicalRecordsDto StudentMedicalRecords { get; private set; }
-	public PreviousSchoolDetailsDto PreviousSchoolDetails { get; private set; }
-	public ParentBankDetailsDto ParentBankDetails { get; private set; }
+	// Value Objects
+	public StudentContactDetailsDto FatherDetails { get; set; }
+	public StudentContactDetailsDto MotherDetails { get; set; }
+	public StudentContactDetailsDto GuardianDetails { get; set; }
+	public StudentCommunicationDetailsDto StudentCommunicationDetails { get; set; }
+	public StudentAdditionalDetailsDto StudentAdditionalDetails { get; set; }
+	public StudentMedicalRecordsDto StudentMedicalRecords { get; set; }
+	public PreviousSchoolDetailsDto PreviousSchoolDetails { get; set; }
+	public ParentBankDetailsDto ParentBankDetails { get; set; }
 }

@@ -1,5 +1,4 @@
 ﻿using ShikshaMitra.Common;
-using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using System;
 using System.Collections.Generic;
@@ -9,11 +8,8 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.BlobStoring;
 using System.Threading.Tasks;
-using ShikshaMitra.Students.FollowUps;
-using ShikshaMitra.Students.StudentEnrollments.FollowUps;
 using Volo.Abp.Guids;
 using Volo.Abp;
-using Volo.Abp.ObjectMapping;
 
 
 namespace ShikshaMitra.Students.StudentEnrollments;
@@ -21,7 +17,6 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 public class StudentEnrollmentAppService(
 	IStudentEnrollmentRepository studentEnrollmentRepository,
 	StudentEnrollmentManager studentEnrollmentManager,
-	IGuidGenerator guidGenerator,
 	IBlobContainer blobContainer) :
 	CrudAppService<StudentEnrollment, StudentEnrollmentDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateStudentEnrollmentDto>(studentEnrollmentRepository),
 	IStudentEnrollmentAppService
@@ -539,70 +534,21 @@ public class StudentEnrollmentAppService(
 
 
 	[RemoteService(false)]
-	public async Task<FollowUpWithStatusAndDateDto> AddFollowUpAsync(Guid studentEnrollmentId, AddFollowUpDto input)
+	public async Task<PagedResultDto<StudentEnrollmentDto>> GetStudentsFollowUp(Guid academicYearId)
 	{
-		// Fetch the StudentEnrollment by InquiryNumber (as before)
-		StudentEnrollment studentEnrollment = await studentEnrollmentRepository.GetAsync(studentEnrollmentId);
+		List<StudentEnrollment> studentEnrollments =
+			await studentEnrollmentRepository.GetListAsync(
+				e => e.AcademicYearId == academicYearId,
+				includeDetails: true
+			);
 
-		// Create a new FollowUpMessage entity
-		var followUpMessage = new FollowUpMessage(
-			id: guidGenerator.Create(),          // new Guid if your entity expects an ID
-			tenantId: CurrentTenant.Id,           // current tenant ID
-			studentEnrollmentId: studentEnrollment.Id,     // foreign key property in FollowUpMessage
-			message: input.Message,
-			author: CurrentUser?.Name ?? "System",
-			timestamp: Clock.Now
-		);
+		// filter out result which has atelast one follow up
+		studentEnrollments = studentEnrollments.Where(e => e.FollowUps.Any()).ToList();
 
-		// Add the new follow-up to the StudentEnrollment's collection
-		studentEnrollment.FollowUps.Add(followUpMessage);
-
-		// Update status if provided
-		if (input.InquiryStatusType.HasValue)
+		return new PagedResultDto<StudentEnrollmentDto>
 		{
-			studentEnrollment = studentEnrollment.ChangeInquiryStatus(input.InquiryStatusType.Value);
-		}
-
-		// Update due date if provided
-		if (input.DueDate.HasValue)
-		{
-			studentEnrollment = studentEnrollment.ChnageDueDate(input.DueDate.Value);
-		}
-
-		// Save changes
-		studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
-
-		// Return the updated DTO
-		return new FollowUpWithStatusAndDateDto
-		{
-			FollowUps = ObjectMapper.Map<List<FollowUpMessage>, List<FollowUpMessageDto>>(studentEnrollment.FollowUps.ToList()),
-			InquiryStatusType = studentEnrollment.InquiryStatusType,
-			DueDate = studentEnrollment.DueDate
+			TotalCount = studentEnrollments.Count,
+			Items = ObjectMapper.Map<List<StudentEnrollment>, List<StudentEnrollmentDto>>(studentEnrollments)
 		};
-	}
-
-	[RemoteService(false)]
-	public async Task<FollowUpWithStatusAndDateDto> GetFollowUpDetailsAsync(Guid studentEnrollmentId)
-	{
-		StudentEnrollment? inquiry = await studentEnrollmentRepository.GetAsync(studentEnrollmentId);
-
-		List<FollowUpMessageDto> followUpMessageDtolist = ObjectMapper.Map<List<FollowUpMessage>, List<FollowUpMessageDto>>([.. inquiry.FollowUps]);
-
-		return new FollowUpWithStatusAndDateDto
-		{
-			FollowUps = followUpMessageDtolist,
-			InquiryStatusType = inquiry.InquiryStatusType,
-			DueDate = inquiry.DueDate
-		};
-
-	}
-
-	[RemoteService(false)]
-	public async Task UpdateStatusAndDueDateAsync(Guid studentEnrollmentId, InquiryStatusType status, DateTimeOffset? dueDate)
-	{
-		var inquiry = await studentEnrollmentRepository.GetAsync(studentEnrollmentId);
-		inquiry = inquiry.ChangeInquiryStatus(status);
-		inquiry = inquiry.ChnageDueDate(dueDate);
-		await studentEnrollmentRepository.UpdateAsync(inquiry);
 	}
 }

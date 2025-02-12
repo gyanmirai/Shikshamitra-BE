@@ -226,23 +226,123 @@ public class AcademicSetupPermissionAppService(
 
 	public async Task AssignPermissions(CreateUpdateAcademicSetupPermissionsDto input)
 	{
-		await academicYearPermissionRepository.InsertManyAsync(
-			academicSetupPermissionManager.CreateAcademicYearPermissions(input.UserId, input.AcademicYearIds));
-
-		await educationBoardPermissionRepository.InsertManyAsync(
-			academicSetupPermissionManager.CreateEducationBoardPermissions(input.UserId, input.EducationBoardIds));
-
-		await educationMediumPermissionRepository.InsertManyAsync(
-			academicSetupPermissionManager.CreateEducationMediumPermissions(input.UserId, input.EducationMediumIds));
-
-		await educationMediumStagePermissionRepository.InsertManyAsync(
-			academicSetupPermissionManager.CreateEducationMediumStagePermissions(input.UserId,
-				input.EducationMediumStageIds));
-
-		await standardPermissionRepository.InsertManyAsync(
-			academicSetupPermissionManager.CreateStandardPermissions(input.UserId, input.StandardIds));
-
-		await divisionPermissionRepository.InsertManyAsync(
-			academicSetupPermissionManager.CreateDivisionPermissions(input.UserId, input.DivisionIds));
+		await UpdateAcademicYearPermissions(input.UserId, input.AcademicYearIds);
+		await UpdateEducationBoardPermissions(input.UserId, input.EducationBoardIds);
+		await UpdateEducationMediumPermissions(input.UserId, input.EducationMediumIds);
+		await UpdateEducationMediumStagePermissions(input.UserId, input.EducationMediumStageIds);
+		await UpdateStandardPermissions(input.UserId, input.StandardIds);
+		await UpdateDivisionPermissions(input.UserId, input.DivisionIds);
 	}
+
+	private async Task UpdateAcademicYearPermissions(Guid userId, List<Guid> newAcademicYearIds)
+	{
+		// Fetch existing Academic Year permissions for the user.
+		var existingPermissions = await academicYearPermissionRepository.GetListAsync(x => x.UserId == userId);
+		var existingIds = existingPermissions.Select(x => x.AcademicYearId).ToList();
+
+		// Delete permissions that are not present in the new list.
+		foreach (var perm in existingPermissions.Where(x => !newAcademicYearIds.Contains(x.AcademicYearId)).ToList())
+		{
+			await academicYearPermissionRepository.DeleteAsync(perm);
+		}
+
+		// Add new permissions that are not already in the database.
+		var idsToAdd = newAcademicYearIds.Except(existingIds).ToList();
+		if (idsToAdd.Count != 0)
+		{
+			var newPermissions = academicSetupPermissionManager.CreateAcademicYearPermissions(userId, idsToAdd);
+			await academicYearPermissionRepository.InsertManyAsync(newPermissions);
+		}
+	}
+
+	private async Task UpdateEducationBoardPermissions(Guid userId, List<Guid> newEducationBoardIds)
+	{
+		var existingPermissions = await educationBoardPermissionRepository.GetListAsync(x => x.UserId == userId);
+		var existingIds = existingPermissions.Select(x => x.EducationBoardId).ToList();
+
+		foreach (var perm in existingPermissions.Where(x => !newEducationBoardIds.Contains(x.EducationBoardId)).ToList())
+		{
+			await educationBoardPermissionRepository.DeleteAsync(perm);
+		}
+
+		var idsToAdd = newEducationBoardIds.Except(existingIds).ToList();
+		if (idsToAdd.Count != 0)
+		{
+			var newPermissions = academicSetupPermissionManager.CreateEducationBoardPermissions(userId, idsToAdd);
+			await educationBoardPermissionRepository.InsertManyAsync(newPermissions);
+		}
+	}
+
+	private async Task UpdateEducationMediumPermissions(Guid userId, List<Guid> newEducationMediumIds)
+	{
+		var existingPermissions = await educationMediumPermissionRepository.GetListAsync(x => x.UserId == userId);
+		var existingIds = existingPermissions.Select(x => x.EducationMediumId).ToList();
+
+		foreach (var perm in existingPermissions.Where(x => !newEducationMediumIds.Contains(x.EducationMediumId)).ToList())
+		{
+			await educationMediumPermissionRepository.DeleteAsync(perm);
+		}
+
+		var idsToAdd = newEducationMediumIds.Except(existingIds).ToList();
+		if (idsToAdd.Count != 0)
+		{
+			var newPermissions = academicSetupPermissionManager.CreateEducationMediumPermissions(userId, idsToAdd);
+			await educationMediumPermissionRepository.InsertManyAsync(newPermissions);
+		}
+	}
+
+	private async Task UpdateEducationMediumStagePermissions(Guid userId, List<Guid> newEducationMediumStageIds)
+	{
+		var existingPermissions = await educationMediumStagePermissionRepository.GetListAsync(x => x.UserId == userId);
+		var existingIds = existingPermissions.Select(x => x.EducationMediumStageId).ToList();
+
+		foreach (var perm in existingPermissions.Where(x => !newEducationMediumStageIds.Contains(x.EducationMediumStageId)).ToList())
+		{
+			await educationMediumStagePermissionRepository.DeleteAsync(perm);
+		}
+
+		var idsToAdd = newEducationMediumStageIds.Except(existingIds).ToList();
+		if (idsToAdd.Count != 0)
+		{
+			var newPermissions = academicSetupPermissionManager.CreateEducationMediumStagePermissions(userId, idsToAdd);
+			await educationMediumStagePermissionRepository.InsertManyAsync(newPermissions);
+		}
+	}
+
+	private async Task UpdateStandardPermissions(Guid userId, List<Guid> newStandardIds)
+	{
+		var existingPermissions = await standardPermissionRepository.GetListAsync(x => x.UserId == userId);
+		var existingIds = existingPermissions.Select(x => x.StandardId).ToList();
+
+		foreach (var perm in existingPermissions.Where(x => !newStandardIds.Contains(x.StandardId)).ToList())
+		{
+			await standardPermissionRepository.DeleteAsync(perm);
+		}
+
+		var idsToAdd = newStandardIds.Except(existingIds).ToList();
+		if (idsToAdd.Count != 0)
+		{
+			var newPermissions = academicSetupPermissionManager.CreateStandardPermissions(userId, idsToAdd);
+			await standardPermissionRepository.InsertManyAsync(newPermissions);
+		}
+	}
+
+	private async Task UpdateDivisionPermissions(Guid userId, List<Guid> newDivisionIds)
+	{
+		var existingPermissions = await divisionPermissionRepository.GetListAsync(x => x.UserId == userId);
+		var existingIds = existingPermissions.Select(x => x.DivisionId).ToList();
+
+		foreach (var perm in existingPermissions.Where(x => !newDivisionIds.Contains(x.DivisionId)).ToList())
+		{
+			await divisionPermissionRepository.DeleteAsync(perm);
+		}
+
+		var idsToAdd = newDivisionIds.Except(existingIds).ToList();
+		if (idsToAdd.Count != 0)
+		{
+			var newPermissions = academicSetupPermissionManager.CreateDivisionPermissions(userId, idsToAdd);
+			await divisionPermissionRepository.InsertManyAsync(newPermissions);
+		}
+	}
+
 }

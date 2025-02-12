@@ -30,8 +30,5 @@ public interface IStudentEnrollmentAppService : ICrudAppService<StudentEnrollmen
 	Task<List<DocumentMetadataDto>> GetDocumentMetadataAsync(Guid studentEnrollmentId);
 	Task<DocumentDto> UpdateDocumentAsync(Guid studentEnrollmentId, Guid documentId, DocumentDto documentDto);
 
-
-	Task<FollowUpWithStatusAndDateDto> AddFollowUpAsync(Guid studentEnrollmentId, AddFollowUpDto input);
-	Task<FollowUpWithStatusAndDateDto> GetFollowUpDetailsAsync(Guid studentEnrollmentId);
-	Task UpdateStatusAndDueDateAsync(Guid studentEnrollmentId, InquiryStatusType status, DateTimeOffset? dueDate);
+	Task<PagedResultDto<StudentEnrollmentDto>> GetStudentsFollowUp(Guid academicYearId);
 }

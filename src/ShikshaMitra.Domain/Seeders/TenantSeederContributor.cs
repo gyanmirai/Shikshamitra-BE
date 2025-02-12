@@ -1,7 +1,9 @@
 ﻿using System.Threading.Tasks;
 using Volo.Abp.Data;
+using Volo.Abp.EventBus.Distributed;
 using Volo.Abp.Guids;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.ObjectExtending;
 using Volo.Abp.TenantManagement;
 using Volo.Abp.Uow;
 
@@ -11,17 +13,22 @@ public class TenantSeederContributor : BaseSeederContributor
 {
 	private readonly ITenantManager _tenantManager;
 	private readonly ITenantRepository _tenantRepository;
+	private readonly IUnitOfWork _unitOfWork;
+	private readonly IDataSeeder _dataSeeder;
 
 	public TenantSeederContributor(
 		ICurrentTenant currentTenant,
 		IGuidGenerator guidGenerator,
 		IUnitOfWork unitOfWork,
+		IDataSeeder dataSeeder,
 		ITenantManager tenantManager,
 		ITenantRepository tenantRepository)
 		: base(currentTenant, guidGenerator, unitOfWork)
 	{
 		_tenantManager = tenantManager;
 		_tenantRepository = tenantRepository;
+		_unitOfWork = unitOfWork;
+		_dataSeeder = dataSeeder;
 	}
 
 	public override async Task SeedAsync(DataSeedContext context)
@@ -31,17 +38,35 @@ public class TenantSeederContributor : BaseSeederContributor
 			return;
 		}
 
-		var tenant = await _tenantManager.CreateAsync("DDVS");
-		tenant.ExtraProperties["InstituteName"] = "DDVS";
-		tenant.ExtraProperties["Address"] = "Parvat Patiya";
-		tenant.ExtraProperties["City"] = "Surat";
-		tenant.ExtraProperties["State"] = "Gujarat";
-		tenant.ExtraProperties["Country"] = "India";
-		tenant.ExtraProperties["PostalCode"] = "395010";
-		tenant.ExtraProperties["ContactNo"] = "+91-9876543210";
+		TenantCreateDto input = new TenantCreateDto()
+		{
+			Name = "DDVS",
+			AdminEmailAddress = "ddvs@gmail.com",
+			AdminPassword = "Temp@123",
+			ExtraProperties =
+				{
+					{ "InstituteName", "DDVS" },
+					{ "Address", "Parvat Patiya" },
+					{ "City", "Surat" },
+					{ "State", "Gujarat" },
+					{ "Country", "India" },
+					{ "PostalCode", "395010" },
+					{ "ContactNo", "+91-9876543210" },
+				}
+		};
+
+		var tenant = await _tenantManager.CreateAsync(input.Name);
+		input.MapExtraPropertiesTo(tenant);
 
 		await _tenantRepository.InsertAsync(tenant);
-		await CurrentUnitOfWork.SaveChangesAsync();
+
+		await _unitOfWork.SaveChangesAsync();
+
+		await _dataSeeder.SeedAsync(
+			new DataSeedContext(tenant.Id)
+				.WithProperty("AdminEmail", input.AdminEmailAddress)
+				.WithProperty("AdminPassword", input.AdminPassword)
+		);
 
 		context.Properties["TenantId"] = tenant.Id;
 	}

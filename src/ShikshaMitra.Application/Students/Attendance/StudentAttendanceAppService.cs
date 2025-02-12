@@ -16,7 +16,7 @@ public class StudentAttendanceAppService(IStudentAttendanceRepository studentAtt
 {
 	public async Task<bool> FillAttendance(List<CreateUpdateStudentAttendanceDto> inputs, DateTimeOffset attendanceDate)
 	{
-		var studentAttendances = inputs.ConvertAll(item => new StudentAttendance(
+		List<StudentAttendance>? studentAttendances = inputs.ConvertAll(item => new StudentAttendance(
 			guidGenerator.Create(),
 			studentId: item.StudentId,
 			attendanceDate,

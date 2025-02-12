@@ -105,21 +105,18 @@ public class StudentEnrollmentManager(
 			educationMediumId: educationMediumId,
 			standardId: standardId,
 			inquiryPreferenceId: inquiryPreferenceId,
-			// registration
-			studentBasicDetails: new StudentBasicDetails(
-				userId: null,
-				profilePicture: null,
-				email: null,
-				aadhaarNo: null,
-				religion: null,
-				familyCast: null,
-				castType: null,
-				motherTongue: null,
-				nationality: null,
-				birthPlace: null,
-				temporaryGr: null,
-				remarks: null
-				),
+			userId: null,
+			profilePicture: null,
+			email: null,
+			aadhaarNo: null,
+			religion: null,
+			familyCast: null,
+			castType: null,
+			motherTongue: null,
+			nationality: null,
+			birthPlace: null,
+			temporaryGr: null,
+			remarks: null,
 			fatherDetails: new StudentContactDetails(
 				name: null,
 				dateOfBirth: null,
@@ -314,21 +311,19 @@ public class StudentEnrollmentManager(
 			educationMediumId: educationMediumId,
 			standardId: standardId,
 			inquiryPreferenceId: inquiryPreferenceId,
-			// registration
-			studentBasicDetails: new StudentBasicDetails(
-				userId: userId,
-				profilePicture: profilePicture,
-				email: email,
-				aadhaarNo: aadhaarNo,
-				religion: religion,
-				familyCast: familyCast,
-				castType: castType,
-				motherTongue: motherTongue,
-				nationality: nationality,
-				birthPlace: birthPlace,
-				temporaryGr: temporaryGr,
-				remarks: remarks
-				),
+			// basic details
+			userId: userId,
+			profilePicture: profilePicture,
+			email: email,
+			aadhaarNo: aadhaarNo,
+			religion: religion,
+			familyCast: familyCast,
+			castType: castType,
+			motherTongue: motherTongue,
+			nationality: nationality,
+			birthPlace: birthPlace,
+			temporaryGr: temporaryGr,
+			remarks: remarks,
 			fatherDetails: new StudentContactDetails(
 				name: null,
 				dateOfBirth: null,
@@ -522,6 +517,7 @@ public class StudentEnrollmentManager(
 
 	#region Update Student Basic details
 
+
 	public async Task<StudentEnrollment> UpdateStudentBasicDetailsByEnrollmentIdAsync(
 		Guid studentEnrollmentId,
 		string? formNumber,
@@ -561,7 +557,7 @@ public class StudentEnrollmentManager(
 	)
 	{
 		// Validate user existence 
-		await GetUserAsync((Guid)userId);
+		await GetUserAsync((Guid) userId);
 		// Get the Registration details
 		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
 		// Update the registration details
@@ -570,7 +566,7 @@ public class StudentEnrollmentManager(
 			firstName: firstName,
 			middleName: middleName,
 			lastName: lastName,
-			previousSchoolName: previousSchoolName, 
+			previousSchoolName: previousSchoolName,
 			dateOfBirth: dateOfBirth,
 			genderType: genderType,
 			parentContactNumber: parentContactNumber,
@@ -871,5 +867,5 @@ public class StudentEnrollmentManager(
 
 	#endregion
 
-	
+
 }

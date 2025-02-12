@@ -8,8 +8,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Volo.Abp.AspNetCore.Mvc;
-using Autofac.Core;
 using ShikshaMitra.Students.FollowUps;
+using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Controllers.Students.StudentEnrollments;
 
@@ -17,7 +17,7 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments;
 [Route("api/student-enrollment")]
 [Authorize]
 
-public class StudentEnrollmentController(IStudentEnrollmentAppService studentEnrollmentAppService) : AbpController
+public class StudentEnrollmentController(IStudentEnrollmentAppService studentEnrollmentAppService, IFollowUpAppService followUpAppService) : AbpController
 {
 	[HttpPut("{studentEnrollmentId}/documents")]
 	public async Task<IActionResult> UploadDocuments(Guid studentEnrollmentId, [FromForm] IList<IFormFile>? files)
@@ -95,13 +95,19 @@ public class StudentEnrollmentController(IStudentEnrollmentAppService studentEnr
 		return Ok(new { Message = "File updated successfully." });
 	}
 
+	[HttpGet("follow-ups")]
+	public async Task<PagedResultDto<StudentEnrollmentDto>> GetStudentEnrollmentsWithFollowUps()
+	{
+		// read academic year from the cookie
+		return await studentEnrollmentAppService.GetStudentsFollowUp(Guid.Parse(Request.Cookies["AcademicYearId"]!));
+	}
 
 	[HttpPost("{studentEnrollmentId}/add-follow-up")]
-	public async Task<FollowUpWithStatusAndDateDto> AddFollowUp(Guid studentEnrollmentId, [FromBody] AddFollowUpDto input) => await studentEnrollmentAppService.AddFollowUpAsync(studentEnrollmentId, input);
+	public async Task<FollowUpWithStatusAndDateDto> AddFollowUp(Guid studentEnrollmentId, [FromBody] AddFollowUpDto input) => await followUpAppService.AddFollowUpAsync(studentEnrollmentId, input);
 
 	[HttpGet("{studentEnrollmentId}/follow-up")]
-	public async Task<FollowUpWithStatusAndDateDto> GetFollowUpDetails(Guid studentEnrollmentId) => await studentEnrollmentAppService.GetFollowUpDetailsAsync(studentEnrollmentId);
+	public async Task<FollowUpWithStatusAndDateDto> GetFollowUpDetails(Guid studentEnrollmentId) => await followUpAppService.GetFollowUpDetailsAsync(studentEnrollmentId);
 
 	[HttpPut("{studentEnrollmentId}/update-status-due-date")]
-	public async Task UpdateStatus(Guid studentEnrollmentId, InquiryStatusType status, DateTimeOffset? dueDate) => await studentEnrollmentAppService.UpdateStatusAndDueDateAsync(studentEnrollmentId, status, dueDate);
+	public async Task UpdateStatus(Guid studentEnrollmentId, InquiryStatusType status, DateTimeOffset? dueDate) => await followUpAppService.UpdateStatusAndDueDateAsync(studentEnrollmentId, status, dueDate);
 }

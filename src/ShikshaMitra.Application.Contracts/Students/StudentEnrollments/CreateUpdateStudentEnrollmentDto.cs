@@ -7,6 +7,7 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 public class CreateUpdateStudentEnrollmentDto
 {
 	public StudentEnrollmentState StudentEnrollmentState { get; set; }
+
 	// Inquiry and Registration Form
 	public string InquiryNumber { get; set; }
 	public string? FormNumber { get; set; }
@@ -19,29 +20,42 @@ public class CreateUpdateStudentEnrollmentDto
 	public GenderType? GenderType { get; set; }
 	public string? ParentContactNumber { get; set; }
 	public string? AlternativeContactNumber { get; set; }
-	public string? AddressLine1 {get; set; }
-	public string? AddressLine2 {get; set; }
-	public string? AddressLine3 {get; set; }
-	public string? Country {get; set; }
+	public string? AddressLine1 { get; set; }
+	public string? AddressLine2 { get; set; }
+	public string? AddressLine3 { get; set; }
+	public string? Country { get; set; }
 	public string? City { get; set; }
 	public string? State { get; set; }
 	public string? PinCode { get; set; }
 	public InquiryStatusType? InquiryStatusType { get; set; }
 
-	// Foreign Key 
+	// Foreign Key
 	public Guid AcademicYearId { get; set; }
 	public Guid EducationBoardId { get; set; }
 	public Guid EducationMediumId { get; set; }
 	public Guid StandardId { get; set; }
 
-	// Value Object
-	public StudentBasicDetailsDto StudentBasicDetails { get; private set; }
-	public StudentContactDetailsDto FatherDetails { get; private set; }
-	public StudentContactDetailsDto MotherDetails { get; private set; }
-	public StudentContactDetailsDto GuardianDetails { get; private set; }
-	public StudentCommunicationDetailsDto StudentCommunicationDetails { get; private set; }
-	public StudentAdditionalDetailsDto StudentAdditionalDetails { get; private set; }
-	public StudentMedicalRecordsDto StudentMedicalRecords { get; private set; }
-	public PreviousSchoolDetailsDto PreviousSchoolDetails { get; private set; }
-	public ParentBankDetailsDto ParentBankDetails { get; private set; }
+	//  StudentBasicDetails
+	public Guid? UserId { get; set; }
+	public byte[]? ProfilePicture { get; set; }
+	public string? Email { get; set; }
+	public string? AadhaarNo { get; set; }
+	public string? Religion { get; set; }
+	public string? FamilyCast { get; set; }
+	public CastType? CastType { get; set; }
+	public string? MotherTongue { get; set; }
+	public string? Nationality { get; set; }
+	public string? BirthPlace { get; set; }
+	public string? TemporaryGr { get; set; }
+	public string? Remarks { get; set; }
+
+	// Value Objects
+	public StudentContactDetailsDto FatherDetails { get; set; }
+	public StudentContactDetailsDto MotherDetails { get; set; }
+	public StudentContactDetailsDto GuardianDetails { get; set; }
+	public StudentCommunicationDetailsDto StudentCommunicationDetails { get; set; }
+	public StudentAdditionalDetailsDto StudentAdditionalDetails { get; set; }
+	public StudentMedicalRecordsDto StudentMedicalRecords { get; set; }
+	public PreviousSchoolDetailsDto PreviousSchoolDetails { get; set; }
+	public ParentBankDetailsDto ParentBankDetails { get; set; }
 }

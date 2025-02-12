@@ -7,6 +7,8 @@ public class EntranceExamSlotDto : AuditedEntityDto<Guid>
 {
 	public DateTimeOffset StartDate { get; set; }
 	public DateTimeOffset EndDate { get; set; }
+	public float PassingMark { get; set; }
+
 	public int StudentLimit { get; set; }
 	public int RoomNo { get; set; }
 }

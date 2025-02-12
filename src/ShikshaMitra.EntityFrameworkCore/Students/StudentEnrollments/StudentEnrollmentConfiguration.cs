@@ -13,7 +13,7 @@ public class StudentEnrollmentConfiguration : IEntityTypeConfiguration<StudentEn
 		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();
 
-		builder.ComplexProperty(e => e.StudentBasicDetails);
+		//builder.ComplexProperty(e => e.StudentBasicDetails);
 		builder.ComplexProperty(e => e.FatherDetails);
 		builder.ComplexProperty(e => e.MotherDetails);
 		builder.ComplexProperty(e => e.GuardianDetails);

@@ -23,6 +23,7 @@ using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using Volo.Abp.TenantManagement;
+using static Volo.Abp.Identity.IdentityPermissions;
 
 namespace ShikshaMitra.Seeders;
 
@@ -138,18 +139,18 @@ public class HRSeederContributor(
 			: "defaultdomain";
 		// Build the email dynamically based on the tenant's institute name.
 		var emailDomain = instituteName.Trim().ToLower();
-		var employeeEmail = $"hvadher@{emailDomain}.com";
+		var employeeEmail = $"teacher@{emailDomain}.com";
 
 		// Create Employee user with the dynamically generated email.
 		var employeeUser = new IdentityUser(
 			GuidGenerator.Create(),
-			$"hvadher{emailDomain.ToLower()}",
+			$"teacher{emailDomain.ToLower()}",
 			employeeEmail,
 			tenantId
 		)
 		{
-			Name = "Hiren",
-			Surname = "Vadher"
+			Name = "Testing",
+			Surname = "Teacher"
 		};
 
 		var password = "Temp@123";
@@ -173,14 +174,82 @@ public class HRSeederContributor(
 			throw new Exception("Teacher role not found.");
 		}
 
+
+		// Find admin role
+		var adminRole = await roleRepository.FindByNormalizedNameAsync("ADMIN");
+
+		List<Employee> employees = new List<Employee>();
+
+		#region Create admin employee
+		// get all users
+		var users = await userRepository.GetListAsync();
+
+		// Get the user id with email address
+		var user = users.Find(u => u.Email == $"{emailDomain}@gmail.com");
+
+		employees.Add(new Employee(
+			id: GuidGenerator.Create(),
+			tenantId: tenantId,
+			userId: user.Id,
+			educationMediumStageId: educationMediumStage.Id,
+			profilePicture: Convert.FromBase64String("Qk1CAAAAAAAAADYAAAAoAAAAAQAAAAD4AAABABgAAAAAACgAAAEDAAEAAAAAAAAAAADEDgAAxA4AAAAAAAAAAAAA//8A/wAA//8A/wD/"),
+			employeeCode: "EMP001",
+			lastName: "LastAdmin",
+			firstName: "FirstAdmin",
+			middleName: "Dineshbhai",
+			shortName: "HVD",
+			employeeStatusType: EmployeeStatusType.Active,
+			dateOfBirth: DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
+			familyCast: "Ahir",
+			castType: CastType.General,
+			genderType: GenderType.Male,
+			religion: "Hindu",
+			maritalStatus: MaritalStatusType.Married,
+			bloodGroup: "O+",
+			mobileNo: "+91-9876543210",
+			email: employeeEmail,
+			address: "123 Main Street, Mumbai",
+			department: "IT",
+			designation: "Software Engineer",
+			dateOfJoining: DateOnly.FromDateTime(new DateTime(2021, 6, 1)),
+			employeeGroup: EmployeeGroupType.Teaching,
+			qualification: "Group A",
+			roleId: adminRole.Id, // Store the Admin role ID here.
+			identificationMark1: "Wear glasses",
+			city: "Gandhinagar",
+			state: "Gujarat",
+			pinCode: "382421",
+			fatherDetails: new ContactDetails("Robert Smith", "Engineer", "+91-9876543211", "456, Elm Street", "Mumbai", "Maharashtra", "400001"),
+			motherDetails: new ContactDetails("Mary Smith", "Teacher", "+91-9876543212", "Parvat Patiya", "Surat", "Gujarat", "395010"),
+			spouseDetails: new ContactDetails("Jane Doe", "Doctor", "+91-9876543213", "ATPL, Trimandir Road", "Adalaj", "Gujarat", "382421"),
+			bankDetails: new BankDetails("ABC Bank", "Mumbai Main Branch", "John Doe", "123456789012", "ABC123456"),
+			workExperiences: new List<WorkExperience>
+			{
+				new WorkExperience(
+					"XYZ Technologies",
+					"789, Tech Park, Bangalore",
+					DateOnly.FromDateTime(new DateTime(2015, 6, 1)),
+					DateOnly.FromDateTime(new DateTime(2019, 12, 31)),
+					"Development",
+					"Software Developer",
+					"Developed web applications and maintained databases",
+					"Jane Doe, Senior Manager"
+				)
+			}
+		));
+
+
+		#endregion
+
+		#region create teacheremployee
 		// Create Employee record and store the Teacher role's ID.
-		var employee = new Employee(
+		var teacherEmployee  = new Employee(
 			id: GuidGenerator.Create(),
 			tenantId: tenantId,
 			userId: employeeUser.Id,
 			educationMediumStageId: educationMediumStage.Id,
 			profilePicture: Convert.FromBase64String("Qk1CAAAAAAAAADYAAAAoAAAAAQAAAAD4AAABABgAAAAAACgAAAEDAAEAAAAAAAAAAADEDgAAxA4AAAAAAAAAAAAA//8A/wAA//8A/wD/"),
-			employeeCode: "EMP001",
+			employeeCode: "EMP002",
 			lastName: "Vadher",
 			firstName: "Hiren",
 			middleName: "Dineshbhai",
@@ -224,34 +293,36 @@ public class HRSeederContributor(
 				)
 			}
 		);
+		employees.Add(teacherEmployee);
+		#endregion
 
-		await employeeRepository.InsertAsync(employee);
+		await employeeRepository.InsertManyAsync(employees);
 
-		// Create Employee Attendance.
-		var employeeAttendance = new EmployeeAttendance
-		{
-			TenantId = tenantId,
-			EmployeeId = employee.Id,
-			TimeIn = new DateTimeOffset(new DateTime(2024, 6, 1, 9, 0, 0)),
-			TimeOut = new DateTimeOffset(new DateTime(2024, 6, 1, 18, 0, 0)),
-			StatusType = EmployeeAttendanceStatusType.Present,
-		};
-		await employeeAttendanceRepository.InsertAsync(employeeAttendance);
+		//// Create Employee Attendance.
+		//var employeeAttendance = new EmployeeAttendance
+		//{
+		//	TenantId = tenantId,
+		//	EmployeeId = adminRole.Id,
+		//	TimeIn = new DateTimeOffset(new DateTime(2024, 6, 1, 9, 0, 0)),
+		//	TimeOut = new DateTimeOffset(new DateTime(2024, 6, 1, 18, 0, 0)),
+		//	StatusType = EmployeeAttendanceStatusType.Present,
+		//};
+		//await employeeAttendanceRepository.InsertAsync(employeeAttendance);
 
-		// Create Custom Attendance Rule.
-		var customAttendanceRule = new CustomAttendanceRule(
-			id: GuidGenerator.Create(),
-			tenantId: tenantId,
-			name: "Custom Rule 1",
-			type: EmployeeAttendanceStatusType.FullDayLeave,
-			lateThreshold: 20,
-			lateThresholdUnit: TimeUnitType.Minutes,
-			halfDayThreshold: 20,
-			halfDayThresholdUnit: TimeUnitType.Minutes,
-			enableNotificationForUpperAuthority: true
-		);
-		await customAttendanceRuleRepository.InsertAsync(customAttendanceRule);
+		//// Create Custom Attendance Rule.
+		//var customAttendanceRule = new CustomAttendanceRule(
+		//	id: GuidGenerator.Create(),
+		//	tenantId: tenantId,
+		//	name: "Custom Rule 1",
+		//	type: EmployeeAttendanceStatusType.FullDayLeave,
+		//	lateThreshold: 20,
+		//	lateThresholdUnit: TimeUnitType.Minutes,
+		//	halfDayThreshold: 20,
+		//	halfDayThresholdUnit: TimeUnitType.Minutes,
+		//	enableNotificationForUpperAuthority: true
+		//);
+		//await customAttendanceRuleRepository.InsertAsync(customAttendanceRule);
 
-		await CurrentUnitOfWork.SaveChangesAsync();
+		//await CurrentUnitOfWork.SaveChangesAsync();
 	}
 }

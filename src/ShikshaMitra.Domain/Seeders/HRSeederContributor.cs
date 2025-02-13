@@ -22,67 +22,36 @@ using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
-using ShikshaMitra.Seeders;
+using Volo.Abp.TenantManagement;
 
 namespace ShikshaMitra.Seeders;
 
-public class HRSeederContributor : BaseSeederContributor
+public class HRSeederContributor(
+	ICurrentTenant currentTenant,
+	IGuidGenerator guidGenerator,
+	IUnitOfWork unitOfWork,
+	IAcademicYearRepository academicYearRepository,
+	IEducationBoardRepository educationBoardRepository,
+	IEducationMediumRepository educationMediumRepository,
+	IEducationMediumStageRepository educationMediumStageRepository,
+	IStandardRepository standardRepository,
+	IDivisionRepository divisionRepository,
+	IPayElementRepository payElementRepository,
+	IPayrollStructureRepository payrollStructureRepository,
+	IEmployeeRepository employeeRepository,
+	IEmployeeAttendanceRepository employeeAttendanceRepository,
+	ICustomAttendanceRuleRepository customAttendanceRuleRepository,
+	IIdentityUserRepository userRepository,
+	IdentityUserManager userManager,
+	IIdentityRoleRepository roleRepository,
+	ITenantRepository tenantRepository) : BaseSeederContributor(currentTenant, guidGenerator, unitOfWork)
 {
-	private readonly IAcademicYearRepository _academicYearRepository;
-	private readonly IEducationBoardRepository _educationBoardRepository;
-	private readonly IEducationMediumRepository _educationMediumRepository;
-	private readonly IEducationMediumStageRepository _educationMediumStageRepository;
-	private readonly IStandardRepository _standardRepository;
-	private readonly IDivisionRepository _divisionRepository;
-	private readonly IPayElementRepository _payElementRepository;
-	private readonly IPayrollStructureRepository _payrollStructureRepository;
-	private readonly IEmployeeRepository _employeeRepository;
-	private readonly IEmployeeAttendanceRepository _employeeAttendanceRepository;
-	private readonly ICustomAttendanceRuleRepository _customAttendanceRuleRepository;
-	private readonly IdentityUserManager _userManager;
-	private readonly IIdentityRoleRepository _roleRepository;
-
-	public HRSeederContributor(
-		ICurrentTenant currentTenant,
-		IGuidGenerator guidGenerator,
-		IUnitOfWork unitOfWork,
-		IAcademicYearRepository academicYearRepository,
-		IEducationBoardRepository educationBoardRepository,
-		IEducationMediumRepository educationMediumRepository,
-		IEducationMediumStageRepository educationMediumStageRepository,
-		IStandardRepository standardRepository,
-		IDivisionRepository divisionRepository,
-		IPayElementRepository payElementRepository,
-		IPayrollStructureRepository payrollStructureRepository,
-		IEmployeeRepository employeeRepository,
-		IEmployeeAttendanceRepository employeeAttendanceRepository,
-		ICustomAttendanceRuleRepository customAttendanceRuleRepository,
-		IIdentityUserRepository userRepository,
-		IdentityUserManager userManager,
-		IIdentityRoleRepository roleRepository)
-		: base(currentTenant, guidGenerator, unitOfWork)
-	{
-		_academicYearRepository = academicYearRepository;
-		_educationBoardRepository = educationBoardRepository;
-		_educationMediumRepository = educationMediumRepository;
-		_educationMediumStageRepository = educationMediumStageRepository;
-		_standardRepository = standardRepository;
-		_divisionRepository = divisionRepository;
-		_payElementRepository = payElementRepository;
-		_payrollStructureRepository = payrollStructureRepository;
-		_employeeRepository = employeeRepository;
-		_employeeAttendanceRepository = employeeAttendanceRepository;
-		_customAttendanceRuleRepository = customAttendanceRuleRepository;
-		_userManager = userManager;
-		_roleRepository = roleRepository;
-	}
-
 	public override async Task SeedAsync(DataSeedContext context)
 	{
 		Guid tenantId = CurrentTenant?.Id ?? throw new Exception("TenantId is not set.");
 
 		// Create Academic Year.
-		var academicYear = await _academicYearRepository.InsertAsync(new AcademicYear(
+		var academicYear = await academicYearRepository.InsertAsync(new AcademicYear(
 			GuidGenerator.Create(),
 			tenantId,
 			"2024-2025",
@@ -91,7 +60,7 @@ public class HRSeederContributor : BaseSeederContributor
 		));
 
 		// Create Education Board.
-		var educationBoard = await _educationBoardRepository.InsertAsync(new EducationBoard(
+		var educationBoard = await educationBoardRepository.InsertAsync(new EducationBoard(
 			GuidGenerator.Create(),
 			tenantId,
 			EducationBoardType.CBSE,
@@ -99,7 +68,7 @@ public class HRSeederContributor : BaseSeederContributor
 		));
 
 		// Create Education Medium.
-		var educationMedium = await _educationMediumRepository.InsertAsync(new EducationMedium(
+		var educationMedium = await educationMediumRepository.InsertAsync(new EducationMedium(
 			GuidGenerator.Create(),
 			tenantId,
 			"English",
@@ -107,7 +76,7 @@ public class HRSeederContributor : BaseSeederContributor
 		));
 
 		// Create Education Medium Stage.
-		var educationMediumStage = await _educationMediumStageRepository.InsertAsync(new EducationMediumStage(
+		var educationMediumStage = await educationMediumStageRepository.InsertAsync(new EducationMediumStage(
 			GuidGenerator.Create(),
 			tenantId,
 			"Primary",
@@ -115,7 +84,7 @@ public class HRSeederContributor : BaseSeederContributor
 		));
 
 		// Create Standard.
-		var standard = await _standardRepository.InsertAsync(new Standard(
+		var standard = await standardRepository.InsertAsync(new Standard(
 			GuidGenerator.Create(),
 			tenantId,
 			"1",
@@ -123,7 +92,7 @@ public class HRSeederContributor : BaseSeederContributor
 		));
 
 		// Create Division.
-		var division = await _divisionRepository.InsertAsync(new Division(
+		var division = await divisionRepository.InsertAsync(new Division(
 			GuidGenerator.Create(),
 			tenantId,
 			"A",
@@ -149,7 +118,7 @@ public class HRSeederContributor : BaseSeederContributor
 			dependent: null,
 			isVisibleInPaySlip: true
 		);
-		payElement = await _payElementRepository.InsertAsync(payElement);
+		payElement = await payElementRepository.InsertAsync(payElement);
 
 		// Create Payroll Structure.
 		var payrollStructure = new PayrollStructure(
@@ -159,14 +128,23 @@ public class HRSeederContributor : BaseSeederContributor
 			payElementType: PayElementType.Credit,
 			amount: 10000
 		);
-		await _payrollStructureRepository.InsertAsync(payrollStructure);
+		await payrollStructureRepository.InsertAsync(payrollStructure);
 
-		// Create Employee user.
-		var employeeId = GuidGenerator.Create();
+		// Retrieve the tenant information to decide on the email domain.
+		var tenant = await tenantRepository.GetAsync(tenantId);
+		// Try to get a domain or institute name from the tenant's extra properties.
+		string instituteName = tenant.ExtraProperties.ContainsKey("InstituteName")
+			? tenant.ExtraProperties["InstituteName"].ToString()
+			: "defaultdomain";
+		// Build the email dynamically based on the tenant's institute name.
+		var emailDomain = instituteName.Trim().ToLower();
+		var employeeEmail = $"hvadher@{emailDomain}.com";
+
+		// Create Employee user with the dynamically generated email.
 		var employeeUser = new IdentityUser(
 			GuidGenerator.Create(),
-			"hvadher",
-			"Hiren.vadher@ddvs.com",
+			$"hvadher{emailDomain.ToLower()}",
+			employeeEmail,
 			tenantId
 		)
 		{
@@ -175,21 +153,21 @@ public class HRSeederContributor : BaseSeederContributor
 		};
 
 		var password = "Temp@123";
-		var userCreationResult = await _userManager.CreateAsync(employeeUser, password);
+		var userCreationResult = await userManager.CreateAsync(employeeUser, password);
 		if (!userCreationResult.Succeeded)
 		{
 			throw new Exception("Failed to create employee user: " + string.Join(", ", userCreationResult.Errors));
 		}
 
 		// Assign the "Teacher" role to the employee user.
-		var roleAssignmentResult = await _userManager.AddToRoleAsync(employeeUser, "Teacher");
+		var roleAssignmentResult = await userManager.AddToRoleAsync(employeeUser, "Teacher");
 		if (!roleAssignmentResult.Succeeded)
 		{
 			throw new Exception("Failed to assign role 'Teacher' to the employee: " + string.Join(", ", roleAssignmentResult.Errors));
 		}
 
 		// Fetch the Teacher role from the repository.
-		var teacherRole = await _roleRepository.FindByNormalizedNameAsync("TEACHER");
+		var teacherRole = await roleRepository.FindByNormalizedNameAsync("TEACHER");
 		if (teacherRole == null)
 		{
 			throw new Exception("Teacher role not found.");
@@ -197,7 +175,7 @@ public class HRSeederContributor : BaseSeederContributor
 
 		// Create Employee record and store the Teacher role's ID.
 		var employee = new Employee(
-			id: employeeId,
+			id: GuidGenerator.Create(),
 			tenantId: tenantId,
 			userId: employeeUser.Id,
 			educationMediumStageId: educationMediumStage.Id,
@@ -216,7 +194,7 @@ public class HRSeederContributor : BaseSeederContributor
 			maritalStatus: MaritalStatusType.Married,
 			bloodGroup: "O+",
 			mobileNo: "+91-9876543210",
-			email: "hvadher@ddvs.com",
+			email: employeeEmail,
 			address: "123 Main Street, Mumbai",
 			department: "IT",
 			designation: "Software Engineer",
@@ -247,18 +225,18 @@ public class HRSeederContributor : BaseSeederContributor
 			}
 		);
 
-		await _employeeRepository.InsertAsync(employee);
+		await employeeRepository.InsertAsync(employee);
 
 		// Create Employee Attendance.
 		var employeeAttendance = new EmployeeAttendance
 		{
 			TenantId = tenantId,
-			EmployeeId = employeeId,
+			EmployeeId = employee.Id,
 			TimeIn = new DateTimeOffset(new DateTime(2024, 6, 1, 9, 0, 0)),
 			TimeOut = new DateTimeOffset(new DateTime(2024, 6, 1, 18, 0, 0)),
 			StatusType = EmployeeAttendanceStatusType.Present,
 		};
-		await _employeeAttendanceRepository.InsertAsync(employeeAttendance);
+		await employeeAttendanceRepository.InsertAsync(employeeAttendance);
 
 		// Create Custom Attendance Rule.
 		var customAttendanceRule = new CustomAttendanceRule(
@@ -272,7 +250,7 @@ public class HRSeederContributor : BaseSeederContributor
 			halfDayThresholdUnit: TimeUnitType.Minutes,
 			enableNotificationForUpperAuthority: true
 		);
-		await _customAttendanceRuleRepository.InsertAsync(customAttendanceRule);
+		await customAttendanceRuleRepository.InsertAsync(customAttendanceRule);
 
 		await CurrentUnitOfWork.SaveChangesAsync();
 	}

@@ -14,6 +14,7 @@ public class EntranceExam : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public DateTimeOffset ExamDate { get; private set; }
 	public string ExamType { get; private set; }
 
+	public float PassingMark { get; set; }
 	public float? MarksObtained { get; private set; }
 	public float TotalMarks { get; private set; }
 	public ExamScheduleType ExamScheduleType { get; private set; }

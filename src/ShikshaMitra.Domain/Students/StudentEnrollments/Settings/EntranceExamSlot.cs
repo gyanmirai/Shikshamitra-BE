@@ -10,7 +10,6 @@ public class EntranceExamSlot : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public DateTimeOffset StartDate { get; private set; }
 	public DateTimeOffset EndDate { get; private set; }
 
-	public float PassingMark { get; private set; }
 	public int StudentLimit { get; private set; }
 
 	public int RoomNo { get; private set; }
@@ -22,14 +21,12 @@ public class EntranceExamSlot : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? tenantId,
 		DateTimeOffset startDate,
 		DateTimeOffset endDate,
-		float passingMark,
 		int studentLimit,
 		int roomNo) : base(id)
 	{
 		TenantId = tenantId ?? throw new ArgumentNullException(nameof(tenantId));
 		StartDate = startDate;
 		EndDate = endDate;
-		PassingMark = passingMark;
 		StudentLimit = studentLimit;
 		RoomNo = roomNo;
 	}

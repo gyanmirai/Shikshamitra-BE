@@ -13,7 +13,7 @@ public class EntranceExamDto :  AuditedEntityDto<Guid>
 	public StudentEnrollmentDto StudentEnrollment { get; set; }
 	public DateTimeOffset ExamDate { get; set; }
 	public string ExamType { get; set; }
-
+	public float PassingMark { get; set; }
 	public float? MarksObtained { get; set; }
 	public float TotalMarks { get; set; }
 	public ExamScheduleType ExamScheduleType { get; set; }

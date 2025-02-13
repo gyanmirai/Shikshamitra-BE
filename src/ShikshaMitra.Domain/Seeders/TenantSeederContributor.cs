@@ -1,6 +1,8 @@
-﻿using System.Threading.Tasks;
+﻿using System.Collections.Generic;
+using System;
+using System.Threading.Tasks;
 using Volo.Abp.Data;
-using Volo.Abp.EventBus.Distributed;
+using Volo.Abp.DependencyInjection;
 using Volo.Abp.Guids;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.ObjectExtending;
@@ -9,65 +11,76 @@ using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Seeders;
 
-public class TenantSeederContributor : BaseSeederContributor
+public class TenantSeederContributor(
+	ICurrentTenant currentTenant,
+	IGuidGenerator guidGenerator,
+	IUnitOfWork unitOfWork,
+	IDataSeeder dataSeeder,
+	ITenantManager tenantManager,
+	ITenantRepository tenantRepository) : BaseSeederContributor(currentTenant, guidGenerator, unitOfWork), ITransientDependency
 {
-	private readonly ITenantManager _tenantManager;
-	private readonly ITenantRepository _tenantRepository;
-	private readonly IUnitOfWork _unitOfWork;
-	private readonly IDataSeeder _dataSeeder;
-
-	public TenantSeederContributor(
-		ICurrentTenant currentTenant,
-		IGuidGenerator guidGenerator,
-		IUnitOfWork unitOfWork,
-		IDataSeeder dataSeeder,
-		ITenantManager tenantManager,
-		ITenantRepository tenantRepository)
-		: base(currentTenant, guidGenerator, unitOfWork)
-	{
-		_tenantManager = tenantManager;
-		_tenantRepository = tenantRepository;
-		_unitOfWork = unitOfWork;
-		_dataSeeder = dataSeeder;
-	}
-
 	public override async Task SeedAsync(DataSeedContext context)
 	{
-		if (await _tenantRepository.GetCountAsync() > 0)
+
+
+		if (await tenantRepository.GetCountAsync() > 0)
 		{
 			return;
 		}
 
-		TenantCreateDto input = new TenantCreateDto()
+		// List tenant creation details.
+		var tenants = new List<(string Name, string AdminEmail, string InstituteName, string Address, string City, string State, string Country, string PostalCode, string ContactNo)>
+			{
+				("DDVS", "ddvs@gmail.com", "DDVS", "Parvat Patiya", "Surat", "Gujarat", "India", "395010", "+91-9876543210"),
+				("SSVM", "ssvm@gmail.com", "SSVM", "Some Address", "CityName", "StateName", "CountryName", "123456", "+91-1234567890")
+			};
+
+		var tenantIds = new List<Guid>();
+
+		foreach (var tenantInfo in tenants)
 		{
-			Name = "DDVS",
-			AdminEmailAddress = "ddvs@gmail.com",
-			AdminPassword = "Temp@123",
-			ExtraProperties =
-				{
-					{ "InstituteName", "DDVS" },
-					{ "Address", "Parvat Patiya" },
-					{ "City", "Surat" },
-					{ "State", "Gujarat" },
-					{ "Country", "India" },
-					{ "PostalCode", "395010" },
-					{ "ContactNo", "+91-9876543210" },
-				}
-		};
+			// Check if the tenant already exists.
+			var existingTenant = await tenantRepository.FindByNameAsync(tenantInfo.Name);
+			if (existingTenant != null)
+			{
+				tenantIds.Add(existingTenant.Id);
+				continue;
+			}
 
-		var tenant = await _tenantManager.CreateAsync(input.Name);
-		input.MapExtraPropertiesTo(tenant);
+			// Create tenant input dto.
+			TenantCreateDto input = new TenantCreateDto
+			{
+				Name = tenantInfo.Name,
+				AdminEmailAddress = tenantInfo.AdminEmail,
+				AdminPassword = "Temp@123"
+			};
 
-		await _tenantRepository.InsertAsync(tenant);
+			input.ExtraProperties.Add("InstituteName", tenantInfo.InstituteName);
+			input.ExtraProperties.Add("Address", tenantInfo.Address);
+			input.ExtraProperties.Add("City", tenantInfo.City);
+			input.ExtraProperties.Add("State", tenantInfo.State);
+			input.ExtraProperties.Add("Country", tenantInfo.Country);
+			input.ExtraProperties.Add("PostalCode", tenantInfo.PostalCode);
+			input.ExtraProperties.Add("ContactNo", tenantInfo.ContactNo);
 
-		await _unitOfWork.SaveChangesAsync();
+			// Create tenant.
+			var tenant = await tenantManager.CreateAsync(input.Name);
+			input.MapExtraPropertiesTo(tenant);
 
-		await _dataSeeder.SeedAsync(
-			new DataSeedContext(tenant.Id)
-				.WithProperty("AdminEmail", input.AdminEmailAddress)
-				.WithProperty("AdminPassword", input.AdminPassword)
-		);
+			await tenantRepository.InsertAsync(tenant);
+			await unitOfWork.SaveChangesAsync();
 
-		context.Properties["TenantId"] = tenant.Id;
+			// Seed tenant-specific data (such as roles, HR, student data, etc.)
+			await dataSeeder.SeedAsync(
+				new DataSeedContext(tenant.Id)
+					.WithProperty("AdminEmail", input.AdminEmailAddress)
+					.WithProperty("AdminPassword", input.AdminPassword)
+			);
+
+			tenantIds.Add(tenant.Id);
+		}
+
+		// Store all tenant IDs in the data seed context.
+		context.Properties["TenantIds"] = tenantIds;
 	}
 }

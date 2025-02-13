@@ -1573,6 +1573,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<float?>("MarksObtained")
                         .HasColumnType("real");
 
+                    b.Property<float>("PassingMark")
+                        .HasColumnType("real");
+
                     b.Property<Guid>("StudentEnrollmentId")
                         .HasColumnType("uuid");
 
@@ -1755,9 +1758,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("LastModifierId")
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
-
-                    b.Property<float>("PassingMark")
-                        .HasColumnType("real");
 
                     b.Property<int>("RoomNo")
                         .HasColumnType("integer");

@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;

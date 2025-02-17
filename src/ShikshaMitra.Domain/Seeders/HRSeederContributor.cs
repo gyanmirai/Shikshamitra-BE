@@ -2,9 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
-using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
-using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
@@ -23,7 +21,6 @@ using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using Volo.Abp.TenantManagement;
-using static Volo.Abp.Identity.IdentityPermissions;
 
 namespace ShikshaMitra.Seeders;
 
@@ -105,7 +102,9 @@ public class HRSeederContributor(
 		context.Properties["AcademicYearId"] = academicYear.Id;
 		context.Properties["EducationBoardId"] = educationBoard.Id;
 		context.Properties["EducationMediumId"] = educationMedium.Id;
+		context.Properties["EducationMediumStageId"] = educationMediumStage.Id;
 		context.Properties["StandardId"] = standard.Id;
+		context.Properties["DivisionId"] = division.Id;
 
 		// Create Pay Element.
 		var payElement = new PayElement(
@@ -207,7 +206,7 @@ public class HRSeederContributor(
 			maritalStatus: MaritalStatusType.Married,
 			bloodGroup: "O+",
 			mobileNo: "+91-9876543210",
-			email: employeeEmail,
+			email: "ddvs@gmail.com",
 			address: "123 Main Street, Mumbai",
 			department: "IT",
 			designation: "Software Engineer",

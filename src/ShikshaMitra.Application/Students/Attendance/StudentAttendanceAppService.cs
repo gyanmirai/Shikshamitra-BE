@@ -18,6 +18,7 @@ public class StudentAttendanceAppService(IStudentAttendanceRepository studentAtt
 	{
 		List<StudentAttendance>? studentAttendances = inputs.ConvertAll(item => new StudentAttendance(
 			guidGenerator.Create(),
+			tenantId: (Guid)CurrentTenant.Id!,
 			studentId: item.StudentId,
 			attendanceDate,
 			item.IsPresent

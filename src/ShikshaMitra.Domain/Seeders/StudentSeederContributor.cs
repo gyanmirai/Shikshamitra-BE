@@ -8,6 +8,7 @@ using Volo.Abp.Guids;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using ShikshaMitra.Students.StudentRecords;
+using Volo.Abp;
 
 namespace ShikshaMitra.Seeders;
 
@@ -22,7 +23,7 @@ public class StudentSeederContributor(
 {
 	public override async Task SeedAsync(DataSeedContext context)
 	{
-		var tenantId = CurrentTenant.Id;
+		Guid tenantId = (Guid)CurrentTenant.Id!;
 
 		// Create Inquiry Preference.
 		var inquiryPreference = await inquiryPreferenceRepository.InsertAsync(new InquiryPreference(
@@ -43,7 +44,9 @@ public class StudentSeederContributor(
 		var academicYearId = (Guid) context.Properties["AcademicYearId"];
 		var educationBoardId = (Guid) context.Properties["EducationBoardId"];
 		var educationMediumId = (Guid) context.Properties["EducationMediumId"];
+		var educationMediumStageId = (Guid) context.Properties["EducationMediumStageId"];
 		var standardId = (Guid) context.Properties["StandardId"];
+		var divisionId = (Guid) context.Properties["DivisionId"];
 
 		// Create a student inquiry.
 		var newStudentInquiry = await studentEnrollmentManager.CreateStudentInquiryAsync(
@@ -76,7 +79,19 @@ public class StudentSeederContributor(
 		await studentEnrollmentRepository.InsertAsync(newStudentInquiry);
 
 		// Create Student
-		var student = new Student(GuidGenerator.Create(), "Hiren Student");
+		var student = new Student(
+			GuidGenerator.Create(),
+			tenantId: tenantId,
+			name: "Hiren Student",
+			academicYearId: academicYearId,
+			educationBoardId: educationBoardId,
+			educationMediumId: educationMediumId,
+			educationMediumStageId: educationMediumStageId,
+			standardId: standardId,
+			divisionId: divisionId,
+			grNoRecord: 1,
+			rollNo: 1
+			);
 
 		await studentRepository.InsertAsync(student);
 

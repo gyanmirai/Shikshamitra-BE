@@ -76,29 +76,6 @@ public class EmployeeManager(
 		// Validate role existence
 		IdentityRole role = await GetRoleAsync(roleId);
 
-		// 1. Create the IdentityUser
-		var user = new IdentityUser(guidGenerator.Create(), email, email, CurrentTenant.Id);
-		user.SetPhoneNumber(mobileNo, false);
-		user.Name = firstName;
-		user.Surname = lastName;
-		var password = "Temp@123"; // Implement a method to generate a random password
-		var userCreateResult = await userManager.CreateAsync(user, password);
-
-		if (!userCreateResult.Succeeded)
-		{
-			// Handle user creation errors (e.g., duplicate email, weak password)
-			throw new UserFriendlyException("Failed to create user: " + string.Join(", ", userCreateResult.Errors.Select(e => e.Description)));
-		}
-
-		// 2. Assign the role to the user
-		var roleAddResult = await userManager.AddToRoleAsync(user, role.Name);
-		if (!roleAddResult.Succeeded)
-		{
-			// Handle role assignment errors
-			await userManager.DeleteAsync(user); // Rollback user creation
-			throw new UserFriendlyException("Failed to add user to role: " + string.Join(", ", roleAddResult.Errors.Select(e => e.Description)));
-		}
-
 
 		// Generate employee code
 		string employeeCode = await GenerateEmployeeCodeAsync();
@@ -107,7 +84,7 @@ public class EmployeeManager(
 		var employee = new Employee(
 			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
-			userId: user.Id,
+			userId: null,
 			profilePicture: profilePicture,
 			employeeCode: employeeCode,
 			lastName: lastName,
@@ -171,6 +148,31 @@ public class EmployeeManager(
 			workExperiences: null
 		);
 
+		// 1. Create the IdentityUser
+		var user = new IdentityUser(guidGenerator.Create(), email, email, CurrentTenant.Id);
+		user.SetPhoneNumber(mobileNo, false);
+		user.Name = firstName;
+		user.Surname = lastName;
+		var password = "Temp@123"; // Implement a method to generate a random password
+		var userCreateResult = await userManager.CreateAsync(user, password);
+
+		if (!userCreateResult.Succeeded)
+		{
+			// Handle user creation errors (e.g., duplicate email, weak password)
+			throw new UserFriendlyException("Failed to create user: " + string.Join(", ", userCreateResult.Errors.Select(e => e.Description)));
+		}
+
+		// 2. Assign the role to the user
+		var roleAddResult = await userManager.AddToRoleAsync(user, role.Name);
+		if (!roleAddResult.Succeeded)
+		{
+			// Handle role assignment errors
+			await userManager.DeleteAsync(user); // Rollback user creation
+			throw new UserFriendlyException("Failed to add user to role: " + string.Join(", ", roleAddResult.Errors.Select(e => e.Description)));
+		}
+
+
+		employee.UpdateUserId(user.Id);
 		return employee;
 	}
 
@@ -209,10 +211,10 @@ public class EmployeeManager(
 		Employee employee = await GetEmployeeAsync(employeeId);
 
 		// Update user roles if roleId is provided and changed
-		if (roleId.HasValue && employee.RoleId != roleId.Value)
+		if (roleId.HasValue && employee.RoleId != roleId.Value && employee.UserId!=null)
 		{
 			// Get the associated user
-			IdentityUser user = await GetUserAsync(employee.UserId);
+			IdentityUser user = await GetUserAsync((Guid)employee.UserId);
 
 			// Remove the user from the old role
 			IdentityRole? oldRole = await roleRepository.GetAsync(employee.RoleId);

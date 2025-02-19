@@ -31,13 +31,13 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid DivisionId { get; set; }
 	public virtual Division Division { get; set; } // Navigation property
 	public int GrNoRecord { get; set; }
-	public int RollNo { get; set; }
+	public int? RollNo { get; set; }
 
 	public Guid? TenantId { get; set; }
 
 	protected Student() { }
 
-	public Student(Guid id, Guid tenantId, string name, Guid academicYearId, Guid educationBoardId, Guid educationMediumId, Guid educationMediumStageId, Guid standardId, Guid divisionId, int grNoRecord, int rollNo) : base(id)
+	public Student(Guid id, Guid tenantId, string name, Guid academicYearId, Guid educationBoardId, Guid educationMediumId, Guid educationMediumStageId, Guid standardId, Guid divisionId, int grNoRecord, int? rollNo) : base(id)
 	{
 		Name = name;
 		TenantId = tenantId;

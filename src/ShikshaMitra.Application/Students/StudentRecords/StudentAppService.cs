@@ -1,6 +1,7 @@
 ﻿using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -41,7 +42,7 @@ public class StudentAppService(StudentManager studentManager ,IStudentRepository
 	public async Task<int> GetRollNoAsync(Guid divisionId)
 	{
 		Student? student = await studentRepository.GetLastStudentbyRollNoAsync(divisionId);
-		return student != null ? student.RollNo + 1 : 1;
+		return (student?.RollNo.HasValue == true) ? student.RollNo.Value + 1 : 1;
 	}
 
 	public async Task UpdateGrNumbersAsync(CreateUpdateGRNoDto input)
@@ -76,6 +77,27 @@ public class StudentAppService(StudentManager studentManager ,IStudentRepository
 			// After validation, fetch and update the student.
 			var student = await studentRepository.GetAsync(item.StudentId);
 			student.RollNo = item.RollNo;
+			await studentRepository.UpdateAsync(student);
+		}
+	}
+
+
+	public async Task UpdateStudentDivisionAsync(UpdateStudentDivisionDto input)
+	{
+		if (input.StudentDivisionUpdates == null || input.StudentDivisionUpdates.Count == 0)
+		{
+			throw new UserFriendlyException("No student data provided.");
+		}
+
+		foreach (var update in input.StudentDivisionUpdates)
+		{
+			// Fetch the student by its ID.
+			var student = await studentRepository.GetAsync(update.StudentId);
+
+			// Update the student's division and reset the roll number.
+			student.DivisionId = update.DivisionId;
+			student.RollNo = null;
+
 			await studentRepository.UpdateAsync(student);
 		}
 	}

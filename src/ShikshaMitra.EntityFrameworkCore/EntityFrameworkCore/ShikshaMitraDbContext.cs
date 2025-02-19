@@ -138,6 +138,8 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	DbSet<Student> Students { get; set; }
 	DbSet<StudentAttendance> StudentAttendances { get; set; }
 
+	DbSet<StudentCertificate> StudentCertificates { get; set; }
+
 	#endregion
 
 	#region Attendance

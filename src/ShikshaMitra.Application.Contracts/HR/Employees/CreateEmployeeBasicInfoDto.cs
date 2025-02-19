@@ -10,7 +10,9 @@ public class CreateEmployeeBasicInfoDto
 	public byte[]? ProfilePicture { get; set; }
 
 	public string? LastName { get; set; }
-	public string? FirstName { get; set; }
+
+	[Required]
+	public string FirstName { get; set; }
 	public string? MiddleName { get; set; }
 	public string? ShortName { get; set; }
 

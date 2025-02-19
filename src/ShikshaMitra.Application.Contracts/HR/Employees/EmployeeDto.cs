@@ -3,6 +3,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Identity;
 
@@ -16,6 +17,7 @@ public class EmployeeDto : EntityDto<Guid>
 	public Guid? UserId { get; set; }
 
 	public string? LastName { get; set; }
+
 	public string? FirstName { get; set; }
 	public string? MiddleName { get; set; }
 	public string? ShortName { get; set; }

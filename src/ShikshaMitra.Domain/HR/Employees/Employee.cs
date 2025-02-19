@@ -14,7 +14,7 @@ namespace ShikshaMitra.HR.Employees;
 public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
-	public Guid UserId { get; private set; }
+	public Guid? UserId { get; private set; }
 	public Guid EducationMediumStageId { get; private set; }
 
 	// Profile Picture
@@ -30,7 +30,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public EmployeeStatusType? EmployeeStatusType { get; private set; }
 	public string? ChangeReason { get; private set; }
 	public DateTimeOffset? StatusLastChangedAt { get; private set; }
-
 	public DateOnly? DateOfBirth { get; private set; }
 	public string? FamilyCast { get; private set; }
 	public CastType? CastType { get; private set; }
@@ -102,7 +101,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	internal Employee(
 		Guid id,
 		Guid? tenantId,
-		Guid userId,
+		Guid? userId,
 		Guid educationMediumStageId,
 		byte[]? profilePicture,
 		string? employeeCode,
@@ -280,5 +279,10 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	internal void RemovePayrollStructure()
 	{
 		PayrollStructureId = null;
+	}
+
+	internal void UpdateUserId(Guid id)
+	{
+		UserId = id;
 	}
 }

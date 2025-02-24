@@ -7,12 +7,15 @@ namespace ShikshaMitra.Students.StudentRecords;
 
 public class StudentCertificate : AggregateRoot<Guid>, IMultiTenant
 {
-	public int StudentId { get; set; }
+	public Guid StudentId { get; set; }
 	public byte[] PdfContent { get; set; }
 	public string FileName { get; set; }
 	public string? Reason { get; set; }
 
 	public DateTimeOffset CreationTime { get; set; }
+
+
+	public Student Student { get; set; } // Navigation property
 
 	public Guid? TenantId { get; }
 
@@ -21,10 +24,11 @@ public class StudentCertificate : AggregateRoot<Guid>, IMultiTenant
 	{
 	}
 
-	public StudentCertificate(Guid id, Guid tenantId, int studentId, byte[] pdfContent, string fileName, DateTimeOffset creationTime, string? reason = null)
+	public StudentCertificate(Guid id, Guid tenantId, Guid studentId, byte[] pdfContent, string fileName, DateTimeOffset creationTime, string? reason = null)
 		: base(id)
 	{
 		StudentId = studentId;
+		TenantId = tenantId;
 		PdfContent = pdfContent;
 		FileName = fileName;
 		CreationTime = creationTime;

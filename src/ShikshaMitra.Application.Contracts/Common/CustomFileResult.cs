@@ -1,12 +1,12 @@
-﻿namespace ShikshaMitra.Students.StudentRecords;
+﻿namespace ShikshaMitra.Common;
 
-public class StudentCertificateFileResult
+public class CustomFileResult
 {
 	public byte[] FileContent { get; set; }
 	public string FileName { get; set; }
 	public string ContentType { get; set; }
 
-	public StudentCertificateFileResult(byte[] fileContent, string fileName, string contentType)
+	public CustomFileResult(byte[] fileContent, string fileName, string contentType)
 	{
 		FileContent = fileContent;
 		FileName = fileName;

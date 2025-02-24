@@ -31,4 +31,5 @@ public interface IStudentEnrollmentAppService : ICrudAppService<StudentEnrollmen
 	Task<DocumentDto> UpdateDocumentAsync(Guid studentEnrollmentId, Guid documentId, DocumentDto documentDto);
 
 	Task<PagedResultDto<StudentEnrollmentDto>> GetStudentsFollowUp(Guid academicYearId);
+	Task<CustomFileResult> GenerateReportAsync(StudentEnrollmentReportType reportType);
 }

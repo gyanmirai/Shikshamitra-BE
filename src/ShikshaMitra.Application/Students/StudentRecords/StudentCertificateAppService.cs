@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp;
+using ShikshaMitra.Common;
 
 namespace ShikshaMitra.Students.StudentRecords;
 
@@ -12,7 +13,7 @@ public class StudentCertificateAppService(
 	IRepository<StudentCertificate, Guid> certificateRepository,
 	ICurrentTenant currentTenant) : ShikshaMitraAppService, IStudentCertificateAppService
 {
-	public async Task UploadCertificateAsync(int studentId, byte[] pdfContent, string fileName, string? reason)
+	public async Task UploadCertificateAsync(Guid studentId, byte[] pdfContent, string fileName, string? reason)
 	{
 		if (pdfContent == null || pdfContent.Length == 0)
 		{
@@ -46,7 +47,7 @@ public class StudentCertificateAppService(
 	}
 
 
-	public async Task<List<StudentCertificateDto>> GetCertificatesAsync(int studentId)
+	public async Task<List<StudentCertificateDto>> GetCertificatesAsync(Guid studentId)
 	{
 		var certificates = await certificateRepository.GetListAsync(x => x.StudentId == studentId);
 		var dtos = new List<StudentCertificateDto>();
@@ -66,7 +67,7 @@ public class StudentCertificateAppService(
 	}
 
 
-	public async Task<StudentCertificateFileResult> DownloadCertificateFileAsync(Guid certificateId)
+	public async Task<CustomFileResult> DownloadCertificateFileAsync(Guid certificateId)
 	{
 		var certificate = await certificateRepository.GetAsync(certificateId);
 		if (certificate == null || certificate.PdfContent == null)
@@ -74,6 +75,6 @@ public class StudentCertificateAppService(
 			throw new UserFriendlyException("Certificate not found.");
 		}
 		// You can adjust the content type if needed.
-		return new StudentCertificateFileResult(certificate.PdfContent, certificate.FileName, "application/pdf");
+		return new CustomFileResult(certificate.PdfContent, certificate.FileName, "application/pdf");
 	}
 }

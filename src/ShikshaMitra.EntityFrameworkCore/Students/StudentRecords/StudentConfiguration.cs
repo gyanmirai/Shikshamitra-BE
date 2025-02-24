@@ -4,7 +4,7 @@ using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Students.StudentRecords;
 
-public class StudentConfiguration : IEntityTypeConfiguration<Student>
+public class StudentConfigurationa : IEntityTypeConfiguration<Student>
 {
 	public void Configure(EntityTypeBuilder<Student> builder)
 	{

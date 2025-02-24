@@ -24,6 +24,7 @@
     <PackageReference Include="Volo.Abp.SettingManagement.Domain" Version="9.0.0" />
     <PackageReference Include="Volo.Abp.OpenIddict.Domain" Version="9.0.0" />
     <PackageReference Include="Volo.Abp.PermissionManagement.Domain.OpenIddict" Version="9.0.0" />
+    <PackageReference Include="QuestPDF" Version="2024.10.4" />
   </ItemGroup>
 
   <ItemGroup>

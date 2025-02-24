@@ -8,8 +8,10 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.BlobStoring;
 using System.Threading.Tasks;
-using Volo.Abp.Guids;
 using Volo.Abp;
+using ShikshaMitra.Students.StudentRecords;
+using QuestPDF.Fluent;
+using QuestPDF.Infrastructure;
 
 
 namespace ShikshaMitra.Students.StudentEnrollments;
@@ -550,5 +552,29 @@ public class StudentEnrollmentAppService(
 			TotalCount = studentEnrollments.Count,
 			Items = ObjectMapper.Map<List<StudentEnrollment>, List<StudentEnrollmentDto>>(studentEnrollments)
 		};
+	}
+
+	public async Task<CustomFileResult> GenerateReportAsync(StudentEnrollmentReportType reportType)
+	{
+		List<StudentEnrollment>? enrollments = await studentEnrollmentRepository.GetListAsync(includeDetails: true);
+
+		IDocument? reportDocument = StudentManager.CreateReport(enrollments, reportType);
+
+		var pdfBytes = await Task.Run(() =>
+		{
+			using MemoryStream ms = new MemoryStream();
+			reportDocument.GeneratePdf(ms);
+			return ms.ToArray();
+		});
+
+		// Build a file name based on the report type and current timestamp.
+		string fileName = $"StudentEnrollmentReport_{reportType}_{DateTime.UtcNow:yyyyMMddHHmmss}.pdf";
+
+		return new CustomFileResult
+		(
+			pdfBytes,
+			"application/pdf",
+			fileName
+		);
 	}
 }

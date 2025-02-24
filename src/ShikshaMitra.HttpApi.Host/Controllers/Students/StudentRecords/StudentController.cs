@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentRecords;
 using System;
 using System.Collections.Generic;
@@ -18,7 +19,7 @@ public class StudentController(IStudentCertificateAppService studentCertificateA
 	[HttpPost("upload-certificate")]
 	[Consumes("multipart/form-data")]
 	public async Task<IActionResult> UploadCertificate(
-	[FromQuery] int studentId,
+	[FromQuery] Guid studentId,
 	[FromForm] IList<IFormFile>? files,
 	[FromForm] string? reason)
 	{
@@ -28,7 +29,7 @@ public class StudentController(IStudentCertificateAppService studentCertificateA
 		}
 
 		// Use the first file in the list
-		var pdf = files.First();
+		var pdf = files[0];
 
 		if (!pdf.ContentType.Equals("application/pdf", System.StringComparison.OrdinalIgnoreCase))
 		{
@@ -48,7 +49,7 @@ public class StudentController(IStudentCertificateAppService studentCertificateA
 
 
 	[HttpGet("get-certificates")]
-	public async Task<IActionResult> GetCertificates([FromQuery] int studentId)
+	public async Task<IActionResult> GetCertificates([FromQuery] Guid studentId)
 	{
 		List<StudentCertificateDto> certificates = await studentCertificateAppService.GetCertificatesAsync(studentId);
 		if (certificates == null || certificates.Count == 0)
@@ -61,7 +62,7 @@ public class StudentController(IStudentCertificateAppService studentCertificateA
 	[HttpGet("download-certificate")]
 	public async Task<IActionResult> DownloadCertificate([FromQuery] Guid certificateId)
 	{
-		var fileResult = await studentCertificateAppService.DownloadCertificateFileAsync(certificateId);
+		CustomFileResult? fileResult = await studentCertificateAppService.DownloadCertificateFileAsync(certificateId);
 		return File(fileResult.FileContent, fileResult.ContentType, fileResult.FileName);
 	}
 }

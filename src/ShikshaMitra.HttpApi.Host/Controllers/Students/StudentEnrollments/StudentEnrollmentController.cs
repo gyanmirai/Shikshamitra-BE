@@ -10,6 +10,7 @@ using System.IO;
 using Volo.Abp.AspNetCore.Mvc;
 using ShikshaMitra.Students.FollowUps;
 using Volo.Abp.Application.Dtos;
+using ShikshaMitra.Students.StudentRecords;
 
 namespace ShikshaMitra.Controllers.Students.StudentEnrollments;
 
@@ -110,4 +111,17 @@ public class StudentEnrollmentController(IStudentEnrollmentAppService studentEnr
 
 	[HttpPut("{studentEnrollmentId}/update-status-due-date")]
 	public async Task UpdateStatus(Guid studentEnrollmentId, InquiryStatusType status, DateTimeOffset? dueDate) => await followUpAppService.UpdateStatusAndDueDateAsync(studentEnrollmentId, status, dueDate);
+
+	[HttpGet("report")]
+	public async Task<IActionResult> GenerateReport([FromQuery] StudentEnrollmentReportType reportType)
+	{
+		CustomFileResult reportResult = await studentEnrollmentAppService.GenerateReportAsync(reportType);
+
+		if (reportResult == null || reportResult.FileContent == null)
+		{
+			return NotFound("Report could not be generated.");
+		}
+
+		return Ok(reportResult);
+	}
 }

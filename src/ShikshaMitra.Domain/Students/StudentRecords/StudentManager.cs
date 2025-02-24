@@ -1,4 +1,8 @@
-﻿using System;
+﻿using QuestPDF.Infrastructure;
+using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.StudentRecords.Reports;
+using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
@@ -39,6 +43,21 @@ public class StudentManager(IStudentRepository studentRepository) : DomainServic
 		if (exists)
 		{
 			throw new UserFriendlyException($"Roll number {rollNo} already exists.");
+		}
+	}
+
+	public static IDocument CreateReport(IReadOnlyList<StudentEnrollment> enrollments, StudentEnrollmentReportType reportType)
+	{
+		switch (reportType)
+		{
+			case StudentEnrollmentReportType.EnrollmentByGender:
+				return new EnrollmentByGenderReport(enrollments);
+
+			case StudentEnrollmentReportType.EnrollmentByAge:
+				return new EnrollmentByAgeReport(enrollments);
+
+			default:
+				throw new NotSupportedException($"Report type '{reportType}' is not supported.");
 		}
 	}
 }

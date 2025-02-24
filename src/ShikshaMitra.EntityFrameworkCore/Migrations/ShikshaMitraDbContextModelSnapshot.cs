@@ -696,7 +696,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
-                    b.Property<Guid>("UserId")
+                    b.Property<Guid?>("UserId")
                         .HasColumnType("uuid");
 
                     b.ComplexProperty<Dictionary<string, object>>("BankDetails", "ShikshaMitra.HR.Employees.Employee.BankDetails#BankDetails", b1 =>
@@ -2503,7 +2503,7 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("RollNo")
+                    b.Property<int?>("RollNo")
                         .HasColumnType("integer");
 
                     b.Property<Guid>("StandardId")
@@ -2528,6 +2528,51 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("StandardId");
 
                     b.ToTable("AppStudents", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentRecords.StudentCertificate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTimeOffset>("CreationTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<byte[]>("PdfContent")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("AppStudentCertificates", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears.AcademicYearPermission", b =>
@@ -4994,8 +5039,7 @@ namespace ShikshaMitra.Migrations
                     b.HasOne("Volo.Abp.Identity.IdentityUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.OwnsMany("ShikshaMitra.HR.Employees.WorkExperience", "WorkExperiences", b1 =>
                         {
@@ -5252,6 +5296,17 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("EducationMediumStage");
 
                     b.Navigation("Standard");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentRecords.StudentCertificate", b =>
+                {
+                    b.HasOne("ShikshaMitra.Students.StudentRecords.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.Divisions.Division", b =>

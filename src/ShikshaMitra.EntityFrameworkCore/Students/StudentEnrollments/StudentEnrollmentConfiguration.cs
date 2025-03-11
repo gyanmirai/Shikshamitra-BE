@@ -1,5 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using ShikshaMitra.Common;
+using System.Reflection.Emit;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
@@ -58,12 +60,26 @@ public class StudentEnrollmentConfiguration : IEntityTypeConfiguration<StudentEn
 
 		builder.Property(i => i.DueDate);
 
+		// Configure Country to be keyless
+
 		//builder.OwnsMany(e => e.FollowUps, b =>
 		//{
 		//	b.ToTable("StudentEnrollmentFollowUps");
 		//	b.WithOwner().HasForeignKey(x=>x.InquiryId);
 		//	b.Property(f => f.Message).HasColumnName("Message");
 		//});
+
+		builder.OwnsOne(e => e.Country, cb =>
+		{
+			cb.Property(c => c.Name).HasColumnName("CountryName");
+			cb.Property(c => c.IsoCode).HasColumnName("CountryIsoCode");
+		});
+
+		builder.OwnsOne(e => e.State, sb =>
+		{
+			sb.Property(s => s.Name).HasColumnName("StateName");
+			sb.Property(s => s.IsoCode).HasColumnName("StateIsoCode");
+		});
 
 		builder.HasMany(e => e.FollowUps)
 				  .WithOne(f => f.StudentEnrollment)                 // the navigation property on FollowUpMessage

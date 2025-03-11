@@ -44,6 +44,8 @@ using ShikshaMitra.Students.StudentEnrollments.FollowUps;
 using ShikshaMitra.Students.Attendance.Settings;
 using ShikshaMitra.Students.StudentRecords;
 using ShikshaMitra.Students.Attendance;
+using ShikshaMitra.TenantSettings;
+using ShikshaMitra.Common;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -111,6 +113,8 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<StandardPermission> StandardPermissions { get; set; }
 	public DbSet<Division> Divisions { get; set; }
 	public DbSet<DivisionPermission> DivisionPermissions { get; set; }
+
+	public DbSet<ShiftManagement> ShiftManagements { get; set; }
 
 	#endregion
 
@@ -261,6 +265,10 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 			b.HasIndex(x => x.Name);
 		});
+
+		//builder.Entity<Country>().HasNoKey();
+		//builder.Entity<State>().HasNoKey();
+
 
 		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 		builder.ConfigureBlobStoring();

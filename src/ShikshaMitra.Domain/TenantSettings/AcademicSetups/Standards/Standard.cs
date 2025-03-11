@@ -15,6 +15,8 @@ public class Standard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public string Name { get; internal set; }
 
+	public int AgeLowerLimit { get; internal set; }
+
 
 	private Standard()
 	{
@@ -25,11 +27,13 @@ public class Standard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid id,
 		Guid? tenantId,
 		string name,
+		int ageLowerLimit,
 		Guid educationMediumStageId)
 		: base(id)
 	{
 		TenantId = Check.NotNull(tenantId, nameof(tenantId));
 		EducationMediumStageId = Check.NotNull(educationMediumStageId, nameof(educationMediumStageId));
+		AgeLowerLimit = ageLowerLimit;
 		SetName(name);
 	}
 

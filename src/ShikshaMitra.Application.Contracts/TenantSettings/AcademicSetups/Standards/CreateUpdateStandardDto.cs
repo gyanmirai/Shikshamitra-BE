@@ -9,6 +9,9 @@ public class CreateUpdateStandardDto
     [Required]
     [StringLength(StandardConsts.MaxNameLength)]
     public string Name { get; set; }
-    
-    public Guid EducationMediumStageId { get; set; }
+
+	[Range(1, int.MaxValue)]
+	public int AgeLowerLimit { get; set; }
+
+	public Guid EducationMediumStageId { get; set; }
 }

@@ -86,6 +86,7 @@ public class HRSeederContributor(
 			GuidGenerator.Create(),
 			tenantId,
 			"1",
+			6,
 			educationMediumStage.Id
 		));
 
@@ -95,7 +96,8 @@ public class HRSeederContributor(
 			tenantId,
 			"A",
 			standard.Id,
-			30
+			30,
+			"112"
 		));
 
 		// Store academic-related IDs in the seed context for use by the student seeder.

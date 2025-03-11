@@ -14,6 +14,8 @@ public class Division : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public int Strength { get; internal set; }
 
+	public string RoomNumber { get; internal set; }
+
 	// Foreign key
 	public Guid StandardId { get; }
 
@@ -31,13 +33,15 @@ public class Division : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? tenantId,
 		string name,
 		Guid standardId,
-		int strength)
+		int strength,
+		string roomNumber)
 		: base(id)
 	{
 		TenantId = Check.NotNull(tenantId, nameof(tenantId));
 		StandardId = Check.NotNull(standardId, nameof(standardId));
 		SetName(name);
 		SetStrength(strength);
+		RoomNumber = roomNumber;
 	}
 
 	internal Division SetName(string name)

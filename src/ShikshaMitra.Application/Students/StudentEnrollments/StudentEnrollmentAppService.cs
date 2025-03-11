@@ -275,6 +275,7 @@ public class StudentEnrollmentAppService(
 		StudentEnrollment studentEnrollment = await studentEnrollmentManager.UpdateStudentInquiryAsync(
 			studentEnrollmentId,
 			studentEnrollmentState: studentEnrollmentState,
+			studentEnrollmentApprovalState: StudentEnrollmentApprovalState.Pending,
 			formNumber: input.FormNumber,
 			firstName: input.FirstName,
 			middleName: input.MiddleName,
@@ -534,6 +535,56 @@ public class StudentEnrollmentAppService(
 
 	#endregion
 
+	#region Update Student Enrollment Approval State
+	//public async Task<StudentEnrollmentDto> UpdateStudentEnrollmentApprovalStateAsync(
+	//	Guid studentEnrollmentId,
+	//	StudentEnrollmentApprovalState approvalState)
+	//{
+	//	// Get the student enrollment through the repository
+	//	StudentEnrollment studentEnrollment = await studentEnrollmentRepository.GetAsync(studentEnrollmentId);
+
+	//	// Update the approval state using the manager
+	//	studentEnrollment = await studentEnrollmentManager.UpdateStudentEnrollmentApprovalStateAsync(
+	//		studentEnrollmentId,
+	//		approvalState);
+
+	//	// Save the updated entity
+	//	studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
+
+	//	// Return the mapped DTO
+	//	return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);
+	//}
+
+	public async Task<List<StudentEnrollmentDto>> UpdateStudentEnrollmentApprovalStateAsync(
+		List<Guid> studentEnrollmentIds,
+		StudentEnrollmentApprovalState approvalState)
+	{
+		var updatedStudentEnrollmentDtos = new List<StudentEnrollmentDto>();
+
+		foreach (var studentEnrollmentId in studentEnrollmentIds)
+		{
+			// Get the student enrollment through the repository
+			StudentEnrollment studentEnrollment = await studentEnrollmentRepository.GetAsync(studentEnrollmentId);
+
+			if (studentEnrollment != null) // Handle case if studentEnrollment is not found
+			{
+				// Update the approval state using the manager
+				studentEnrollment = await studentEnrollmentManager.UpdateStudentEnrollmentApprovalStateAsync(
+					studentEnrollmentId,
+					approvalState);
+
+				// Save the updated entity
+				studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
+
+				// Map to DTO and add to the list
+				updatedStudentEnrollmentDtos.Add(ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment));
+			}
+		}
+
+		// Return the list of mapped DTOs
+		return updatedStudentEnrollmentDtos;
+	}
+	#endregion
 
 	[RemoteService(false)]
 	public async Task<PagedResultDto<StudentEnrollmentDto>> GetStudentsFollowUp(Guid academicYearId)

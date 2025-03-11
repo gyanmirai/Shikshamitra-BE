@@ -26,7 +26,8 @@ public class StandardAppService(
 	{
 		Standard standard = await standardManager.CreateAsync(
 			input.EducationMediumStageId,
-			input.Name
+			input.Name,
+			input.AgeLowerLimit
 		);
 
 		await standardRepository.InsertAsync(standard);
@@ -36,7 +37,7 @@ public class StandardAppService(
 	public override async Task<StandardDto> UpdateAsync(Guid id, CreateUpdateStandardDto input)
 	{
 		Standard standard = await standardRepository.GetAsync(id);
-		await standardManager.UpdateAsync(standard, input.Name);
+		await standardManager.UpdateAsync(standard, input.Name, input.AgeLowerLimit);
 		return ObjectMapper.Map<Standard, StandardDto>(standard);
 	}
 

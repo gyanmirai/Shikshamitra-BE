@@ -17,6 +17,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 	public StudentEnrollmentState StudentEnrollmentState { get; private set; }
+	public StudentEnrollmentApprovalState StudentEnrollmentApprovalState { get; private set; }
 
 	// Student Inquiry payload
 	public string InquiryNumber { get; private set; }
@@ -33,12 +34,18 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? AddressLine1 { get; private set; }
 	public string? AddressLine2 { get; private set; }
 	public string? AddressLine3 { get; private set; }
-	public string? Country { get; private set; }
+	public Country? Country { get; private set; }
+	public State? State { get; private set; }
 	public string? City { get; private set; }
-	public string? State { get; private set; }
 	public string? PinCode { get; private set; }
 	public InquiryStatusType? InquiryStatusType { get; private set; }
 	public DateTimeOffset? DueDate { get; private set; }
+
+	public float TotalAmount { get; private set; }
+	public float PaidAmount { get; private set; }
+
+	public FeeStatusType FeeStatusType { get; private set; }
+
 	public virtual ICollection<FollowUpMessage> FollowUps { get; private set; } = new List<FollowUpMessage>();
 
 	// Foreign Key
@@ -87,6 +94,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid id,
 		Guid? tenantId,
 		StudentEnrollmentState studentEnrollmentState,
+		StudentEnrollmentApprovalState studentEnrollmentApprovalState,
 		string inquiryNumber,
 		string? formNumber,
 		string? firstName,
@@ -101,8 +109,8 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? addressLine1,
 		string? addressLine2,
 		string? addressLine3,
-		string? country,
-		string? state,
+		Country? country,
+		State? state,
 		string? city,
 		string? pinCode,
 		InquiryStatusType? inquiryStatusType,
@@ -139,6 +147,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		TenantId = tenantId;
 		StudentEnrollmentState = studentEnrollmentState;
+		StudentEnrollmentApprovalState = studentEnrollmentApprovalState;
 		InquiryNumber = inquiryNumber;
 		FormNumber = formNumber;
 		FirstName = firstName;
@@ -191,6 +200,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	internal StudentEnrollment UpdateStudentInquiry(
 		StudentEnrollmentState studentEnrollmentState,
+		StudentEnrollmentApprovalState studentEnrollmentApprovalState,
 		string? formNumber,
 		string? firstName,
 		string? middleName,
@@ -204,8 +214,8 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? addressLine1,
 		string? addressLine2,
 		string? addressLine3,
-		string? country,
-		string? state,
+		Country? country,
+		State? state,
 		string? city,
 		string? pinCode,
 		InquiryStatusType? inquiryStatusType,
@@ -217,6 +227,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	)
 	{
 		StudentEnrollmentState = studentEnrollmentState;
+		StudentEnrollmentApprovalState = studentEnrollmentApprovalState;
 		FormNumber = formNumber;
 		FirstName = firstName;
 		MiddleName = middleName;
@@ -261,9 +272,9 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? addressLine1,
 		string? addressLine2,
 		string? addressLine3,
-		string? country,
+		Country? country,
 		string? city,
-		string? state,
+		State? state,
 		string? pinCode,
 		Guid academicYearId,
 		Guid educationBoardId,
@@ -416,6 +427,12 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public StudentEnrollment ChangeInquiryStatus(InquiryStatusType inquiryStatusType)
 	{
 		InquiryStatusType = inquiryStatusType;
+		return this;
+	}
+
+	internal StudentEnrollment UpdateStudentEnrollmentApprovalState(StudentEnrollmentApprovalState approvalState)
+	{
+		StudentEnrollmentApprovalState = approvalState;
 		return this;
 	}
 }

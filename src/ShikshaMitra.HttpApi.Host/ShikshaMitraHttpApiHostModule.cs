@@ -34,6 +34,7 @@ using Microsoft.AspNetCore.Mvc;
 using QuestPDF.Infrastructure;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography;
+using Microsoft.AspNetCore.Http;
 
 namespace ShikshaMitra;
 
@@ -198,6 +199,12 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 					.AllowAnyMethod()
 					.AllowCredentials();
 			});
+		});
+
+		context.Services.ConfigureApplicationCookie(options =>
+		{
+			options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+			options.Cookie.SameSite = SameSiteMode.None;
 		});
 	}
 	private X509Certificate2 GetEncryptionCertificate(IWebHostEnvironment environment, IConfiguration config)

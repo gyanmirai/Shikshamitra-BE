@@ -14,5 +14,7 @@ public class CreateUpdateDivisionDto
 	[Range(1, DivisionConsts.MaxStrengthCount)]
 	public int Strength { get; set; }
 
+	public string RoomNumber { get; set; }
+
 	public Guid StandardId { get; set; }
 }

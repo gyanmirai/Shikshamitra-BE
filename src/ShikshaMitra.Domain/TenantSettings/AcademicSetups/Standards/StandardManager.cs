@@ -14,31 +14,33 @@ public class StandardManager(IStandardRepository standardRepository, IGuidGenera
 {
 	private string EntityName => this.GetType().ToEntityNameFromManager();
 
-	public async Task<Standard> CreateAsync(Guid educationMediumStageId, string name)
+	public async Task<Standard> CreateAsync(Guid educationMediumStageId, string name, int ageLowerLimit)
 	{
+		Check.NotNullOrWhiteSpace(name, nameof(name));
+		Check.Positive(ageLowerLimit, nameof(ageLowerLimit));
 		await ValidateStandardAsync(name, educationMediumStageId);
 
 		return new Standard(
 			guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
 			name,
+			ageLowerLimit,
 			educationMediumStageId
 		);
 	}
 
-	public async Task<Standard> UpdateAsync(Standard standard, string newName)
+	public async Task<Standard> UpdateAsync(Standard standard, string newName, int newAgeLowerLimit)
 	{
 		Check.NotNull(standard, nameof(standard));
-
-		if (standard.Name == newName)
+		Check.NotNullOrWhiteSpace(newName, nameof(newName));
+		Check.Positive(newAgeLowerLimit, nameof(newAgeLowerLimit));
+		if (standard.Name == newName && standard.AgeLowerLimit == newAgeLowerLimit)
 		{
 			return standard;
 		}
-
 		await ValidateStandardAsync(newName, standard.EducationMediumStageId);
-
 		standard.SetName(newName);
-
+		standard.AgeLowerLimit = newAgeLowerLimit;
 		return standard;
 	}
 

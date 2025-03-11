@@ -2,7 +2,6 @@
 using ShikshaMitra.Onboarding.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.Divisions;
-using ShikshaMitra.TenantSettings.Standards;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -28,7 +27,8 @@ public class DivisionManager(IDivisionRepository divisionRepository, IGuidGenera
 			tenantId: CurrentTenant.Id,
 			name,
 			standardId,
-			strength
+			strength,
+			"101"
 		);
 	}
 

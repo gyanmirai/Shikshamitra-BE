@@ -1947,9 +1947,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("character varying(40)")
                         .HasColumnName("ConcurrencyStamp");
 
-                    b.Property<string>("Country")
-                        .HasColumnType("text");
-
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("CreationTime");
@@ -1991,6 +1988,9 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<string>("FamilyCast")
                         .HasColumnType("text");
+
+                    b.Property<int>("FeeStatusType")
+                        .HasColumnType("integer");
 
                     b.Property<string>("FirstName")
                         .HasColumnType("text");
@@ -2039,6 +2039,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("Nationality")
                         .HasColumnType("text");
 
+                    b.Property<float>("PaidAmount")
+                        .HasColumnType("real");
+
                     b.Property<string>("ParentContactNumber")
                         .HasColumnType("text");
 
@@ -2060,8 +2063,8 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("StandardId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("State")
-                        .HasColumnType("text");
+                    b.Property<int>("StudentEnrollmentApprovalState")
+                        .HasColumnType("integer");
 
                     b.Property<int>("StudentEnrollmentState")
                         .HasColumnType("integer");
@@ -2072,6 +2075,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
+
+                    b.Property<float>("TotalAmount")
+                        .HasColumnType("real");
 
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid");
@@ -2907,6 +2913,10 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("RoomNumber")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<Guid>("StandardId")
                         .HasColumnType("uuid");
 
@@ -3120,10 +3130,45 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppEducationMediums", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.TenantSettings.ShiftManagement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<TimeOnly>("EndTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<string>("ShiftName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<TimeOnly>("StartTime")
+                        .HasColumnType("time without time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AppShiftManagements", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.TenantSettings.Standards.Standard", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("AgeLowerLimit")
+                        .HasColumnType("integer");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -5236,7 +5281,55 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.OwnsOne("ShikshaMitra.Common.Country", "Country", b1 =>
+                        {
+                            b1.Property<Guid>("StudentEnrollmentId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("IsoCode")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("CountryIsoCode");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("CountryName");
+
+                            b1.HasKey("StudentEnrollmentId");
+
+                            b1.ToTable("AppStudentEnrollments");
+
+                            b1.WithOwner()
+                                .HasForeignKey("StudentEnrollmentId");
+                        });
+
+                    b.OwnsOne("ShikshaMitra.Common.State", "State", b1 =>
+                        {
+                            b1.Property<Guid>("StudentEnrollmentId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("IsoCode")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("StateIsoCode");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("StateName");
+
+                            b1.HasKey("StudentEnrollmentId");
+
+                            b1.ToTable("AppStudentEnrollments");
+
+                            b1.WithOwner()
+                                .HasForeignKey("StudentEnrollmentId");
+                        });
+
                     b.Navigation("AcademicYear");
+
+                    b.Navigation("Country");
 
                     b.Navigation("EducationBoard");
 
@@ -5245,6 +5338,8 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("InquiryPreference");
 
                     b.Navigation("Standard");
+
+                    b.Navigation("State");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentRecords.Student", b =>

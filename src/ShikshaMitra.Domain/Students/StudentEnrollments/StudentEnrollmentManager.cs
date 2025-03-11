@@ -60,9 +60,9 @@ public class StudentEnrollmentManager(
 			string? addressLine1,
 			string? addressLine2,
 			string? addressLine3,
-			string? country,
+			Country? country,
+			State? state,
 			string? city,
-			string? state,
 			string? pinCode,
 			InquiryStatusType? inquiryStatusType,
 			Guid academicYearId,
@@ -80,6 +80,7 @@ public class StudentEnrollmentManager(
 			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
 			studentEnrollmentState: studentEnrollmentState,
+			studentEnrollmentApprovalState: StudentEnrollmentApprovalState.Pending,
 			// Inquiry details
 			inquiryNumber: inquiryNumber,
 			formNumber: formNumber,
@@ -254,9 +255,9 @@ public class StudentEnrollmentManager(
 			string? addressLine1,
 			string? addressLine2,
 			string? addressLine3,
-			string? country,
+			Country? country,
 			string? city,
-			string? state,
+			State? state,
 			string? pinCode,
 			Guid academicYearId,
 			Guid educationBoardId,
@@ -286,6 +287,7 @@ public class StudentEnrollmentManager(
 			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
 			studentEnrollmentState: StudentEnrollmentState.Registration,
+			studentEnrollmentApprovalState: StudentEnrollmentApprovalState.Pending,
 			// Inquiry details
 			inquiryNumber: inquiryNumber,
 			formNumber: formNumber,
@@ -302,8 +304,8 @@ public class StudentEnrollmentManager(
 			addressLine2: addressLine2,
 			addressLine3: addressLine3,
 			country: country,
-			city: city,
 			state: state,
+			city: city,
 			pinCode: pinCode,
 			inquiryStatusType: null,
 			academicYearId: academicYearId,
@@ -452,6 +454,7 @@ public class StudentEnrollmentManager(
 	(
 		Guid studentEnrollmentId,
 		StudentEnrollmentState studentEnrollmentState,
+		StudentEnrollmentApprovalState studentEnrollmentApprovalState,
 		// Inquiry
 		string? formNumber,
 		string? firstName,
@@ -466,9 +469,9 @@ public class StudentEnrollmentManager(
 		string? addressLine1,
 		string? addressLine2,
 		string? addressLine3,
-		string? country,
+		Country? country,
 		string? city,
-		string? state,
+		State? state,
 		string? pinCode,
 		InquiryStatusType? inquiryStatusType,
 		Guid academicYearId,
@@ -484,6 +487,7 @@ public class StudentEnrollmentManager(
 		// Update the student inquiry details
 		studentEnrollment.UpdateStudentInquiry(
 			studentEnrollmentState: studentEnrollmentState,
+			studentEnrollmentApprovalState: studentEnrollmentApprovalState,
 			formNumber: formNumber,
 			firstName: firstName,
 			middleName: middleName,
@@ -532,9 +536,9 @@ public class StudentEnrollmentManager(
 		string? addressLine1,
 		string? addressLine2,
 		string? addressLine3,
-		string? country,
+		Country? country,
 		string? city,
-		string? state,
+		State? state,
 		string? pinCode,
 		Guid academicYearId,
 		Guid educationBoardId,
@@ -864,7 +868,16 @@ public class StudentEnrollmentManager(
 		return studentEnrollment;
 	}
 
+	public async Task<StudentEnrollment> UpdateStudentEnrollmentApprovalStateAsync(Guid studentEnrollmentId, StudentEnrollmentApprovalState approvalState)
+	{
+		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
+		// Update the employee status
+		studentEnrollment = studentEnrollment.UpdateStudentEnrollmentApprovalState(approvalState);
 
+		// update in the database
+		await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
+		return studentEnrollment;
+	}
 	#endregion
 
 

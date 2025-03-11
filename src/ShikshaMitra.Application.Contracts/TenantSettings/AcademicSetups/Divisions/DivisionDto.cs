@@ -9,5 +9,7 @@ public class DivisionDto : AuditedEntityDto<Guid>
 
 	public int Strength { get; set; }
 
+	public string RoomNumber { get; set; }
+
 	public Guid StandardId { get; set; }
 }

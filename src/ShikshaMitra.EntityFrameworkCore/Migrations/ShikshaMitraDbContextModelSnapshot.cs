@@ -1995,6 +1995,11 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("FirstName")
                         .HasColumnType("text");
 
+                    b.Property<int?>("FollowUpStatusType")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<string>("FormNumber")
                         .HasColumnType("text");
 
@@ -2007,11 +2012,6 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<Guid?>("InquiryPreferenceId")
                         .HasColumnType("uuid");
-
-                    b.Property<int?>("InquiryStatusType")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -2064,6 +2064,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<int>("StudentEnrollmentApprovalState")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("StudentEnrollmentInquiryState")
                         .HasColumnType("integer");
 
                     b.Property<int>("StudentEnrollmentState")

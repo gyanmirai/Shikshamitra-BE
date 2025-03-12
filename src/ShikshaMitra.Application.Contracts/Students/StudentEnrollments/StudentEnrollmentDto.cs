@@ -14,7 +14,6 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 
 public class StudentEnrollmentDto : EntityDto<Guid>
 {
-	public StudentEnrollmentState StudentEnrollmentState { get; set; }
 	// Inquiry Information
 	public string InquiryNumber { get; set; }
 	public string? FormNumber { get; set; }
@@ -30,10 +29,17 @@ public class StudentEnrollmentDto : EntityDto<Guid>
 	public string? AddressLine1 { get; set; }
 	public string? AddressLine2 { get; set; }
 	public string? AddressLine3 { get; set; }
-	public string? Country { get; set; }
+	public Country? Country { get; set; }
 	public string? City { get; set; }
-	public string? State { get; set; }
+	public State? State { get; set; }
 	public string? PinCode { get; set; }
+	public string? Email { get; set; }
+
+	public StudentEnrollmentState StudentEnrollmentState { get; private set; }
+	public StudentEnrollmentApprovalState StudentEnrollmentApprovalState { get; private set; }
+	public FollowUpStatusType? FollowUpStatusType { get; private set; }
+	public FeeStatusType FeeStatusType { get; private set; }
+	public StudentEnrollmentInquiryState StudentEnrollmentInquiryState { get; private set; }
 
 	// Foreign Key
 	public Guid EducationMediumId { get; set; }
@@ -48,13 +54,11 @@ public class StudentEnrollmentDto : EntityDto<Guid>
 	public InquiryPreferenceDto InquiryPreference { get; set; }
 
 	public DateTimeOffset? DueDate { get; set; }
-    public InquiryStatusType? InquiryStatusType { get; set; }
     public List<FollowUpMessageDto> FollowUps { get; set; } = new();
 
 	//  StudentBasicDetails properties moved directly into StudentEnrollmentDto
 	public Guid? UserId { get; set; }
 	public byte[]? ProfilePicture { get; set; }
-	public string? Email { get; set; }
 	public string? AadhaarNo { get; set; }
 	public string? Religion { get; set; }
 	public string? FamilyCast { get; set; }

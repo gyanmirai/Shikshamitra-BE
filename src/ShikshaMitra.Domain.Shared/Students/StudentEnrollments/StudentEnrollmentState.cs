@@ -6,5 +6,4 @@ public enum StudentEnrollmentState
 	RegistrationForm,
 	Registration,
 	Admission,
-	AdmissionFees,
 }

@@ -64,17 +64,17 @@ public class StudentEnrollmentAppService(
 	#endregion
 
 	#region Move To Addmission Fees
-	public async Task<StudentEnrollmentDto> MoveToAdmissionFees(Guid studentEnrollmentId)
-	{
+	//public async Task<StudentEnrollmentDto> MoveToAdmissionFees(Guid studentEnrollmentId)
+	//{
 
-		StudentEnrollment studentEnrollment = await studentEnrollmentManager.MoveToAdmissionFeesAsync(studentEnrollmentId);
+	//	StudentEnrollment studentEnrollment = await studentEnrollmentManager.MoveToAdmissionFeesAsync(studentEnrollmentId);
 
-		// Save the student enrollment
-		studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
+	//	// Save the student enrollment
+	//	studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
 
-		// Return the DTO
-		return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);
-	}
+	//	// Return the DTO
+	//	return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);
+	//}
 
 	#endregion
 
@@ -150,20 +150,20 @@ public class StudentEnrollmentAppService(
 	#endregion
 
 	#region Get Student Admission fees list
-	public async Task<PagedResultDto<StudentEnrollmentDto>> GetStudentAdmissionFeesAsync()
-	{
-		List<StudentEnrollment> studentInquiry =
-			await studentEnrollmentRepository.GetListAsync(
-				e => e.StudentEnrollmentState == StudentEnrollmentState.AdmissionFees,
-				includeDetails: true
-			);
+	//public async Task<PagedResultDto<StudentEnrollmentDto>> GetStudentAdmissionFeesAsync()
+	//{
+	//	List<StudentEnrollment> studentInquiry =
+	//		await studentEnrollmentRepository.GetListAsync(
+	//			e => e.StudentEnrollmentState == StudentEnrollmentState.AdmissionFees,
+	//			includeDetails: true
+	//		);
 
-		return new PagedResultDto<StudentEnrollmentDto>
-		{
-			TotalCount = studentInquiry.Count,
-			Items = ObjectMapper.Map<List<StudentEnrollment>, List<StudentEnrollmentDto>>(studentInquiry)
-		};
-	}
+	//	return new PagedResultDto<StudentEnrollmentDto>
+	//	{
+	//		TotalCount = studentInquiry.Count,
+	//		Items = ObjectMapper.Map<List<StudentEnrollment>, List<StudentEnrollmentDto>>(studentInquiry)
+	//	};
+	//}
 	#endregion
 
 	#region Create student registration
@@ -245,7 +245,7 @@ public class StudentEnrollmentAppService(
 			city: input.City,
 			state: input.State,
 			pinCode: input.PinCode,
-			inquiryStatusType: InquiryStatusType.Pending,
+			inquiryStatusType: FollowUpStatusType.Pending,
 			academicYearId: input.AcademicYearId,
 			educationBoardId: input.EducationBoardId,
 			educationMediumId: input.EducationMediumId,
@@ -572,6 +572,36 @@ public class StudentEnrollmentAppService(
 				studentEnrollment = await studentEnrollmentManager.UpdateStudentEnrollmentApprovalStateAsync(
 					studentEnrollmentId,
 					approvalState);
+
+				// Save the updated entity
+				studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
+
+				// Map to DTO and add to the list
+				updatedStudentEnrollmentDtos.Add(ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment));
+			}
+		}
+
+		// Return the list of mapped DTOs
+		return updatedStudentEnrollmentDtos;
+	}
+
+	public async Task<List<StudentEnrollmentDto>> UpdateStudentEnrollmentInquiryStateAsync(
+		List<Guid> studentEnrollmentIds,
+		StudentEnrollmentInquiryState inquiryState)
+	{
+		var updatedStudentEnrollmentDtos = new List<StudentEnrollmentDto>();
+
+		foreach (var studentEnrollmentId in studentEnrollmentIds)
+		{
+			// Get the student enrollment through the repository
+			StudentEnrollment studentEnrollment = await studentEnrollmentRepository.GetAsync(studentEnrollmentId);
+
+			if (studentEnrollment != null) // Handle case if studentEnrollment is not found
+			{
+				// Update the approval state using the manager
+				studentEnrollment = await studentEnrollmentManager.UpdateStudentEnrollmentInquiryStateAsync(
+					studentEnrollmentId,
+					inquiryState);
 
 				// Save the updated entity
 				studentEnrollment = await studentEnrollmentRepository.UpdateAsync(studentEnrollment);

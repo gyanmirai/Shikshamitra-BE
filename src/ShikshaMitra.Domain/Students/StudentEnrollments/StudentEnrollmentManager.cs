@@ -64,7 +64,7 @@ public class StudentEnrollmentManager(
 			State? state,
 			string? city,
 			string? pinCode,
-			InquiryStatusType? inquiryStatusType,
+			FollowUpStatusType? inquiryStatusType,
 			Guid academicYearId,
 			Guid educationBoardId,
 			Guid educationMediumId,
@@ -473,7 +473,7 @@ public class StudentEnrollmentManager(
 		string? city,
 		State? state,
 		string? pinCode,
-		InquiryStatusType? inquiryStatusType,
+		FollowUpStatusType? inquiryStatusType,
 		Guid academicYearId,
 		Guid educationBoardId,
 		Guid educationMediumId,
@@ -859,20 +859,31 @@ public class StudentEnrollmentManager(
 
 	#region Move to Admission Fess
 
-	public async Task<StudentEnrollment> MoveToAdmissionFeesAsync(Guid studentEnrollmentId)
-	{
-		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
+	//public async Task<StudentEnrollment> MoveToAdmissionFeesAsync(Guid studentEnrollmentId)
+	//{
+	//	var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
 
-		// Update the employee status
-		studentEnrollment = studentEnrollment.UpdateStudentEnrollmentState(StudentEnrollmentState.AdmissionFees);
-		return studentEnrollment;
-	}
+	//	// Update the employee status
+	//	studentEnrollment = studentEnrollment.UpdateStudentEnrollmentState(StudentEnrollmentState.AdmissionFees);
+	//	return studentEnrollment;
+	//}
 
 	public async Task<StudentEnrollment> UpdateStudentEnrollmentApprovalStateAsync(Guid studentEnrollmentId, StudentEnrollmentApprovalState approvalState)
 	{
 		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
 		// Update the employee status
 		studentEnrollment = studentEnrollment.UpdateStudentEnrollmentApprovalState(approvalState);
+
+		// update in the database
+		await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
+		return studentEnrollment;
+	}
+
+	public async Task<StudentEnrollment> UpdateStudentEnrollmentInquiryStateAsync(Guid studentEnrollmentId, StudentEnrollmentInquiryState approvalState)
+	{
+		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
+		// Update the employee status
+		studentEnrollment = studentEnrollment.UpdateStudentEnrollmentInquiryState(approvalState);
 
 		// update in the database
 		await studentEnrollmentRepository.UpdateAsync(studentEnrollment);

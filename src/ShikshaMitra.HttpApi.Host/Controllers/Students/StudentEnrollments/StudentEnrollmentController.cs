@@ -110,7 +110,7 @@ public class StudentEnrollmentController(IStudentEnrollmentAppService studentEnr
 	public async Task<FollowUpWithStatusAndDateDto> GetFollowUpDetails(Guid studentEnrollmentId) => await followUpAppService.GetFollowUpDetailsAsync(studentEnrollmentId);
 
 	[HttpPut("{studentEnrollmentId}/update-status-due-date")]
-	public async Task UpdateStatus(Guid studentEnrollmentId, InquiryStatusType status, DateTimeOffset? dueDate) => await followUpAppService.UpdateStatusAndDueDateAsync(studentEnrollmentId, status, dueDate);
+	public async Task UpdateStatus(Guid studentEnrollmentId, FollowUpStatusType status, DateTimeOffset? dueDate) => await followUpAppService.UpdateStatusAndDueDateAsync(studentEnrollmentId, status, dueDate);
 
 	[HttpGet("report")]
 	public async Task<IActionResult> GenerateReport([FromQuery] StudentEnrollmentReportType reportType)

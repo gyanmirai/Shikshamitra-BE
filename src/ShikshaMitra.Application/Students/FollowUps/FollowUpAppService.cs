@@ -50,7 +50,7 @@ public class FollowUpAppService(IStudentEnrollmentRepository studentEnrollmentRe
 		return new FollowUpWithStatusAndDateDto
 		{
 			FollowUps = ObjectMapper.Map<List<FollowUpMessage>, List<FollowUpMessageDto>>(studentEnrollment.FollowUps.ToList()),
-			InquiryStatusType = studentEnrollment.InquiryStatusType,
+			InquiryStatusType = studentEnrollment.FollowUpStatusType,
 			DueDate = studentEnrollment.DueDate
 		};
 	}
@@ -65,13 +65,13 @@ public class FollowUpAppService(IStudentEnrollmentRepository studentEnrollmentRe
 		return new FollowUpWithStatusAndDateDto
 		{
 			FollowUps = followUpMessageDtolist,
-			InquiryStatusType = inquiry.InquiryStatusType,
+			InquiryStatusType = inquiry.FollowUpStatusType,
 			DueDate = inquiry.DueDate
 		};
 	}
 
 	[RemoteService(false)]
-	public async Task UpdateStatusAndDueDateAsync(Guid studentEnrollmentId, InquiryStatusType status, DateTimeOffset? dueDate)
+	public async Task UpdateStatusAndDueDateAsync(Guid studentEnrollmentId, FollowUpStatusType status, DateTimeOffset? dueDate)
 	{
 		var inquiry = await studentEnrollmentRepository.GetAsync(studentEnrollmentId);
 		inquiry = inquiry.ChangeInquiryStatus(status);

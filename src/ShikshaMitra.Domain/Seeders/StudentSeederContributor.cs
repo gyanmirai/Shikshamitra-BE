@@ -68,7 +68,7 @@ public class StudentSeederContributor(
 			city: "Adalaj",
 			state: new State("Gujarat", "GJ"),
 			pinCode: "382421",
-			inquiryStatusType: InquiryStatusType.Pending,
+			inquiryStatusType: FollowUpStatusType.Pending,
 			academicYearId: academicYearId,
 			educationBoardId: educationBoardId,
 			educationMediumId: educationMediumId,

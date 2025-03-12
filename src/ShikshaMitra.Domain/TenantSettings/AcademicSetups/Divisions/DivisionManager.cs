@@ -45,7 +45,11 @@ public class DivisionManager(IDivisionRepository divisionRepository, IGuidGenera
 		}
 
 		// Validate the name is unique within the same Standard.
-		await ValidateDivisionAsync(newName, division.StandardId);
+		// add condtion to validate only if name is changed
+		if (division.Name != newName)
+		{
+			await ValidateDivisionAsync(newName, division.StandardId);
+		}
 
 		division.SetName(newName);
 		division.SetStrength(newStrength);

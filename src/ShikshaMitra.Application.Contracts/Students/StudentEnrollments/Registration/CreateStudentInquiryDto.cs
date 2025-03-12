@@ -25,7 +25,7 @@ public class CreateStudentInquiryDto
 	public State? State { get; set; }
 	public string? PinCode { get; set; }
 
-	public InquiryStatusType InquiryStatusType { get; set; }
+	public FollowUpStatusType InquiryStatusType { get; set; }
 
 	// Foreign Key 
 	public Guid AcademicYearId { get; set; }

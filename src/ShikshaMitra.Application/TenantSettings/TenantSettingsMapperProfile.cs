@@ -10,14 +10,15 @@ using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 
-namespace ShikshaMitra.MapperProfile;
+namespace ShikshaMitra.TenantSettings;
 
-public class AcademicSetupsMapperProfile : Profile
+public class TenantSettingsMapperProfile : Profile
 {
-    public AcademicSetupsMapperProfile()
-    {
-        // Mapping for AcademicYear
-        CreateMap<AcademicYear, AcademicYearDto>();
+	public TenantSettingsMapperProfile()
+	{
+		#region Academic Setup
+		// Mapping for AcademicYear
+		CreateMap<AcademicYear, AcademicYearDto>();
         CreateMap<CreateUpdateAcademicYearDto, AcademicYear>();
 
         // Mapping for EducationBoard
@@ -36,8 +37,16 @@ public class AcademicSetupsMapperProfile : Profile
         CreateMap<Standard, StandardDto>();
         CreateMap<CreateUpdateStandardDto, Standard>();
 
-        // Mapping for Division
-        CreateMap<Division, DivisionDto>();
+		// Mapping for Division
+		CreateMap<Division, DivisionDto>();
         CreateMap<CreateUpdateDivisionDto, Division>();
-    }
+
+		#endregion
+
+
+		#region ShiftManagemetnt
+		CreateMap<ShiftManagement, ShiftManagementDto>();
+		CreateMap<CreateUpdateShiftManagementDto, ShiftManagement>();
+		#endregion
+	}
 }

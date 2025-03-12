@@ -15,11 +15,11 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 
 public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
-	public Guid? TenantId { get; private set; }
-	public StudentEnrollmentState StudentEnrollmentState { get; private set; }
-	public StudentEnrollmentApprovalState StudentEnrollmentApprovalState { get; private set; }
+	#region Properties
 
-	// Student Inquiry payload
+	public Guid? TenantId { get; private set; }
+
+	// Inquiry Payload
 	public string InquiryNumber { get; private set; }
 	public string? FormNumber { get; private set; }
 	public string? FirstName { get; private set; }
@@ -38,37 +38,42 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public State? State { get; private set; }
 	public string? City { get; private set; }
 	public string? PinCode { get; private set; }
-	public InquiryStatusType? InquiryStatusType { get; private set; }
 	public DateTimeOffset? DueDate { get; private set; }
+
+	public string? Email { get; private set; }
+
 
 	public float TotalAmount { get; private set; }
 	public float PaidAmount { get; private set; }
 
+	public StudentEnrollmentState StudentEnrollmentState { get; private set; }
+	public StudentEnrollmentApprovalState StudentEnrollmentApprovalState { get; private set; }
+	public FollowUpStatusType? FollowUpStatusType { get; private set; }
 	public FeeStatusType FeeStatusType { get; private set; }
+	public StudentEnrollmentInquiryState StudentEnrollmentInquiryState { get; private set; } = StudentEnrollmentInquiryState.New;
 
 	public virtual ICollection<FollowUpMessage> FollowUps { get; private set; } = new List<FollowUpMessage>();
 
-	// Foreign Key
+	// Foreign Keys
 	public Guid AcademicYearId { get; private set; }
 	public Guid EducationBoardId { get; private set; }
 	public Guid EducationMediumId { get; private set; }
 	public Guid StandardId { get; private set; }
 	public Guid? InquiryPreferenceId { get; private set; }
 
-	// Navigation Property for student enrollment
+	// Navigation Properties
 	public AcademicYear AcademicYear { get; private set; }
 	public EducationBoard EducationBoard { get; private set; }
 	public EducationMedium EducationMedium { get; private set; }
 	public Standard Standard { get; private set; }
 	public InquiryPreference InquiryPreference { get; private set; }
 
-	// Value Object
+	// Documents Value Object
 	public List<StudentDocument> Documents { get; private set; } = new List<StudentDocument>();
 
-	//  StudentBasicDetails properties moved directly into StudentEnrollment
+	// Student Basic Details
 	public Guid? UserId { get; private set; }
 	public byte[]? ProfilePicture { get; private set; }
-	public string? Email { get; private set; }
 	public string? AadhaarNo { get; private set; }
 	public string? Religion { get; private set; }
 	public string? FamilyCast { get; private set; }
@@ -79,6 +84,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? TemporaryGr { get; private set; }
 	public string? Remarks { get; private set; }
 
+	// Registration Details
 	public StudentContactDetails FatherDetails { get; private set; }
 	public StudentContactDetails MotherDetails { get; private set; }
 	public StudentContactDetails GuardianDetails { get; private set; }
@@ -87,6 +93,10 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public StudentMedicalRecords StudentMedicalRecords { get; private set; }
 	public PreviousSchoolDetails PreviousSchoolDetails { get; private set; }
 	public ParentBankDetails ParentBankDetails { get; private set; }
+
+	#endregion
+
+	#region Constructors
 
 	private StudentEnrollment() { } // For ORM
 
@@ -113,14 +123,13 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		State? state,
 		string? city,
 		string? pinCode,
-		InquiryStatusType? inquiryStatusType,
+		FollowUpStatusType? inquiryStatusType,
 		Guid academicYearId,
 		Guid educationBoardId,
 		Guid educationMediumId,
 		Guid standardId,
 		Guid? inquiryPreferenceId,
-
-		//Added Student Basic Details Properties
+		// Basic Details
 		Guid? userId,
 		byte[]? profilePicture,
 		string? email,
@@ -133,8 +142,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? birthPlace,
 		string? temporaryGr,
 		string? remarks,
-
-		// registration
+		// Registration Details
 		StudentContactDetails fatherDetails,
 		StudentContactDetails motherDetails,
 		StudentContactDetails guardianDetails,
@@ -166,14 +174,14 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		City = city;
 		State = state;
 		PinCode = pinCode;
-		InquiryStatusType = inquiryStatusType;
+		FollowUpStatusType = inquiryStatusType;
 		AcademicYearId = academicYearId;
 		EducationBoardId = educationBoardId;
 		EducationMediumId = educationMediumId;
 		StandardId = standardId;
 		InquiryPreferenceId = inquiryPreferenceId;
 
-		// basic details
+		// Basic Details
 		UserId = userId;
 		ProfilePicture = profilePicture;
 		Email = email;
@@ -187,7 +195,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		TemporaryGr = temporaryGr;
 		Remarks = remarks;
 
-		// registration
+		// Registration Details
 		FatherDetails = fatherDetails;
 		MotherDetails = motherDetails;
 		GuardianDetails = guardianDetails;
@@ -197,6 +205,10 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PreviousSchoolDetails = previousSchoolDetails;
 		ParentBankDetails = parentBankDetails;
 	}
+
+	#endregion
+
+	#region Update Methods
 
 	internal StudentEnrollment UpdateStudentInquiry(
 		StudentEnrollmentState studentEnrollmentState,
@@ -218,7 +230,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		State? state,
 		string? city,
 		string? pinCode,
-		InquiryStatusType? inquiryStatusType,
+		FollowUpStatusType? inquiryStatusType,
 		Guid academicYearId,
 		Guid educationBoardId,
 		Guid educationMediumId,
@@ -245,21 +257,18 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		City = city;
 		State = state;
 		PinCode = pinCode;
-		InquiryStatusType = inquiryStatusType;
+		FollowUpStatusType = inquiryStatusType;
 		AcademicYearId = academicYearId;
 		EducationBoardId = educationBoardId;
 		EducationMediumId = educationMediumId;
 		StandardId = standardId;
 		InquiryPreferenceId = inquiryPreferenceId;
+
 		FollowUps = new List<FollowUpMessage>();
 		return this;
 	}
 
-
-	// ++++++++ Update Student Basic Details +++++++
-
 	internal StudentEnrollment UpdateStudentBasicDetails(
-
 		string? formNumber,
 		string? firstName,
 		string? middleName,
@@ -281,8 +290,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid educationMediumId,
 		Guid standardId,
 		Guid? inquiryPreferenceId,
-
-		// basic details
+		// Basic Details
 		Guid? userId,
 		byte[]? profilePicture,
 		string? email,
@@ -319,7 +327,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		StandardId = standardId;
 		InquiryPreferenceId = inquiryPreferenceId;
 
-		// basic details
+		// Basic Details
 		UserId = userId;
 		ProfilePicture = profilePicture;
 		Email = email;
@@ -336,85 +344,85 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		return this;
 	}
 
-	// +++++++++++ Update Family Details ++++++++++++
-
 	internal StudentEnrollment UpdateFamilyDetails(
 		StudentContactDetails fatherDetails,
 		StudentContactDetails motherDetails,
 		StudentContactDetails guardianDetails
 	)
 	{
-		this.FatherDetails = fatherDetails;
-		this.MotherDetails = motherDetails;
-		this.GuardianDetails = guardianDetails;
+		FatherDetails = fatherDetails;
+		MotherDetails = motherDetails;
+		GuardianDetails = guardianDetails;
 		return this;
 	}
-
-	// ++++++++ Update Communication Details +++++++
 
 	internal StudentEnrollment UpdateCommunicationDetails(
 		StudentCommunicationDetails studentCommunicationDetails
 	)
 	{
-		this.StudentCommunicationDetails = studentCommunicationDetails;
+		StudentCommunicationDetails = studentCommunicationDetails;
 		return this;
 	}
-
-	// +++++++++ Update Additional Details ++++++++++++
 
 	internal StudentEnrollment UpdateAdditionalDetails(
 		StudentAdditionalDetails studentAdditionalDetails
 	)
 	{
-		this.StudentAdditionalDetails = studentAdditionalDetails;
+		StudentAdditionalDetails = studentAdditionalDetails;
 		return this;
 	}
-
-	// +++++++++ Update Medical Details +++++++
 
 	internal StudentEnrollment UpdateMedicalReports(
 		StudentMedicalRecords studentMedicalRecords
 	)
 	{
-		this.StudentMedicalRecords = studentMedicalRecords;
+		StudentMedicalRecords = studentMedicalRecords;
 		return this;
 	}
-
-	// +++++++++ Update Previous School Details +++++++
 
 	internal StudentEnrollment UpdatePreviousSchoolDetails(
 		PreviousSchoolDetails previousSchoolDetails
 	)
 	{
-		this.PreviousSchoolDetails = previousSchoolDetails;
+		PreviousSchoolDetails = previousSchoolDetails;
 		return this;
 	}
-
-	// +++++++++ Update Parent Bank Details +++++++++
 
 	internal StudentEnrollment UpdateParenBankDetails(
 		ParentBankDetails parentBankDetails
 	)
 	{
-		this.ParentBankDetails = parentBankDetails;
+		ParentBankDetails = parentBankDetails;
 		return this;
 	}
 
-	// +++++++++ Update Student Enrollment State to registration +++++++++
-
-	internal StudentEnrollment UpdateStudentEnrollmentState(StudentEnrollmentState studentEnrollmentState)
+	internal StudentEnrollment UpdateStudentEnrollmentState(
+		StudentEnrollmentState studentEnrollmentState
+	)
 	{
 		StudentEnrollmentState = studentEnrollmentState;
 		return this;
 	}
 
-	// +++++++++ Add Student Documeent +++++++++
-
-	internal void AddDocument(StudentDocument document) => Documents.Add(document);
-
 	public StudentEnrollment AddFollowUpMessage(FollowUpMessage followUpMessage)
 	{
 		FollowUps.Add(followUpMessage);
+		return this;
+	}
+
+	internal StudentEnrollment UpdateStudentEnrollmentApprovalState(
+		StudentEnrollmentApprovalState approvalState
+	)
+	{
+		StudentEnrollmentApprovalState = approvalState;
+		return this;
+	}
+
+	internal StudentEnrollment UpdateStudentEnrollmentInquiryState(
+		StudentEnrollmentInquiryState inquiryState
+	)
+	{
+		StudentEnrollmentInquiryState = inquiryState;
 		return this;
 	}
 
@@ -424,15 +432,16 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		return this;
 	}
 
-	public StudentEnrollment ChangeInquiryStatus(InquiryStatusType inquiryStatusType)
+	public StudentEnrollment ChangeInquiryStatus(FollowUpStatusType inquiryStatusType)
 	{
-		InquiryStatusType = inquiryStatusType;
+		FollowUpStatusType = inquiryStatusType;
 		return this;
 	}
 
-	internal StudentEnrollment UpdateStudentEnrollmentApprovalState(StudentEnrollmentApprovalState approvalState)
+	public void AddDocument(StudentDocument document)
 	{
-		StudentEnrollmentApprovalState = approvalState;
-		return this;
+		Documents.Add(document);
 	}
+
+	#endregion
 }

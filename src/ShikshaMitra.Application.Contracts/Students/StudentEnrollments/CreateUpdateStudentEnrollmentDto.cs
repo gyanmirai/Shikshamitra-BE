@@ -6,8 +6,6 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 
 public class CreateUpdateStudentEnrollmentDto
 {
-	public StudentEnrollmentState StudentEnrollmentState { get; set; }
-
 	// Inquiry and Registration Form
 	public string InquiryNumber { get; set; }
 	public string? FormNumber { get; set; }
@@ -23,11 +21,15 @@ public class CreateUpdateStudentEnrollmentDto
 	public string? AddressLine1 { get; set; }
 	public string? AddressLine2 { get; set; }
 	public string? AddressLine3 { get; set; }
-	public string? Country { get; set; }
+	public Country? Country { get; set; }
 	public string? City { get; set; }
-	public string? State { get; set; }
+	public State? State { get; set; }
+
 	public string? PinCode { get; set; }
-	public InquiryStatusType? InquiryStatusType { get; set; }
+	public string? Email { get; set; }
+
+	public StudentEnrollmentState StudentEnrollmentState { get; set; }
+	public FollowUpStatusType? FollowUpStatusType { get; set; }
 
 	// Foreign Key
 	public Guid AcademicYearId { get; set; }
@@ -38,7 +40,6 @@ public class CreateUpdateStudentEnrollmentDto
 	//  StudentBasicDetails
 	public Guid? UserId { get; set; }
 	public byte[]? ProfilePicture { get; set; }
-	public string? Email { get; set; }
 	public string? AadhaarNo { get; set; }
 	public string? Religion { get; set; }
 	public string? FamilyCast { get; set; }

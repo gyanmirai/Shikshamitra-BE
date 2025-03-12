@@ -55,8 +55,8 @@ public class StudentEnrollmentConfiguration : IEntityTypeConfiguration<StudentEn
 			.HasForeignKey(s => s.InquiryPreferenceId)
 			.OnDelete(DeleteBehavior.Restrict);
 
-		builder.Property(i => i.InquiryStatusType)
-		   .HasDefaultValue(InquiryStatusType.Pending);
+		builder.Property(i => i.FollowUpStatusType)
+		   .HasDefaultValue(FollowUpStatusType.Pending);
 
 		builder.Property(i => i.DueDate);
 

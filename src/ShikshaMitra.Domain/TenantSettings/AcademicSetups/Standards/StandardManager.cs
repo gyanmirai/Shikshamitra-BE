@@ -38,7 +38,11 @@ public class StandardManager(IStandardRepository standardRepository, IGuidGenera
 		{
 			return standard;
 		}
-		await ValidateStandardAsync(newName, standard.EducationMediumStageId);
+
+		if (standard.Name != newName)
+		{
+			await ValidateStandardAsync(newName, standard.EducationMediumStageId);
+		}
 		standard.SetName(newName);
 		standard.AgeLowerLimit = newAgeLowerLimit;
 		return standard;

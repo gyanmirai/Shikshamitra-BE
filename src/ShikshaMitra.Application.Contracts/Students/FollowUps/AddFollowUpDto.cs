@@ -10,6 +10,6 @@ public class AddFollowUpDto
 	[StringLength(1000)]
 	public string Message { get; set; }
 
-	public InquiryStatusType? InquiryStatusType { get; set; }
+	public FollowUpStatusType? InquiryStatusType { get; set; }
 	public DateTimeOffset? DueDate { get; set; }
 }

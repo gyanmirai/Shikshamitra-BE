@@ -12,12 +12,14 @@ using Volo.Abp;
 using ShikshaMitra.Students.StudentRecords;
 using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
+using static ShikshaMitra.Students.StudentPermissions;
 
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
 public class StudentEnrollmentAppService(
 	IStudentEnrollmentRepository studentEnrollmentRepository,
+	IStudentRepository studentRepository,
 	StudentEnrollmentManager studentEnrollmentManager,
 	IBlobContainer blobContainer) :
 	CrudAppService<StudentEnrollment, StudentEnrollmentDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateStudentEnrollmentDto>(studentEnrollmentRepository),
@@ -578,6 +580,15 @@ public class StudentEnrollmentAppService(
 
 				// Map to DTO and add to the list
 				updatedStudentEnrollmentDtos.Add(ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment));
+
+				if (approvalState == StudentEnrollmentApprovalState.Approved)
+				{
+					Student student = await studentEnrollmentManager.ConvertToStudentAsync(studentEnrollment, null, null, null);
+					// update in the db 
+
+					await studentRepository.InsertAsync(student);
+				}
+
 			}
 		}
 

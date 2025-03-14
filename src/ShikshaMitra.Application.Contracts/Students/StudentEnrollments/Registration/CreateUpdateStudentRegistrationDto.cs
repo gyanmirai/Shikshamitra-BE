@@ -40,6 +40,6 @@ public class CreateUpdateStudentRegistrationDto
 	public string? MotherTongue { get; set; }
 	public string? Nationality { get; set; }
 	public string? BirthPlace { get; set; }
-	public string? TemporaryGr { get; set; }
+	public int? TemporaryGr { get; set; }
 	public string? Remarks { get; set; }
 }

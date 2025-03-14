@@ -81,7 +81,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? MotherTongue { get; private set; }
 	public string? Nationality { get; private set; }
 	public string? BirthPlace { get; private set; }
-	public string? TemporaryGr { get; private set; }
+	public int? TemporaryGr { get; private set; }
 	public string? Remarks { get; private set; }
 
 	// Registration Details
@@ -140,7 +140,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? motherTongue,
 		string? nationality,
 		string? birthPlace,
-		string? temporaryGr,
+		int? temporaryGr,
 		string? remarks,
 		// Registration Details
 		StudentContactDetails fatherDetails,
@@ -301,7 +301,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? motherTongue,
 		string? nationality,
 		string? birthPlace,
-		string? temporaryGr,
+		int? temporaryGr,
 		string? remarks
 	)
 	{

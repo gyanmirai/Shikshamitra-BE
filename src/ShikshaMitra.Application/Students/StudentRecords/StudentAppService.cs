@@ -15,28 +15,28 @@ public class StudentAppService(StudentManager studentManager ,IStudentRepository
 {
 	// Get GR No
 
-	public async Task<int> GetGrNoAsync(Guid educationBoardId, Guid educationMediumId, Guid educationMediumStageId)
-	{
-		EducationBoard? educationBoard = await educationBoardRepository.GetAsync(educationBoardId);
+	  public async Task<int> GetGrNoAsync(Guid educationBoardId, Guid educationMediumId, Guid educationMediumStageId)
+    {
+        EducationBoard? educationBoard = await educationBoardRepository.GetAsync(educationBoardId);
 
-		if (educationBoard.Type == EducationBoardType.GSEB)
-		{
-			Student? student = await studentRepository.GetLastStudentbyGrNoForGSEBAsync(educationBoardId, educationMediumId, educationMediumStageId);
+        if (educationBoard.Type == EducationBoardType.GSEB)
+        {
+            Student? student = await studentRepository.GetLastStudentbyGrNoForGSEBAsync(educationBoardId, educationMediumId, educationMediumStageId);
 
-			return student != null ? student.GrNoRecord + 1 : 1;
-		}
-		else if (educationBoard.Type == EducationBoardType.CBSE)
-		{
-			Student? student = await studentRepository.GetLastStudentbyGrNoForCBSEAsync(educationBoardId);
+            return student?.GrNoRecord.HasValue == true ? student.GrNoRecord.Value + 1 : 1;
+        }
+        else if (educationBoard.Type == EducationBoardType.CBSE)
+        {
+            Student? student = await studentRepository.GetLastStudentbyGrNoForCBSEAsync(educationBoardId);
 
-			return student != null ? student.GrNoRecord + 1 : 1;
-		}
-		else
-		{
-			// if education board is not found then throw an exception
-			throw new UserFriendlyException("Education Board not found");
-		}
-	}
+            return student?.GrNoRecord.HasValue == true ? student.GrNoRecord.Value + 1 : 1;
+        }
+        else
+        {
+            // if education board is not found then throw an exception
+            throw new UserFriendlyException("Education Board not found");
+        }
+    }
 
 	// Get Student Roll No
 	public async Task<int> GetRollNoAsync(Guid divisionId)

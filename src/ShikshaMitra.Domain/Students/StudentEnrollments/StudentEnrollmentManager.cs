@@ -9,6 +9,8 @@ using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Identity;
+using ShikshaMitra.Students.StudentRecords;
+using System.Linq;
 
 
 namespace ShikshaMitra.Students.StudentEnrollments;
@@ -275,7 +277,7 @@ public class StudentEnrollmentManager(
 			string? motherTongue,
 			string? nationality,
 			string? birthPlace,
-			string? temporaryGr,
+			int? temporaryGr,
 			string? remarks
 			)
 	{
@@ -556,7 +558,7 @@ public class StudentEnrollmentManager(
 		string? motherTongue,
 		string? nationality,
 		string? birthPlace,
-		string? temporaryGr,
+		int? temporaryGr,
 		string? remarks
 	)
 	{
@@ -891,5 +893,80 @@ public class StudentEnrollmentManager(
 	}
 	#endregion
 
+	public async Task<Student> ConvertToStudentAsync(
+			StudentEnrollment enrollment,
+			Guid? educationMediumStageId,
+			Guid? divisionId,
+			int? rollNo = null)
+	{
+		// Create full name from components
+		string fullName = string.Join(" ", new[] {
+				enrollment.FirstName,
+				enrollment.MiddleName,
+				enrollment.LastName
+			}.Where(n => !string.IsNullOrWhiteSpace(n)));
 
+		// Create new Student entity with all fields from enrollment
+		var student = new Student(
+			id: guidGenerator.Create(),
+			tenantId: enrollment.TenantId,
+			formNumber: enrollment.FormNumber,
+			firstName: enrollment.FirstName,
+			middleName: enrollment.MiddleName,
+			lastName: enrollment.LastName,
+			dateOfBirth: enrollment.DateOfBirth,
+			genderType: enrollment.GenderType,
+			email: enrollment.Email,
+			parentContactNumber: enrollment.ParentContactNumber,
+			alternativeContactNumber: enrollment.AlternativeContactNumber,
+			profilePicture: enrollment.ProfilePicture,
+
+			// Address
+			addressLine1: enrollment.AddressLine1,
+			addressLine2: enrollment.AddressLine2,
+			addressLine3: enrollment.AddressLine3,
+			country: enrollment.Country,
+			state: enrollment.State,
+			city: enrollment.City,
+			pinCode: enrollment.PinCode,
+
+			// Personal Details
+			aadhaarNo: enrollment.AadhaarNo,
+			religion: enrollment.Religion,
+			familyCast: enrollment.FamilyCast,
+			castType: enrollment.CastType,
+			motherTongue: enrollment.MotherTongue,
+			nationality: enrollment.Nationality,
+			birthPlace: enrollment.BirthPlace,
+			remarks: enrollment.Remarks,
+			userId: enrollment.UserId,
+
+			// Academic Details
+			academicYearId: enrollment.AcademicYearId,
+			educationBoardId: enrollment.EducationBoardId,
+			educationMediumId: enrollment.EducationMediumId,
+			educationMediumStageId: educationMediumStageId,
+			standardId: enrollment.StandardId,
+			divisionId: divisionId,
+			tempGrNo: enrollment.TemporaryGr,
+			grNoRecord: null,
+			rollNo: rollNo,
+
+			// Family Details
+			fatherDetails: enrollment.FatherDetails,
+			motherDetails: enrollment.MotherDetails,
+			guardianDetails: enrollment.GuardianDetails,
+
+			// Additional Details
+			studentCommunicationDetails: enrollment.StudentCommunicationDetails,
+			studentAdditionalDetails: enrollment.StudentAdditionalDetails,
+			studentMedicalRecords: enrollment.StudentMedicalRecords,
+			previousSchoolDetails: enrollment.PreviousSchoolDetails,
+			parentBankDetails: enrollment.ParentBankDetails,
+			documents: new List<StudentDocument>(enrollment.Documents) // Create a new list with the same documents
+		);
+
+
+		return student;
+	}
 }

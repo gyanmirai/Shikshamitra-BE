@@ -11,6 +11,16 @@ public class StudentConfigurationa : IEntityTypeConfiguration<Student>
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "Students", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
+		builder.ComplexProperty(e => e.FatherDetails);
+		builder.ComplexProperty(e => e.MotherDetails);
+		builder.ComplexProperty(e => e.GuardianDetails);
+		builder.ComplexProperty(e => e.StudentCommunicationDetails);
+		builder.ComplexProperty(e => e.StudentAdditionalDetails);
+		builder.ComplexProperty(e => e.StudentMedicalRecords);
+		builder.ComplexProperty(e => e.PreviousSchoolDetails);
+		builder.ComplexProperty(e => e.ParentBankDetails);
+
+
 		// Foreign Key Constraints
 		builder.HasOne(s => s.AcademicYear)
 			.WithMany()
@@ -41,6 +51,27 @@ public class StudentConfigurationa : IEntityTypeConfiguration<Student>
 			.WithMany()
 			.HasForeignKey(s => s.DivisionId)
 			.OnDelete(DeleteBehavior.Restrict);
+
+
+		builder.OwnsOne(e => e.Country, cb =>
+		{
+			cb.Property(c => c.Name).HasColumnName("CountryName");
+			cb.Property(c => c.IsoCode).HasColumnName("CountryIsoCode");
+		});
+
+		builder.OwnsOne(e => e.State, sb =>
+		{
+			sb.Property(s => s.Name).HasColumnName("StateName");
+			sb.Property(s => s.IsoCode).HasColumnName("StateIsoCode");
+		});
+
+		builder.Navigation(x => x.AcademicYear).AutoInclude();
+		builder.Navigation(x => x.EducationBoard).AutoInclude();
+		builder.Navigation(x => x.EducationMedium).AutoInclude();
+		builder.Navigation(x => x.EducationMedium).AutoInclude();
+		builder.Navigation(x => x.Standard).AutoInclude();
+		builder.Navigation(x => x.Division).AutoInclude();
+		builder.Navigation(x => x.Standard).AutoInclude();
 
 	}
 }

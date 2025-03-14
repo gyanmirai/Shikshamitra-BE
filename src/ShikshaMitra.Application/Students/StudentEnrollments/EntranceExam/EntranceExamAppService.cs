@@ -1,6 +1,7 @@
 ﻿using AutoMapper.Internal.Mappers;
 using System;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
@@ -35,6 +36,14 @@ public class EntranceExamAppService(IEntranceExamRepository entranceExamReposito
 		await entranceExamRepository.UpdateAsync(entity);
 
 		// Return the updated entity mapped to a DTO.
+		return ObjectMapper.Map<EntranceExam, EntranceExamDto>(entity);
+	}
+
+	// get Student Entrance Exam Dto based on Student Enrollment Id
+	//[RemoteService(false)]
+	public async Task<EntranceExamDto> GetByStudentEnrollmentId(Guid studentEnrollmentId)
+	{
+		var entity = await entranceExamRepository.GetAsync(x => x.StudentEnrollmentId == studentEnrollmentId);
 		return ObjectMapper.Map<EntranceExam, EntranceExamDto>(entity);
 	}
 }

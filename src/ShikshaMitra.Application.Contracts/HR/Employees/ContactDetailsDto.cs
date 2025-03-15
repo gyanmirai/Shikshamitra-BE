@@ -1,4 +1,6 @@
-﻿namespace ShikshaMitra.HR.Employees;
+﻿using ShikshaMitra.Common;
+
+namespace ShikshaMitra.HR.Employees;
 
 public class ContactDetailsDto
 {
@@ -7,6 +9,9 @@ public class ContactDetailsDto
 	public string? ContactNo { get; set; }
 	public string? Address { get; set; }
 	public string? City { get; set; }
-	public string? State { get; set; }
+	public string? StateName { get; set; }
+	public string? StateIsoCode { get; set; }
+	public string? CountryName { get; set; }
+	public string? CountryIsoCode { get; set; }
 	public string? PinCode { get; set; }
 }

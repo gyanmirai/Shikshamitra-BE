@@ -10,7 +10,10 @@ public class ContactDetails(
 	string? contactNo,
 	string? address,
 	string? city,
-	string? state,
+	string? stateName,
+	string? stateIsoCode,
+	string? countryName,
+	string? countryIsoCode,
 	string? pinCode)
 	: ValueObject
 {
@@ -19,7 +22,10 @@ public class ContactDetails(
 	public string? ContactNo { get; private set; } = contactNo;
 	public string? Address { get; private set; } = address;
 	public string? City { get; private set; } = city;
-	public string? State { get; private set; } = state;
+	public string? StateName { get; private set; } = stateName;
+	public string? StateIsoCode { get; private set; } = stateIsoCode;
+	public string? CountryName { get; private set; } = countryName;
+	public string? CountryIsoCode { get; private set; } = countryIsoCode;
 	public string? PinCode { get; private set; } = pinCode;
 
 	protected override IEnumerable<object> GetAtomicValues()
@@ -29,7 +35,10 @@ public class ContactDetails(
 		yield return ContactNo;
 		yield return Address;
 		yield return City;
-		yield return State;
+		yield return StateName;
+		yield return StateIsoCode;
+		yield return CountryName;
+		yield return CountryIsoCode;
 		yield return PinCode;
 	}
 }

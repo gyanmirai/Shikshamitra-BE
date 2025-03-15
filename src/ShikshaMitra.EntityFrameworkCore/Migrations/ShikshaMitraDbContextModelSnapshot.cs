@@ -686,9 +686,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("ShortName")
                         .HasColumnType("text");
 
-                    b.Property<string>("State")
-                        .HasColumnType("text");
-
                     b.Property<DateTimeOffset?>("StatusLastChangedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -732,6 +729,12 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("ContactNo")
                                 .HasColumnType("text");
 
+                            b1.Property<string>("CountryIsoCode")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("CountryName")
+                                .HasColumnType("text");
+
                             b1.Property<string>("Name")
                                 .HasColumnType("text");
 
@@ -741,7 +744,10 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("PinCode")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("State")
+                            b1.Property<string>("StateIsoCode")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("StateName")
                                 .HasColumnType("text");
                         });
 
@@ -758,6 +764,12 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("ContactNo")
                                 .HasColumnType("text");
 
+                            b1.Property<string>("CountryIsoCode")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("CountryName")
+                                .HasColumnType("text");
+
                             b1.Property<string>("Name")
                                 .HasColumnType("text");
 
@@ -767,7 +779,10 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("PinCode")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("State")
+                            b1.Property<string>("StateIsoCode")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("StateName")
                                 .HasColumnType("text");
                         });
 
@@ -784,6 +799,12 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("ContactNo")
                                 .HasColumnType("text");
 
+                            b1.Property<string>("CountryIsoCode")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("CountryName")
+                                .HasColumnType("text");
+
                             b1.Property<string>("Name")
                                 .HasColumnType("text");
 
@@ -793,7 +814,10 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("PinCode")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("State")
+                            b1.Property<string>("StateIsoCode")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("StateName")
                                 .HasColumnType("text");
                         });
 
@@ -5505,6 +5529,52 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.OwnsOne("ShikshaMitra.Common.Country", "Country", b1 =>
+                        {
+                            b1.Property<Guid>("EmployeeId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("IsoCode")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("CountryIsoCode");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("CountryName");
+
+                            b1.HasKey("EmployeeId");
+
+                            b1.ToTable("AppEmployees");
+
+                            b1.WithOwner()
+                                .HasForeignKey("EmployeeId");
+                        });
+
+                    b.OwnsOne("ShikshaMitra.Common.State", "State", b1 =>
+                        {
+                            b1.Property<Guid>("EmployeeId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("IsoCode")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("StateIsoCode");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasColumnType("text")
+                                .HasColumnName("StateName");
+
+                            b1.HasKey("EmployeeId");
+
+                            b1.ToTable("AppEmployees");
+
+                            b1.WithOwner()
+                                .HasForeignKey("EmployeeId");
+                        });
+
                     b.OwnsMany("ShikshaMitra.HR.Employees.WorkExperience", "WorkExperiences", b1 =>
                         {
                             b1.Property<Guid>("EmployeeId")
@@ -5548,11 +5618,15 @@ namespace ShikshaMitra.Migrations
                                 .HasForeignKey("EmployeeId");
                         });
 
+                    b.Navigation("Country");
+
                     b.Navigation("EducationMediumStage");
 
                     b.Navigation("PayrollStructure");
 
                     b.Navigation("Role");
+
+                    b.Navigation("State");
 
                     b.Navigation("WorkExperiences");
                 });

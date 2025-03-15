@@ -34,6 +34,10 @@ public class CreateUpdateEmployeeDto
 	public string? RoleRoleId { get; set; }
 	public string? IdentificationMark1 { get; set; }
 
+	public State? State { get; set; }
+	public Country? Country { get; set; }
+
+
 	// Value Objects
 	public ContactDetailsDto FatherDetails { get; set; }
 	public ContactDetailsDto MotherDetails { get; set; }

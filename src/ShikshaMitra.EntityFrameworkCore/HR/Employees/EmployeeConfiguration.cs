@@ -38,6 +38,19 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 			.HasForeignKey(s => s.EducationMediumStageId)
 			.OnDelete(DeleteBehavior.Restrict);
 
+		builder.OwnsOne(e => e.Country, cb =>
+		{
+			cb.Property(c => c.Name).HasColumnName("CountryName");
+			cb.Property(c => c.IsoCode).HasColumnName("CountryIsoCode");
+		});
+
+		builder.OwnsOne(e => e.State, sb =>
+		{
+			sb.Property(s => s.Name).HasColumnName("StateName");
+			sb.Property(s => s.IsoCode).HasColumnName("StateIsoCode");
+		});
+
+
 		builder.Navigation(x => x.Role).AutoInclude();
 		builder.Navigation(x => x.EducationMediumStage).AutoInclude();
 	}

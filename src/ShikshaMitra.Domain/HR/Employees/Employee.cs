@@ -49,7 +49,9 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? IdentificationMark1 { get; private set; }
 
 	public string? City { get; private set; }
-	public string? State { get; private set; }
+	public State? State { get; private set; }
+	public Country? Country { get; private set; }
+
 	public string? PinCode { get; private set; }
 
 	// Value Objects
@@ -128,7 +130,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? roleId,
 		string? identificationMark1,
 		string? city,
-		string? state,
+		State? state,
+		Country? country,
 		string? pinCode,
 		ContactDetails? fatherDetails,
 		ContactDetails? motherDetails,
@@ -166,6 +169,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		IdentificationMark1 = identificationMark1;
 		City = city;
 		State = state;
+		Country = country;
 		PinCode = pinCode;
 		FatherDetails = fatherDetails;
 		MotherDetails = motherDetails;
@@ -199,7 +203,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? roleId,
 		string? identificationMark1,
 		string? city,
-		string? state,
+		State? state,
+		Country? country,
 		string? pinCode,
 		Guid educationMediumStageId
 		)
@@ -229,6 +234,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		IdentificationMark1 = identificationMark1;
 		City = city;
 		State = state;
+		Country = country;
 		PinCode = pinCode;
 		EducationMediumStageId = educationMediumStageId;
 		return this;

@@ -41,7 +41,8 @@ public class UpdateEmployeeBasicInfoDto
 	public Guid RoleId { get; set; }
 
 	public string? City { get; set; }
-	public string? State { get; set; }
+	public State? State { get; set; }
+	public Country? Country { get; set; }
 	public string? PinCode { get; set; }
 
 	[Required(ErrorMessage = "Education Medium Stage is required.")]

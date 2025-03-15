@@ -218,11 +218,12 @@ public class HRSeederContributor(
 			roleId: adminRole.Id, // Store the Admin role ID here.
 			identificationMark1: "Wear glasses",
 			city: "Gandhinagar",
-			state: "Gujarat",
+			state: new State("Gujarat", "GJ"),
+			country: new Country("India", "In"),
 			pinCode: "382421",
-			fatherDetails: new ContactDetails("Robert Smith", "Engineer", "+91-9876543211", "456, Elm Street", "Mumbai", "Maharashtra", "400001"),
-			motherDetails: new ContactDetails("Mary Smith", "Teacher", "+91-9876543212", "Parvat Patiya", "Surat", "Gujarat", "395010"),
-			spouseDetails: new ContactDetails("Jane Doe", "Doctor", "+91-9876543213", "ATPL, Trimandir Road", "Adalaj", "Gujarat", "382421"),
+			fatherDetails: new ContactDetails("Robert Smith", "Engineer", "+91-9876543211", "456, Elm Street", "Mumbai", stateName: "Maharashtra", stateIsoCode: "MH", countryName: "India", countryIsoCode: "In", "400001"),
+			motherDetails: new ContactDetails("Mary Smith", "Teacher", "+91-9876543212", "Parvat Patiya", "Surat", stateName: "Gujarat", stateIsoCode: "GJ", countryName: "India", countryIsoCode: "In", "395010"),
+			spouseDetails: new ContactDetails("Jane Doe", "Doctor", "+91-9876543213", "ATPL, Trimandir Road", "Adalaj", stateName: "Gujarat", stateIsoCode: "GJ", countryName: "India", countryIsoCode: "In", "382421"),
 			bankDetails: new BankDetails("ABC Bank", "Mumbai Main Branch", "John Doe", "123456789012", "ABC123456"),
 			workExperiences: new List<WorkExperience>
 			{
@@ -244,7 +245,7 @@ public class HRSeederContributor(
 
 		#region create teacheremployee
 		// Create Employee record and store the Teacher role's ID.
-		var teacherEmployee  = new Employee(
+		var teacherEmployee = new Employee(
 			id: GuidGenerator.Create(),
 			tenantId: tenantId,
 			userId: employeeUser.Id,
@@ -274,11 +275,12 @@ public class HRSeederContributor(
 			roleId: teacherRole.Id, // Store the Teacher role ID here.
 			identificationMark1: "Wear glasses",
 			city: "Gandhinagar",
-			state: "Gujarat",
+			state: new State("Gujarat", "GJ"),
+			country: new Country("India", "In"),
 			pinCode: "382421",
-			fatherDetails: new ContactDetails("Robert Smith", "Engineer", "+91-9876543211", "456, Elm Street", "Mumbai", "Maharashtra", "400001"),
-			motherDetails: new ContactDetails("Mary Smith", "Teacher", "+91-9876543212", "Parvat Patiya", "Surat", "Gujarat", "395010"),
-			spouseDetails: new ContactDetails("Jane Doe", "Doctor", "+91-9876543213", "ATPL, Trimandir Road", "Adalaj", "Gujarat", "382421"),
+			fatherDetails: new ContactDetails("Robert Smith", "Engineer", "+91-9876543211", "456, Elm Street", "Mumbai", stateName: "Maharashtra", stateIsoCode: "MH", countryName: "India", countryIsoCode: "In", "400001"),
+			motherDetails: new ContactDetails("Mary Smith", "Teacher", "+91-9876543212", "Parvat Patiya", "Surat", stateName: "Gujarat", stateIsoCode: "GJ", countryName: "India", countryIsoCode: "In", "395010"),
+			spouseDetails: new ContactDetails("Jane Doe", "Doctor", "+91-9876543213", "ATPL, Trimandir Road", "Adalaj", stateName: "Gujarat", stateIsoCode: "GJ", countryName: "India", countryIsoCode: "In", "382421"),
 			bankDetails: new BankDetails("ABC Bank", "Mumbai Main Branch", "John Doe", "123456789012", "ABC123456"),
 			workExperiences: new List<WorkExperience>
 			{

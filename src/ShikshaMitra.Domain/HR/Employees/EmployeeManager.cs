@@ -70,7 +70,8 @@ public class EmployeeManager(
 		string? qualification = null,
 		string? identificationMark1 = null,
 		string? city = null,
-		string? state = null,
+		State? state = null,
+		Country? country = null,
 		string? pinCode = null)
 	{
 		// Validate role existence
@@ -111,6 +112,7 @@ public class EmployeeManager(
 			identificationMark1: identificationMark1,
 			city: city,
 			state: state,
+			country: country,
 			pinCode: pinCode,
 			educationMediumStageId: educationMediumStageId,
 			fatherDetails:
@@ -120,7 +122,10 @@ public class EmployeeManager(
 				contactNo: null,
 				address: null,
 				city: null,
-				state: null,
+				stateName: null,
+				stateIsoCode: null,
+				countryName: null,
+				countryIsoCode: null,
 				pinCode: null),
 			motherDetails: new ContactDetails(
 				name: null,
@@ -128,7 +133,10 @@ public class EmployeeManager(
 				contactNo: null,
 				address: null,
 				city: null,
-				state: null,
+				stateName: null,
+				stateIsoCode: null,
+				countryName: null,
+				countryIsoCode: null,
 				pinCode: null),
 			spouseDetails: new ContactDetails(
 				name: null,
@@ -136,7 +144,10 @@ public class EmployeeManager(
 				contactNo: null,
 				address: null,
 				city: null,
-				state: null,
+				stateName: null,
+				stateIsoCode: null,
+				countryName: null,
+				countryIsoCode: null,
 				pinCode: null),
 			bankDetails: new BankDetails(
 				bankName: null,
@@ -203,7 +214,8 @@ public class EmployeeManager(
 		Guid? roleId = null,
 		string? identificationMark1 = null,
 		string? city = null,
-		string? state = null,
+		State? state = null,
+		Country? country = null,
 		string? pinCode = null
 	)
 	{
@@ -211,10 +223,10 @@ public class EmployeeManager(
 		Employee employee = await GetEmployeeAsync(employeeId);
 
 		// Update user roles if roleId is provided and changed
-		if (roleId.HasValue && employee.RoleId != roleId.Value && employee.UserId!=null)
+		if (roleId.HasValue && employee.RoleId != roleId.Value && employee.UserId != null)
 		{
 			// Get the associated user
-			IdentityUser user = await GetUserAsync((Guid)employee.UserId);
+			IdentityUser user = await GetUserAsync((Guid) employee.UserId);
 
 			// Remove the user from the old role
 			IdentityRole? oldRole = await roleRepository.GetAsync(employee.RoleId);
@@ -252,6 +264,7 @@ public class EmployeeManager(
 			identificationMark1: identificationMark1,
 			city: city,
 			state: state,
+			country: country,
 			pinCode: pinCode,
 			educationMediumStageId: educationMediumStageId
 		);

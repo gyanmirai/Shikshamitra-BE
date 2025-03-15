@@ -43,7 +43,8 @@ public class CreateEmployeeBasicInfoDto
 	public Guid EducationMediumStageId { get; set; }
 	public string? IdentificationMark1 { get; set; }
 	public string? City { get; set; }
-	public string? State { get; set; }
+	public State? State { get; set; }
+	public Country? Country { get; set; }
 	public string? PinCode { get; set; }
 	public string? Address { get; set; }
 }

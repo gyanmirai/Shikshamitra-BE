@@ -1,9 +1,7 @@
 ﻿using ShikshaMitra.Common;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
-using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Identity;
 
@@ -49,7 +47,8 @@ public class EmployeeDto : EntityDto<Guid>
 	public IdentityRoleDto? Role { get; set; }
 	public string? IdentificationMark1 { get; set; }
 	public string? City { get; set; }
-	public string? State { get; set; }
+	public State? State { get; set; }
+	public Country? Country { get; set; }
 	public string? PinCode { get; set; }
 
 	// Value Objects

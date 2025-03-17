@@ -7,6 +7,7 @@ using ShikshaMitra.Students.StudentEnrollments.EntranceExam;
 using ShikshaMitra.Students.StudentEnrollments.FollowUps;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
+using ShikshaMitra.Students.StudentRecords;
 
 namespace ShikshaMitra.Students;
 
@@ -63,5 +64,8 @@ public class StudentMapperProfile : Profile
 
 		#endregion
 
+
+		CreateMap<Student, StudentDto>().ReverseMap();
+		//CreateMap<CreateUpdateStudentDto, Student>();
 	}
 }

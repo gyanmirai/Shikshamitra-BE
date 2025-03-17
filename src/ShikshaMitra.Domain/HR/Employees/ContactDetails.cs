@@ -8,7 +8,9 @@ public class ContactDetails(
 	string? name,
 	string? occupation,
 	string? contactNo,
-	string? address,
+	string? address1,
+	string? address2,
+	string? address3,
 	string? city,
 	string? stateName,
 	string? stateIsoCode,
@@ -20,7 +22,9 @@ public class ContactDetails(
 	public string? Name { get; private set; } = name;
 	public string? Occupation { get; private set; } = occupation;
 	public string? ContactNo { get; private set; } = contactNo;
-	public string? Address { get; private set; } = address;
+	public string? Address1 { get; private set; } = address1;
+	public string? Address2 { get; private set; } = address2;
+	public string? Address3 { get; private set; } = address3;
 	public string? City { get; private set; } = city;
 	public string? StateName { get; private set; } = stateName;
 	public string? StateIsoCode { get; private set; } = stateIsoCode;
@@ -33,7 +37,9 @@ public class ContactDetails(
 		yield return Name;
 		yield return Occupation;
 		yield return ContactNo;
-		yield return Address;
+		yield return Address1;
+		yield return Address2;
+		yield return Address3;
 		yield return City;
 		yield return StateName;
 		yield return StateIsoCode;

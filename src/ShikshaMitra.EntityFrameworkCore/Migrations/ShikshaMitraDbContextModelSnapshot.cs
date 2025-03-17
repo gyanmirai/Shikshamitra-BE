@@ -720,7 +720,13 @@ namespace ShikshaMitra.Migrations
                         {
                             b1.IsRequired();
 
-                            b1.Property<string>("Address")
+                            b1.Property<string>("Address1")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address2")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address3")
                                 .HasColumnType("text");
 
                             b1.Property<string>("City")
@@ -755,7 +761,13 @@ namespace ShikshaMitra.Migrations
                         {
                             b1.IsRequired();
 
-                            b1.Property<string>("Address")
+                            b1.Property<string>("Address1")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address2")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address3")
                                 .HasColumnType("text");
 
                             b1.Property<string>("City")
@@ -790,7 +802,13 @@ namespace ShikshaMitra.Migrations
                         {
                             b1.IsRequired();
 
-                            b1.Property<string>("Address")
+                            b1.Property<string>("Address1")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address2")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address3")
                                 .HasColumnType("text");
 
                             b1.Property<string>("City")

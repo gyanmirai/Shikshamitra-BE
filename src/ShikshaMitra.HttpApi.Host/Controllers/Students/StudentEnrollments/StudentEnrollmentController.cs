@@ -11,6 +11,7 @@ using Volo.Abp.AspNetCore.Mvc;
 using ShikshaMitra.Students.FollowUps;
 using Volo.Abp.Application.Dtos;
 using ShikshaMitra.Students.StudentRecords;
+using ShikshaMitra.Extensions;
 
 namespace ShikshaMitra.Controllers.Students.StudentEnrollments;
 
@@ -99,8 +100,11 @@ public class StudentEnrollmentController(IStudentEnrollmentAppService studentEnr
 	[HttpGet("follow-ups")]
 	public async Task<PagedResultDto<StudentEnrollmentDto>> GetStudentEnrollmentsWithFollowUps()
 	{
+		// Access all values using the Headers extension method
+		var headers = this.Headers();
+
 		// read academic year from the cookie
-		return await studentEnrollmentAppService.GetStudentsFollowUp(Guid.Parse(Request.Cookies["AcademicYearId"]!));
+		return await studentEnrollmentAppService.GetStudentsFollowUp(headers.AcademicYearId);
 	}
 
 	[HttpPost("{studentEnrollmentId}/add-follow-up")]

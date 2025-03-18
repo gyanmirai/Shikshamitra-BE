@@ -35,6 +35,7 @@ using QuestPDF.Infrastructure;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Http;
+using ShikshaMitra.Middleware;
 
 namespace ShikshaMitra;
 
@@ -293,6 +294,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 		app.UseCorrelationId();
 		app.UseStaticFiles();
+		app.UseCustomHeader();
 		app.UseRouting();
 		app.UseCors();
 		app.UseAuthentication();

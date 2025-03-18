@@ -35,7 +35,9 @@ public class UpdateEmployeeBasicInfoDto
 
 	public string? Qualification { get; set; }
 	public string? IdentificationMark1 { get; set; }
-	public string? Address { get; set; }
+	public string? Address1 { get; set; }
+	public string? Address2 { get; set; }
+	public string? Address3 { get; set; }
 
 	[Required(ErrorMessage = "Role is required.")]
 	public Guid RoleId { get; set; }

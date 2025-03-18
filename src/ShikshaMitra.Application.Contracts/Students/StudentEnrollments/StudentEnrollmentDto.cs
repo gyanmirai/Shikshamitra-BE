@@ -3,6 +3,7 @@ using ShikshaMitra.Students.FollowUps;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
+using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
@@ -52,6 +53,9 @@ public class StudentEnrollmentDto : EntityDto<Guid>
 	public StandardDto Standard { get; set; }
 	public Guid? InquiryPreferenceId { get; set; }
 	public InquiryPreferenceDto InquiryPreference { get; set; }
+
+	public Guid? DivisionId { get; set; }
+	public DivisionDto? Division { get; set; }
 
 	public DateTimeOffset? DueDate { get; set; }
     public List<FollowUpMessageDto> FollowUps { get; set; } = new();

@@ -128,4 +128,13 @@ public class StudentEnrollmentController(IStudentEnrollmentAppService studentEnr
 
 		return Ok(reportResult);
 	}
+
+	[HttpPut("approval-status")]
+	public async Task<IActionResult> UpdateApprovalStatus(List<Guid> studentEnrollmentIds,
+		StudentEnrollmentApprovalState approvalState)
+	{
+		var headers = this.Headers();
+		await studentEnrollmentAppService.UpdateStudentEnrollmentApprovalStateAsync(studentEnrollmentIds, approvalState, headers.AcademicYearId, headers.EducationBoardId, headers.EducationMediumId);
+		return Ok("Approval status updated successfully.");
+	}
 }

@@ -13,9 +13,46 @@ public class StudentAppService(StudentManager studentManager ,IStudentRepository
 	CrudAppService<Student, StudentDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateStudentDto>(studentRepository),
 	IStudentAppService
 {
+
+	public async Task<PagedResultDto<StudentDto>> GetFilteredListAsync(PagedAndSortedResultRequestDto input, Guid? educationMediumStageId, Guid? standardId, Guid? divisionId)
+	{
+		// Create the base query from the repository
+		var query = await Repository.GetQueryableAsync();
+
+		// Apply additional filters
+		if (educationMediumStageId.HasValue)
+		{
+			query = query.Where(student => student.EducationMediumStageId == educationMediumStageId);
+		}
+
+		if (standardId.HasValue)
+		{
+			query = query.Where(student => student.StandardId == standardId);
+		}
+
+		if (divisionId.HasValue)
+		{
+			query = query.Where(student => student.DivisionId == divisionId);
+		}
+
+		// Get the total count for pagination
+		var totalCount = await AsyncExecuter.CountAsync(query);
+
+		// Apply sorting and paging
+		query = ApplySorting(query, input);
+		query = ApplyPaging(query, input);
+
+		// Execute the query to get the students
+		var entities = await AsyncExecuter.ToListAsync(query);
+
+		// Map the entities to DTOs
+		var entityDtos = await MapToGetListOutputDtosAsync(entities);
+
+		return new PagedResultDto<StudentDto>(totalCount, entityDtos);
+	}
 	// Get GR No
 
-	  public async Task<int> GetGrNoAsync(Guid educationBoardId, Guid educationMediumId, Guid educationMediumStageId)
+	public async Task<int> GetGrNoAsync(Guid educationBoardId, Guid educationMediumId, Guid educationMediumStageId)
     {
         EducationBoard? educationBoard = await educationBoardRepository.GetAsync(educationBoardId);
 

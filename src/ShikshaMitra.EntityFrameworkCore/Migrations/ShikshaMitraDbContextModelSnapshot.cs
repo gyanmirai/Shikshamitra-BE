@@ -553,7 +553,13 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Address")
+                    b.Property<string>("Address1")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Address2")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Address3")
                         .HasColumnType("text");
 
                     b.Property<string>("BloodGroup")

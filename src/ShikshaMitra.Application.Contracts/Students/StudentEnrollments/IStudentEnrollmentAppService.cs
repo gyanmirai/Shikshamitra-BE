@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Common;
+﻿using DocumentFormat.OpenXml.Spreadsheet;
+using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Students.FollowUps;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
@@ -32,4 +33,8 @@ public interface IStudentEnrollmentAppService : ICrudAppService<StudentEnrollmen
 
 	Task<PagedResultDto<StudentEnrollmentDto>> GetStudentsFollowUp(Guid academicYearId);
 	Task<CustomFileResult> GenerateReportAsync(StudentEnrollmentReportType reportType);
+
+	Task<List<StudentEnrollmentDto>> UpdateStudentEnrollmentApprovalStateAsync(
+	List<Guid> studentEnrollmentIds,
+		StudentEnrollmentApprovalState approvalState, Guid? AcademicYearId, Guid? EducationBoardId, Guid? EducationMediumId);
 }

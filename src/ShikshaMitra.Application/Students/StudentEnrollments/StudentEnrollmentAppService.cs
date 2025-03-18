@@ -13,12 +13,15 @@ using ShikshaMitra.Students.StudentRecords;
 using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
 using static ShikshaMitra.Students.StudentPermissions;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+using ShikshaMitra.TenantSettings.EducationMediums;
 
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
 public class StudentEnrollmentAppService(
 	IStudentEnrollmentRepository studentEnrollmentRepository,
+	IEducationMediumRepository educationMediumRepository,
 	IStudentRepository studentRepository,
 	StudentEnrollmentManager studentEnrollmentManager,
 	IBlobContainer blobContainer) :
@@ -557,9 +560,13 @@ public class StudentEnrollmentAppService(
 	//	return ObjectMapper.Map<StudentEnrollment, StudentEnrollmentDto>(studentEnrollment);
 	//}
 
+	[RemoteService(false)]
 	public async Task<List<StudentEnrollmentDto>> UpdateStudentEnrollmentApprovalStateAsync(
 		List<Guid> studentEnrollmentIds,
-		StudentEnrollmentApprovalState approvalState)
+		StudentEnrollmentApprovalState approvalState,
+		Guid? academicYearId,
+		Guid? educationBoardId,
+		Guid? educationMediumId)
 	{
 		var updatedStudentEnrollmentDtos = new List<StudentEnrollmentDto>();
 
@@ -583,7 +590,13 @@ public class StudentEnrollmentAppService(
 
 				if (approvalState == StudentEnrollmentApprovalState.Approved)
 				{
-					Student student = await studentEnrollmentManager.ConvertToStudentAsync(studentEnrollment, null, null, null);
+					// find 
+					if (academicYearId.HasValue)
+					{
+						EducationMedium? educationMedium = await educationMediumRepository.GetAsync(educationMediumId.Value);
+						// TODO: FIx from the frontedn
+					}
+					Student student = await studentEnrollmentManager.ConvertToStudentAsync(studentEnrollment, null, studentEnrollment.DivisionId, null);
 					// update in the db 
 
 					await studentRepository.InsertAsync(student);
@@ -668,5 +681,24 @@ public class StudentEnrollmentAppService(
 			"application/pdf",
 			fileName
 		);
+	}
+
+	public async Task UpdateStudentEnrollmentDivisionAsync(UpdateStudentDivisionDto input)
+	{
+		if (input.StudentDivisionUpdates == null || input.StudentDivisionUpdates.Count == 0)
+		{
+			throw new UserFriendlyException("No student data provided.");
+		}
+
+		foreach (var update in input.StudentDivisionUpdates)
+		{
+			// Fetch the student by its ID.
+			StudentEnrollment? student = await studentEnrollmentRepository.GetAsync(update.StudentId);
+
+			// Update the student's division and reset the roll number.
+			student.DivisionId = update.DivisionId;
+
+			await studentEnrollmentRepository.UpdateAsync(student);
+		}
 	}
 }

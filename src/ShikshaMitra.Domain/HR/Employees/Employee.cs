@@ -39,7 +39,9 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? BloodGroup { get; private set; }
 	public string? MobileNo { get; private set; }
 	public string? Email { get; private set; }
-	public string? Address { get; private set; }
+	public string? Address1 { get; private set; }
+	public string? Address2 { get; private set; }
+	public string? Address3 { get; private set; }
 	public string? Department { get; private set; }
 	public string? Designation { get; private set; }
 	public DateOnly? DateOfJoining { get; private set; }
@@ -121,7 +123,9 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? bloodGroup,
 		string? mobileNo,
 		string? email,
-		string? address,
+		string? address1,
+		string? address2,
+		string? address3,
 		string? department,
 		string? designation,
 		DateOnly? dateOfJoining,
@@ -159,7 +163,9 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		BloodGroup = bloodGroup;
 		MobileNo = mobileNo;
 		Email = email;
-		Address = address;
+		Address1 = address1;
+		Address2 = address2;
+		Address3 = address3;
 		Department = department;
 		Designation = designation;
 		DateOfJoining = dateOfJoining;
@@ -194,7 +200,9 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? bloodGroup,
 		string? mobileNo,
 		string? email,
-		string? address,
+		string? address1,
+		string? address2,
+		string? address3,
 		string? department,
 		string? designation,
 		DateOnly? dateOfJoining,
@@ -224,7 +232,9 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		BloodGroup = bloodGroup;
 		MobileNo = mobileNo;
 		Email = email;
-		Address = address;
+		Address1 = address1;
+		Address2 = address2;
+		Address3 = address3;
 		Department = department;
 		Designation = designation;
 		DateOfJoining = dateOfJoining;

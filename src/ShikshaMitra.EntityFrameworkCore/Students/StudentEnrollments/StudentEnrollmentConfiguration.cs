@@ -50,6 +50,12 @@ public class StudentEnrollmentConfiguration : IEntityTypeConfiguration<StudentEn
 			.HasForeignKey(s => s.StandardId)
 			.OnDelete(DeleteBehavior.Restrict);
 
+
+		builder.HasOne(e => e.Division)
+			.WithMany()
+			.HasForeignKey(s => s.DivisionId)
+			.OnDelete(DeleteBehavior.Restrict);
+
 		builder.HasOne(e => e.InquiryPreference)
 			.WithMany()
 			.HasForeignKey(s => s.InquiryPreferenceId)
@@ -91,6 +97,7 @@ public class StudentEnrollmentConfiguration : IEntityTypeConfiguration<StudentEn
 		builder.Navigation(x => x.AcademicYear).AutoInclude();
 		builder.Navigation(x => x.Standard).AutoInclude();
 		builder.Navigation(x => x.InquiryPreference).AutoInclude();
+		builder.Navigation(x => x.Division).AutoInclude();
 		builder.Navigation(x => x.FollowUps).AutoInclude();
 	}
 }

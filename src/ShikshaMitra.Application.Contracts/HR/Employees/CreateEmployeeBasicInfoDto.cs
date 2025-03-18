@@ -46,5 +46,7 @@ public class CreateEmployeeBasicInfoDto
 	public State? State { get; set; }
 	public Country? Country { get; set; }
 	public string? PinCode { get; set; }
-	public string? Address { get; set; }
+	public string? Address1 { get; set; }
+	public string? Address2 { get; set; }
+	public string? Address3 { get; set; }
 }

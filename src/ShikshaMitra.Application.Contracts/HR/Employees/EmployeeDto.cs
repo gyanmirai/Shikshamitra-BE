@@ -33,7 +33,9 @@ public class EmployeeDto : EntityDto<Guid>
 	public string? BloodGroup { get; set; }
 	public string? MobileNo { get; set; }
 	public string? Email { get; set; }
-	public string? Address { get; set; }
+	public string? Address1 { get; set; }
+	public string? Address2 { get; set; }
+	public string? Address3 { get; set; }
 	public string? Department { get; set; }
 	public string? Designation { get; set; }
 	public DateOnly? DateOfJoining { get; set; }

@@ -2019,6 +2019,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
+                    b.Property<Guid?>("DivisionId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset?>("DueDate")
                         .HasColumnType("timestamp with time zone");
 
@@ -2481,6 +2484,8 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AcademicYearId");
+
+                    b.HasIndex("DivisionId");
 
                     b.HasIndex("EducationBoardId");
 
@@ -5781,6 +5786,11 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ShikshaMitra.TenantSettings.Divisions.Division", "Division")
+                        .WithMany()
+                        .HasForeignKey("DivisionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", "EducationBoard")
                         .WithMany()
                         .HasForeignKey("EducationBoardId")
@@ -5853,6 +5863,8 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("AcademicYear");
 
                     b.Navigation("Country");
+
+                    b.Navigation("Division");
 
                     b.Navigation("EducationBoard");
 

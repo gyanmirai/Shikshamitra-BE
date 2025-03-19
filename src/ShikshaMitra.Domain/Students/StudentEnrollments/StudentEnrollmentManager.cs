@@ -908,7 +908,7 @@ public class StudentEnrollmentManager(
 
 		// Create new Student entity with all fields from enrollment
 		var student = new Student(
-			id: guidGenerator.Create(),
+			id: enrollment.Id,
 			tenantId: enrollment.TenantId,
 			formNumber: enrollment.FormNumber,
 			firstName: enrollment.FirstName,

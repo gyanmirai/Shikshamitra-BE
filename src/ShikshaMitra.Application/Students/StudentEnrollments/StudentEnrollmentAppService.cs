@@ -15,6 +15,9 @@ using QuestPDF.Infrastructure;
 using static ShikshaMitra.Students.StudentPermissions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 
 
 namespace ShikshaMitra.Students.StudentEnrollments;
@@ -23,6 +26,7 @@ public class StudentEnrollmentAppService(
 	IStudentEnrollmentRepository studentEnrollmentRepository,
 	IEducationMediumRepository educationMediumRepository,
 	IStudentRepository studentRepository,
+	IStandardRepository standardRepository,
 	StudentEnrollmentManager studentEnrollmentManager,
 	IBlobContainer blobContainer) :
 	CrudAppService<StudentEnrollment, StudentEnrollmentDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateStudentEnrollmentDto>(studentEnrollmentRepository),
@@ -590,18 +594,23 @@ public class StudentEnrollmentAppService(
 
 				if (approvalState == StudentEnrollmentApprovalState.Approved)
 				{
+					Guid? educationMediumStageId = null;
 					// find 
-					if (academicYearId.HasValue)
+					if (studentEnrollment.StandardId != default)
 					{
-						EducationMedium? educationMedium = await educationMediumRepository.GetAsync(educationMediumId.Value);
-						// TODO: FIx from the frontedn
+						// Standard
+						educationMediumStageId = (await standardRepository.GetAsync(studentEnrollment.StandardId)).EducationMediumStageId;
 					}
-					Student student = await studentEnrollmentManager.ConvertToStudentAsync(studentEnrollment, null, studentEnrollment.DivisionId, null);
+					Student student = await studentEnrollmentManager.ConvertToStudentAsync(studentEnrollment, educationMediumStageId, studentEnrollment.DivisionId, null);
 					// update in the db 
 
 					await studentRepository.InsertAsync(student);
 				}
-
+				else if (approvalState == StudentEnrollmentApprovalState.Rejected)
+				{
+					// delete the student
+					await studentRepository.DeleteAsync(studentEnrollment.Id);
+				}
 			}
 		}
 

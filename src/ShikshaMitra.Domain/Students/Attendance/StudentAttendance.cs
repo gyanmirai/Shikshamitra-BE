@@ -12,15 +12,18 @@ public class StudentAttendance : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public Guid? TenantId { get; }
 
+	public string? Remarks { get; set; }
+
 
 	private StudentAttendance() { }
 
-	public StudentAttendance(Guid id, Guid tenantId, Guid studentId, DateTimeOffset attendanceDate, bool isPresent)
+	public StudentAttendance(Guid id, Guid tenantId, Guid studentId, DateTimeOffset attendanceDate, bool isPresent, string? remarks)
 		: base(id)
 	{
 		TenantId = tenantId;
 		StudentId = studentId;
 		AttendanceDate = attendanceDate;
 		IsPresent = isPresent;
+		Remarks = remarks;
 	}
 }

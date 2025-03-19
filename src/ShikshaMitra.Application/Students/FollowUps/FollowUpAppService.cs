@@ -78,6 +78,5 @@ public class FollowUpAppService(IStudentEnrollmentRepository studentEnrollmentRe
 		inquiry = inquiry.ChnageDueDate(dueDate);
 		await studentEnrollmentRepository.UpdateAsync(inquiry);
 	}
-
 	
 }

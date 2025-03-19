@@ -10,4 +10,6 @@ public class CreateUpdateStudentAttendanceDto
 {
 	public Guid StudentId { get; set; }
 	public bool IsPresent { get; set; }
+
+	public string? Remarks { get; set; }
 }

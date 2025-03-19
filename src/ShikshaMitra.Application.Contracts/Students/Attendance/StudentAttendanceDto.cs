@@ -8,4 +8,5 @@ public class StudentAttendanceDto : AuditedEntityDto<Guid>
 	public Guid StudentId { get; set; }
 	public DateTimeOffset AttendanceDate { get; set; }
 	public bool IsPresent { get; set; }
+	public string? Remarks { get; set; }
 }

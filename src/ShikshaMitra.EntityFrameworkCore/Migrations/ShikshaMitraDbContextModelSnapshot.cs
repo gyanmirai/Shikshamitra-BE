@@ -2400,13 +2400,19 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("LocalCity")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("LocalCountry")
+                            b1.Property<string>("LocalCountryIsoCode")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("LocalCountryName")
                                 .HasColumnType("text");
 
                             b1.Property<string>("LocalPinCode")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("LocalState")
+                            b1.Property<string>("LocalStateIsoCode")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("LocalStateName")
                                 .HasColumnType("text");
 
                             b1.Property<string>("ParentContactNo")
@@ -2427,13 +2433,19 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("PermanentCity")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("PermanentCountry")
+                            b1.Property<string>("PermanentCountryIsoCode")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("PermanentCountryName")
                                 .HasColumnType("text");
 
                             b1.Property<string>("PermanentPinCode")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("PermanentState")
+                            b1.Property<string>("PermanentStateIsoCode")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("PermanentStateName")
                                 .HasColumnType("text");
 
                             b1.Property<string>("PrimaryContactNo")
@@ -2910,13 +2922,19 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("LocalCity")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("LocalCountry")
+                            b1.Property<string>("LocalCountryIsoCode")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("LocalCountryName")
                                 .HasColumnType("text");
 
                             b1.Property<string>("LocalPinCode")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("LocalState")
+                            b1.Property<string>("LocalStateIsoCode")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("LocalStateName")
                                 .HasColumnType("text");
 
                             b1.Property<string>("ParentContactNo")
@@ -2937,13 +2955,19 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("PermanentCity")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("PermanentCountry")
+                            b1.Property<string>("PermanentCountryIsoCode")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("PermanentCountryName")
                                 .HasColumnType("text");
 
                             b1.Property<string>("PermanentPinCode")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("PermanentState")
+                            b1.Property<string>("PermanentStateIsoCode")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("PermanentStateName")
                                 .HasColumnType("text");
 
                             b1.Property<string>("PrimaryContactNo")

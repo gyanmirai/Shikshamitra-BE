@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.Attendance.settings;
 using ShikshaMitra.Students.Attendance.Settings;
 using ShikshaMitra.Students.FollowUps;
@@ -52,7 +53,7 @@ public class StudentMapperProfile : Profile
 		#endregion
 
 		#region Attendance
-
+		CreateMap<StudentAttendanceDto, StudentAttendance>().ReverseMap();
 		#region Settings
 
 		CreateMap<AttendanceType, AttendanceTypeDto>();

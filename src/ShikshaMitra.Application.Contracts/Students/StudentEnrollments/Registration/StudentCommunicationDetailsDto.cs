@@ -1,4 +1,6 @@
-﻿namespace ShikshaMitra.Students.StudentEnrollments.Registration;
+﻿using ShikshaMitra.Common;
+
+namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
 public class StudentCommunicationDetailsDto
 {
@@ -11,15 +13,19 @@ public class StudentCommunicationDetailsDto
 	public string? LocalAddressLine1 { get; set; }
 	public string? LocalAddressLine2 { get; set; }
 	public string? LocalAddressLine3 { get; set; }
-	public string? LocalCountry { get; set; }
-	public string? LocalState { get; set; }
+	public string? LocalCountryIsoCode { get; set; }
+	public string? LocalCountryName { get; set; }
+	public string? LocalStateIsoCode { get; set; }
+	public string? LocalStateName { get; set; }
 	public string? LocalCity { get; set; }
 	public string? LocalPinCode { get; set; }
 	public string? PermanentAddressLine1 { get; set; }
 	public string? PermanentAddressLine2 { get; set; }
 	public string? PermanentAddressLine3 { get; set; }
-	public string? PermanentCountry { get; set; }
-	public string? PermanentState { get; set; }
+	public string? PermanentCountryIsoCode { get; set; }
+	public string? PermanentCountryName { get; set; }
+	public string? PermanentStateIsoCode { get; set; }
+	public string? PermanentStateName { get; set; }
 	public string? PermanentCity { get; set; }
 	public string? PermanentPinCode { get; set; }
 	public string? EmergencyAddressLine1 { get; set; }

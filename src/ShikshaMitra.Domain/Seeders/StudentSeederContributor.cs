@@ -25,7 +25,7 @@ public class StudentSeederContributor(
 {
 	public override async Task SeedAsync(DataSeedContext context)
 	{
-		Guid tenantId = (Guid)CurrentTenant.Id!;
+		Guid tenantId = (Guid) CurrentTenant.Id!;
 
 		// Create Inquiry Preference.
 		var inquiryPreference = await inquiryPreferenceRepository.InsertAsync(new InquiryPreference(
@@ -41,7 +41,7 @@ public class StudentSeederContributor(
 			!context.Properties.ContainsKey("EducationMediumStageId") ||
 			!context.Properties.ContainsKey("StandardId") ||
 			!context.Properties.ContainsKey("DivisionId")
-			) 
+			)
 		{
 			return;
 		}
@@ -145,15 +145,19 @@ public class StudentSeederContributor(
 			localAddressLine1: "123 Main Street",
 			localAddressLine2: "Near City Center",
 			localAddressLine3: null,
-			localCountry: "India",
-			localState: "Gujarat",
+			localCountryName: "India",
+			localCountryIsoCode: "IN",
+			localStateName: "Gujarat",
+			localStateIsoCode: "GJ",
 			localCity: "Ahmedabad",
 			localPinCode: "380001",
 			permanentAddressLine1: "123 Main Street",
 			permanentAddressLine2: "Near City Center",
 			permanentAddressLine3: null,
-			permanentCountry: "India",
-			permanentState: "Gujarat",
+			permanentCountryIsoCode: "IN",
+			permanentCountryName: "India",
+			permanentStateIsoCode: "GJ",
+			permanentStateName: "Gujarat",
 			permanentCity: "Ahmedabad",
 			permanentPinCode: "380001",
 			emergencyAddressLine1: "456 Other Street",
@@ -253,7 +257,7 @@ public class StudentSeederContributor(
 			standardId: standardId,
 			divisionId: divisionId,
 			grNoRecord: 1,
-			tempGrNo:1,
+			tempGrNo: 1,
 			rollNo: 1,
 
 			// Family details

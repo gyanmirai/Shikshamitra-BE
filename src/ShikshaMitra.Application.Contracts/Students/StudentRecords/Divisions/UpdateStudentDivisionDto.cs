@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace ShikshaMitra.Students.StudentRecords;
+namespace ShikshaMitra.Students.StudentRecords.Division;
 
 public class UpdateStudentDivisionDto
 {

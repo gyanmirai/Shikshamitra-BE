@@ -60,7 +60,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid EducationBoardId { get; private set; }
 	public Guid EducationMediumId { get; private set; }
 	public Guid? EducationMediumStageId { get; private set; }
-	public Guid? StandardId { get; private set; }
+	public Guid? StandardId { get;  set; }
 	public Guid? DivisionId { get; set; }
 	#endregion
 

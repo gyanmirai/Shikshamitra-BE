@@ -11,7 +11,10 @@ using Volo.Abp.Guids;
 namespace ShikshaMitra.Students.Attendance;
 
 [RemoteService(true)]
-public class StudentAttendanceAppService(IStudentAttendanceRepository studentAttendanceRepository, IStudentRepository studentRepository, IGuidGenerator guidGenerator)
+public class StudentAttendanceAppService(
+	IStudentAttendanceRepository studentAttendanceRepository, 
+	IStudentRepository studentRepository, 
+	IGuidGenerator guidGenerator)
 	: CrudAppService<StudentAttendance, StudentAttendanceDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateStudentAttendanceDto>(studentAttendanceRepository),
 	IStudentAttendanceAppService
 {
@@ -33,61 +36,106 @@ public class StudentAttendanceAppService(IStudentAttendanceRepository studentAtt
 
 	public async Task<PagedResultDto<StudentAttendanceDto>> GetFilteredAttendenceListAsync(PagedAndSortedResultRequestDto input, DateTimeOffset? attendanceDate, Guid? educationMediumStageId, Guid? standardId, Guid? divisionId)
 	{
-		// Create the base query from the repository
-		IQueryable<StudentAttendance>? query = await Repository.GetQueryableAsync();
+		// Start with students instead of attendance records
+		var studentRepository = LazyServiceProvider.LazyGetRequiredService<IStudentRepository>();
+		IQueryable<Student>? studentQuery = await studentRepository.GetQueryableAsync();
 
-		// Apply filters
-		// Filter by attendance date if provided
-		if (attendanceDate.HasValue)
+		// Apply student-specific filters
+		if (educationMediumStageId.HasValue)
 		{
-			// Compare only date part
-			var startDate = attendanceDate.Value.Date;
+			studentQuery = studentQuery.Where(s => s.EducationMediumStageId == educationMediumStageId.Value);
+		}
+
+		if (standardId.HasValue)
+		{
+			studentQuery = studentQuery.Where(s => s.StandardId == standardId.Value);
+		}
+
+		if (divisionId.HasValue)
+		{
+			studentQuery = studentQuery.Where(s => s.DivisionId == divisionId.Value);
+		}
+
+		// Get total count of filtered students
+		var totalCount = await AsyncExecuter.CountAsync(studentQuery);
+
+		// Get the filtered student list
+		var students = await AsyncExecuter.ToListAsync(studentQuery);
+		var studentIds = students.Select(s => s.Id).ToList();
+
+		// Default attendance date to today if not specified
+		var effectiveDate = attendanceDate ?? DateTimeOffset.UtcNow.Date;
+
+		// Get attendance data for the specific date if students exist
+		var attendanceRecords = new Dictionary<Guid, StudentAttendance>();
+		if (studentIds.Any())
+		{
+			var attendanceQuery = await Repository.GetQueryableAsync();
+			var startDate = effectiveDate.Date;
 			var endDate = startDate.AddDays(1);
-			query = query.Where(a => a.AttendanceDate >= startDate && a.AttendanceDate < endDate);
+
+			attendanceQuery = attendanceQuery.Where(a =>
+				studentIds.Contains(a.StudentId) &&
+				a.AttendanceDate >= startDate &&
+				a.AttendanceDate < endDate);
+
+			var existingAttendance = await AsyncExecuter.ToListAsync(attendanceQuery);
+			attendanceRecords = existingAttendance.ToDictionary(a => a.StudentId);
 		}
 
-		// For the education medium, standard, and division filters, we'll need to join with the Student table
-		if (educationMediumStageId.HasValue || standardId.HasValue || divisionId.HasValue)
+		var firstDayOfMonth = new DateTimeOffset(effectiveDate.Year, effectiveDate.Month, 1, 0, 0, 0, effectiveDate.Offset);
+		var lastDayOfMonth = firstDayOfMonth.AddMonths(1).AddDays(-1);
+		var totalDaysInPeriod = (int) (lastDayOfMonth.Date - firstDayOfMonth.Date).TotalDays + 1;
+
+		var monthlyAttendanceQuery = await Repository.GetQueryableAsync();
+		monthlyAttendanceQuery = monthlyAttendanceQuery.Where(a =>
+			studentIds.Contains(a.StudentId) &&
+			a.AttendanceDate >= firstDayOfMonth &&
+			a.AttendanceDate <= lastDayOfMonth);
+
+		var monthlyAttendance = await AsyncExecuter.ToListAsync(monthlyAttendanceQuery);
+
+		var presentDaysByStudent = monthlyAttendance
+			.Where(a => a.IsPresent)
+			.GroupBy(a => a.StudentId)
+			.ToDictionary(g => g.Key, g => g.Count());
+
+		var resultAttendances = new List<StudentAttendanceDto>();
+		foreach (var student in students)
 		{
-			// Assuming we have a DbContext available
-			var dbContext = LazyServiceProvider.LazyGetRequiredService<IStudentRepository>();
-			var studentQuery = await dbContext.GetQueryableAsync();
+			StudentAttendanceDto attendanceDto;
 
-			if (educationMediumStageId.HasValue)
+			if (attendanceRecords.TryGetValue(student.Id, out var attendance))
 			{
-				studentQuery = studentQuery.Where(s => s.EducationMediumStageId == educationMediumStageId.Value);
+				// Use existing attendance record
+				attendanceDto = ObjectMapper.Map<StudentAttendance, StudentAttendanceDto>(attendance);
+			}
+			else
+			{
+				// Create placeholder attendance record with isPresent = true (default to present)
+				attendanceDto = new StudentAttendanceDto
+				{
+					Id = Guid.Empty, // Empty ID indicates this is a placeholder
+					StudentId = student.Id,
+					AttendanceDate = effectiveDate,
+					IsPresent = true, // Default to present when attendance hasn't been filled
+					Remarks = null
+				};
 			}
 
-			if (standardId.HasValue)
-			{
-				studentQuery = studentQuery.Where(s => s.StandardId == standardId.Value);
-			}
+			// Add attendance statistics
+			attendanceDto.TotalDays = totalDaysInPeriod;
+			attendanceDto.PresentDays = presentDaysByStudent.GetValueOrDefault(student.Id, 0);
 
-			if (divisionId.HasValue)
-			{
-				studentQuery = studentQuery.Where(s => s.DivisionId == divisionId.Value);
-			}
-
-			// Get the filtered student IDs
-			var filteredStudentIds = await AsyncExecuter.ToListAsync(studentQuery.Select(s => s.Id));
-
-			// Apply the student filter to the attendance query
-			query = query.Where(a => filteredStudentIds.Contains(a.StudentId));
+			resultAttendances.Add(attendanceDto);
 		}
 
-		// Get the total count AFTER applying filters (moved this down)
-		var totalCount = await AsyncExecuter.CountAsync(query);
+		// Apply paging after preparing all data
+		var pagedResults = resultAttendances
+			.Skip(input.SkipCount)
+			.Take(input.MaxResultCount)
+			.ToList();
 
-		// Apply sorting and paging
-		query = ApplySorting(query, input);
-		query = ApplyPaging(query, input);
-
-		// Execute the query to get the attendance records
-		var entities = await AsyncExecuter.ToListAsync(query);
-
-		// Map the entities to DTOs
-		var entityDtos = await MapToGetListOutputDtosAsync(entities);
-
-		return new PagedResultDto<StudentAttendanceDto>(totalCount, entityDtos);
+		return new PagedResultDto<StudentAttendanceDto>(totalCount, pagedResults);
 	}
 }

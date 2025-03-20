@@ -1,4 +1,6 @@
-﻿using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+﻿using ShikshaMitra.Students.StudentRecords.Division;
+using ShikshaMitra.Students.StudentRecords.Standards;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Linq;
@@ -118,6 +120,22 @@ public class StudentAppService(StudentManager studentManager ,IStudentRepository
 		}
 	}
 
+
+	public async Task UpdateStudentStandardAsync(UpdateStudentStandardDto input)
+	{
+		if (input.StudentStandardUpdates == null || input.StudentStandardUpdates.Count == 0)
+		{
+			throw new UserFriendlyException("No student data provided.");
+		}
+		foreach (var update in input.StudentStandardUpdates)
+		{
+			// Fetch the student by its ID.
+			var student = await studentRepository.GetAsync(update.StudentId);
+			student.StandardId = update.StandardId;
+			student.DivisionId = null;
+			await studentRepository.UpdateAsync(student);
+		}
+	}
 
 	public async Task UpdateStudentDivisionAsync(UpdateStudentDivisionDto input)
 	{

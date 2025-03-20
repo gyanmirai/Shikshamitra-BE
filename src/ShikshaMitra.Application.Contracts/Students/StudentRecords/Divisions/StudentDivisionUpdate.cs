@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace ShikshaMitra.Students.StudentRecords;
+namespace ShikshaMitra.Students.StudentRecords.Division;
 
 public class StudentDivisionUpdate
 {

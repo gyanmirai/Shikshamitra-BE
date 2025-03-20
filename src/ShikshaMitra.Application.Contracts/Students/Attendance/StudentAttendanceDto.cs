@@ -9,4 +9,6 @@ public class StudentAttendanceDto : AuditedEntityDto<Guid>
 	public DateTimeOffset AttendanceDate { get; set; }
 	public bool IsPresent { get; set; }
 	public string? Remarks { get; set; }
+	public int TotalDays { get; set; }
+	public int PresentDays { get; set; }
 }

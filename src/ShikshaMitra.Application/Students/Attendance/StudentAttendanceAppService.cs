@@ -59,9 +59,13 @@ public class StudentAttendanceAppService(
 		// Get total count of filtered students
 		var totalCount = await AsyncExecuter.CountAsync(studentQuery);
 
-		// Get the filtered student list
+		// Get the filtered student list with eager loading of needed properties
 		var students = await AsyncExecuter.ToListAsync(studentQuery);
 		var studentIds = students.Select(s => s.Id).ToList();
+
+		// Map students to StudentDto objects for later use
+		var studentDtos = ObjectMapper.Map<List<Student>, List<StudentDto>>(students);
+		var studentDtoDict = studentDtos.ToDictionary(s => s.Id);
 
 		// Default attendance date to today if not specified
 		var effectiveDate = attendanceDate ?? DateTimeOffset.UtcNow.Date;
@@ -83,18 +87,35 @@ public class StudentAttendanceAppService(
 			attendanceRecords = existingAttendance.ToDictionary(a => a.StudentId);
 		}
 
+		// Get the first day of the month
 		var firstDayOfMonth = new DateTimeOffset(effectiveDate.Year, effectiveDate.Month, 1, 0, 0, 0, effectiveDate.Offset);
-		var lastDayOfMonth = firstDayOfMonth.AddMonths(1).AddDays(-1);
-		var totalDaysInPeriod = (int) (lastDayOfMonth.Date - firstDayOfMonth.Date).TotalDays + 1;
 
+		// Get all attendance records for this month up to the effective date
 		var monthlyAttendanceQuery = await Repository.GetQueryableAsync();
 		monthlyAttendanceQuery = monthlyAttendanceQuery.Where(a =>
 			studentIds.Contains(a.StudentId) &&
 			a.AttendanceDate >= firstDayOfMonth &&
-			a.AttendanceDate <= lastDayOfMonth);
+			a.AttendanceDate <= effectiveDate);
 
 		var monthlyAttendance = await AsyncExecuter.ToListAsync(monthlyAttendanceQuery);
 
+		// Find all distinct dates when attendance was recorded
+		var attendanceDates = monthlyAttendance
+			.Select(a => a.AttendanceDate.Date)
+			.Distinct()
+			.OrderBy(d => d)
+			.ToList();
+
+		// The total number of days attendance has been taken is the count of distinct dates
+		int totalDaysWithAttendance = attendanceDates.Count;
+
+		// If no attendance has been recorded yet, use the day of month of the effective date
+		if (totalDaysWithAttendance == 0)
+		{
+			totalDaysWithAttendance = effectiveDate.Day;
+		}
+
+		// Calculate present days per student
 		var presentDaysByStudent = monthlyAttendance
 			.Where(a => a.IsPresent)
 			.GroupBy(a => a.StudentId)
@@ -115,7 +136,7 @@ public class StudentAttendanceAppService(
 				// Create placeholder attendance record with isPresent = true (default to present)
 				attendanceDto = new StudentAttendanceDto
 				{
-					Id = Guid.Empty, // Empty ID indicates this is a placeholder
+					Id = Guid.Empty,
 					StudentId = student.Id,
 					AttendanceDate = effectiveDate,
 					IsPresent = true, // Default to present when attendance hasn't been filled
@@ -124,8 +145,11 @@ public class StudentAttendanceAppService(
 			}
 
 			// Add attendance statistics
-			attendanceDto.TotalDays = totalDaysInPeriod;
+			attendanceDto.TotalDays = totalDaysWithAttendance;
 			attendanceDto.PresentDays = presentDaysByStudent.GetValueOrDefault(student.Id, 0);
+
+			// Add the full student information
+			attendanceDto.Student = studentDtoDict[student.Id];
 
 			resultAttendances.Add(attendanceDto);
 		}

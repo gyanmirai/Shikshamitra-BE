@@ -13,6 +13,10 @@ public class StudentAttendanceConfiguration : IEntityTypeConfiguration<StudentAt
 		builder.ConfigureByConvention();
 
 		// Student Id is a foreign key to the Student entity
-		builder.HasOne<Student>().WithMany().HasForeignKey(e => e.StudentId).IsRequired();
+		builder.HasOne(x => x.Student).WithMany().HasForeignKey(e => e.StudentId).IsRequired();
+
+
+		// Add navigation properties
+		builder.Navigation(e => e.Student).AutoInclude();
 	}
 }

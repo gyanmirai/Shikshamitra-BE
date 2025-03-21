@@ -5755,11 +5755,13 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Students.Attendance.StudentAttendance", b =>
                 {
-                    b.HasOne("ShikshaMitra.Students.StudentRecords.Student", null)
+                    b.HasOne("ShikshaMitra.Students.StudentRecords.Student", "Student")
                         .WithMany()
                         .HasForeignKey("StudentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.EntranceExam.EntranceExam", b =>

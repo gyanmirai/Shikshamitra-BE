@@ -18,6 +18,9 @@ public class CreateUpdateStudentRegistrationDto
 	public string? AddressLine2 {get; set; }
 	public string? AddressLine3 {get; set; }
 	public Country? Country {get; set; }
+	public string? Village { get; set; }
+	public string? PAN { get; set; }
+	public string? ApparId { get; set; }
 	public string? City { get; set; }
 	public State? State { get; set; }
 	public string? PinCode { get; set; }
@@ -40,6 +43,6 @@ public class CreateUpdateStudentRegistrationDto
 	public string? MotherTongue { get; set; }
 	public string? Nationality { get; set; }
 	public string? BirthPlace { get; set; }
-	public int? TemporaryGr { get; set; }
+	public int TemporaryGr { get; set; }
 	public string? Remarks { get; set; }
 }

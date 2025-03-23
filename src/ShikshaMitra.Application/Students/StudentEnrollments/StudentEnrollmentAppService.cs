@@ -12,11 +12,7 @@ using Volo.Abp;
 using ShikshaMitra.Students.StudentRecords;
 using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
-using static ShikshaMitra.Students.StudentPermissions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
-using ShikshaMitra.TenantSettings.EducationMediums;
-using ShikshaMitra.TenantSettings.EducationBoards;
-using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.Students.StudentRecords.Division;
 
@@ -194,6 +190,9 @@ public class StudentEnrollmentAppService(
 			addressLine2: input.AddressLine2,
 			addressLine3: input.AddressLine3,
 			country: input.Country,
+			village: input.Village,
+			pan: input.PAN,
+			apparId: input.ApparId,
 			city: input.City,
 			state: input.State,
 			pinCode: input.PinCode,
@@ -252,6 +251,9 @@ public class StudentEnrollmentAppService(
 			addressLine2: input.AddressLine2,
 			addressLine3: input.AddressLine3,
 			country: input.Country,
+			village: input.Village,
+			pan: input.PAN,
+			apparId: input.ApparId,
 			city: input.City,
 			state: input.State,
 			pinCode: input.PinCode,
@@ -300,6 +302,9 @@ public class StudentEnrollmentAppService(
 			addressLine2: input.AddressLine2,
 			addressLine3: input.AddressLine3,
 			country: input.Country,
+			village: input.Village,
+			pan: input.PAN,
+			apparId: input.ApparId,
 			city: input.City,
 			state: input.State,
 			pinCode: input.PinCode,
@@ -334,6 +339,9 @@ public class StudentEnrollmentAppService(
 			addressLine2: input.AddressLine2,
 			addressLine3: input.AddressLine3,
 			country: input.Country,
+			village: input.Village,
+			pan: input.PAN,
+			apparId: input.ApparId,
 			city: input.City,
 			state: input.State,
 			pinCode: input.PinCode,

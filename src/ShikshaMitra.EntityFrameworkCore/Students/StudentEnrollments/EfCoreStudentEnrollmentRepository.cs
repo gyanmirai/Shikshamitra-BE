@@ -38,4 +38,12 @@ public class EfCoreStudentEnrollmentRepository(IDbContextProvider<ShikshaMitraDb
 			?? throw new UserFriendlyException("Inquiry not found");
 	}
 
+	public async Task<StudentEnrollment?> GetLastStudentEnrollmentAsync()
+	{
+		DbSet<StudentEnrollment?> studentEnrollments = await GetDbSetAsync();
+
+		return await studentEnrollments
+					.OrderByDescending(e => e.TemporaryGr)
+					.FirstOrDefaultAsync();
+	}
 }

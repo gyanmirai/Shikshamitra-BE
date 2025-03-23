@@ -114,6 +114,30 @@ public class OpenIddictDataSeedContributor(
 		}
 
 
+		// Flutter Client
+		var flutterClientId = configurationSection["ShikshaMitra_Flutter_App:ClientId"];
+		if (!flutterClientId.IsNullOrWhiteSpace())
+		{
+			string? flutterClientRootUrl = configurationSection["ShikshaMitra_Flutter_App:RootUrl"]?.TrimEnd('/');
+			await CreateApplicationAsync(
+				name: flutterClientId!,
+				type: OpenIddictConstants.ClientTypes.Public,
+				consentType: OpenIddictConstants.ConsentTypes.Implicit,
+				displayName: "Flutter Application",
+				secret: null,
+				grantTypes: new List<string>
+				{
+			OpenIddictConstants.GrantTypes.AuthorizationCode,
+			OpenIddictConstants.GrantTypes.RefreshToken
+				},
+				scopes: commonScopes,
+				redirectUri: $"{flutterClientRootUrl}/callback",
+				clientUri: flutterClientRootUrl,
+				postLogoutRedirectUri: $"{flutterClientRootUrl}/logout"
+			);
+		}
+
+
 		// Swagger Client
 		var swaggerClientId = configurationSection["ShikshaMitra_Swagger:ClientId"];
 		if (!swaggerClientId.IsNullOrWhiteSpace())

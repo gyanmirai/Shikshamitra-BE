@@ -37,12 +37,15 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? AddressLine3 { get; private set; }
 	public Country? Country { get; private set; }
 	public State? State { get; private set; }
+
+	public string? Village { get; private set; }
+	public string? PAN { get; private set; }
+	public string? ApparId { get; private set; }
+
 	public string? City { get; private set; }
 	public string? PinCode { get; private set; }
 	public DateTimeOffset? DueDate { get; private set; }
-
 	public string? Email { get; private set; }
-
 
 	public float TotalAmount { get; private set; }
 	public float PaidAmount { get; private set; }
@@ -84,7 +87,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? MotherTongue { get; private set; }
 	public string? Nationality { get; private set; }
 	public string? BirthPlace { get; private set; }
-	public int? TemporaryGr { get; private set; }
+	public int TemporaryGr { get; private set; }
 	public string? Remarks { get; private set; }
 	public Guid? DivisionId { get; set; }
 
@@ -125,6 +128,9 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? addressLine3,
 		Country? country,
 		State? state,
+		string? village,
+		string? pan,
+		string? apparId,
 		string? city,
 		string? pinCode,
 		FollowUpStatusType? inquiryStatusType,
@@ -144,7 +150,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? motherTongue,
 		string? nationality,
 		string? birthPlace,
-		int? temporaryGr,
+		int temporaryGr,
 		string? remarks,
 		// Registration Details
 		StudentContactDetails fatherDetails,
@@ -175,6 +181,9 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		AddressLine2 = addressLine2;
 		AddressLine3 = addressLine3;
 		Country = country;
+		Village = village;
+		PAN = pan;
+		ApparId = apparId;
 		City = city;
 		State = state;
 		PinCode = pinCode;
@@ -232,6 +241,9 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? addressLine3,
 		Country? country,
 		State? state,
+		string? village,
+		string? pan,
+		string? apparId,
 		string? city,
 		string? pinCode,
 		FollowUpStatusType? inquiryStatusType,
@@ -258,6 +270,9 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		AddressLine2 = addressLine2;
 		AddressLine3 = addressLine3;
 		Country = country;
+		Village = village;
+		PAN = pan;
+		ApparId = apparId;
 		City = city;
 		State = state;
 		PinCode = pinCode;
@@ -286,6 +301,9 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? addressLine2,
 		string? addressLine3,
 		Country? country,
+		string? village,
+		string? pan,
+		string? apparId,
 		string? city,
 		State? state,
 		string? pinCode,
@@ -305,7 +323,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? motherTongue,
 		string? nationality,
 		string? birthPlace,
-		int? temporaryGr,
+		int temporaryGr,
 		string? remarks
 	)
 	{
@@ -322,6 +340,9 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		AddressLine2 = addressLine2;
 		AddressLine3 = addressLine3;
 		Country = country;
+		Village = village;
+		PAN = pan;
+		ApparId = apparId;
 		City = city;
 		State = state;
 		PinCode = pinCode;

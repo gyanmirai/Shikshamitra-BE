@@ -31,6 +31,9 @@ public class StudentEnrollmentDto : EntityDto<Guid>
 	public string? AddressLine2 { get; set; }
 	public string? AddressLine3 { get; set; }
 	public Country? Country { get; set; }
+	public string? Village { get; set; }
+	public string? PAN { get; set; }
+	public string? ApparId { get; set; }
 	public string? City { get; set; }
 	public State? State { get; set; }
 	public string? PinCode { get; set; }
@@ -58,7 +61,7 @@ public class StudentEnrollmentDto : EntityDto<Guid>
 	public DivisionDto? Division { get; set; }
 
 	public DateTimeOffset? DueDate { get; set; }
-    public List<FollowUpMessageDto> FollowUps { get; set; } = new();
+	public List<FollowUpMessageDto> FollowUps { get; set; } = new();
 
 	//  StudentBasicDetails properties moved directly into StudentEnrollmentDto
 	public Guid? UserId { get; set; }

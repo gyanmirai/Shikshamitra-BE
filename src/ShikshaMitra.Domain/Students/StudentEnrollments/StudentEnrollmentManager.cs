@@ -64,6 +64,9 @@ public class StudentEnrollmentManager(
 			string? addressLine3,
 			Country? country,
 			State? state,
+			string? village,
+			string? pan,
+			string? apparId,
 			string? city,
 			string? pinCode,
 			FollowUpStatusType? inquiryStatusType,
@@ -76,6 +79,8 @@ public class StudentEnrollmentManager(
 	{
 		// Generate Inquiry Number
 		string inquiryNumber = await GenerateInquiryNumberAsync();
+
+		int tempGrNo = await GenerateStudentEnrollmentTempGRCodeAsync();
 
 		// create registration entity
 		var registration = new StudentEnrollment(
@@ -99,6 +104,9 @@ public class StudentEnrollmentManager(
 			addressLine2: addressLine2,
 			addressLine3: addressLine3,
 			country: country,
+			village: village,
+			pan: pan,
+			apparId: apparId,
 			city: city,
 			state: state,
 			pinCode: pinCode,
@@ -118,7 +126,7 @@ public class StudentEnrollmentManager(
 			motherTongue: null,
 			nationality: null,
 			birthPlace: null,
-			temporaryGr: null,
+			temporaryGr: tempGrNo,
 			remarks: null,
 			fatherDetails: new StudentContactDetails(
 				name: null,
@@ -262,6 +270,9 @@ public class StudentEnrollmentManager(
 			string? addressLine2,
 			string? addressLine3,
 			Country? country,
+			string? village,
+			string? pan,
+			string? apparId,
 			string? city,
 			State? state,
 			string? pinCode,
@@ -288,6 +299,7 @@ public class StudentEnrollmentManager(
 		// Generate Inquiry Number
 		string inquiryNumber = await GenerateInquiryNumberAsync();
 
+		int tempGrNo = await GenerateStudentEnrollmentTempGRCodeAsync();
 		// create registration entity
 		var registration = new StudentEnrollment(
 			id: guidGenerator.Create(),
@@ -311,6 +323,9 @@ public class StudentEnrollmentManager(
 			addressLine3: addressLine3,
 			country: country,
 			state: state,
+			village: village,
+			pan: pan,
+			apparId: apparId,
 			city: city,
 			pinCode: pinCode,
 			inquiryStatusType: null,
@@ -330,7 +345,7 @@ public class StudentEnrollmentManager(
 			motherTongue: motherTongue,
 			nationality: nationality,
 			birthPlace: birthPlace,
-			temporaryGr: temporaryGr,
+			temporaryGr: tempGrNo,
 			remarks: remarks,
 			fatherDetails: new StudentContactDetails(
 				name: null,
@@ -480,6 +495,9 @@ public class StudentEnrollmentManager(
 		string? addressLine2,
 		string? addressLine3,
 		Country? country,
+		string? village,
+		string? pan,
+		string? apparId,
 		string? city,
 		State? state,
 		string? pinCode,
@@ -512,6 +530,9 @@ public class StudentEnrollmentManager(
 			addressLine2: addressLine2,
 			addressLine3: addressLine3,
 			country: country,
+			village: village,
+			pan: pan,
+			apparId: apparId,
 			city: city,
 			state: state,
 			pinCode: pinCode,
@@ -547,6 +568,9 @@ public class StudentEnrollmentManager(
 		string? addressLine2,
 		string? addressLine3,
 		Country? country,
+		string? village,
+		string? pan,
+		string? apparId,
 		string? city,
 		State? state,
 		string? pinCode,
@@ -566,7 +590,7 @@ public class StudentEnrollmentManager(
 		string? motherTongue,
 		string? nationality,
 		string? birthPlace,
-		int? temporaryGr,
+		int temporaryGr,
 		string? remarks
 	)
 	{
@@ -589,6 +613,9 @@ public class StudentEnrollmentManager(
 			addressLine2: addressLine2,
 			addressLine3: addressLine3,
 			country: country,
+					village: village,
+			pan: pan,
+			apparId: apparId,
 			city: city,
 			state: state,
 			pinCode: pinCode,
@@ -976,5 +1003,22 @@ public class StudentEnrollmentManager(
 
 
 		return student;
+	}
+
+	private async Task<int> GenerateStudentEnrollmentTempGRCodeAsync()
+	{
+		// Get the last EmployeeCode
+		StudentEnrollment? lastEnrolledStudent = await studentEnrollmentRepository.GetLastStudentEnrollmentAsync();
+
+		int nextNumber = 1;
+
+		if (lastEnrolledStudent != null)
+		{
+			var lastNumber = lastEnrolledStudent.TemporaryGr;
+
+			nextNumber = lastNumber + 1;
+		}
+
+		return nextNumber;
 	}
 }

@@ -125,7 +125,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	DbSet<FollowUpMessage> FollowUpMessages { get; set; }
 
 
-	DbSet<StudentDocument> StudentDocuments { get; set; }
+	public DbSet<StudentDocument> StudentDocuments { get; set; }
 	DbSet<EntranceExam> EntranceExams { get; set; }
 
 
@@ -140,6 +140,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region Student Record
 	DbSet<Student> Students { get; set; }
+	public DbSet<StudentGroup> StudentGroups { get; set; }
 	DbSet<StudentAttendance> StudentAttendances { get; set; }
 	public DbSet<StudentCertificate> StudentCertificates { get; set; }
 

@@ -11,5 +11,11 @@ public class StudentDocumentConfiguration : IEntityTypeConfiguration<StudentDocu
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StudentDocuments", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+
+		// Foreign Key Constraints StudentEnrollmentId
+		builder.HasOne(x => x.StudentEnrollment)
+			.WithMany()
+			.HasForeignKey(s => s.StudentEnrollmentId)
+			.OnDelete(DeleteBehavior.Restrict);
 	}
 }

@@ -8,7 +8,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 public class StudentDocument : Entity<Guid>, IMultiTenant, IHasCreationTime                              
 {
 	public Guid? TenantId { get; private set; }
-	public Guid StudentId { get; private set; }
+	public Guid StudentEnrollmentId { get; private set; }
 	public string DocumentName { get; private set; }
 	public string ContentType { get; private set; }
 	public long Size { get; private set; }
@@ -17,13 +17,15 @@ public class StudentDocument : Entity<Guid>, IMultiTenant, IHasCreationTime
 	// Stores the Blob name if using Blob Storage
 	public string BlobName { get; private set; }
 
+	public StudentEnrollment StudentEnrollment { get; private set; }
+
 	// For ORM
 	private StudentDocument(){}
 
 	public StudentDocument(
 		Guid id,
 		Guid? tenantId,
-		Guid studentId,
+		Guid studentEnrollmentId,
 		string documentName,
 		string contentType,
 		long size,
@@ -31,7 +33,7 @@ public class StudentDocument : Entity<Guid>, IMultiTenant, IHasCreationTime
 	{
 		Id = id;
 		TenantId = tenantId;
-		StudentId = studentId;
+		StudentEnrollmentId = studentEnrollmentId;
 		DocumentName = documentName;
 		ContentType = contentType;
 		Size = size;

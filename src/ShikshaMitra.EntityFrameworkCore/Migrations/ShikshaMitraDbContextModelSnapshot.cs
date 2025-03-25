@@ -1747,10 +1747,13 @@ namespace ShikshaMitra.Migrations
                     b.Property<long>("Size")
                         .HasColumnType("bigint");
 
-                    b.Property<Guid?>("StudentEnrollmentId")
+                    b.Property<Guid>("StudentEnrollmentId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("StudentId")
+                    b.Property<Guid?>("StudentEnrollmentId1")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("StudentId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("TenantId")
@@ -1760,6 +1763,8 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("StudentEnrollmentId");
+
+                    b.HasIndex("StudentEnrollmentId1");
 
                     b.HasIndex("StudentId");
 
@@ -1984,6 +1989,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("AlternativeContactNumber")
                         .HasColumnType("text");
 
+                    b.Property<string>("ApparId")
+                        .HasColumnType("text");
+
                     b.Property<string>("BirthPlace")
                         .HasColumnType("text");
 
@@ -2095,6 +2103,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("Nationality")
                         .HasColumnType("text");
 
+                    b.Property<string>("PAN")
+                        .HasColumnType("text");
+
                     b.Property<float>("PaidAmount")
                         .HasColumnType("real");
 
@@ -2128,7 +2139,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("StudentEnrollmentState")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("TemporaryGr")
+                    b.Property<int>("TemporaryGr")
                         .HasColumnType("integer");
 
                     b.Property<Guid?>("TenantId")
@@ -2140,6 +2151,9 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Village")
+                        .HasColumnType("text");
 
                     b.ComplexProperty<Dictionary<string, object>>("FatherDetails", "ShikshaMitra.Students.StudentEnrollments.StudentEnrollment.FatherDetails#StudentContactDetails", b1 =>
                         {
@@ -3078,6 +3092,36 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("StudentId");
 
                     b.ToTable("AppStudentCertificates", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentRecords.StudentGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AppStudentGroups", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears.AcademicYearPermission", b =>
@@ -5796,15 +5840,22 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Registration.StudentDocument", b =>
                 {
+                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", "StudentEnrollment")
+                        .WithMany()
+                        .HasForeignKey("StudentEnrollmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", null)
                         .WithMany("Documents")
-                        .HasForeignKey("StudentEnrollmentId");
+                        .HasForeignKey("StudentEnrollmentId1")
+                        .HasConstraintName("FK_AppStudentDocuments_AppStudentEnrollments_StudentEnrollmen~1");
 
                     b.HasOne("ShikshaMitra.Students.StudentRecords.Student", null)
                         .WithMany("Documents")
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("StudentId");
+
+                    b.Navigation("StudentEnrollment");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", b =>

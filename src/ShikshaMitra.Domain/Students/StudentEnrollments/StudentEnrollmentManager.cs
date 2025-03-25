@@ -595,7 +595,7 @@ public class StudentEnrollmentManager(
 	)
 	{
 		// Validate user existence 
-		await GetUserAsync((Guid) userId);
+		//await GetUserAsync((Guid) userId);
 		// Get the Registration details
 		var studentEnrollment = await GetStudentEnrollmentAsync(studentEnrollmentId);
 		// Update the registration details
@@ -764,7 +764,7 @@ public class StudentEnrollmentManager(
 			var document = new StudentDocument(
 				id: documentId,
 				tenantId: CurrentTenant.Id,
-				studentId: registrationId,
+				studentEnrollmentId: registrationId,
 				documentName: docData.FileName,
 				contentType: docData.ContentType,
 				size: docData.Size,
@@ -784,7 +784,7 @@ public class StudentEnrollmentManager(
 	public async Task<StudentDocument> GetDocumentAsync(Guid studentEnrollmentId, Guid documentId)
 	{
 		var document =
-			await studentDocumentRepository.FirstOrDefaultAsync(d => d.StudentId == studentEnrollmentId && d.Id == documentId);
+			await studentDocumentRepository.FirstOrDefaultAsync(d => d.StudentEnrollmentId == studentEnrollmentId && d.Id == documentId);
 		return document ?? throw new BusinessException($"Document with ID {documentId} does not exist.");
 	}
 	#endregion
@@ -794,7 +794,7 @@ public class StudentEnrollmentManager(
 	public async Task<List<StudentDocument>> GetDocumentsAsync(Guid studentEnrollmentId)
 	{
 		List<StudentDocument>
-			documents = await studentDocumentRepository.GetListAsync(d => d.StudentId == studentEnrollmentId);
+			documents = await studentDocumentRepository.GetListAsync(d => d.StudentEnrollmentId == studentEnrollmentId);
 		return documents;
 	}
 

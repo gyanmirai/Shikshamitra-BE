@@ -53,6 +53,7 @@ public class StudentEnrollmentManager(
 			string? firstName,
 			string? middleName,
 			string? lastName,
+			string? email,
 			string? previousSchoolName,
 			DateTimeOffset? dateOfBirth,
 			DateTimeOffset? dateOfInquiry,
@@ -118,7 +119,7 @@ public class StudentEnrollmentManager(
 			inquiryPreferenceId: inquiryPreferenceId,
 			userId: null,
 			profilePicture: null,
-			email: null,
+			email: email,
 			aadhaarNo: null,
 			religion: null,
 			familyCast: null,
@@ -250,6 +251,7 @@ public class StudentEnrollmentManager(
 				ifscCode: null
 				)
 		);
+
 		return registration;
 	}
 	#endregion
@@ -656,6 +658,7 @@ public class StudentEnrollmentManager(
 
 		// Update the Family details
 		studentEnrollment.UpdateFamilyDetails(fatherDetails, motherDetails, guardianDetails);
+		studentEnrollment.ChangeOnboardingProgressState(OnboardingProgressState.FamilyInformation);
 		return studentEnrollment;
 	}
 
@@ -673,6 +676,7 @@ public class StudentEnrollmentManager(
 
 		// Update the Communication details
 		studentEnrollment.UpdateCommunicationDetails(studentCommunicationDetails);
+		studentEnrollment.ChangeOnboardingProgressState(OnboardingProgressState.Communication);
 		return studentEnrollment;
 	}
 
@@ -690,6 +694,7 @@ public class StudentEnrollmentManager(
 
 		// Update the Communication details
 		studentEnrollment.UpdateAdditionalDetails(studentAdditionalDetails);
+		studentEnrollment.ChangeOnboardingProgressState(OnboardingProgressState.AddtionalDetails);
 		return studentEnrollment;
 	}
 
@@ -707,6 +712,7 @@ public class StudentEnrollmentManager(
 
 		// Update the Communication details
 		studentEnrollment.UpdateMedicalReports(studentMedicalRecords);
+		studentEnrollment.ChangeOnboardingProgressState(OnboardingProgressState.MedicalRecords);
 		return studentEnrollment;
 	}
 
@@ -724,6 +730,7 @@ public class StudentEnrollmentManager(
 
 		// Update Previous School Details
 		studentEnrollment.UpdatePreviousSchoolDetails(previousSchoolDetails);
+		studentEnrollment.ChangeOnboardingProgressState(OnboardingProgressState.PreviousSchoolDetails);
 		return studentEnrollment;
 	}
 
@@ -741,6 +748,7 @@ public class StudentEnrollmentManager(
 
 		// Update Parent Bank Details
 		studentEnrollment.UpdateParenBankDetails(parentBankDetails);
+		studentEnrollment.ChangeOnboardingProgressState(OnboardingProgressState.ParentBankDetails);
 		return studentEnrollment;
 	}
 
@@ -775,6 +783,7 @@ public class StudentEnrollmentManager(
 		}
 
 		// Update the registration entity
+		studentEnrollment.ChangeOnboardingProgressState(OnboardingProgressState.Documents);
 		await studentEnrollmentRepository.UpdateAsync(studentEnrollment);
 	}
 

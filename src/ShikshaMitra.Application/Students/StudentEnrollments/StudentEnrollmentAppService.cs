@@ -241,6 +241,7 @@ public class StudentEnrollmentAppService(
 			firstName: input.FirstName,
 			middleName: input.MiddleName,
 			lastName: input.LastName,
+			email: input.Email,
 			previousSchoolName: input.PreviousSchoolName,
 			dateOfBirth: input.DateOfBirth,
 			dateOfInquiry: input.DateOfInquiry,
@@ -251,11 +252,11 @@ public class StudentEnrollmentAppService(
 			addressLine2: input.AddressLine2,
 			addressLine3: input.AddressLine3,
 			country: input.Country,
+			state: input.State,
 			village: input.Village,
 			pan: input.PAN,
 			apparId: input.ApparId,
 			city: input.City,
-			state: input.State,
 			pinCode: input.PinCode,
 			inquiryStatusType: FollowUpStatusType.Pending,
 			academicYearId: input.AcademicYearId,
@@ -264,6 +265,9 @@ public class StudentEnrollmentAppService(
 			standardId: input.StandardId,
 			inquiryPreferenceId: input.InquiryPreferenceId
 		);
+
+		// set status 
+		studentEnrollment.OnboardingProgressState = OnboardingProgressState.General;
 
 		// Save the student enrollment
 		studentEnrollment = await studentEnrollmentRepository.InsertAsync(studentEnrollment);

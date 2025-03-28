@@ -60,6 +60,7 @@ public class StudentSeederContributor(
 			firstName: "John",
 			middleName: "Michael",
 			lastName: "Doe",
+			email:"test@gmail.com",
 			previousSchoolName: "Springfield Public School",
 			dateOfBirth: new DateTimeOffset(new DateTime(2015, 3, 15)),
 			dateOfInquiry: new DateTimeOffset(DateTime.UtcNow),

@@ -39,11 +39,13 @@ public class StudentEnrollmentDto : EntityDto<Guid>
 	public string? PinCode { get; set; }
 	public string? Email { get; set; }
 
-	public StudentEnrollmentState StudentEnrollmentState { get; private set; }
-	public StudentEnrollmentApprovalState StudentEnrollmentApprovalState { get; private set; }
-	public FollowUpStatusType? FollowUpStatusType { get; private set; }
-	public FeeStatusType FeeStatusType { get; private set; }
-	public StudentEnrollmentInquiryState StudentEnrollmentInquiryState { get; private set; }
+	public StudentEnrollmentState StudentEnrollmentState { get;  set; }
+	public StudentEnrollmentApprovalState StudentEnrollmentApprovalState { get;  set; }
+	public FollowUpStatusType? FollowUpStatusType { get;  set; }
+	public FeeStatusType FeeStatusType { get;  set; }
+	public StudentEnrollmentInquiryState StudentEnrollmentInquiryState { get; set; }
+	public OnboardingProgressState OnboardingProgressState { get; set; }
+
 
 	// Foreign Key
 	public Guid EducationMediumId { get; set; }

@@ -56,6 +56,8 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public FeeStatusType FeeStatusType { get; private set; }
 	public StudentEnrollmentInquiryState StudentEnrollmentInquiryState { get; private set; } = StudentEnrollmentInquiryState.New;
 
+	public OnboardingProgressState OnboardingProgressState { get; set; } = OnboardingProgressState.General;
+
 	public virtual ICollection<FollowUpMessage> FollowUps { get; private set; } = new List<FollowUpMessage>();
 
 	// Foreign Keys
@@ -217,6 +219,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		StudentMedicalRecords = studentMedicalRecords;
 		PreviousSchoolDetails = previousSchoolDetails;
 		ParentBankDetails = parentBankDetails;
+		OnboardingProgressState = OnboardingProgressState.General;
 	}
 
 	#endregion
@@ -460,6 +463,16 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public StudentEnrollment ChangeInquiryStatus(FollowUpStatusType inquiryStatusType)
 	{
 		FollowUpStatusType = inquiryStatusType;
+		return this;
+	}
+
+	public StudentEnrollment ChangeOnboardingProgressState(OnboardingProgressState onboardingProgressState)
+	{
+		// user can not go back to previous state
+		if (OnboardingProgressState < onboardingProgressState)
+		{
+			OnboardingProgressState = onboardingProgressState;
+		}
 		return this;
 	}
 

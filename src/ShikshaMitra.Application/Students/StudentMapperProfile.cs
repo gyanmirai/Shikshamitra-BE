@@ -9,6 +9,7 @@ using ShikshaMitra.Students.StudentEnrollments.FollowUps;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.Students.StudentRecords;
+using ShikshaMitra.Students.StudentRecords.StudentGroups;
 
 namespace ShikshaMitra.Students;
 
@@ -67,6 +68,10 @@ public class StudentMapperProfile : Profile
 
 
 		CreateMap<Student, StudentDto>().ReverseMap();
+
+		CreateMap<StudentGroup, StudentGroupDto>();
+		CreateMap<CreateUpdateStudentGroupDto, StudentGroup>();
+
 		//CreateMap<CreateUpdateStudentDto, Student>();
 	}
 }

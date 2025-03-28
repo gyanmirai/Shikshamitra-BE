@@ -2103,6 +2103,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("Nationality")
                         .HasColumnType("text");
 
+                    b.Property<int>("OnboardingProgressState")
+                        .HasColumnType("integer");
+
                     b.Property<string>("PAN")
                         .HasColumnType("text");
 

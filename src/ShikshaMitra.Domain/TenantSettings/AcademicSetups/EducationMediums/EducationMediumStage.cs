@@ -13,6 +13,8 @@ public class EducationMediumStage : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; private set; }
 	public Guid EducationMediumId { get; private set; }
 	public string Name { get; private set; }
+	public byte[]? BannerPicture { get; private set; }
+
 
 	private EducationMediumStage()
 	{
@@ -23,11 +25,13 @@ public class EducationMediumStage : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid id,
 		Guid? tenantId,
 		string name,
+		byte[]? bannerPicture,
 		Guid educationMediumId)
 		: base(id)
 	{
 		TenantId = Check.NotNull(tenantId, nameof(tenantId));
 		EducationMediumId = Check.NotNull(educationMediumId, nameof(educationMediumId));
+		BannerPicture = bannerPicture;
 		SetName(name);
 	}
 

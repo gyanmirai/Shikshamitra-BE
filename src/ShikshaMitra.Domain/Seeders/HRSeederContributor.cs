@@ -78,6 +78,7 @@ public class HRSeederContributor(
 			GuidGenerator.Create(),
 			tenantId,
 			"Primary",
+			null,
 			educationMedium.Id
 		));
 

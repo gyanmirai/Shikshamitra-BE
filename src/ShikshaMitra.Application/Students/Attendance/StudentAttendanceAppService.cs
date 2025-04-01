@@ -20,16 +20,62 @@ public class StudentAttendanceAppService(
 {
 	public async Task<bool> FillAttendance(List<CreateUpdateStudentAttendanceDto> inputs, DateTimeOffset attendanceDate)
 	{
-		List<StudentAttendance>? studentAttendances = inputs.ConvertAll(item => new StudentAttendance(
-			guidGenerator.Create(),
-			tenantId: (Guid) CurrentTenant.Id!,
-			studentId: item.StudentId,
-			attendanceDate,
-			item.IsPresent,
-			item.Remarks
-		));
+		// Normalize the attendance date to remove time component
+		var normalizedDate = attendanceDate.Date;
 
-		await studentAttendanceRepository.InsertManyAsync(studentAttendances);
+		// Get all student IDs from inputs
+		var studentIds = inputs.Select(i => i.StudentId).ToList();
+
+		// Find existing attendance records for these students on the given date
+		var query = await studentAttendanceRepository.GetQueryableAsync();
+		var existingRecords = await AsyncExecuter.ToListAsync(
+			query.Where(a =>
+				studentIds.Contains(a.StudentId) &&
+				a.AttendanceDate.Date == normalizedDate)
+		);
+
+		// Create dictionary for quick lookup
+		var existingRecordsDictionary = existingRecords.ToDictionary(r => r.StudentId);
+
+		// Prepare lists for updates and inserts
+		var recordsToUpdate = new List<StudentAttendance>();
+		var recordsToInsert = new List<StudentAttendance>();
+
+		// Process each input
+		foreach (var input in inputs)
+		{
+			if (existingRecordsDictionary.TryGetValue(input.StudentId, out var existingRecord))
+			{
+				// Update existing record
+				existingRecord.IsPresent = input.IsPresent;
+				existingRecord.Remarks = input.Remarks;
+				recordsToUpdate.Add(existingRecord);
+			}
+			else
+			{
+				// Create new record
+				var newRecord = new StudentAttendance(
+					guidGenerator.Create(),
+					tenantId: (Guid) CurrentTenant.Id!,
+					studentId: input.StudentId,
+					normalizedDate,
+					input.IsPresent,
+					input.Remarks
+				);
+				recordsToInsert.Add(newRecord);
+			}
+		}
+
+		// Perform updates and inserts
+		if (recordsToUpdate.Any())
+		{
+			await studentAttendanceRepository.UpdateManyAsync(recordsToUpdate);
+		}
+
+		if (recordsToInsert.Any())
+		{
+			await studentAttendanceRepository.InsertManyAsync(recordsToInsert);
+		}
 
 		return true;
 	}

@@ -21,6 +21,7 @@ public class EducationMediumStageManager(IEducationMediumStageRepository educati
 			GuidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
 			name,
+			null,
 			educationMediumId
 		);
 	}

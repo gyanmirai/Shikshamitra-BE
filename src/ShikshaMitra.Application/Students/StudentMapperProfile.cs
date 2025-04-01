@@ -69,9 +69,8 @@ public class StudentMapperProfile : Profile
 
 		CreateMap<Student, StudentDto>().ReverseMap();
 
-		CreateMap<StudentGroup, StudentGroupDto>();
+		CreateMap<StudentGroup, StudentGroupDto>().ReverseMap();
 		CreateMap<CreateUpdateStudentGroupDto, StudentGroup>();
 
-		//CreateMap<CreateUpdateStudentDto, Student>();
 	}
 }

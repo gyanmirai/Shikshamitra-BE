@@ -72,7 +72,7 @@ public static class ShikshaMitraModuleExtensionConfigurator
 		 * https://docs.abp.io/en/abp/latest/Module-Entity-Extensions
 		 */
 
-		# region Tenant Extra Properties
+		#region Tenant Extra Properties
 
 		ObjectExtensionManager.Instance
 			.AddOrUpdateProperty<string>(
@@ -87,11 +87,28 @@ public static class ShikshaMitraModuleExtensionConfigurator
 		ObjectExtensionManager.Instance
 			.AddOrUpdateProperty<string>(
 				new[] { typeof(TenantDto), typeof(TenantCreateDto), typeof(TenantUpdateDto), typeof(Tenant) },
-				"Address", property =>
+				"Address1", property =>
 				{
 					property.Attributes.Add(new RequiredAttribute());
 				}
 			);
+
+		ObjectExtensionManager.Instance
+	.AddOrUpdateProperty<string>(
+		new[] { typeof(TenantDto), typeof(TenantCreateDto), typeof(TenantUpdateDto), typeof(Tenant) },
+		"Address2", property =>
+		{
+			property.Attributes.Add(new RequiredAttribute());
+		}
+	);
+		ObjectExtensionManager.Instance
+	.AddOrUpdateProperty<string>(
+		new[] { typeof(TenantDto), typeof(TenantCreateDto), typeof(TenantUpdateDto), typeof(Tenant) },
+		"Address3", property =>
+		{
+			property.Attributes.Add(new RequiredAttribute());
+		}
+	);
 
 		ObjectExtensionManager.Instance
 			.AddOrUpdateProperty<string>(
@@ -142,12 +159,25 @@ public static class ShikshaMitraModuleExtensionConfigurator
 					property.Attributes.Add(new RequiredAttribute());
 				}
 			);
-		
+
 		ObjectExtensionManager.Instance
 			.AddOrUpdateProperty<byte[]>(
 				new[] { typeof(TenantDto), typeof(TenantCreateDto), typeof(TenantUpdateDto), typeof(Tenant) },
 				"Logo"
 			);
+
+		ObjectExtensionManager.Instance
+		.AddOrUpdateProperty<byte[]>(
+			new[] { typeof(TenantDto), typeof(TenantCreateDto), typeof(TenantUpdateDto), typeof(Tenant) },
+			"Banner"
+		);
+
+
+		ObjectExtensionManager.Instance
+		.AddOrUpdateProperty<byte[]>(
+			new[] { typeof(TenantDto), typeof(TenantCreateDto), typeof(TenantUpdateDto), typeof(Tenant) },
+			"PrincipleSign"
+		);
 
 		#endregion
 	}

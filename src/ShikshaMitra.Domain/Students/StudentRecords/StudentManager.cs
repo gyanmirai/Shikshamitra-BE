@@ -60,4 +60,14 @@ public class StudentManager(IStudentRepository studentRepository) : DomainServic
 				throw new NotSupportedException($"Report type '{reportType}' is not supported.");
 		}
 	}
+
+	public static IDocument CreateStudentReport(IReadOnlyList<Student> enrollments, StudentReportType reportType)
+	{
+		switch (reportType)
+		{
+
+			default:
+				throw new NotSupportedException($"Report type '{reportType}' is not supported.");
+		}
+	}
 }

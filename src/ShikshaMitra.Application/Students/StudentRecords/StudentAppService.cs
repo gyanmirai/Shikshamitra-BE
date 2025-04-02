@@ -1,8 +1,14 @@
-﻿using ShikshaMitra.Students.StudentRecords.Division;
+﻿using QuestPDF.Fluent;
+using QuestPDF.Infrastructure;
+using ShikshaMitra.Common;
+using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.StudentRecords.Division;
 using ShikshaMitra.Students.StudentRecords.Standards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -11,7 +17,7 @@ using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Students.StudentRecords;
 
-public class StudentAppService(StudentManager studentManager ,IStudentRepository studentRepository, IEducationBoardRepository educationBoardRepository) :
+public class StudentAppService(StudentManager studentManager, IStudentRepository studentRepository, IEducationBoardRepository educationBoardRepository) :
 	CrudAppService<Student, StudentDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateStudentDto>(studentRepository),
 	IStudentAppService
 {
@@ -55,27 +61,27 @@ public class StudentAppService(StudentManager studentManager ,IStudentRepository
 	// Get GR No
 
 	public async Task<int> GetGrNoAsync(Guid educationBoardId, Guid educationMediumId, Guid educationMediumStageId)
-    {
-        EducationBoard? educationBoard = await educationBoardRepository.GetAsync(educationBoardId);
+	{
+		EducationBoard? educationBoard = await educationBoardRepository.GetAsync(educationBoardId);
 
-        if (educationBoard.Type == EducationBoardType.GSEB)
-        {
-            Student? student = await studentRepository.GetLastStudentbyGrNoForGSEBAsync(educationBoardId, educationMediumId, educationMediumStageId);
+		if (educationBoard.Type == EducationBoardType.GSEB)
+		{
+			Student? student = await studentRepository.GetLastStudentbyGrNoForGSEBAsync(educationBoardId, educationMediumId, educationMediumStageId);
 
-            return student?.GrNoRecord.HasValue == true ? student.GrNoRecord.Value + 1 : 1;
-        }
-        else if (educationBoard.Type == EducationBoardType.CBSE)
-        {
-            Student? student = await studentRepository.GetLastStudentbyGrNoForCBSEAsync(educationBoardId);
+			return student?.GrNoRecord.HasValue == true ? student.GrNoRecord.Value + 1 : 1;
+		}
+		else if (educationBoard.Type == EducationBoardType.CBSE)
+		{
+			Student? student = await studentRepository.GetLastStudentbyGrNoForCBSEAsync(educationBoardId);
 
-            return student?.GrNoRecord.HasValue == true ? student.GrNoRecord.Value + 1 : 1;
-        }
-        else
-        {
-            // if education board is not found then throw an exception
-            throw new UserFriendlyException("Education Board not found");
-        }
-    }
+			return student?.GrNoRecord.HasValue == true ? student.GrNoRecord.Value + 1 : 1;
+		}
+		else
+		{
+			// if education board is not found then throw an exception
+			throw new UserFriendlyException("Education Board not found");
+		}
+	}
 
 	// Get Student Roll No
 	public async Task<int> GetRollNoAsync(Guid divisionId)
@@ -155,5 +161,29 @@ public class StudentAppService(StudentManager studentManager ,IStudentRepository
 
 			await studentRepository.UpdateAsync(student);
 		}
+	}
+
+	public async Task<CustomFileResult> GenerateReportAsync(StudentReportType reportType)
+	{
+		List<Student>? enrollments = await studentRepository.GetListAsync(includeDetails: true);
+
+		IDocument? reportDocument = StudentManager.CreateStudentReport(enrollments, reportType);
+
+		var pdfBytes = await Task.Run(() =>
+		{
+			using MemoryStream ms = new MemoryStream();
+			reportDocument.GeneratePdf(ms);
+			return ms.ToArray();
+		});
+
+		// Build a file name based on the report type and current timestamp.
+		string fileName = $"StudentReport_{reportType}_{DateTime.UtcNow:yyyyMMddHHmmss}.pdf";
+
+		return new CustomFileResult
+		(
+			pdfBytes,
+			"application/pdf",
+			fileName
+		);
 	}
 }

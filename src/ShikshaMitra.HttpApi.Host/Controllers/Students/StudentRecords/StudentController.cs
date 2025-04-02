@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Common;
+using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentRecords;
 using System;
 using System.Collections.Generic;
@@ -14,7 +15,7 @@ namespace ShikshaMitra.Controllers.Students.StudentRecords;
 
 [Route("api/students")]
 
-public class StudentController(IStudentCertificateAppService studentCertificateAppService) : AbpController
+public class StudentController(IStudentCertificateAppService studentCertificateAppService,IStudentAppService studentAppService) : AbpController
 {
 	[HttpPost("upload-certificate")]
 	[Consumes("multipart/form-data")]
@@ -64,5 +65,18 @@ public class StudentController(IStudentCertificateAppService studentCertificateA
 	{
 		CustomFileResult? fileResult = await studentCertificateAppService.DownloadCertificateFileAsync(certificateId);
 		return File(fileResult.FileContent, fileResult.ContentType, fileResult.FileName);
+	}
+
+	[HttpGet("student-report")]
+	public async Task<IActionResult> GenerateReport([FromQuery] StudentReportType reportType)
+	{
+		CustomFileResult reportResult = await studentAppService.GenerateReportAsync(reportType);
+
+		if (reportResult == null || reportResult.FileContent == null)
+		{
+			return NotFound("Report could not be generated.");
+		}
+
+		return Ok(reportResult);
 	}
 }

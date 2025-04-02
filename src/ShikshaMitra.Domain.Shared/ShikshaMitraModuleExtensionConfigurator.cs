@@ -75,6 +75,16 @@ public static class ShikshaMitraModuleExtensionConfigurator
 		#region Tenant Extra Properties
 
 		ObjectExtensionManager.Instance
+		.AddOrUpdateProperty<string>(
+			new[] { typeof(TenantDto), typeof(TenantCreateDto), typeof(TenantUpdateDto), typeof(Tenant) },
+			"Email",
+			property =>
+			{
+				property.Attributes.Add(new RequiredAttribute());
+			}
+		);
+
+		ObjectExtensionManager.Instance
 			.AddOrUpdateProperty<string>(
 				new[] { typeof(TenantDto), typeof(TenantCreateDto), typeof(TenantUpdateDto), typeof(Tenant) },
 				"InstituteName",

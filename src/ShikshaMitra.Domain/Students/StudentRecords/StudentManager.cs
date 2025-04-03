@@ -56,6 +56,9 @@ public class StudentManager(IStudentRepository studentRepository) : DomainServic
 			case StudentEnrollmentReportType.EnrollmentByAge:
 				return new EnrollmentByAgeReport(enrollments);
 
+			//case StudentEnrollmentReportType.AgewiseSummary:
+			//	return new AgeWiseSummary(enrollments);
+
 			default:
 				throw new NotSupportedException($"Report type '{reportType}' is not supported.");
 		}
@@ -65,7 +68,14 @@ public class StudentManager(IStudentRepository studentRepository) : DomainServic
 	{
 		switch (reportType)
 		{
-
+			case StudentReportType.ContactList:
+				return new StudentContactList(enrollments);
+			case StudentReportType.AdmissionCategoryWiseList:
+				return new AdmissionCategoryWiseList(enrollments);
+			case StudentReportType.AgeWiseList:
+				return new AgewiseList(enrollments);
+			case StudentReportType.AgeWiseSummary:
+				return new AgeWiseSummary(enrollments);
 			default:
 				throw new NotSupportedException($"Report type '{reportType}' is not supported.");
 		}

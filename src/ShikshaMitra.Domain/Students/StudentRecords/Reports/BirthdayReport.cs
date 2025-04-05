@@ -9,16 +9,14 @@ using System.Threading.Tasks;
 
 namespace ShikshaMitra.Students.StudentRecords.Reports
 {
-	internal class AllBirthdayWhishLiast : IDocument
-
-
+	internal class BirthdayReport : IDocument
 	{
-
 		private readonly IReadOnlyList<Student> _students;
-		public AllBirthdayWhishLiast(IReadOnlyList<Student> students)
+		public BirthdayReport(IReadOnlyList<Student> students)
 		{
 			_students = students;
 		}
+		public DocumentMetadata GetMetadata() => DocumentMetadata.Default;
 		public void Compose(IDocumentContainer container)
 		{
 			container.Page(page =>
@@ -41,7 +39,7 @@ namespace ShikshaMitra.Students.StudentRecords.Reports
 				{
 					row.RelativeItem().AlignCenter().Column(c =>
 					{
-						c.Item().Image("C:\\Users\\dharm\\OneDrive\\Documents\\Work\\Shikshaitra\\QuestPDFTesting\\QuestPDFTesting\\Reports\\OrganizationHead.jpg", ImageScaling.FitWidth);
+						c.Item().Text("Hedar Part");
 					});
 				});
 			});
@@ -55,7 +53,7 @@ namespace ShikshaMitra.Students.StudentRecords.Reports
 				// add line for whole page width
 				column.Item().PaddingTop(10).BorderBottom(1).BorderColor(Colors.Black);
 
-				column.Item().PaddingTop(10).Text("All Birthday Wishlist")
+				column.Item().PaddingTop(10).Text("Birthday Report")
 					.FontSize(16).Bold().AlignCenter();
 
 				column.Item().PaddingTop(10).BorderBottom(1).BorderColor(Colors.Black);
@@ -92,34 +90,47 @@ namespace ShikshaMitra.Students.StudentRecords.Reports
 						columns.RelativeColumn();
 						columns.RelativeColumn();
 						columns.RelativeColumn();
-						columns.RelativeColumn();
-						columns.RelativeColumn();
 					});
 
 					// Academic Performance Table Header
 					table.Header(header =>
 					{
-						header.Cell().Border(1).Background(Colors.Grey.Lighten2).Padding(5).Text("Category Name").Bold();
+						header.Cell().Border(1).Background(Colors.Grey.Lighten2).Padding(5).Text("Birth Date").Bold();
 						header.Cell().Border(1).Background(Colors.Grey.Lighten2).Padding(5).Text("GR No.").Bold();
 						header.Cell().Border(1).Background(Colors.Grey.Lighten2).Padding(5).Text("Class/Div").Bold();
-						header.Cell().Border(1).Background(Colors.Grey.Lighten2).Padding(5).Text("Student Name").Bold();
-						header.Cell().Border(1).Background(Colors.Grey.Lighten2).Padding(5).Text("Date of Birth").Bold();
-						header.Cell().Border(1).Background(Colors.Grey.Lighten2).Padding(5).Text("Contact No.").Bold();
+						header.Cell().Border(1).Background(Colors.Grey.Lighten2).Padding(5).Text("Name").Bold();
 					});
 
 					// Sample data rows
-
 					foreach (var item in _students)
 					{
-						table.Cell().Border(1).Padding(5).Text(item.CastType).FontSize(12);
-
-						table.Cell().Border(1).Padding(5).Text(item.GrNoRecord.ToString());
-						table.Cell().Border(1).Padding(5).Text(item.Standard.Name + "/"+item.Division.Name );
-						table.Cell().Border(1).Padding(5).Text(item.LastName + " " + item.FirstName + " " + item.MiddleName);
                         table.Cell().Border(1).Padding(5).Text(item.DateOfBirth?.ToString("dd/MM/yyyy"));
-						table.Cell().Border(1).Padding(5).Text(item.ParentContactNumber);
-
+						table.Cell().Border(1).Padding(5).Text(item.GrNoRecord);
+						table.Cell().Border(1).Padding(5).Text(item.Standard.Name + "/"+ item.Division.Name);
+						table.Cell().Border(1).Padding(5).Text(item.LastName + " " + item.FirstName + " " + item.MiddleName);
 					}
+
+					
+
+					//table.Cell().Border(1).Padding(5).Text("01/01/2025");
+					//table.Cell().Border(1).Padding(5).Text("1235");
+					//table.Cell().Border(1).Padding(5).Text("10/A");
+					//table.Cell().Border(1).Padding(5).Text("Dharmik");
+
+					//table.Cell().Border(1).Padding(5).Text("01/01/2025");
+					//table.Cell().Border(1).Padding(5).Text("1236");
+					//table.Cell().Border(1).Padding(5).Text("10/A");
+					//table.Cell().Border(1).Padding(5).Text("Jeet");
+
+					//table.Cell().Border(1).Padding(5).Text("01/01/2025");
+					//table.Cell().Border(1).Padding(5).Text("1237");
+					//table.Cell().Border(1).Padding(5).Text("10/A");
+					//table.Cell().Border(1).Padding(5).Text("Jignesh");
+
+					//table.Cell().Border(1).Padding(5).Text("01/01/2025");
+					//table.Cell().Border(1).Padding(5).Text("1238");
+					//table.Cell().Border(1).Padding(5).Text("10/A");
+					//table.Cell().Border(1).Padding(5).Text("Parth");
 				});
 			});
 		}
@@ -143,5 +154,6 @@ namespace ShikshaMitra.Students.StudentRecords.Reports
 			table.Cell().Background(Colors.Grey.Lighten3).Padding(5).Text(label).Bold();
 			table.Cell().Padding(5).Text(value);
 		}
+
 	}
 }

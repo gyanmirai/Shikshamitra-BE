@@ -46,6 +46,7 @@ using ShikshaMitra.Students.StudentRecords;
 using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.Common;
+using ShikshaMitra.Academic.Curriculum;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -218,6 +219,15 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#endregion
 	#endregion
 	#endregion
+	#endregion
+
+	#region Academic
+
+	#region Curriculum
+
+	DbSet<Subject> Subjects { get; set; }
+	#endregion
+
 	#endregion
 
 	protected override void OnModelCreating(ModelBuilder builder)

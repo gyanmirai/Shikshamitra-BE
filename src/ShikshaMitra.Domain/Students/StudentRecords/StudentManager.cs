@@ -96,6 +96,16 @@ public class StudentManager(IStudentRepository studentRepository) : DomainServic
 				return new ReligionwiseList(enrollments);
 			case StudentReportType.ReligionWiseSummary:
 				return new ReligionwiseSummary(enrollments);
+			case StudentReportType.StudentDeatilInfoarmtion:
+				return new StudentDetailInformation(enrollments);
+			case StudentReportType.StudentDetailList:
+				return new StudentDetailList(enrollments);
+			case StudentReportType.StudentList:
+				return new StudentList(enrollments);
+			case StudentReportType.DivisionWiseStudentList:
+				return new StudetListDivisionnWise(enrollments);
+			case StudentReportType.StudentProfileReport:
+				return new StudentProfileReport(enrollments[0]);
 			default:
 				throw new NotSupportedException($"Report type '{reportType}' is not supported.");
 		}

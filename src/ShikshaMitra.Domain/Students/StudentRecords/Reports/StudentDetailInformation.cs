@@ -148,3 +148,4 @@ namespace ShikshaMitra.Students.StudentRecords.Reports
 			table.Cell().Padding(5).Text(value);
 		}
 	}
+}

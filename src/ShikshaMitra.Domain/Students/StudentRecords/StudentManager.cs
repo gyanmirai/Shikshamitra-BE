@@ -114,6 +114,8 @@ public class StudentManager(IStudentRepository studentRepository) : DomainServic
 				return new StudentRegisterWithAddress(enrollments);
 			case StudentReportType.TranscriptionCerticficate:
 				return new TranscriptionCertificate(enrollments[0]);
+			case StudentReportType.VerifyStudentData:
+				return new VeriftStudentData(enrollments);
 			default:
 				throw new NotSupportedException($"Report type '{reportType}' is not supported.");
 		}

@@ -110,7 +110,8 @@ public class StudentManager(IStudentRepository studentRepository) : DomainServic
 				return new StudentRegister(enrollments);
 			case StudentReportType.StudentStrengthDivisionWiseSummary:
 				return new StudentStrengthDivisionWiseSummary(enrollments);
-
+			case StudentReportType.StudentRegisterWithAddress:
+				return new StudentRegisterWithAddress(enrollments);
 			default:
 				throw new NotSupportedException($"Report type '{reportType}' is not supported.");
 		}

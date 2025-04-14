@@ -4,4 +4,5 @@ public enum StudentEnrollmentReportType
 {
 	EnrollmentByGender,
 	EnrollmentByAge,
+	AgewiseSummary,
 }

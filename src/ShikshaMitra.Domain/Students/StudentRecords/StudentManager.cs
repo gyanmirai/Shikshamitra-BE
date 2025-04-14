@@ -56,6 +56,9 @@ public class StudentManager(IStudentRepository studentRepository) : DomainServic
 			case StudentEnrollmentReportType.EnrollmentByAge:
 				return new EnrollmentByAgeReport(enrollments);
 
+			//case StudentEnrollmentReportType.AgewiseSummary:
+			//	return new AgeWiseSummary(enrollments);
+
 			default:
 				throw new NotSupportedException($"Report type '{reportType}' is not supported.");
 		}
@@ -65,7 +68,54 @@ public class StudentManager(IStudentRepository studentRepository) : DomainServic
 	{
 		switch (reportType)
 		{
-
+			case StudentReportType.ContactList:
+				return new StudentContactList(enrollments);
+			case StudentReportType.AdmissionCategoryWiseList:
+				return new AdmissionCategoryWiseList(enrollments);
+			case StudentReportType.AgeWiseList:
+				return new AgewiseList(enrollments);
+			case StudentReportType.AgeWiseSummary:
+				return new AgeWiseSummary(enrollments);
+			case StudentReportType.AllBirthDayWiseList:
+				return new AllBirthdayWhishList(enrollments);
+			case StudentReportType.BirthDayReport:
+				return new BirthdayReport(enrollments);
+			case StudentReportType.CastCategoryWiseSummary:
+				return new CasteCategoryWiseSummary(enrollments);
+			case StudentReportType.FessCategoryWiseSummary:
+				return new FeesCategoryWiseSummary(enrollments);
+			case StudentReportType.GenderWiseList:
+				return new GenderWiseList(enrollments);
+			case StudentReportType.GenderWiseStudentStrengthSummary:
+				return new GenderwiseStudentStrengthSummary(enrollments);
+			case StudentReportType.LeftStudentList:
+				return new LeftStudentsList(enrollments);
+			case StudentReportType.NewStudentAdmissionReport:
+				return new NewStudentAdmissionReport(enrollments[0]);
+			case StudentReportType.ReligionWiseList:
+				return new ReligionwiseList(enrollments);
+			case StudentReportType.ReligionWiseSummary:
+				return new ReligionwiseSummary(enrollments);
+			case StudentReportType.StudentDeatilInfoarmtion:
+				return new StudentDetailInformation(enrollments);
+			case StudentReportType.StudentDetailList:
+				return new StudentDetailList(enrollments);
+			case StudentReportType.StudentList:
+				return new StudentList(enrollments);
+			case StudentReportType.DivisionWiseStudentList:
+				return new StudetListDivisionnWise(enrollments);
+			case StudentReportType.StudentProfileReport:
+				return new StudentProfileReport(enrollments[0]);
+			case StudentReportType.StudentRegister:
+				return new StudentRegister(enrollments);
+			case StudentReportType.StudentStrengthDivisionWiseSummary:
+				return new StudentStrengthDivisionWiseSummary(enrollments);
+			case StudentReportType.StudentRegisterWithAddress:
+				return new StudentRegisterWithAddress(enrollments);
+			case StudentReportType.TranscriptionCerticficate:
+				return new TranscriptionCertificate(enrollments[0]);
+			case StudentReportType.VerifyStudentData:
+				return new VeriftStudentData(enrollments);
 			default:
 				throw new NotSupportedException($"Report type '{reportType}' is not supported.");
 		}

@@ -72,5 +72,12 @@ public class StudentMapperProfile : Profile
 		CreateMap<StudentGroup, StudentGroupDto>().ReverseMap();
 		CreateMap<CreateUpdateStudentGroupDto, StudentGroup>();
 
+
+		CreateMap<StudentGroupMember, StudentGroupMemberDto>()
+	.ForMember(dest => dest.StudentName, opt => opt.MapFrom(src =>
+		src.Student != null ? $"{src.Student.FirstName} {src.Student.LastName}" : string.Empty))
+	.ForMember(dest => dest.StudentGroupName, opt => opt.MapFrom(src =>
+		src.StudentGroup != null ? src.StudentGroup.Name : string.Empty));
+
 	}
 }

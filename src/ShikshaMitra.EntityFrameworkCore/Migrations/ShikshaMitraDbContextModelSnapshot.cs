@@ -3127,6 +3127,34 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppStudentGroups", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Students.StudentRecords.StudentGroupMember", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsLeader")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("StudentGroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentGroupId", "IsLeader");
+
+                    b.HasIndex("StudentId", "StudentGroupId")
+                        .IsUnique();
+
+                    b.ToTable("AppStudentGroupMembers", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears.AcademicYearPermission", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6070,6 +6098,25 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
 
                     b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentRecords.StudentGroupMember", b =>
+                {
+                    b.HasOne("ShikshaMitra.Students.StudentRecords.StudentGroup", "StudentGroup")
+                        .WithMany()
+                        .HasForeignKey("StudentGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Students.StudentRecords.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Student");
+
+                    b.Navigation("StudentGroup");
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.Divisions.Division", b =>

@@ -23,7 +23,7 @@ public class EmployeeLeaveAppService(
 		return employeeLeaveDto;
 	}
 
-	public async Task<EmployeeLeaveDto> UpdateLeaveRequestStatusAsync(Guid id, EmployeeLeaveApprovalDto input)
+	public async Task<EmployeeLeaveDto> UpdateLeaveRequestStatusAsync(Guid id, LeaveApprovalDto input)
 	{
 		EmployeeLeave employeeLeave = await employeeLeaveRepository.GetAsync(id);
 		employeeLeave =

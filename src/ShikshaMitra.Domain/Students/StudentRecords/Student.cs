@@ -27,6 +27,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? ParentContactNumber { get; private set; }
 	public string? AlternativeContactNumber { get; private set; }
 	public byte[]? ProfilePicture { get; private set; }
+	public StudentStatus Status { get; private set; }
 	#endregion
 
 	#region Address Details
@@ -204,5 +205,11 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PreviousSchoolDetails = previousSchoolDetails;
 		ParentBankDetails = parentBankDetails;
 		Documents = documents ?? new List<StudentDocument>();
+		Status = StudentStatus.Active;
+	}
+
+	public void UpdateStatus(StudentStatus newStatus)
+	{
+		Status = newStatus;
 	}
 }

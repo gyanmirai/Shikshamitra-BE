@@ -186,4 +186,15 @@ public class StudentAppService(StudentManager studentManager, IStudentRepository
 			fileName
 		);
 	}
+
+	public async Task<StudentDto> UpdateStudentStatusAsync(Guid studentId, StudentStatus newStatus)
+	{
+		var student = await studentRepository.GetAsync(studentId);
+		
+		student.UpdateStatus(newStatus);
+		
+		await studentRepository.UpdateAsync(student);
+		
+		return ObjectMapper.Map<Student, StudentDto>(student);
+	}
 }

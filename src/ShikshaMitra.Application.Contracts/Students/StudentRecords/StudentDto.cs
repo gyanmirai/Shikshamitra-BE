@@ -53,6 +53,9 @@ public class StudentDto : AuditedEntityDto<Guid>
 	public int? TempGrNo { get; set; }
 	public int? RollNo { get; set; }
 
+	public StudentStatus Status { get; set; }
+
+
 	public Guid AcademicYearId { get; set; }
 	public AcademicYearDto AcademicYear { get; set; }
 

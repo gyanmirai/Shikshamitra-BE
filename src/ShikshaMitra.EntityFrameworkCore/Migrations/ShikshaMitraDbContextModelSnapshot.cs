@@ -2757,6 +2757,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("StandardId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("TempGrNo")
                         .HasColumnType("integer");
 

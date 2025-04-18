@@ -197,4 +197,30 @@ public class StudentAppService(StudentManager studentManager, IStudentRepository
 		
 		return ObjectMapper.Map<Student, StudentDto>(student);
 	}
+
+	public async Task<CustomFileResult> GenerateCertificate(Guid studentId, StudentCertificateType certificateType)
+	{
+		Student? student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		if (student == null)
+		{
+			throw new UserFriendlyException($"Student not found: {studentId}");
+		}
+
+		IDocument? certificateDocument = StudentManager.CreateCertificate(student, certificateType);
+		var pdfBytes = await Task.Run(() =>
+		{
+			using MemoryStream ms = new MemoryStream();
+			certificateDocument.GeneratePdf(ms);
+			return ms.ToArray();
+		});
+
+		string fileName = $"StudentCertificate_{studentId}_{certificateType}_{DateTime.UtcNow:yyyyMMddHHmmss}.pdf";
+
+		return new CustomFileResult
+		(
+			pdfBytes,
+			"application/pdf",
+			fileName
+		);
+	}
 }

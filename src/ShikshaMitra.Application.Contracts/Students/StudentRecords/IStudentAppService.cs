@@ -9,6 +9,7 @@ namespace ShikshaMitra.Students.StudentRecords;
 
 public interface IStudentAppService : ICrudAppService<StudentDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateStudentDto>
 {
+	Task<CustomFileResult> GenerateCertificate(Guid studentId, StudentCertificateType certificateType);
 	Task<CustomFileResult> GenerateReportAsync(StudentReportType reportType);
 	Task<StudentDto> UpdateStudentStatusAsync(Guid studentId, StudentStatus newStatus);
 }

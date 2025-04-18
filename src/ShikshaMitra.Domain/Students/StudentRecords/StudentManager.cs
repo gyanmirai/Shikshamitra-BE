@@ -120,4 +120,16 @@ public class StudentManager(IStudentRepository studentRepository) : DomainServic
 				throw new NotSupportedException($"Report type '{reportType}' is not supported.");
 		}
 	}
+
+	public static IDocument? CreateCertificate(Student student, StudentCertificateType certificateType)
+	{
+		switch (certificateType)
+		{
+			//case StudentCertificateType.AdmissionCertificate:
+			//	return new AdmissionCertificate(student);
+
+			default:
+				throw new NotSupportedException($"Certificate type '{certificateType}' is not supported.");
+		}
+	}
 }

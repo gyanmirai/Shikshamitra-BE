@@ -1,10 +1,8 @@
 ﻿
 using System;
-using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Guids;
-using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -14,6 +12,7 @@ public class SubjectManager(
 	) : DomainService
 {
 	public Subject CreateSubject(
+		Guid classId,
 		string subjectCode,
 		string subjectName,
 		Guid primaryTeacherId,
@@ -26,6 +25,7 @@ public class SubjectManager(
 		var subject = new Subject(
 			guidGenerator.Create(),
 			CurrentTenant.Id,
+			classId,
 			subjectCode,
 			subjectName,
 			primaryTeacherId,

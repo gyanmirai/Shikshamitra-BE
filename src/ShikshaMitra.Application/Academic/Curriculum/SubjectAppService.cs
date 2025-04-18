@@ -1,6 +1,4 @@
-﻿
-using ShikshaMitra.HR.Employees;
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -8,14 +6,14 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class SubjectAppService(IEmployeeRepository employeeRepository, SubjectManager subjectManager, IRepository<Subject> subjectRepository) : CrudAppService<Employee, EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>(
-		employeeRepository), ISubjectAppService
+public class SubjectAppService(ISubjectRepository subjectRepository, SubjectManager subjectManager, IRepository<Subject> subjectnewRepository) : ApplicationService, ISubjectAppService
 {
     public async Task CreateAsync(CreateSubjectDto subjectDto)
     {
         try
         {
-            Subject subject = subjectManager.CreateSubject(
+			Subject subject = subjectManager.CreateSubject(
+					subjectDto.ClassId,
 					subjectDto.SubjectCode,
 					subjectDto.SubjectName,
 					subjectDto.PrimaryTeacherId,
@@ -26,8 +24,8 @@ public class SubjectAppService(IEmployeeRepository employeeRepository, SubjectMa
 					subjectDto.Description
 				);
 
-            await subjectRepository.InsertAsync(subject);
-        }
+			await subjectRepository.InsertAsync(subject);
+		}
         catch (Exception ex)
         {
             // Log the exception or handle it as needed

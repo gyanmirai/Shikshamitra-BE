@@ -2,8 +2,9 @@
 using ShikshaMitra.TenantSettings.Standards;
 using System;
 using System.Collections.Generic;
-using Volo.Abp.Domain.Entities;
+using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
+using Volo.Abp.Domain.Values;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Academic.Curriculum;
@@ -28,7 +29,9 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? Description { get; set; }
 	public string? UploadedDocument { get; set; }
 
-	protected Subject()
+	public ICollection<SubjectTeacher>? SecondaryTeachers { get; set; }
+
+	private Subject()
 	{
 		/* This constructor is for deserialization / ORM purpose */
 	}
@@ -36,6 +39,7 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Subject(
 		Guid id,
 		Guid? tenantId,
+		Guid standardId,
 		string subjectCode,
 		string subjectName,
 		Guid primaryTeacherId,
@@ -48,8 +52,9 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		: base(id)
 	{
 		TenantId = tenantId;
-		SubjectCode = subjectCode;
-		SubjectName = subjectName;
+		StandardId = standardId;
+		SubjectCode = Check.NotNullOrEmpty(subjectCode, nameof(SubjectCode));
+		SubjectName = Check.NotNullOrEmpty(subjectName, nameof(SubjectName));
 		PrimaryTeacherId = primaryTeacherId;
 		ScheduledDate = scheduledDate;
 		SubjectColor = subjectColor;
@@ -61,22 +66,15 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 }
 
 // Junction Table for Secondary Teachers
-public class SubjectTeacher : Entity<Guid>
+public class SubjectTeacher : ValueObject
 {
-	public Guid SubjectId { get; set; }
-	public virtual Subject Subject { get; set; }
-
-	public Guid TeacherId { get; set; }
-	public virtual Employee Teacher { get; set; }
-
-	public SubjectTeacher(Guid subjectId, Guid teacherId)
+	public Guid SubjectId { get; set; }  // FK to Subject table
+	public virtual Subject Subject { get; set; }  // Navigation Property
+	public Guid SecondaryTeacherId { get; set; }  // FK to Employee table
+	public virtual Employee SecondaryTeacher { get; set; }  // Navigation Property
+	protected override IEnumerable<object> GetAtomicValues()
 	{
-		SubjectId = subjectId;
-		TeacherId = teacherId;
-	}
-
-	protected SubjectTeacher()
-	{
-		/* This constructor is for deserialization / ORM purpose */
+		yield return SubjectId;
+		yield return SecondaryTeacherId;
 	}
 }

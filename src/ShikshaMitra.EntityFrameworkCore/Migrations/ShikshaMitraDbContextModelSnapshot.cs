@@ -25,6 +25,99 @@ namespace ShikshaMitra.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Subject", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("LearningGoals")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Prerequisites")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("PrimaryTeacherId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ScheduledDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("StandardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SubjectCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SubjectColor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SubjectName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<string>("UploadedDocument")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PrimaryTeacherId");
+
+                    b.HasIndex("StandardId");
+
+                    b.ToTable("AppSubjects", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Authors.Author", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5591,6 +5684,23 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("TenantId", "Name");
 
                     b.ToTable("AbpTenantConnectionStrings", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Subject", b =>
+                {
+                    b.HasOne("ShikshaMitra.HR.Employees.Employee", "PrimaryTeacher")
+                        .WithMany()
+                        .HasForeignKey("PrimaryTeacherId");
+
+                    b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
+                        .WithMany()
+                        .HasForeignKey("StandardId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PrimaryTeacher");
+
+                    b.Navigation("Standard");
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.EmployeeLeave", b =>

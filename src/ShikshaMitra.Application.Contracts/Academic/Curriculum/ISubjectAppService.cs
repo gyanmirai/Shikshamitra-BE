@@ -8,7 +8,7 @@ using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public interface ISubjectAppService : ICrudAppService<EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>
+public interface ISubjectAppService
 {
 	Task CreateAsync(CreateSubjectDto input);
 }

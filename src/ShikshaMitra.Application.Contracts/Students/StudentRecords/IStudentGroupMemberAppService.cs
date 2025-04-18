@@ -8,6 +8,7 @@ namespace ShikshaMitra.Students.StudentRecords;
 public interface IStudentGroupMemberAppService : IApplicationService
 {
 	Task<StudentGroupMemberDto> AssignStudentToGroupAsync(AssignStudentToGroupDto input);
+	Task<List<StudentGroupMemberDto>> BulkAssignStudentsToGroupAsync(BulkAssignStudentsToGroupDto input);
 	Task RemoveStudentFromGroupAsync(Guid studentId, Guid groupId);
 	Task<StudentGroupMemberDto> SetGroupLeaderAsync(SetGroupLeaderDto input);
 	Task RemoveGroupLeaderAsync(Guid groupId);

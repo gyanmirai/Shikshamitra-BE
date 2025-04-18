@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -141,5 +142,43 @@ public class StudentGroupMemberAppService(
 
 		var leader = await studentRepository.GetAsync(leaderMembership.StudentId);
 		return ObjectMapper.Map<Student, StudentDto>(leader);
+	}
+
+	public async Task<List<StudentGroupMemberDto>> BulkAssignStudentsToGroupAsync(BulkAssignStudentsToGroupDto input)
+	{
+		var group = await studentGroupRepository.GetAsync(input.StudentGroupId);
+		var studentIds = input.StudentIds.Distinct().ToList();
+		var students = await studentRepository.GetListAsync(s => studentIds.Contains(s.Id));
+		
+		// Get all existing memberships for these students in this group to avoid duplicates
+		var existingMemberships = await studentGroupMemberRepository.GetListAsync(
+			m => m.StudentGroupId == group.Id && studentIds.Contains(m.StudentId));
+		
+		var results = new List<StudentGroupMemberDto>();
+		
+		foreach (var student in students)
+		{
+			// Check if the student is already in this group
+			var existingMembership = existingMemberships.FirstOrDefault(m => m.StudentId == student.Id);
+			
+			// Skip students already in the group
+			if (existingMembership != null)
+			{
+				results.Add(ObjectMapper.Map<StudentGroupMember, StudentGroupMemberDto>(existingMembership));
+				continue;
+			}
+			
+			// Use domain service to validate and create new membership
+			var result = await studentGroupManager.ValidateStudentGroupAssignmentAsync(
+				student, group, false, null); // Always adding as regular member, not leader
+				
+			if (result.NeedsNewMembership)
+			{
+				await studentGroupMemberRepository.InsertAsync(result.NewMembership);
+				results.Add(ObjectMapper.Map<StudentGroupMember, StudentGroupMemberDto>(result.NewMembership));
+			}
+		}
+		
+		return results;
 	}
 }

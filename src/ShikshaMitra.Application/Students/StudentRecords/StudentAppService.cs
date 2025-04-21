@@ -6,6 +6,7 @@ using ShikshaMitra.Students.StudentRecords.Division;
 using ShikshaMitra.Students.StudentRecords.Standards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.Students.StudentRecords.BulkUpload;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -14,10 +15,15 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentRecords;
 
-public class StudentAppService(StudentManager studentManager, IStudentRepository studentRepository, IEducationBoardRepository educationBoardRepository) :
+public class StudentAppService(
+	StudentManager studentManager,
+	IStudentRepository studentRepository, 
+	IEducationBoardRepository educationBoardRepository,
+	IStudentCsvImportService studentCsvImportService) :
 	CrudAppService<Student, StudentDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateStudentDto>(studentRepository),
 	IStudentAppService
 {
@@ -198,6 +204,7 @@ public class StudentAppService(StudentManager studentManager, IStudentRepository
 		return ObjectMapper.Map<Student, StudentDto>(student);
 	}
 
+	[RemoteService(false)]
 	public async Task<CustomFileResult> GenerateCertificate(Guid studentId, StudentCertificateType certificateType)
 	{
 		Student? student = await studentRepository.GetAsync(studentId, includeDetails: true);
@@ -222,5 +229,11 @@ public class StudentAppService(StudentManager studentManager, IStudentRepository
 			"application/pdf",
 			fileName
 		);
+	}
+
+	[RemoteService(false)]
+	public async Task<StudentCsvUploadResultDto> ImportStudentsFromCsvAsync(Stream fileStream, string fileName)
+	{
+		return await studentCsvImportService.ImportStudentsFromCsvAsync(fileStream);
 	}
 }

@@ -12,4 +12,6 @@ public class AssignStudentToGroupDto
 	public Guid StudentGroupId { get; set; }
 
 	public bool IsLeader { get; set; }
+	
+	public bool IsDivisionLeader { get; set; }
 }

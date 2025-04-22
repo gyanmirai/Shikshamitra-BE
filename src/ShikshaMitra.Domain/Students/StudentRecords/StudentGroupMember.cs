@@ -9,6 +9,7 @@ public class StudentGroupMember : Entity<Guid>, IMultiTenant
 	public Guid StudentId { get; private set; }
 	public Guid StudentGroupId { get; private set; }
 	public bool IsLeader { get; private set; }
+	public bool IsDivisionLeader { get; private set; }
 	public Guid? TenantId { get; set; }
 
 	public virtual Student Student { get; private set; }
@@ -21,11 +22,13 @@ public class StudentGroupMember : Entity<Guid>, IMultiTenant
 		Guid studentId,
 		Guid studentGroupId,
 		bool isLeader = false,
+		bool isDivisionLeader = false,
 		Guid? tenantId = null) : base(id)
 	{
 		StudentId = studentId;
 		StudentGroupId = studentGroupId;
 		IsLeader = isLeader;
+		IsDivisionLeader = isDivisionLeader;
 		TenantId = tenantId;
 	}
 
@@ -37,5 +40,15 @@ public class StudentGroupMember : Entity<Guid>, IMultiTenant
 	public void RemoveAsLeader()
 	{
 		IsLeader = false;
+	}
+
+	public void SetAsDivisionLeader()
+	{
+		IsDivisionLeader = true;
+	}
+
+	public void RemoveAsDivisionLeader()
+	{
+		IsDivisionLeader = false;
 	}
 }

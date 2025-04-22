@@ -17,5 +17,6 @@ public class StudentGroupMemberConfiguration : IEntityTypeConfiguration<StudentG
 		builder.HasIndex(x => new { x.StudentId, x.StudentGroupId }).IsUnique();
 
 		builder.HasIndex(x => new { x.StudentGroupId, x.IsLeader });
+		builder.HasIndex(x => new { x.StudentGroupId, x.IsDivisionLeader });
 	}
 }

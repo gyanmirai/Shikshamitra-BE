@@ -24,7 +24,7 @@ public class StudentGroupMemberAppService(
 
 		// Get validation and action plan from domain service
 		var result = await studentGroupManager.ValidateStudentGroupAssignmentAsync(
-			student, group, input.IsLeader, existingMembership);
+			student, group, input.IsLeader, input.IsDivisionLeader, existingMembership);
 
 		// Execute the required operations based on validation results
 		if (result.NeedsLeaderUpdate)
@@ -37,6 +37,19 @@ public class StudentGroupMemberAppService(
 			{
 				currentLeader.RemoveAsLeader();
 				await studentGroupMemberRepository.UpdateAsync(currentLeader);
+			}
+		}
+		
+		if (result.NeedsDivisionLeaderUpdate)
+		{
+			// Remove existing division leader
+			var currentDivisionLeader = await studentGroupMemberRepository.FirstOrDefaultAsync(
+				m => m.StudentGroupId == group.Id && m.IsDivisionLeader);
+
+			if (currentDivisionLeader != null)
+			{
+				currentDivisionLeader.RemoveAsDivisionLeader();
+				await studentGroupMemberRepository.UpdateAsync(currentDivisionLeader);
 			}
 		}
 
@@ -103,6 +116,42 @@ public class StudentGroupMemberAppService(
 
 		return ObjectMapper.Map<StudentGroupMember, StudentGroupMemberDto>(updatedMembership);
 	}
+	
+	public async Task<StudentGroupMemberDto> SetDivisionLeaderAsync(SetDivisionLeaderDto input)
+	{
+		var student = await studentRepository.GetAsync(input.StudentId);
+		var group = await studentGroupRepository.GetAsync(input.StudentGroupId);
+
+		// First, remove any existing division leader
+		var currentDivisionLeader = await studentGroupMemberRepository.FirstOrDefaultAsync(
+			m => m.StudentGroupId == group.Id && m.IsDivisionLeader);
+
+		if (currentDivisionLeader != null)
+		{
+			currentDivisionLeader.RemoveAsDivisionLeader();
+			await studentGroupMemberRepository.UpdateAsync(currentDivisionLeader);
+		}
+
+		// Check if the student is a member of the group
+		var membership = await studentGroupMemberRepository.FirstOrDefaultAsync(
+			m => m.StudentId == input.StudentId && m.StudentGroupId == input.StudentGroupId);
+
+		// Use domain service to prepare the membership update
+		var updatedMembership = await studentGroupManager.PrepareDivisionLeadershipUpdateAsync(student, group, membership);
+
+		if (membership != null)
+		{
+			// Update existing membership
+			await studentGroupMemberRepository.UpdateAsync(updatedMembership);
+		}
+		else
+		{
+			// Insert new membership
+			await studentGroupMemberRepository.InsertAsync(updatedMembership);
+		}
+
+		return ObjectMapper.Map<StudentGroupMember, StudentGroupMemberDto>(updatedMembership);
+	}
 
 	public async Task RemoveGroupLeaderAsync(Guid groupId)
 	{
@@ -113,6 +162,18 @@ public class StudentGroupMemberAppService(
 		{
 			currentLeader.RemoveAsLeader();
 			await studentGroupMemberRepository.UpdateAsync(currentLeader);
+		}
+	}
+	
+	public async Task RemoveDivisionLeaderAsync(Guid groupId)
+	{
+		var currentDivisionLeader = await studentGroupMemberRepository.FirstOrDefaultAsync(
+			m => m.StudentGroupId == groupId && m.IsDivisionLeader);
+
+		if (currentDivisionLeader != null)
+		{
+			currentDivisionLeader.RemoveAsDivisionLeader();
+			await studentGroupMemberRepository.UpdateAsync(currentDivisionLeader);
 		}
 	}
 
@@ -143,6 +204,20 @@ public class StudentGroupMemberAppService(
 		var leader = await studentRepository.GetAsync(leaderMembership.StudentId);
 		return ObjectMapper.Map<Student, StudentDto>(leader);
 	}
+	
+	public async Task<StudentDto> GetDivisionLeaderAsync(Guid groupId)
+	{
+		var divisionLeaderMembership = await studentGroupMemberRepository.FirstOrDefaultAsync(
+			m => m.StudentGroupId == groupId && m.IsDivisionLeader);
+
+		if (divisionLeaderMembership == null)
+		{
+			return null;
+		}
+
+		var divisionLeader = await studentRepository.GetAsync(divisionLeaderMembership.StudentId);
+		return ObjectMapper.Map<Student, StudentDto>(divisionLeader);
+	}
 
 	public async Task<List<StudentGroupMemberDto>> BulkAssignStudentsToGroupAsync(BulkAssignStudentsToGroupDto input)
 	{
@@ -170,7 +245,7 @@ public class StudentGroupMemberAppService(
 			
 			// Use domain service to validate and create new membership
 			var result = await studentGroupManager.ValidateStudentGroupAssignmentAsync(
-				student, group, false, null); // Always adding as regular member, not leader
+				student, group, false, false, null); // Always adding as regular member, not leader or division leader
 				
 			if (result.NeedsNewMembership)
 			{

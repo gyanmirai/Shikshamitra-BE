@@ -3222,6 +3222,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsDivisionLeader")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsLeader")
                         .HasColumnType("boolean");
 
@@ -3236,6 +3239,8 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("StudentGroupId", "IsDivisionLeader");
 
                     b.HasIndex("StudentGroupId", "IsLeader");
 

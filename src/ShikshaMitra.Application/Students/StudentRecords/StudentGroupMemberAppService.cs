@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentRecords;
@@ -18,9 +17,24 @@ public class StudentGroupMemberAppService(
 		var student = await studentRepository.GetAsync(input.StudentId);
 		var group = await studentGroupRepository.GetAsync(input.StudentGroupId);
 
-		// Check if the student is already in this group
+		// Check if the student is already in ANY group (not just this one)
 		var existingMembership = await studentGroupMemberRepository.FirstOrDefaultAsync(
-			m => m.StudentId == student.Id && m.StudentGroupId == group.Id);
+			m => m.StudentId == student.Id);
+
+		// If student belongs to a different group, remove them from that group first
+		if (existingMembership != null && existingMembership.StudentGroupId != group.Id)
+		{
+			await studentGroupMemberRepository.DeleteAsync(existingMembership);
+			// Reset existingMembership to null since we're removing them from the previous group
+			existingMembership = null;
+		}
+
+		// Now check if they're in the target group
+		if (existingMembership == null)
+		{
+			existingMembership = await studentGroupMemberRepository.FirstOrDefaultAsync(
+				m => m.StudentId == student.Id && m.StudentGroupId == group.Id);
+		}
 
 		// Get validation and action plan from domain service
 		var result = await studentGroupManager.ValidateStudentGroupAssignmentAsync(
@@ -225,25 +239,40 @@ public class StudentGroupMemberAppService(
 		var studentIds = input.StudentIds.Distinct().ToList();
 		var students = await studentRepository.GetListAsync(s => studentIds.Contains(s.Id));
 		
-		// Get all existing memberships for these students in this group to avoid duplicates
-		var existingMemberships = await studentGroupMemberRepository.GetListAsync(
-			m => m.StudentGroupId == group.Id && studentIds.Contains(m.StudentId));
+		// Get ALL existing memberships for these students (not just in this group)
+		// to ensure students can only belong to one group
+		var allExistingMemberships = await studentGroupMemberRepository.GetListAsync(
+			m => studentIds.Contains(m.StudentId));
+		
+		// Identify students already in this group vs. students in other groups
+		var studentsInThisGroup = allExistingMemberships
+			.Where(m => m.StudentGroupId == group.Id)
+			.Select(m => m.StudentId)
+			.ToHashSet();
+		
+		var studentsInOtherGroups = allExistingMemberships
+			.Where(m => m.StudentGroupId != group.Id)
+			.ToList();
 		
 		var results = new List<StudentGroupMemberDto>();
 		
+		// First, remove students from other groups
+		foreach (var membership in studentsInOtherGroups)
+		{
+			await studentGroupMemberRepository.DeleteAsync(membership);
+		}
+		
 		foreach (var student in students)
 		{
-			// Check if the student is already in this group
-			var existingMembership = existingMemberships.FirstOrDefault(m => m.StudentId == student.Id);
-			
-			// Skip students already in the group
-			if (existingMembership != null)
+			// Skip if student is already in this group
+			if (studentsInThisGroup.Contains(student.Id))
 			{
+				var existingMembership = allExistingMemberships.First(m => m.StudentId == student.Id);
 				results.Add(ObjectMapper.Map<StudentGroupMember, StudentGroupMemberDto>(existingMembership));
 				continue;
 			}
 			
-			// Use domain service to validate and create new membership
+			// Create new membership for this student
 			var result = await studentGroupManager.ValidateStudentGroupAssignmentAsync(
 				student, group, false, false, null); // Always adding as regular member, not leader or division leader
 				

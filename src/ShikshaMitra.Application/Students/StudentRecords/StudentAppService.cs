@@ -62,8 +62,68 @@ public class StudentAppService(
 		// Map the entities to DTOs
 		var entityDtos = await MapToGetListOutputDtosAsync(entities);
 
+		// Get student group information
+		await EnrichStudentsWithGroupInfoAsync(entityDtos);
+
 		return new PagedResultDto<StudentDto>(totalCount, entityDtos);
 	}
+
+	/// <summary>
+	/// Enriches student DTOs with group membership information
+	/// </summary>
+	private async Task EnrichStudentsWithGroupInfoAsync(List<StudentDto> students)
+	{
+		if (students == null || !students.Any())
+			return;
+
+		// Get all student IDs
+		var studentIds = students.Select(s => s.Id).ToList();
+
+		// Get all student group memberships for these students in a single query
+		var studentGroupMemberships = await LazyServiceProvider
+			.LazyGetRequiredService<IRepository<StudentGroupMember, Guid>>()
+			.GetListAsync(m => studentIds.Contains(m.StudentId));
+
+			// Create a dictionary that maps student IDs to their group membership
+		var membershipByStudentId = studentGroupMemberships.ToDictionary(
+			m => m.StudentId,
+			m => m);
+
+		// Get all group IDs from memberships
+		var groupIds = studentGroupMemberships.Select(m => m.StudentGroupId).Distinct().ToList();
+
+		// Get all student groups in a single query
+		var studentGroups = groupIds.Any() 
+			? await LazyServiceProvider.LazyGetRequiredService<IRepository<StudentGroup, Guid>>()
+				.GetListAsync(g => groupIds.Contains(g.Id)) 
+			: new List<StudentGroup>();
+
+		// Create a dictionary for quick group lookups
+		var groupsDict = studentGroups.ToDictionary(g => g.Id, g => g);
+
+			// Assign group membership to student DTOs
+		foreach (var student in students)
+		{
+			if (membershipByStudentId.TryGetValue(student.Id, out var membership))
+			{
+				student.GroupMembership = new StudentGroupMembershipInfo
+				{
+					GroupId = membership.StudentGroupId,
+					GroupName = groupsDict.ContainsKey(membership.StudentGroupId) 
+						? groupsDict[membership.StudentGroupId].Name 
+						: "Unknown Group",
+					IsLeader = membership.IsLeader,
+					IsDivisionLeader = membership.IsDivisionLeader
+				};
+			}
+			else
+			{
+				// Set null or a default empty object to indicate no group membership
+				student.GroupMembership = null;
+			}
+		}
+	}
+
 	// Get GR No
 
 	public async Task<int> GetGrNoAsync(Guid educationBoardId, Guid educationMediumId, Guid educationMediumStageId)

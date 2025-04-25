@@ -1,14 +1,12 @@
-﻿
-using ShikshaMitra.HR.Employees;
-using ShikshaMitra.Students.StudentEnrollments;
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
-using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
 public interface ISubjectAppService
 {
-	Task CreateAsync(CreateSubjectDto input);
+	Task<SubjectDto> CreateAsync(CreateSubjectDto subjectDto);
+
+	Task<PagedResultDto<SubjectDto>> GetAllAsync(Guid classId, int skipCount, int maxResultCount);
 }

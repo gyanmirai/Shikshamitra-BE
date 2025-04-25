@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using ShikshaMitra.HR.Employees;
+using System;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -13,6 +10,7 @@ public class SubjectDto
 	public string? SubjectCode { get; set; }
 	public string? SubjectName { get; set; }
 	public Guid PrimaryTeacherId { get; set; }
+	public EmployeeDto PrimaryTeacher { get; set; }
 	public DateTimeOffset ScheduledDate { get; set; }
 	public string? SubjectColor { get; set; }
 	public string? LearningGoals { get; set; }

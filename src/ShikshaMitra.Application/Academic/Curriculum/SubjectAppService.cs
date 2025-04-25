@@ -1,30 +1,39 @@
-﻿using System;
+﻿using Microsoft.AspNetCore.Http;
+using ShikshaMitra.Common.Header;
+using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
-using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class SubjectAppService(ISubjectRepository subjectRepository, SubjectManager subjectManager, IRepository<Subject> subjectnewRepository) : ApplicationService, ISubjectAppService
+public class SubjectAppService(ISubjectRepository subjectRepository, SubjectManager subjectManager, IHttpContextAccessor httpContextAccessor) : ApplicationService, ISubjectAppService
 {
-    public async Task CreateAsync(CreateSubjectDto subjectDto)
+    public async Task<SubjectDto> CreateAsync(CreateSubjectDto subjectDto)
     {
         try
         {
-			Subject subject = subjectManager.CreateSubject(
-					subjectDto.ClassId,
-					subjectDto.SubjectCode,
-					subjectDto.SubjectName,
-					subjectDto.PrimaryTeacherId,
-					subjectDto.ScheduledDate,
-					subjectDto.SubjectColor,
-					subjectDto.LearningGoals,
-					subjectDto.Prerequisites,
-					subjectDto.Description
-				);
+			(Guid academicYearId, Guid academicBoardId, Guid academicMediumId) = HeaderValidationExtractionHelper.ValidateAndExtractHeaders(httpContextAccessor.HttpContext.Request.Headers);
 
-			await subjectRepository.InsertAsync(subject);
+			Subject subject = subjectManager.CreateSubject(
+				academicYearId,
+				academicBoardId,
+				academicMediumId,
+				subjectDto.ClassId,
+                subjectDto.SubjectCode,
+                subjectDto.SubjectName,
+                subjectDto.PrimaryTeacherId,
+                subjectDto.SecondaryTeacherIds ?? [],
+                subjectDto.ScheduledDate,
+                subjectDto.SubjectColor,
+                subjectDto.LearningGoals,
+                subjectDto.Prerequisites,
+                subjectDto.Description
+            );
+
+            await subjectRepository.InsertAsync(subject);
+
+			return ObjectMapper.Map<Subject, SubjectDto>(subject);
 		}
         catch (Exception ex)
         {
@@ -32,4 +41,25 @@ public class SubjectAppService(ISubjectRepository subjectRepository, SubjectMana
             throw new ApplicationException("An error occurred while creating the subject.", ex);
         }
     }
+
+	// create a method to get all subjects for a class, use paged result
+	public async Task<PagedResultDto<SubjectDto>> GetAllAsync(Guid classId, int skipCount = 0, int maxResultCount = 10)
+	{
+		try
+		{
+			// fetch all subjects for a class
+			var subjects = await subjectRepository.GetSubjectsByClassAsync(
+				classId,
+				skipCount,
+				maxResultCount
+			);
+
+			// map pagedresult to pagedresultdto for subjects
+			return ObjectMapper.Map<PagedResultDto<Subject>, PagedResultDto<SubjectDto>>(subjects);
+		}
+		catch (Exception ex)
+		{
+			throw new ApplicationException("An error occurred while retrieving subjects.", ex);
+		}
+	}
 }

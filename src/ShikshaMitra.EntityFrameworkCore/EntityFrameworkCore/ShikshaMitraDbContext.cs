@@ -226,6 +226,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Curriculum
 
 	public DbSet<Subject> Subjects { get; set; }
+	public DbSet<SubjectTeacher> SubjectTeachers { get; set; }
 	#endregion
 
 	#endregion

@@ -30,6 +30,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("BoardId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -78,6 +81,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("LearningGoals")
                         .HasColumnType("text");
 
+                    b.Property<Guid>("MediumId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Prerequisites")
                         .HasColumnType("text");
 
@@ -109,6 +115,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("UploadedDocument")
                         .HasColumnType("text");
 
+                    b.Property<Guid>("YearId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("PrimaryTeacherId");
@@ -116,6 +125,24 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("StandardId");
 
                     b.ToTable("AppSubjects", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.SubjectTeacher", b =>
+                {
+                    b.Property<Guid>("SubjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TeacherId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("SubjectId", "TeacherId");
+
+                    b.HasIndex("TeacherId");
+
+                    b.ToTable("AppSubjectTeacher", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Authors.Author", b =>
@@ -5703,6 +5730,25 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Standard");
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.SubjectTeacher", b =>
+                {
+                    b.HasOne("ShikshaMitra.Academic.Curriculum.Subject", "Subject")
+                        .WithMany("SecondaryTeachers")
+                        .HasForeignKey("SubjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.HR.Employees.Employee", "Teacher")
+                        .WithMany()
+                        .HasForeignKey("TeacherId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Subject");
+
+                    b.Navigation("Teacher");
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.EmployeeLeave", b =>
                 {
                     b.HasOne("ShikshaMitra.HR.Employees.Employee", "Employee")
@@ -6384,6 +6430,11 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Subject", b =>
+                {
+                    b.Navigation("SecondaryTeachers");
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>

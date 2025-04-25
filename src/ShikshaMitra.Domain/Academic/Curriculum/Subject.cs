@@ -1,15 +1,16 @@
-﻿using ShikshaMitra.HR.Employees;
+﻿using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.Standards;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using Volo.Abp;
-using Volo.Abp.Domain.Entities.Auditing;
-using Volo.Abp.Domain.Values;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class Subject : GyanMiraiFullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 
@@ -21,6 +22,7 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public Guid? PrimaryTeacherId { get; set; }  // FK to Employee table
 	public virtual Employee PrimaryTeacher { get; set; }  // Navigation Property
+	public ICollection<SubjectTeacher>? SecondaryTeachers { get; set; }
 
 	public DateTimeOffset? ScheduledDate { get; set; }
 	public string SubjectColor { get; set; }
@@ -28,9 +30,7 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? Prerequisites { get; set; }
 	public string? Description { get; set; }
 	public string? UploadedDocument { get; set; }
-
-	public ICollection<SubjectTeacher>? SecondaryTeachers { get; set; }
-
+	
 	private Subject()
 	{
 		/* This constructor is for deserialization / ORM purpose */
@@ -39,6 +39,9 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Subject(
 		Guid id,
 		Guid? tenantId,
+		Guid yearId,
+		Guid boardId,
+		Guid mediumId,
 		Guid standardId,
 		string subjectCode,
 		string subjectName,
@@ -52,6 +55,9 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		: base(id)
 	{
 		TenantId = tenantId;
+		YearId = yearId;
+		BoardId = boardId;
+		MediumId = mediumId;
 		StandardId = standardId;
 		SubjectCode = Check.NotNullOrEmpty(subjectCode, nameof(SubjectCode));
 		SubjectName = Check.NotNullOrEmpty(subjectName, nameof(SubjectName));
@@ -62,19 +68,38 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Prerequisites = prerequisites;
 		Description = description;
 		UploadedDocument = uploadedDocument;
+		SecondaryTeachers = new HashSet<SubjectTeacher>();
 	}
+
+    // create method to add a single secondary teacher
+    public void AddSecondaryTeacher(Guid subjectTeacherId, Guid teacherId)
+    {
+        if (SecondaryTeachers == null)
+        {
+            SecondaryTeachers = new HashSet<SubjectTeacher>();
+        }
+
+        var subjectTeacher = new SubjectTeacher(subjectTeacherId, Id, teacherId);
+        SecondaryTeachers.Add(subjectTeacher);
+    }
 }
 
-// Junction Table for Secondary Teachers
-public class SubjectTeacher : ValueObject
+public class SubjectTeacher : Entity<Guid>
 {
-	public Guid SubjectId { get; set; }  // FK to Subject table
-	public virtual Subject Subject { get; set; }  // Navigation Property
-	public Guid SecondaryTeacherId { get; set; }  // FK to Employee table
-	public virtual Employee SecondaryTeacher { get; set; }  // Navigation Property
-	protected override IEnumerable<object> GetAtomicValues()
+	public Guid SubjectId { get; private set; }
+	public Guid TeacherId { get; private set; }
+
+	[ForeignKey(nameof(SubjectId))]
+	public virtual Subject Subject { get; private set; }
+
+	[ForeignKey(nameof(TeacherId))]
+	public virtual Employee Teacher { get; private set; }
+
+	private SubjectTeacher() { }
+
+	public SubjectTeacher(Guid id, Guid subjectId, Guid teacherId) : base(id)
 	{
-		yield return SubjectId;
-		yield return SecondaryTeacherId;
+		SubjectId = subjectId;
+		TeacherId = teacherId;
 	}
 }

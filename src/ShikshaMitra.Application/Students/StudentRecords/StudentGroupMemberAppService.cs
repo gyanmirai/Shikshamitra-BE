@@ -1,8 +1,11 @@
-﻿using System;
+﻿using ShikshaMitra.Common;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using ShikshaMitra.Students.StudentRecords;
 
 namespace ShikshaMitra.Students.StudentRecords;
 
@@ -37,7 +40,7 @@ public class StudentGroupMemberAppService(
 		}
 
 		// Get validation and action plan from domain service
-		var result = await studentGroupManager.ValidateStudentGroupAssignmentAsync(
+		var result = studentGroupManager.ValidateStudentGroupAssignmentAsync(
 			student, group, input.IsLeader, input.IsDivisionLeader, existingMembership);
 
 		// Execute the required operations based on validation results
@@ -115,7 +118,7 @@ public class StudentGroupMemberAppService(
 			m => m.StudentId == input.StudentId && m.StudentGroupId == input.StudentGroupId);
 
 		// Use domain service to prepare the membership update
-		var updatedMembership = await studentGroupManager.PrepareLeadershipUpdateAsync(student, group, membership);
+		var updatedMembership =  studentGroupManager.PrepareLeadershipUpdateAsync(student, group, membership);
 
 		if (membership != null)
 		{
@@ -151,7 +154,7 @@ public class StudentGroupMemberAppService(
 			m => m.StudentId == input.StudentId && m.StudentGroupId == input.StudentGroupId);
 
 		// Use domain service to prepare the membership update
-		var updatedMembership = await studentGroupManager.PrepareDivisionLeadershipUpdateAsync(student, group, membership);
+		var updatedMembership = studentGroupManager.PrepareDivisionLeadershipUpdateAsync(student, group, membership);
 
 		if (membership != null)
 		{
@@ -273,7 +276,7 @@ public class StudentGroupMemberAppService(
 			}
 			
 			// Create new membership for this student
-			var result = await studentGroupManager.ValidateStudentGroupAssignmentAsync(
+			var result =  studentGroupManager.ValidateStudentGroupAssignmentAsync(
 				student, group, false, false, null); // Always adding as regular member, not leader or division leader
 				
 			if (result.NeedsNewMembership)
@@ -285,4 +288,76 @@ public class StudentGroupMemberAppService(
 		
 		return results;
 	}
+
+    public async Task<List<StudentGroupMemberDto>> AutoAssignStudentsToGroupsAsync(AutoAssignStudentsToGroupsDto input)
+    {
+        // Validate input
+        if (input.GroupIds == null || input.GroupIds.Count == 0)
+        {
+            throw new UserFriendlyException("No groups provided for assignment.");
+        }
+
+        // Get all the requested groups
+        var groups = await studentGroupRepository.GetListAsync(g => input.GroupIds.Contains(g.Id));
+        
+        if (groups.Count == 0)
+        {
+            throw new UserFriendlyException("No valid groups found for assignment.");
+        }
+
+        // Fetch students by EducationMediumId and optionally by DivisionId
+        var studentsQuery = await studentRepository.GetQueryableAsync();
+        studentsQuery = studentsQuery.Where(s => s.EducationMediumId == input.EducationMediumId);
+        
+        // Filter by division if specified
+        if (input.DivisionId.HasValue)
+        {
+            studentsQuery = studentsQuery.Where(s => s.DivisionId == input.DivisionId);
+        }
+
+        var students = await AsyncExecuter.ToListAsync(studentsQuery);
+        
+        if (students.Count == 0)
+        {
+            throw new UserFriendlyException("No students found for the specified education medium" +
+                (input.DivisionId.HasValue ? " and division." : "."));
+        }
+
+        // Get existing group memberships for all students
+        var studentIds = students.Select(s => s.Id).ToList();
+        var existingMemberships = await studentGroupMemberRepository.GetListAsync(
+            m => studentIds.Contains(m.StudentId));
+
+        // Delete any existing memberships for these students 
+        // to ensure clean assignment
+        foreach (var membership in existingMemberships)
+        {
+            await studentGroupMemberRepository.DeleteAsync(membership);
+        }
+
+        // Use the domain service to calculate optimal group assignments
+        var groupAssignments = studentGroupManager.CalculateOptimalGroupAssignments(students, groups);
+
+        var results = new List<StudentGroupMemberDto>();
+
+        // Create new memberships based on the calculated assignments
+        foreach (var assignment in groupAssignments)
+        {
+            var student = assignment.Key;
+            var group = assignment.Value;
+            
+            // Create the group membership
+            var membershipResult =  studentGroupManager.ValidateStudentGroupAssignmentAsync(
+                student, group, false, false);
+                
+            if (membershipResult.NeedsNewMembership && membershipResult.NewMembership != null)
+            {
+                // Insert the new membership
+                var newMembership = await studentGroupMemberRepository.InsertAsync(membershipResult.NewMembership);
+                results.Add(ObjectMapper.Map<StudentGroupMember, StudentGroupMemberDto>(newMembership));
+            }
+        }
+
+        return results;
+    }
 }

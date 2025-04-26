@@ -17,4 +17,5 @@ public interface IStudentGroupMemberAppService : IApplicationService
 	Task<StudentGroupMemberDto> SetDivisionLeaderAsync(SetDivisionLeaderDto input);
 	Task RemoveDivisionLeaderAsync(Guid groupId);
 	Task<StudentDto> GetDivisionLeaderAsync(Guid groupId);
+	Task<List<StudentGroupMemberDto>> AutoAssignStudentsToGroupsAsync(AutoAssignStudentsToGroupsDto input);
 }

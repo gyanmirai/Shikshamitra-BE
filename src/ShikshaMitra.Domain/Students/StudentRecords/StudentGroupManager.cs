@@ -1,19 +1,19 @@
-﻿using System;
+﻿using ShikshaMitra.Common;
+using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using Volo.Abp.Domain.Repositories;
+using System.Linq;
 using Volo.Abp.Domain.Services;
 
 namespace ShikshaMitra.Students.StudentRecords;
 
 public class StudentGroupManager : DomainService
 {
-	public async Task<StudentGroupMembershipResult> ValidateStudentGroupAssignmentAsync(
+	public StudentGroupMembershipResult ValidateStudentGroupAssignmentAsync(
 		Student student,
 		StudentGroup group,
 		bool isLeader = false,
 		bool isDivisionLeader = false,
-		StudentGroupMember existingMembership = null)
+		StudentGroupMember? existingMembership = null)
 	{
 		var result = new StudentGroupMembershipResult();
 
@@ -68,7 +68,7 @@ public class StudentGroupManager : DomainService
 			{
 				result.NeedsLeaderUpdate = true;
 			}
-			
+
 			if (isDivisionLeader)
 			{
 				result.NeedsDivisionLeaderUpdate = true;
@@ -92,10 +92,10 @@ public class StudentGroupManager : DomainService
 			tenantId
 		);
 
-	public async Task<StudentGroupMember> PrepareLeadershipUpdateAsync(
+	public StudentGroupMember PrepareLeadershipUpdateAsync(
 		Student student,
 		StudentGroup group,
-		StudentGroupMember existingMembership)
+		StudentGroupMember? existingMembership)
 	{
 		if (existingMembership != null)
 		{
@@ -116,11 +116,11 @@ public class StudentGroupManager : DomainService
 			);
 		}
 	}
-	
-	public async Task<StudentGroupMember> PrepareDivisionLeadershipUpdateAsync(
+
+	public StudentGroupMember PrepareDivisionLeadershipUpdateAsync(
 		Student student,
 		StudentGroup group,
-		StudentGroupMember existingMembership)
+		StudentGroupMember? existingMembership)
 	{
 		if (existingMembership != null)
 		{
@@ -141,15 +141,117 @@ public class StudentGroupManager : DomainService
 			);
 		}
 	}
+
+	/// <summary>
+	/// Calculates optimal student group assignments based on division and gender balance
+	/// </summary>
+	/// <param name="students">List of students to assign to groups</param>
+	/// <param name="groups">Available groups for assignment</param>
+	/// <returns>Dictionary mapping each student to their optimal group</returns>
+	public Dictionary<Student, StudentGroup> CalculateOptimalGroupAssignments(
+		List<Student> students,
+		List<StudentGroup> groups)
+	{
+		if (students == null || !students.Any() || groups == null || !groups.Any())
+		{
+			return new Dictionary<Student, StudentGroup>();
+		}
+
+		var groupAssignments = new Dictionary<Student, StudentGroup>();
+
+		// 1. First separate boys and girls
+		var boysStudents = students.Where(s => s.GenderType == GenderType.Male).ToList();
+		var girlsStudents = students.Where(s => s.GenderType == GenderType.Female).ToList();
+
+		// 2. Group students by division
+		var boysByDivision = boysStudents
+			.GroupBy(s => s.DivisionId)
+			.Where(g => g.Key.HasValue) // Skip null division IDs
+			.ToDictionary(g => g.Key!.Value, g => g.ToList());
+
+		var girlsByDivision = girlsStudents
+			.GroupBy(s => s.DivisionId)
+			.Where(g => g.Key.HasValue) // Skip null division IDs
+			.ToDictionary(g => g.Key!.Value, g => g.ToList());
+
+		// 3. Process each division separately
+		var allDivisionIds = new HashSet<Guid>();
+		allDivisionIds.UnionWith(boysByDivision.Keys);
+		allDivisionIds.UnionWith(girlsByDivision.Keys);
+
+		foreach (var divisionId in allDivisionIds)
+		{
+			var hasBoys = boysByDivision.ContainsKey(divisionId) && boysByDivision[divisionId].Any();
+			var hasGirls = girlsByDivision.ContainsKey(divisionId) && girlsByDivision[divisionId].Any();
+
+			// Skip if no students in this division
+			if (!hasBoys && !hasGirls) continue;
+
+			// Get available groups
+			var availableGroups = groups.ToList();
+			if (!availableGroups.Any()) continue;
+
+			// Define how many students per group
+			var groupCount = availableGroups.Count;
+
+			// Process boys
+			if (hasBoys)
+			{
+				var boys = boysByDivision[divisionId];
+				var boysPerGroup = boys.Count / groupCount;
+				var extraBoys = boys.Count % groupCount;
+
+				for (var i = 0; i < groupCount; i++)
+				{
+					var group = availableGroups[i];
+					var currentBoysCount = boysPerGroup + (i < extraBoys ? 1 : 0);
+					var boysForThisGroup = boys.Skip(i * boysPerGroup + Math.Min(i, extraBoys))
+												.Take(currentBoysCount)
+												.ToList();
+
+					// Assign each boy to this group
+					foreach (var student in boysForThisGroup)
+					{
+						groupAssignments[student] = group;
+					}
+				}
+			}
+
+			// Process girls
+			if (hasGirls)
+			{
+				var girls = girlsByDivision[divisionId];
+				var girlsPerGroup = girls.Count / groupCount;
+				var extraGirls = girls.Count % groupCount;
+
+				for (var i = 0; i < groupCount; i++)
+				{
+					var group = availableGroups[i];
+					var currentGirlsCount = girlsPerGroup + (i < extraGirls ? 1 : 0);
+					var girlsForThisGroup = girls.Skip(i * girlsPerGroup + Math.Min(i, extraGirls))
+												 .Take(currentGirlsCount)
+												 .ToList();
+
+					// Assign each girl to this group
+					foreach (var student in girlsForThisGroup)
+					{
+						groupAssignments[student] = group;
+					}
+				}
+			}
+		}
+
+		return groupAssignments;
+	}
 }
 
 public class StudentGroupMembershipResult
 {
 	public bool NeedsNewMembership { get; set; }
-	public StudentGroupMember NewMembership { get; set; }
+	public StudentGroupMember? NewMembership { get; set; }
 
 	public bool UpdateExistingMembership { get; set; }
-	public StudentGroupMember ExistingMembership { get; set; }
+	public StudentGroupMember? ExistingMembership { get; set; }
 
 	public bool NeedsLeaderUpdate { get; set; }
 	public bool NeedsDivisionLeaderUpdate { get; set; }

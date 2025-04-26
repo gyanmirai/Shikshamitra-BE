@@ -16,7 +16,7 @@ public class StudentLeaveDto : FullAuditedEntityDto<Guid>
 	public DateTimeOffset StartDate { get; set; }
 	public DateTimeOffset EndDate { get; set; }
 	public EmployeeLeaveStatusType Status { get; set; }
-	public string Description { get; set; }
+	public string? Description { get; set; }
 	public string? RejectionReason { get; set; }
 
 	// Attachment

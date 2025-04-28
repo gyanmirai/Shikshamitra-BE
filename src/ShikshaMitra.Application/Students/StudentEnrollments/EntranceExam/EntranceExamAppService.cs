@@ -1,7 +1,6 @@
-﻿using AutoMapper.Internal.Mappers;
-using System;
+﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
-using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
@@ -24,26 +23,39 @@ public class EntranceExamAppService(IEntranceExamRepository entranceExamReposito
 
 	public override async Task<EntranceExamDto> UpdateAsync(Guid id, CreateUpdateEntranceExamDto input)
 	{
-		// Retrieve the existing entity.
 		var entity = await entranceExamRepository.GetAsync(id);
 
 		await entranceExamManager.ValidateNoOverlappingExamAsync(input.EntranceExamSlotId, input.ExamDate, id);
 
-		// Map the updated fields from input DTO to the entity.
 		ObjectMapper.Map(input, entity);
 
-		// Update the entity in the repository.
 		await entranceExamRepository.UpdateAsync(entity);
 
-		// Return the updated entity mapped to a DTO.
 		return ObjectMapper.Map<EntranceExam, EntranceExamDto>(entity);
 	}
 
-	// get Student Entrance Exam Dto based on Student Enrollment Id
-	//[RemoteService(false)]
 	public async Task<EntranceExamDto> GetByStudentEnrollmentId(Guid studentEnrollmentId)
 	{
 		var entity = await entranceExamRepository.GetAsync(x => x.StudentEnrollmentId == studentEnrollmentId);
 		return ObjectMapper.Map<EntranceExam, EntranceExamDto>(entity);
+	}
+
+	public async Task<SlotStudentCountDto> GetStudentCountForSlotByDateAsync(Guid slotId, DateTimeOffset examDate)
+	{
+		var queryable = await Repository.GetQueryableAsync();
+
+		var dateOnly = examDate.Date;
+		var query = queryable.Where(e =>
+			e.EntranceExamSlotId == slotId &&
+			e.ExamDate.Date == dateOnly);
+
+		var count = await AsyncExecuter.CountAsync(query);
+
+		return new SlotStudentCountDto
+		{
+			EntranceExamSlotId = slotId,
+			ExamDate = examDate,
+			StudentCount = count
+		};
 	}
 }

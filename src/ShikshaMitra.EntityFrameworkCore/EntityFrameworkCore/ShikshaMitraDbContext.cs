@@ -47,6 +47,7 @@ using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.Common;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -142,7 +143,10 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Student Record
 	DbSet<Student> Students { get; set; }
 	public DbSet<StudentGroup> StudentGroups { get; set; }
-	DbSet<StudentAttendance> StudentAttendances { get; set; }
+	public DbSet<StudentAttendance> StudentAttendances { get; set; }
+	public DbSet<StudentLeave> StudentLeaves { get; set; }
+	public DbSet<StudentGroupMember> StudentGroupMembers { get; set; }
+
 	public DbSet<StudentCertificate> StudentCertificates { get; set; }
 
 	#endregion
@@ -172,6 +176,8 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region AttedenceAndLeaves
 
 	DbSet<EmployeeAttendance> EmployeeAttendances { get; set; }
+
+	public DbSet<EmployeeLeave> EmployeeLeaves { get; set; }
 
 	DbSet<CustomAttendanceRule> CustomAttendanceRules { get; set; }
 

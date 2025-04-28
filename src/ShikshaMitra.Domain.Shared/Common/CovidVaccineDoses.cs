@@ -2,6 +2,7 @@
 
 public enum CovidVaccineDoses
 {
+	None = 0,
 	FirstDose = 1,
 	SecondDose = 2,
 	ThirdDose = 3,

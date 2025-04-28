@@ -79,4 +79,17 @@ public class StudentController(IStudentCertificateAppService studentCertificateA
 
 		return Ok(reportResult);
 	}
+
+	[HttpGet("generate-certificate")]
+	public async Task<IActionResult> GenerateCertificate([FromQuery] Guid studentId, [FromQuery] StudentCertificateType certificateType)
+	{
+		CustomFileResult reportResult = await studentAppService.GenerateCertificate(studentId, certificateType);
+
+		if (reportResult == null || reportResult.FileContent == null)
+		{
+			return NotFound("Report could not be generated.");
+		}
+
+		return Ok(reportResult);
+	}
 }

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
-using Volo.Abp.Domain.Entities.Auditing;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
@@ -16,10 +15,9 @@ public class CreateUpdateEmployeeLeaveDto
 	
 	public DateTimeOffset EndDate { get; set; }
 
-	[Required] public string Description { get; set; }
+	public string? Description { get; set; }
 	
 	// Attachment
 	public byte[]? Attachment { get; set; }
-	
 	
 }

@@ -6,6 +6,7 @@ using ShikshaMitra.Students.StudentRecords.Division;
 using ShikshaMitra.Students.StudentRecords.Standards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.Students.StudentRecords.BulkUpload;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -14,10 +15,15 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentRecords;
 
-public class StudentAppService(StudentManager studentManager, IStudentRepository studentRepository, IEducationBoardRepository educationBoardRepository) :
+public class StudentAppService(
+	StudentManager studentManager,
+	IStudentRepository studentRepository, 
+	IEducationBoardRepository educationBoardRepository,
+	IStudentCsvImportService studentCsvImportService) :
 	CrudAppService<Student, StudentDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateStudentDto>(studentRepository),
 	IStudentAppService
 {
@@ -56,8 +62,68 @@ public class StudentAppService(StudentManager studentManager, IStudentRepository
 		// Map the entities to DTOs
 		var entityDtos = await MapToGetListOutputDtosAsync(entities);
 
+		// Get student group information
+		await EnrichStudentsWithGroupInfoAsync(entityDtos);
+
 		return new PagedResultDto<StudentDto>(totalCount, entityDtos);
 	}
+
+	/// <summary>
+	/// Enriches student DTOs with group membership information
+	/// </summary>
+	private async Task EnrichStudentsWithGroupInfoAsync(List<StudentDto> students)
+	{
+		if (students == null || !students.Any())
+			return;
+
+		// Get all student IDs
+		var studentIds = students.Select(s => s.Id).ToList();
+
+		// Get all student group memberships for these students in a single query
+		var studentGroupMemberships = await LazyServiceProvider
+			.LazyGetRequiredService<IRepository<StudentGroupMember, Guid>>()
+			.GetListAsync(m => studentIds.Contains(m.StudentId));
+
+			// Create a dictionary that maps student IDs to their group membership
+		var membershipByStudentId = studentGroupMemberships.ToDictionary(
+			m => m.StudentId,
+			m => m);
+
+		// Get all group IDs from memberships
+		var groupIds = studentGroupMemberships.Select(m => m.StudentGroupId).Distinct().ToList();
+
+		// Get all student groups in a single query
+		var studentGroups = groupIds.Any() 
+			? await LazyServiceProvider.LazyGetRequiredService<IRepository<StudentGroup, Guid>>()
+				.GetListAsync(g => groupIds.Contains(g.Id)) 
+			: new List<StudentGroup>();
+
+		// Create a dictionary for quick group lookups
+		var groupsDict = studentGroups.ToDictionary(g => g.Id, g => g);
+
+			// Assign group membership to student DTOs
+		foreach (var student in students)
+		{
+			if (membershipByStudentId.TryGetValue(student.Id, out var membership))
+			{
+				student.GroupMembership = new StudentGroupMembershipInfo
+				{
+					GroupId = membership.StudentGroupId,
+					GroupName = groupsDict.ContainsKey(membership.StudentGroupId) 
+						? groupsDict[membership.StudentGroupId].Name 
+						: "Unknown Group",
+					IsLeader = membership.IsLeader,
+					IsDivisionLeader = membership.IsDivisionLeader
+				};
+			}
+			else
+			{
+				// Set null or a default empty object to indicate no group membership
+				student.GroupMembership = null;
+			}
+		}
+	}
+
 	// Get GR No
 
 	public async Task<int> GetGrNoAsync(Guid educationBoardId, Guid educationMediumId, Guid educationMediumStageId)
@@ -185,5 +251,49 @@ public class StudentAppService(StudentManager studentManager, IStudentRepository
 			"application/pdf",
 			fileName
 		);
+	}
+
+	public async Task<StudentDto> UpdateStudentStatusAsync(Guid studentId, StudentStatus newStatus)
+	{
+		var student = await studentRepository.GetAsync(studentId);
+		
+		student.UpdateStatus(newStatus);
+		
+		await studentRepository.UpdateAsync(student);
+		
+		return ObjectMapper.Map<Student, StudentDto>(student);
+	}
+
+	[RemoteService(false)]
+	public async Task<CustomFileResult> GenerateCertificate(Guid studentId, StudentCertificateType certificateType)
+	{
+		Student? student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		if (student == null)
+		{
+			throw new UserFriendlyException($"Student not found: {studentId}");
+		}
+
+		IDocument? certificateDocument = StudentManager.CreateCertificate(student, certificateType);
+		var pdfBytes = await Task.Run(() =>
+		{
+			using MemoryStream ms = new MemoryStream();
+			certificateDocument.GeneratePdf(ms);
+			return ms.ToArray();
+		});
+
+		string fileName = $"StudentCertificate_{studentId}_{certificateType}_{DateTime.UtcNow:yyyyMMddHHmmss}.pdf";
+
+		return new CustomFileResult
+		(
+			pdfBytes,
+			"application/pdf",
+			fileName
+		);
+	}
+
+	[RemoteService(false)]
+	public async Task<StudentCsvUploadResultDto> ImportStudentsFromCsvAsync(Stream fileStream, string fileName)
+	{
+		return await studentCsvImportService.ImportStudentsFromCsvAsync(fileStream);
 	}
 }

@@ -17,7 +17,7 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public DateTimeOffset StartDate { get; private set; }
 	public DateTimeOffset EndDate { get; private set; }
 	public EmployeeLeaveStatusType Status { get; private set; }
-	public string Description { get; private set; }
+	public string? Description { get; private set; }
 	public string? RejectionReason { get; private set; }
 	public Employee? Employee { get; private set; }
 	public LeavePolicy? LeavePolicy { get; private set; } // Navigation property

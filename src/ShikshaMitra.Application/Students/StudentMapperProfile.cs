@@ -1,7 +1,9 @@
 ﻿using AutoMapper;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.Attendance.settings;
 using ShikshaMitra.Students.Attendance.Settings;
+using ShikshaMitra.Students.AttendanceAndLeaves;
 using ShikshaMitra.Students.FollowUps;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.EntranceExam;
@@ -72,5 +74,15 @@ public class StudentMapperProfile : Profile
 		CreateMap<StudentGroup, StudentGroupDto>().ReverseMap();
 		CreateMap<CreateUpdateStudentGroupDto, StudentGroup>();
 
+
+		CreateMap<StudentGroupMember, StudentGroupMemberDto>()
+	.ForMember(dest => dest.StudentName, opt => opt.MapFrom(src =>
+		src.Student != null ? $"{src.Student.FirstName} {src.Student.LastName}" : string.Empty))
+	.ForMember(dest => dest.StudentGroupName, opt => opt.MapFrom(src =>
+		src.StudentGroup != null ? src.StudentGroup.Name : string.Empty));
+
+
+		CreateMap<StudentLeave, StudentLeaveDto>();
+		CreateMap<CreateUpdateStudentLeaveDto, StudentLeave>();
 	}
 }

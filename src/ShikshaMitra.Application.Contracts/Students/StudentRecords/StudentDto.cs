@@ -26,6 +26,10 @@ public class StudentDto : AuditedEntityDto<Guid>
 	public byte[] ProfilePicture { get; set; }
 	#endregion
 
+	#region Group Information
+	public StudentGroupMembershipInfo GroupMembership { get; set; }
+	#endregion
+
 	#region Address Details
 	public string AddressLine1 { get; set; }
 	public string AddressLine2 { get; set; }
@@ -52,6 +56,9 @@ public class StudentDto : AuditedEntityDto<Guid>
 	public int? GrNoRecord { get; set; }
 	public int? TempGrNo { get; set; }
 	public int? RollNo { get; set; }
+
+	public StudentStatus Status { get; set; }
+
 
 	public Guid AcademicYearId { get; set; }
 	public AcademicYearDto AcademicYear { get; set; }
@@ -85,4 +92,12 @@ public class StudentDto : AuditedEntityDto<Guid>
 	public PreviousSchoolDetailsDto PreviousSchoolDetails { get; set; }
 	public ParentBankDetailsDto ParentBankDetails { get; set; }
 	#endregion
+}
+
+public class StudentGroupMembershipInfo
+{
+	public Guid? GroupId { get; set; }
+	public string GroupName { get; set; }
+	public bool IsLeader { get; set; }  // Main leader
+	public bool IsDivisionLeader { get; set; }  // Division leader
 }

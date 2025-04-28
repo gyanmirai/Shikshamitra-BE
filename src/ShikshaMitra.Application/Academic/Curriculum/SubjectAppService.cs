@@ -50,7 +50,6 @@ public class SubjectAppService(ISubjectRepository subjectRepository, SubjectMana
         }
     }
 
-	// create a method to get all subjects for a class, use paged result
 	public async Task<PagedResultDto<SubjectDto>> GetAllAsync(Guid classId, int skipCount = 0, int maxResultCount = 10)
 	{
 		try
@@ -70,6 +69,31 @@ public class SubjectAppService(ISubjectRepository subjectRepository, SubjectMana
 			throw new ApplicationException("An error occurred while retrieving subjects.", ex);
 		}
 	}
+
+    public async Task ChangeSubjectStatusAsync(Guid subjectId, SubjectStatus status)
+    {
+        try
+        {
+            // Fetch the subject by ID  
+            var subject = await subjectRepository.GetAsync(subjectId);
+
+            // Check if the subject already has the desired status  
+            if (subject.Status == status)
+            {
+                return; // No update needed  
+            }
+
+            // Change the status of the subject  
+            subject.ChangeStatus(status);
+
+            // Update the subject in the repository  
+            await subjectRepository.UpdateAsync(subject);
+        }
+        catch (Exception ex)
+        {
+            throw new ApplicationException("An error occurred while changing the subject status.", ex);
+        }
+    }
 
 	private void AddTeacherToSubject(Subject subject, TeacherDto teacherDto)
 	{

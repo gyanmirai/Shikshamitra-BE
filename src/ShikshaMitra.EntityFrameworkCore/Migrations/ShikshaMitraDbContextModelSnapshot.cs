@@ -30,9 +30,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("BoardId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -81,20 +78,17 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("LearningGoals")
                         .HasColumnType("text");
 
-                    b.Property<Guid>("MediumId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("Prerequisites")
                         .HasColumnType("text");
 
-                    b.Property<DateTimeOffset>("ScheduledDate")
+                    b.Property<Guid?>("PrimaryTeacherId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ScheduledDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("StandardId")
                         .HasColumnType("uuid");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
 
                     b.Property<string>("SubjectCode")
                         .IsRequired()
@@ -115,35 +109,13 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("UploadedDocument")
                         .HasColumnType("text");
 
-                    b.Property<Guid>("YearId")
-                        .HasColumnType("uuid");
-
                     b.HasKey("Id");
+
+                    b.HasIndex("PrimaryTeacherId");
 
                     b.HasIndex("StandardId");
 
                     b.ToTable("AppSubjects", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.SubjectTeacher", b =>
-                {
-                    b.Property<Guid>("SubjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TeacherId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("TeacherType")
-                        .HasColumnType("integer");
-
-                    b.HasKey("SubjectId", "TeacherId");
-
-                    b.HasIndex("TeacherId");
-
-                    b.ToTable("AppSubjectTeacher", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Authors.Author", b =>
@@ -320,7 +292,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("FeeHeads");
+                    b.ToTable("FeeHeads", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption.PaymentStatusOption", b =>
@@ -380,7 +352,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PaymentStatusOptions");
+                    b.ToTable("PaymentStatusOptions", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.EmployeeLeave", b =>
@@ -2017,7 +1989,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("InquiryPreferences");
+                    b.ToTable("InquiryPreferences", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.StudentDocumentSetting", b =>
@@ -2084,7 +2056,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("StudentDocumentSettings");
+                    b.ToTable("StudentDocumentSettings", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", b =>
@@ -5716,32 +5688,19 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Subject", b =>
                 {
+                    b.HasOne("ShikshaMitra.HR.Employees.Employee", "PrimaryTeacher")
+                        .WithMany()
+                        .HasForeignKey("PrimaryTeacherId");
+
                     b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
                         .WithMany()
                         .HasForeignKey("StandardId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.Navigation("PrimaryTeacher");
+
                     b.Navigation("Standard");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.SubjectTeacher", b =>
-                {
-                    b.HasOne("ShikshaMitra.Academic.Curriculum.Subject", "Subject")
-                        .WithMany("Teachers")
-                        .HasForeignKey("SubjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.HR.Employees.Employee", "Teacher")
-                        .WithMany()
-                        .HasForeignKey("TeacherId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Subject");
-
-                    b.Navigation("Teacher");
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.EmployeeLeave", b =>
@@ -5803,7 +5762,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("EmployeeId");
 
-                            b1.ToTable("AppEmployees");
+                            b1.ToTable("AppEmployees", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("EmployeeId");
@@ -5826,7 +5785,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("EmployeeId");
 
-                            b1.ToTable("AppEmployees");
+                            b1.ToTable("AppEmployees", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("EmployeeId");
@@ -5867,7 +5826,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("EmployeeId", "__synthesizedOrdinal");
 
-                            b1.ToTable("AppEmployees");
+                            b1.ToTable("AppEmployees", (string)null);
 
                             b1.ToJson("WorkExperiences");
 
@@ -5945,7 +5904,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("PayElementId");
 
-                            b1.ToTable("AppPayElements");
+                            b1.ToTable("AppPayElements", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("PayElementId");
@@ -6068,7 +6027,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("StudentEnrollmentId");
 
-                            b1.ToTable("AppStudentEnrollments");
+                            b1.ToTable("AppStudentEnrollments", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("StudentEnrollmentId");
@@ -6091,7 +6050,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("StudentEnrollmentId");
 
-                            b1.ToTable("AppStudentEnrollments");
+                            b1.ToTable("AppStudentEnrollments", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("StudentEnrollmentId");
@@ -6166,7 +6125,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("StudentId");
 
-                            b1.ToTable("AppStudents");
+                            b1.ToTable("AppStudents", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("StudentId");
@@ -6189,7 +6148,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("StudentId");
 
-                            b1.ToTable("AppStudents");
+                            b1.ToTable("AppStudents", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("StudentId");
@@ -6425,11 +6384,6 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Subject", b =>
-                {
-                    b.Navigation("Teachers");
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>

@@ -12,8 +12,9 @@ public class SubjectTeacherConfiguration : IEntityTypeConfiguration<SubjectTeach
 		builder.ConfigureByConvention();
 		builder.HasKey(st => new { st.SubjectId, st.TeacherId});
 
+		// write the configuration for the SubjectTeacher entity
 		builder.HasOne(st => st.Subject)
-			.WithMany(s => s.SecondaryTeachers)
+			.WithMany(s => s.Teachers)
 			.HasForeignKey(st => st.SubjectId)
 			.OnDelete(DeleteBehavior.Cascade);
 	}

@@ -14,7 +14,7 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20250425054742_v20")]
+    [Migration("20250426084048_v20")]
     partial class v20
     {
         /// <inheritdoc />
@@ -90,14 +90,14 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("Prerequisites")
                         .HasColumnType("text");
 
-                    b.Property<Guid?>("PrimaryTeacherId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("ScheduledDate")
+                    b.Property<DateTimeOffset>("ScheduledDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("StandardId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
 
                     b.Property<string>("SubjectCode")
                         .IsRequired()
@@ -123,8 +123,6 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PrimaryTeacherId");
-
                     b.HasIndex("StandardId");
 
                     b.ToTable("AppSubjects", (string)null);
@@ -140,6 +138,9 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("TeacherType")
+                        .HasColumnType("integer");
 
                     b.HasKey("SubjectId", "TeacherId");
 
@@ -5718,17 +5719,11 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Subject", b =>
                 {
-                    b.HasOne("ShikshaMitra.HR.Employees.Employee", "PrimaryTeacher")
-                        .WithMany()
-                        .HasForeignKey("PrimaryTeacherId");
-
                     b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
                         .WithMany()
                         .HasForeignKey("StandardId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("PrimaryTeacher");
 
                     b.Navigation("Standard");
                 });
@@ -5736,7 +5731,7 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.SubjectTeacher", b =>
                 {
                     b.HasOne("ShikshaMitra.Academic.Curriculum.Subject", "Subject")
-                        .WithMany("SecondaryTeachers")
+                        .WithMany("Teachers")
                         .HasForeignKey("SubjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -6437,7 +6432,7 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Subject", b =>
                 {
-                    b.Navigation("SecondaryTeachers");
+                    b.Navigation("Teachers");
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>

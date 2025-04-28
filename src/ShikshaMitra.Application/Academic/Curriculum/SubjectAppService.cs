@@ -9,31 +9,39 @@ namespace ShikshaMitra.Academic.Curriculum;
 
 public class SubjectAppService(ISubjectRepository subjectRepository, SubjectManager subjectManager, IHttpContextAccessor httpContextAccessor) : ApplicationService, ISubjectAppService
 {
-    public async Task<SubjectDto> CreateAsync(CreateSubjectDto subjectDto)
+    public async Task<SubjectDto> CreateAsync(CreateSubjectDto createSubjectDto)
     {
         try
         {
-			(Guid academicYearId, Guid academicBoardId, Guid academicMediumId) = HeaderValidationExtractionHelper.ValidateAndExtractHeaders(httpContextAccessor.HttpContext.Request.Headers);
+            (Guid academicYearId, Guid academicBoardId, Guid academicMediumId) = HeaderValidationExtractionHelper.ValidateAndExtractHeaders(httpContextAccessor.HttpContext.Request.Headers);
 
+			// Create a new Subject entity using the provided details and extracted headers
 			Subject subject = subjectManager.CreateSubject(
-				academicYearId,
-				academicBoardId,
-				academicMediumId,
-				subjectDto.ClassId,
-                subjectDto.SubjectCode,
-                subjectDto.SubjectName,
-                subjectDto.PrimaryTeacherId,
-                subjectDto.SecondaryTeacherIds ?? [],
-                subjectDto.ScheduledDate,
-                subjectDto.SubjectColor,
-                subjectDto.LearningGoals,
-                subjectDto.Prerequisites,
-                subjectDto.Description
-            );
+			   academicYearId,
+			   academicBoardId,
+			   academicMediumId,
+			   createSubjectDto.ClassId,
+			   createSubjectDto.SubjectCode,
+			   createSubjectDto.SubjectName,
+			   createSubjectDto.ScheduledDate,
+			   createSubjectDto.SubjectColor,
+			   createSubjectDto.LearningGoals,
+			   createSubjectDto.Prerequisites,
+			   createSubjectDto.Description,
+			   createSubjectDto.Status
+			);
 
+            // Add each teacher from the provided list to the subject
+            foreach (var teacherDto in createSubjectDto.Teachers)
+            {
+				AddTeacherToSubject(subject, teacherDto);
+			}
+
+            // Save the newly created subject, along with its associated teachers, to the repository
             await subjectRepository.InsertAsync(subject);
 
-			return ObjectMapper.Map<Subject, SubjectDto>(subject);
+            // Map the Subject entity to a SubjectDto and return it as the result
+            return ObjectMapper.Map<Subject, SubjectDto>(subject);
 		}
         catch (Exception ex)
         {
@@ -61,5 +69,19 @@ public class SubjectAppService(ISubjectRepository subjectRepository, SubjectMana
 		{
 			throw new ApplicationException("An error occurred while retrieving subjects.", ex);
 		}
+	}
+
+	private void AddTeacherToSubject(Subject subject, TeacherDto teacherDto)
+	{
+		// Create a new SubjectTeacher entity for the teacher  
+		var teacher = new SubjectTeacher(
+			GuidGenerator.Create(), // Generate a unique ID for the teacher  
+			subject.Id,             // Associate the teacher with the subject  
+			teacherDto.TeacherId,   // Assign the teacher's ID  
+			teacherDto.TeacherType  // Specify the teacher's type  
+		);
+
+		// Add the teacher to the subject's collection of teachers  
+		subject.AddTeacher(teacher);
 	}
 }

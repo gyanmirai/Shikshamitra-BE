@@ -1,16 +1,15 @@
-﻿using ShikshaMitra.HR.Employees;
-using System;
+﻿using System;
+using System.Collections.Generic;
+using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class SubjectDto
+public class SubjectDto : EntityDto<Guid>
 {
-	public Guid Id { get; set; }
 	public Guid ClassId { get; set; }
 	public string? SubjectCode { get; set; }
 	public string? SubjectName { get; set; }
-	public Guid PrimaryTeacherId { get; set; }
-	public EmployeeDto PrimaryTeacher { get; set; }
+	//public List<TeacherDto> Teachers { get; set; } = new();
 	public DateTimeOffset ScheduledDate { get; set; }
 	public string? SubjectColor { get; set; }
 	public string? LearningGoals { get; set; }

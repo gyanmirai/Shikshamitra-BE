@@ -16,7 +16,7 @@ public class EfCoreSubjectRepository(IDbContextProvider<ShikshaMitraDbContext> d
     {
         DbSet<Subject> subjects = await GetDbSetAsync();
         var query = subjects.Where(s => s.StandardId == classId)
-			.Include(s => s.SecondaryTeachers)
+			.Include(s => s.Teachers)
            .ThenInclude(s => s.Teacher);
 
         var totalCount = await query.CountAsync();

@@ -50,7 +50,7 @@ public class SubjectAppService(ISubjectRepository subjectRepository, SubjectMana
         }
     }
 
-	public async Task<PagedResultDto<SubjectDto>> GetAllAsync(Guid classId, int skipCount = 0, int maxResultCount = 10)
+	public async Task<PagedResultDto<SubjectDto>> GetSubjectsByClassAsync(Guid classId, int skipCount = 0, int maxResultCount = 10)
 	{
 		try
 		{
@@ -70,7 +70,22 @@ public class SubjectAppService(ISubjectRepository subjectRepository, SubjectMana
 		}
 	}
 
-    public async Task ChangeSubjectStatusAsync(Guid subjectId, SubjectStatus status)
+	public async Task DeleteAsync(Guid id)
+	{
+		try
+		{
+			// Fetch the subject by ID  
+			var subject = await subjectRepository.GetAsync(id);
+			// Delete the subject from the repository  
+			await subjectRepository.DeleteAsync(subject);
+		}
+		catch (Exception ex)
+		{
+			throw new ApplicationException("An error occurred while deleting the subject.", ex);
+		}
+	}
+
+	public async Task ChangeSubjectStatusAsync(Guid subjectId, SubjectStatus status)
     {
         try
         {

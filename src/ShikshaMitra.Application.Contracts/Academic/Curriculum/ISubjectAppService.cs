@@ -8,5 +8,9 @@ public interface ISubjectAppService
 {
 	Task<SubjectDto> CreateAsync(CreateSubjectDto createSubjectDto);
 
-	Task<PagedResultDto<SubjectDto>> GetAllAsync(Guid classId, int skipCount, int maxResultCount);
+	Task<PagedResultDto<SubjectDto>> GetSubjectsByClassAsync(Guid classId, int skipCount = 0, int maxResultCount = 10);
+
+	Task DeleteAsync(Guid id);
+
+	Task ChangeSubjectStatusAsync(Guid subjectId, SubjectStatus status);
 }

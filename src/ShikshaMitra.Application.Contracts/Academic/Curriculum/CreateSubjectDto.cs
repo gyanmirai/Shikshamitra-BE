@@ -16,9 +16,3 @@ public class CreateSubjectDto
     public string? Description { get; set; }
 	public SubjectStatus Status { get; set; }
 }
-
-public class TeacherDto
-{
-    public Guid TeacherId { get; set; }
-    public TeacherType TeacherType { get; set; }
-}

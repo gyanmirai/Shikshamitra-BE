@@ -4,10 +4,11 @@ using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class SubjectAppService(ISubjectRepository subjectRepository, SubjectManager subjectManager, IHttpContextAccessor httpContextAccessor) : ApplicationService, ISubjectAppService
+public class SubjectAppService(ISubjectRepository subjectRepository, IRepository<SubjectTeacher> subjectTeacherRepository, SubjectManager subjectManager, IHttpContextAccessor httpContextAccessor) : ApplicationService, ISubjectAppService
 {
     public async Task<SubjectDto> CreateAsync(CreateSubjectDto createSubjectDto)
     {
@@ -70,20 +71,27 @@ public class SubjectAppService(ISubjectRepository subjectRepository, SubjectMana
 		}
 	}
 
-	public async Task DeleteAsync(Guid id)
-	{
-		try
-		{
-			// Fetch the subject by ID  
-			var subject = await subjectRepository.GetAsync(id);
-			// Delete the subject from the repository  
-			await subjectRepository.DeleteAsync(subject);
-		}
-		catch (Exception ex)
-		{
-			throw new ApplicationException("An error occurred while deleting the subject.", ex);
-		}
-	}
+    public async Task DeleteAsync(Guid id)
+    {
+        try
+        {
+            // Fetch the subject by ID  
+            var subject = await subjectRepository.GetAsync(id);
+
+            // Fetch all SubjectTeacher entities associated with the subject ID  
+            var subjectTeachers = await subjectTeacherRepository.GetListAsync(x => x.SubjectId == id);
+
+            // Delete all associated SubjectTeacher entities  
+            await subjectTeacherRepository.DeleteManyAsync(subjectTeachers);
+
+            // Delete the subject from the repository  
+            await subjectRepository.DeleteAsync(subject);
+        }
+        catch (Exception ex)
+        {
+            throw new ApplicationException("An error occurred while deleting the subject.", ex);
+        }
+    }
 
 	public async Task ChangeSubjectStatusAsync(Guid subjectId, SubjectStatus status)
     {

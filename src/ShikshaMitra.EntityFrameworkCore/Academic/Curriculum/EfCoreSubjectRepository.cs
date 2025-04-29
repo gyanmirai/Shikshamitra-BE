@@ -30,4 +30,20 @@ public class EfCoreSubjectRepository(IDbContextProvider<ShikshaMitraDbContext> d
 			items
 		);
 	}
+
+	public async Task<PagedResultDto<SubjectTeacher>> GetTeachersByStandardAsync(Guid standardId, int skipCount, int maxResultCount)
+	{
+		DbSet<SubjectTeacher> subjectTeachers = await GetDbSetAsync();
+		var query = subjectTeachers.Where(s => s.StandardId == standardId)
+			.Include(s => s.Teacher);
+		var totalCount = await query.CountAsync();
+		List<SubjectTeacher> items = await query
+			.Skip(skipCount)
+			.Take(maxResultCount)
+			.ToListAsync() ?? [];
+		return new PagedResultDto<SubjectTeacher>(
+			totalCount,
+			items
+		);
+	}
 }

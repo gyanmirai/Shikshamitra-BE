@@ -70,20 +70,27 @@ public class SubjectAppService(ISubjectRepository subjectRepository, SubjectMana
 		}
 	}
 
-	public async Task DeleteAsync(Guid id)
-	{
-		try
-		{
-			// Fetch the subject by ID  
-			var subject = await subjectRepository.GetAsync(id);
-			// Delete the subject from the repository  
-			await subjectRepository.DeleteAsync(subject);
-		}
-		catch (Exception ex)
-		{
-			throw new ApplicationException("An error occurred while deleting the subject.", ex);
-		}
-	}
+    public async Task DeleteAsync(Guid id)
+    {
+        try
+        {
+            // Fetch the subject by ID  
+            var subject = await subjectRepository.GetAsync(id);
+
+            // Ensure related entities (e.g., Teachers) are removed before deleting the subject  
+            foreach (var teacher in subject.Teachers)
+            {
+                subject.RemoveTeacher(teacher);
+            }
+
+            // Delete the subject from the repository  
+            await subjectRepository.DeleteAsync(subject);
+        }
+        catch (Exception ex)
+        {
+            throw new ApplicationException("An error occurred while deleting the subject.", ex);
+        }
+    }
 
 	public async Task ChangeSubjectStatusAsync(Guid subjectId, SubjectStatus status)
     {
@@ -109,6 +116,26 @@ public class SubjectAppService(ISubjectRepository subjectRepository, SubjectMana
             throw new ApplicationException("An error occurred while changing the subject status.", ex);
         }
     }
+
+	// implement API to retrieve teachers by subject id
+	public async Task<PagedResultDto<TeacherDto>> GetTeachersBySubjectIdAsync(Guid subjectId, int skipCount = 0, int maxResultCount = 10)
+	{
+		try
+		{
+			// Fetch all teachers for a subject  
+			var teachers = await subjectRepository.GetTeachersByStandardAsync(
+				subjectId,
+				skipCount,
+				maxResultCount
+			);
+			// Map paged result to paged result DTO for teachers  
+			return ObjectMapper.Map<PagedResultDto<SubjectTeacher>, PagedResultDto<TeacherDto>>(teachers);
+		}
+		catch (Exception ex)
+		{
+			throw new ApplicationException("An error occurred while retrieving teachers.", ex);
+		}
+	}
 
 	private void AddTeacherToSubject(Subject subject, TeacherDto teacherDto)
 	{

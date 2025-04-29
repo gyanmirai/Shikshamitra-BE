@@ -9,4 +9,7 @@ namespace ShikshaMitra.Academic.Curriculum;
 public interface ISubjectRepository : IRepository<Subject, Guid>
 {
 	public Task<PagedResultDto<Subject>> GetSubjectsByClassAsync(Guid classId, int skipCount, int maxResultCount);
+
+	// write interface to get teachers by standard
+	public Task<PagedResultDto<SubjectTeacher>> GetTeachersByStandardAsync(Guid standardId, int skipCount, int maxResultCount);
 }

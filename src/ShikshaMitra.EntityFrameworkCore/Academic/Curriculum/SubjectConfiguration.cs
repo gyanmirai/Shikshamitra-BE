@@ -12,10 +12,10 @@ public class SubjectConfiguration : IEntityTypeConfiguration<Subject>
 		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();
 
-		// handle cascade delete for teachers associated with subject
-		builder.HasMany(s => s.Teachers)
-			.WithOne(st => st.Subject)
-			.HasForeignKey(st => st.SubjectId)
-			.OnDelete(DeleteBehavior.Cascade);
+		//// handle cascade delete for teachers associated with subject
+		//builder.HasMany(s => s.Teachers)
+		//	.WithOne(st => st.Subject)
+		//	.HasForeignKey(st => st.SubjectId)
+		//	.OnDelete(DeleteBehavior.Cascade);
 	}
 }

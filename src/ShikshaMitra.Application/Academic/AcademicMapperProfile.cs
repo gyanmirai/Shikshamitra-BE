@@ -10,10 +10,12 @@ public class AcademicMapperProfile : Profile
 	{
 		#region Curriculum
 
-		CreateMap<Subject, SubjectDto>()
+		CreateMap<TempSubject, TempSubjectDto>()
 			.ForMember(dest => dest.ClassId, opt => opt.MapFrom(src => src.StandardId));
 
-		CreateMap<PagedResultDto<Subject>, PagedResultDto<SubjectDto>>()
+		CreateMap<Subject, SubjectDto>();
+
+		CreateMap<PagedResultDto<TempSubject>, PagedResultDto<TempSubjectDto>>()
 			.ForMember(dest => dest.Items, opt => opt.MapFrom(src => src.Items));
 		#endregion
 	}

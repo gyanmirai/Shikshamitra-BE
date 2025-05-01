@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class CreateSubjectDto
+public class CreateTempSubjectDto
 {
     public Guid ClassId { get; set; }
     required public string SubjectCode { get; set; }

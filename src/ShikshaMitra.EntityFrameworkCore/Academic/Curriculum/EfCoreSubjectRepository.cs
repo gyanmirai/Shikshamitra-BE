@@ -10,22 +10,22 @@ using Volo.Abp.EntityFrameworkCore;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class EfCoreSubjectRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider) : EfCoreRepository<ShikshaMitraDbContext, Subject, Guid>(dbContextProvider), ISubjectRepository
+public class EfCoreSubjectRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider) : EfCoreRepository<ShikshaMitraDbContext, TempSubject, Guid>(dbContextProvider), ISubjectRepository
 {
-    public async Task<PagedResultDto<Subject>> GetSubjectsByClassAsync(Guid classId, int skipCount, int maxResultCount)
+    public async Task<PagedResultDto<TempSubject>> GetSubjectsByClassAsync(Guid classId, int skipCount, int maxResultCount)
     {
-        DbSet<Subject> subjects = await GetDbSetAsync();
+        DbSet<TempSubject> subjects = await GetDbSetAsync();
         var query = subjects.Where(s => s.StandardId == classId)
 			.Include(s => s.Teachers)
            .ThenInclude(s => s.Teacher);
 
         var totalCount = await query.CountAsync();
-        List<Subject> items = await query
+        List<TempSubject> items = await query
             .Skip(skipCount)
             .Take(maxResultCount)
             .ToListAsync() ?? [];
 
-		return new PagedResultDto<Subject>(
+		return new PagedResultDto<TempSubject>(
 			totalCount,
 			items
 		);

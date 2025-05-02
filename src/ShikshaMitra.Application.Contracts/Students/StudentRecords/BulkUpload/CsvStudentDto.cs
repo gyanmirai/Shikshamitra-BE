@@ -40,16 +40,27 @@ public class CsvStudentDto
     public string? BirthPlace { get; set; }
     public string? Remarks { get; set; }
     
+    // Additional Details
+    public string? Category { get; set; } // Will be converted to Category enum
+    public string? RightToEducation { get; set; } // Will be parsed to bool?
+    public string? BPLStudent { get; set; } // Will be parsed to bool?
+    public string? BPLCardNo { get; set; }
+    public string? PersonWithDisability { get; set; } // Will be parsed to bool?
+    public string? SecondLanguage { get; set; }
+    public string? EmergencyContactNo { get; set; }    public string? SingleParentChild { get; set; } // Will be parsed to bool?
+    public string? SingleChild { get; set; } // Will be parsed to bool?
+    public string? SponsorName { get; set; }
+    
     // Academic Details
     public string? GrNoRecord { get; set; } // Will be parsed to int?
     public string? TempGrNo { get; set; } // Will be parsed to int?
     public string? RollNo { get; set; } // Will be parsed to int?
-    public string? AcademicYearId { get; set; } // Will be parsed to Guid
-    public string? EducationBoardId { get; set; } // Will be parsed to Guid
-    public string? EducationMediumId { get; set; } // Will be parsed to Guid
-    public string? EducationMediumStageId { get; set; } // Will be parsed to Guid?
-    public string? StandardId { get; set; } // Will be parsed to Guid?
-    public string? DivisionId { get; set; } // Will be parsed to Guid?
+    public string? AcademicYearId { get; set; } // Can be name or Guid
+    public string? EducationBoardId { get; set; } // Can be name or Guid
+    public string? EducationMediumId { get; set; } // Can be name or Guid
+    public string? EducationMediumStageId { get; set; } // Can be name or Guid
+    public string? StandardId { get; set; } // Can be name or Guid
+    public string? DivisionId { get; set; } // Can be name or Guid
     public string? Status { get; set; } // Will be converted to StudentStatus enum
     
     // Father Details

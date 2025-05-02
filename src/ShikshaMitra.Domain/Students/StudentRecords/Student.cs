@@ -1,5 +1,10 @@
 ﻿using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
+using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
+using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;

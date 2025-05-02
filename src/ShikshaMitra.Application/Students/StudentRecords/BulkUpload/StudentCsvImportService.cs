@@ -3,6 +3,11 @@ using CsvHelper.Configuration;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
+using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
+using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -11,90 +16,109 @@ using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.MultiTenancy;
+using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
 
 namespace ShikshaMitra.Students.StudentRecords.BulkUpload
 {
 	public class StudentCsvImportService : IStudentCsvImportService, ITransientDependency
-    {
-        private readonly IStudentRepository _studentRepository;
-        private readonly ILogger<StudentCsvImportService> _logger;
-        private readonly IGuidGenerator _guidGenerator;
-        private readonly ICurrentTenant _currentTenant;
+	{
+		private readonly IStudentRepository _studentRepository;
+		private readonly ILogger<StudentCsvImportService> _logger;
+		private readonly IGuidGenerator _guidGenerator;
+		private readonly ICurrentTenant _currentTenant;
+		private readonly IAcademicYearRepository _academicYearRepository;
+		private readonly IEducationBoardRepository _educationBoardRepository;
+		private readonly IEducationMediumRepository _educationMediumRepository;
+		private readonly IEducationMediumStageRepository _educationMediumStageRepository;
+		private readonly IStandardRepository _standardRepository;
+		private readonly IDivisionRepository _divisionRepository;
 
-        public StudentCsvImportService(
-            IStudentRepository studentRepository,
-            ILogger<StudentCsvImportService> logger,
-            IGuidGenerator guidGenerator,
-            ICurrentTenant currentTenant)
-        {
-            _studentRepository = studentRepository;
-            _logger = logger;
-            _guidGenerator = guidGenerator;
-            _currentTenant = currentTenant;
-        }
+		public StudentCsvImportService(
+			IStudentRepository studentRepository,
+			ILogger<StudentCsvImportService> logger,
+			IGuidGenerator guidGenerator,
+			ICurrentTenant currentTenant,
+			IAcademicYearRepository academicYearRepository,
+			IEducationBoardRepository educationBoardRepository,
+			IEducationMediumRepository educationMediumRepository,
+			IEducationMediumStageRepository educationMediumStageRepository,
+			IStandardRepository standardRepository,
+			IDivisionRepository divisionRepository)
+		{
+			_studentRepository = studentRepository;
+			_logger = logger;
+			_guidGenerator = guidGenerator;
+			_currentTenant = currentTenant;
+			_academicYearRepository = academicYearRepository;
+			_educationBoardRepository = educationBoardRepository;
+			_educationMediumRepository = educationMediumRepository;
+			_educationMediumStageRepository = educationMediumStageRepository;
+			_standardRepository = standardRepository;
+			_divisionRepository = divisionRepository;
+		}
+		public async Task<StudentCsvUploadResultDto> ImportStudentsFromCsvAsync(Stream stream)
+		{
+			var result = new StudentCsvUploadResultDto();
+			var rowNumber = 0;
 
-        public async Task<StudentCsvUploadResultDto> ImportStudentsFromCsvAsync(Stream stream)
-        {
-            var result = new StudentCsvUploadResultDto();
-            var rowNumber = 0;
+			try
+			{
+				using var reader = new StreamReader(stream);
+				using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
+				{
+					HeaderValidated = null,
+					MissingFieldFound = null
+				});
 
-            try
-            {
-                using var reader = new StreamReader(stream);
-                using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
-                {
-                    HeaderValidated = null,
-                    MissingFieldFound = null
-                });
+				var records = csv.GetRecords<CsvStudentDto>().ToList();
+				var studentsToAdd = new List<Student>();
 
-                var records = csv.GetRecords<CsvStudentDto>().ToList();
-                var studentsToAdd = new List<Student>();
-                
-                foreach (var record in records)
-                {
-                    rowNumber++;
-                    result.TotalCount++;
+				foreach (var record in records)
+				{
+					rowNumber++;
+					result.TotalCount++;
 
-                    try
-                    {
-                        var student = ConvertCsvRecordToStudent(record);
-                        if (student != null)
-                        {
-                            studentsToAdd.Add(student);
-                            result.SuccessCount++;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error processing CSV record at row {RowNumber}", rowNumber);
-                        result.FailureCount++;
-                        result.ValidationErrors.Add(new StudentCsvValidationError
-                        {
-                            RowNumber = rowNumber,
-                            Identifier = GetRecordIdentifier(record),
-                            ErrorMessage = ex.Message
-                        });
-                    }
-                }
+					try
+					{
+						var student = await ConvertCsvRecordToStudentAsync(record);
+						if (student != null)
+						{
+							studentsToAdd.Add(student);
+							result.SuccessCount++;
+						}
+					}
+					catch (Exception ex)
+					{
+						_logger.LogError(ex, "Error processing CSV record at row {RowNumber}", rowNumber);
+						result.FailureCount++;
+						result.ValidationErrors.Add(new StudentCsvValidationError
+						{
+							RowNumber = rowNumber,
+							Identifier = GetRecordIdentifier(record),
+							ErrorMessage = ex.Message
+						});
+					}
+				}
 
-                // Bulk insert all valid students
-                if (studentsToAdd.Any())
-                {
-                    await _studentRepository.InsertManyAsync(studentsToAdd);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error processing CSV file");
-                throw new UserFriendlyException("Failed to process the CSV file. Please check the file format.");
-            }
+				// Bulk insert all valid students
+				if (studentsToAdd.Any())
+				{
+					await _studentRepository.InsertManyAsync(studentsToAdd);
+				}
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error processing CSV file");
+				throw new UserFriendlyException("Failed to process the CSV file. Please check the file format.");
+			}
 
-            return result;
-        }
-
-		private Student? ConvertCsvRecordToStudent(CsvStudentDto record)
+			return result;
+		}
+		private async Task<Student?> ConvertCsvRecordToStudentAsync(CsvStudentDto record)
 		{
 			// Basic validation
 			if (string.IsNullOrWhiteSpace(record.FirstName) || string.IsNullOrWhiteSpace(record.LastName))
@@ -136,39 +160,28 @@ namespace ShikshaMitra.Students.StudentRecords.BulkUpload
 						}
 						castType = parsedCastType;
 					}
-
 					DateTimeOffset? dob = null;
 					if (!string.IsNullOrWhiteSpace(record.DateOfBirth))
 					{
-						if (!DateTimeOffset.TryParse(record.DateOfBirth, out var parsedDob))
+						if (!DateTimeOffset.TryParseExact(record.DateOfBirth, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDob))
 						{
-							throw new UserFriendlyException($"Invalid date of birth: {record.DateOfBirth}. Expected format: yyyy-MM-dd");
+							throw new UserFriendlyException($"Invalid date of birth: {record.DateOfBirth}. Expected format: dd-MM-yyyy");
 						}
 						dob = parsedDob;
-					}
+					}                   // Parse the academic details
+					var grNoRecord = ParseInt(record.GrNoRecord, "GR number");
+					var tempGrNo = ParseInt(record.TempGrNo, "Temporary GR number");
+					var rollNo = ParseInt(record.RollNo, "Roll number");
 
-					// Parse the academic details
-					int? grNoRecord = ParseInt(record.GrNoRecord, "GR number");
-					int? tempGrNo = ParseInt(record.TempGrNo, "Temporary GR number");
-					int? rollNo = ParseInt(record.RollNo, "Roll number");
+					// Find academic entities by name instead of requiring GUIDs directly
+					var academicYearId = await GetAcademicYearIdAsync(record.AcademicYearId);
+					var educationBoardId = await GetEducationBoardIdAsync(record.EducationBoardId, academicYearId);
+					var educationMediumId = await GetEducationMediumIdAsync(record.EducationMediumId, educationBoardId);
+					var educationMediumStageId = await GetEducationMediumStageIdAsync(record.EducationMediumStageId, educationMediumId);
+					var standardId = await GetStandardIdAsync(record.StandardId, educationMediumStageId);
 
-					Guid academicYearId = ParseGuid(record.AcademicYearId, "Academic year ID");
-					Guid educationBoardId = ParseGuid(record.EducationBoardId, "Education board ID");
-					Guid educationMediumId = ParseGuid(record.EducationMediumId, "Education medium ID");
-
-					Guid? educationMediumStageId = null;
-					if (!string.IsNullOrWhiteSpace(record.EducationMediumStageId))
-					{
-						educationMediumStageId = ParseGuid(record.EducationMediumStageId, "Education medium stage ID");
-					}
-
-					Guid standardId = ParseGuid(record.StandardId, "Standard ID");
-
-					Guid? divisionId = null;
-					if (!string.IsNullOrWhiteSpace(record.DivisionId))
-					{
-						divisionId = ParseGuid(record.DivisionId, "Division ID");
-					}
+					Guid? divisionId = await GetDivisionIdAsync(record.DivisionId, standardId); 
+			
 
 					// Parse status
 					var status = StudentStatus.Active;
@@ -270,18 +283,36 @@ namespace ShikshaMitra.Students.StudentRecords.BulkUpload
 						remarks: record.Remarks
 					);
 
+					// Parse category from string to enum
+					Category? category = null;
+					if (!string.IsNullOrWhiteSpace(record.Category))
+					{
+						if (!Enum.TryParse<Category>(record.Category, true, out var parsedCategory))
+						{
+							throw new UserFriendlyException($"Invalid category: {record.Category}");
+						}
+						category = parsedCategory;
+					}
+
+					// Parse boolean fields
+					var rightToEducation = ParseBool(record.RightToEducation, "Right to education");
+					var bPLStudent = ParseBool(record.BPLStudent, "BPL student");
+					var personWithDisability = ParseBool(record.PersonWithDisability, "Person with disability");
+					var singleParentChild = ParseBool(record.SingleParentChild, "Single parent child");
+					var singleChild = ParseBool(record.SingleChild, "Single child");
+
 					// Create student additional details
 					var studentAdditionalDetails = new StudentAdditionalDetails(
-						category: null, // Not available in CSV
-						rightToEducation: record.FamilyCast?.ToLower().Contains("rte") ?? false,
-						bPLStudent: record.FamilyCast?.ToLower().Contains("bpl") ?? false,
-						bPLCardNo: null, // Not available in CSV
-						personWithDisability: null, // Not available in CSV
-						secondLanguage: null, // Not available in CSV
-						emergencyContactNo: record.GuardianContactNo ?? record.MotherContactNo,
-						singleParentChild: null, // Not available in CSV
-						singleChild: null, // Not available in CSV
-						sponsorName: null  // Not available in CSV
+						category: category,
+						rightToEducation: rightToEducation,
+						bPLStudent: bPLStudent,
+						bPLCardNo: record.BPLCardNo,
+						personWithDisability: personWithDisability,
+						secondLanguage: record.SecondLanguage,
+						emergencyContactNo: record.EmergencyContactNo ?? record.GuardianContactNo ?? record.MotherContactNo,
+						singleParentChild: singleParentChild,
+						singleChild: singleChild,
+						sponsorName: record.SponsorName
 					);
 
 					// Create medical records
@@ -295,9 +326,7 @@ namespace ShikshaMitra.Students.StudentRecords.BulkUpload
 						pulseRate: ParseFloat(record.PulseRate, "Pulse Rate"),
 						childImmunisation: record.ChildImmunisation,
 						immunisationRemarks: record.ImmunisationRemarks
-					);
-
-					// Create the student entity
+					);                  // Create the student entity
 					return new Student(
 						_guidGenerator.Create(),
 						_currentTenant.Id,
@@ -310,7 +339,7 @@ namespace ShikshaMitra.Students.StudentRecords.BulkUpload
 						record.Email,
 						record.ParentContactNumber,
 						record.AlternativeContactNumber,
-						null, // No profile picture from CSV
+						Array.Empty<byte>(), // No profile picture from CSV
 
 						// Address
 						record.AddressLine1,
@@ -354,7 +383,7 @@ namespace ShikshaMitra.Students.StudentRecords.BulkUpload
 						studentMedicalRecords,
 						previousSchoolDetails,
 						parentBankDetails,
-						null // No documents from CSV
+						new List<StudentDocument>() // Empty document list
 					);
 				}
 			}
@@ -362,84 +391,98 @@ namespace ShikshaMitra.Students.StudentRecords.BulkUpload
 			return null;
 		}
 
-        private string GetRecordIdentifier(CsvStudentDto record)
-        {
-            if (!string.IsNullOrWhiteSpace(record.FormNumber))
-                return $"Form #{record.FormNumber}";
-            
-            var name = new[] { record.FirstName, record.MiddleName, record.LastName }
-                .Where(n => !string.IsNullOrWhiteSpace(n))
-                .Select(n => n?.Trim())
-                .ToArray();
-                
-            return string.Join(" ", name);
-        }
+		private string GetRecordIdentifier(CsvStudentDto record)
+		{
+			if (!string.IsNullOrWhiteSpace(record.FormNumber))
+				return $"Form #{record.FormNumber}";
 
-        private StudentContactDetails CreateContactDetails(
-            string? name,
-            string? dob,
-            string? occupation,
-            string? qualification,
-            string? contactNo,
-            string? email,
-            string? aadhaarNo)
-        {
-            DateTimeOffset? parsedDob = null;
-            if (!string.IsNullOrWhiteSpace(dob) && DateTimeOffset.TryParse(dob, out var dobValue))
-            {
-                parsedDob = dobValue;
-            }
+			var name = new[] { record.FirstName, record.MiddleName, record.LastName }
+				.Where(n => !string.IsNullOrWhiteSpace(n))
+				.Select(n => n?.Trim())
+				.ToArray();
 
-            return new StudentContactDetails(
-                name,
-                parsedDob,
-                occupation,
-                qualification,
-                contactNo,
-                email,
-                null, // passOutYear
-                null, // officeNo
-                null, // officeAddress
-                null, // designation
-                null, // organisation
-                aadhaarNo,
-                null, // remarks
-                null  // address
-            );
-        }
+			return string.Join(" ", name);
+		}
 
-        private int? ParseInt(string? value, string fieldName)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return null;
+		private StudentContactDetails CreateContactDetails(
+			string? name,
+			string? dob,
+			string? occupation,
+			string? qualification,
+			string? contactNo,
+			string? email,
+			string? aadhaarNo)
+		{
+			DateTimeOffset? parsedDob = null;
+			if (!string.IsNullOrWhiteSpace(dob) && DateTimeOffset.TryParseExact(dob, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dobValue))
+			{
+				parsedDob = dobValue;
+			}
 
-            if (int.TryParse(value, out var result))
-                return result;
+			return new StudentContactDetails(
+				name,
+				parsedDob,
+				occupation,
+				qualification,
+				contactNo,
+				email,
+				null, // passOutYear
+				null, // officeNo
+				null, // officeAddress
+				null, // designation
+				null, // organisation
+				aadhaarNo,
+				null, // remarks
+				null  // address
+			);
+		}
 
-            throw new UserFriendlyException($"Invalid {fieldName} value: {value}. Expected a number.");
-        }
+		private int? ParseInt(string? value, string fieldName)
+		{
+			if (string.IsNullOrWhiteSpace(value))
+				return null;
 
-        private float? ParseFloat(string? value, string fieldName)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return null;
+			if (int.TryParse(value, out var result))
+				return result;
 
-            if (float.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var result))
-                return result;
+			throw new UserFriendlyException($"Invalid {fieldName} value: {value}. Expected a number.");
+		}
+		private float? ParseFloat(string? value, string fieldName)
+		{
+			if (string.IsNullOrWhiteSpace(value))
+				return null;
 
-            throw new UserFriendlyException($"Invalid {fieldName} value: {value}. Expected a number.");
-        }
+			if (float.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var result))
+				return result;
 
-        private Guid ParseGuid(string? value, string fieldName)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                throw new UserFriendlyException($"{fieldName} is required.");
+			throw new UserFriendlyException($"Invalid {fieldName} value: {value}. Expected a number.");
+		}
 
-            if (Guid.TryParse(value, out var result))
-                return result;
+		private bool? ParseBool(string? value, string fieldName)
+		{
+			if (string.IsNullOrWhiteSpace(value))
+				return null;
 
-            throw new UserFriendlyException($"Invalid {fieldName}: {value}. Expected a valid GUID.");
-        }
+			value = value.Trim().ToLowerInvariant();
+
+			return value switch
+			{
+				"true" or "yes" or "1" or "y" => true,
+				"false" or "no" or "0" or "n" => false,
+				_ => throw new UserFriendlyException($"Invalid {fieldName} value: {value}. Expected a boolean value like 'true'/'false', 'yes'/'no', etc.")
+			};
+		}
+
+		private Guid ParseGuid(string? value, string fieldName)
+		{
+			if (string.IsNullOrWhiteSpace(value))
+				throw new UserFriendlyException($"{fieldName} is required.");
+
+			if (Guid.TryParse(value, out var result))
+				return result;
+
+			throw new UserFriendlyException($"Invalid {fieldName}: {value}. Expected a valid GUID.");
+		}
 
 		private CovidVaccineDoses? ParseCovidVaccinationStatus(string? value)
 		{
@@ -457,6 +500,159 @@ namespace ShikshaMitra.Students.StudentRecords.BulkUpload
 
 				_ => throw new UserFriendlyException($"Invalid Covid vaccination status: {value}. Expected values: None, One, Two, ThreeOrMore, or numeric values 0-3")
 			};
+		}
+
+		// Helper methods to find entities by name or ID
+		private async Task<Guid> GetAcademicYearIdAsync(string? nameOrId)
+		{
+			if (string.IsNullOrWhiteSpace(nameOrId))
+			{
+				throw new UserFriendlyException("Academic year is required.");
+			}
+
+			// Check if it's a valid GUID
+			if (Guid.TryParse(nameOrId, out var parsedId))
+			{
+				var exists = await _academicYearRepository.AnyAsync(ay => ay.Id == parsedId);
+				if (exists)
+				{
+					return parsedId;
+				}
+				throw new UserFriendlyException($"Academic year with ID {nameOrId} not found.");
+			}
+
+			// Look up by name
+			var academicYear = await _academicYearRepository.FirstOrDefaultAsync(ay => ay.Name == nameOrId); if (academicYear is null)
+			{
+				throw new UserFriendlyException($"Academic year '{nameOrId}' not found.");
+			}
+
+			return academicYear.Id;
+		}
+
+		private async Task<Guid> GetEducationBoardIdAsync(string? nameOrId, Guid academicYearId)
+		{
+			if (string.IsNullOrWhiteSpace(nameOrId))
+			{
+				throw new UserFriendlyException("Education board is required.");
+			}
+
+			// Check if it's a valid GUID
+			if (Guid.TryParse(nameOrId, out var parsedId))
+			{
+				var exists = await _educationBoardRepository.AnyAsync(eb => eb.Id == parsedId);
+				if (exists)
+				{
+					return parsedId;
+				}
+				throw new UserFriendlyException($"Education board with ID {nameOrId} not found.");
+			}
+
+			if (!Enum.TryParse<EducationBoardType>(nameOrId, true, out var educationBoardType))
+			{
+				throw new UserFriendlyException($"Invalid education board type: {nameOrId}. Expected values: {string.Join(", ", Enum.GetNames(typeof(EducationBoardType)))}");
+			}
+
+			// Look up by name
+			var educationBoard = await _educationBoardRepository.FirstOrDefaultAsync(eb => eb.Type == educationBoardType && eb.AcademicYearId == academicYearId);
+			return educationBoard is null ? throw new UserFriendlyException($"Education board '{nameOrId}' not found.") : educationBoard.Id;
+		}
+
+		private async Task<Guid> GetEducationMediumIdAsync(string? nameOrId, Guid educationBoardId)
+		{
+			if (string.IsNullOrWhiteSpace(nameOrId))
+			{
+				throw new UserFriendlyException("Education medium is required.");
+			}
+
+			// Check if it's a valid GUID
+			if (Guid.TryParse(nameOrId, out var parsedId))
+			{
+				var exists = await _educationMediumRepository.AnyAsync(em => em.Id == parsedId && em.EducationBoardId == educationBoardId);
+				if (exists)
+				{
+					return parsedId;
+				}
+				throw new UserFriendlyException($"Education medium with ID {nameOrId} not found.");
+			}
+
+			// Look up by name
+			var educationMedium = await _educationMediumRepository.FirstOrDefaultAsync(em => em.Name == nameOrId); if (educationMedium is null)
+			{
+				throw new UserFriendlyException($"Education medium '{nameOrId}' not found.");
+			}
+
+			return educationMedium.Id;
+		}
+
+		private async Task<Guid> GetEducationMediumStageIdAsync(string? nameOrId, Guid educationMediumId)
+		{
+			if (string.IsNullOrWhiteSpace(nameOrId))
+			{
+				throw new UserFriendlyException("Education medium stage is required.");
+			}
+			// Check if it's a valid GUID
+			if (Guid.TryParse(nameOrId, out var parsedId))
+			{
+				var exists = await _educationMediumStageRepository.AnyAsync(ems => ems.Id == parsedId && ems.EducationMediumId == educationMediumId);
+				if (exists)
+				{
+					return parsedId;
+				}
+				throw new UserFriendlyException($"Education medium stage with ID {nameOrId} not found.");
+			}
+			// Look up by name
+			var educationMediumStage = await _educationMediumStageRepository.FirstOrDefaultAsync(ems => ems.Name == nameOrId); if (educationMediumStage is null)
+			{
+				throw new UserFriendlyException($"Education medium stage '{nameOrId}' not found.");
+			}
+			return educationMediumStage.Id;
+		}
+
+		private async Task<Guid> GetStandardIdAsync(string? nameOrId, Guid educationMediumStageId)
+		{
+			if (string.IsNullOrWhiteSpace(nameOrId))
+			{
+				throw new UserFriendlyException("Standard is required.");
+			}
+
+			// Check if it's a valid GUID
+			if (Guid.TryParse(nameOrId, out var parsedId))
+			{
+				var exists = await _standardRepository.AnyAsync(s => s.Id == parsedId);
+				if (exists)
+				{
+					return parsedId;
+				}
+				throw new UserFriendlyException($"Standard with ID {nameOrId} not found.");
+			}
+
+			// Look up by name
+			var standard = await _standardRepository.FirstOrDefaultAsync(s => s.Name == nameOrId && s.EducationMediumStageId == educationMediumStageId);
+			return standard is null ? throw new UserFriendlyException($"Standard '{nameOrId}' not found.") : standard.Id;
+		}
+
+		private async Task<Guid> GetDivisionIdAsync(string? nameOrId, Guid standardId)
+		{
+			if (string.IsNullOrWhiteSpace(nameOrId))
+			{
+				throw new UserFriendlyException("Division is required.");
+			}
+
+			// Check if it's a valid GUID
+			if (Guid.TryParse(nameOrId, out var parsedId))
+			{
+				var exists = await _divisionRepository.AnyAsync(d => d.Id == parsedId);
+				if (exists)
+				{
+					return parsedId;
+				}
+				throw new UserFriendlyException($"Division with ID {nameOrId} not found.");
+			}
+
+			// Look up by name
+			var division = await _divisionRepository.FirstOrDefaultAsync(d => d.Name == nameOrId && d.StandardId == standardId);
+			return division is null ? throw new UserFriendlyException($"Division '{nameOrId}' not found.") : division.Id;
 		}
 	}
 }

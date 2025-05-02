@@ -14,5 +14,5 @@ public interface IStudentAppService : ICrudAppService<StudentDto, Guid, PagedAnd
     Task<CustomFileResult> GenerateCertificate(Guid studentId, StudentCertificateType certificateType);
     Task<CustomFileResult> GenerateReportAsync(StudentReportType reportType);
     Task<StudentDto> UpdateStudentStatusAsync(Guid studentId, StudentStatus newStatus);
-    Task<StudentCsvUploadResultDto> ImportStudentsFromCsvAsync(Stream fileStream, string fileName);
+    Task<StudentCsvUploadResultDto> ImportStudentsFromCsvAsync(byte[] csvContent, string fileName);
 }

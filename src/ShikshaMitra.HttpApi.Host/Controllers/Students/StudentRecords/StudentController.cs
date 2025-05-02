@@ -3,19 +3,23 @@ using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentRecords;
+using ShikshaMitra.Students.StudentRecords.BulkUpload;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.Validation;
 
 namespace ShikshaMitra.Controllers.Students.StudentRecords;
 
 
 [Route("api/students")]
 
-public class StudentController(IStudentCertificateAppService studentCertificateAppService,IStudentAppService studentAppService) : AbpController
+public class StudentController(IStudentCertificateAppService studentCertificateAppService, IStudentAppService studentAppService) : AbpController
 {
 	[HttpPost("upload-certificate")]
 	[Consumes("multipart/form-data")]
@@ -91,5 +95,33 @@ public class StudentController(IStudentCertificateAppService studentCertificateA
 		}
 
 		return Ok(reportResult);
+	}
+	[HttpPost("bulk-upload")]
+	[DisableValidation] // Disable validation for the entire action
+	[Consumes("multipart/form-data")]
+	public async Task<StudentCsvUploadResultDto> UploadStudentsCsv([FromForm] IList<IFormFile>? files)
+	{
+		if (files == null || files.Count == 0)
+		{
+			throw new UserFriendlyException("CSV file is required.");
+		}
+
+		// Use the first file in the list
+		var csv = files[0];
+
+		if (!csv.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+		{
+			throw new UserFriendlyException("Only CSV files are supported.");
+		}
+
+		byte[] csvContent;
+		await using (var memoryStream = new MemoryStream())
+		{
+			await csv.CopyToAsync(memoryStream);
+			csvContent = memoryStream.ToArray();
+		}
+
+		
+		return await studentAppService.ImportStudentsFromCsvAsync(csvContent, csv.FileName);
 	}
 }

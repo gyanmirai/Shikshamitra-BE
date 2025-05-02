@@ -290,10 +290,10 @@ public class StudentAppService(
 			fileName
 		);
 	}
-
 	[RemoteService(false)]
-	public async Task<StudentCsvUploadResultDto> ImportStudentsFromCsvAsync(Stream fileStream, string fileName)
+	public async Task<StudentCsvUploadResultDto> ImportStudentsFromCsvAsync(byte[] csvContent, string fileName)
 	{
-		return await studentCsvImportService.ImportStudentsFromCsvAsync(fileStream);
+		using var memoryStream = new MemoryStream(csvContent);
+		return await studentCsvImportService.ImportStudentsFromCsvAsync(memoryStream);
 	}
 }

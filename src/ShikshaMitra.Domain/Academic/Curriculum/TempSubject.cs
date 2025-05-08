@@ -18,7 +18,6 @@ public class TempSubject : GyanMiraiFullAuditedAggregateRoot<Guid>, IMultiTenant
 	[ForeignKey(nameof(StandardId))]
 	public virtual Standard Standard { get; set; }
 	public string SubjectCode { get; set; }
-	public string SubjectName { get; set; }
 	public ICollection<SubjectTeacher> Teachers { get; set; } = new HashSet<SubjectTeacher>();
 	public DateTimeOffset ScheduledDate { get; set; }
 	public string SubjectColor { get; set; }
@@ -58,7 +57,6 @@ public class TempSubject : GyanMiraiFullAuditedAggregateRoot<Guid>, IMultiTenant
 		MediumId = mediumId;
 		StandardId = standardId;
 		SubjectCode = Check.NotNullOrEmpty(subjectCode, nameof(SubjectCode));
-		SubjectName = Check.NotNullOrEmpty(subjectName, nameof(SubjectName));
 		ScheduledDate = scheduledDate;
 		SubjectColor = subjectColor;
 		LearningGoals = learningGoals;

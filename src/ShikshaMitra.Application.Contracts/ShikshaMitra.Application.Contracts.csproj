@@ -45,4 +45,8 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Academic\Curriculum\Subject\" />
+  </ItemGroup>
+
 </Project>

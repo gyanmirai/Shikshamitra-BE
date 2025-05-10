@@ -32,17 +32,14 @@ namespace ShikshaMitra.Students.StudentRecords.Reports
 				{
 					row.RelativeItem().AlignCenter().Column(c =>
 					{
-						// Check if tenant has a banner
 						if (tenant.ExtraProperties.ContainsKey("Banner") &&
 							tenant.ExtraProperties["Banner"] is byte[] bannerBytes &&
 							bannerBytes.Length > 0)
 						{
-							// Use the banner from tenant properties
 							c.Item().Image(bannerBytes, ImageScaling.FitWidth);
 						}
 						else
 						{
-							// Fallback text if no banner is available
 							c.Item().Text("School Name").FontSize(20).Bold();
 						}
 					});

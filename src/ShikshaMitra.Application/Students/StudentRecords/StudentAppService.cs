@@ -16,6 +16,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using System.Linq.Expressions;
 
 namespace ShikshaMitra.Students.StudentRecords;
 
@@ -229,11 +230,45 @@ public class StudentAppService(
 		}
 	}
 
-	public async Task<CustomFileResult> GenerateReportAsync(StudentReportType reportType)
+	public async Task<CustomFileResult> GenerateReportAsync(StudentReportType reportType, StudentReportDto reportDto)
 	{
-		List<Student>? enrollments = await studentRepository.GetListAsync(includeDetails: true);
+		Expression<Func<Student, bool>> filter = student => true;
 
-		IDocument? reportDocument = StudentManager.CreateStudentReport(enrollments, reportType);
+		// Apply filters if specified in the reportDto
+		if (reportDto.AcademicYearId.HasValue)
+		{
+			filter = filter.And(s => s.AcademicYearId == reportDto.AcademicYearId.Value);
+		}
+
+		if (reportDto.EducationBoardId.HasValue)
+		{
+			filter = filter.And(s => s.EducationBoardId == reportDto.EducationBoardId.Value);
+		}
+
+		if (reportDto.EducationMediumId.HasValue)
+		{
+			filter = filter.And(s => s.EducationMediumId == reportDto.EducationMediumId.Value);
+		}
+
+		if (reportDto.EducaitonMediumStageId.HasValue)
+		{
+			filter = filter.And(s => s.EducationMediumStageId == reportDto.EducaitonMediumStageId.Value);
+		}
+
+		if (reportDto.StandardId.HasValue)
+		{
+			filter = filter.And(s => s.StandardId == reportDto.StandardId.Value);
+		}
+
+		if (reportDto.DivisionId.HasValue)
+		{
+			filter = filter.And(s => s.DivisionId == reportDto.DivisionId.Value);
+		}
+
+		// Get filtered list of students
+		List<Student>? enrollments = await studentRepository.GetListAsync(filter, includeDetails: true);
+
+		IDocument? reportDocument = await studentManager.CreateStudentReport(enrollments, reportType);
 
 		var pdfBytes = await Task.Run(() =>
 		{

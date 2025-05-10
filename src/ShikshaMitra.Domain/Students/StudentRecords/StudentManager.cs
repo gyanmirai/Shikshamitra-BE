@@ -7,10 +7,12 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.TenantManagement;
 
 namespace ShikshaMitra.Students.StudentRecords;
 
-public class StudentManager(IStudentRepository studentRepository) : DomainService
+public class StudentManager(IStudentRepository studentRepository, ICurrentTenant currentTenant, ITenantRepository tenantRepository) : DomainService
 {
 	public async Task ValidateGrNumberAsync(Guid studentId, int grNo)
 	{
@@ -64,12 +66,17 @@ public class StudentManager(IStudentRepository studentRepository) : DomainServic
 		}
 	}
 
-	public static IDocument CreateStudentReport(IReadOnlyList<Student> enrollments, StudentReportType reportType)
+	public async Task<IDocument> CreateStudentReport(IReadOnlyList<Student> enrollments, StudentReportType reportType)
 	{
+		var tenantId = currentTenant.Id;
+		Tenant tenant = await tenantRepository.GetAsync(tenantId.Value) ?? throw new UserFriendlyException($"Tenant not found: {tenantId}");
+
+
+
 		switch (reportType)
 		{
 			case StudentReportType.ContactList:
-				return new StudentContactList(enrollments);
+				return new StudentContactList(enrollments, tenant);
 			case StudentReportType.AdmissionCategoryWiseList:
 				return new AdmissionCategoryWiseList(enrollments);
 			case StudentReportType.AgeWiseList:

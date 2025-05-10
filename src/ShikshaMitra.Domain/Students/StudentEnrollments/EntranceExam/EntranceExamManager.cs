@@ -2,32 +2,41 @@
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Services;
 using Volo.Abp;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
+using System.Linq;
 
 namespace ShikshaMitra.Students.StudentEnrollments.EntranceExam;
 
 public class EntranceExamManager(IEntranceExamRepository entranceExamRepository) : DomainService
 {
-	/// <summary>
-	/// Validates that there is no exam overlapping the specified exam slot and exam date.
-	/// If an overlapping exam is found, a BusinessException is thrown.
-	/// </summary>
-	/// <param name="entranceExamSlotId">The exam slot identifier.</param>
-	/// <param name="examDate">The date of the exam.</param>
-	/// <param name="excludingExamId">
-	/// Optional exam Id to exclude from the overlapping check (useful during updates).
-	/// </param>
-	public async Task ValidateNoOverlappingExamAsync(Guid entranceExamSlotId, DateTimeOffset examDate, Guid? excludingExamId = null)
+	public async Task ValidateSlotCapacityAsync(Guid entranceExamSlotId, DateTimeOffset examDate, Guid? excludingExamId = null)
 	{
-		// The following repository method is assumed to exist.
-		// It should return an EntranceExam (if any) scheduled for the same slot that overlaps with the exam date.
-		// Adjust the query logic in the repository based on your specific overlapping criteria.
-		var existingExam = await entranceExamRepository.FindAsync(exam =>
-				exam.EntranceExamSlotId == entranceExamSlotId &&
-				exam.ExamDate.Date == examDate.Date);
+		// Get the slot to check its maximum capacity
+		var slot = await entranceExamRepository.GetAsync(entranceExamSlotId) ?? throw new BusinessException("The specified entrance exam slot does not exist.");
 
-		if (existingExam != null && (!excludingExamId.HasValue || existingExam.Id != excludingExamId.Value))
+		// Count students already assigned to this slot on this date
+		var queryable = await entranceExamRepository.GetQueryableAsync();
+		var dateOnly = examDate.Date;
+
+		var query = queryable.Where(e =>
+			e.EntranceExamSlotId == entranceExamSlotId &&
+			e.ExamDate.Date == dateOnly);
+
+		// Exclude the current exam if it's an update operation
+		if (excludingExamId.HasValue)
 		{
-			throw new BusinessException("There is an existing exam scheduled for the given slot and date which causes an overlapping conflict.");
+			query = query.Where(e => e.Id != excludingExamId.Value);
+		}
+
+		var currentCount = await AsyncExecuter.CountAsync(query);
+
+		// Check if adding one more student would exceed the slot's capacity
+		if (currentCount >= slot.EntranceExamSlot.StudentLimit)
+		{
+			throw new BusinessException(
+				"The selected exam slot has reached its maximum capacity for the specified date. " +
+				"Please choose another slot or date."
+			);
 		}
 	}
 }

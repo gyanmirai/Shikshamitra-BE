@@ -611,7 +611,6 @@ public class StudentEnrollmentAppService(
 					// find 
 					if (studentEnrollment.StandardId != default)
 					{
-						// Standard
 						educationMediumStageId = (await standardRepository.GetAsync(studentEnrollment.StandardId)).EducationMediumStageId;
 					}
 					Student student = await studentEnrollmentManager.ConvertToStudentAsync(studentEnrollment, educationMediumStageId, studentEnrollment.DivisionId, null);

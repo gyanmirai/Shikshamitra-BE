@@ -71,10 +71,10 @@ public class StudentController(IStudentCertificateAppService studentCertificateA
 		return File(fileResult.FileContent, fileResult.ContentType, fileResult.FileName);
 	}
 
-	[HttpGet("student-report")]
-	public async Task<IActionResult> GenerateReport([FromQuery] StudentReportType reportType)
+	[HttpPost("student-report")]
+	public async Task<IActionResult> GenerateReport([FromQuery] StudentReportType reportType, [FromBody] StudentReportDto reportDto)
 	{
-		CustomFileResult reportResult = await studentAppService.GenerateReportAsync(reportType);
+		CustomFileResult reportResult = await studentAppService.GenerateReportAsync(reportType, reportDto);
 
 		if (reportResult == null || reportResult.FileContent == null)
 		{

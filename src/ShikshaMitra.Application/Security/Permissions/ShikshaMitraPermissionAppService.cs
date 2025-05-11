@@ -178,9 +178,7 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IShikshaMitr
 		{
 			var definitions = group
 				.GetPermissionsWithChildren()
-				.Where(x => x.IsEnabled)
-				.Where(x => !x.Providers.Any() || x.Providers.Contains(providerName))
-				.Where(x => x.MultiTenancySide.HasFlag(multiTenancySide))
+				.Where(x => x.IsEnabled && (!x.Providers.Any() || x.Providers.Contains(providerName)) && x.MultiTenancySide.HasFlag(multiTenancySide))
 				.ToList();
 
 			allPermissionDefinitions.AddRange(definitions);

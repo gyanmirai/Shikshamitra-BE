@@ -17,8 +17,6 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments;
 
 
 [Route("api/student-enrollment")]
-[Authorize]
-
 public class StudentEnrollmentController(IStudentEnrollmentAppService studentEnrollmentAppService, IFollowUpAppService followUpAppService) : AbpController
 {
 	[HttpPut("{studentEnrollmentId}/documents")]

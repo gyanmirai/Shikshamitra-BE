@@ -1,25 +1,14 @@
 ﻿using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
-using ShikshaMitra.Students.StudentEnrollments;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Volo.Abp.TenantManagement;
 
 namespace ShikshaMitra.Students.StudentRecords.Reports
 {
-	internal class StudentContactList : IDocument
+	internal class StudentContactList(IReadOnlyList<Student> students, Tenant tenant) : IDocument
 	{
-		private readonly IReadOnlyList<Student> _students;
-
-		public StudentContactList(IReadOnlyList<Student> students)
-		{
-			_students = students;
-			
-		}
-
 		public void Compose(IDocumentContainer container)
 		{
 			container.Page(page =>
@@ -34,6 +23,7 @@ namespace ShikshaMitra.Students.StudentRecords.Reports
 			});
 		}
 
+
 		void ComposeHeader(IContainer container)
 		{
 			container.Column(column =>
@@ -42,7 +32,16 @@ namespace ShikshaMitra.Students.StudentRecords.Reports
 				{
 					row.RelativeItem().AlignCenter().Column(c =>
 					{
-						c.Item().Text("Header Parth");
+						if (tenant.ExtraProperties.ContainsKey("Banner") &&
+							tenant.ExtraProperties["Banner"] is byte[] bannerBytes &&
+							bannerBytes.Length > 0)
+						{
+							c.Item().Image(bannerBytes, ImageScaling.FitWidth);
+						}
+						else
+						{
+							c.Item().Text("School Name").FontSize(20).Bold();
+						}
 					});
 				});
 			});
@@ -108,7 +107,7 @@ namespace ShikshaMitra.Students.StudentRecords.Reports
 
 					// Sample data rows
 
-					foreach (var item in _students)
+					foreach (var item in students)
 					{
 						table.Cell().Border(1).Padding(5).Text(item.RollNo);
 						table.Cell().Border(1).Padding(5).Text(item.GrNoRecord);
@@ -117,7 +116,7 @@ namespace ShikshaMitra.Students.StudentRecords.Reports
 						table.Cell().Border(1).Padding(5).Text(item.AlternativeContactNumber).FontSize(12);
 					}
 
-					
+
 
 					//table.Cell().Border(1).Padding(5).Text("02");
 					//table.Cell().Border(1).Padding(5).Text("1235");

@@ -12,25 +12,20 @@ public class EntranceExamAppService(IEntranceExamRepository entranceExamReposito
 {
 	public override async Task<EntranceExamDto> CreateAsync(CreateUpdateEntranceExamDto input)
 	{
-		await entranceExamManager.ValidateNoOverlappingExamAsync(input.EntranceExamSlotId, input.ExamDate);
+		await entranceExamManager.ValidateSlotCapacityAsync(input.EntranceExamSlotId, input.ExamDate);
 
 		var entity = ObjectMapper.Map<CreateUpdateEntranceExamDto, EntranceExam>(input);
-
 		await entranceExamRepository.InsertAsync(entity);
-
 		return ObjectMapper.Map<EntranceExam, EntranceExamDto>(entity);
 	}
 
 	public override async Task<EntranceExamDto> UpdateAsync(Guid id, CreateUpdateEntranceExamDto input)
 	{
 		var entity = await entranceExamRepository.GetAsync(id);
-
-		await entranceExamManager.ValidateNoOverlappingExamAsync(input.EntranceExamSlotId, input.ExamDate, id);
+		await entranceExamManager.ValidateSlotCapacityAsync(input.EntranceExamSlotId, input.ExamDate, id);
 
 		ObjectMapper.Map(input, entity);
-
 		await entranceExamRepository.UpdateAsync(entity);
-
 		return ObjectMapper.Map<EntranceExam, EntranceExamDto>(entity);
 	}
 

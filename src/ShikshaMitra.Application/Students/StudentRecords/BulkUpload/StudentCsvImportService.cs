@@ -619,11 +619,7 @@ public class StudentCsvImportService(
 		if (Guid.TryParse(nameOrId, out var parsedId))
 		{
 			var exists = await divisionRepository.AnyAsync(d => d.Id == parsedId);
-			if (exists)
-			{
-				return parsedId;
-			}
-			throw new UserFriendlyException($"Division with ID {nameOrId} not found.");
+			return exists ? parsedId : throw new UserFriendlyException($"Division with ID {nameOrId} not found.");
 		}
 
 		// Look up by name

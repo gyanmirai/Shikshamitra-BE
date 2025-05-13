@@ -8,33 +8,51 @@ namespace ShikshaMitra.Academic.Syllabus;
 /// </summary>
 public class ChapterProgress : FullAuditedEntity<Guid>
 {
-	/// <summary>
-	/// Gets or sets the ID of the chapter being tracked.
-	/// </summary>
-	public Guid ChapterId { get; set; }
+    #region Properties
 
-	/// <summary>
-	/// Gets or sets the ID of the division (e.g., A, B, C).
-	/// </summary>
-	public Guid DivisionId { get; set; }
+    /// <summary>
+    /// Gets or sets the ID of the chapter being tracked.
+    /// </summary>
+    public Guid ChapterId { get; set; }
 
-	/// <summary>
-	/// Gets or sets the actual start date of the chapter in this division.
-	/// </summary>
-	public DateTime? StartDate { get; set; }
+    /// <summary>
+    /// Gets or sets the ID of the division (e.g., A, B, C).
+    /// </summary>
+    public Guid DivisionId { get; set; }
 
-	/// <summary>
-	/// Gets or sets the actual completion date of the chapter in this division.
-	/// </summary>
-	public DateTime? CompletionDate { get; set; }
+    /// <summary>
+    /// Gets or sets the actual start date of the chapter in this division.
+    /// </summary>
+    public DateTime? StartDate { get; set; }
 
-	/// <summary>
-	/// Gets or sets any additional notes or remarks about the progress.
-	/// </summary>
-	public string? Remarks { get; set; }
+    /// <summary>
+    /// Gets or sets the actual completion date of the chapter in this division.
+    /// </summary>
+    public DateTime? CompletionDate { get; set; }
 
-	/// <summary>
-	/// Navigation property to the chapter.
-	/// </summary>
-	public SubjectChapter Chapter { get; set; }
+    /// <summary>
+    /// Gets or sets any additional notes or remarks about the progress.
+    /// </summary>
+    public string? Remarks { get; set; }
+
+    /// <summary>
+    /// Navigation property to the chapter.
+    /// </summary>
+    public SubjectChapter Chapter { get; set; }
+
+    #endregion
+
+    #region Constructors
+	private ChapterProgress() { } // Required for EF Core
+
+	public ChapterProgress(Guid chapterId, Guid divisionId)
+	{
+		ChapterId = chapterId;
+		DivisionId = divisionId;
+	}
+
+	#endregion
+
+	#region Methods
+	#endregion
 }

@@ -9,7 +9,7 @@ public class SubjectManager(
 	IGuidGenerator guidGenerator
    ) : DomainService
 {
-    public Subject CreateSubject(
+    public StandardSubjectAssignment CreateSubject(
         Guid academicYearId,
         Guid academicBoardId,
         Guid academicMediumId,

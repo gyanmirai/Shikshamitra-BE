@@ -17,7 +17,7 @@ public class SubjectAppService(ISubjectRepository subjectRepository, IRepository
             (Guid academicYearId, Guid academicBoardId, Guid academicMediumId) = HeaderValidationExtractionHelper.ValidateAndExtractHeaders(httpContextAccessor.HttpContext.Request.Headers);
 
 			// Create a new Subject entity using the provided details and extracted headers
-			Subject subject = subjectManager.CreateSubject(
+			StandardSubjectAssignment subject = subjectManager.CreateSubject(
 			   academicYearId,
 			   academicBoardId,
 			   academicMediumId,
@@ -42,7 +42,7 @@ public class SubjectAppService(ISubjectRepository subjectRepository, IRepository
             await subjectRepository.InsertAsync(subject);
 
             // Map the Subject entity to a SubjectDto and return it as the result
-            return ObjectMapper.Map<Subject, SubjectDto>(subject);
+            return ObjectMapper.Map<StandardSubjectAssignment, SubjectDto>(subject);
 		}
         catch (Exception ex)
         {
@@ -63,7 +63,7 @@ public class SubjectAppService(ISubjectRepository subjectRepository, IRepository
 			);
 
 			// map pagedresult to pagedresultdto for subjects
-			return ObjectMapper.Map<PagedResultDto<Subject>, PagedResultDto<SubjectDto>>(subjects);
+			return ObjectMapper.Map<PagedResultDto<StandardSubjectAssignment>, PagedResultDto<SubjectDto>>(subjects);
 		}
 		catch (Exception ex)
 		{
@@ -118,7 +118,7 @@ public class SubjectAppService(ISubjectRepository subjectRepository, IRepository
         }
     }
 
-	private void AddTeacherToSubject(Subject subject, TeacherDto teacherDto)
+	private void AddTeacherToSubject(StandardSubjectAssignment subject, TeacherDto teacherDto)
 	{
 		// Create a new SubjectTeacher entity for the teacher  
 		var teacher = new SubjectTeacher(

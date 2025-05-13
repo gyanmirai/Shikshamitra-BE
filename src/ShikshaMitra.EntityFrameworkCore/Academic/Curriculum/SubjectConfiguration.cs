@@ -4,9 +4,9 @@ using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class SubjectConfiguration : IEntityTypeConfiguration<Subject>
+public class SubjectConfiguration : IEntityTypeConfiguration<StandardSubjectAssignment>
 {
-	public void Configure(EntityTypeBuilder<Subject> builder)
+	public void Configure(EntityTypeBuilder<StandardSubjectAssignment> builder)
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "Subjects", ShikshaMitraConsts.DbSchema);
 		// Apply default configurations based on ABP conventions.

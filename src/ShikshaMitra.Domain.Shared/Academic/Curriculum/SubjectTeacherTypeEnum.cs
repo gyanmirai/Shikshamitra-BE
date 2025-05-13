@@ -1,6 +1,6 @@
 ﻿namespace ShikshaMitra.Academic.Curriculum;
 
-public enum TeacherType
+public enum SubjectTeacherType
 {
     Primary,
     Secondary

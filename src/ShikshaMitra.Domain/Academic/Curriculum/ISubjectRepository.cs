@@ -6,7 +6,7 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public interface ISubjectRepository : IRepository<Subject, Guid>
+public interface ISubjectRepository : IRepository<StandardSubjectAssignment, Guid>
 {
-	public Task<PagedResultDto<Subject>> GetSubjectsByClassAsync(Guid classId, int skipCount, int maxResultCount);
+	public Task<PagedResultDto<StandardSubjectAssignment>> GetSubjectsByClassAsync(Guid classId, int skipCount, int maxResultCount);
 }

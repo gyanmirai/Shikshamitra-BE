@@ -48,6 +48,7 @@ using ShikshaMitra.TenantSettings;
 using ShikshaMitra.Common;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.Academic.ClassTeacher;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -233,6 +234,11 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	public DbSet<StandardSubjectAssignment> Subjects { get; set; }
 	public DbSet<SubjectTeacher> SubjectTeachers { get; set; }
+	#endregion
+
+	#region ClassTeacher
+
+	public DbSet<ClassTeacher> ClassTeachers { get; set; }
 	#endregion
 
 	#endregion

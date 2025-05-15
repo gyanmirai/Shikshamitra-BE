@@ -1,6 +1,10 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
+using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
+using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
@@ -8,11 +12,19 @@ using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.EventAndHolidays;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.Library.Setting.General_Setting;
+using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
+using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
+using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.Attendance.settings;
+using ShikshaMitra.Students.Attendance.Settings;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.EntranceExam;
+using ShikshaMitra.Students.StudentEnrollments.FollowUps;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
+using ShikshaMitra.Students.StudentRecords;
+using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
@@ -25,6 +37,7 @@ using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
 using Volo.Abp.BackgroundJobs.EntityFrameworkCore;
+using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.EntityFrameworkCore;
@@ -37,17 +50,6 @@ using Volo.Abp.PermissionManagement.EntityFrameworkCore;
 using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.TenantManagement;
 using Volo.Abp.TenantManagement.EntityFrameworkCore;
-using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
-using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
-using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
-using ShikshaMitra.Students.StudentEnrollments.FollowUps;
-using ShikshaMitra.Students.Attendance.Settings;
-using ShikshaMitra.Students.StudentRecords;
-using ShikshaMitra.Students.Attendance;
-using ShikshaMitra.TenantSettings;
-using ShikshaMitra.Common;
-using ShikshaMitra.Academic.Curriculum;
-using ShikshaMitra.HR.AttendanceAndLeaves;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -237,6 +239,27 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#endregion
 
+	#region Library
+	#region GeneralSetting
+	public DbSet<BookCategory> BookCategory { get; set; } //here <BookCategory> is the entity class name and BookCategory is the table name
+	#endregion
+	#endregion
+
+	#region Library
+	#region GeneralSetting
+	public DbSet<LibraryTiming> LibraryTiming { get; set; }
+	#endregion
+	#endregion
+
+
+	// Apply BookCategory configuration
+
+	// Optionally, apply all configurations in assembly:
+	// builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
+
+	// Add more entity configurations here as needed
+
+
 	protected override void OnModelCreating(ModelBuilder builder)
 	{
 		base.OnModelCreating(builder);
@@ -259,7 +282,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 		//    b.ToTable(ShikshaMitraConsts.DbTablePrefix + "YourEntities", ShikshaMitraConsts.DbSchema);
 		//    b.ConfigureByConvention(); //auto configure for the base class props
 		//    //...
-		//});
+		//})
 
 
 		builder.Entity<Book>(b =>

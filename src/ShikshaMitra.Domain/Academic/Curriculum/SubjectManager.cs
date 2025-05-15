@@ -23,21 +23,19 @@ public class SubjectManager(
         string? description,
 		SubjectStatus status)
     {
-        return new Subject(
-            guidGenerator.Create(),
-            CurrentTenant.Id,
-            academicYearId,
-            academicBoardId,
-            academicMediumId,
-            classId,
-            subjectCode,
-            subjectName,
-            scheduledDate,
-            subjectColor,
-            learningGoals,
-            prerequisites,
-            description,
-			status
-		);
-    }
+		return new StandardSubjectAssignment(
+	  guidGenerator.Create(),
+	  CurrentTenant.Id,
+	  academicMediumId,
+	  classId,
+	  subjectCode,
+	  subjectName,
+	  scheduledDate,
+	  subjectColor,
+	  learningGoals,
+	  prerequisites,
+	  description,
+	  status
+   );
+	}
 }

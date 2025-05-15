@@ -1,5 +1,4 @@
-﻿using AutoMapper.Internal.Mappers;
-using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
+﻿using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
@@ -7,15 +6,9 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 
-public class LibraryTimingAppService : ApplicationService, ILibraryTimingAppService
+public class LibraryTimingAppService(IRepository<LibraryTiming, Guid> _repository)
+	: ApplicationService, ILibraryTimingAppService
 {
-	private readonly IRepository<LibraryTiming, Guid> _repository;
-
-	public LibraryTimingAppService(IRepository<LibraryTiming, Guid> repository)
-	{
-		_repository = repository;
-	}
-
 	public async Task<List<LibraryTimingDto>> GetListAsync()
 	{
 		var items = await _repository.GetListAsync();

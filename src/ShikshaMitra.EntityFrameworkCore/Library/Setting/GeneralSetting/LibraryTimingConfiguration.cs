@@ -14,7 +14,7 @@ namespace ShikshaMitra.Library.Setting.GeneralSetting
 	{
 		public void Configure(EntityTypeBuilder<LibraryTiming> builder)
 		{
-			builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "LibraryTiming", ShikshaMitraConsts.DbSchema);
+			builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "LibraryTimings", ShikshaMitraConsts.DbSchema);
 
 			builder.ConfigureByConvention();
 

@@ -5,17 +5,13 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ShikshaMitra.Library.Setting.GeneralSetting.BookCategory
+namespace ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
+
+public class CreateUpdateBookCategoryDto
 {
-	public class CreateUpdateBookCategoryDto
-	{
-		[Required]
-		[StringLength(128)]
-		public string Name { get; set; }
+	[Required]
+	[StringLength(128)]
+	public string Name { get; set; }
+	public string Description { get; set; }
 
-
-		[StringLength(512)]
-		public string Description { get; set; }
-
-	}
 }

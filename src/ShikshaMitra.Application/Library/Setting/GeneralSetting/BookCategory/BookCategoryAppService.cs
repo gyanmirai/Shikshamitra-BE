@@ -7,16 +7,9 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
-
-public class BookCategoryAppService : ApplicationService, IBookCategoryAppService
+public class BookCategoryAppService(IRepository<BookCategory, Guid> _bookCategoryRepository)
+	: ApplicationService, IBookCategoryAppService
 {
-	private readonly IRepository<BookCategory, Guid> _bookCategoryRepository;
-
-	public BookCategoryAppService(IRepository<BookCategory, Guid> bookCategoryRepository) // this constructor is used to inject the repository dependency into your service class 
-	{
-		_bookCategoryRepository = bookCategoryRepository;
-	}
-
 	public async Task<BookCategoryDto> CreateAsync(CreateUpdateBookCategoryDto input)
 	{
 		try
@@ -81,8 +74,8 @@ public class BookCategoryAppService : ApplicationService, IBookCategoryAppServic
 
 			var items = await AsyncExecuter.ToListAsync(
 				queryable
-				.Skip(input.SkipCount)
-				.Take(input.MaxResultCount)
+					.Skip(input.SkipCount)
+					.Take(input.MaxResultCount)
 			);
 
 			var dtoList = ObjectMapper.Map<List<BookCategory>, List<BookCategoryDto>>(items);
@@ -93,7 +86,4 @@ public class BookCategoryAppService : ApplicationService, IBookCategoryAppServic
 			throw new ApplicationException("An error occurred while retrieving book categories.", ex);
 		}
 	}
-
 }
-
-

@@ -241,18 +241,13 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region Library
 	#region GeneralSetting
-	public DbSet<BookCategory> BookCategory { get; set; } //here <BookCategory> is the entity class name and BookCategory is the table name
+	public DbSet<LibraryTiming> LibraryTimings { get; set; }
+    public DbSet<BookCategory> BookCategories { get; set; } //here <BookCategory> is the entity class name and BookCategory is the table name
+
 	#endregion
 	#endregion
 
-	#region Library
-	#region GeneralSetting
-	public DbSet<LibraryTiming> LibraryTiming { get; set; }
-	#endregion
-	#endregion
-
-
-	// Apply BookCategory configuration
+// Apply BookCategory configuration
 
 	// Optionally, apply all configurations in assembly:
 	// builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);

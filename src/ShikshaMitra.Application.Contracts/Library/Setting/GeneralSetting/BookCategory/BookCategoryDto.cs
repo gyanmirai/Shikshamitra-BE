@@ -4,11 +4,10 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ShikshaMitra.Library.Setting.GeneralSetting.BookCategory
+namespace ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
+
+public class BookCategoryDto
 {
-	public class BookCategoryDto
-	{
-		public string Name { get; set; }
-		public string Description { get; set; }
-	}
+	public string Name { get; set; }
+	public string Description { get; set; }
 }

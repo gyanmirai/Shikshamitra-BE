@@ -18,7 +18,6 @@ public class ClassTeacherController(IClassTeacherAppService classTeacherAppServi
 		return Ok("Assignments processed successfully.");
 	}
 
-	// create a new endpoint to get all class teachers for a given academic medium
 	[HttpGet("all")]
 	public async Task<IActionResult> GetAllClassTeachers()
 	{

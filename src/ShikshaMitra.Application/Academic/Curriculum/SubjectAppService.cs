@@ -1,134 +1,49 @@
-﻿using Microsoft.AspNetCore.Http;
-using ShikshaMitra.Common.Header;
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
-using Volo.Abp.Application.Dtos;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class SubjectAppService(ISubjectRepository subjectRepository, IRepository<SubjectTeacher> subjectTeacherRepository, SubjectManager subjectManager, IHttpContextAccessor httpContextAccessor) : ApplicationService, ISubjectAppService
+[RemoteService(IsEnabled = false)]
+public class SubjectAppService(IRepository<Subject, Guid> subjectRepository, SubjectManager subjectManager) : ApplicationService, ISubjectAppService
 {
-    public async Task<SubjectDto> CreateAsync(CreateSubjectDto createSubjectDto)
-    {
-        try
-        {
-            (Guid academicYearId, Guid academicBoardId, Guid academicMediumId) = HeaderValidationExtractionHelper.ValidateAndExtractHeaders(httpContextAccessor.HttpContext.Request.Headers);
-
-			// Create a new Subject entity using the provided details and extracted headers
-			StandardSubjectAssignment subject = subjectManager.CreateSubject(
-			   academicYearId,
-			   academicBoardId,
-			   academicMediumId,
-			   createSubjectDto.ClassId,
-			   createSubjectDto.SubjectCode,
-			   createSubjectDto.SubjectName,
-			   createSubjectDto.ScheduledDate,
-			   createSubjectDto.SubjectColor,
-			   createSubjectDto.LearningGoals,
-			   createSubjectDto.Prerequisites,
-			   createSubjectDto.Description,
-			   createSubjectDto.Status
-			);
-
-            // Add each teacher from the provided list to the subject
-            foreach (var teacherDto in createSubjectDto.Teachers)
-            {
-				AddTeacherToSubject(subject, teacherDto);
-			}
-
-            // Save the newly created subject, along with its associated teachers, to the repository
-            await subjectRepository.InsertAsync(subject);
-
-            // Map the Subject entity to a SubjectDto and return it as the result
-            return ObjectMapper.Map<StandardSubjectAssignment, SubjectDto>(subject);
-		}
-        catch (Exception ex)
-        {
-            // Log the exception or handle it as needed
-            throw new ApplicationException("An error occurred while creating the subject.", ex);
-        }
-    }
-
-	public async Task<PagedResultDto<SubjectDto>> GetSubjectsByClassAsync(Guid classId, int skipCount = 0, int maxResultCount = 10)
+	public async Task<SubjectDto> CreateAsync(CreateUpdateSubjectDto createSubjectDto)
 	{
-		try
-		{
-			// fetch all subjects for a class
-			var subjects = await subjectRepository.GetSubjectsByClassAsync(
-				classId,
-				skipCount,
-				maxResultCount
-			);
-
-			// map pagedresult to pagedresultdto for subjects
-			return ObjectMapper.Map<PagedResultDto<StandardSubjectAssignment>, PagedResultDto<SubjectDto>>(subjects);
-		}
-		catch (Exception ex)
-		{
-			throw new ApplicationException("An error occurred while retrieving subjects.", ex);
-		}
-	}
-
-    public async Task DeleteAsync(Guid id)
-    {
-        try
-        {
-            // Fetch the subject by ID  
-            var subject = await subjectRepository.GetAsync(id);
-
-            // Fetch all SubjectTeacher entities associated with the subject ID  
-            var subjectTeachers = await subjectTeacherRepository.GetListAsync(x => x.SubjectId == id);
-
-            // Delete all associated SubjectTeacher entities  
-            await subjectTeacherRepository.DeleteManyAsync(subjectTeachers);
-
-            // Delete the subject from the repository  
-            await subjectRepository.DeleteAsync(subject);
-        }
-        catch (Exception ex)
-        {
-            throw new ApplicationException("An error occurred while deleting the subject.", ex);
-        }
-    }
-
-	public async Task ChangeSubjectStatusAsync(Guid subjectId, SubjectStatus status)
-    {
-        try
-        {
-            // Fetch the subject by ID  
-            var subject = await subjectRepository.GetAsync(subjectId);
-
-            // Check if the subject already has the desired status  
-            if (subject.Status == status)
-            {
-                return; // No update needed  
-            }
-
-            // Change the status of the subject  
-            subject.ChangeStatus(status);
-
-            // Update the subject in the repository  
-            await subjectRepository.UpdateAsync(subject);
-        }
-        catch (Exception ex)
-        {
-            throw new ApplicationException("An error occurred while changing the subject status.", ex);
-        }
-    }
-
-	private void AddTeacherToSubject(StandardSubjectAssignment subject, TeacherDto teacherDto)
-	{
-		// Create a new SubjectTeacher entity for the teacher  
-		var teacher = new SubjectTeacher(
-			GuidGenerator.Create(), // Generate a unique ID for the teacher  
-			subject.Id,             // Associate the teacher with the subject  
-			teacherDto.TeacherId,   // Assign the teacher's ID  
-			teacherDto.TeacherType  // Specify the teacher's type  
+		Subject subject = await subjectManager.CreateSubject(
+			createSubjectDto.Name,
+			createSubjectDto.MediumId,
+			createSubjectDto.Color
 		);
 
-		// Add the teacher to the subject's collection of teachers  
-		subject.AddTeacher(teacher);
+		await subjectRepository.InsertAsync(subject);
+		
+		return ObjectMapper.Map<Subject, SubjectDto>(subject);
+	}
+
+	public async Task DeleteAsync(Guid id)
+	{
+		var subject = await subjectRepository.GetAsync(id);
+		await subjectRepository.DeleteAsync(id);
+	}
+
+	public async Task<List<SubjectDto>> GetListAsync(Guid mediumId)
+	{
+		List<Subject> subjects = await subjectRepository.GetListAsync(m => m.MediumId == mediumId);
+
+		return ObjectMapper.Map<List<Subject>, List<SubjectDto>>(subjects);
+	}
+
+	public async Task<SubjectDto> UpdateAsync(Guid id, CreateUpdateSubjectDto updateSubjectDto)
+	{
+		var subject = await subjectRepository.GetAsync(id);
+
+		await subjectManager.UpdateAsync(subject, updateSubjectDto.Name, updateSubjectDto.MediumId, updateSubjectDto.Color);
+
+		await subjectRepository.UpdateAsync(subject);
+
+		return ObjectMapper.Map<Subject, SubjectDto>(subject);
 	}
 }

@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Curriculum.SubjectAssignment;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Academic;
@@ -10,11 +11,15 @@ public class AcademicMapperProfile : Profile
 	{
 		#region Curriculum
 
-		CreateMap<StandardSubjectAssignment, SubjectDto>()
+		CreateMap<TempSubject, TempSubjectDto>()
 			.ForMember(dest => dest.ClassId, opt => opt.MapFrom(src => src.StandardId));
 
-		CreateMap<PagedResultDto<StandardSubjectAssignment>, PagedResultDto<SubjectDto>>()
+		CreateMap<Subject, SubjectDto>();
+
+		CreateMap<PagedResultDto<TempSubject>, PagedResultDto<TempSubjectDto>>()
 			.ForMember(dest => dest.Items, opt => opt.MapFrom(src => src.Items));
+
+		CreateMap<StandardSubjectAssignment, StandardSubjectAssignmentResponseDto>();
 		#endregion
 	}
 }

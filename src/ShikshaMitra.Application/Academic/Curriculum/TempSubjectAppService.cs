@@ -6,7 +6,7 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class TempSubjectAppService(ISubjectRepository subjectRepository, IRepository<SubjectTeacher> subjectTeacherRepository, TempSubjectManager subjectManager) : ApplicationService, ITempSubjectAppService
+public class TempSubjectAppService(IRepository<TempSubject, Guid> subjectRepository, IRepository<SubjectTeacher> subjectTeacherRepository, TempSubjectManager subjectManager) : ApplicationService, ITempSubjectAppService
 {
     public async Task<TempSubjectDto> CreateAsync(CreateTempSubjectDto createSubjectDto)
     {
@@ -51,32 +51,32 @@ public class TempSubjectAppService(ISubjectRepository subjectRepository, IReposi
         }
     }
 
-	public async Task<PagedResultDto<TempSubjectDto>> GetSubjectsByClassAsync(Guid classId, int skipCount = 0, int maxResultCount = 10)
-	{
-		try
-		{
-			// fetch all subjects for a class
-			var subjects = await subjectRepository.GetSubjectsByClassAsync(
-				classId,
-				skipCount,
-				maxResultCount
-			);
+	//public async Task<PagedResultDto<TempSubjectDto>> GetSubjectsByClassAsync(Guid classId, int skipCount = 0, int maxResultCount = 10)
+	//{
+	//	try
+	//	{
+	//		// fetch all subjects for a class
+	//		var subjects = await subjectRepository.GetSubjectsByClassAsync(
+	//			classId,
+	//			skipCount,
+	//			maxResultCount
+	//		);
 
-			// map pagedresult to pagedresultdto for subjects
-			return ObjectMapper.Map<PagedResultDto<TempSubject>, PagedResultDto<TempSubjectDto>>(subjects);
-		}
-		catch (Exception ex)
-		{
-			throw new ApplicationException("An error occurred while retrieving subjects.", ex);
-		}
-	}
+	//		// map pagedresult to pagedresultdto for subjects
+	//		return ObjectMapper.Map<PagedResultDto<TempSubject>, PagedResultDto<TempSubjectDto>>(subjects);
+	//	}
+	//	catch (Exception ex)
+	//	{
+	//		throw new ApplicationException("An error occurred while retrieving subjects.", ex);
+	//	}
+	//}
 
     public async Task DeleteAsync(Guid id)
     {
         try
         {
             // Fetch the subject by ID  
-            var subject = await subjectRepository.GetAsync(id);
+            var subject = await subjectRepository.FindAsync(id);
 
             // Fetch all SubjectTeacher entities associated with the subject ID  
             var subjectTeachers = await subjectTeacherRepository.GetListAsync(x => x.SubjectId == id);

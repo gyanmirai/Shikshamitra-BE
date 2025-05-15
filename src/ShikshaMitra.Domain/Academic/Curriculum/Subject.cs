@@ -15,7 +15,7 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public string Color { get; set; }
 
     [ForeignKey(nameof(EducationMedium))]
-    public Guid MediumId { get; set; }
+    public Guid AcademicMediumId { get; set; }
 
     public virtual EducationMedium EducationMedium { get; set; }
     #endregion
@@ -30,8 +30,8 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
         Guid id,
         Guid? tenantId,
         string name,
-        Guid mediumId,
-        string color)
+        string color,
+		Guid mediumId)
         : base(id)
     {
         TenantId = tenantId;
@@ -48,14 +48,8 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Name = name;
 	}
 
-	public void SetMedium(Guid mediumId)
-	{
-		MediumId = mediumId;
-	}
+	public void SetMedium(Guid mediumId) => AcademicMediumId = mediumId;
 
-	public void SetColor(string? color)
-	{
-		Color = color;
-	}
+	public void SetColor(string? color) => Color = color;
 	#endregion
 }

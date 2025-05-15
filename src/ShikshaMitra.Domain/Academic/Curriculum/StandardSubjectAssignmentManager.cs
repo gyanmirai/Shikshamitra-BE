@@ -11,6 +11,7 @@ namespace ShikshaMitra.Academic.Curriculum;
 public class StandardSubjectAssignmentManager(IRepository<StandardSubjectAssignment, Guid> assignmentRepo, IGuidGenerator guidGenerator) : DomainService
 {
 	public StandardSubjectAssignment AssignSubject(
+		Guid academicMediumId,
 		Guid subjectId,
 		Guid standardId,
 		string subjectCode,
@@ -20,6 +21,7 @@ public class StandardSubjectAssignmentManager(IRepository<StandardSubjectAssignm
 		SubjectStatus status) => new StandardSubjectAssignment(
 			guidGenerator.Create(),
 			CurrentTenant.Id,
+			academicMediumId,
 			subjectId,
 			standardId,
 			subjectCode,

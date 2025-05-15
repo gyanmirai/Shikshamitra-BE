@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System;
 using Volo.Abp.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Extensions;
 
 namespace ShikshaMitra.Controllers.Academic.Curriculum;
 
@@ -16,7 +17,8 @@ public class StandardSubjectAssignmentController(IStandardSubjectAssignmentAppSe
 	[HttpPost]
 	public async Task<StandardSubjectAssignmentResponseDto> CreateAssignmentAsync([FromBody] CreateStandardSubjectAssignmentDto createAssignmentDto)
 	{
-		return await assignmentAppService.CreateAssignmentAsync(createAssignmentDto);
+		var headers = this.Headers();
+		return await assignmentAppService.CreateAssignmentAsync(createAssignmentDto, headers.EducationMediumId);
 	}
 
 	[HttpPut("{assignmentId}/status")]

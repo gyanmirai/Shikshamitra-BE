@@ -8,7 +8,7 @@ public interface ITempSubjectAppService
 {
 	Task<TempSubjectDto> CreateAsync(CreateTempSubjectDto createSubjectDto);
 
-	Task<PagedResultDto<TempSubjectDto>> GetSubjectsByClassAsync(Guid classId, int skipCount = 0, int maxResultCount = 10);
+	//Task<PagedResultDto<TempSubjectDto>> GetSubjectsByClassAsync(Guid classId, int skipCount = 0, int maxResultCount = 10);
 
 	Task DeleteAsync(Guid id);
 

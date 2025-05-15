@@ -13,6 +13,7 @@ public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiT
 {
 	#region Properties
 	public Guid? TenantId { get; private set; }
+	public Guid AcademicMediumId { get; set; }
 
 	[ForeignKey(nameof(Standard))]
 	public Guid StandardId { get; set; }

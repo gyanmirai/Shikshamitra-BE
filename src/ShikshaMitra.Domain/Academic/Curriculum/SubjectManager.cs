@@ -11,12 +11,12 @@ public class SubjectManager(IGuidGenerator guidGenerator, IRepository<Subject> s
 {
     public async Task<Subject> CreateSubject(
 		   string name,
-           Guid mediumId,
-           string color)
+           string color,
+		   Guid academicMediumId)
     {
         try
         {
-			var existingSubject = await subjectRepository.FirstOrDefaultAsync(s => s.Name == name && s.MediumId == mediumId);
+			var existingSubject = await subjectRepository.FindAsync(s => s.Name == name && s.AcademicMediumId == academicMediumId);
 			if (existingSubject != null)
 			{
 				throw new BusinessException("Subject with the same name already exists for this medium.");
@@ -26,8 +26,8 @@ public class SubjectManager(IGuidGenerator guidGenerator, IRepository<Subject> s
                 guidGenerator.Create(),
                 CurrentTenant.Id,
 				name,
-                mediumId,
-                color);
+                color,
+				academicMediumId);
         }
         catch (Exception ex)
         {
@@ -36,23 +36,16 @@ public class SubjectManager(IGuidGenerator guidGenerator, IRepository<Subject> s
         }
     }
 
-    public async Task UpdateAsync(Subject subject, string name, Guid mediumId, string? color)
+    public async Task UpdateAsync(Subject subject, string name, string? color, Guid academicMediumId)
     {
         try
         {
-            var existingSubject = await subjectRepository.FirstOrDefaultAsync(s =>
+            var existingSubject = await subjectRepository.FindAsync(s =>
                 s.Id != subject.Id &&
-                s.Name.Equals(name, StringComparison.OrdinalIgnoreCase) &&
-                s.MediumId == mediumId
-            );
-
-            if (existingSubject != null)
-            {
-                throw new BusinessException("Subject with the same name already exists for this medium.");
-            }
+                s.AcademicMediumId == academicMediumId
+			);
 
             subject.SetName(name);
-            subject.SetMedium(mediumId);
             subject.SetColor(color);
         }
         catch (BusinessException ex)

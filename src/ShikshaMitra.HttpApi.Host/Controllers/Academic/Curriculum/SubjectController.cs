@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Extensions;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp.AspNetCore.Mvc;
@@ -12,24 +13,26 @@ namespace ShikshaMitra.Controllers.Academic.Curriculum;
 public class SubjectController(ISubjectAppService subjectAppService) : AbpController
 {
 	[HttpGet]
-	[Route("/api/mediums/{mediumId}/subjects")]
-	public async Task<IActionResult> GetAllSubjects(Guid mediumId)
+	[Route("/api/academic-mediums/{academicMediumId}/subjects")]
+	public async Task<IActionResult> GetAllSubjects(Guid academicMediumId)
 	{
-		var subjects = await subjectAppService.GetListAsync(mediumId);
+		var subjects = await subjectAppService.GetListAsync(academicMediumId);
 		return Ok(subjects);
 	}
 
 	[HttpPost]
 	public async Task<IActionResult> CreateSubject([FromBody] CreateUpdateSubjectDto createSubjectDto)
 	{
-		var subject = await subjectAppService.CreateAsync(createSubjectDto);
+		var headers = this.Headers();
+		var subject = await subjectAppService.CreateAsync(createSubjectDto, headers.EducationMediumId);
 		return Ok(subject);
 	}
 
 	[HttpPut("{id}")]
 	public async Task<IActionResult> UpdateSubject(Guid id, [FromBody] CreateUpdateSubjectDto updateSubjectDto)
 	{
-		var subject = await subjectAppService.UpdateAsync(id, updateSubjectDto);
+		var headers = this.Headers();
+		var subject = await subjectAppService.UpdateAsync(id, updateSubjectDto, headers.EducationMediumId);
 		return Ok(subject);
 	}
 

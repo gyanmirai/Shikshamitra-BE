@@ -18,11 +18,12 @@ public class StandardSubjectAssignmentAppService(
 	ILogger<StandardSubjectAssignmentAppService> logger
 ) : ApplicationService, IStandardSubjectAssignmentAppService
 {
-	public async Task<StandardSubjectAssignmentResponseDto> CreateAssignmentAsync(CreateStandardSubjectAssignmentDto createAssignmentDto)
+	public async Task<StandardSubjectAssignmentResponseDto> CreateAssignmentAsync(CreateStandardSubjectAssignmentDto createAssignmentDto, Guid academicMediumId)
 	{
 		try
 		{
 			var assignment = manager.AssignSubject(
+				academicMediumId,
 				createAssignmentDto.SubjectId,
 				createAssignmentDto.StandardId,
 				createAssignmentDto.SubjectCode,

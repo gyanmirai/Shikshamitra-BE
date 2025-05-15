@@ -85,27 +85,3 @@ public class TempSubject : GyanMiraiFullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 	#endregion
 }
-
-public class SubjectTeacher : Entity<Guid>
-{
-	#region Properties
-	public Guid SubjectId { get; private set; }
-	[ForeignKey(nameof(SubjectId))]
-	public virtual TempSubject Subject { get; private set; }
-	public Guid TeacherId { get; private set; }
-	[ForeignKey(nameof(TeacherId))]
-	public virtual Employee Teacher { get; private set; }
-	public TeacherType TeacherType { get; set; }
-	#endregion
-
-	#region Constructors
-	private SubjectTeacher() { }
-
-	public SubjectTeacher(Guid id, Guid subjectId, Guid teacherId, TeacherType teacherType) : base(id)
-	{
-		SubjectId = subjectId;
-		TeacherId = teacherId;
-		TeacherType = teacherType;
-	}
-	#endregion
-}

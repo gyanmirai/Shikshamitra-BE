@@ -1,6 +1,8 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
+using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
+using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 namespace ShikshaMitra;
 
 public class ShikshaMitraApplicationAutoMapperProfile : Profile
@@ -17,5 +19,12 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 
         CreateMap<Author, AuthorDto>();
         CreateMap<Author, AuthorLookupDto>();
-    }
+
+		CreateMap<BookCategory, BookCategoryDto>();
+		CreateMap<CreateUpdateBookCategoryDto, BookCategory>();
+
+		CreateMap<LibraryTiming, LibraryTimingDto>();
+		CreateMap<LibraryTimingDto, LibraryTiming>();
+
+	}
 }

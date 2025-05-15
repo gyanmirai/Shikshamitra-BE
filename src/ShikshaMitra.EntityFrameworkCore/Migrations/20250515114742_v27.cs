@@ -6,33 +6,19 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace ShikshaMitra.Migrations
 {
     /// <inheritdoc />
-    public partial class v26 : Migration
+    public partial class v27 : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "Id",
-                table: "AppSubjectTeacher");
-
-            migrationBuilder.DropColumn(
-                name: "BoardId",
-                table: "AppSubjects");
-
-            migrationBuilder.DropColumn(
-                name: "MediumId",
-                table: "AppSubjects");
-
-            migrationBuilder.RenameColumn(
-                name: "YearId",
-                table: "AppSubjects",
-                newName: "AcademicMediumId");
-
-            migrationBuilder.AddColumn<Guid>(
-                name: "TenantId",
-                table: "AppSubjectTeacher",
-                type: "uuid",
-                nullable: true);
+            migrationBuilder.AlterColumn<string>(
+                name: "Description",
+                table: "AppBookCategories",
+                type: "text",
+                nullable: false,
+                oldClrType: typeof(string),
+                oldType: "character varying(512)",
+                oldMaxLength: 512);
 
             migrationBuilder.CreateTable(
                 name: "AppClassTeachers",
@@ -66,35 +52,14 @@ namespace ShikshaMitra.Migrations
             migrationBuilder.DropTable(
                 name: "AppClassTeachers");
 
-            migrationBuilder.DropColumn(
-                name: "TenantId",
-                table: "AppSubjectTeacher");
-
-            migrationBuilder.RenameColumn(
-                name: "AcademicMediumId",
-                table: "AppSubjects",
-                newName: "YearId");
-
-            migrationBuilder.AddColumn<Guid>(
-                name: "Id",
-                table: "AppSubjectTeacher",
-                type: "uuid",
+            migrationBuilder.AlterColumn<string>(
+                name: "Description",
+                table: "AppBookCategories",
+                type: "character varying(512)",
+                maxLength: 512,
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
-
-            migrationBuilder.AddColumn<Guid>(
-                name: "BoardId",
-                table: "AppSubjects",
-                type: "uuid",
-                nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
-
-            migrationBuilder.AddColumn<Guid>(
-                name: "MediumId",
-                table: "AppSubjects",
-                type: "uuid",
-                nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                oldClrType: typeof(string),
+                oldType: "text");
         }
     }
 }

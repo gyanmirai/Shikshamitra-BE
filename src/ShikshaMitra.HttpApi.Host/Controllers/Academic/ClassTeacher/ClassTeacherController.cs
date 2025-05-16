@@ -10,7 +10,7 @@ namespace ShikshaMitra.Controllers.Academic.ClassTeacher;
 [Route("api/class-teacher")]
 public class ClassTeacherController(IClassTeacherAppService classTeacherAppService) : AbpController
 {
-	[HttpPost("assign")]
+	[HttpPut("assign")]
 	public async Task<IActionResult> AssignOrUpdateTeachers([FromBody] List<AssignClassTeacherDto> input)
 	{
 		var headers = this.Headers();

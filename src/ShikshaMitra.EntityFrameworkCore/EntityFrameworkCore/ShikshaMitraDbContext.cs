@@ -50,6 +50,18 @@ using Volo.Abp.PermissionManagement.EntityFrameworkCore;
 using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.TenantManagement;
 using Volo.Abp.TenantManagement.EntityFrameworkCore;
+using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
+using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
+using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
+using ShikshaMitra.Students.StudentEnrollments.FollowUps;
+using ShikshaMitra.Students.Attendance.Settings;
+using ShikshaMitra.Students.StudentRecords;
+using ShikshaMitra.Students.Attendance;
+using ShikshaMitra.TenantSettings;
+using ShikshaMitra.Common;
+using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.Academic.ClassTeacher;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -243,6 +255,11 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region GeneralSetting
 	public DbSet<LibraryTiming> LibraryTimings { get; set; }
     public DbSet<BookCategory> BookCategories { get; set; } //here <BookCategory> is the entity class name and BookCategory is the table name
+
+	#region ClassTeacher
+
+	public DbSet<ClassTeacher> ClassTeachers { get; set; }
+	#endregion
 
 	#endregion
 	#endregion

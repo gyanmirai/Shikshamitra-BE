@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.Controllers.Academic.ClassTeacher;
+namespace ShikshaMitra.Controllers.Academic;
 
 [Route("api/class-teacher")]
 public class ClassTeacherController(IClassTeacherAppService classTeacherAppService) : AbpController

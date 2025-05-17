@@ -11,7 +11,7 @@ using Volo.Abp.Guids;
 namespace ShikshaMitra.Academic.ClassTeacher;
 
 [RemoteService(false)]
-public class ClassTeacherAppService(IRepository<ClassTeacher, Guid> assignmentRepo, IRepository<Employee, Guid> employeeRepo, IGuidGenerator guidGenerator) : ApplicationService, IClassTeacherAppService
+public class ClassTeacherAppService(IRepository<ClassTeacher, Guid> assignmentRepository, IRepository<Employee, Guid> employeeRepository, IGuidGenerator guidGenerator) : ApplicationService, IClassTeacherAppService
 {
     public async Task AssignOrUpdateTeachersAsync(List<AssignClassTeacherDto> assignments, Guid academicMediumId)
     {
@@ -19,21 +19,21 @@ public class ClassTeacherAppService(IRepository<ClassTeacher, Guid> assignmentRe
         {
             try
             {
-                Employee employee = await employeeRepo.FindAsync(item.TeacherId) ?? throw new Exception($"Teacher with ID {item.TeacherId} does not exist or is not of type 'Teacher'.");
+                Employee employee = await employeeRepository.FindAsync(item.TeacherId) ?? throw new Exception($"Teacher with ID {item.TeacherId} does not exist or is not of type 'Teacher'.");
 
-                var assignment = await assignmentRepo.FindAsync(x =>
+                var assignment = await assignmentRepository.FindAsync(x =>
                    x.StandardId == item.ClassId &&
                    x.DivisionId == item.DivisionId);
 
                 if (assignment == null)
                 {
                     assignment = new ClassTeacher(guidGenerator.Create(), CurrentTenant.Id, item.ClassId, item.DivisionId, item.TeacherId, academicMediumId);
-                    await assignmentRepo.InsertAsync(assignment);
+                    await assignmentRepository.InsertAsync(assignment);
                 }
                 else
                 {
                     assignment.TeacherId = item.TeacherId;
-                    await assignmentRepo.UpdateAsync(assignment);
+                    await assignmentRepository.UpdateAsync(assignment);
                 }
             }
             catch (Exception)
@@ -47,7 +47,7 @@ public class ClassTeacherAppService(IRepository<ClassTeacher, Guid> assignmentRe
     {
         try
         {
-            var classTeachers = await assignmentRepo.GetListAsync(x => x.AcademicMediumId == educationMediumId);
+            var classTeachers = await assignmentRepository.GetListAsync(x => x.AcademicMediumId == educationMediumId);
 
             var result = new List<ClassTeacherDto>();
 

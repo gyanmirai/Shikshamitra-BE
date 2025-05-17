@@ -105,7 +105,7 @@ public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiT
 		AcademicMediumId = academicMediumId;
 		StandardId = standardId;
 		SubjectId = subjectId;
-		SubjectCode = Check.NotNullOrWhiteSpace(subjectCode, nameof(subjectCode));
+		SubjectCode = subjectCode;
 		Status = status;
 
 		LearningGoals = learningGoals;
@@ -126,18 +126,27 @@ public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiT
 
 	public void SetPrimaryTeacher(Guid teacherId)
 	{
-		//Teachers.RemoveWhere(t => t.IsPrimary);
-		//Teachers.Add(new SubjectTeacher(Id, teacherId, true));
+		// find the current primary teacher
+		var currentPrimary = Teachers.FirstOrDefault(t => t.TeacherType == SubjectTeacherType.Primary);
+		if (currentPrimary != null)
+		{
+			Teachers.Remove(currentPrimary);
+		}
+		Teachers.Add(new SubjectTeacher(Id, SubjectId, teacherId, SubjectTeacherType.Primary));
 	}
 
 	public void SetSecondaryTeachers(IEnumerable<Guid> teacherIds)
 	{
-		//var currentSecondary = Teachers.Where(t => !t.IsPrimary).ToList();
-		//foreach (var t in currentSecondary)
-		//	Teachers.Remove(t);
-
-		//foreach (var id in teacherIds)
-		//	Teachers.Add(new SubjectTeacher(Id, id, false));
+		// find the current secondary teachers
+		var currentSecondary = Teachers.Where(t => t.TeacherType == SubjectTeacherType.Secondary).ToList();
+		foreach (var teacher in currentSecondary)
+		{
+			Teachers.Remove(teacher);
+		}
+		foreach (var teacherId in teacherIds)
+		{
+			Teachers.Add(new SubjectTeacher(Id, SubjectId, teacherId, SubjectTeacherType.Secondary));
+		}
 	}
 	#endregion
 }

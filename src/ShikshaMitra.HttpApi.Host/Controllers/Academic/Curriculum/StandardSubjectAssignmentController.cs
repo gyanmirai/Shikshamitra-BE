@@ -15,10 +15,11 @@ namespace ShikshaMitra.Controllers.Academic.Curriculum;
 public class StandardSubjectAssignmentController(IStandardSubjectAssignmentAppService assignmentAppService) : AbpController
 {
 	[HttpPost]
-	public async Task<StandardSubjectAssignmentResponseDto> CreateAssignmentAsync([FromBody] CreateStandardSubjectAssignmentDto createAssignmentDto)
+	public async Task<IActionResult> CreateAssignmentAsync([FromBody] CreateStandardSubjectAssignmentDto createAssignmentDto)
 	{
 		var headers = this.Headers();
-		return await assignmentAppService.CreateAssignmentAsync(createAssignmentDto, headers.EducationMediumId);
+		var subject = await assignmentAppService.CreateAssignmentAsync(createAssignmentDto, headers.EducationMediumId);
+		return Ok(subject);
 	}
 
 	[HttpPut("{assignmentId}/status")]
@@ -28,9 +29,10 @@ public class StandardSubjectAssignmentController(IStandardSubjectAssignmentAppSe
 	}
 
 	[HttpGet("{standardId}")]
-	public async Task<List<StandardSubjectAssignmentResponseDto>> GetListAsync(Guid standardId)
+	public async Task<IActionResult> GetListAsync(Guid standardId)
 	{
-		return await assignmentAppService.GetListAsync(standardId);
+		var subjects = await assignmentAppService.GetListAsync(standardId);
+		return Ok(subjects);
 	}
 
 	[HttpPut("{assignmentId}/teachers")]

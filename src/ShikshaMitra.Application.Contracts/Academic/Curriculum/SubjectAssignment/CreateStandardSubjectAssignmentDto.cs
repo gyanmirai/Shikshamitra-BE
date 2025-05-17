@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace ShikshaMitra.Academic.Curriculum.SubjectAssignment;
 
@@ -7,6 +8,8 @@ public class CreateStandardSubjectAssignmentDto
 	public Guid StandardId { get; set; }
 	public Guid SubjectId { get; set; }
 	public string SubjectCode { get; set; } = default!;
+	public Guid? PrimaryTeacherId { get; set; }
+	public List<Guid>? SecondaryTeacherIds { get; set; }
 	public string? LearningGoals { get; set; }
 	public string? Prerequisites { get; set; }
 	public string? Description { get; set; }

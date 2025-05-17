@@ -37,10 +37,4 @@ public class StandardSubjectAssignmentManager(IRepository<StandardSubjectAssignm
 		assignment.SetPrimaryTeacher(primaryId);
 		assignment.SetSecondaryTeachers(secondaryIds);
 	}
-
-	public async Task ChangeStatusAsync(Guid assignmentId, SubjectStatus status)
-	{
-		var assignment = await assignmentRepo.GetAsync(assignmentId);
-		assignment.ChangeStatus(status);
-	}
 }

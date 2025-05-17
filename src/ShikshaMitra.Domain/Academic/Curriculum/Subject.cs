@@ -18,15 +18,15 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public Guid AcademicMediumId { get; set; }
 
     public virtual EducationMedium EducationMedium { get; set; }
-    #endregion
+	#endregion
 
-    #region Constructors  
-    private Subject()
-    {
-        /* This constructor is for deserialization / ORM purpose */
-    }
+	#region Constructors  
+	private Subject()
+	{
+		/* This constructor is for deserialization / ORM purpose */
+	}
 
-    public Subject(
+	public Subject(
         Guid id,
         Guid? tenantId,
         string name,

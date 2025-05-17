@@ -42,4 +42,6 @@ public class SubjectController(ISubjectAppService subjectAppService) : AbpContro
 		await subjectAppService.DeleteAsync(id);
 		return NoContent();
 	}
+
+
 }

@@ -27,7 +27,6 @@
   <ItemGroup>
     <ProjectReference Include="..\ShikshaMitra.Application\ShikshaMitra.Application.csproj" />
     <ProjectReference Include="..\ShikshaMitra.EntityFrameworkCore\ShikshaMitra.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\ShikshaMitra.HttpApi\ShikshaMitra.HttpApi.csproj" />
   </ItemGroup>
 
   <ItemGroup>

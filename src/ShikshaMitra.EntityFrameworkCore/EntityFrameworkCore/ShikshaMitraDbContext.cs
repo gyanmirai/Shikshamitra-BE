@@ -1,7 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Academic.Curriculum;
-using ShikshaMitra.Authors;
-using ShikshaMitra.Books;
 using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
 using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
 using ShikshaMitra.HR.AttendanceAndLeaves;
@@ -12,7 +11,6 @@ using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.EventAndHolidays;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
-using ShikshaMitra.Library.Setting.General_Setting;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using ShikshaMitra.Students.Attendance;
@@ -41,7 +39,6 @@ using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.EntityFrameworkCore;
-using Volo.Abp.EntityFrameworkCore.Modeling;
 using Volo.Abp.FeatureManagement.EntityFrameworkCore;
 using Volo.Abp.Identity;
 using Volo.Abp.Identity.EntityFrameworkCore;
@@ -50,18 +47,6 @@ using Volo.Abp.PermissionManagement.EntityFrameworkCore;
 using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.TenantManagement;
 using Volo.Abp.TenantManagement.EntityFrameworkCore;
-using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
-using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
-using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
-using ShikshaMitra.Students.StudentEnrollments.FollowUps;
-using ShikshaMitra.Students.Attendance.Settings;
-using ShikshaMitra.Students.StudentRecords;
-using ShikshaMitra.Students.Attendance;
-using ShikshaMitra.TenantSettings;
-using ShikshaMitra.Common;
-using ShikshaMitra.Academic.Curriculum;
-using ShikshaMitra.HR.AttendanceAndLeaves;
-using ShikshaMitra.Academic.ClassTeacher;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -105,13 +90,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<TenantConnectionString> TenantConnectionStrings { get; set; }
 
 	#endregion
-
-	#endregion
-
-	#region BookStore
-
-	public DbSet<Book> Books { get; set; }
-	public DbSet<Author> Authors { get; set; }
 
 	#endregion
 
@@ -286,43 +264,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 		builder.ConfigureOpenIddict();
 		builder.ConfigureFeatureManagement();
 		builder.ConfigureTenantManagement();
-
-		/* Configure your own tables/entities inside here */
-
-		//builder.Entity<YourEntity>(b =>
-		//{
-		//    b.ToTable(ShikshaMitraConsts.DbTablePrefix + "YourEntities", ShikshaMitraConsts.DbSchema);
-		//    b.ConfigureByConvention(); //auto configure for the base class props
-		//    //...
-		//})
-
-
-		builder.Entity<Book>(b =>
-		{
-			b.ToTable(ShikshaMitraConsts.DbTablePrefix + "Books",
-				ShikshaMitraConsts.DbSchema);
-			b.ConfigureByConvention(); //auto configure for the base class props
-			b.Property(x => x.Name).IsRequired().HasMaxLength(128);
-		});
-
-		builder.Entity<Author>(b =>
-		{
-			b.ToTable(ShikshaMitraConsts.DbTablePrefix + "Authors",
-				ShikshaMitraConsts.DbSchema);
-
-			b.ConfigureByConvention();
-
-			b.Property(x => x.Name)
-				.IsRequired()
-				.HasMaxLength(AuthorConsts.MaxNameLength);
-
-			b.HasIndex(x => x.Name);
-		});
-
-		//builder.Entity<Country>().HasNoKey();
-		//builder.Entity<State>().HasNoKey();
-
-
 		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 		builder.ConfigureBlobStoring();
 	}

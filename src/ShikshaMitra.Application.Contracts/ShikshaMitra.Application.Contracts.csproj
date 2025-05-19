@@ -9,8 +9,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Academic\Curriculum\Subject\**" />
     <Compile Remove="EducationBoards\**" />
+    <EmbeddedResource Remove="Academic\Curriculum\Subject\**" />
     <EmbeddedResource Remove="EducationBoards\**" />
+    <None Remove="Academic\Curriculum\Subject\**" />
     <None Remove="EducationBoards\**" />
   </ItemGroup>
 
@@ -43,10 +46,6 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Academic\Curriculum\Subject\" />
   </ItemGroup>
 
 </Project>

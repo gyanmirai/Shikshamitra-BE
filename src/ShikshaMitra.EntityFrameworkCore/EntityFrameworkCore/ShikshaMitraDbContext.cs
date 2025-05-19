@@ -261,11 +261,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<LibraryTiming> LibraryTimings { get; set; }
     public DbSet<BookCategory> BookCategories { get; set; } //here <BookCategory> is the entity class name and BookCategory is the table name
 
-	#region ClassTeacher
-
-	public DbSet<ClassTeacher> ClassTeachers { get; set; }
-	#endregion
-
 	#endregion
 	#endregion
 

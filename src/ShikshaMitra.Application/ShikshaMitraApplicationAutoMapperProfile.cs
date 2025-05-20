@@ -3,6 +3,7 @@ using ShikshaMitra.Authors;
 using ShikshaMitra.Books;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
+using ShikshaMitra.Library.Setting.GeneralSetting.LoanPolicies;
 namespace ShikshaMitra;
 
 public class ShikshaMitraApplicationAutoMapperProfile : Profile
@@ -25,6 +26,9 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 
 		CreateMap<LibraryTiming, LibraryTimingDto>();
 		CreateMap<LibraryTimingDto, LibraryTiming>();
+
+		CreateMap<LoanPolicy, LoanPolicyDto>();
+		CreateMap<CreateUpdateLoanPolicyDto, LoanPolicy>();
 
 	}
 }

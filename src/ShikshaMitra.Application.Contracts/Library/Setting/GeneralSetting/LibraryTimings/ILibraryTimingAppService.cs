@@ -10,7 +10,6 @@ namespace ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings
 	public interface ILibraryTimingAppService : IApplicationService
 	{
 		Task<List<LibraryTimingDto>> GetListAsync();
-		//Task<List<LibraryTimingDto>> CreateOrUpdateAsync(List<CreateUpdateLibraryTimingDto> input);
 
 		Task<LibraryTimingDto> CreateAsync(CreateUpdateLibraryTimingDto input);
 

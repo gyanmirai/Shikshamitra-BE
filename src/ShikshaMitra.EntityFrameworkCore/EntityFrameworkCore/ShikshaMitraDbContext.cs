@@ -15,6 +15,7 @@ using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Library.Setting.General_Setting;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
+using ShikshaMitra.Library.Setting.GeneralSetting.LoanPolicies;
 using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.Attendance.settings;
 using ShikshaMitra.Students.Attendance.Settings;
@@ -50,6 +51,8 @@ using Volo.Abp.PermissionManagement.EntityFrameworkCore;
 using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.TenantManagement;
 using Volo.Abp.TenantManagement.EntityFrameworkCore;
+
+
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -242,12 +245,13 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Library
 	#region GeneralSetting
 	public DbSet<LibraryTiming> LibraryTimings { get; set; }
-    public DbSet<BookCategory> BookCategories { get; set; } //here <BookCategory> is the entity class name and BookCategory is the table name
+    public DbSet<BookCategory> BookCategories { get; set; }
+    public DbSet<LoanPolicy> LoanPolicies { get; set; }
 
 	#endregion
 	#endregion
 
-// Apply BookCategory configuration
+	// Apply BookCategory configuration
 
 	// Optionally, apply all configurations in assembly:
 	// builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
@@ -269,7 +273,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 		builder.ConfigureOpenIddict();
 		builder.ConfigureFeatureManagement();
 		builder.ConfigureTenantManagement();
-
+	
 		/* Configure your own tables/entities inside here */
 
 		//builder.Entity<YourEntity>(b =>
@@ -278,7 +282,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 		//    b.ConfigureByConvention(); //auto configure for the base class props
 		//    //...
 		//})
-
 
 		builder.Entity<Book>(b =>
 		{

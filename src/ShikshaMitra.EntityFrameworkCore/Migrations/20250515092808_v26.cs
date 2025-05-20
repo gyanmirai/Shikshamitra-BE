@@ -1,12 +1,12 @@
-﻿using System;
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
+using System;
 
 #nullable disable
 
 namespace ShikshaMitra.Migrations
 {
-    /// <inheritdoc />
-    public partial class v26 : Migration
+	/// <inheritdoc />
+	public partial class v26 : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

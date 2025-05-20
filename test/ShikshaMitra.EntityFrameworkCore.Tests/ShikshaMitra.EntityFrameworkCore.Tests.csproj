@@ -11,6 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\ShikshaMitra.EntityFrameworkCore\ShikshaMitra.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\ShikshaMitra.Application.Tests\ShikshaMitra.Application.Tests.csproj" />
+    <PackageReference Include="System.Linq.Dynamic.Core" Version="1.6.3" />
     <PackageReference Include="Volo.Abp.EntityFrameworkCore.Sqlite" Version="9.0.0" />
   </ItemGroup>
 

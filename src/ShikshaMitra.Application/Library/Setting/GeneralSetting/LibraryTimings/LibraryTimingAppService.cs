@@ -5,51 +5,114 @@ using System;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
+using Volo.Abp.Application.Dtos;
+using Volo.Abp.Domain.Entities;
+using System.Linq;
 
-public class LibraryTimingAppService(IRepository<LibraryTiming, Guid> _repository)
-	: ApplicationService, ILibraryTimingAppService
+namespace ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
+public class LibraryTimingAppService(
+	IRepository<LibraryTiming, Guid> _libraryTimingRepository,
+	IGuidGenerator guidGenerator
+) : ApplicationService, ILibraryTimingAppService
 {
-	public async Task<List<LibraryTimingDto>> GetListAsync()
-	{
-		var items = await _repository.GetListAsync();
-		return ObjectMapper.Map<List<LibraryTiming>, List<LibraryTimingDto>>(items);
-	}
-
 	public async Task<LibraryTimingDto> CreateAsync(CreateUpdateLibraryTimingDto input)
 	{
-		var newTiming = new LibraryTiming(
-			GuidGenerator.Create(),
-			input.Day,
-			input.OpeningTime,
-			input.ClosingTime
-		);
+		try
+		{
+			var entity = new LibraryTiming(
+				guidGenerator.Create(),
+				input.Day,
+				input.OpeningTime,
+				input.ClosingTime,
+				CurrentTenant.Id ?? Guid.Empty
+			);
 
-		var inserted = await _repository.InsertAsync(newTiming);
-		return ObjectMapper.Map<LibraryTiming, LibraryTimingDto>(inserted);
+			await _libraryTimingRepository.InsertAsync(entity, autoSave: true);
+			return ObjectMapper.Map<LibraryTiming, LibraryTimingDto>(entity);
+		}
+		catch (Exception ex)
+		{
+			throw new ApplicationException("An error occurred while creating the library timing.", ex);
+		}
 	}
 
 	public async Task<LibraryTimingDto> UpdateAsync(Guid id, CreateUpdateLibraryTimingDto input)
 	{
-		var existing = await _repository.GetAsync(id);
-		existing.OpeningTime = input.OpeningTime;
-		existing.ClosingTime = input.ClosingTime;
+		try
+		{
+			var entity = await _libraryTimingRepository.FindAsync(id);
+			if (entity == null)
+			{
+				throw new EntityNotFoundException(typeof(LibraryTiming), id);
+			}
 
-		var updated = await _repository.UpdateAsync(existing);
-		return ObjectMapper.Map<LibraryTiming, LibraryTimingDto>(updated);
+			entity.OpeningTime = input.OpeningTime;
+			entity.ClosingTime = input.ClosingTime;
+
+			await _libraryTimingRepository.UpdateAsync(entity, autoSave: true);
+			return ObjectMapper.Map<LibraryTiming, LibraryTimingDto>(entity);
+		}
+		catch (Exception ex)
+		{
+			throw new ApplicationException("An error occurred while updating the library timing.", ex);
+		}
 	}
 
 	public async Task DeleteAsync(int day)
 	{
-		if (!Enum.IsDefined(typeof(DayOfWeek), day))
+		try
 		{
-			throw new ArgumentException("Invalid day value. It must be between 0 (Sunday) and 6 (Saturday).");
-		}
+			if (!Enum.IsDefined(typeof(DayOfWeek), day))
+			{
+				throw new ArgumentException("Invalid day value. It must be between 0 (Sunday) and 6 (Saturday).");
+			}
 
-		var dayOfWeek = (DayOfWeek) day;
-		var existing = await _repository.FindAsync(x => x.Day == dayOfWeek);
-		if (existing != null)
+			var dayOfWeek = (DayOfWeek) day;
+			var entity = await _libraryTimingRepository.FindAsync(x => x.Day == dayOfWeek);
+			if (entity == null)
+			{
+				throw new EntityNotFoundException($"No library timing found for day {dayOfWeek}.");
+			}
+
+			await _libraryTimingRepository.DeleteAsync(entity);
+		}
+		catch (Exception ex)
 		{
-			await _repository.DeleteAsync(existing);
+			throw new ApplicationException("An error occurred while deleting the library timing.", ex);
 		}
 	}
+
+	public async Task<LibraryTimingDto> GetAsync(Guid id)
+	{
+		try
+		{
+			var entity = await _libraryTimingRepository.GetAsync(id);
+			return ObjectMapper.Map<LibraryTiming, LibraryTimingDto>(entity);
+		}
+		catch (Exception ex)
+		{
+			throw new ApplicationException("An error occurred while retrieving the library timing.", ex);
+		}
+	}
+
+    public async Task<List<LibraryTimingDto>> GetListAsync()
+    {
+        try
+        {
+            var tenantId = CurrentTenant.Id;
+            var queryable = await _libraryTimingRepository.GetQueryableAsync();
+
+            if (tenantId.HasValue)
+            {
+                queryable = queryable.Where(x => x.TenantId == tenantId.Value);
+            }
+
+            var items = await AsyncExecuter.ToListAsync(queryable);
+            return ObjectMapper.Map<List<LibraryTiming>, List<LibraryTimingDto>>(items);
+        }
+        catch (Exception ex)
+        {
+            throw new ApplicationException("An error occurred while retrieving the library timings.", ex);
+        }
+    }
 }

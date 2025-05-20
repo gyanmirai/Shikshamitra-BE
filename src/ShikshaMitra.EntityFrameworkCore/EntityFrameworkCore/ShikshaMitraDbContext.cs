@@ -1,7 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Academic.Curriculum;
-using ShikshaMitra.Authors;
-using ShikshaMitra.Books;
 using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
 using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
 using ShikshaMitra.HR.AttendanceAndLeaves;
@@ -12,7 +11,6 @@ using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.EventAndHolidays;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
-using ShikshaMitra.Library.Setting.General_Setting;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using ShikshaMitra.Library.Setting.GeneralSetting.LoanPolicies;
@@ -42,7 +40,6 @@ using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.EntityFrameworkCore;
-using Volo.Abp.EntityFrameworkCore.Modeling;
 using Volo.Abp.FeatureManagement.EntityFrameworkCore;
 using Volo.Abp.Identity;
 using Volo.Abp.Identity.EntityFrameworkCore;
@@ -96,13 +93,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<TenantConnectionString> TenantConnectionStrings { get; set; }
 
 	#endregion
-
-	#endregion
-
-	#region BookStore
-
-	public DbSet<Book> Books { get; set; }
-	public DbSet<Author> Authors { get; set; }
 
 	#endregion
 
@@ -248,6 +238,11 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
     public DbSet<BookCategory> BookCategories { get; set; }
     public DbSet<LoanPolicy> LoanPolicies { get; set; }
 
+	#region ClassTeacher
+
+	public DbSet<ClassTeacher> ClassTeachers { get; set; }
+	#endregion
+
 	#endregion
 	#endregion
 
@@ -273,6 +268,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 		builder.ConfigureOpenIddict();
 		builder.ConfigureFeatureManagement();
 		builder.ConfigureTenantManagement();
+<<<<<<< HEAD
 	
 		/* Configure your own tables/entities inside here */
 
@@ -309,6 +305,8 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 		//builder.Entity<State>().HasNoKey();
 
 
+=======
+>>>>>>> main
 		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 		builder.ConfigureBlobStoring();
 	}

@@ -40,7 +40,6 @@ using ShikshaMitra.Middleware;
 namespace ShikshaMitra;
 
 [DependsOn(
-	typeof(ShikshaMitraHttpApiModule),
 	typeof(AbpAutofacModule),
 	typeof(AbpAspNetCoreMultiTenancyModule),
 	typeof(ShikshaMitraApplicationModule),

@@ -86,7 +86,9 @@ public class QuestPdfService(IFontService fontService, IImageService imageServic
 					{
 						Elements = properties.Select(prop => (IElement) new TextElement
 						{
-							Text = FormatPropertyValue(prop, item), Padding = 5, PaddingUnit = Unit.Point
+							Text = FormatPropertyValue(prop, item),
+							Padding = 5,
+							PaddingUnit = Unit.Point
 						}).ToList(),
 						Spacing = 10
 					})).ToList(),
@@ -96,7 +98,7 @@ public class QuestPdfService(IFontService fontService, IImageService imageServic
 		return await GeneratePdfAsBytes(pdfDocument);
 	}
 
-// Helper method to format property values
+	// Helper method to format property values
 	private string FormatPropertyValue<T>(PropertyInfo prop, T item)
 	{
 		var value = prop.GetValue(item, null);

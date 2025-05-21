@@ -268,45 +268,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 		builder.ConfigureOpenIddict();
 		builder.ConfigureFeatureManagement();
 		builder.ConfigureTenantManagement();
-<<<<<<< HEAD
-	
-		/* Configure your own tables/entities inside here */
-
-		//builder.Entity<YourEntity>(b =>
-		//{
-		//    b.ToTable(ShikshaMitraConsts.DbTablePrefix + "YourEntities", ShikshaMitraConsts.DbSchema);
-		//    b.ConfigureByConvention(); //auto configure for the base class props
-		//    //...
-		//})
-
-		builder.Entity<Book>(b =>
-		{
-			b.ToTable(ShikshaMitraConsts.DbTablePrefix + "Books",
-				ShikshaMitraConsts.DbSchema);
-			b.ConfigureByConvention(); //auto configure for the base class props
-			b.Property(x => x.Name).IsRequired().HasMaxLength(128);
-		});
-
-		builder.Entity<Author>(b =>
-		{
-			b.ToTable(ShikshaMitraConsts.DbTablePrefix + "Authors",
-				ShikshaMitraConsts.DbSchema);
-
-			b.ConfigureByConvention();
-
-			b.Property(x => x.Name)
-				.IsRequired()
-				.HasMaxLength(AuthorConsts.MaxNameLength);
-
-			b.HasIndex(x => x.Name);
-		});
-
-		//builder.Entity<Country>().HasNoKey();
-		//builder.Entity<State>().HasNoKey();
-
-
-=======
->>>>>>> main
 		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 		builder.ConfigureBlobStoring();
 	}

@@ -4,8 +4,9 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using IElement = ShikshaMitra.Common.PDF.Elements.IElement;
+using ShikshaMitra.Common.PDF;
 
-namespace ShikshaMitra.Common.Extensions;
+namespace ShikshaMitra.Common.PDF;
 
 internal static class QuestExtensions
 {
@@ -213,8 +214,8 @@ internal static class QuestExtensions
 		{
 			(not null, not null) => container.Container().Height(imageElement.Height.Value)
 				.Width(imageElement.Width.Value).Image(imageElement.Image ??
-				                                       throw new InvalidOperationException(
-					                                       "Image bytes are not loaded")),
+													   throw new InvalidOperationException(
+														   "Image bytes are not loaded")),
 			(not null, null) => container.Container().Width(imageElement.Width.Value).Image(imageElement.Image ??
 				throw new InvalidOperationException("Image bytes are not loaded")),
 			(null, not null) => container.Container().Height(imageElement.Height.Value)
@@ -260,7 +261,7 @@ internal static class QuestExtensions
 
 			foreach (var childElement in columnElement.Elements)
 			{
-				Element(column.Item(), childElement);
+				column.Item().Element(childElement);
 			}
 		});
 
@@ -276,15 +277,15 @@ internal static class QuestExtensions
 			{
 				if (childElement.RowItemConfig is null || childElement.RowItemConfig?.Type == TypeInRow.Auto)
 				{
-					Element(row.AutoItem(), childElement);
+					row.AutoItem().Element(childElement);
 				}
 				else if (childElement.RowItemConfig?.Type == TypeInRow.Relative)
 				{
-					Element(row.RelativeItem(childElement.RowItemConfig.Size ?? 1), childElement);
+					row.RelativeItem(childElement.RowItemConfig.Size ?? 1).Element(childElement);
 				}
 				else if (childElement.RowItemConfig?.Type == TypeInRow.Constant)
 				{
-					Element(row.ConstantItem(childElement.RowItemConfig.Size ?? 1), childElement);
+					row.ConstantItem(childElement.RowItemConfig.Size ?? 1).Element(childElement);
 				}
 				else
 				{
@@ -344,7 +345,7 @@ internal static class QuestExtensions
 				cell.ColumnSpan(cellElement.ColumnSpan.Value);
 			}
 
-			Element(cell.Element((cellContainer) => Cell(cellContainer, cellElement)), cellElement.Element);
+			cell.Element((cellContainer) => Cell(cellContainer, cellElement)).Element(cellElement.Element);
 		}
 
 		return table;

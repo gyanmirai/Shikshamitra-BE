@@ -1,7 +1,5 @@
 ﻿using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
-using ShikshaMitra.Common.Extensions;
-using ShikshaMitra.Common.PDF;
 using ShikshaMitra.Common.PDF.Elements;
 using System;
 using System.Collections.Generic;
@@ -15,7 +13,7 @@ using Volo.Abp.DependencyInjection;
 using IElement = ShikshaMitra.Common.PDF.Elements.IElement;
 using QImage = QuestPDF.Infrastructure.Image;
 
-namespace ShikshaMitra.Common;
+namespace ShikshaMitra.Common.PDF;
 
 public class QuestPdfService(IFontService fontService, IImageService imageService) : IPdfService, ITransientDependency
 {
@@ -50,7 +48,7 @@ public class QuestPdfService(IFontService fontService, IImageService imageServic
 
 	public async Task<byte[]> GenerateSimplePdf<T>(IEnumerable<T> items)
 	{
-		PropertyInfo[] properties = typeof(T).GetProperties();
+		var properties = typeof(T).GetProperties();
 
 		// Construct the PDF document
 		var pdfDocument = new PDFDocument
@@ -86,7 +84,9 @@ public class QuestPdfService(IFontService fontService, IImageService imageServic
 					{
 						Elements = properties.Select(prop => (IElement) new TextElement
 						{
-							Text = FormatPropertyValue(prop, item), Padding = 5, PaddingUnit = Unit.Point
+							Text = FormatPropertyValue(prop, item),
+							Padding = 5,
+							PaddingUnit = Unit.Point
 						}).ToList(),
 						Spacing = 10
 					})).ToList(),
@@ -96,7 +96,7 @@ public class QuestPdfService(IFontService fontService, IImageService imageServic
 		return await GeneratePdfAsBytes(pdfDocument);
 	}
 
-// Helper method to format property values
+	// Helper method to format property values
 	private string FormatPropertyValue<T>(PropertyInfo prop, T item)
 	{
 		var value = prop.GetValue(item, null);

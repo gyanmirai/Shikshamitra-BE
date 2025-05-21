@@ -113,6 +113,27 @@ public class OpenIddictDataSeedContributor(
 			);
 		}
 
+		var reactAzureClinetId = configurationSection["ShikshaMitra_Azure_React_App:ClientId"];
+		if (!reactAzureClinetId.IsNullOrWhiteSpace())
+		{
+			string? reactAzureClientRootUrl = configurationSection["ShikshaMitra_Azure_React_App:RootUrl"]?.TrimEnd('/');
+			await CreateApplicationAsync(
+				name: reactAzureClinetId!,
+				type: OpenIddictConstants.ClientTypes.Public,
+				consentType: OpenIddictConstants.ConsentTypes.Implicit,
+				displayName: "React Azure Application",
+				secret: null,
+				grantTypes: new List<string>
+				{
+					OpenIddictConstants.GrantTypes.AuthorizationCode, OpenIddictConstants.GrantTypes.RefreshToken
+				},
+				scopes: commonScopes,
+				redirectUri: $"{reactAzureClientRootUrl}/auth/openiddict",
+				clientUri: reactAzureClientRootUrl,
+				postLogoutRedirectUri: $"{reactAzureClientRootUrl}/login"
+			);
+		}
+
 
 		// Flutter Client
 		var flutterClientId = configurationSection["ShikshaMitra_Flutter_App:ClientId"];

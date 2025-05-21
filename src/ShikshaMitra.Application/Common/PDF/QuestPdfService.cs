@@ -1,5 +1,7 @@
 ﻿using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
+using ShikshaMitra.Common.Extensions;
+using ShikshaMitra.Common.PDF;
 using ShikshaMitra.Common.PDF.Elements;
 using System;
 using System.Collections.Generic;
@@ -13,7 +15,7 @@ using Volo.Abp.DependencyInjection;
 using IElement = ShikshaMitra.Common.PDF.Elements.IElement;
 using QImage = QuestPDF.Infrastructure.Image;
 
-namespace ShikshaMitra.Common.PDF;
+namespace ShikshaMitra.Common;
 
 public class QuestPdfService(IFontService fontService, IImageService imageService) : IPdfService, ITransientDependency
 {
@@ -48,7 +50,7 @@ public class QuestPdfService(IFontService fontService, IImageService imageServic
 
 	public async Task<byte[]> GenerateSimplePdf<T>(IEnumerable<T> items)
 	{
-		var properties = typeof(T).GetProperties();
+		PropertyInfo[] properties = typeof(T).GetProperties();
 
 		// Construct the PDF document
 		var pdfDocument = new PDFDocument

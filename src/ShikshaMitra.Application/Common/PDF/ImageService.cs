@@ -1,11 +1,12 @@
-﻿using ShikshaMitra.Common.PDF.Elements;
+﻿using ShikshaMitra.Common.PDF;
+using ShikshaMitra.Common.PDF.Elements;
 using System;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp.DependencyInjection;
 
-namespace ShikshaMitra.Common.PDF;
+namespace ShikshaMitra.Common;
 
 public class ImageService(IHttpClientFactory httpClientFactory) : IImageService, IScopedDependency
 {

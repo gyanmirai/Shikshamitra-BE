@@ -1,4 +1,5 @@
 ﻿using QuestPDF.Drawing;
+using ShikshaMitra.Common.PDF;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -7,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp.DependencyInjection;
 
-namespace ShikshaMitra.Common.PDF;
+namespace ShikshaMitra.Common;
 
 public class FontService(IHttpClientFactory httpClientFactory) : IFontService, IScopedDependency
 {

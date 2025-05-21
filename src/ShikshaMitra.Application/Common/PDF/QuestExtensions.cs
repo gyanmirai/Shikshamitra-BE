@@ -4,9 +4,8 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using IElement = ShikshaMitra.Common.PDF.Elements.IElement;
-using ShikshaMitra.Common.PDF;
 
-namespace ShikshaMitra.Common.PDF;
+namespace ShikshaMitra.Common.Extensions;
 
 internal static class QuestExtensions
 {
@@ -261,7 +260,7 @@ internal static class QuestExtensions
 
 			foreach (var childElement in columnElement.Elements)
 			{
-				column.Item().Element(childElement);
+				Element(column.Item(), childElement);
 			}
 		});
 
@@ -277,15 +276,15 @@ internal static class QuestExtensions
 			{
 				if (childElement.RowItemConfig is null || childElement.RowItemConfig?.Type == TypeInRow.Auto)
 				{
-					row.AutoItem().Element(childElement);
+					Element(row.AutoItem(), childElement);
 				}
 				else if (childElement.RowItemConfig?.Type == TypeInRow.Relative)
 				{
-					row.RelativeItem(childElement.RowItemConfig.Size ?? 1).Element(childElement);
+					Element(row.RelativeItem(childElement.RowItemConfig.Size ?? 1), childElement);
 				}
 				else if (childElement.RowItemConfig?.Type == TypeInRow.Constant)
 				{
-					row.ConstantItem(childElement.RowItemConfig.Size ?? 1).Element(childElement);
+					Element(row.ConstantItem(childElement.RowItemConfig.Size ?? 1), childElement);
 				}
 				else
 				{
@@ -345,7 +344,7 @@ internal static class QuestExtensions
 				cell.ColumnSpan(cellElement.ColumnSpan.Value);
 			}
 
-			cell.Element((cellContainer) => Cell(cellContainer, cellElement)).Element(cellElement.Element);
+			Element(cell.Element((cellContainer) => Cell(cellContainer, cellElement)), cellElement.Element);
 		}
 
 		return table;

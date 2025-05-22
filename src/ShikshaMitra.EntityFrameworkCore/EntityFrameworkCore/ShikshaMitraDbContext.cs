@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Syllabus;
 using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
 using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
 using ShikshaMitra.HR.AttendanceAndLeaves;
@@ -230,6 +231,10 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region ClassTeacher
 
 	public DbSet<ClassTeacher> ClassTeachers { get; set; }
+	#endregion
+
+	#region Syllabus
+	public DbSet<SubjectChapter> SubjectChapters { get; set; }
 	#endregion
 
 	#endregion

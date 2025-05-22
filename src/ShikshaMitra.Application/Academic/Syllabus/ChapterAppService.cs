@@ -33,4 +33,22 @@ public class ChapterAppService(IRepository<SubjectChapter, Guid> chapterReposito
 
 		return ObjectMapper.Map<List<SubjectChapter>, List<ChapterDto>>(chapters);
 	}
+
+	public async Task<ChapterDto> UpdateAsync(Guid id, CreateUpdateChapterDto input)
+	{
+		var chapter = await chapterRepository.GetAsync(id);
+
+		chapter.Update(
+			input.ChapterName,
+			input.ChapterStartTime,
+			input.ChapterEndTime,
+			input.Description
+		);
+
+		chapter.ChapterNumber = input.ChapterNumber;
+
+		await chapterRepository.UpdateAsync(chapter, autoSave: true);
+		return ObjectMapper.Map<SubjectChapter, ChapterDto>(chapter);
+	}
+
 }

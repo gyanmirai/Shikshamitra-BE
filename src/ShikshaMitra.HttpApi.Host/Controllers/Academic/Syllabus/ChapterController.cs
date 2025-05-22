@@ -24,5 +24,11 @@ public class ChapterController(IChapterAppService chapterAppService) : AbpContro
 	{
 		return chapterAppService.GetByStandardSubjectIdAsync(standardSubjectId);
 	}
-}
 
+	[HttpPut("{id}")]
+	public Task<ChapterDto> UpdateAsync(Guid id, [FromBody] CreateUpdateChapterDto input)
+	{
+		return chapterAppService.UpdateAsync(id, input);
+	}
+
+}

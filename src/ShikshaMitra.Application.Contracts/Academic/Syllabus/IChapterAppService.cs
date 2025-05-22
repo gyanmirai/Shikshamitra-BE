@@ -9,4 +9,6 @@ public interface IChapterAppService : IApplicationService
 {
 	Task<ChapterDto> CreateAsync(CreateUpdateChapterDto input);
 	Task<List<ChapterDto>> GetByStandardSubjectIdAsync(Guid standardSubjectId);
+	Task<ChapterDto> UpdateAsync(Guid id, CreateUpdateChapterDto input);
+
 }

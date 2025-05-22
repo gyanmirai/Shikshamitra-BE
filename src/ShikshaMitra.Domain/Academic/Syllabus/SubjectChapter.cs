@@ -51,9 +51,9 @@ public class SubjectChapter : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public SubjectChapter() { }
 
     // Parameterized constructor  
-    public SubjectChapter(Guid standardId, Guid subjectId, int chapterNumber, string chapterName, DateTimeOffset chapterStartTime, DateTimeOffset chapterEndTime, string? description = null)
+    public SubjectChapter(Guid id, Guid standardSubjectId, int chapterNumber, string chapterName, DateTimeOffset chapterStartTime, DateTimeOffset chapterEndTime, string? description = null) : base(id)
     {
-        StandardSubjectId = standardId;
+        StandardSubjectId = standardSubjectId;
         ChapterNumber = chapterNumber;
         ChapterName = chapterName;
         ChapterStartTime = chapterStartTime;
@@ -61,8 +61,16 @@ public class SubjectChapter : FullAuditedAggregateRoot<Guid>, IMultiTenant
         Description = description;
     }
 
-    #endregion
+	#endregion
 
-    #region Methods  
-    #endregion
+	#region Methods  
+
+	public void Update(string chapterName, DateTimeOffset chapterStartTime, DateTimeOffset chapterEndTime, string? description = null)
+	{
+		ChapterName = chapterName;
+		ChapterStartTime = chapterStartTime;
+		ChapterEndTime = chapterEndTime;
+		Description = description;
+	}
+	#endregion
 }

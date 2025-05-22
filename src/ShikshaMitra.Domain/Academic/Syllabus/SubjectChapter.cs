@@ -1,29 +1,27 @@
 ﻿using System;
 using Volo.Abp.Domain.Entities.Auditing;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Academic.Syllabus;
 
 /// <summary>  
 /// Represents a chapter in a subject for a specific standard.  
 /// </summary>
-public class SubjectChapter : FullAuditedAggregateRoot<Guid>
+public class SubjectChapter : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
-    #region Properties  
+	#region Properties  
 
-    /// <summary>  
-    /// Gets or sets the ID of the standard (e.g., Grade 6, Grade 10).  
-    /// </summary>  
-    public Guid StandardId { get; set; }
+	public Guid? TenantId { get; set; }
 
-    /// <summary>  
-    /// Gets or sets the ID of the subject to which the chapter belongs (e.g., Science, Math).  
-    /// </summary>  
-    public Guid SubjectId { get; set; }
+	/// <summary>
+	/// Gets or sets the ID of the standard subject assignment (e.g., Grade 6, Grade 10).  
+	/// </summary>
+	public Guid StandardSubjectId { get; set; }
 
     /// <summary>  
     /// Gets or sets the chapter number (e.g., 1, 2, 3).  
     /// </summary>  
-    public int ChapterNo { get; set; }
+    public int ChapterNumber { get; set; }
 
     /// <summary>  
     /// Gets or sets the name/title of the chapter.  
@@ -53,11 +51,10 @@ public class SubjectChapter : FullAuditedAggregateRoot<Guid>
     public SubjectChapter() { }
 
     // Parameterized constructor  
-    public SubjectChapter(Guid standardId, Guid subjectId, int chapterNo, string chapterName, DateTimeOffset chapterStartTime, DateTimeOffset chapterEndTime, string? description = null)
+    public SubjectChapter(Guid standardId, Guid subjectId, int chapterNumber, string chapterName, DateTimeOffset chapterStartTime, DateTimeOffset chapterEndTime, string? description = null)
     {
-        StandardId = standardId;
-        SubjectId = subjectId;
-        ChapterNo = chapterNo;
+        StandardSubjectId = standardId;
+        ChapterNumber = chapterNumber;
         ChapterName = chapterName;
         ChapterStartTime = chapterStartTime;
         ChapterEndTime = chapterEndTime;

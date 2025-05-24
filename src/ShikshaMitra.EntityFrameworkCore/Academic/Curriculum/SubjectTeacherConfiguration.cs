@@ -8,14 +8,10 @@ public class SubjectTeacherConfiguration : IEntityTypeConfiguration<SubjectTeach
 {
 	public void Configure(EntityTypeBuilder<SubjectTeacher> builder)
 	{
-		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "SubjectTeacher", ShikshaMitraConsts.DbSchema);
+		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "SubjectTeachers", ShikshaMitraConsts.DbSchema);
+		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();
-		builder.HasKey(st => new { st.SubjectId, st.TeacherId});
 
-		// write the configuration for the SubjectTeacher entity
-		builder.HasOne(st => st.Subject)
-			.WithMany(s => s.Teachers)
-			.HasForeignKey(st => st.SubjectId)
-			.OnDelete(DeleteBehavior.Cascade);
+		builder.HasKey(st => new { st.SubjectId, st.TeacherId });
 	}
 }

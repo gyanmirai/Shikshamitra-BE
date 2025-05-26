@@ -19,7 +19,7 @@ public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepos
 		try
 		{
 			var loanPolicyEntity = new LoanPolicy(guidGenerator.Create(),
-										 input.Role,
+										 input.RoleId,
 										 input.LoanDurationInDays,
 										 input.MaxBooksAllowed,
 										 input.LateReturnFinePerDay,
@@ -109,7 +109,7 @@ public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepos
 
             // Apply sorting, skip, and take  
             var sortedQuery = queryable
-                .OrderBy(x => input.Sorting ?? nameof(LoanPolicy.Role)) // Explicitly specify the type for OrderBy  
+                .OrderBy(x => input.Sorting ?? nameof(LoanPolicy.RoleId)) // Explicitly specify the type for OrderBy  
                 .Skip(input.SkipCount)
                 .Take(input.MaxResultCount);
 

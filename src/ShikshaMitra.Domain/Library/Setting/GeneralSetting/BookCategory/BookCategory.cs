@@ -4,20 +4,22 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Entities.Auditing;
+using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra.Library.Setting.GeneralSetting.BookCategory
+namespace ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
+
+public class BookCategory : AuditedAggregateRoot<Guid>, IMultiTenant
 {
-	public class BookCategory : AuditedAggregateRoot<Guid>
+	public Guid? TenantId { get; set; }
+	public string Name { get; set; }
+    public string Description { get; set; }
+	private BookCategory() { }
+
+	public BookCategory(Guid id, string name, string description, Guid tenantId) : base(id)
 	{
-		public string Name { get; set; }
-
-		public string Description { get; set; }
-
-		public BookCategory(string name, string description)
-		{
-			Name = name;
-			Description = description;
-		}
-
+		Name = name;
+		Description = description;
+		TenantId = tenantId;
 	}
+
 }

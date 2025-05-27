@@ -1,5 +1,5 @@
-﻿using System;
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
+using System;
 
 #nullable disable
 
@@ -7,13 +7,13 @@ namespace ShikshaMitra.Migrations
 {
 	/// <inheritdoc />
 	public partial class v26 : Migration
-	{
-		/// <inheritdoc />
-		protected override void Up(MigrationBuilder migrationBuilder)
-		{
-			migrationBuilder.DropColumn(
-				name: "Id",
-				table: "AppSubjectTeacher");
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.DropColumn(
+                name: "Id",
+                table: "AppSubjectTeacher");
 
 			migrationBuilder.DropColumn(
 				name: "BoardId",

@@ -40,8 +40,4 @@
     </PackageReference>
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Library\Setting\GeneralSetting\LoanPolicies\" />
-  </ItemGroup>
-
 </Project>

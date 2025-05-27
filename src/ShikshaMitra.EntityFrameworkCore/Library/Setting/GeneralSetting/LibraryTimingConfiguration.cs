@@ -8,26 +8,23 @@ using System.Text;
 using System.Threading.Tasks;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
-namespace ShikshaMitra.Library.Setting.GeneralSetting
+namespace ShikshaMitra.Library.Setting.GeneralSetting;
+
+public class LibraryTimingConfiguration : IEntityTypeConfiguration<LibraryTiming>
 {
-	public class LibraryTimingConfiguration : IEntityTypeConfiguration<LibraryTiming>
+	public void Configure(EntityTypeBuilder<LibraryTiming> builder)
 	{
-		public void Configure(EntityTypeBuilder<LibraryTiming> builder)
-		{
-			builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "LibraryTimings", ShikshaMitraConsts.DbSchema);
+		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "LibraryTimings", ShikshaMitraConsts.DbSchema);
 
-			builder.ConfigureByConvention();
+		builder.ConfigureByConvention();
 
-			builder.Property(x => x.Day)
-				.IsRequired();
+		builder.Property(x => x.Day)
+			.IsRequired();
 
-			builder.Property(x => x.OpeningTime)
-				.IsRequired();
+		builder.Property(x => x.OpeningTime)
+			.IsRequired();
 
-			builder.Property(x => x.ClosingTime)
-				.IsRequired();
-
-			builder.HasIndex(x => x.Day).IsUnique();
-		}
+		builder.Property(x => x.ClosingTime)
+			.IsRequired();
 	}
 }

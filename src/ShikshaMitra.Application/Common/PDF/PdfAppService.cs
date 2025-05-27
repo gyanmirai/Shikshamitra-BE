@@ -8,7 +8,7 @@ public class PdfAppService(IPdfService pdfService) : ShikshaMitraAppService
 {
 	public async Task<byte[]> PostGeneratedPdfAsync(PDFDocument request)
 	{
-		var stream =  await pdfService.GeneratePdfAsBytes(request);
+		var stream = await pdfService.GeneratePdfAsBytes(request);
 		return stream;
 	}
 }

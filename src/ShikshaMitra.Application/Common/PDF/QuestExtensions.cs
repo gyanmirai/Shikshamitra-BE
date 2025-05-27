@@ -213,8 +213,8 @@ internal static class QuestExtensions
 		{
 			(not null, not null) => container.Container().Height(imageElement.Height.Value)
 				.Width(imageElement.Width.Value).Image(imageElement.Image ??
-				                                       throw new InvalidOperationException(
-					                                       "Image bytes are not loaded")),
+													   throw new InvalidOperationException(
+														   "Image bytes are not loaded")),
 			(not null, null) => container.Container().Width(imageElement.Width.Value).Image(imageElement.Image ??
 				throw new InvalidOperationException("Image bytes are not loaded")),
 			(null, not null) => container.Container().Height(imageElement.Height.Value)

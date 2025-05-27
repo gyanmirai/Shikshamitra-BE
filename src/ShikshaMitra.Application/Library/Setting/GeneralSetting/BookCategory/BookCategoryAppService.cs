@@ -15,40 +15,39 @@ public class BookCategoryAppService(
 ) : ApplicationService, IBookCategoryAppService
 {
     
-public async Task<BookCategoryDto> CreateAsync(CreateUpdateBookCategoryDto input)
+public async Task<BookCategoryDto> CreateAsync(CreateUpdateBookCategoryDto createBookCategoryDto)
     {
         try
         {
-            // Use the constructor to set the Id since the property setter is inaccessible  
-            var BookCategoryentity = new BookCategory(
-                guidGenerator.Create(), // Pass the required 'Id' parameter  
-                input.Name,             // Pass the required 'Name' parameter  
-                input.Description,      // Pass the required 'Description' parameter  
-                CurrentTenant.Id ?? Guid.Empty // Pass the required 'TenantId' parameter  
+            var bookCategoryEntity = new BookCategory(
+                guidGenerator.Create(),
+				createBookCategoryDto.Name,
+				createBookCategoryDto.Description,
+                CurrentTenant.Id ?? Guid.Empty
             );
 
-            await _bookCategoryRepository.InsertAsync(BookCategoryentity, autoSave: true);
-            return ObjectMapper.Map<BookCategory, BookCategoryDto>(BookCategoryentity);
+            await _bookCategoryRepository.InsertAsync(bookCategoryEntity, autoSave: true);
+            return ObjectMapper.Map<BookCategory, BookCategoryDto>(bookCategoryEntity);
         }
         catch (Exception ex)
         {
             throw new ApplicationException("An error occurred while creating the book category.", ex);
         }
     }
-    public async Task<BookCategoryDto> UpdateAsync(Guid id, CreateUpdateBookCategoryDto input)
+    public async Task<BookCategoryDto> UpdateAsync(Guid id, CreateUpdateBookCategoryDto updateBookCategoryDto)
 	{
 		try
 		{
-			var entity = await _bookCategoryRepository.FindAsync(id);
-			if (entity == null)
+			var bookCategoryEntity = await _bookCategoryRepository.FindAsync(id);
+			if (bookCategoryEntity == null)
 			{
 				throw new EntityNotFoundException(typeof(BookCategory), id);
 			}
 
-			ObjectMapper.Map(input, entity);
+			ObjectMapper.Map(updateBookCategoryDto, bookCategoryEntity);
 
-			await _bookCategoryRepository.UpdateAsync(entity, autoSave: true);
-			return ObjectMapper.Map<BookCategory, BookCategoryDto>(entity);
+			await _bookCategoryRepository.UpdateAsync(bookCategoryEntity, autoSave: true);
+			return ObjectMapper.Map<BookCategory, BookCategoryDto>(bookCategoryEntity);
 		}
 		catch (Exception ex)
 		{
@@ -60,13 +59,13 @@ public async Task<BookCategoryDto> CreateAsync(CreateUpdateBookCategoryDto input
 	{
 		try
 		{
-			var entity = await _bookCategoryRepository.FindAsync(id);
-			if (entity == null)
+			var bookCategoryEntity = await _bookCategoryRepository.FindAsync(id);
+			if (bookCategoryEntity == null)
 			{
 				throw new EntityNotFoundException(typeof(BookCategory), id);
 			}
 
-			await _bookCategoryRepository.DeleteAsync(entity);
+			await _bookCategoryRepository.DeleteAsync(bookCategoryEntity);
 		}
 		catch (Exception ex)
 		{
@@ -78,8 +77,8 @@ public async Task<BookCategoryDto> CreateAsync(CreateUpdateBookCategoryDto input
 	{
 		try
 		{
-			var entity = await _bookCategoryRepository.GetAsync(id);
-			return ObjectMapper.Map<BookCategory, BookCategoryDto>(entity);
+			var bookCategoryEntity = await _bookCategoryRepository.GetAsync(id);
+			return ObjectMapper.Map<BookCategory, BookCategoryDto>(bookCategoryEntity);
 		}
 		catch (Exception ex)
 		{
@@ -87,7 +86,7 @@ public async Task<BookCategoryDto> CreateAsync(CreateUpdateBookCategoryDto input
 		}
 	}
 
-    public async Task<PagedResultDto<BookCategoryDto>> GetListAsync(PagedAndSortedResultRequestDto input)
+    public async Task<PagedResultDto<BookCategoryDto>> GetListAsync(PagedAndSortedResultRequestDto bookCategoryDto)
     {
         try
         {
@@ -101,11 +100,10 @@ public async Task<BookCategoryDto> CreateAsync(CreateUpdateBookCategoryDto input
 
             var totalCount = await AsyncExecuter.CountAsync(queryable);
 
-            // Fix: Explicitly specify the type arguments for OrderBy  
             var sortedQuery = queryable
-                .OrderBy<BookCategory, string>(x => input.Sorting == nameof(BookCategory.Name) ? x.Name : string.Empty)
-                .Skip(input.SkipCount)
-                .Take(input.MaxResultCount);
+                .OrderBy<BookCategory, string>(x => bookCategoryDto.Sorting == nameof(BookCategory.Name) ? x.Name : string.Empty)
+                .Skip(bookCategoryDto.SkipCount)
+                .Take(bookCategoryDto.MaxResultCount);
 
             var items = await AsyncExecuter.ToListAsync(sortedQuery);
             var dtoList = ObjectMapper.Map<List<BookCategory>, List<BookCategoryDto>>(items);

@@ -31,8 +31,5 @@ public class LoanPolicyConfiguration : IEntityTypeConfiguration<LoanPolicy>
 		builder.Property(x => x.LateReturnFinePerDay)
 			.IsRequired()
 			.HasColumnType("decimal(18,2)");
-
-		builder.HasIndex(x => x.RoleId).IsUnique(); // One policy per role (e.g., Student, Teacher)
 	}
-
 }

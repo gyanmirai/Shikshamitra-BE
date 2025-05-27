@@ -226,8 +226,13 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region Curriculum
 
-	public DbSet<StandardSubjectAssignment> Subjects { get; set; }
-	public DbSet<SubjectTeacher> SubjectTeachers { get; set; }
+	public DbSet<Subject> Subjects { get; set; }
+	public DbSet<StandardSubjectAssignment> StandardSubjectAssignments { get; set; }
+	#endregion
+
+	#region ClassTeacher
+
+	public DbSet<ClassTeacher> ClassTeachers { get; set; }
 	#endregion
 
 	#endregion
@@ -237,11 +242,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<LibraryTiming> LibraryTimings { get; set; }
     public DbSet<BookCategory> BookCategories { get; set; }
     public DbSet<LoanPolicy> LoanPolicies { get; set; }
-
-	#region ClassTeacher
-
-	public DbSet<ClassTeacher> ClassTeachers { get; set; }
-	#endregion
 
 	#endregion
 	#endregion

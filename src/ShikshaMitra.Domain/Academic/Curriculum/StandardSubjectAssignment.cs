@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Linq;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -10,29 +11,22 @@ namespace ShikshaMitra.Academic.Curriculum;
 
 public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
-    #region Properties
-    public virtual Guid? TenantId { get; private set; }
+	#region Properties
+	public Guid? TenantId { get; private set; }
+	public Guid AcademicMediumId { get; set; }
 
-    /// <summary>
-    /// Identifier for the academic medium associated with the subject.
-    /// </summary>
-    public Guid AcademicMediumId { get; set; }
+	[ForeignKey(nameof(Standard))]
+	public Guid StandardId { get; set; }
+	public virtual Standard Standard { get; set; }
 
-    /// <summary>
-    /// Identifier for the standard associated with the subject.
-    /// </summary>
-    public Guid StandardId { get; set; }
-
-    /// <summary>
-    /// Navigation property to the Standard entity associated with the subject.
-    /// </summary>
-    [ForeignKey(nameof(StandardId))]
-    public Standard Standard { get; set; }
+	[ForeignKey(nameof(Subject))]
+	public Guid SubjectId { get; set; }
+	public virtual Subject Subject { get; set; }
 
     /// <summary>
     /// Unique code representing the subject.
     /// </summary>
-    public string SubjectCode { get; set; }
+	public string SubjectCode { get; set; }
 
     /// <summary>
     /// Name of the subject.
@@ -42,7 +36,7 @@ public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiT
     /// <summary>
     /// Collection of teachers assigned to the subject.
     /// </summary>
-    public ICollection<SubjectTeacher> Teachers { get; set; } = new HashSet<SubjectTeacher>();
+	public ICollection<SubjectTeacher> Teachers { get; set; } = new HashSet<SubjectTeacher>();
 
     /// <summary>
     /// Scheduled date for the subject.
@@ -57,99 +51,102 @@ public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiT
     /// <summary>
     /// Learning goals or objectives for the subject.
     /// </summary>
-    public string? LearningGoals { get; set; }
+	public string? LearningGoals { get; set; }
 
     /// <summary>
     /// Prerequisites required for understanding the subject.
     /// </summary>
-    public string? Prerequisites { get; set; }
+	public string? Prerequisites { get; set; }
 
     /// <summary>
     /// Description providing additional details about the subject.
     /// </summary>
-    public string? Description { get; set; }
+	public string? Description { get; set; }
 
     /// <summary>
     /// Path or reference to the uploaded document related to the subject.
     /// </summary>
-    public string? UploadedDocument { get; set; }
+	public string? UploadedDocument { get; set; }
 
     /// <summary>
     /// Current status of the subject (e.g., Draft, Published).
     /// </summary>
-    public SubjectStatus Status { get; set; } = SubjectStatus.Draft;
-    #endregion
+	public SubjectStatus Status { get; set; } = SubjectStatus.Draft;
+	#endregion
 
-    #region Constructors
+	#region Constructors
     /// <summary>
     /// Private constructor for ORM and deserialization purposes.
     /// </summary>
-    private StandardSubjectAssignment()
-    {
-        /* This constructor is for deserialization / ORM purpose */
-    }
+	private StandardSubjectAssignment()
+	{
+		/* This constructor is for deserialization / ORM purpose */
+	}
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StandardSubjectAssignment"/> class with specified parameters.
     /// </summary>
-    public StandardSubjectAssignment(
-        Guid id,
-        Guid? tenantId,
+	public StandardSubjectAssignment(
+	   Guid id,
+	   Guid? tenantId,
         Guid academicMediumId,
-        Guid standardId,
-        string subjectCode,
-        string subjectName,
-        DateTimeOffset scheduledDate,
-        string subjectColor,
-        string? learningGoals,
-        string? prerequisites,
-        string? description,
-        SubjectStatus status)
-        : base(id)
-    {
+	   Guid standardId,
+	   Guid subjectId,
+	   string subjectCode,
+	   SubjectStatus status = SubjectStatus.Draft,
+	   string? learningGoals = null,
+	   string? prerequisites = null,
+	   string? description = null,
+	   string? uploadedDocument = null
+	) : base(id)
+	{
 		Check.NotNullOrEmpty(subjectCode, nameof(SubjectCode));
 		TenantId = tenantId;
 		AcademicMediumId = academicMediumId;
-        StandardId = standardId;
-        SubjectCode = Check.NotNullOrEmpty(subjectCode, nameof(SubjectCode));
-        SubjectName = Check.NotNullOrEmpty(subjectName, nameof(SubjectName));
-        ScheduledDate = scheduledDate;
-        SubjectColor = subjectColor;
-        LearningGoals = learningGoals;
-        Prerequisites = prerequisites;
-        Description = description;
-        Status = status;
-    }
-    #endregion
+		StandardId = standardId;
+		SubjectId = subjectId;
+		SubjectCode = subjectCode;
+		Status = status;
 
-    #region Methods  
-    /// <summary>
-    /// Adds a teacher to the subject.
-    /// </summary>
-    /// <param name="teacher">The teacher to add.</param>
-    public void AddTeacher(SubjectTeacher teacher)
-    {
-        if (teacher == null) throw new ArgumentNullException(nameof(teacher));
-        Teachers.Add(teacher);
-    }
+		LearningGoals = learningGoals;
+		Prerequisites = prerequisites;
+		Description = description;
+		UploadedDocument = uploadedDocument;
 
-    /// <summary>
-    /// Removes a teacher from the subject.
-    /// </summary>
-    /// <param name="teacher">The teacher to remove.</param>
-    public void RemoveTeacher(SubjectTeacher teacher)
-    {
-        if (teacher == null) throw new ArgumentNullException(nameof(teacher));
-        Teachers.Remove(teacher);
-    }
+		Teachers = new HashSet<SubjectTeacher>();
+	}
 
-    /// <summary>
-    /// Changes the status of the subject.
-    /// </summary>
-    /// <param name="status">The new status to set.</param>
-    public void ChangeStatus(SubjectStatus status)
-    {
-        Status = status;
-    }
-    #endregion
+	#endregion
+
+	#region Methods
+	public void ChangeStatus(SubjectStatus status)
+	{
+		Status = status;
+	}
+
+	public void SetPrimaryTeacher(Guid teacherId)
+	{
+		// find the current primary teacher
+		var currentPrimary = Teachers.FirstOrDefault(t => t.TeacherType == SubjectTeacherType.Primary);
+		if (currentPrimary != null)
+		{
+			Teachers.Remove(currentPrimary);
+		}
+		Teachers.Add(new SubjectTeacher(Id, SubjectId, teacherId, SubjectTeacherType.Primary));
+	}
+
+	public void SetSecondaryTeachers(IEnumerable<Guid> teacherIds)
+	{
+		// find the current secondary teachers
+		var currentSecondary = Teachers.Where(t => t.TeacherType == SubjectTeacherType.Secondary).ToList();
+		foreach (var teacher in currentSecondary)
+		{
+			Teachers.Remove(teacher);
+		}
+		foreach (var teacherId in teacherIds)
+		{
+			Teachers.Add(new SubjectTeacher(Id, SubjectId, teacherId, SubjectTeacherType.Secondary));
+		}
+	}
+	#endregion
 }

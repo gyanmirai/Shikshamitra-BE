@@ -26,7 +26,5 @@ public class LibraryTimingConfiguration : IEntityTypeConfiguration<LibraryTiming
 
 		builder.Property(x => x.ClosingTime)
 			.IsRequired();
-
-		builder.HasIndex(x => x.Day).IsUnique();
 	}
 }

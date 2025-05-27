@@ -266,9 +266,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	// builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 
 	// Add more entity configurations here as needed
-
-
-	protected override void OnModelCreating(ModelBuilder builder)
+  protected override void OnModelCreating(ModelBuilder builder)
 	{
 		base.OnModelCreating(builder);
 

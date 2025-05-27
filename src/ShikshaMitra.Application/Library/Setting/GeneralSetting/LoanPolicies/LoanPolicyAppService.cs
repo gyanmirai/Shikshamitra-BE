@@ -14,15 +14,15 @@ using Volo.Abp.MultiTenancy;
 namespace ShikshaMitra.Library.Setting.GeneralSetting.LoanPolicies;
 public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepository,IGuidGenerator guidGenerator) : ApplicationService, ILoanPolicyAppService
 {
-	public async Task<LoanPolicyDto> CreateAsync(CreateUpdateLoanPolicyDto input)
+	public async Task<LoanPolicyDto> CreateAsync(CreateUpdateLoanPolicyDto createLoanPolicyDto)
 	{
 		try
 		{
 			var loanPolicyEntity = new LoanPolicy(guidGenerator.Create(),
-										 input.Role,
-										 input.LoanDurationInDays,
-										 input.MaxBooksAllowed,
-										 input.LateReturnFinePerDay,
+										 createLoanPolicyDto.RoleId,
+										 createLoanPolicyDto.LoanDurationInDays,
+										 createLoanPolicyDto.MaxBooksAllowed,
+										 createLoanPolicyDto.LateReturnFinePerDay,
 										 CurrentTenant.Id);
 
 			await _loanPolicyRepository.InsertAsync(loanPolicyEntity, autoSave: true);
@@ -34,21 +34,21 @@ public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepos
 		}
 	}
 
-	public async Task<LoanPolicyDto> UpdateAsync(Guid id, CreateUpdateLoanPolicyDto input)
+	public async Task<LoanPolicyDto> UpdateAsync(Guid id, CreateUpdateLoanPolicyDto updateLoanPolicyDto)
 	{
 		try
 		{
-			var entity = await _loanPolicyRepository.FindAsync(id);
-			if (entity == null)
+			var loanPolicyEntity = await _loanPolicyRepository.FindAsync(id);
+			if (loanPolicyEntity == null)
 			{
 				throw new EntityNotFoundException(typeof(LoanPolicy), id);
 			}
 
-			ObjectMapper.Map(input, entity);
+			ObjectMapper.Map(updateLoanPolicyDto, loanPolicyEntity);
 
-			await _loanPolicyRepository.UpdateAsync(entity, autoSave: true);
+			await _loanPolicyRepository.UpdateAsync(loanPolicyEntity, autoSave: true);
 
-			return ObjectMapper.Map<LoanPolicy, LoanPolicyDto>(entity);
+			return ObjectMapper.Map<LoanPolicy, LoanPolicyDto>(loanPolicyEntity);
 		}
 		catch (Exception ex)
 		{
@@ -60,13 +60,13 @@ public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepos
 	{
 		try
 		{
-			var entity = await _loanPolicyRepository.FindAsync(id);
-			if (entity == null)
+			var loanPolicyEntity = await _loanPolicyRepository.FindAsync(id);
+			if (loanPolicyEntity == null)
 			{
 				throw new EntityNotFoundException(typeof(LoanPolicy), id);
 			}
 
-			await _loanPolicyRepository.DeleteAsync(entity);
+			await _loanPolicyRepository.DeleteAsync(loanPolicyEntity);
 		}
 		catch (Exception ex)
 		{
@@ -78,17 +78,17 @@ public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepos
 	  {
 		try
 		{
-			var entity = await _loanPolicyRepository.GetAsync(id);
+			var loanPolicyEntity = await _loanPolicyRepository.GetAsync(id);
 
 
-			return ObjectMapper.Map<LoanPolicy, LoanPolicyDto>(entity);
+			return ObjectMapper.Map<LoanPolicy, LoanPolicyDto>(loanPolicyEntity);
 		}
 		catch (Exception ex)
 		{
 			throw new ApplicationException("An error occurred while retrieving the loan policy.", ex);
 		}
 	  }
-     public async Task<PagedResultDto<LoanPolicyDto>> GetListAsync(PagedAndSortedResultRequestDto input)
+     public async Task<PagedResultDto<LoanPolicyDto>> GetListAsync(PagedAndSortedResultRequestDto loanPolicyDto)
       {
         try
         {
@@ -109,9 +109,9 @@ public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepos
 
             // Apply sorting, skip, and take  
             var sortedQuery = queryable
-                .OrderBy(x => input.Sorting ?? nameof(LoanPolicy.Role)) // Explicitly specify the type for OrderBy  
-                .Skip(input.SkipCount)
-                .Take(input.MaxResultCount);
+                .OrderBy(x => loanPolicyDto.Sorting ?? nameof(LoanPolicy.RoleId)) /
+                .Skip(loanPolicyDto.SkipCount)
+                .Take(loanPolicyDto.MaxResultCount);
 
             // Fetch the paged items  
             var items = await AsyncExecuter.ToListAsync(sortedQuery);

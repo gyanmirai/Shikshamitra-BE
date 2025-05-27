@@ -18,7 +18,7 @@ public class LoanPolicyConfiguration : IEntityTypeConfiguration<LoanPolicy>
 
 		builder.ConfigureByConvention();
 
-		builder.Property(x => x.Role)
+		builder.Property(x => x.RoleId)
 			.IsRequired()
 			.HasMaxLength(64);
 
@@ -31,8 +31,5 @@ public class LoanPolicyConfiguration : IEntityTypeConfiguration<LoanPolicy>
 		builder.Property(x => x.LateReturnFinePerDay)
 			.IsRequired()
 			.HasColumnType("decimal(18,2)");
-
-		builder.HasIndex(x => x.Role).IsUnique(); // One policy per role (e.g., Student, Teacher)
-	}
-
+    }
 }

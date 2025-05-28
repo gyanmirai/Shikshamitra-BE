@@ -17,22 +17,22 @@ namespace ShikshaMitra.Library.BookManagement.AddNewBooks
 	     IGuidGenerator guidGenerator)
 		: ApplicationService, IAddNewBookAppService
 	{
-		public async Task<AddNewBookDto> CreateAsync(CreateUpdateAddNewBookDto input)
+		public async Task<AddNewBookDto> CreateAsync(CreateUpdateAddNewBookDto createAddNewBookDto)
 		{
 			try
 			{
 				var book = new AddNewBook(
 					guidGenerator.Create(),
-					input.BookTitle,
-					input.BookAuthor,
-					input.ISBN,
-					input.Publisher,
-					input.Year,
-					input.AvailableCopies,
-					input.Category,
-					input.Condition,
-					input.PicturePath,
-					input.EditionNotes,
+					createAddNewBookDto.BookTitle,
+					createAddNewBookDto.BookAuthor,
+					createAddNewBookDto.ISBN,
+					createAddNewBookDto.Publisher,
+					createAddNewBookDto.Year,
+					createAddNewBookDto.AvailableCopies,
+					createAddNewBookDto.Category,
+					createAddNewBookDto.Condition,
+					createAddNewBookDto.PicturePath,
+					createAddNewBookDto.EditionNotes,
 					CurrentTenant.Id
 				);
 
@@ -45,7 +45,7 @@ namespace ShikshaMitra.Library.BookManagement.AddNewBooks
 			}
 		}
 
-		public async Task<AddNewBookDto> UpdateAsync(Guid id, CreateUpdateAddNewBookDto input)
+		public async Task<AddNewBookDto> UpdateAsync(Guid id, CreateUpdateAddNewBookDto updateAddNewBookDto)
 		{
 			try
 			{
@@ -55,7 +55,7 @@ namespace ShikshaMitra.Library.BookManagement.AddNewBooks
 					throw new EntityNotFoundException(typeof(AddNewBook), id);
 				}
 
-				ObjectMapper.Map(input, book);
+				ObjectMapper.Map(updateAddNewBookDto, book);
 				await bookRepository.UpdateAsync(book, autoSave: true);
 
 				return ObjectMapper.Map<AddNewBook, AddNewBookDto>(book);
@@ -97,7 +97,7 @@ namespace ShikshaMitra.Library.BookManagement.AddNewBooks
 			}
 		}
 
-        public async Task<PagedResultDto<AddNewBookDto>> GetListAsync(PagedAndSortedResultRequestDto input)
+        public async Task<PagedResultDto<AddNewBookDto>> GetListAsync(PagedAndSortedResultRequestDto addNewBook)
         {
             try
             {
@@ -111,12 +111,11 @@ namespace ShikshaMitra.Library.BookManagement.AddNewBooks
 
                 var totalCount = await AsyncExecuter.CountAsync(queryable);
 
-                // Explicitly specify the type arguments for OrderBy to resolve CS0411  
                 var books = await AsyncExecuter.ToListAsync(
                     queryable
-                        .OrderBy<AddNewBook, string>(b => input.Sorting ?? b.BookTitle)
-                        .Skip(input.SkipCount)
-                        .Take(input.MaxResultCount)
+                        .OrderBy<AddNewBook, string>(b => addNewBook.Sorting ?? b.BookTitle)
+                        .Skip(addNewBook.SkipCount)
+                        .Take(addNewBook.MaxResultCount)
                 );
 
                 var dtoList = ObjectMapper.Map<List<AddNewBook>, List<AddNewBookDto>>(books);

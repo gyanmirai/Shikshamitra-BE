@@ -19,15 +19,15 @@ namespace ShikshaMitra.Library.BookManagement.BookOverviews
 		IGuidGenerator guidGenerator)
 		: ApplicationService, IBookOverviewAppService
 	{
-		public async Task<BookOverviewDto> CreateAsync(CreateUpdateBookOverviewDto input)
+		public async Task<BookOverviewDto> CreateAsync(CreateUpdateBookOverviewDto createBookOverviewDto)
 		{
 			var bookOverview = new BookOverview(
 				guidGenerator.Create(),
-				input.ISBN,
-				input.Name,
-				input.Borrowed,
-				input.Overdue,
-				input.Reserved,
+				createBookOverviewDto.ISBN,
+				createBookOverviewDto.Name,
+				createBookOverviewDto.Borrowed,
+				createBookOverviewDto.Overdue,
+				createBookOverviewDto.Reserved,
 				CurrentTenant.Id
 			);
 
@@ -42,11 +42,11 @@ namespace ShikshaMitra.Library.BookManagement.BookOverviews
 
 		public async Task<BookOverviewDto> GetAsync(Guid id)
 		{
-			var entity = await bookOverviewRepository.GetAsync(id);
-			return ObjectMapper.Map<BookOverview, BookOverviewDto>(entity);
+			var bookOverviewEntity = await bookOverviewRepository.GetAsync(id);
+			return ObjectMapper.Map<BookOverview, BookOverviewDto>(bookOverviewEntity);
 		}
 
-        public async Task<PagedResultDto<BookOverviewDto>> GetListAsync(PagedAndSortedResultRequestDto input)
+        public async Task<PagedResultDto<BookOverviewDto>> GetListAsync(PagedAndSortedResultRequestDto bookOveriewDto)
         {
             var queryable = await bookOverviewRepository.GetQueryableAsync();
 
@@ -60,9 +60,9 @@ namespace ShikshaMitra.Library.BookManagement.BookOverviews
             // Fix: Use a lambda expression to create the required Expression<Func<T, TResult>>  
             var entities = await AsyncExecuter.ToListAsync(
                 queryable
-                    .OrderBy(input.Sorting ?? nameof(BookOverview.Name))
-                    .Skip(input.SkipCount)
-                    .Take(input.MaxResultCount)
+                    .OrderBy(bookOveriewDto.Sorting ?? nameof(BookOverview.Name))
+                    .Skip(bookOveriewDto.SkipCount)
+                    .Take(bookOveriewDto.MaxResultCount)
             );
 
             var dtoList = ObjectMapper.Map<List<BookOverview>, List<BookOverviewDto>>(entities);
@@ -70,19 +70,18 @@ namespace ShikshaMitra.Library.BookManagement.BookOverviews
         }
 
     
-		public async Task<BookOverviewDto> UpdateAsync(Guid id, CreateUpdateBookOverviewDto input)
+		public async Task<BookOverviewDto> UpdateAsync(Guid id, CreateUpdateBookOverviewDto updateBookOverviewDto)
 		{
-			var entity = await bookOverviewRepository.FindAsync(id);
-			if (entity == null)
+			var bookOverviewEntity = await bookOverviewRepository.FindAsync(id);
+			if (bookOverviewEntity == null)
 			{
 				throw new EntityNotFoundException(typeof(BookOverview), id);
 			}
 
-			ObjectMapper.Map(input, entity);
-			await bookOverviewRepository.UpdateAsync(entity, autoSave: true);
+			ObjectMapper.Map(updateBookOverviewDto, bookOverviewEntity);
+			await bookOverviewRepository.UpdateAsync(bookOverviewEntity, autoSave: true);
 
-			return ObjectMapper.Map<BookOverview, BookOverviewDto>(entity);
+			return ObjectMapper.Map<BookOverview, BookOverviewDto>(bookOverviewEntity);
 		}
 	}
 }
-

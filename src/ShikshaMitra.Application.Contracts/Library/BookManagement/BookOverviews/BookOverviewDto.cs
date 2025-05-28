@@ -8,7 +8,7 @@ using Volo.Abp.Application.Dtos;
 namespace ShikshaMitra.Library.BookManagement.BookOverviews
 {
 	public class BookOverviewDto : AuditedEntityDto<Guid>
-	{
+	{   
 		public string ISBN { get; set; }
 		public string Name { get; set; }
 		public int Borrowed { get; set; }

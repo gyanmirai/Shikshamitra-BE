@@ -11,8 +11,7 @@ namespace ShikshaMitra.Library.BookManagement.IssueBooks
 	public class IssueBook : AuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		public Guid? TenantId { get; set; }
-
-		public string Standard { get; set; }
+        public string Standard { get; set; }
 		public string Division { get; set; }
 		public string GrNumber { get; set; }
 		public string StudentName { get; set; }

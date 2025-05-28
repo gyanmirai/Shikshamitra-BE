@@ -17,23 +17,23 @@ namespace ShikshaMitra.Library.BookManagement.IssueBooks
 	  IGuidGenerator guidGenerator)
 	  : ApplicationService, IIssueBookAppService
 	{
-		public async Task<IssueBookDto> CreateAsync(CreateUpdateIssueBookDto input)
+		public async Task<IssueBookDto> CreateAsync(CreateUpdateIssueBookDto createIssueBookDto)
 		{
 			try
 			{
 				var issueBook = new IssueBooks.IssueBook(
 					guidGenerator.Create(),
-					input.Standard,
-					input.Division,
-					input.GrNumber,
-					input.StudentName,
-					input.BookId,
-					input.BookTitle,
-					input.EditionYear,
-					input.Publisher,
-					input.IssueDate,
-					input.DueDate,
-					hasPendingCharges: false, // Assuming it is set false initially
+					createIssueBookDto.Standard,
+					createIssueBookDto.Division,
+					createIssueBookDto.GrNumber,
+					createIssueBookDto.StudentName,
+					createIssueBookDto.BookId,
+					createIssueBookDto.BookTitle,
+					createIssueBookDto.EditionYear,
+					createIssueBookDto.Publisher,
+					createIssueBookDto.IssueDate,
+					createIssueBookDto.DueDate,
+					hasPendingCharges: false,
 					tenantId: CurrentTenant.Id
 				);
 
@@ -46,14 +46,14 @@ namespace ShikshaMitra.Library.BookManagement.IssueBooks
 			}
 		}
 
-		public async Task<IssueBookDto> UpdateAsync(Guid id, CreateUpdateIssueBookDto input)
+		public async Task<IssueBookDto> UpdateAsync(Guid id, CreateUpdateIssueBookDto updateIssueBookDto)
 		{
 			try
 			{
 				var issueBook = await issueBookRepository.FindAsync(id)
 								 ?? throw new EntityNotFoundException(typeof(IssueBooks.IssueBook), id);
 
-				ObjectMapper.Map(input, issueBook);
+				ObjectMapper.Map(updateIssueBookDto, issueBook);
 				await issueBookRepository.UpdateAsync(issueBook, autoSave: true);
 
 				return ObjectMapper.Map<IssueBooks.IssueBook, IssueBookDto>(issueBook);
@@ -92,7 +92,7 @@ namespace ShikshaMitra.Library.BookManagement.IssueBooks
 			}
 		}
 
-        public async Task<PagedResultDto<IssueBookDto>> GetListAsync(PagedAndSortedResultRequestDto input)
+        public async Task<PagedResultDto<IssueBookDto>> GetListAsync(PagedAndSortedResultRequestDto issueBookDto)
         {
             try
             {
@@ -101,12 +101,11 @@ namespace ShikshaMitra.Library.BookManagement.IssueBooks
                     queryable = queryable.Where(x => x.TenantId == CurrentTenant.Id);
 
                 var totalCount = await AsyncExecuter.CountAsync(queryable);
-
-                // Explicitly specify the type arguments for OrderBy to resolve CS0411  
+ 
                 var items = await AsyncExecuter.ToListAsync(
                     queryable.OrderBy<IssueBooks.IssueBook, DateTime>(x => x.IssueDate)
-                             .Skip(input.SkipCount)
-                             .Take(input.MaxResultCount)
+                             .Skip(issueBookDto.SkipCount)
+                             .Take(issueBookDto.MaxResultCount)
                 );
 
                 var dtoList = ObjectMapper.Map<List<IssueBooks.IssueBook>, List<IssueBookDto>>(items);

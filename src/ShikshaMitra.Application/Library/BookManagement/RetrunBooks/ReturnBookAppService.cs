@@ -17,26 +17,26 @@ namespace ShikshaMitra.Library.BookManagement.RetrunBooks
 	     IGuidGenerator guidGenerator)
 	     : ApplicationService, IReturnBookAppService
 		{
-		public async Task<ReturnBookDto> CreateAsync(CreateUpdateReturnBookDto input)
+		public async Task<ReturnBookDto> CreateAsync(CreateUpdateReturnBookDto createReturnBookDto)
 		{
 			try
 			{
 				var returnBook = new ReturnBooks.ReturnBook(
 					guidGenerator.Create(),
-					input.BookId,
-					input.BookTitle,
-					input.MemberId,
-					input.MemberName,
-					input.DueDate,
-					input.ReturnDate,
-					input.Condition,
-					input.FineAmount,
-					input.FineReason,
-					input.ReceivedFineAmount,
-					input.PaymentMode,
-					input.NotificationSentOn,
-					input.NotificationStatus,
-					input.Action,
+					createReturnBookDto.BookId,
+					createReturnBookDto.BookTitle,
+					createReturnBookDto.MemberId,
+					createReturnBookDto.MemberName,
+					createReturnBookDto.DueDate,
+					createReturnBookDto.ReturnDate,
+					createReturnBookDto.Condition,
+					createReturnBookDto.FineAmount,
+					createReturnBookDto.FineReason,
+					createReturnBookDto.ReceivedFineAmount,
+					createReturnBookDto.PaymentMode,
+					createReturnBookDto.NotificationSentOn,
+					createReturnBookDto.NotificationStatus,
+					createReturnBookDto.Action,
 					CurrentTenant.Id
 				);
 
@@ -49,14 +49,14 @@ namespace ShikshaMitra.Library.BookManagement.RetrunBooks
 			}
 		}
 
-		public async Task<ReturnBookDto> UpdateAsync(Guid id, CreateUpdateReturnBookDto input)
+		public async Task<ReturnBookDto> UpdateAsync(Guid id, CreateUpdateReturnBookDto updateReturnBookDto)
 		{
 			try
 			{
 				var returnBook = await returnBookRepository.FindAsync(id)
 								  ?? throw new EntityNotFoundException(typeof(ReturnBooks.ReturnBook), id);
 
-				ObjectMapper.Map(input, returnBook);
+				ObjectMapper.Map(updateReturnBookDto, returnBook);
 				await returnBookRepository.UpdateAsync(returnBook, autoSave: true);
 
 				return ObjectMapper.Map<ReturnBooks.ReturnBook, ReturnBookDto>(returnBook);
@@ -95,7 +95,7 @@ namespace ShikshaMitra.Library.BookManagement.RetrunBooks
 			}
 		}
 
-        public async Task<PagedResultDto<ReturnBookDto>> GetListAsync(PagedAndSortedResultRequestDto input)
+        public async Task<PagedResultDto<ReturnBookDto>> GetListAsync(PagedAndSortedResultRequestDto returnBookDto)
         {
             try
             {
@@ -105,11 +105,10 @@ namespace ShikshaMitra.Library.BookManagement.RetrunBooks
 
                 var totalCount = await AsyncExecuter.CountAsync(queryable);
 
-                // Explicitly specify the type arguments for OrderBy to resolve CS0411  
                 var items = await AsyncExecuter.ToListAsync(
                     queryable.OrderBy<ReturnBooks.ReturnBook, DateTime>(x => x.ReturnDate)
-                             .Skip(input.SkipCount)
-                             .Take(input.MaxResultCount)
+                             .Skip(returnBookDto.SkipCount)
+                             .Take(returnBookDto.MaxResultCount)
                 );
 
                 var dtoList = ObjectMapper.Map<List<ReturnBooks.ReturnBook>, List<ReturnBookDto>>(items);

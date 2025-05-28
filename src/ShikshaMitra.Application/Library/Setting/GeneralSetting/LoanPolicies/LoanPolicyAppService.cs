@@ -92,34 +92,26 @@ public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepos
       {
         try
         {
-            // Retrieve the tenant ID  
             var tenantId = CurrentTenant.Id;
 
-            // Get the queryable from the repository  
             var queryable = await _loanPolicyRepository.GetQueryableAsync();
 
-            // Filter by TenantId if available  
             if (tenantId.HasValue)
             {
                 queryable = queryable.Where(x => x.TenantId == tenantId.Value);
             }
 
-            // Get the total count before pagination  
             var totalCount = await AsyncExecuter.CountAsync(queryable);
 
-            // Apply sorting, skip, and take  
             var sortedQuery = queryable
                 .OrderBy(x => loanPolicyDto.Sorting ?? nameof(LoanPolicy.RoleId)) /
                 .Skip(loanPolicyDto.SkipCount)
                 .Take(loanPolicyDto.MaxResultCount);
 
-            // Fetch the paged items  
             var items = await AsyncExecuter.ToListAsync(sortedQuery);
 
-            // Map entities to DTOs  
             var dtoList = ObjectMapper.Map<List<LoanPolicy>, List<LoanPolicyDto>>(items);
 
-            // Return paged result  
             return new PagedResultDto<LoanPolicyDto>(totalCount, dtoList);
         }
         catch (Exception ex)

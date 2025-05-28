@@ -1,7 +1,4 @@
 ﻿using AutoMapper;
-using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
-using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
-using ShikshaMitra.Library.Setting.GeneralSetting.LoanPolicies;
 namespace ShikshaMitra;
 
 public class ShikshaMitraApplicationAutoMapperProfile : Profile

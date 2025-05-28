@@ -13,5 +13,4 @@ public class LoanPolicyDto
 	public int LoanDurationInDays { get; set; }
 	public int MaxBooksAllowed { get; set; }
 	public decimal LateReturnFinePerDay { get; set; }
-
 }

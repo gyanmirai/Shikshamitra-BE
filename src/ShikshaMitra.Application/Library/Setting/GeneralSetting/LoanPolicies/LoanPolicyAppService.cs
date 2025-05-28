@@ -104,7 +104,7 @@ public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepos
             var totalCount = await AsyncExecuter.CountAsync(queryable);
 
             var sortedQuery = queryable
-                .OrderBy(x => loanPolicyDto.Sorting ?? nameof(LoanPolicy.RoleId)) // Explicitly specify the type for OrderBy  
+                .OrderBy(x => loanPolicyDto.Sorting ?? nameof(LoanPolicy.RoleId)) /
                 .Skip(loanPolicyDto.SkipCount)
                 .Take(loanPolicyDto.MaxResultCount);
 

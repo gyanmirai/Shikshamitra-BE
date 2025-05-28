@@ -11,6 +11,10 @@ using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.EventAndHolidays;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.Library.BookManagement.AddNewBooks;
+using ShikshaMitra.Library.BookManagement.BookOverviews;
+using ShikshaMitra.Library.BookManagement.IssueBooks;
+using ShikshaMitra.Library.BookManagement.ReturnBooks;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using ShikshaMitra.Library.Setting.GeneralSetting.LoanPolicies;
@@ -34,6 +38,7 @@ using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
+using System.Collections.Generic;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
 using Volo.Abp.BackgroundJobs.EntityFrameworkCore;
 using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
@@ -242,6 +247,15 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<LibraryTiming> LibraryTimings { get; set; }
     public DbSet<BookCategory> BookCategories { get; set; }
     public DbSet<LoanPolicy> LoanPolicies { get; set; }
+	#endregion
+
+	#region Library
+	#region BookManagement
+	public DbSet<AddNewBook> AddNewBooks { get; set; }
+	public DbSet<IssueBook> IssueBooks { get; set; }
+	public DbSet<ReturnBook> ReturnBooks { get; set; }
+    public DbSet<BookOverview> BookOverviews { get; set; }
+    #endregion
 
 	#endregion
 	#endregion
@@ -252,9 +266,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	// builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 
 	// Add more entity configurations here as needed
-
-
-	protected override void OnModelCreating(ModelBuilder builder)
+  protected override void OnModelCreating(ModelBuilder builder)
 	{
 		base.OnModelCreating(builder);
 

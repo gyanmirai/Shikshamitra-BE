@@ -31,5 +31,5 @@ public class LoanPolicyConfiguration : IEntityTypeConfiguration<LoanPolicy>
 		builder.Property(x => x.LateReturnFinePerDay)
 			.IsRequired()
 			.HasColumnType("decimal(18,2)");
-	}
+    }
 }

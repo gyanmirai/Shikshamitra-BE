@@ -211,7 +211,6 @@ public class StudentEnrollmentAppService(
 			motherTongue: input.MotherTongue,
 			nationality: input.Nationality,
 			birthPlace: input.BirthPlace,
-			temporaryGr: input.TemporaryGr,
 			remarks: input.Remarks
 		);
 

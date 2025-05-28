@@ -74,7 +74,8 @@ public class EmployeeManager(
 		string? city = null,
 		State? state = null,
 		Country? country = null,
-		string? pinCode = null)
+		string? pinCode = null,
+		Guid? shiftId = null)
 	{
 		// Validate role existence
 		IdentityRole role = await GetRoleAsync(roleId);
@@ -166,7 +167,8 @@ public class EmployeeManager(
 				accountNumber: null,
 				ifscCode: null
 			),
-			workExperiences: null
+			workExperiences: null,
+			shiftId: shiftId
 		);
 
 		// 1. Create the IdentityUser
@@ -228,7 +230,8 @@ public class EmployeeManager(
 		string? city = null,
 		State? state = null,
 		Country? country = null,
-		string? pinCode = null
+		string? pinCode = null,
+		Guid? shiftId = null
 	)
 	{
 		// Get the employee
@@ -280,7 +283,8 @@ public class EmployeeManager(
 			state: state,
 			country: country,
 			pinCode: pinCode,
-			educationMediumStageId: educationMediumStageId
+			educationMediumStageId: educationMediumStageId,
+			shiftId: shiftId
 		);
 		// Validate the updated employee if needed
 		ValidateEmployee(employee);

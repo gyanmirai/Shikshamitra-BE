@@ -63,7 +63,8 @@ public class EmployeeAppService(
 			city: input.City,
 			state: input.State,
 			country: input.Country,
-			pinCode: input.PinCode
+			pinCode: input.PinCode,
+			shiftId: input.ShiftId
 		);
 
 		// Save the employee
@@ -107,7 +108,8 @@ public class EmployeeAppService(
 			city: input.City,
 			state: input.State,
 			country: input.Country,
-			pinCode: input.PinCode
+			pinCode: input.PinCode,
+			shiftId: input.ShiftId
 		);
 
 		// Save the updated employee

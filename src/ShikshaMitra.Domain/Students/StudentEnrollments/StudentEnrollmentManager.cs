@@ -294,7 +294,6 @@ public class StudentEnrollmentManager(
 			string? motherTongue,
 			string? nationality,
 			string? birthPlace,
-			int? temporaryGr,
 			string? remarks
 			)
 	{

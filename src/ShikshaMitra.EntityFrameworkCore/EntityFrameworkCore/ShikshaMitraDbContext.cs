@@ -21,7 +21,6 @@ using ShikshaMitra.Library.Setting.GeneralSetting.LoanPolicies;
 using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.Attendance.settings;
 using ShikshaMitra.Students.Attendance.Settings;
-using ShikshaMitra.Students.Dashboard;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.EntranceExam;
 using ShikshaMitra.Students.StudentEnrollments.FollowUps;
@@ -162,10 +161,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#endregion
 
-	#endregion
-
-	#region Dashboard
-	public DbSet<DashboardLayout> Dashboards { get; set; }
 	#endregion
 
 	#endregion

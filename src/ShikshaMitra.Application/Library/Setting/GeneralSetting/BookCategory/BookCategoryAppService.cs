@@ -10,19 +10,18 @@ using Volo.Abp.Guids;
 
 namespace ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 public class BookCategoryAppService(
-	IRepository<BookCategory, Guid> bookCategoryRepository,
-	IGuidGenerator guidGenerator
+   IRepository<BookCategory, Guid> bookCategoryRepository,
+   IGuidGenerator guidGenerator
 ) : ApplicationService, IBookCategoryAppService
 {
-    
-public async Task<BookCategoryDto> CreateAsync(CreateUpdateBookCategoryDto createBookCategoryDto)
+    public async Task<BookCategoryDto> CreateAsync(CreateUpdateBookCategoryDto createBookCategoryDto)
     {
         try
         {
             var bookCategoryEntity = new BookCategory(
                 guidGenerator.Create(),
-				createBookCategoryDto.Name,
-				createBookCategoryDto.Description,
+                createBookCategoryDto.Name,
+                createBookCategoryDto.Description,
                 CurrentTenant.Id ?? Guid.Empty
             );
 
@@ -34,15 +33,12 @@ public async Task<BookCategoryDto> CreateAsync(CreateUpdateBookCategoryDto creat
             throw new ApplicationException("An error occurred while creating the book category.", ex);
         }
     }
+
     public async Task<BookCategoryDto> UpdateAsync(Guid id, CreateUpdateBookCategoryDto updateBookCategoryDto)
     {
         try
         {
-            var bookCategoryEntity = await bookCategoryRepository.FindAsync(id);
-			if (bookCategoryEntity == null)
-			{
-                throw new EntityNotFoundException(typeof(BookCategory), id);
-            }
+            var bookCategoryEntity = await bookCategoryRepository.FindAsync(id) ?? throw new EntityNotFoundException(typeof(BookCategory), id);
 
             ObjectMapper.Map(updateBookCategoryDto, bookCategoryEntity);
 
@@ -53,17 +49,13 @@ public async Task<BookCategoryDto> CreateAsync(CreateUpdateBookCategoryDto creat
         {
             throw new ApplicationException("An error occurred while updating the book category.", ex);
         }
-    }
- 
-public async Task DeleteAsync(Guid id)
+    }
+
+    public async Task DeleteAsync(Guid id)
     {
         try
         {
-            var bookCategoryEntity = await bookCategoryRepository.FindAsync(id);
-            if (bookCategoryEntity == null)
-            {
-                throw new EntityNotFoundException(typeof(BookCategory), id);
-            }
+            var bookCategoryEntity = await bookCategoryRepository.FindAsync(id) ?? throw new EntityNotFoundException(typeof(BookCategory), id);
 
             await bookCategoryRepository.DeleteAsync(bookCategoryEntity);
         }
@@ -73,20 +65,18 @@ public async Task DeleteAsync(Guid id)
         }
     }
 
-
- 
-	public async Task<BookCategoryDto> GetAsync(Guid id)
-	{
-		try
-		{
-			var bookCategoryEntity = await bookCategoryRepository.GetAsync(id);
-			return ObjectMapper.Map<BookCategory, BookCategoryDto>(bookCategoryEntity);
-		}
-		catch (Exception ex)
-		{
-			throw new ApplicationException("An error occurred while retrieving the book category.", ex);
-		}
-	}
+    public async Task<BookCategoryDto> GetAsync(Guid id)
+    {
+        try
+        {
+            var bookCategoryEntity = await bookCategoryRepository.GetAsync(id);
+            return ObjectMapper.Map<BookCategory, BookCategoryDto>(bookCategoryEntity);
+        }
+        catch (Exception ex)
+        {
+            throw new ApplicationException("An error occurred while retrieving the book category.", ex);
+        }
+    }
 
     public async Task<PagedResultDto<BookCategoryDto>> GetListAsync(PagedAndSortedResultRequestDto bookCategoryDto)
     {

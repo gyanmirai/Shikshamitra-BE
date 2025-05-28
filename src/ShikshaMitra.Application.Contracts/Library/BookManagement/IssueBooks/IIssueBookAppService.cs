@@ -6,14 +6,13 @@ using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
-namespace ShikshaMitra.Library.BookManagement.IssueBook
-{
-	public interface IIssueBookAppService : ICrudAppService<
-		IssueBookDto,
-		Guid,
-		PagedAndSortedResultRequestDto,
-		CreateUpdateIssueBookDto>
-	{
+namespace ShikshaMitra.Library.BookManagement.IssueBook;
 
-	}
+public interface IIssueBookAppService : ICrudAppService<
+	IssueBookDto,
+	Guid,
+	PagedAndSortedResultRequestDto,
+	CreateUpdateIssueBookDto>
+{
+
 }

@@ -12,39 +12,39 @@ using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra.Library.BookManagement.BookOverviews
+namespace ShikshaMitra.Library.BookManagement.BookOverviews;
+
+public class BookOverviewAppService(
+	IRepository<BookOverview, Guid> bookOverviewRepository,
+	IGuidGenerator guidGenerator)
+	: ApplicationService, IBookOverviewAppService
 {
-	public class BookOverviewAppService(
-		IRepository<BookOverview, Guid> bookOverviewRepository,
-		IGuidGenerator guidGenerator)
-		: ApplicationService, IBookOverviewAppService
+	public async Task<BookOverviewDto> CreateAsync(CreateUpdateBookOverviewDto createBookOverviewDto)
 	{
-		public async Task<BookOverviewDto> CreateAsync(CreateUpdateBookOverviewDto createBookOverviewDto)
-		{
-			var bookOverview = new BookOverview(
-				guidGenerator.Create(),
-				createBookOverviewDto.ISBN,
-				createBookOverviewDto.Name,
-				createBookOverviewDto.Borrowed,
-				createBookOverviewDto.Overdue,
-				createBookOverviewDto.Reserved,
-				CurrentTenant.Id
-			);
+		var bookOverview = new BookOverview(
+			guidGenerator.Create(),
+			createBookOverviewDto.ISBN,
+			createBookOverviewDto.Name,
+			createBookOverviewDto.Borrowed,
+			createBookOverviewDto.Overdue,
+			createBookOverviewDto.Reserved,
+			CurrentTenant.Id
+		);
 
-			await bookOverviewRepository.InsertAsync(bookOverview, autoSave: true);
-			return ObjectMapper.Map<BookOverview, BookOverviewDto>(bookOverview);
-		}
+		await bookOverviewRepository.InsertAsync(bookOverview, autoSave: true);
+		return ObjectMapper.Map<BookOverview, BookOverviewDto>(bookOverview);
+	}
 
-		public async Task DeleteAsync(Guid id)
-		{
-			await bookOverviewRepository.DeleteAsync(id);
-		}
+	public async Task DeleteAsync(Guid id)
+	{
+		await bookOverviewRepository.DeleteAsync(id);
+	}
 
-		public async Task<BookOverviewDto> GetAsync(Guid id)
-		{
-			var bookOverviewEntity = await bookOverviewRepository.GetAsync(id);
-			return ObjectMapper.Map<BookOverview, BookOverviewDto>(bookOverviewEntity);
-		}
+	public async Task<BookOverviewDto> GetAsync(Guid id)
+	{
+		var bookOverviewEntity = await bookOverviewRepository.GetAsync(id);
+		return ObjectMapper.Map<BookOverview, BookOverviewDto>(bookOverviewEntity);
+	}
 
         public async Task<PagedResultDto<BookOverviewDto>> GetListAsync(PagedAndSortedResultRequestDto bookOveriewDto)
         {
@@ -70,18 +70,17 @@ namespace ShikshaMitra.Library.BookManagement.BookOverviews
         }
 
     
-		public async Task<BookOverviewDto> UpdateAsync(Guid id, CreateUpdateBookOverviewDto updateBookOverviewDto)
+	public async Task<BookOverviewDto> UpdateAsync(Guid id, CreateUpdateBookOverviewDto updateBookOverviewDto)
+	{
+		var bookOverviewEntity = await bookOverviewRepository.FindAsync(id);
+		if (bookOverviewEntity == null)
 		{
-			var bookOverviewEntity = await bookOverviewRepository.FindAsync(id);
-			if (bookOverviewEntity == null)
-			{
-				throw new EntityNotFoundException(typeof(BookOverview), id);
-			}
-
-			ObjectMapper.Map(updateBookOverviewDto, bookOverviewEntity);
-			await bookOverviewRepository.UpdateAsync(bookOverviewEntity, autoSave: true);
-
-			return ObjectMapper.Map<BookOverview, BookOverviewDto>(bookOverviewEntity);
+			throw new EntityNotFoundException(typeof(BookOverview), id);
 		}
+
+		ObjectMapper.Map(updateBookOverviewDto, bookOverviewEntity);
+		await bookOverviewRepository.UpdateAsync(bookOverviewEntity, autoSave: true);
+
+		return ObjectMapper.Map<BookOverview, BookOverviewDto>(bookOverviewEntity);
 	}
 }

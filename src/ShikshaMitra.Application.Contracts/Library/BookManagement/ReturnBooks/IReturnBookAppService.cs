@@ -6,13 +6,12 @@ using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
-namespace ShikshaMitra.Library.BookManagement.ReturnBook
+namespace ShikshaMitra.Library.BookManagement.ReturnBook;
+
+public interface IReturnBookAppService : ICrudAppService<
+	ReturnBookDto,
+	Guid,
+	PagedAndSortedResultRequestDto,
+	CreateUpdateReturnBookDto>
 {
-	public interface IReturnBookAppService : ICrudAppService<
-		ReturnBookDto,
-		Guid,
-		PagedAndSortedResultRequestDto,
-		CreateUpdateReturnBookDto>
-	{
-	}
 }

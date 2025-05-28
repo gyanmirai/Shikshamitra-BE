@@ -10,90 +10,90 @@ using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 
-namespace ShikshaMitra.Library.BookManagement.RetrunBooks
-{
-	public class ReturnBookAppService(
-	 	 IRepository<ReturnBooks.ReturnBook, Guid> returnBookRepository,
-	     IGuidGenerator guidGenerator)
-	     : ApplicationService, IReturnBookAppService
-		{
-		public async Task<ReturnBookDto> CreateAsync(CreateUpdateReturnBookDto createReturnBookDto)
-		{
-			try
-			{
-				var returnBook = new ReturnBooks.ReturnBook(
-					guidGenerator.Create(),
-					createReturnBookDto.BookId,
-					createReturnBookDto.BookTitle,
-					createReturnBookDto.MemberId,
-					createReturnBookDto.MemberName,
-					createReturnBookDto.DueDate,
-					createReturnBookDto.ReturnDate,
-					createReturnBookDto.Condition,
-					createReturnBookDto.FineAmount,
-					createReturnBookDto.FineReason,
-					createReturnBookDto.ReceivedFineAmount,
-					createReturnBookDto.PaymentMode,
-					createReturnBookDto.NotificationSentOn,
-					createReturnBookDto.NotificationStatus,
-					createReturnBookDto.Action,
-					CurrentTenant.Id
-				);
+namespace ShikshaMitra.Library.BookManagement.RetrunBooks;
 
-				await returnBookRepository.InsertAsync(returnBook, autoSave: true);
-				return ObjectMapper.Map<ReturnBooks.ReturnBook, ReturnBookDto>(returnBook);
-			}
-			catch (Exception ex)
-			{
-				throw new ApplicationException("An error occurred while processing the return.", ex);
-			}
+public class ReturnBookAppService(
+ 	 IRepository<ReturnBooks.ReturnBook, Guid> returnBookRepository,
+     IGuidGenerator guidGenerator)
+     : ApplicationService, IReturnBookAppService
+	{
+	public async Task<ReturnBookDto> CreateAsync(CreateUpdateReturnBookDto createReturnBookDto)
+	{
+		try
+		{
+			var returnBook = new ReturnBooks.ReturnBook(
+				guidGenerator.Create(),
+				createReturnBookDto.BookId,
+				createReturnBookDto.BookTitle,
+				createReturnBookDto.MemberId,
+				createReturnBookDto.MemberName,
+				createReturnBookDto.DueDate,
+				createReturnBookDto.ReturnDate,
+				createReturnBookDto.Condition,
+				createReturnBookDto.FineAmount,
+				createReturnBookDto.FineReason,
+				createReturnBookDto.ReceivedFineAmount,
+				createReturnBookDto.PaymentMode,
+				createReturnBookDto.NotificationSentOn,
+				createReturnBookDto.NotificationStatus,
+				createReturnBookDto.Action,
+				CurrentTenant.Id
+			);
+
+			await returnBookRepository.InsertAsync(returnBook, autoSave: true);
+			return ObjectMapper.Map<ReturnBooks.ReturnBook, ReturnBookDto>(returnBook);
 		}
-
-		public async Task<ReturnBookDto> UpdateAsync(Guid id, CreateUpdateReturnBookDto updateReturnBookDto)
+		catch (Exception ex)
 		{
-			try
-			{
-				var returnBook = await returnBookRepository.FindAsync(id)
-								  ?? throw new EntityNotFoundException(typeof(ReturnBooks.ReturnBook), id);
-
-				ObjectMapper.Map(updateReturnBookDto, returnBook);
-				await returnBookRepository.UpdateAsync(returnBook, autoSave: true);
-
-				return ObjectMapper.Map<ReturnBooks.ReturnBook, ReturnBookDto>(returnBook);
-			}
-			catch (Exception ex)
-			{
-				throw new ApplicationException("An error occurred while updating the return record.", ex);
-			}
+			throw new ApplicationException("An error occurred while processing the return.", ex);
 		}
+	}
 
-		public async Task DeleteAsync(Guid id)
+	public async Task<ReturnBookDto> UpdateAsync(Guid id, CreateUpdateReturnBookDto updateReturnBookDto)
+	{
+		try
 		{
-			try
-			{
-				var returnBook = await returnBookRepository.FindAsync(id)
-								  ?? throw new EntityNotFoundException(typeof(ReturnBooks.ReturnBook), id);
+			var returnBook = await returnBookRepository.FindAsync(id)
+							  ?? throw new EntityNotFoundException(typeof(ReturnBooks.ReturnBook), id);
 
-				await returnBookRepository.DeleteAsync(returnBook);
-			}
-			catch (Exception ex)
-			{
-				throw new ApplicationException("An error occurred while deleting the return record.", ex);
-			}
+			ObjectMapper.Map(updateReturnBookDto, returnBook);
+			await returnBookRepository.UpdateAsync(returnBook, autoSave: true);
+
+			return ObjectMapper.Map<ReturnBooks.ReturnBook, ReturnBookDto>(returnBook);
 		}
-
-		public async Task<ReturnBookDto> GetAsync(Guid id)
+		catch (Exception ex)
 		{
-			try
-			{
-				var returnBook = await returnBookRepository.GetAsync(id);
-				return ObjectMapper.Map<ReturnBooks.ReturnBook, ReturnBookDto>(returnBook);
-			}
-			catch (Exception ex)
-			{
-				throw new ApplicationException("An error occurred while retrieving the return record.", ex);
-			}
+			throw new ApplicationException("An error occurred while updating the return record.", ex);
 		}
+	}
+
+	public async Task DeleteAsync(Guid id)
+	{
+		try
+		{
+			var returnBook = await returnBookRepository.FindAsync(id)
+							  ?? throw new EntityNotFoundException(typeof(ReturnBooks.ReturnBook), id);
+
+			await returnBookRepository.DeleteAsync(returnBook);
+		}
+		catch (Exception ex)
+		{
+			throw new ApplicationException("An error occurred while deleting the return record.", ex);
+		}
+	}
+
+	public async Task<ReturnBookDto> GetAsync(Guid id)
+	{
+		try
+		{
+			var returnBook = await returnBookRepository.GetAsync(id);
+			return ObjectMapper.Map<ReturnBooks.ReturnBook, ReturnBookDto>(returnBook);
+		}
+		catch (Exception ex)
+		{
+			throw new ApplicationException("An error occurred while retrieving the return record.", ex);
+		}
+	}
 
         public async Task<PagedResultDto<ReturnBookDto>> GetListAsync(PagedAndSortedResultRequestDto returnBookDto)
         {
@@ -121,4 +121,3 @@ namespace ShikshaMitra.Library.BookManagement.RetrunBooks
             }
         }
    	}
-}

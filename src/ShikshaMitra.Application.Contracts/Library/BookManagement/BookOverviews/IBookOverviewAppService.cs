@@ -6,14 +6,13 @@ using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
-namespace ShikshaMitra.Library.BookManagement.BookOverviews
+namespace ShikshaMitra.Library.BookManagement.BookOverviews;
+
+public interface IBookOverviewAppService :
+	ICrudAppService<
+		BookOverviewDto,
+		Guid,
+		PagedAndSortedResultRequestDto,
+		CreateUpdateBookOverviewDto>
 {
-	public interface IBookOverviewAppService :
-		ICrudAppService<
-			BookOverviewDto,
-			Guid,
-			PagedAndSortedResultRequestDto,
-			CreateUpdateBookOverviewDto>
-	{
     }
-}

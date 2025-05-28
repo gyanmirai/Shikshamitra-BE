@@ -12,7 +12,7 @@ using DocumentFormat.OpenXml.Vml.Office;
 
 namespace ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 public class LibraryTimingAppService(
-	IRepository<LibraryTiming, Guid> _libraryTimingRepository,
+	IRepository<LibraryTiming, Guid> libraryTimingRepository,
 	IGuidGenerator guidGenerator
 ) : ApplicationService, ILibraryTimingAppService
 {
@@ -28,7 +28,7 @@ public class LibraryTimingAppService(
 				CurrentTenant.Id ?? Guid.Empty
 			);
 
-			await _libraryTimingRepository.InsertAsync(libraryTimingEntity, autoSave: true);
+			await libraryTimingRepository.InsertAsync(libraryTimingEntity, autoSave: true);
 			return ObjectMapper.Map<LibraryTiming, LibraryTimingDto>(libraryTimingEntity);
 		}
 		catch (Exception ex)
@@ -41,7 +41,7 @@ public class LibraryTimingAppService(
 	{
 		try
 		{
-			var libraryTimingEntity = await _libraryTimingRepository.FindAsync(id);
+			var libraryTimingEntity = await libraryTimingRepository.FindAsync(id);
 			if (libraryTimingEntity == null)
 			{
 				throw new EntityNotFoundException(typeof(LibraryTiming), id);
@@ -50,7 +50,7 @@ public class LibraryTimingAppService(
 			libraryTimingEntity.OpeningTime = updateLibraryTimingDto.OpeningTime;
 			libraryTimingEntity.ClosingTime = updateLibraryTimingDto.ClosingTime;
 
-			await _libraryTimingRepository.UpdateAsync(libraryTimingEntity, autoSave: true);
+			await libraryTimingRepository.UpdateAsync(libraryTimingEntity, autoSave: true);
 			return ObjectMapper.Map<LibraryTiming, LibraryTimingDto>(libraryTimingEntity);
 		}
 		catch (Exception ex)
@@ -69,13 +69,13 @@ public class LibraryTimingAppService(
 			}
 
 			var dayOfWeek = (DayOfWeek) day;
-			var libraryTimingEntity = await _libraryTimingRepository.FindAsync(x => x.Day == dayOfWeek);
+			var libraryTimingEntity = await libraryTimingRepository.FindAsync(x => x.Day == dayOfWeek);
 			if (libraryTimingEntity == null)
 			{
 				throw new EntityNotFoundException($"No library timing found for day {dayOfWeek}.");
 			}
 
-			await _libraryTimingRepository.DeleteAsync(libraryTimingEntity);
+			await libraryTimingRepository.DeleteAsync(libraryTimingEntity);
 		}
 		catch (Exception ex)
 		{
@@ -87,7 +87,7 @@ public class LibraryTimingAppService(
 	{
 		try
 		{
-			var libraryTimingEntity = await _libraryTimingRepository.GetAsync(id);
+			var libraryTimingEntity = await libraryTimingRepository.GetAsync(id);
 			return ObjectMapper.Map<LibraryTiming, LibraryTimingDto>(libraryTimingEntity);
 		}
 		catch (Exception ex)
@@ -101,7 +101,7 @@ public class LibraryTimingAppService(
         try
         {
             var tenantId = CurrentTenant.Id;
-            var queryable = await _libraryTimingRepository.GetQueryableAsync();
+            var queryable = await libraryTimingRepository.GetQueryableAsync();
 
             if (tenantId.HasValue)
             {

@@ -45,7 +45,8 @@ namespace ShikshaMitra.Library
 
 			CreateMap<BookOverview, BookOverviewDto>();
 			CreateMap<BookOverviewDto, BookOverview>();
-            #endregion
+			#endregion
+			#endregion
 		}
 	}
 }

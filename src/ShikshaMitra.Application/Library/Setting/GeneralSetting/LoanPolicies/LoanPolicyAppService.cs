@@ -12,7 +12,7 @@ using Volo.Abp.Guids;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Library.Setting.GeneralSetting.LoanPolicies;
-public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepository,IGuidGenerator guidGenerator) : ApplicationService, ILoanPolicyAppService
+public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> loanPolicyRepository,IGuidGenerator guidGenerator) : ApplicationService, ILoanPolicyAppService
 {
 	public async Task<LoanPolicyDto> CreateAsync(CreateUpdateLoanPolicyDto createLoanPolicyDto)
 	{
@@ -25,7 +25,7 @@ public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepos
 										 createLoanPolicyDto.LateReturnFinePerDay,
 										 CurrentTenant.Id);
 
-			await _loanPolicyRepository.InsertAsync(loanPolicyEntity, autoSave: true);
+			await loanPolicyRepository.InsertAsync(loanPolicyEntity, autoSave: true);
 			return ObjectMapper.Map<LoanPolicy, LoanPolicyDto>(loanPolicyEntity);
 		}
 		catch (Exception ex)
@@ -38,7 +38,7 @@ public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepos
 	{
 		try
 		{
-			var loanPolicyEntity = await _loanPolicyRepository.FindAsync(id);
+			var loanPolicyEntity = await loanPolicyRepository.FindAsync(id);
 			if (loanPolicyEntity == null)
 			{
 				throw new EntityNotFoundException(typeof(LoanPolicy), id);
@@ -46,7 +46,7 @@ public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepos
 
 			ObjectMapper.Map(updateLoanPolicyDto, loanPolicyEntity);
 
-			await _loanPolicyRepository.UpdateAsync(loanPolicyEntity, autoSave: true);
+			await loanPolicyRepository.UpdateAsync(loanPolicyEntity, autoSave: true);
 
 			return ObjectMapper.Map<LoanPolicy, LoanPolicyDto>(loanPolicyEntity);
 		}
@@ -60,13 +60,13 @@ public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepos
 	{
 		try
 		{
-			var loanPolicyEntity = await _loanPolicyRepository.FindAsync(id);
+			var loanPolicyEntity = await loanPolicyRepository.FindAsync(id);
 			if (loanPolicyEntity == null)
 			{
 				throw new EntityNotFoundException(typeof(LoanPolicy), id);
 			}
 
-			await _loanPolicyRepository.DeleteAsync(loanPolicyEntity);
+			await loanPolicyRepository.DeleteAsync(loanPolicyEntity);
 		}
 		catch (Exception ex)
 		{
@@ -78,7 +78,7 @@ public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepos
 	  {
 		try
 		{
-			var loanPolicyEntity = await _loanPolicyRepository.GetAsync(id);
+			var loanPolicyEntity = await loanPolicyRepository.GetAsync(id);
 
 
 			return ObjectMapper.Map<LoanPolicy, LoanPolicyDto>(loanPolicyEntity);
@@ -94,7 +94,7 @@ public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepos
         {
             var tenantId = CurrentTenant.Id;
 
-            var queryable = await _loanPolicyRepository.GetQueryableAsync();
+            var queryable = await loanPolicyRepository.GetQueryableAsync();
 
             if (tenantId.HasValue)
             {
@@ -104,7 +104,7 @@ public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> _loanPolicyRepos
             var totalCount = await AsyncExecuter.CountAsync(queryable);
 
             var sortedQuery = queryable
-                .OrderBy(x => loanPolicyDto.Sorting ?? nameof(LoanPolicy.RoleId)) /
+                .OrderBy(x => loanPolicyDto.Sorting ?? nameof(LoanPolicy.RoleId))
                 .Skip(loanPolicyDto.SkipCount)
                 .Take(loanPolicyDto.MaxResultCount);
 

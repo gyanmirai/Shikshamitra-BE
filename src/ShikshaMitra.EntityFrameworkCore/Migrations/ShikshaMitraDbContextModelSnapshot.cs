@@ -830,6 +830,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("RoleId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ShiftId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ShortName")
                         .HasColumnType("text");
 
@@ -993,6 +996,8 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("PayrollStructureId1");
 
                     b.HasIndex("RoleId");
+
+                    b.HasIndex("ShiftId");
 
                     b.HasIndex("UserId");
 
@@ -4107,6 +4112,23 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppEducationMediums", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.TenantSettings.InstituteSetupExtraProperties", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("State")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AppInstituteSetupExtraProperties", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.TenantSettings.ShiftManagement", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4197,6 +4219,9 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<Guid?>("ShiftId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
@@ -4204,6 +4229,8 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("EducationMediumStageId");
+
+                    b.HasIndex("ShiftId");
 
                     b.ToTable("AppStandards", (string)null);
                 });
@@ -6095,6 +6122,10 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ShikshaMitra.TenantSettings.ShiftManagement", "Shift")
+                        .WithMany()
+                        .HasForeignKey("ShiftId");
+
                     b.HasOne("Volo.Abp.Identity.IdentityUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -6196,6 +6227,8 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("PayrollStructure");
 
                     b.Navigation("Role");
+
+                    b.Navigation("Shift");
 
                     b.Navigation("State");
 
@@ -6625,7 +6658,13 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("ShikshaMitra.TenantSettings.ShiftManagement", "Shift")
+                        .WithMany()
+                        .HasForeignKey("ShiftId");
+
                     b.Navigation("EducationMediumStage");
+
+                    b.Navigation("Shift");
                 });
 
             modelBuilder.Entity("Volo.Abp.AuditLogging.AuditLogAction", b =>

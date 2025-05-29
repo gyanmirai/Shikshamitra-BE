@@ -1,5 +1,6 @@
 ﻿using ShikshaMitra.Common;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
+using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Collections.Generic;
@@ -61,6 +62,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public ContactDetails MotherDetails { get; private set; }
 	public ContactDetails SpouseDetails { get; private set; }
 	public BankDetails BankDetails { get; private set; }
+	public Guid? ShiftId { get; set; }
 
 	public List<WorkExperience> WorkExperiences { get; private set; } = new List<WorkExperience>();
 	public List<EmployeeDocument> Documents { get; private set; } = new List<EmployeeDocument>();
@@ -76,6 +78,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	// Navigation property for PayrollStructure
 	public virtual PayrollStructure? PayrollStructure { get; private set; }
+	// Navigation property for Shift
+	public virtual ShiftManagement? Shift { get; private set; }
 
 	// Full name including middle name
 	public string EmployeeNameWithFather
@@ -141,7 +145,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ContactDetails? motherDetails,
 		ContactDetails? spouseDetails,
 		BankDetails? bankDetails,
-		List<WorkExperience>? workExperiences
+		List<WorkExperience>? workExperiences,
+		Guid? shiftId
 	) : base(id)
 	{
 		TenantId = tenantId;
@@ -182,6 +187,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SpouseDetails = spouseDetails;
 		BankDetails = bankDetails;
 		WorkExperiences = workExperiences ?? [];
+		ShiftId = shiftId;
 	}
 
 	internal Employee UpdateBasicInfo(
@@ -214,7 +220,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		State? state,
 		Country? country,
 		string? pinCode,
-		Guid educationMediumStageId
+		Guid educationMediumStageId,
+		Guid? shiftId
 		)
 	{
 		LastName = lastName;
@@ -247,6 +254,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Country = country;
 		PinCode = pinCode;
 		EducationMediumStageId = educationMediumStageId;
+		ShiftId = shiftId;
 		return this;
 	}
 

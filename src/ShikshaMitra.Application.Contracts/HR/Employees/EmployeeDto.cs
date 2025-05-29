@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using System;
 using System.Collections.Generic;
@@ -66,4 +67,6 @@ public class EmployeeDto : EntityDto<Guid>
 
 	// Profile Picture
 	public byte[]? ProfilePicture { get; set; }
+
+	public ShiftManagementDto Shift { get; set; }
 }

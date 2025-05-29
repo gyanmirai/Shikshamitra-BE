@@ -14,4 +14,6 @@ public class CreateUpdateStandardDto
 	public int AgeLowerLimit { get; set; }
 
 	public Guid EducationMediumStageId { get; set; }
+
+	public Guid? ShiftId { get; set; }
 }

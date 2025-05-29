@@ -14,7 +14,7 @@ public class StandardManager(IStandardRepository standardRepository, IGuidGenera
 {
 	private string EntityName => this.GetType().ToEntityNameFromManager();
 
-	public async Task<Standard> CreateAsync(Guid educationMediumStageId, string name, int ageLowerLimit)
+	public async Task<Standard> CreateAsync(Guid educationMediumStageId, string name, int ageLowerLimit, Guid? shiftId)
 	{
 		Check.NotNullOrWhiteSpace(name, nameof(name));
 		Check.Positive(ageLowerLimit, nameof(ageLowerLimit));
@@ -25,16 +25,17 @@ public class StandardManager(IStandardRepository standardRepository, IGuidGenera
 			tenantId: CurrentTenant.Id,
 			name,
 			ageLowerLimit,
-			educationMediumStageId
+			educationMediumStageId,
+			shiftId
 		);
 	}
 
-	public async Task<Standard> UpdateAsync(Standard standard, string newName, int newAgeLowerLimit)
+	public async Task<Standard> UpdateAsync(Standard standard, string newName, int newAgeLowerLimit, Guid? shiftId)
 	{
 		Check.NotNull(standard, nameof(standard));
 		Check.NotNullOrWhiteSpace(newName, nameof(newName));
 		Check.Positive(newAgeLowerLimit, nameof(newAgeLowerLimit));
-		if (standard.Name == newName && standard.AgeLowerLimit == newAgeLowerLimit)
+		if (standard.Name == newName && standard.AgeLowerLimit == newAgeLowerLimit && standard.ShiftId == shiftId)
 		{
 			return standard;
 		}
@@ -45,6 +46,10 @@ public class StandardManager(IStandardRepository standardRepository, IGuidGenera
 		}
 		standard.SetName(newName);
 		standard.AgeLowerLimit = newAgeLowerLimit;
+		if (shiftId.HasValue)
+		{
+			standard.ShiftId = shiftId;
+		}
 		return standard;
 	}
 

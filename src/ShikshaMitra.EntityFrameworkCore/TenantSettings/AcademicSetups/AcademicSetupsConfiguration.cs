@@ -99,6 +99,8 @@ public class AcademicSetupsConfiguration :
 			.HasForeignKey(x => x.EducationMediumStageId);
 
 		builder.Navigation(x => x.Divisions).AutoInclude();
+
+		builder.Navigation(x => x.Shift).AutoInclude();
 	}
 
 	// Configure the Division entity

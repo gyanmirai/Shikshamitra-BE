@@ -49,4 +49,5 @@ public class UpdateEmployeeBasicInfoDto
 
 	[Required(ErrorMessage = "Education Medium Stage is required.")]
 	public Guid EducationMediumStageId { get; set; }
+	public Guid? ShiftId { get; set; }
 }

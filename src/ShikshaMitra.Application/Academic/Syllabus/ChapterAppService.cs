@@ -11,44 +11,71 @@ namespace ShikshaMitra.Academic.Syllabus;
 [RemoteService(IsEnabled = false)]
 public class ChapterAppService(IRepository<SubjectChapter, Guid> chapterRepository, IGuidGenerator guidGenerator) : ApplicationService, IChapterAppService
 {
-	public async Task<ChapterDto> CreateAsync(CreateUpdateChapterDto input)
+	public async Task<ChapterDto> CreateAsync(CreateUpdateChapterDto createChapterDto)
 	{
-		var chapter = new SubjectChapter(
-			guidGenerator.Create(),
-			input.StandardSubjectId,
-			input.ChapterNumber,
-			input.ChapterName,
-			input.ChapterStartTime,
-			input.ChapterEndTime,
-			input.Description
-		);
+		try
+		{
+			var chapter = new SubjectChapter(
+				guidGenerator.Create(),
+				createChapterDto.StandardId,
+				createChapterDto.SubjectId,
+				createChapterDto.ChapterNumber,
+				createChapterDto.ChapterName,
+				createChapterDto.ChapterStartTime,
+				createChapterDto.ChapterEndTime,
+				createChapterDto.Description
+			);
 
-		await chapterRepository.InsertAsync(chapter, autoSave: true);
-		return ObjectMapper.Map<SubjectChapter, ChapterDto>(chapter);
+			await chapterRepository.InsertAsync(chapter, autoSave: true);
+			return ObjectMapper.Map<SubjectChapter, ChapterDto>(chapter);
+		}
+		catch (Exception ex)
+		{
+			throw new UserFriendlyException("Error creating chapter", ex.Message);
+		}
 	}
 
-	public async Task<List<ChapterDto>> GetByStandardSubjectIdAsync(Guid standardSubjectId)
+	public async Task<List<ChapterDto>> GetByStandardSubjectIdAsync(Guid standardId, Guid subjectId)
 	{
-		var chapters = (await chapterRepository.GetListAsync(x => x.StandardSubjectId == standardSubjectId));
+		try
+		{
+			var chapters = await chapterRepository.GetListAsync(x => x.StandardId == standardId && x.SubjectId == subjectId);
 
-		return ObjectMapper.Map<List<SubjectChapter>, List<ChapterDto>>(chapters);
+			return ObjectMapper.Map<List<SubjectChapter>, List<ChapterDto>>(chapters);
+		}
+		catch (Exception ex)
+		{
+			throw new UserFriendlyException("Error retrieving chapters", ex.Message);
+		}
+
 	}
 
-	public async Task<ChapterDto> UpdateAsync(Guid id, CreateUpdateChapterDto input)
+	public async Task<ChapterDto> UpdateAsync(Guid id, CreateUpdateChapterDto updateChapterDto)
 	{
-		var chapter = await chapterRepository.GetAsync(id);
+		var chapter = await chapterRepository.GetAsync(id) ?? throw new UserFriendlyException("Chapter not found");
 
 		chapter.Update(
-			input.ChapterName,
-			input.ChapterStartTime,
-			input.ChapterEndTime,
-			input.Description
+			updateChapterDto.ChapterName,
+			updateChapterDto.ChapterStartTime,
+			updateChapterDto.ChapterEndTime,
+			updateChapterDto.Description
 		);
 
-		chapter.ChapterNumber = input.ChapterNumber;
+		chapter.ChapterNumber = updateChapterDto.ChapterNumber;
 
 		await chapterRepository.UpdateAsync(chapter, autoSave: true);
 		return ObjectMapper.Map<SubjectChapter, ChapterDto>(chapter);
 	}
 
+	public Task DeleteAsync(Guid id)
+	{
+		try
+		{
+			return chapterRepository.DeleteAsync(id, autoSave: true);
+		}
+		catch (Exception ex)
+		{
+			throw new UserFriendlyException("Error deleting chapter", ex.Message);
+		}
+	}
 }

@@ -9,38 +9,36 @@ namespace ShikshaMitra.Academic.Syllabus;
 /// </summary>
 public class SubjectChapter : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
-	#region Properties  
-
+	#region Properties
 	public Guid? TenantId { get; set; }
 
-	/// <summary>
-	/// Gets or sets the ID of the standard subject assignment (e.g., Grade 6, Grade 10).  
-	/// </summary>
-	public Guid StandardSubjectId { get; set; }
+	public Guid StandardId { get; set; }
 
-    /// <summary>  
-    /// Gets or sets the chapter number (e.g., 1, 2, 3).  
-    /// </summary>  
-    public int ChapterNumber { get; set; }
+	public Guid SubjectId { get; set; }
+
+	/// <summary>  
+	/// Gets or sets the chapter number (e.g., 1, 2, 3).  
+	/// </summary>
+	public int ChapterNumber { get; set; }
 
     /// <summary>  
     /// Gets or sets the name/title of the chapter.  
-    /// </summary>  
+    /// </summary>
     public string ChapterName { get; set; }
 
     /// <summary>  
     /// Gets or sets the planned start time of the chapter.  
-    /// </summary>  
+    /// </summary>
     public DateTimeOffset ChapterStartTime { get; set; }
 
-    /// <summary>  
-    /// Gets or sets the planned end time of the chapter.  
-    /// </summary>  
-    public DateTimeOffset ChapterEndTime { get; set; }
+	/// <summary>  
+	/// Gets or sets the planned end time of the chapter.  
+	/// </summary>
+	public DateTimeOffset ChapterEndTime { get; set; }
 
     /// <summary>  
     /// Gets or sets an optional description of the chapter (e.g., objectives, summary).  
-    /// </summary>  
+    /// </summary>
     public string? Description { get; set; }
 
     #endregion
@@ -48,13 +46,14 @@ public class SubjectChapter : FullAuditedAggregateRoot<Guid>, IMultiTenant
     #region Constructors  
 
     // Default constructor  
-    public SubjectChapter() { }
+    protected SubjectChapter() { }
 
     // Parameterized constructor  
-    public SubjectChapter(Guid id, Guid standardSubjectId, int chapterNumber, string chapterName, DateTimeOffset chapterStartTime, DateTimeOffset chapterEndTime, string? description = null) : base(id)
+    public SubjectChapter(Guid id, Guid standardId, Guid subjectId, int chapterNumber, string chapterName, DateTimeOffset chapterStartTime, DateTimeOffset chapterEndTime, string? description = null) : base(id)
     {
-        StandardSubjectId = standardSubjectId;
-        ChapterNumber = chapterNumber;
+		StandardId = standardId;
+		SubjectId = subjectId;
+		ChapterNumber = chapterNumber;
         ChapterName = chapterName;
         ChapterStartTime = chapterStartTime;
         ChapterEndTime = chapterEndTime;

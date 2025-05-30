@@ -1,20 +1,21 @@
-﻿using System.Security.AccessControl;
-using System;
+﻿using System;
 using Volo.Abp.Domain.Entities.Auditing;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Academic.Syllabus;
 
 /// <summary>
 /// Represents a learning resource for a subject in a standard, optionally tied to a specific chapter.
 /// </summary>
-public class LearningResource : FullAuditedAggregateRoot<Guid>
+public class LearningResource : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
-    #region Properties
+	#region Properties
+	public Guid? TenantId { get; set; }
 
-    /// <summary>
-    /// Gets or sets the ID of the standard (e.g., Grade 6).
-    /// </summary>
-    public Guid StandardId { get; set; }
+	/// <summary>
+	/// Gets or sets the ID of the standard (e.g., Grade 6).
+	/// </summary>
+	public Guid StandardId { get; set; }
 
     /// <summary>
     /// Gets or sets the ID of the subject (e.g., Math, Science).
@@ -31,10 +32,10 @@ public class LearningResource : FullAuditedAggregateRoot<Guid>
     /// </summary>
     public string ResourceTitle { get; set; }
 
-    /// <summary>
-    /// Gets or sets a short description about the resource.
-    /// </summary>
-    public string? Description { get; set; }
+	/// <summary>
+	/// Gets or sets a short description about the resource.
+	/// </summary>
+	public string? Description { get; set; }
 
     /// <summary>
     /// Gets or sets the file path or URL to the resource document.

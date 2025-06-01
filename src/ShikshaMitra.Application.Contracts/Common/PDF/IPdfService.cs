@@ -13,6 +13,5 @@ public interface IPdfService
 
 	Task<byte[]> GeneratePdfAsBytes(PDFDocument request, CancellationToken cancellationToken = default);
 
-	Task<byte[]> GenerateSimplePdf<T>(IEnumerable<T> items);
-
+	Task<byte[]> GenerateReport<T>(IEnumerable<T> items, string title);
 }

@@ -1,6 +1,4 @@
-﻿using QuestPDF.Fluent;
-using QuestPDF.Helpers;
-using QuestPDF.Infrastructure;
+﻿using QuestPDF.Infrastructure;
 using ShikshaMitra.Common.PDF;
 using ShikshaMitra.Common.PDF.Elements;
 using System.Collections.Generic;

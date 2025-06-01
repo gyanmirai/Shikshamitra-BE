@@ -48,7 +48,7 @@ public class QuestPdfService(IFontService fontService, IImageService imageServic
 		return stream.ToArray();
 	}
 
-	public async Task<byte[]> GenerateSimplePdf<T>(IEnumerable<T> items)
+	public async Task<byte[]> GenerateReport<T>(IEnumerable<T> items, string title)
 	{
 		PropertyInfo[] properties = typeof(T).GetProperties();
 
@@ -58,7 +58,7 @@ public class QuestPdfService(IFontService fontService, IImageService imageServic
 			Page = new PageSpecs { BackgroundColor = "#ffffff", Margin = 20, MarginUnit = Unit.Point },
 			Header = new TextElement
 			{
-				Text = $"{typeof(T).Name} Report",
+				Text = $"title Report",
 				FontSize = 24,
 				FontWeight = FontWeight.Bold,
 				Alignment = TextAlignment.Center,

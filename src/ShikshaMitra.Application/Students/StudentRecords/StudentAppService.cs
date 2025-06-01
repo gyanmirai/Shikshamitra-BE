@@ -17,19 +17,27 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using System.Linq.Expressions;
+using ShikshaMitra.Common.PDF;
+using ShikshaMitra.Common.Excel;
 
 namespace ShikshaMitra.Students.StudentRecords;
 
 public class StudentAppService(
 	StudentManager studentManager,
-	IStudentRepository studentRepository, 
+	IStudentRepository studentRepository,
 	IEducationBoardRepository educationBoardRepository,
+	IPdfService pdfService,
+    IExcelService excelService,
 	IStudentCsvImportService studentCsvImportService) :
 	CrudAppService<Student, StudentDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateStudentDto>(studentRepository),
 	IStudentAppService
 {
-
-	public async Task<PagedResultDto<StudentDto>> GetFilteredListAsync(PagedAndSortedResultRequestDto input, Guid? educationMediumStageId, Guid? standardId, Guid? divisionId)
+	public async Task<PagedResultDto<StudentDto>> GetFilteredListAsync(
+	PagedAndSortedResultRequestDto input,
+	Guid? educationMediumStageId,
+	Guid? standardId,
+	Guid? divisionId,
+	bool skipPagination = false)
 	{
 		// Create the base query from the repository
 		var query = await Repository.GetQueryableAsync();
@@ -53,9 +61,13 @@ public class StudentAppService(
 		// Get the total count for pagination
 		var totalCount = await AsyncExecuter.CountAsync(query);
 
-		// Apply sorting and paging
+		// Apply sorting
 		query = ApplySorting(query, input);
-		query = ApplyPaging(query, input);
+
+		if (!skipPagination)
+		{
+			query = ApplyPaging(query, input);
+		}
 
 		// Execute the query to get the students
 		var entities = await AsyncExecuter.ToListAsync(query);
@@ -67,6 +79,37 @@ public class StudentAppService(
 		await EnrichStudentsWithGroupInfoAsync(entityDtos);
 
 		return new PagedResultDto<StudentDto>(totalCount, entityDtos);
+	}
+
+	public async Task<CustomFileResult> GetFilteredListReport(
+	PagedAndSortedResultRequestDto input,
+	Guid? educationMediumStageId,
+	Guid? standardId,
+	Guid? divisionId,
+	ReportFormatType format)
+	{
+		var studentdtos = await GetFilteredListAsync(input, educationMediumStageId, standardId, divisionId, skipPagination: true);
+		var fileName = $"StudentReport_{DateTime.UtcNow:ddMMyyyyHHmmss}";
+		if (format == ReportFormatType.Pdf)
+		{
+			var pdfBytes = await pdfService.GenerateReport(studentdtos.Items, fileName);
+			  return new CustomFileResult(
+				pdfBytes,
+				"application/pdf",
+				fileName + ".pdf"
+			);
+		}
+		else
+		{
+			var excelBytes = excelService.GenerateExcelFromData(studentdtos.Items, "Student Report", "Student Report");
+			return new CustomFileResult(
+			   excelBytes,
+			   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+			   fileName + ".xlsx"
+		   );
+
+		}
+
 	}
 
 	/// <summary>
@@ -85,7 +128,7 @@ public class StudentAppService(
 			.LazyGetRequiredService<IRepository<StudentGroupMember, Guid>>()
 			.GetListAsync(m => studentIds.Contains(m.StudentId));
 
-			// Create a dictionary that maps student IDs to their group membership
+		// Create a dictionary that maps student IDs to their group membership
 		var membershipByStudentId = studentGroupMemberships.ToDictionary(
 			m => m.StudentId,
 			m => m);
@@ -94,15 +137,15 @@ public class StudentAppService(
 		var groupIds = studentGroupMemberships.Select(m => m.StudentGroupId).Distinct().ToList();
 
 		// Get all student groups in a single query
-		var studentGroups = groupIds.Any() 
+		var studentGroups = groupIds.Any()
 			? await LazyServiceProvider.LazyGetRequiredService<IRepository<StudentGroup, Guid>>()
-				.GetListAsync(g => groupIds.Contains(g.Id)) 
+				.GetListAsync(g => groupIds.Contains(g.Id))
 			: new List<StudentGroup>();
 
 		// Create a dictionary for quick group lookups
 		var groupsDict = studentGroups.ToDictionary(g => g.Id, g => g);
 
-			// Assign group membership to student DTOs
+		// Assign group membership to student DTOs
 		foreach (var student in students)
 		{
 			if (membershipByStudentId.TryGetValue(student.Id, out var membership))
@@ -110,8 +153,8 @@ public class StudentAppService(
 				student.GroupMembership = new StudentGroupMembershipInfo
 				{
 					GroupId = membership.StudentGroupId,
-					GroupName = groupsDict.ContainsKey(membership.StudentGroupId) 
-						? groupsDict[membership.StudentGroupId].Name 
+					GroupName = groupsDict.ContainsKey(membership.StudentGroupId)
+						? groupsDict[membership.StudentGroupId].Name
 						: "Unknown Group",
 					IsLeader = membership.IsLeader,
 					IsDivisionLeader = membership.IsDivisionLeader
@@ -291,11 +334,11 @@ public class StudentAppService(
 	public async Task<StudentDto> UpdateStudentStatusAsync(Guid studentId, StudentStatus newStatus)
 	{
 		var student = await studentRepository.GetAsync(studentId);
-		
+
 		student.UpdateStatus(newStatus);
-		
+
 		await studentRepository.UpdateAsync(student);
-		
+
 		return ObjectMapper.Map<Student, StudentDto>(student);
 	}
 

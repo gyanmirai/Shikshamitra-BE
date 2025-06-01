@@ -7,8 +7,6 @@ using ShikshaMitra.Students.StudentRecords.BulkUpload;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
@@ -121,7 +119,7 @@ public class StudentController(IStudentCertificateAppService studentCertificateA
 			csvContent = memoryStream.ToArray();
 		}
 
-		
+
 		return await studentAppService.ImportStudentsFromCsvAsync(csvContent, csv.FileName);
 	}
 }

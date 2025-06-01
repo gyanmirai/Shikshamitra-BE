@@ -72,7 +72,7 @@ public class ClosedXmlExcelService : IExcelService, ITransientDependency
 				rowIndex++;
 
 				var metadataCell = worksheet.Cell(rowIndex, 1);
-				metadataCell.Value = $"Generated on: {DateTime.UtcNow:dd-MM-yyyy HH:mm:ss} by: {Environment.UserName}";
+				metadataCell.Value = $"Generated on: {DateTime.UtcNow:dd-MM-yyyy HH:mm:ss}";
 				metadataCell.Style.Font.Italic = true;
 				worksheet.Range(rowIndex, 1, rowIndex, properties.Count).Merge();
 				rowIndex++;
@@ -142,7 +142,7 @@ public class ClosedXmlExcelService : IExcelService, ITransientDependency
 				{
 					new ExcelCell
 					{
-						Value = $"Generated on: {DateTime.UtcNow:dd-MM-yyyy HH:mm:ss} by: {Environment.UserName}"
+						Value = $"Generated on: {DateTime.UtcNow:dd-MM-yyyy HH:mm:ss}"
 					}
 				}
 			});

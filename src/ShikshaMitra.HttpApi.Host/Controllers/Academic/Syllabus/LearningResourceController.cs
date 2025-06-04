@@ -10,9 +10,8 @@ namespace ShikshaMitra.Controllers.Academic.Syllabus;
 [RemoteService]
 [Area("Academic")]
 [Route("api/academic/learning-resources")]
-public class LearningResourceController : AbpController
+public class LearningResourceController(ILearningResource) : AbpController
 {
-	// add controllers for create, update and delete learning resources
 	[HttpPost]
 	public Task<LearningResourceDto> CreateAsync([FromBody] CreateUpdateLearningResourceDto input)
 	{
@@ -37,7 +36,6 @@ public class LearningResourceController : AbpController
 		return learningResourceAppService.DeleteAsync(id);
 	}
 
-	// add controllers for adding, updating and deleting resource types
 	[HttpPost("resource-types")]
 	public Task<ResourceTypeDto> CreateResourceTypeAsync([FromBody] CreateUpdateResourceTypeDto input)
 	{

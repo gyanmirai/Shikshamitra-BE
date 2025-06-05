@@ -11,10 +11,9 @@ using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.EventAndHolidays;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
-using ShikshaMitra.Library.BookManagement.AddNewBooks;
-using ShikshaMitra.Library.BookManagement.BookOverviews;
-using ShikshaMitra.Library.BookManagement.IssueBooks;
-using ShikshaMitra.Library.BookManagement.ReturnBooks;
+using ShikshaMitra.Library.Books;
+using ShikshaMitra.Library.BooksAssignements;
+using ShikshaMitra.Library.Members;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using ShikshaMitra.Library.Setting.GeneralSetting.LoanPolicies;
@@ -243,21 +242,19 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#endregion
 
 	#region Library
+
 	#region GeneralSetting
 	public DbSet<LibraryTiming> LibraryTimings { get; set; }
     public DbSet<BookCategory> BookCategories { get; set; }
     public DbSet<LoanPolicy> LoanPolicies { get; set; }
 	#endregion
 
-	#region Library
-	#region BookManagement
-	public DbSet<AddNewBook> AddNewBooks { get; set; }
-	public DbSet<IssueBook> IssueBooks { get; set; }
-	public DbSet<ReturnBook> ReturnBooks { get; set; }
-    public DbSet<BookOverview> BookOverviews { get; set; }
-    #endregion
-
+	#region Books Management 
+    public DbSet<Book> Books { get; set; }
+	public DbSet<BooksAssignment> BooksAssignments { get; set; }
+    public DbSet<Member> Members { get; set; }
 	#endregion
+
 	#endregion
 
 	// Apply BookCategory configuration
@@ -266,7 +263,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	// builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 
 	// Add more entity configurations here as needed
-  protected override void OnModelCreating(ModelBuilder builder)
+	protected override void OnModelCreating(ModelBuilder builder)
 	{
 		base.OnModelCreating(builder);
 

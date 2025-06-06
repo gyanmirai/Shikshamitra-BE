@@ -12,30 +12,30 @@ using Volo.Abp.TenantManagement;
 namespace ShikshaMitra;
 
 [DependsOn(
-    typeof(ShikshaMitraApplicationContractsModule),
-    typeof(AbpAccountHttpApiModule),
-    typeof(AbpIdentityHttpApiModule),
-    typeof(AbpPermissionManagementHttpApiModule),
-    typeof(AbpTenantManagementHttpApiModule),
-    typeof(AbpFeatureManagementHttpApiModule),
-    typeof(AbpSettingManagementHttpApiModule)
-    )]
+	typeof(ShikshaMitraApplicationContractsModule),
+	typeof(AbpAccountHttpApiModule),
+	typeof(AbpIdentityHttpApiModule),
+	typeof(AbpPermissionManagementHttpApiModule),
+	typeof(AbpTenantManagementHttpApiModule),
+	typeof(AbpFeatureManagementHttpApiModule),
+	typeof(AbpSettingManagementHttpApiModule)
+	)]
 public class ShikshaMitraHttpApiModule : AbpModule
 {
-    public override void ConfigureServices(ServiceConfigurationContext context)
-    {
-        ConfigureLocalization();
-    }
+	public override void ConfigureServices(ServiceConfigurationContext context)
+	{
+		ConfigureLocalization();
+	}
 
-    private void ConfigureLocalization()
-    {
-        Configure<AbpLocalizationOptions>(options =>
-        {
-            options.Resources
-                .Get<ShikshaMitraResource>()
-                .AddBaseTypes(
-                    typeof(AbpUiResource)
-                );
-        });
-    }
+	private void ConfigureLocalization()
+	{
+		Configure<AbpLocalizationOptions>(options =>
+		{
+			options.Resources
+				.Get<ShikshaMitraResource>()
+				.AddBaseTypes(
+					typeof(AbpUiResource)
+				);
+		});
+	}
 }

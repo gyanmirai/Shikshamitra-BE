@@ -58,14 +58,13 @@ public class StudentEnrollmentManager(
 			DateTimeOffset? dateOfBirth,
 			DateTimeOffset? dateOfInquiry,
 			GenderType? genderType,
-			string? parentContactNumber,
-			string? alternativeContactNumber,
+			string? primaryContactNumber,
+			string? secondaryContactNumber,
 			string? addressLine1,
 			string? addressLine2,
 			string? addressLine3,
 			Country? country,
 			State? state,
-			string? village,
 			string? pan,
 			string? apparId,
 			string? city,
@@ -80,8 +79,6 @@ public class StudentEnrollmentManager(
 	{
 		// Generate Inquiry Number
 		string inquiryNumber = await GenerateInquiryNumberAsync();
-
-		int tempGrNo = await GenerateStudentEnrollmentTempGRCodeAsync();
 
 		// create registration entity
 		var registration = new StudentEnrollment(
@@ -99,13 +96,12 @@ public class StudentEnrollmentManager(
 			dateOfBirth: dateOfBirth,
 			dateOfInquiry: dateOfInquiry,
 			genderType: genderType,
-			parentContactNumber: parentContactNumber,
-			alternativeContactNumber: alternativeContactNumber,
+			primaryContactNumber: primaryContactNumber,
+			secondaryContactNumber: secondaryContactNumber,
 			addressLine1: addressLine1,
 			addressLine2: addressLine2,
 			addressLine3: addressLine3,
 			country: country,
-			village: village,
 			pan: pan,
 			apparId: apparId,
 			city: city,
@@ -127,7 +123,6 @@ public class StudentEnrollmentManager(
 			motherTongue: null,
 			nationality: null,
 			birthPlace: null,
-			temporaryGr: tempGrNo,
 			remarks: null,
 			fatherDetails: new StudentContactDetails(
 				name: null,
@@ -138,12 +133,16 @@ public class StudentEnrollmentManager(
 				email: null,
 				passOutYear: null,
 				officeNo: null,
-				officeAddress: null,
+				officeAddress1: null,
+				officeAddress2: null,
+				officeAddress3: null,
 				designation: null,
 				organisation: null,
 				aadhaarNo: null,
 				remarks: null,
-				address: null
+				address1: null,
+				address2: null,
+				address3: null
 			),
 			motherDetails: new StudentContactDetails(
 				name: null,
@@ -154,12 +153,16 @@ public class StudentEnrollmentManager(
 				email: null,
 				passOutYear: null,
 				officeNo: null,
-				officeAddress: null,
+				officeAddress1: null,
+				officeAddress2: null,
+				officeAddress3: null,
 				designation: null,
 				organisation: null,
 				aadhaarNo: null,
 				remarks: null,
-				address: null
+				address1: null,
+				address2: null,
+				address3: null
 			),
 			guardianDetails: new StudentContactDetails(
 				name: null,
@@ -170,12 +173,16 @@ public class StudentEnrollmentManager(
 				email: null,
 				passOutYear: null,
 				officeNo: null,
-				officeAddress: null,
+				officeAddress1: null,
+				officeAddress2: null,
+				officeAddress3: null,
 				designation: null,
 				organisation: null,
 				aadhaarNo: null,
 				remarks: null,
-				address: null
+				address1: null,
+				address2: null,
+				address3: null
 			),
 			studentCommunicationDetails: new StudentCommunicationDetails(
 				primaryContactNo: null,
@@ -266,13 +273,12 @@ public class StudentEnrollmentManager(
 			string? previousSchoolName,
 			DateTimeOffset? dateOfBirth,
 			GenderType? genderType,
-			string? parentContactNumber,
-			string? alternativeContactNumber,
+			string? primaryContactNumber,
+			string? secondaryContactNumber,
 			string? addressLine1,
 			string? addressLine2,
 			string? addressLine3,
 			Country? country,
-			string? village,
 			string? pan,
 			string? apparId,
 			string? city,
@@ -300,7 +306,6 @@ public class StudentEnrollmentManager(
 		// Generate Inquiry Number
 		string inquiryNumber = await GenerateInquiryNumberAsync();
 
-		int tempGrNo = await GenerateStudentEnrollmentTempGRCodeAsync();
 		// create registration entity
 		var registration = new StudentEnrollment(
 			id: guidGenerator.Create(),
@@ -317,14 +322,13 @@ public class StudentEnrollmentManager(
 			dateOfBirth: dateOfBirth,
 			dateOfInquiry: null,
 			genderType: genderType,
-			parentContactNumber: parentContactNumber,
-			alternativeContactNumber: alternativeContactNumber,
+			primaryContactNumber: primaryContactNumber,
+			secondaryContactNumber: secondaryContactNumber,
 			addressLine1: addressLine1,
 			addressLine2: addressLine2,
 			addressLine3: addressLine3,
 			country: country,
 			state: state,
-			village: village,
 			pan: pan,
 			apparId: apparId,
 			city: city,
@@ -346,7 +350,6 @@ public class StudentEnrollmentManager(
 			motherTongue: motherTongue,
 			nationality: nationality,
 			birthPlace: birthPlace,
-			temporaryGr: tempGrNo,
 			remarks: remarks,
 			fatherDetails: new StudentContactDetails(
 				name: null,
@@ -357,12 +360,16 @@ public class StudentEnrollmentManager(
 				email: null,
 				passOutYear: null,
 				officeNo: null,
-				officeAddress: null,
+				officeAddress1: null,
+				officeAddress2: null,
+				officeAddress3: null,
 				designation: null,
 				organisation: null,
 				aadhaarNo: null,
 				remarks: null,
-				address: null
+				address1: null,
+				address2: null,
+				address3: null
 			),
 			motherDetails: new StudentContactDetails(
 				name: null,
@@ -373,12 +380,16 @@ public class StudentEnrollmentManager(
 				email: null,
 				passOutYear: null,
 				officeNo: null,
-				officeAddress: null,
+				officeAddress1: null,
+				officeAddress2: null,
+				officeAddress3: null,
 				designation: null,
 				organisation: null,
 				aadhaarNo: null,
 				remarks: null,
-				address: null
+				address1: null,
+				address2: null,
+				address3: null
 			),
 			guardianDetails: new StudentContactDetails(
 				name: null,
@@ -389,12 +400,16 @@ public class StudentEnrollmentManager(
 				email: null,
 				passOutYear: null,
 				officeNo: null,
-				officeAddress: null,
+				officeAddress1: null,
+				officeAddress2: null,
+				officeAddress3: null,
 				designation: null,
 				organisation: null,
 				aadhaarNo: null,
 				remarks: null,
-				address: null
+				address1: null, 
+				address2: null,	
+				address3: null
 			),
 			studentCommunicationDetails: new StudentCommunicationDetails(
 				primaryContactNo: null,
@@ -490,13 +505,12 @@ public class StudentEnrollmentManager(
 		DateTimeOffset? dateOfBirth,
 		DateTimeOffset? dateOfInquiry,
 		GenderType? genderType,
-		string? parentContactNumber,
-		string? alternativeContactNumber,
+		string? primaryContactNumber,
+		string? secondaryContactNumber,
 		string? addressLine1,
 		string? addressLine2,
 		string? addressLine3,
 		Country? country,
-		string? village,
 		string? pan,
 		string? apparId,
 		string? city,
@@ -525,13 +539,12 @@ public class StudentEnrollmentManager(
 			dateOfBirth: dateOfBirth,
 			dateOfInquiry: dateOfInquiry,
 			genderType: genderType,
-			parentContactNumber: parentContactNumber,
-			alternativeContactNumber: alternativeContactNumber,
+			primaryContactNumber: primaryContactNumber,
+			secondaryContactNumber: secondaryContactNumber,
 			addressLine1: addressLine1,
 			addressLine2: addressLine2,
 			addressLine3: addressLine3,
 			country: country,
-			village: village,
 			pan: pan,
 			apparId: apparId,
 			city: city,
@@ -563,13 +576,12 @@ public class StudentEnrollmentManager(
 		string? previousSchoolName,
 		DateTimeOffset? dateOfBirth,
 		GenderType? genderType,
-		string? parentContactNumber,
-		string? alternativeContactNumber,
+		string? primaryContactNumber,
+		string? secondaryContactNumber,
 		string? addressLine1,
 		string? addressLine2,
 		string? addressLine3,
 		Country? country,
-		string? village,
 		string? pan,
 		string? apparId,
 		string? city,
@@ -591,7 +603,6 @@ public class StudentEnrollmentManager(
 		string? motherTongue,
 		string? nationality,
 		string? birthPlace,
-		int temporaryGr,
 		string? remarks
 	)
 	{
@@ -608,13 +619,12 @@ public class StudentEnrollmentManager(
 			previousSchoolName: previousSchoolName,
 			dateOfBirth: dateOfBirth,
 			genderType: genderType,
-			parentContactNumber: parentContactNumber,
-			alternativeContactNumber: alternativeContactNumber,
+			primaryContactNumber: primaryContactNumber,
+			secondaryContactNumber: secondaryContactNumber,
 			addressLine1: addressLine1,
 			addressLine2: addressLine2,
 			addressLine3: addressLine3,
 			country: country,
-					village: village,
 			pan: pan,
 			apparId: apparId,
 			city: city,
@@ -635,7 +645,6 @@ public class StudentEnrollmentManager(
 			motherTongue: motherTongue,
 			nationality: nationality,
 			birthPlace: birthPlace,
-			temporaryGr: temporaryGr,
 			remarks: remarks
 		);
 		return studentEnrollment;
@@ -960,8 +969,8 @@ public class StudentEnrollmentManager(
 			dateOfBirth: enrollment.DateOfBirth,
 			genderType: enrollment.GenderType,
 			email: enrollment.Email,
-			parentContactNumber: enrollment.ParentContactNumber,
-			alternativeContactNumber: enrollment.AlternativeContactNumber,
+			parentContactNumber: enrollment.PrimaryContactNumber,
+			alternativeContactNumber: enrollment.SecondaryContactNumber,
 			profilePicture: enrollment.ProfilePicture,
 
 			// Address
@@ -991,7 +1000,6 @@ public class StudentEnrollmentManager(
 			educationMediumStageId: educationMediumStageId,
 			standardId: enrollment.StandardId,
 			divisionId: divisionId,
-			tempGrNo: enrollment.TemporaryGr,
 			grNoRecord: null,
 			rollNo: rollNo,
 
@@ -1011,22 +1019,5 @@ public class StudentEnrollmentManager(
 
 
 		return student;
-	}
-
-	private async Task<int> GenerateStudentEnrollmentTempGRCodeAsync()
-	{
-		// Get the last EmployeeCode
-		StudentEnrollment? lastEnrolledStudent = await studentEnrollmentRepository.GetLastStudentEnrollmentAsync();
-
-		int nextNumber = 1;
-
-		if (lastEnrolledStudent != null)
-		{
-			var lastNumber = lastEnrolledStudent.TemporaryGr;
-
-			nextNumber = lastNumber + 1;
-		}
-
-		return nextNumber;
 	}
 }

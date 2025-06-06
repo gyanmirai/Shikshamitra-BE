@@ -141,7 +141,9 @@ namespace ShikshaMitra.Students.StudentRecords.Reports
 						table.Cell().Row(2).Column(2).Text($"Qualification: {_student.FatherDetails.Qualification}");
 						table.Cell().Row(3).Column(1).Text($"Occupation: {_student.FatherDetails.Occupation}");
 						table.Cell().Row(3).Column(2).Text($"Contact No: {_student.FatherDetails.ContactNo} ");
-						table.Cell().Row(4).Column(1).Text($"Office Address: {_student.FatherDetails.OfficeAddress} ");
+						table.Cell().Row(4).Column(1).Text($"Office Address1: {_student.FatherDetails.OfficeAddress1} ");
+						table.Cell().Row(4).Column(1).Text($"Office Address2: {_student.FatherDetails.OfficeAddress2} ");
+						table.Cell().Row(4).Column(1).Text($"Office Address3: {_student.FatherDetails.OfficeAddress2} ");
 						table.Cell().Row(4).Column(2).Text($"Email: {_student.FatherDetails.Email} ");
 						//table.Cell().Row(5).Column(1).Text("Are you an ex-student of this school?: NO");
 						table.Cell().Row(5).Column(2).Text($"Year Of Passing: {_student.FatherDetails.PassOutYear} ");
@@ -164,7 +166,9 @@ namespace ShikshaMitra.Students.StudentRecords.Reports
 						table.Cell().Row(2).Column(2).Text($"Qualification: {_student.MotherDetails.Qualification}");
 						table.Cell().Row(3).Column(1).Text($"Occupation: {_student.MotherDetails.Occupation}");
 						table.Cell().Row(3).Column(2).Text($"Contact No: {_student.MotherDetails.ContactNo} ");
-						table.Cell().Row(4).Column(1).Text($"Office Address: {_student.MotherDetails.OfficeAddress} ");
+						table.Cell().Row(4).Column(1).Text($"Office Address1: {_student.MotherDetails.OfficeAddress1} ");
+						table.Cell().Row(4).Column(1).Text($"Office Address2: {_student.MotherDetails.OfficeAddress2} ");
+						table.Cell().Row(4).Column(1).Text($"Office Address3: {_student.MotherDetails.OfficeAddress3} ");
 						table.Cell().Row(4).Column(2).Text($"Email: {_student.MotherDetails.Email} ");
 						//table.Cell().Row(5).Column(1).Text("Are you an ex-student of this school?: NO");
 						table.Cell().Row(5).Column(2).Text($"Year Of Passing: {_student.MotherDetails.PassOutYear} ");

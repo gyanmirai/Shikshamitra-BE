@@ -137,7 +137,6 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? educationMediumStageId,
 		Guid standardId,
 		Guid? divisionId,
-		int? tempGrNo,
 		int? grNoRecord,
 		int? rollNo,
 
@@ -194,7 +193,6 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EducationMediumStageId = educationMediumStageId;
 		StandardId = standardId;
 		DivisionId = divisionId;
-		TempGrNo = tempGrNo;
 		GrNoRecord = grNoRecord;
 		RollNo = rollNo;
 

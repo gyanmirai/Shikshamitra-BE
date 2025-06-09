@@ -4,12 +4,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ShikshaMitra.Library.BooksAssignments
+namespace ShikshaMitra.Library.BooksAssignments;
+
+public enum PaymentMode
 {
-	public enum PaymentMode
-	{
-		Cash,
-		OnlinePayment,
-		BankTransfer,
-	}
+	Cash,
+	OnlinePayment,
+	BankTransfer,
 }

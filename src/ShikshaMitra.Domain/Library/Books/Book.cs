@@ -17,7 +17,7 @@ public class Book : AuditedAggregateRoot<Guid>, IMultiTenant
 		public string Publisher { get; set; }
 		public int Year { get; set; }
 		public int AvailableCopies { get; set; }
-		public string Category { get; set; }
+		public Guid BookCategoryId { get; set; }
 		public string PicturePath { get; set; }
 		public string EditionNotes { get; set; }
 
@@ -31,8 +31,7 @@ public class Book : AuditedAggregateRoot<Guid>, IMultiTenant
 		string publisher,
 		int year,
 		int availableCopies,
-		string category,
-		string condition,
+		Guid bookCategoryId,
 		string picturePath,
 		string editionNotes,
 		Guid? tenantId)
@@ -44,7 +43,7 @@ public class Book : AuditedAggregateRoot<Guid>, IMultiTenant
 		Publisher = publisher;
 		Year = year;
 		AvailableCopies = availableCopies;
-		Category = category;
+		BookCategoryId = bookCategoryId;
 		PicturePath = picturePath;
 		EditionNotes = editionNotes;
 		TenantId = tenantId;

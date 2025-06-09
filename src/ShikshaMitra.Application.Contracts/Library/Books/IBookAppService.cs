@@ -6,14 +6,13 @@ using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
-namespace ShikshaMitra.Library.Books
+namespace ShikshaMitra.Library.Books;
+
+public interface IBookAppService : IApplicationService
 {
-	public interface IBookAppService : IApplicationService
-	{
-		Task<PagedResultDto<BookDto>> GetListAsync(PagedAndSortedResultRequestDto input);
-		Task<BookDto> GetAsync(Guid id);
-		Task<BookDto> CreateAsync(BookDto input);
-		Task<BookDto> UpdateAsync(Guid id, BookDto input);
-		Task DeleteAsync(Guid id);
-	}
+	Task <BookDto>AddNewBookAsync(AddNewBookDto input);
+    Task<ListResultDto<BookDto>> GetAllAsync();
+	Task<BookDto> GetByIdAsync(Guid id);
+	Task IssueBookAsync(IssueBookDto input);
+	Task ReturnBookAsync(ReturnBookDto input);
 }

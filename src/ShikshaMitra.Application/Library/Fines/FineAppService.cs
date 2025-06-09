@@ -4,12 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ShikshaMitra.Library.Reservations
+namespace ShikshaMitra.Library.Fines;
+
+internal class FineAppService
 {
-	public enum ReservationStatus
-	{
-		Pending,
-		Ready,
-		Collected
-	}
 }

@@ -1,4 +1,9 @@
 ﻿using AutoMapper;
+using ShikshaMitra.Library.Books;
+using ShikshaMitra.Library.BooksAssignements;
+using ShikshaMitra.Library.BooksReservations;
+using ShikshaMitra.Library.Fines;
+using ShikshaMitra.Library.Members;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using ShikshaMitra.Library.Setting.GeneralSetting.LoanPolicies;
@@ -24,11 +29,44 @@ namespace ShikshaMitra.Library
 
             CreateMap<LoanPolicy, LoanPolicyDto>();
             CreateMap<CreateUpdateLoanPolicyDto, LoanPolicy>();
-            #endregion
+			#endregion
+			#endregion
 
-         
+			#region Books Management
+			CreateMap<Book, BookDto>();
+			CreateMap<BookDto, Book>();
 
-            #endregion
-        }
-    }
+			CreateMap<AddNewBookDto, Book>();
+
+			CreateMap<IssueBookDto, Book>();
+			CreateMap<ReturnBookDto, Book>();
+			#endregion
+
+			//#region Book Assignments
+			//CreateMap<BookAssignment, AssignBookDto>();
+			//CreateMap<AssignBookDto, BookAssignment>();
+			//#endregion
+
+			//#region Book Reservations
+			//CreateMap<BookReservation, CreateBookReservationDto>();
+			//CreateMap<CreateBookReservationDto, BookReservation>();
+
+			//#endregion
+			//#region Members
+			//CreateMap<Member, MemberDto>();
+			//CreateMap<MemberDto, Member>();
+
+			//CreateMap<Member, MemberSummaryDto>();
+			//CreateMap<MemberSummaryDto, Member>();
+			//#endregion
+
+			//#region Fines
+			//CreateMap<Fine, FineDto>();
+			//CreateMap<FineDto, Fine>();
+
+			//CreateMap<CreateUpdateFineDto, Fine>();
+			//CreateMap<Fine, CreateUpdateFineDto>();
+			//#endregion
+		}
+	}
 }

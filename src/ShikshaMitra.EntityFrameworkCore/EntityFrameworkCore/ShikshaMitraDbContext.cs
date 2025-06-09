@@ -13,6 +13,8 @@ using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Library.Books;
 using ShikshaMitra.Library.BooksAssignements;
+using ShikshaMitra.Library.BooksReservations;
+using ShikshaMitra.Library.Fines;
 using ShikshaMitra.Library.Members;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
@@ -252,7 +254,9 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Books Management 
     public DbSet<Book> Books { get; set; }
 	public DbSet<BooksAssignment> BooksAssignments { get; set; }
-    public DbSet<Member> Members { get; set; }
+    public DbSet<BooksReservation> BooksReservations { get; set; }
+    public DbSet<Fine> Fines { get; set; }
+	public DbSet<Member> Members { get; set; }
 	#endregion
 
 	#endregion

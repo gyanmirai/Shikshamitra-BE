@@ -1,97 +1,98 @@
-﻿using System;
+﻿using ShikshaMitra.Library.BooksAssignements;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Guids;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Library.Books;
 
 public class BookAppService(
-		IRepository<Book, Guid> bookRepository
-	) : ApplicationService, IBookAppService
+       IRepository<Book, Guid> bookRepository,
+       IGuidGenerator guidGenerator
+   ) : ApplicationService, IBookAppService
 {
-	public async Task<BookDto> CreateAsync(BookDto input)
-	{
-		var book = new Book(
-			GuidGenerator.Create(),
-			input.BookTitle,
-			input.BookAuthor,
-			input.ISBN,
-			input.Publisher,
-			input.Year,
-			input.AvailableCopies,
-			input.Category,
-			string.Empty, // No condition field in entity
-			input.PicturePath,
-			input.EditionNotes,
-			CurrentTenant.Id
-		);
+    public async Task <BookDto>AddNewBookAsync(AddNewBookDto addNewBookDto)
+    {
+        var book = new Book(
+            guidGenerator.Create(),
+			addNewBookDto.BookTitle,
+			addNewBookDto.BookAuthor,
+			addNewBookDto.ISBN,
+			addNewBookDto.Publisher,
+			addNewBookDto.Year,
+			addNewBookDto.AvailableCopies,
+			addNewBookDto.BookCategoryId,
+			addNewBookDto.PicturePath,
+			addNewBookDto.EditionNotes,
+            CurrentTenant.Id
+        );
 
-		await bookRepository.InsertAsync(book, autoSave: true);
+        await bookRepository.InsertAsync(book, autoSave: true);
 		return ObjectMapper.Map<Book, BookDto>(book);
-	}
+    }
 
-	public async Task<BookDto> GetAsync(Guid id)
-	{
-		var book = await bookRepository.GetAsync(id);
-		var dto = ObjectMapper.Map<Book, BookDto>(book);
+    public async Task<BookDto> GetByIdAsync(Guid id)
+    {
+        try
+        {
+            var book = await bookRepository.GetAsync(id);
+            return ObjectMapper.Map<Book, BookDto>(book);
+        }
+        catch (Exception ex)
+        {
+            throw new ApplicationException("An error occurred while retrieving the book.", ex);
+        }
+    }
 
-		// Simulated logic - replace with actual business logic
-		dto.IsBorrowed = false;
-		dto.IsReserved = false;
-		dto.IsOverdue = false;
+    public async Task<ListResultDto<BookDto>> GetAllAsync()
+    {
+        try
+        {
+            var books = await bookRepository.GetListAsync();
+            var mapped = ObjectMapper.Map<List<Book>, List<BookDto>>(books);
+            return new ListResultDto<BookDto>(mapped);
+        }
+        catch (Exception ex)
+        {
+            throw new ApplicationException("An error occurred while retrieving all books.", ex);
+        }
+    }
+    public async Task IssueBookAsync(IssueBookDto input)
+    {
+        try
+        {
+            var book = await bookRepository.GetAsync(input.BookId);
 
-		return dto;
-	}
+            if (book.AvailableCopies <= 0)
+                throw new BusinessException("No copies available to issue.");
 
-	public async Task<PagedResultDto<BookDto>> GetListAsync(PagedAndSortedResultRequestDto input)
-	{
-		var queryable = await bookRepository.GetQueryableAsync();
+            book.AvailableCopies -= 1;
+            await bookRepository.UpdateAsync(book, autoSave: true);
+        }
+        catch (Exception ex)
+        {
+            throw new ApplicationException("An error occurred while issuing the book.", ex);
+        }
+    }
+    public async Task ReturnBookAsync(ReturnBookDto input)
+    {
+        try
+        {
+            var book = await bookRepository.GetAsync(input.BookId);
+            book.AvailableCopies += 1;
 
-		var totalCount = queryable.Count();
-
-		var books = queryable
-			.OrderBy(x => x.BookTitle)
-			.Skip(input.SkipCount)
-			.Take(input.MaxResultCount)
-			.ToList();
-
-		var result = books.Select(book =>
-		{
-			var dto = ObjectMapper.Map<Book, BookDto>(book);
-			dto.IsBorrowed = false;
-			dto.IsReserved = false;
-			dto.IsOverdue = false;
-			return dto;
-		}).ToList();
-
-		return new PagedResultDto<BookDto>(totalCount, result);
-	}
-
-	public async Task<BookDto> UpdateAsync(Guid id, BookDto input)
-	{
-		var book = await bookRepository.GetAsync(id);
-
-		book.BookTitle = input.BookTitle;
-		book.BookAuthor = input.BookAuthor;
-		book.ISBN = input.ISBN;
-		book.Publisher = input.Publisher;
-		book.Year = input.Year;
-		book.AvailableCopies = input.AvailableCopies;
-		book.Category = input.Category;
-		book.PicturePath = input.PicturePath;
-		book.EditionNotes = input.EditionNotes;
-
-		await bookRepository.UpdateAsync(book, autoSave: true);
-
-		return ObjectMapper.Map<Book, BookDto>(book);
-	}
-
-	public async Task DeleteAsync(Guid id)
-	{
-		await bookRepository.DeleteAsync(id);
-	}
+            await bookRepository.UpdateAsync(book, autoSave: true);
+        }
+        catch (Exception ex)
+        {
+            throw new ApplicationException("An error occurred while returning the book.", ex);
+        }
+    }
 }

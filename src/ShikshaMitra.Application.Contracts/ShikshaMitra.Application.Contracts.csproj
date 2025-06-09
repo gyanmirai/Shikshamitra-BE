@@ -48,9 +48,4 @@
     </PackageReference>
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Library\BooksAssignments\" />
-    <Folder Include="Library\Members\" />
-  </ItemGroup>
-
 </Project>

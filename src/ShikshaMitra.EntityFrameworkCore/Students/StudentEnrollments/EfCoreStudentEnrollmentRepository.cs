@@ -43,7 +43,7 @@ public class EfCoreStudentEnrollmentRepository(IDbContextProvider<ShikshaMitraDb
 		DbSet<StudentEnrollment?> studentEnrollments = await GetDbSetAsync();
 
 		return await studentEnrollments
-					.OrderByDescending(e => e.TemporaryGr)
+					.OrderByDescending(e => e.CreationTime)
 					.FirstOrDefaultAsync();
 	}
 }

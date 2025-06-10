@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.Library.BooksAssignments;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -15,4 +16,5 @@ public interface IBookAppService : IApplicationService
 	Task<BookDto> GetByIdAsync(Guid id);
 	Task IssueBookAsync(IssueBookDto input);
 	Task ReturnBookAsync(ReturnBookDto input);
+	Task<List<BookOverviewDto>> GetBookOverviewAsync();
 }

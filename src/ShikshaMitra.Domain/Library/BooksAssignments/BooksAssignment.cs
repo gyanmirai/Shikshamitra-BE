@@ -1,5 +1,4 @@
-﻿using ShikshaMitra.Library.BooksAssignments;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -7,7 +6,7 @@ using System.Threading.Tasks;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra.Library.BooksAssignements;
+namespace ShikshaMitra.Library.BooksAssignments;
 
 public class BooksAssignment : AuditedAggregateRoot<Guid>, IMultiTenant
 {

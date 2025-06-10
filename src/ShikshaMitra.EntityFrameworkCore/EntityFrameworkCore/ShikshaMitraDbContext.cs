@@ -12,7 +12,7 @@ using ShikshaMitra.HR.EventAndHolidays;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Library.Books;
-using ShikshaMitra.Library.BooksAssignements;
+using ShikshaMitra.Library.BooksAssignments;
 using ShikshaMitra.Library.BooksReservations;
 using ShikshaMitra.Library.Fines;
 using ShikshaMitra.Library.Members;

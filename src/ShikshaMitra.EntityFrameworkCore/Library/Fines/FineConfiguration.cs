@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using ShikshaMitra.Library.BooksAssignements;
+using ShikshaMitra.Library.BooksAssignments;
 using ShikshaMitra.Library.Members;
 using System;
 using System.Collections.Generic;

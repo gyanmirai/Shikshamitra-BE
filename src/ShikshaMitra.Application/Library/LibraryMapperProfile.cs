@@ -1,6 +1,6 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Library.Books;
-using ShikshaMitra.Library.BooksAssignements;
+using ShikshaMitra.Library.BooksAssignments;
 using ShikshaMitra.Library.BooksReservations;
 using ShikshaMitra.Library.Fines;
 using ShikshaMitra.Library.Members;
@@ -29,44 +29,45 @@ namespace ShikshaMitra.Library
 
             CreateMap<LoanPolicy, LoanPolicyDto>();
             CreateMap<CreateUpdateLoanPolicyDto, LoanPolicy>();
-			#endregion
-			#endregion
+            #endregion
+            #endregion
 
-			#region Books Management
-			CreateMap<Book, BookDto>();
-			CreateMap<BookDto, Book>();
-
-			CreateMap<AddNewBookDto, Book>();
-
-			CreateMap<IssueBookDto, Book>();
-			CreateMap<ReturnBookDto, Book>();
+            #region Books Management
+            CreateMap<Book, BookDto>();
+            CreateMap<BookDto, Book>();
+            CreateMap<AddNewBookDto, Book>();
+            CreateMap<Book, BookOverviewDto>();
 			#endregion
 
-			//#region Book Assignments
-			//CreateMap<BookAssignment, AssignBookDto>();
-			//CreateMap<AssignBookDto, BookAssignment>();
-			//#endregion
+			#region Books Assignments 
+			CreateMap<BooksAssignment, BooksAssignmentDto>();
+			CreateMap<BooksAssignmentDto, BooksAssignment>();
 
-			//#region Book Reservations
-			//CreateMap<BookReservation, CreateBookReservationDto>();
-			//CreateMap<CreateBookReservationDto, BookReservation>();
+			CreateMap<IssueBookDto, BooksAssignment>();
 
-			//#endregion
-			//#region Members
-			//CreateMap<Member, MemberDto>();
-			//CreateMap<MemberDto, Member>();
+            CreateMap<ReturnBookDto, BooksAssignment>();
+            #endregion
 
-			//CreateMap<Member, MemberSummaryDto>();
-			//CreateMap<MemberSummaryDto, Member>();
-			//#endregion
+            //#region Book Reservations
+            //CreateMap<BookReservation, CreateBookReservationDto>();
+            //CreateMap<CreateBookReservationDto, BookReservation>();
 
-			//#region Fines
-			//CreateMap<Fine, FineDto>();
-			//CreateMap<FineDto, Fine>();
+            //#endregion
+            //#region Members
+            //CreateMap<Member, MemberDto>();
+            //CreateMap<MemberDto, Member>();
 
-			//CreateMap<CreateUpdateFineDto, Fine>();
-			//CreateMap<Fine, CreateUpdateFineDto>();
-			//#endregion
-		}
-	}
+            //CreateMap<Member, MemberSummaryDto>();
+            //CreateMap<MemberSummaryDto, Member>();
+            //#endregion
+
+            //#region Fines
+            //CreateMap<Fine, FineDto>();
+            //CreateMap<FineDto, Fine>();
+
+            //CreateMap<CreateUpdateFineDto, Fine>();
+            //CreateMap<Fine, CreateUpdateFineDto>();
+            //#endregion
+        }
+    }
 }

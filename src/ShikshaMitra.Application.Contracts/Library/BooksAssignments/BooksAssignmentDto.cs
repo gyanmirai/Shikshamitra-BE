@@ -4,9 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ShikshaMitra.Library.BookAssignments
+namespace ShikshaMitra.Library.BooksAssignments
 {
-	internal class IBookAssignmentAppService
+	public class BooksAssignmentDto
 	{
 	}
 }

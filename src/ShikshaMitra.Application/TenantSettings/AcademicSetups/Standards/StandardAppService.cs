@@ -5,7 +5,9 @@ using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
@@ -42,11 +44,13 @@ public class StandardAppService(
 		return ObjectMapper.Map<Standard, StandardDto>(standard);
 	}
 
-
+	[RemoteService(false)]
 	public async Task<List<StandardDto>> GetStandardsByEducationMediumId(Guid educationMediumId)
 	{
 		List<EducationMediumStage> educationMediumsStages =
 			await educationMediumRepository.GetEducationMediumStagesByEducationMediumIdAsync(educationMediumId);
+
+		educationMediumsStages = educationMediumsStages.OrderBy(x => x.Name).ToList();
 
 		if (educationMediumsStages.Count == 0)
 		{
@@ -63,7 +67,14 @@ public class StandardAppService(
 				await standardRepository.GetStandardsByEducationMediumStageIdAsync(
 					educationMediumStage.Id
 				);
-			standards.AddRange(standardsForEducationMedium);
+
+			// sort divisions by it's name for each standard
+			foreach (Standard standard in standardsForEducationMedium)
+			{
+				// sort divisions in standard using orderby
+				standard.Divisions = standard.Divisions.OrderBy(x => x.Name).ToList();
+				standards.Add(standard);
+			}
 		}
 
 		return ObjectMapper.Map<List<Standard>, List<StandardDto>>(standards);

@@ -1996,13 +1996,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTimeOffset>("ExamDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("ExamScheduleType")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ExamType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -2025,7 +2018,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<float?>("MarksObtained")
                         .HasColumnType("real");
 
-                    b.Property<float>("PassingMark")
+                    b.Property<float?>("PassingMark")
                         .HasColumnType("real");
 
                     b.Property<Guid>("StudentEnrollmentId")
@@ -2035,7 +2028,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
-                    b.Property<float>("TotalMarks")
+                    b.Property<float?>("TotalMarks")
                         .HasColumnType("real");
 
                     b.HasKey("Id");

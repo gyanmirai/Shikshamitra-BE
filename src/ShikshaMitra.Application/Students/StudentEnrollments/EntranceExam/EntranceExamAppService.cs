@@ -29,10 +29,13 @@ public class EntranceExamAppService(IEntranceExamRepository entranceExamReposito
 		return ObjectMapper.Map<EntranceExam, EntranceExamDto>(entity);
 	}
 
-	public async Task<EntranceExamDto> GetByStudentEnrollmentId(Guid studentEnrollmentId)
+	public async Task<EntranceExamDto?> GetByStudentEnrollmentId(Guid studentEnrollmentId)
 	{
-		var entity = await entranceExamRepository.GetAsync(x => x.StudentEnrollmentId == studentEnrollmentId);
-		return ObjectMapper.Map<EntranceExam, EntranceExamDto>(entity);
+		var entity = await entranceExamRepository.FindAsync(e => e.StudentEnrollmentId == studentEnrollmentId);
+
+		return entity is null
+			? null
+			: ObjectMapper.Map<EntranceExam, EntranceExamDto>(entity);
 	}
 
 	public async Task<SlotStudentCountDto> GetStudentCountForSlotByDateAsync(Guid slotId, DateTimeOffset examDate)

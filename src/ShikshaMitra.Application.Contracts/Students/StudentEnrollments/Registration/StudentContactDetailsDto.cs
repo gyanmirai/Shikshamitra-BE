@@ -12,10 +12,14 @@ public class StudentContactDetailsDto
 	public string? Email { get;  set; }
 	public int? PassOutYear { get;  set; }
 	public string? OfficeNo { get;  set; }
-	public string? OfficeAddress { get;  set; }
+	public string? OfficeAddress1 { get;  set; }
+	public string? OfficeAddress2 { get;  set; }
+	public string? OfficeAddress3 { get;  set; }
 	public string? Designation { get;  set; }
 	public string? Organisation { get;  set; }
 	public string? AadhaarNo { get;  set; }
 	public string? Remarks { get;  set; }
-	public string? Address { get;  set; }
+	public string? Address1 { get;  set; }
+	public string? Address2 { get;  set; }
+	public string? Address3 { get;  set; }
 }

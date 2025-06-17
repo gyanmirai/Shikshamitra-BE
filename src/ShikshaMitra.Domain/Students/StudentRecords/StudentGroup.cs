@@ -9,6 +9,8 @@ public class StudentGroup : AggregateRoot<Guid>, IMultiTenant
 	public string Name { get;set; }
 
 	public Guid? TenantId { get; set; }
+	public string? Color { get; set; }
+	public string? Logo { get; set; }
 	private StudentGroup() { }
 
 	public StudentGroup(Guid id, string name, Guid? tenantId = null) : base(id)

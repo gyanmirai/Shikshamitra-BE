@@ -65,13 +65,12 @@ public class StudentSeederContributor(
 			dateOfBirth: new DateTimeOffset(new DateTime(2015, 3, 15)),
 			dateOfInquiry: new DateTimeOffset(DateTime.UtcNow),
 			genderType: GenderType.Male,
-			parentContactNumber: "+91-9988776655",
-			alternativeContactNumber: "+91-9876543210",
+			primaryContactNumber: "+91-9988776655",
+			secondaryContactNumber: "+91-9876543210",
 			addressLine1: "Trimandir",
 			addressLine2: "Trimandir",
 			addressLine3: null,
 			country: new Country("India", "In"),
-			village: "Trimandir",
 			pan: "ABCDE1234F",
 			apparId: "123456",
 			city: "Adalaj",
@@ -97,12 +96,16 @@ public class StudentSeederContributor(
 			email: "dinesh.vadher@example.com",
 			passOutYear: 1996,
 			officeNo: "+91-0792223344",
-			officeAddress: "123 Business Park, Ahmedabad",
+			officeAddress1: "123 Business Park, Ahmedabad",
+			officeAddress2: "123 Business Park, Ahmedabad",
+			officeAddress3: "123 Business Park, Ahmedabad",
 			designation: "Owner",
 			organisation: "Vadher Enterprises",
 			aadhaarNo: "1234 5678 9012",
 			remarks: null,
-			address: "123 Main Street, Ahmedabad"
+			address1: "123 Main Street, Ahmedabad",
+			address2: "123 Main Street, Ahmedabad",
+			address3: "123 Main Street, Ahmedabad"
 		);
 
 		var motherDetails = new StudentContactDetails(
@@ -114,12 +117,16 @@ public class StudentSeederContributor(
 			email: "nathiben.vadher@example.com",
 			passOutYear: 1998,
 			officeNo: null,
-			officeAddress: null,
+			officeAddress1: null,
+			officeAddress2: null,
+			officeAddress3: null,
 			designation: null,
 			organisation: null,
 			aadhaarNo: "2345 6789 0123",
 			remarks: null,
-			address: "123 Main Street, Ahmedabad"
+			address1: "123 Main Street, Ahmedabad",
+			address2: "123 Main Street, Ahmedabad",
+			address3: "123 Main Street, Ahmedabad"
 		);
 
 		var guardianDetails = new StudentContactDetails(
@@ -131,12 +138,16 @@ public class StudentSeederContributor(
 			email: null,
 			passOutYear: null,
 			officeNo: null,
-			officeAddress: null,
+			officeAddress1: null,
+			officeAddress2: null,
+			officeAddress3: null,
 			designation: null,
 			organisation: null,
 			aadhaarNo: null,
 			remarks: null,
-			address: null
+			address1: null,
+			address2: null,
+			address3: null
 		);
 
 		var studentCommunicationDetails = new StudentCommunicationDetails(
@@ -261,7 +272,6 @@ public class StudentSeederContributor(
 			standardId: standardId,
 			divisionId: divisionId,
 			grNoRecord: 1,
-			tempGrNo: 1,
 			rollNo: 1,
 
 			// Family details

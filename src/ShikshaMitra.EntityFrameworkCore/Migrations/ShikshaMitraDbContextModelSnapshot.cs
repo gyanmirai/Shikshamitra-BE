@@ -830,6 +830,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("RoleId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("SecondaryMobileNo")
+                        .HasColumnType("text");
+
                     b.Property<Guid?>("ShiftId")
                         .HasColumnType("uuid");
 
@@ -1135,6 +1138,9 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<float>("DocumentSize")
+                        .HasColumnType("real");
+
                     b.PrimitiveCollection<int[]>("DocumentTypes")
                         .IsRequired()
                         .HasColumnType("integer[]");
@@ -1223,8 +1229,11 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<string>("Reason")
+                    b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Reason")
                         .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("StartDate")

@@ -12,8 +12,7 @@ namespace ShikshaMitra.Library.BooksReservations;
 public class BooksReservation : AuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; set; }
-	public Guid BookId { get; set; }
-	public Guid MemberId { get; set; }
+	public Guid BooksAssignmentId { get; set; }
 	public DateTime RequestedDate { get; set; }
 	public DateTime? FulfilledDate { get; set; }
 	public ReservationStatus Status { get; set; }
@@ -23,16 +22,14 @@ public class BooksReservation : AuditedAggregateRoot<Guid>, IMultiTenant
 	public BooksReservation(
 		Guid id,
 		Guid? tenantId,
-		Guid bookId,
-		Guid memberId,
+		Guid booksAssignmentId,
 		DateTime requestedDate,
 		DateTime? fulfilledDate,
 		ReservationStatus status
 	) : base(id)
 	{
 		TenantId = tenantId;
-		BookId = bookId;
-		MemberId = memberId;
+		BooksAssignmentId = booksAssignmentId;
 		RequestedDate = requestedDate;
 		FulfilledDate = fulfilledDate;
 		Status = status;

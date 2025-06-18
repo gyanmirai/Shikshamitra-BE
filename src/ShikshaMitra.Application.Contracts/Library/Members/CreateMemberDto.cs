@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 
 namespace ShikshaMitra.Library.Members;
 
-public class MembeDto
+public class CreateMemberDto
 {
+	public string Name { get; set; }
+	public string Role { get; set; }
 }

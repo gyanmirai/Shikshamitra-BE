@@ -14,7 +14,7 @@ public class BooksAssignmentConfiguration : IEntityTypeConfiguration<BooksAssign
 {
 	public void Configure(EntityTypeBuilder<BooksAssignment> builder)
 	{
-		builder.ToTable("BooksAssignments");
+		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "BooksAssignments", ShikshaMitraConsts.DbSchema);
 
 		builder.HasKey(ba => ba.Id);
 
@@ -27,6 +27,9 @@ public class BooksAssignmentConfiguration : IEntityTypeConfiguration<BooksAssign
 		builder.Property(ba => ba.MemberId)
 			.IsRequired();
 
+		builder.Property(ba => ba.BookTitle)
+			.IsRequired();
+
 		builder.Property(ba => ba.IssueDate)
 			.IsRequired();
 
@@ -35,14 +38,6 @@ public class BooksAssignmentConfiguration : IEntityTypeConfiguration<BooksAssign
 
 		builder.Property(ba => ba.ReturnDate)
 			.IsRequired(false);
-
-		builder.Property(ba => ba.FineAmount)
-			.HasColumnType("decimal(18,2)")
-			.IsRequired();
-
-		builder.Property(ba => ba.Status)
-			.IsRequired()
-			.HasMaxLength(50);
 
 		builder.HasOne<Book>()
 			.WithMany()

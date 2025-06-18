@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Library.Books;
+using ShikshaMitra.Library.BooksAssignments;
 using ShikshaMitra.Library.Members;
 using System;
 using System.Collections.Generic;
@@ -14,17 +15,14 @@ public class BooksReservationConfiguration : IEntityTypeConfiguration<BooksReser
 {
 	public void Configure(EntityTypeBuilder<BooksReservation> builder)
 	{
-		builder.ToTable("BooksReservations");
+		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "BooksReservations", ShikshaMitraConsts.DbSchema);
 
 		builder.HasKey(br => br.Id);
 
 		builder.Property(br => br.TenantId)
 			   .IsRequired(false);
 
-		builder.Property(br => br.BookId)
-			   .IsRequired();
-
-		builder.Property(br => br.MemberId)
+		builder.Property(br => br.BooksAssignmentId)
 			   .IsRequired();
 
 		builder.Property(br => br.RequestedDate)
@@ -36,15 +34,9 @@ public class BooksReservationConfiguration : IEntityTypeConfiguration<BooksReser
 		builder.Property(br => br.Status)
 			   .IsRequired();
 
-		// Define Foreign Keys
-		builder.HasOne<Book>()
-			   .WithMany()
-			   .HasForeignKey(br => br.BookId)
-			   .OnDelete(DeleteBehavior.Restrict);
-
-		builder.HasOne<Member>()
-			   .WithMany()
-			   .HasForeignKey(br => br.MemberId)
-			   .OnDelete(DeleteBehavior.Restrict);
+		builder.HasOne<BooksAssignment>()
+				.WithMany()
+				.HasForeignKey(br => br.BooksAssignmentId)
+				.OnDelete(DeleteBehavior.Restrict);
 	}
 }

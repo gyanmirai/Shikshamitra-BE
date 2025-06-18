@@ -11,7 +11,7 @@ public class BookOverviewDto
 	public Guid Id { get; set; }
 	public string Isbn { get; set; }
 	public string Name { get; set; }
-	public int BorrowedCount { get; set; }
-	public int OverdueCount { get; set; }
-	public int ReservedCount { get; set; }
+	public int Borrowed { get; set; }
+	public int Overdue { get; set; }
+	public int Reserved { get; set; }
 }

@@ -12,30 +12,39 @@ namespace ShikshaMitra.Library.Fines
 	public class Fine : AuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		public Guid? TenantId { get; set; }
-        public Guid MemberId { get; set; }
-		public Guid BookAssignmentId { get; set; }
-		public decimal TotalFineAmount { get; set; }
-		public string Status { get; set; }
+		public Guid BooksAssignmentId { get; set; }
+		public decimal FineAmount { get; set; }
 		public PaymentMode PaymentMode { get; set; }
+        public decimal PenaltyAmount { get; set; }
+		public string? PenaltyReason { get; set; }
+		public string? BankAccountNumber { get; set; }
+		public string? IFSCCode { get; set; }
+		public string? AccountHolderName { get; set; }
 
 		private Fine() { }
 
 		public Fine(
 		   Guid id,
-		   Guid memberId,
-		   Guid bookAssignmentId,
-		   decimal totalFineAmount,
-		   string status,
+		   Guid? tenantId,
+		   Guid booksAssignmentId,
+		   decimal FineAmount,
 		   PaymentMode paymentMode,
-		   Guid? tenantId
-	   ) : base(id)
+		   decimal penaltyAmount,
+		   string pentaltyReason,
+		   string bankAccountNumber,
+           string ifscCode,
+		   string accountHolderName)
+	       : base(id)
 		{
-			MemberId = memberId;
-			BookAssignmentId = bookAssignmentId;
-			TotalFineAmount = totalFineAmount;
-			Status = status;
+			TenantId = TenantId;
+			BooksAssignmentId = booksAssignmentId;
+			FineAmount = FineAmount;
 			PaymentMode = paymentMode;
-			TenantId = tenantId;
+			PenaltyAmount = penaltyAmount;
+			PenaltyReason = pentaltyReason;
+			BankAccountNumber = bankAccountNumber;
+			IFSCCode = ifscCode;
+			AccountHolderName = accountHolderName;
 		}
 	}
 }

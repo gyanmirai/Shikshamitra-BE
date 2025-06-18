@@ -14,7 +14,5 @@ public interface IBookAppService : IApplicationService
 	Task <BookDto>AddNewBookAsync(AddNewBookDto input);
     Task<ListResultDto<BookDto>> GetAllAsync();
 	Task<BookDto> GetByIdAsync(Guid id);
-	Task IssueBookAsync(IssueBookDto input);
-	Task ReturnBookAsync(ReturnBookDto input);
 	Task<List<BookOverviewDto>> GetBookOverviewAsync();
 }

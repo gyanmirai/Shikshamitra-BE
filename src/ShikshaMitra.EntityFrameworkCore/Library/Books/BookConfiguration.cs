@@ -13,7 +13,7 @@ public class BookConfiguration : IEntityTypeConfiguration<Book>
 {
 	public void Configure(EntityTypeBuilder<Book> builder)
 	{
-		builder.ToTable("Books");
+		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "Books", ShikshaMitraConsts.DbSchema);
 
 		builder.HasKey(b => b.Id);
 

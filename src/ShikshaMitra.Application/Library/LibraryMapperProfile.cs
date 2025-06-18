@@ -13,61 +13,57 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ShikshaMitra.Library
+namespace ShikshaMitra.Library;
+
+public class LibraryMapperProfile : Profile
 {
-    internal class LibraryMapperProfile : Profile
-    {
-        public LibraryMapperProfile()
-        {
-            #region Setting
-            #region General Setting 
-            CreateMap<BookCategory, BookCategoryDto>();
-            CreateMap<CreateUpdateBookCategoryDto, BookCategory>();
+	public LibraryMapperProfile()
+	{
+		#region Library
+		#region Setting
+		#region General Setting 
+		CreateMap<BookCategory, BookCategoryDto>();
+		CreateMap<CreateUpdateBookCategoryDto, BookCategory>();
 
-            CreateMap<LibraryTiming, LibraryTimingDto>();
-            CreateMap<LibraryTimingDto, LibraryTiming>();
+		CreateMap<LibraryTiming, LibraryTimingDto>();
+		CreateMap<LibraryTimingDto, LibraryTiming>();
 
-            CreateMap<LoanPolicy, LoanPolicyDto>();
-            CreateMap<CreateUpdateLoanPolicyDto, LoanPolicy>();
-            #endregion
-            #endregion
+		CreateMap<LoanPolicy, LoanPolicyDto>();
+		CreateMap<CreateUpdateLoanPolicyDto, LoanPolicy>();
+		#endregion
+		#endregion
 
-            #region Books Management
-            CreateMap<Book, BookDto>();
-            CreateMap<BookDto, Book>();
-            CreateMap<AddNewBookDto, Book>();
-            CreateMap<Book, BookOverviewDto>();
-			#endregion
+		#region Books Management
+		CreateMap<Book, BookDto>();
+		CreateMap<AddNewBookDto, Book>();
+		CreateMap<Book, BookOverviewDto>();
+		#endregion
 
-			#region Books Assignments 
-			CreateMap<BooksAssignment, BooksAssignmentDto>();
-			CreateMap<BooksAssignmentDto, BooksAssignment>();
+		#region Books Assignments 
+		CreateMap<BooksAssignment, BooksAssignmentDto>();
+		CreateMap<BooksAssignmentDto, BooksAssignment>();
 
-			CreateMap<IssueBookDto, BooksAssignment>();
+		CreateMap<IssueBookDto, BooksAssignment>();
 
-            CreateMap<ReturnBookDto, BooksAssignment>();
-            #endregion
+		CreateMap<ReturnBookDto, BooksAssignment>();
+		#endregion
 
-            //#region Book Reservations
-            //CreateMap<BookReservation, CreateBookReservationDto>();
-            //CreateMap<CreateBookReservationDto, BookReservation>();
+		#region Members
+		CreateMap<Member, MemberDto>();
 
-            //#endregion
-            //#region Members
-            //CreateMap<Member, MemberDto>();
-            //CreateMap<MemberDto, Member>();
+		CreateMap<CreateMemberDto, Member>();
+		CreateMap<Member, MemberOverviewDto>();
+		#endregion
 
-            //CreateMap<Member, MemberSummaryDto>();
-            //CreateMap<MemberSummaryDto, Member>();
-            //#endregion
+		#region Book Reservations
+		CreateMap<BooksReservation, BooksReservationDto>();
+		CreateMap<CreateUpdateBooksReservationDto, BooksReservation>();
+		#endregion
 
-            //#region Fines
-            //CreateMap<Fine, FineDto>();
-            //CreateMap<FineDto, Fine>();
-
-            //CreateMap<CreateUpdateFineDto, Fine>();
-            //CreateMap<Fine, CreateUpdateFineDto>();
-            //#endregion
-        }
-    }
+		#region Fines
+		CreateMap<Fine, FineDto>();
+		CreateMap<CreateFineDto, Fine>();
+		#endregion
+		#endregion
+	}
 }

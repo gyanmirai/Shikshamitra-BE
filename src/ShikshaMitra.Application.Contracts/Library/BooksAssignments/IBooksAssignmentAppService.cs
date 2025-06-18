@@ -6,6 +6,12 @@ using System.Threading.Tasks;
 
 namespace ShikshaMitra.Library.BooksAssignments;
 
-internal class IBooksAssignmentAppService
+public interface IBooksAssignmentAppService
 {
+	Task<BooksAssignmentDto> CreateAsync(CreateUpdateBooksAssignmentDto input);
+	Task<List<BooksAssignmentDto>> GetListAsync();
+    Task<BooksAssignmentDto> GetAsync(Guid id);
+	Task<BooksAssignmentDto> UpdateAsync(Guid id, CreateUpdateBooksAssignmentDto input);
+    Task<string> IssueBookAsync(IssueBookDto input);
+    Task<string> ReturnBookAsync(ReturnBookDto input);
 }

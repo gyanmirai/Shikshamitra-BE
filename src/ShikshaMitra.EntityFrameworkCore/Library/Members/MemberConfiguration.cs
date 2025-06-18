@@ -12,7 +12,7 @@ public class MemberConfiguration : IEntityTypeConfiguration<Member>
 {
 	public void Configure(EntityTypeBuilder<Member> builder)
 	{
-		builder.ToTable("Members");
+		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "Members", ShikshaMitraConsts.DbSchema);
 
 		builder.HasKey(m => m.Id);
 
@@ -26,8 +26,5 @@ public class MemberConfiguration : IEntityTypeConfiguration<Member>
 		builder.Property(m => m.Role)
 			.IsRequired()
 			.HasMaxLength(100);
-
-		builder.Property(m => m.ReferenceId)
-			.IsRequired();
 	}
 }

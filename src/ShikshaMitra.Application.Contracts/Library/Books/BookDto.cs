@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Library.Books;
 
-public class BookDto
+public class BookDto : EntityDto<Guid>
 {
 	public string BookTitle { get; set; }
 	public string BookAuthor { get; set; }

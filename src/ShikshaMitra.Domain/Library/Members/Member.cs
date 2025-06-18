@@ -13,20 +13,17 @@ namespace ShikshaMitra.Library.Members
 		public Guid? TenantId { get; set; }
         public string Name { get; set; }
 		public string Role { get; set; }
-		public int ReferenceId { get; set; }
 
 		private Member() { }
 		public Member(
 			Guid id,
 			string name,
 			string role,
-			int referenceId,
 			Guid? tenantId)
 			: base(id)
 		{
 			Name = name;
 			Role = role;
-			ReferenceId = referenceId;
 			TenantId = tenantId;
 		}
 	}

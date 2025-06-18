@@ -14,8 +14,8 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20250609112907_v29")]
-    partial class v29
+    [Migration("20250613115604_v32")]
+    partial class v32
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -1581,7 +1581,7 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("Books", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Library.BooksAssignements.BooksAssignment", b =>
+            modelBuilder.Entity("ShikshaMitra.Library.BooksAssignments.BooksAssignment", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -1591,7 +1591,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("BankAccountNumber")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<Guid>("BookId")
@@ -1652,7 +1651,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("numeric");
 
                     b.Property<string>("PenaltyReason")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("ReturnDate")
@@ -1837,9 +1835,6 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
-
-                    b.Property<int>("ReferenceId")
-                        .HasColumnType("integer");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -6631,7 +6626,7 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Library.BooksAssignements.BooksAssignment", b =>
+            modelBuilder.Entity("ShikshaMitra.Library.BooksAssignments.BooksAssignment", b =>
                 {
                     b.HasOne("ShikshaMitra.Library.Books.Book", null)
                         .WithMany()
@@ -6663,7 +6658,7 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Library.Fines.Fine", b =>
                 {
-                    b.HasOne("ShikshaMitra.Library.BooksAssignements.BooksAssignment", null)
+                    b.HasOne("ShikshaMitra.Library.BooksAssignments.BooksAssignment", null)
                         .WithMany()
                         .HasForeignKey("BookAssignmentId")
                         .OnDelete(DeleteBehavior.Restrict)

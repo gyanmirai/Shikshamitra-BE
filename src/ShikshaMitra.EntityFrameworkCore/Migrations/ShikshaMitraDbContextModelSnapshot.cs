@@ -1575,24 +1575,20 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("BookCategoryId");
 
-                    b.ToTable("Books", (string)null);
+                    b.ToTable("AppBooks", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Library.BooksAssignements.BooksAssignment", b =>
+            modelBuilder.Entity("ShikshaMitra.Library.BooksAssignments.BooksAssignment", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("AccountHolderName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("BankAccountNumber")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<Guid>("BookId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("BookTitle")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -1617,13 +1613,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
-                    b.Property<decimal>("FineAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("IFSCCode")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<DateTime>("IssueDate")
                         .HasColumnType("timestamp with time zone");
 
@@ -1638,27 +1627,8 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("MemberId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Notes")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("PaymentMode")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("PenaltyAmount")
-                        .HasColumnType("numeric");
-
-                    b.Property<string>("PenaltyReason")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<DateTime?>("ReturnDate")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
@@ -1670,7 +1640,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("MemberId");
 
-                    b.ToTable("BooksAssignments", (string)null);
+                    b.ToTable("AppBooksAssignments", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.BooksReservations.BooksReservation", b =>
@@ -1678,7 +1648,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("BookId")
+                    b.Property<Guid>("BooksAssignmentId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -1712,9 +1682,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<Guid>("MemberId")
-                        .HasColumnType("uuid");
-
                     b.Property<DateTime>("RequestedDate")
                         .HasColumnType("timestamp with time zone");
 
@@ -1727,11 +1694,9 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BookId");
+                    b.HasIndex("BooksAssignmentId");
 
-                    b.HasIndex("MemberId");
-
-                    b.ToTable("BooksReservations", (string)null);
+                    b.ToTable("AppBooksReservations", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Fines.Fine", b =>
@@ -1739,7 +1704,15 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("BookAssignmentId")
+                    b.Property<string>("AccountHolderName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("BankAccountNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("BooksAssignmentId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -1762,6 +1735,13 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
+                    b.Property<decimal>("FineAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("IFSCCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("LastModificationTime");
@@ -1770,31 +1750,25 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<Guid>("MemberId")
-                        .HasColumnType("uuid");
-
                     b.Property<int>("PaymentMode")
                         .HasColumnType("integer");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                    b.Property<decimal>("PenaltyAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("PenaltyReason")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
-                    b.Property<decimal>("TotalFineAmount")
-                        .HasColumnType("decimal(18,2)");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("BookAssignmentId");
+                    b.HasIndex("BooksAssignmentId");
 
-                    b.HasIndex("MemberId");
-
-                    b.ToTable("Fines", (string)null);
+                    b.ToTable("AppFines", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Members.Member", b =>
@@ -1835,9 +1809,6 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<int>("ReferenceId")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Role")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1849,7 +1820,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Members", (string)null);
+                    b.ToTable("AppMembers", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Setting.GeneralSetting.BookCategory.BookCategory", b =>
@@ -6628,7 +6599,7 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Library.BooksAssignements.BooksAssignment", b =>
+            modelBuilder.Entity("ShikshaMitra.Library.BooksAssignments.BooksAssignment", b =>
                 {
                     b.HasOne("ShikshaMitra.Library.Books.Book", null)
                         .WithMany()
@@ -6645,30 +6616,18 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Library.BooksReservations.BooksReservation", b =>
                 {
-                    b.HasOne("ShikshaMitra.Library.Books.Book", null)
+                    b.HasOne("ShikshaMitra.Library.BooksAssignments.BooksAssignment", null)
                         .WithMany()
-                        .HasForeignKey("BookId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.Library.Members.Member", null)
-                        .WithMany()
-                        .HasForeignKey("MemberId")
+                        .HasForeignKey("BooksAssignmentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Fines.Fine", b =>
                 {
-                    b.HasOne("ShikshaMitra.Library.BooksAssignements.BooksAssignment", null)
+                    b.HasOne("ShikshaMitra.Library.BooksAssignments.BooksAssignment", null)
                         .WithMany()
-                        .HasForeignKey("BookAssignmentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.Library.Members.Member", null)
-                        .WithMany()
-                        .HasForeignKey("MemberId")
+                        .HasForeignKey("BooksAssignmentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

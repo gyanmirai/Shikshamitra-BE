@@ -14,38 +14,42 @@ public class FineConfiguration : IEntityTypeConfiguration<Fine>
 {
 	public void Configure(EntityTypeBuilder<Fine> builder)
 	{
-		builder.ToTable("Fines");
+		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "Fines", ShikshaMitraConsts.DbSchema);
 
 		builder.HasKey(f => f.Id);
 
 		builder.Property(f => f.TenantId)
 			   .IsRequired(false);
 
-		builder.Property(f => f.MemberId)
+        builder.Property(f => f.BooksAssignmentId)
 			   .IsRequired();
 
-		builder.Property(f => f.BookAssignmentId)
-			   .IsRequired();
-
-		builder.Property(f => f.TotalFineAmount)
+		builder.Property(f => f.FineAmount)
 			   .IsRequired()
 			   .HasColumnType("decimal(18,2)");
-
-		builder.Property(f => f.Status)
-			   .IsRequired()
-			   .HasMaxLength(50);
 
 		builder.Property(f => f.PaymentMode)
 			   .IsRequired();
 
-		builder.HasOne<Member>()
-			   .WithMany()
-			   .HasForeignKey(f => f.MemberId)
-			   .OnDelete(DeleteBehavior.Restrict);
+		builder.Property(f => f.PenaltyAmount)
+				.IsRequired()
+				.HasColumnType("decimal(18,2)");
 
-		builder.HasOne<BooksAssignment>()
+		builder.Property(f => f.PenaltyReason)
+				   .HasMaxLength(256);
+
+		builder.Property(f => f.BankAccountNumber)
+				   .HasMaxLength(50);
+
+		builder.Property(f => f.IFSCCode)
+				   .HasMaxLength(20);
+
+		builder.Property(f => f.AccountHolderName)
+				   .HasMaxLength(100);
+
+        builder.HasOne<BooksAssignment>()
 			   .WithMany()
-			   .HasForeignKey(f => f.BookAssignmentId)
+			   .HasForeignKey(f => f.BooksAssignmentId)
 			   .OnDelete(DeleteBehavior.Restrict);
 	}
 }

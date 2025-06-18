@@ -1,11 +1,22 @@
-﻿using System;
+﻿using ShikshaMitra.Library.BooksAssignments;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Library.Fines;
 
-public class FineDto
+public class FineDto : EntityDto<Guid>
 {
+	public Guid Id { get; set; }
+	public Guid BooksAssignmentId { get; set; }
+	public decimal FineAmount { get; set; }
+	public PaymentMode PaymentMode { get; set; }
+	public decimal PenaltyAmount { get; set; }
+	public string? PenaltyReason { get; set; }
+	public string? BankAccountNumber { get; set; }
+	public string? IFSCCode { get; set; }
+	public string? AccountHolderName { get; set; }
 }

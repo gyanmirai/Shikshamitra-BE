@@ -1,5 +1,4 @@
-﻿using ShikshaMitra.Students.EntranceExam;
-using ShikshaMitra.Students.StudentEnrollments.Settings;
+﻿using ShikshaMitra.Students.StudentEnrollments.Settings;
 using System;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -12,29 +11,25 @@ public class EntranceExam : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid EntranceExamSlotId { get; private set; }
 	public Guid StudentEnrollmentId { get; private set; }
 	public DateTimeOffset ExamDate { get; private set; }
-	public string ExamType { get; private set; }
 
-	public float PassingMark { get; set; }
+	public float? PassingMark { get; set; }
 	public float? MarksObtained { get; private set; }
-	public float TotalMarks { get; private set; }
-	public ExamScheduleType ExamScheduleType { get; private set; }
+	public float? TotalMarks { get; private set; }
 	public EntranceExamSlot EntranceExamSlot { get; private set; }
 	public StudentEnrollment StudentEnrollment { get; private set; }
 
 	protected EntranceExam() { }
 
-	internal EntranceExam(Guid id, Guid tenantId, Guid entranceExamSlotId, Guid studentEnrollmentId, DateTimeOffset examDate, string examType,
+	internal EntranceExam(Guid id, Guid tenantId, Guid entranceExamSlotId, Guid studentEnrollmentId, DateTimeOffset examDate,
 		float? marksObtained,
-		float totalMarks, ExamScheduleType examScheduleType) : base(id)
+		float totalMarks) : base(id)
 	{
 		TenantId = tenantId;
 		EntranceExamSlotId = entranceExamSlotId;
 		StudentEnrollmentId = studentEnrollmentId;
 		ExamDate = examDate;
-		ExamType = examType;
 		MarksObtained = marksObtained;
 		TotalMarks = totalMarks;
-		ExamScheduleType = examScheduleType;
 	}
 
 }

@@ -905,6 +905,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("RoleId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("SecondaryMobileNo")
+                        .HasColumnType("text");
+
                     b.Property<Guid?>("ShiftId")
                         .HasColumnType("uuid");
 
@@ -1210,6 +1213,9 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<float>("DocumentSize")
+                        .HasColumnType("real");
+
                     b.PrimitiveCollection<int[]>("DocumentTypes")
                         .IsRequired()
                         .HasColumnType("integer[]");
@@ -1298,8 +1304,11 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<string>("Reason")
+                    b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Reason")
                         .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("StartDate")
@@ -2071,13 +2080,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTimeOffset>("ExamDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("ExamScheduleType")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ExamType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -2100,7 +2102,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<float?>("MarksObtained")
                         .HasColumnType("real");
 
-                    b.Property<float>("PassingMark")
+                    b.Property<float?>("PassingMark")
                         .HasColumnType("real");
 
                     b.Property<Guid>("StudentEnrollmentId")
@@ -2110,7 +2112,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
-                    b.Property<float>("TotalMarks")
+                    b.Property<float?>("TotalMarks")
                         .HasColumnType("real");
 
                     b.HasKey("Id");

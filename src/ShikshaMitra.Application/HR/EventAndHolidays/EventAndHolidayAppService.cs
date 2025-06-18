@@ -7,10 +7,8 @@ using Volo.Abp.Application.Services;
 namespace ShikshaMitra.HR.EventAndHolidays;
 // private readonly IFileStorage _fileStorage;
 
-public class EventAndHolidayAppService(IEventAndHolidayRepository eventAndHolidayRepository) : CrudAppService<HR.EventAndHolidays.EventAndHoliday, EventAndHolidayDto, Guid, PagedAndSortedResultRequestDto,CreateUpdateEventAndHolidayDto>(eventAndHolidayRepository), IEventAndHolidayAppService
+public class EventAndHolidayAppService(IEventAndHolidayRepository eventAndHolidayRepository) : CrudAppService<EventAndHoliday, EventAndHolidayDto, Guid, PagedAndSortedResultRequestDto,CreateUpdateEventAndHolidayDto>(eventAndHolidayRepository), IEventAndHolidayAppService
 {
-	
-	
 	public async Task<PagedResultDto<EventAndHolidayDto>> GetEventAndHolidayByMonth(DateTimeOffset date)
 	{
 		List<EventAndHoliday> eventAndHoliday =
@@ -25,5 +23,4 @@ public class EventAndHolidayAppService(IEventAndHolidayRepository eventAndHolida
 			Items = ObjectMapper.Map<List<EventAndHoliday>, List<EventAndHolidayDto>>(eventAndHoliday)
 		};
 	}
-	
 }

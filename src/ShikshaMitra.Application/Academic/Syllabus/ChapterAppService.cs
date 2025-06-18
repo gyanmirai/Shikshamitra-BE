@@ -47,24 +47,34 @@ public class ChapterAppService(IRepository<SubjectChapter, Guid> chapterReposito
 		{
 			throw new UserFriendlyException("Error retrieving chapters", ex.Message);
 		}
-
 	}
 
 	public async Task<ChapterDto> UpdateAsync(Guid id, CreateUpdateChapterDto updateChapterDto)
 	{
-		var chapter = await chapterRepository.GetAsync(id) ?? throw new UserFriendlyException("Chapter not found");
+        try
+        {
+            var chapter = await chapterRepository.FindAsync(id) ?? throw new UserFriendlyException("Chapter not found");
 
-		chapter.Update(
-			updateChapterDto.ChapterName,
-			updateChapterDto.ChapterStartTime,
-			updateChapterDto.ChapterEndTime,
-			updateChapterDto.Description
-		);
+            chapter.Update(
+                updateChapterDto.ChapterName,
+                updateChapterDto.ChapterStartTime,
+                updateChapterDto.ChapterEndTime,
+                updateChapterDto.Description
+            );
 
-		chapter.ChapterNumber = updateChapterDto.ChapterNumber;
+            chapter.ChapterNumber = updateChapterDto.ChapterNumber;
 
-		await chapterRepository.UpdateAsync(chapter, autoSave: true);
-		return ObjectMapper.Map<SubjectChapter, ChapterDto>(chapter);
+            await chapterRepository.UpdateAsync(chapter, autoSave: true);
+            return ObjectMapper.Map<SubjectChapter, ChapterDto>(chapter);
+        }
+		catch (UserFriendlyException ex)
+		{
+			throw;
+		}
+        catch (Exception ex)
+        {
+            throw new UserFriendlyException("Error updating chapter", ex.Message);
+        }
 	}
 
 	public Task DeleteAsync(Guid id)

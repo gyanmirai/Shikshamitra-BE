@@ -29,7 +29,7 @@ public class ResourceType : AggregateRoot<Guid>, IMultiTenant
 
 	public ResourceType(string type)
     {
-        Type = type;
+        Name = type;
     }
     #endregion
 

@@ -23,16 +23,14 @@ public class SubjectController(ISubjectAppService subjectAppService) : AbpContro
 	[HttpPost]
 	public async Task<IActionResult> CreateSubject([FromBody] CreateUpdateSubjectDto createSubjectDto)
 	{
-		var headers = this.Headers();
-		var subject = await subjectAppService.CreateAsync(createSubjectDto, headers.EducationMediumId);
+		var subject = await subjectAppService.CreateAsync(createSubjectDto);
 		return Ok(subject);
 	}
 
 	[HttpPut("{id}")]
 	public async Task<IActionResult> UpdateSubject(Guid id, [FromBody] CreateUpdateSubjectDto updateSubjectDto)
 	{
-		var headers = this.Headers();
-		var subject = await subjectAppService.UpdateAsync(id, updateSubjectDto, headers.EducationMediumId);
+		var subject = await subjectAppService.UpdateAsync(id, updateSubjectDto);
 		return Ok(subject);
 	}
 

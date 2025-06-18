@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -8,42 +9,95 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Academic.Curriculum;
 
 [RemoteService(IsEnabled = false)]
-public class SubjectAppService(IRepository<Subject, Guid> subjectRepository, SubjectManager subjectManager) : ApplicationService, ISubjectAppService
+public class SubjectAppService(
+	IRepository<Subject, Guid> subjectRepository,
+	SubjectManager subjectManager,
+	ILogger<SubjectAppService> logger) : ApplicationService, ISubjectAppService
 {
-	public async Task<SubjectDto> CreateAsync(CreateUpdateSubjectDto createSubjectDto, Guid academicMediumId)
+	public async Task<SubjectDto> CreateAsync(CreateUpdateSubjectDto createSubjectDto)
 	{
-		Subject subject = await subjectManager.CreateSubject(
-			createSubjectDto.Name,
-			createSubjectDto.Color,
-			academicMediumId
-		);
+		try
+		{
+			Subject subject = await subjectManager.CreateSubject(
+				createSubjectDto.Name,
+				createSubjectDto.Color,
+				createSubjectDto.EducationMediumId
+			);
 
-		await subjectRepository.InsertAsync(subject);
-		
-		return ObjectMapper.Map<Subject, SubjectDto>(subject);
+			await subjectRepository.InsertAsync(subject);
+
+			return ObjectMapper.Map<Subject, SubjectDto>(subject);
+		}
+		catch (UserFriendlyException ex)
+		{
+			logger.LogError(ex.Message);
+			throw;
+		}
+		catch (Exception ex)
+		{
+			logger.LogError(ex, "Error creating subject with name {SubjectName} for medium {EducationMediumId}", createSubjectDto.Name, createSubjectDto.EducationMediumId);
+			throw new UserFriendlyException("Error occurred while creating subject");
+		}
 	}
 
 	public async Task DeleteAsync(Guid id)
 	{
-		var subject = await subjectRepository.GetAsync(id);
-		await subjectRepository.DeleteAsync(id);
+		try
+		{
+			var subject = await subjectRepository.GetAsync(id);
+			await subjectRepository.DeleteAsync(id);
+		}
+		catch (UserFriendlyException ex)
+		{
+			logger.LogError(ex.Message);
+			throw;
+		}
+		catch (Exception ex)
+		{
+			logger.LogError(ex, "Error deleting subject with ID {SubjectId}", id);
+			throw new UserFriendlyException("Error occurred while deleting subject");
+		}
 	}
 
-	public async Task<List<SubjectDto>> GetListAsync(Guid mediumId)
+	public async Task<List<SubjectDto>> GetListAsync(Guid educationMediumId)
 	{
-		List<Subject> subjects = await subjectRepository.GetListAsync(m => m.AcademicMediumId == mediumId);
+		try
+		{
+			List<Subject> subjects = await subjectRepository.GetListAsync(m => m.EducationMediumId == educationMediumId);
 
-		return ObjectMapper.Map<List<Subject>, List<SubjectDto>>(subjects);
+			return ObjectMapper.Map<List<Subject>, List<SubjectDto>>(subjects);
+		}
+		catch (UserFriendlyException ex)
+		{
+			logger.LogError(ex.Message);
+			throw;
+		}
+		catch (Exception ex)
+		{
+			logger.LogError(ex, "Error retrieving subjects for medium {EducationMediumId}", educationMediumId);
+			throw new UserFriendlyException("Error occurred while retrieving subjects");
+		}
 	}
 
-	public async Task<SubjectDto> UpdateAsync(Guid id, CreateUpdateSubjectDto updateSubjectDto, Guid academicMediumId)
+	public async Task<SubjectDto> UpdateAsync(Guid id, CreateUpdateSubjectDto updateSubjectDto)
 	{
-		var subject = await subjectRepository.GetAsync(id);
+		try
+		{
+			var subject = await subjectManager.UpdateAsync(id, updateSubjectDto.Name, updateSubjectDto.Color, updateSubjectDto.EducationMediumId);
 
-		await subjectManager.UpdateAsync(subject, updateSubjectDto.Name, updateSubjectDto.Color, academicMediumId);
+			await subjectRepository.UpdateAsync(subject, autoSave: true);
 
-		await subjectRepository.UpdateAsync(subject);
-
-		return ObjectMapper.Map<Subject, SubjectDto>(subject);
+			return ObjectMapper.Map<Subject, SubjectDto>(subject);
+		}
+		catch (UserFriendlyException ex)
+		{
+			logger.LogError(ex.Message);
+			throw;
+		}
+		catch (Exception ex)
+		{
+			logger.LogError(ex, "Error updating subject with ID {SubjectId}", id);
+			throw new UserFriendlyException("Error occurred while updating subject");
+		}
 	}
 }

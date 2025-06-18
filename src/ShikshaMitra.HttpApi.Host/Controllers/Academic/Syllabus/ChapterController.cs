@@ -19,7 +19,7 @@ public class ChapterController(IChapterAppService chapterAppService) : AbpContro
 		return chapterAppService.CreateAsync(input);
 	}
 
-	[HttpGet("/standards/{standardId}/subjects/{subjectId}/chapters")]
+	[HttpGet("/api/academic/standards/{standardId}/subjects/{subjectId}/chapters")]
 	public Task<List<ChapterDto>> GetByStandardSubjectIdAsync(Guid standardId, Guid subjectId)
 	{
 		return chapterAppService.GetByStandardSubjectIdAsync(standardId, subjectId);

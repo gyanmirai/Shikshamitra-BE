@@ -7,4 +7,5 @@ public class SubjectDto : EntityDto<Guid>
 {
 	public string Name { get; set; }
 	public string Color { get; set; }
+	public Guid EducationMediumId { get; set; }
 }

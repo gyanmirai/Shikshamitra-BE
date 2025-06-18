@@ -33,6 +33,7 @@ public class EmployeeDto : EntityDto<Guid>
 	public MaritalStatusType? MaritalStatus { get; set; }
 	public string? BloodGroup { get; set; }
 	public string? MobileNo { get; set; }
+	public string? SecondaryMobileNo { get; set; }
 	public string? Email { get; set; }
 	public string? Address1 { get; set; }
 	public string? Address2 { get; set; }

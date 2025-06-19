@@ -12,7 +12,6 @@ using Volo.Abp.Identity;
 using ShikshaMitra.Students.StudentRecords;
 using System.Linq;
 
-
 namespace ShikshaMitra.Students.StudentEnrollments;
 
 public class StudentEnrollmentManager(
@@ -407,8 +406,8 @@ public class StudentEnrollmentManager(
 				organisation: null,
 				aadhaarNo: null,
 				remarks: null,
-				address1: null, 
-				address2: null,	
+				address1: null,
+				address2: null,
 				address3: null
 			),
 			studentCommunicationDetails: new StudentCommunicationDetails(

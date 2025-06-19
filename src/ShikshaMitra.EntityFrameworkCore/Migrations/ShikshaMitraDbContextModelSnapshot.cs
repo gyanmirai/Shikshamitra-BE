@@ -197,9 +197,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AcademicMediumId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("Color")
                         .IsRequired()
                         .HasColumnType("text");
@@ -226,6 +223,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTime?>("DeletionTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
+
+                    b.Property<Guid>("EducationMediumId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
@@ -256,7 +256,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AcademicMediumId");
+                    b.HasIndex("EducationMediumId");
 
                     b.ToTable("AppSubjects", (string)null);
                 });
@@ -348,7 +348,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<Guid>("StandardSubjectId")
+                    b.Property<Guid>("StandardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SubjectId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("TenantId")
@@ -6220,7 +6223,7 @@ namespace ShikshaMitra.Migrations
                 {
                     b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "EducationMedium")
                         .WithMany()
-                        .HasForeignKey("AcademicMediumId")
+                        .HasForeignKey("EducationMediumId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

@@ -1648,7 +1648,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("BooksAssignmentId")
+                    b.Property<Guid>("BookId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -1682,6 +1682,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<Guid>("MemberId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("RequestedDate")
                         .HasColumnType("timestamp with time zone");
 
@@ -1694,7 +1697,9 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BooksAssignmentId");
+                    b.HasIndex("BookId");
+
+                    b.HasIndex("MemberId");
 
                     b.ToTable("AppBooksReservations", (string)null);
                 });
@@ -1750,6 +1755,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<Guid>("MemberId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("PaymentMode")
                         .HasColumnType("integer");
 
@@ -1767,6 +1775,8 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BooksAssignmentId");
+
+                    b.HasIndex("MemberId");
 
                     b.ToTable("AppFines", (string)null);
                 });
@@ -6616,9 +6626,15 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Library.BooksReservations.BooksReservation", b =>
                 {
-                    b.HasOne("ShikshaMitra.Library.BooksAssignments.BooksAssignment", null)
+                    b.HasOne("ShikshaMitra.Library.Books.Book", null)
                         .WithMany()
-                        .HasForeignKey("BooksAssignmentId")
+                        .HasForeignKey("BookId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Members.Member", null)
+                        .WithMany()
+                        .HasForeignKey("MemberId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
@@ -6628,6 +6644,12 @@ namespace ShikshaMitra.Migrations
                     b.HasOne("ShikshaMitra.Library.BooksAssignments.BooksAssignment", null)
                         .WithMany()
                         .HasForeignKey("BooksAssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Members.Member", null)
+                        .WithMany()
+                        .HasForeignKey("MemberId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

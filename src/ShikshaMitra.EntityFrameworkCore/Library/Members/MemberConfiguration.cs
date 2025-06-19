@@ -24,7 +24,8 @@ public class MemberConfiguration : IEntityTypeConfiguration<Member>
 			.HasMaxLength(256);
 
 		builder.Property(m => m.Role)
-			.IsRequired()
-			.HasMaxLength(100);
+		   .HasConversion<string>() 
+		   .IsRequired()
+		   .HasMaxLength(100);
 	}
 }

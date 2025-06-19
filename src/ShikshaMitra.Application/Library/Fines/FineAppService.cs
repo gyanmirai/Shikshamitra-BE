@@ -1,9 +1,11 @@
 ﻿using ShikshaMitra.Library.BooksAssignments;
+using ShikshaMitra.Library.Members;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -14,16 +16,34 @@ namespace ShikshaMitra.Library.Fines;
 public class FineAppService(
 	IRepository<Fine, Guid> fineRepository,
 	IRepository<BooksAssignment, Guid> booksAssignmentRepository,
+	IRepository<Member, Guid> memberRepository, 
 	IGuidGenerator guidGenerator
 ) : ApplicationService, IFineAppService
 {
 	public async Task<FineDto> CreateAsync(CreateFineDto createFineDto)
 	{
+		var member = await memberRepository.GetAsync(createFineDto.MemberId)
+			?? throw new BusinessException("Invalid Member ID");
+
+		var assignment = await booksAssignmentRepository.GetAsync(createFineDto.BooksAssignmentId)
+			?? throw new BusinessException("Invalid Assignment ID");
+
+		var returnDate = assignment.ReturnDate ?? Clock.Now;
+
+		int lateDays = (returnDate.Date - assignment.DueDate.Date).Days;
+		lateDays = Math.Max(0, lateDays);
+
+		    decimal finePerDay = member.Role.ToString() == "Student" ? 5 : 2;
+
+    
+		decimal totalFine = lateDays * finePerDay;
+
 		var fine = new Fine(
 			guidGenerator.Create(),
 			CurrentTenant.Id,
 			createFineDto.BooksAssignmentId,
-			createFineDto.FineAmount,
+			createFineDto.MemberId,
+			totalFine,
 			createFineDto.PaymentMode,
 			createFineDto.PenaltyAmount,
 			createFineDto.PenaltyReason,
@@ -33,6 +53,7 @@ public class FineAppService(
 		);
 
 		await fineRepository.InsertAsync(fine, autoSave: true);
+
 		return ObjectMapper.Map<Fine, FineDto>(fine);
 	}
 

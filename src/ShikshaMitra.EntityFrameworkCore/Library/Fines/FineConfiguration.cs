@@ -24,6 +24,9 @@ public class FineConfiguration : IEntityTypeConfiguration<Fine>
         builder.Property(f => f.BooksAssignmentId)
 			   .IsRequired();
 
+		builder.Property(f => f.MemberId)
+			   .IsRequired();
+
 		builder.Property(f => f.FineAmount)
 			   .IsRequired()
 			   .HasColumnType("decimal(18,2)");
@@ -50,6 +53,11 @@ public class FineConfiguration : IEntityTypeConfiguration<Fine>
         builder.HasOne<BooksAssignment>()
 			   .WithMany()
 			   .HasForeignKey(f => f.BooksAssignmentId)
+			   .OnDelete(DeleteBehavior.Restrict);
+
+		builder.HasOne<Member>()
+			   .WithMany()
+			   .HasForeignKey(f => f.MemberId)
 			   .OnDelete(DeleteBehavior.Restrict);
 	}
 }

@@ -10,13 +10,9 @@ namespace ShikshaMitra.Library.Fines;
 
 public class CreateFineDto
 {
-	[Required]
 	public Guid BooksAssignmentId { get; set; }
-
-	[Required]
-	public decimal FineAmount { get; set; }
-
-	[Required]
+	public Guid MemberId { get; set; }
+    public decimal FineAmount { get; set; }
 	public PaymentMode PaymentMode { get; set; }
 
 	public decimal PenaltyAmount { get; set; }

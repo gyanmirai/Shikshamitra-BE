@@ -78,14 +78,11 @@ public class BookAppService(
 			var overdue = assignments.Count(a => a.BookId == book.Id && a.ReturnDate == null && a.DueDate < Clock.Now);
 
 			var reserved = reservations.Count(r =>
-			{
-				var relatedAssignment = assignments.FirstOrDefault(a => a.Id == r.BooksAssignmentId);
-				return relatedAssignment != null &&
-					   relatedAssignment.BookId == book.Id &&
-					   (r.Status == ReservationStatus.Pending ||
-						r.Status == ReservationStatus.Ready ||
-						r.Status == ReservationStatus.Collected);
-			});
+				r.BookId == book.Id &&
+				(r.Status == ReservationStatus.Pending ||
+				 r.Status == ReservationStatus.Ready ||
+				 r.Status == ReservationStatus.Collected)
+			);
 
 			return new BookOverviewDto
 			{

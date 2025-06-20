@@ -16,8 +16,8 @@ public class CsvStudentDto
     public string? DateOfBirth { get; set; }
     public string? Gender { get; set; } 
     public string? Email { get; set; }
-    public string? ParentContactNumber { get; set; }
-    public string? AlternativeContactNumber { get; set; }
+    public string? PrimaryContactNumber { get; set; }
+    public string? SecondaryContactNumber { get; set; }
     
     // Address Details
     public string? AddressLine1 { get; set; }
@@ -53,7 +53,6 @@ public class CsvStudentDto
     
     // Academic Details
     public string? GrNoRecord { get; set; } // Will be parsed to int?
-    public string? TempGrNo { get; set; } // Will be parsed to int?
     public string? RollNo { get; set; } // Will be parsed to int?
     public string? AcademicYearId { get; set; } // Can be name or Guid
     public string? EducationBoardId { get; set; } // Can be name or Guid

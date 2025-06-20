@@ -30,15 +30,14 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public DateTimeOffset? DateOfBirth { get; private set; }
 	public DateTimeOffset? DateOfInquiry { get; private set; }
 	public GenderType? GenderType { get; private set; }
-	public string? ParentContactNumber { get; private set; }
-	public string? AlternativeContactNumber { get; private set; }
+	public string? PrimaryContactNumber { get; private set; }
+	public string? SecondaryContactNumber { get; private set; }
 	public string? AddressLine1 { get; private set; }
 	public string? AddressLine2 { get; private set; }
 	public string? AddressLine3 { get; private set; }
 	public Country? Country { get; private set; }
 	public State? State { get; private set; }
 
-	public string? Village { get; private set; }
 	public string? PAN { get; private set; }
 	public string? ApparId { get; private set; }
 
@@ -89,7 +88,6 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? MotherTongue { get; private set; }
 	public string? Nationality { get; private set; }
 	public string? BirthPlace { get; private set; }
-	public int TemporaryGr { get; private set; }
 	public string? Remarks { get; private set; }
 	public Guid? DivisionId { get; set; }
 
@@ -123,14 +121,13 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DateTimeOffset? dateOfBirth,
 		DateTimeOffset? dateOfInquiry,
 		GenderType? genderType,
-		string? parentContactNumber,
-		string? alternativeContactNumber,
+		string? primaryContactNumber,
+		string? secondaryContactNumber,
 		string? addressLine1,
 		string? addressLine2,
 		string? addressLine3,
 		Country? country,
 		State? state,
-		string? village,
 		string? pan,
 		string? apparId,
 		string? city,
@@ -152,7 +149,6 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? motherTongue,
 		string? nationality,
 		string? birthPlace,
-		int temporaryGr,
 		string? remarks,
 		// Registration Details
 		StudentContactDetails fatherDetails,
@@ -177,13 +173,12 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DateOfBirth = dateOfBirth;
 		DateOfInquiry = dateOfInquiry;
 		GenderType = genderType;
-		ParentContactNumber = parentContactNumber;
-		AlternativeContactNumber = alternativeContactNumber;
+		PrimaryContactNumber = primaryContactNumber;
+		SecondaryContactNumber = secondaryContactNumber;
 		AddressLine1 = addressLine1;
 		AddressLine2 = addressLine2;
 		AddressLine3 = addressLine3;
 		Country = country;
-		Village = village;
 		PAN = pan;
 		ApparId = apparId;
 		City = city;
@@ -207,7 +202,6 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		MotherTongue = motherTongue;
 		Nationality = nationality;
 		BirthPlace = birthPlace;
-		TemporaryGr = temporaryGr;
 		Remarks = remarks;
 
 		// Registration Details
@@ -237,14 +231,13 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DateTimeOffset? dateOfBirth,
 		DateTimeOffset? dateOfInquiry,
 		GenderType? genderType,
-		string? parentContactNumber,
-		string? alternativeContactNumber,
+		string? primaryContactNumber,
+		string? secondaryContactNumber,
 		string? addressLine1,
 		string? addressLine2,
 		string? addressLine3,
 		Country? country,
 		State? state,
-		string? village,
 		string? pan,
 		string? apparId,
 		string? city,
@@ -267,13 +260,12 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DateOfBirth = dateOfBirth;
 		DateOfInquiry = dateOfInquiry;
 		GenderType = genderType;
-		ParentContactNumber = parentContactNumber;
-		AlternativeContactNumber = alternativeContactNumber;
+		PrimaryContactNumber = primaryContactNumber;
+		SecondaryContactNumber = secondaryContactNumber;
 		AddressLine1 = addressLine1;
 		AddressLine2 = addressLine2;
 		AddressLine3 = addressLine3;
 		Country = country;
-		Village = village;
 		PAN = pan;
 		ApparId = apparId;
 		City = city;
@@ -298,13 +290,12 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? previousSchoolName,
 		DateTimeOffset? dateOfBirth,
 		GenderType? genderType,
-		string? parentContactNumber,
-		string? alternativeContactNumber,
+		string? primaryContactNumber,
+		string? secondaryContactNumber,
 		string? addressLine1,
 		string? addressLine2,
 		string? addressLine3,
 		Country? country,
-		string? village,
 		string? pan,
 		string? apparId,
 		string? city,
@@ -326,7 +317,6 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? motherTongue,
 		string? nationality,
 		string? birthPlace,
-		int temporaryGr,
 		string? remarks
 	)
 	{
@@ -337,13 +327,12 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PreviousSchoolName = previousSchoolName;
 		DateOfBirth = dateOfBirth;
 		GenderType = genderType;
-		ParentContactNumber = parentContactNumber;
-		AlternativeContactNumber = alternativeContactNumber;
+		PrimaryContactNumber = primaryContactNumber;
+		SecondaryContactNumber = secondaryContactNumber;
 		AddressLine1 = addressLine1;
 		AddressLine2 = addressLine2;
 		AddressLine3 = addressLine3;
 		Country = country;
-		Village = village;
 		PAN = pan;
 		ApparId = apparId;
 		City = city;
@@ -366,7 +355,6 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		MotherTongue = motherTongue;
 		Nationality = nationality;
 		BirthPlace = birthPlace;
-		TemporaryGr = temporaryGr;
 		Remarks = remarks;
 
 		return this;

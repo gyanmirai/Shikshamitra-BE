@@ -119,6 +119,8 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	public DbSet<ShiftManagement> ShiftManagements { get; set; }
 
+	public DbSet<InstituteSetupExtraProperties> InstituteSetupExtraProperties { get; set; }
+
 	#endregion
 
 	#region Student

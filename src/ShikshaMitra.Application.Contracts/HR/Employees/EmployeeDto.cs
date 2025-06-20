@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using System;
 using System.Collections.Generic;
@@ -32,6 +33,7 @@ public class EmployeeDto : EntityDto<Guid>
 	public MaritalStatusType? MaritalStatus { get; set; }
 	public string? BloodGroup { get; set; }
 	public string? MobileNo { get; set; }
+	public string? SecondaryMobileNo { get; set; }
 	public string? Email { get; set; }
 	public string? Address1 { get; set; }
 	public string? Address2 { get; set; }
@@ -66,4 +68,6 @@ public class EmployeeDto : EntityDto<Guid>
 
 	// Profile Picture
 	public byte[]? ProfilePicture { get; set; }
+
+	public ShiftManagementDto Shift { get; set; }
 }

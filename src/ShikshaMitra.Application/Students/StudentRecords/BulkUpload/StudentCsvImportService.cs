@@ -146,7 +146,6 @@ public class StudentCsvImportService(
 					dob = parsedDob;
 				}                   // Parse the academic details
 				var grNoRecord = ParseInt(record.GrNoRecord, "GR number");
-				var tempGrNo = ParseInt(record.TempGrNo, "Temporary GR number");
 				var rollNo = ParseInt(record.RollNo, "Roll number");
 
 				// Find academic entities by name instead of requiring GUIDs directly
@@ -225,12 +224,12 @@ public class StudentCsvImportService(
 
 				// Create student communication details
 				var studentCommunicationDetails = new StudentCommunicationDetails(
-					primaryContactNo: record.ParentContactNumber,
-					parentContactNo: record.FatherContactNo ?? record.ParentContactNumber,
+					primaryContactNo: record.PrimaryContactNumber,
+					parentContactNo: record.FatherContactNo ?? record.PrimaryContactNumber,
 					parentEmail: record.FatherEmail ?? record.Email,
-					studentContactNo: record.AlternativeContactNumber,
+					studentContactNo: record.SecondaryContactNumber,
 					studentEmail: record.Email,
-					whatsAppNo: record.AlternativeContactNumber ?? record.ParentContactNumber,
+					whatsAppNo: record.SecondaryContactNumber ?? record.PrimaryContactNumber,
 					localAddressLine1: record.AddressLine1,
 					localAddressLine2: record.AddressLine2,
 					localAddressLine3: record.AddressLine3,
@@ -313,8 +312,8 @@ public class StudentCsvImportService(
 					dob,
 					gender,
 					record.Email,
-					record.ParentContactNumber,
-					record.AlternativeContactNumber,
+					record.PrimaryContactNumber,
+					record.SecondaryContactNumber,
 					Array.Empty<byte>(), // No profile picture from CSV
 
 					// Address
@@ -344,7 +343,6 @@ public class StudentCsvImportService(
 					educationMediumStageId,
 					standardId,
 					divisionId,
-					tempGrNo,
 					grNoRecord,
 					rollNo,
 
@@ -404,12 +402,16 @@ public class StudentCsvImportService(
 			email,
 			null, // passOutYear
 			null, // officeNo
-			null, // officeAddress
+			null,
+			null,
+			null,// officeAddress
 			null, // designation
 			null, // organisation
 			aadhaarNo,
 			null, // remarks
-			null  // address
+			null, // address
+			null,
+			null
 		);
 	}
 

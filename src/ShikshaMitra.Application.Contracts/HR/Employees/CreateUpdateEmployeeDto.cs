@@ -23,6 +23,7 @@ public class CreateUpdateEmployeeDto
 	public MaritalStatusType? MaritalStatus { get; set; }
 	public string? BloodGroup { get; set; }
 	public string? MobileNo { get; set; }
+	public string? SecondaryMobileNo { get; set; }
 	public string? Email { get; set; }
 	public string? Address { get; set; }
 	public string? Department { get; set; }

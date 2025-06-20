@@ -342,7 +342,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("FeeHeads");
+                    b.ToTable("FeeHeads", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption.PaymentStatusOption", b =>
@@ -402,7 +402,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PaymentStatusOptions");
+                    b.ToTable("PaymentStatusOptions", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.EmployeeLeave", b =>
@@ -1494,345 +1494,6 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppProvidentFunds", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Library.Books.Book", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("AvailableCopies")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("BookAuthor")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<Guid>("BookCategoryId")
-                        .HasMaxLength(100)
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BookTitle")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<string>("EditionNotes")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<string>("ISBN")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<string>("PicturePath")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("Publisher")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.Property<int>("Year")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BookCategoryId");
-
-                    b.ToTable("AppBooks", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Library.BooksAssignments.BooksAssignment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BookId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BookTitle")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<DateTime>("DueDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<DateTime>("IssueDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<Guid>("MemberId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("ReturnDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BookId");
-
-                    b.HasIndex("MemberId");
-
-                    b.ToTable("AppBooksAssignments", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Library.BooksReservations.BooksReservation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BookId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<DateTime?>("FulfilledDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<Guid>("MemberId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("RequestedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BookId");
-
-                    b.HasIndex("MemberId");
-
-                    b.ToTable("AppBooksReservations", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Library.Fines.Fine", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AccountHolderName")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("BankAccountNumber")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<Guid>("BooksAssignmentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<decimal>("FineAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("IFSCCode")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<Guid>("MemberId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("PaymentMode")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("PenaltyAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("PenaltyReason")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BooksAssignmentId");
-
-                    b.HasIndex("MemberId");
-
-                    b.ToTable("AppFines", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Library.Members.Member", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("AppMembers", (string)null);
-                });
-
             modelBuilder.Entity("ShikshaMitra.Library.Setting.GeneralSetting.BookCategory.BookCategory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1874,10 +1535,6 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
 
                     b.HasKey("Id");
 
@@ -1926,68 +1583,12 @@ namespace ShikshaMitra.Migrations
                     b.Property<TimeSpan>("OpeningTime")
                         .HasColumnType("interval");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
                     b.HasKey("Id");
+
+                    b.HasIndex("Day")
+                        .IsUnique();
 
                     b.ToTable("AppLibraryTimings", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Library.Setting.GeneralSetting.LoanPolicies.LoanPolicy", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<decimal>("LateReturnFinePerDay")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int>("LoanDurationInDays")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("MaxBooksAllowed")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("RoleId")
-                        .HasMaxLength(64)
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("AppLoanPolicies", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.Attendance.Settings.StudentAttendanceRule", b =>
@@ -2620,7 +2221,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("InquiryPreferences");
+                    b.ToTable("InquiryPreferences", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.StudentDocumentSetting", b =>
@@ -2687,7 +2288,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("StudentDocumentSettings");
+                    b.ToTable("StudentDocumentSettings", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", b =>
@@ -6449,7 +6050,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("EmployeeId");
 
-                            b1.ToTable("AppEmployees");
+                            b1.ToTable("AppEmployees", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("EmployeeId");
@@ -6472,7 +6073,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("EmployeeId");
 
-                            b1.ToTable("AppEmployees");
+                            b1.ToTable("AppEmployees", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("EmployeeId");
@@ -6513,7 +6114,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("EmployeeId", "__synthesizedOrdinal");
 
-                            b1.ToTable("AppEmployees");
+                            b1.ToTable("AppEmployees", (string)null);
 
                             b1.ToJson("WorkExperiences");
 
@@ -6591,67 +6192,13 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("PayElementId");
 
-                            b1.ToTable("AppPayElements");
+                            b1.ToTable("AppPayElements", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("PayElementId");
                         });
 
                     b.Navigation("Dependent");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Library.Books.Book", b =>
-                {
-                    b.HasOne("ShikshaMitra.Library.Setting.GeneralSetting.BookCategory.BookCategory", null)
-                        .WithMany()
-                        .HasForeignKey("BookCategoryId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Library.BooksAssignments.BooksAssignment", b =>
-                {
-                    b.HasOne("ShikshaMitra.Library.Books.Book", null)
-                        .WithMany()
-                        .HasForeignKey("BookId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.Library.Members.Member", null)
-                        .WithMany()
-                        .HasForeignKey("MemberId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Library.BooksReservations.BooksReservation", b =>
-                {
-                    b.HasOne("ShikshaMitra.Library.Books.Book", null)
-                        .WithMany()
-                        .HasForeignKey("BookId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.Library.Members.Member", null)
-                        .WithMany()
-                        .HasForeignKey("MemberId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Library.Fines.Fine", b =>
-                {
-                    b.HasOne("ShikshaMitra.Library.BooksAssignments.BooksAssignment", null)
-                        .WithMany()
-                        .HasForeignKey("BooksAssignmentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.Library.Members.Member", null)
-                        .WithMany()
-                        .HasForeignKey("MemberId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.Attendance.StudentAttendance", b =>
@@ -6787,7 +6334,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("StudentEnrollmentId");
 
-                            b1.ToTable("AppStudentEnrollments");
+                            b1.ToTable("AppStudentEnrollments", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("StudentEnrollmentId");
@@ -6810,7 +6357,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("StudentEnrollmentId");
 
-                            b1.ToTable("AppStudentEnrollments");
+                            b1.ToTable("AppStudentEnrollments", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("StudentEnrollmentId");
@@ -6885,7 +6432,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("StudentId");
 
-                            b1.ToTable("AppStudents");
+                            b1.ToTable("AppStudents", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("StudentId");
@@ -6908,7 +6455,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("StudentId");
 
-                            b1.ToTable("AppStudents");
+                            b1.ToTable("AppStudents", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("StudentId");

@@ -25,13 +25,12 @@ public class StudentEnrollmentDto : EntityDto<Guid>
 	public DateTimeOffset? DateOfBirth { get; set; }
 	public DateTimeOffset DateOfInquiry { get; set; }
 	public GenderType GenderType { get; set; }
-	public string? ParentContactNumber { get; set; }
-	public string? AlternativeContactNumber { get; set; }
+	public string? PrimaryContactNumber { get; set; }
+	public string? SecondaryContactNumber { get; set; }
 	public string? AddressLine1 { get; set; }
 	public string? AddressLine2 { get; set; }
 	public string? AddressLine3 { get; set; }
 	public Country? Country { get; set; }
-	public string? Village { get; set; }
 	public string? PAN { get; set; }
 	public string? ApparId { get; set; }
 	public string? City { get; set; }

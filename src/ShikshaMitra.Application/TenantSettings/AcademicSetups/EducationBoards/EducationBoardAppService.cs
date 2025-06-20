@@ -2,10 +2,10 @@
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
-using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.TenantSettings.EducationBoards;
 
@@ -35,5 +35,33 @@ public class EducationBoardAppService(
 		EducationBoard educationBoard = await educationBoardRepository.GetAsync(id);
 		await educationBoardManager.UpdateAsync(educationBoard, input.Type);
 		return ObjectMapper.Map<EducationBoard, EducationBoardDto>(educationBoard);
+	}
+
+	public async override Task<PagedResultDto<EducationBoardDto>>
+		GetListAsync(PagedAndSortedResultRequestDto input)
+	{
+		var result = await base.GetListAsync(input);
+
+		result.Items = result.Items.OrderBy(x => x.Type).ToList();
+
+		foreach (var board in result.Items)
+		{
+			board.EducationMediums = board.EducationMediums.OrderBy(x => x.Name).ToList();
+
+			foreach (var medium in board.EducationMediums)
+			{
+				medium.EducationMediumStages = medium.EducationMediumStages.OrderBy(x => x.Name).ToList();
+				foreach (var stage in medium.EducationMediumStages)
+				{
+					stage.Standards = stage.Standards.OrderBy(x => x.Name).ToList();
+					foreach (var standard in stage.Standards)
+					{
+						standard.Divisions = standard.Divisions.OrderBy(x => x.Name).ToList();
+					}
+				}
+			}
+		}
+
+		return result;
 	}
 }

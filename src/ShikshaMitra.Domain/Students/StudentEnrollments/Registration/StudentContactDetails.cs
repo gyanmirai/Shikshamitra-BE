@@ -13,12 +13,16 @@ public class StudentContactDetails(
 	string? email,
 	int? passOutYear,
 	string? officeNo,
-	string? officeAddress,
+	string? officeAddress1,
+	string? officeAddress2,
+	string? officeAddress3,
 	string? designation,
 	string? organisation,
 	string? aadhaarNo,
 	string? remarks,
-	string? address
+	string? address1,
+	string? address2,
+	string? address3
 	) : ValueObject
 {
 	public string? Name { get; private set; } = name;
@@ -29,28 +33,37 @@ public class StudentContactDetails(
 	public string? Email { get; private set; } = email;
 	public int? PassOutYear { get; private set; } = passOutYear;
 	public string? OfficeNo { get; private set; } = officeNo;
-	public string? OfficeAddress { get; private set; } = officeAddress;
+	public string? OfficeAddress1 { get; private set; } = officeAddress1;
+	public string? OfficeAddress2 { get; private set; } = officeAddress2;
+	public string? OfficeAddress3 { get; private set; } = officeAddress3;
 	public string? Designation { get; private set; } = designation;
 	public string? Organisation { get; private set; } = organisation;
 	public string? AadhaarNo { get; private set; } = aadhaarNo;
 	public string? Remarks { get; private set; } = remarks;
-	public string? Address { get; private set; } = address;
-	
+	public string? Address1 { get; private set; } = address1;
+	public string? Address2 { get; private set; } = address2;
+	public string? Address3 { get; private set; } = address3;
+
+
 	protected override IEnumerable<object> GetAtomicValues()
 	{
-	yield return Name;
-	yield return DateOfBirth;
-	yield return Occupation;
-	yield return Qualification;
-	yield return ContactNo;
-	yield return Email;
-	yield return PassOutYear;
-	yield return OfficeNo;
-	yield return OfficeAddress;
-	yield return Designation;
-	yield return Organisation;
-	yield return AadhaarNo;
-	yield return Remarks;
-	yield return Address;
+		yield return Name;
+		yield return DateOfBirth;
+		yield return Occupation;
+		yield return Qualification;
+		yield return ContactNo;
+		yield return Email;
+		yield return PassOutYear;
+		yield return OfficeNo;
+		yield return OfficeAddress1;
+		yield return OfficeAddress2;
+		yield return OfficeAddress3;
+		yield return Designation;
+		yield return Organisation;
+		yield return AadhaarNo;
+		yield return Remarks;
+		yield return Address1;
+		yield return Address2;
+		yield return Address3;
 	}
 }

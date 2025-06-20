@@ -830,6 +830,12 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("RoleId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("SecondaryMobileNo")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ShiftId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ShortName")
                         .HasColumnType("text");
 
@@ -994,6 +1000,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("RoleId");
 
+                    b.HasIndex("ShiftId");
+
                     b.HasIndex("UserId");
 
                     b.ToTable("AppEmployees", (string)null);
@@ -1130,6 +1138,9 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<float>("DocumentSize")
+                        .HasColumnType("real");
+
                     b.PrimitiveCollection<int[]>("DocumentTypes")
                         .IsRequired()
                         .HasColumnType("integer[]");
@@ -1218,8 +1229,11 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<string>("Reason")
+                    b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Reason")
                         .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("StartDate")
@@ -1991,13 +2005,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTimeOffset>("ExamDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("ExamScheduleType")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ExamType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -2020,7 +2027,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<float?>("MarksObtained")
                         .HasColumnType("real");
 
-                    b.Property<float>("PassingMark")
+                    b.Property<float?>("PassingMark")
                         .HasColumnType("real");
 
                     b.Property<Guid>("StudentEnrollmentId")
@@ -2030,7 +2037,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
-                    b.Property<float>("TotalMarks")
+                    b.Property<float?>("TotalMarks")
                         .HasColumnType("real");
 
                     b.HasKey("Id");
@@ -2378,9 +2385,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("AddressLine3")
                         .HasColumnType("text");
 
-                    b.Property<string>("AlternativeContactNumber")
-                        .HasColumnType("text");
-
                     b.Property<string>("ApparId")
                         .HasColumnType("text");
 
@@ -2504,13 +2508,13 @@ namespace ShikshaMitra.Migrations
                     b.Property<float>("PaidAmount")
                         .HasColumnType("real");
 
-                    b.Property<string>("ParentContactNumber")
-                        .HasColumnType("text");
-
                     b.Property<string>("PinCode")
                         .HasColumnType("text");
 
                     b.Property<string>("PreviousSchoolName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PrimaryContactNumber")
                         .HasColumnType("text");
 
                     b.Property<byte[]>("ProfilePicture")
@@ -2520,6 +2524,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("Remarks")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SecondaryContactNumber")
                         .HasColumnType("text");
 
                     b.Property<Guid>("StandardId")
@@ -2534,9 +2541,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("StudentEnrollmentState")
                         .HasColumnType("integer");
 
-                    b.Property<int>("TemporaryGr")
-                        .HasColumnType("integer");
-
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
@@ -2547,9 +2551,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Village")
-                        .HasColumnType("text");
-
                     b.ComplexProperty<Dictionary<string, object>>("FatherDetails", "ShikshaMitra.Students.StudentEnrollments.StudentEnrollment.FatherDetails#StudentContactDetails", b1 =>
                         {
                             b1.IsRequired();
@@ -2557,7 +2558,13 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("AadhaarNo")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("Address")
+                            b1.Property<string>("Address1")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address2")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address3")
                                 .HasColumnType("text");
 
                             b1.Property<string>("ContactNo")
@@ -2578,7 +2585,13 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("Occupation")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("OfficeAddress")
+                            b1.Property<string>("OfficeAddress1")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("OfficeAddress2")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("OfficeAddress3")
                                 .HasColumnType("text");
 
                             b1.Property<string>("OfficeNo")
@@ -2604,7 +2617,13 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("AadhaarNo")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("Address")
+                            b1.Property<string>("Address1")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address2")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address3")
                                 .HasColumnType("text");
 
                             b1.Property<string>("ContactNo")
@@ -2625,7 +2644,13 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("Occupation")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("OfficeAddress")
+                            b1.Property<string>("OfficeAddress1")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("OfficeAddress2")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("OfficeAddress3")
                                 .HasColumnType("text");
 
                             b1.Property<string>("OfficeNo")
@@ -2651,7 +2676,13 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("AadhaarNo")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("Address")
+                            b1.Property<string>("Address1")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address2")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address3")
                                 .HasColumnType("text");
 
                             b1.Property<string>("ContactNo")
@@ -2672,7 +2703,13 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("Occupation")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("OfficeAddress")
+                            b1.Property<string>("OfficeAddress1")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("OfficeAddress2")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("OfficeAddress3")
                                 .HasColumnType("text");
 
                             b1.Property<string>("OfficeNo")
@@ -3082,7 +3119,13 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("AadhaarNo")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("Address")
+                            b1.Property<string>("Address1")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address2")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address3")
                                 .HasColumnType("text");
 
                             b1.Property<string>("ContactNo")
@@ -3103,7 +3146,13 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("Occupation")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("OfficeAddress")
+                            b1.Property<string>("OfficeAddress1")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("OfficeAddress2")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("OfficeAddress3")
                                 .HasColumnType("text");
 
                             b1.Property<string>("OfficeNo")
@@ -3129,7 +3178,13 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("AadhaarNo")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("Address")
+                            b1.Property<string>("Address1")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address2")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address3")
                                 .HasColumnType("text");
 
                             b1.Property<string>("ContactNo")
@@ -3150,7 +3205,13 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("Occupation")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("OfficeAddress")
+                            b1.Property<string>("OfficeAddress1")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("OfficeAddress2")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("OfficeAddress3")
                                 .HasColumnType("text");
 
                             b1.Property<string>("OfficeNo")
@@ -3176,7 +3237,13 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("AadhaarNo")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("Address")
+                            b1.Property<string>("Address1")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address2")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address3")
                                 .HasColumnType("text");
 
                             b1.Property<string>("ContactNo")
@@ -3197,7 +3264,13 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("Occupation")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("OfficeAddress")
+                            b1.Property<string>("OfficeAddress1")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("OfficeAddress2")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("OfficeAddress3")
                                 .HasColumnType("text");
 
                             b1.Property<string>("OfficeNo")
@@ -3497,6 +3570,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Color")
+                        .HasColumnType("text");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -3508,6 +3584,9 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
+
+                    b.Property<string>("Logo")
+                        .HasColumnType("text");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -4107,6 +4186,23 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppEducationMediums", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.TenantSettings.InstituteSetupExtraProperties", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("State")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AppInstituteSetupExtraProperties", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.TenantSettings.ShiftManagement", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4197,6 +4293,9 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<Guid?>("ShiftId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
@@ -4204,6 +4303,8 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("EducationMediumStageId");
+
+                    b.HasIndex("ShiftId");
 
                     b.ToTable("AppStandards", (string)null);
                 });
@@ -6095,6 +6196,10 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ShikshaMitra.TenantSettings.ShiftManagement", "Shift")
+                        .WithMany()
+                        .HasForeignKey("ShiftId");
+
                     b.HasOne("Volo.Abp.Identity.IdentityUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -6196,6 +6301,8 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("PayrollStructure");
 
                     b.Navigation("Role");
+
+                    b.Navigation("Shift");
 
                     b.Navigation("State");
 
@@ -6625,7 +6732,13 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("ShikshaMitra.TenantSettings.ShiftManagement", "Shift")
+                        .WithMany()
+                        .HasForeignKey("ShiftId");
+
                     b.Navigation("EducationMediumStage");
+
+                    b.Navigation("Shift");
                 });
 
             modelBuilder.Entity("Volo.Abp.AuditLogging.AuditLogAction", b =>

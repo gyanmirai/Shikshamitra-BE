@@ -7,6 +7,8 @@ public class DivisionDto : AuditedEntityDto<Guid>
 {
 	public string Name { get; set; }
 
+	public int HeadCount { get; set; }
+
 	public int Strength { get; set; }
 
 	public string RoomNumber { get; set; }

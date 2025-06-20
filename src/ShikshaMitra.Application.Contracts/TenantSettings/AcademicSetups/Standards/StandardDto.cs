@@ -14,4 +14,5 @@ public class StandardDto : AuditedEntityDto<Guid>
 	public List<DivisionDto> Divisions { get; set; }
 
 	public Guid EducationMediumStageId { get; set; }
+	public ShiftManagementDto Shift { get; set; } = new ShiftManagementDto();
 }

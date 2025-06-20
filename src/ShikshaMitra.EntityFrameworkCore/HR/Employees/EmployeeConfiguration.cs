@@ -53,5 +53,6 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 
 		builder.Navigation(x => x.Role).AutoInclude();
 		builder.Navigation(x => x.EducationMediumStage).AutoInclude();
+		builder.Navigation(x => x.Shift).AutoInclude();
 	}
 }

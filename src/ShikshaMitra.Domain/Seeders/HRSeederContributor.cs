@@ -88,7 +88,8 @@ public class HRSeederContributor(
 			tenantId,
 			"1",
 			6,
-			educationMediumStage.Id
+			educationMediumStage.Id,
+			shiftId: null
 		));
 
 		// Create Division.
@@ -228,6 +229,7 @@ public class HRSeederContributor(
 			motherDetails: new ContactDetails("Mary Smith", "Teacher", "+91-9876543212", "Parvat Patiya", null, null , "Surat", stateName: "Gujarat", stateIsoCode: "GJ", countryName: "India", countryIsoCode: "In", "395010"),
 			spouseDetails: new ContactDetails("Jane Doe", "Doctor", "+91-9876543213", "ATPL, Trimandir Road",null,null, "Adalaj", stateName: "Gujarat", stateIsoCode: "GJ", countryName: "India", countryIsoCode: "In", "382421"),
 			bankDetails: new BankDetails("ABC Bank", "Mumbai Main Branch", "John Doe", "123456789012", "ABC123456"),
+			shiftId: null,
 			workExperiences: new List<WorkExperience>
 			{
 				new WorkExperience(
@@ -299,7 +301,8 @@ public class HRSeederContributor(
 					"Developed web applications and maintained databases",
 					"Jane Doe, Senior Manager"
 				)
-			}
+			},
+			shiftId: null
 		);
 		employees.Add(teacherEmployee);
 		#endregion

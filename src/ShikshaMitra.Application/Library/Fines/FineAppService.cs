@@ -2,8 +2,6 @@
 using ShikshaMitra.Library.Members;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -16,7 +14,7 @@ namespace ShikshaMitra.Library.Fines;
 public class FineAppService(
 	IRepository<Fine, Guid> fineRepository,
 	IRepository<BooksAssignment, Guid> booksAssignmentRepository,
-	IRepository<Member, Guid> memberRepository, 
+	IRepository<Member, Guid> memberRepository,
 	IGuidGenerator guidGenerator
 ) : ApplicationService, IFineAppService
 {

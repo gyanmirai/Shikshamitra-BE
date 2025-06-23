@@ -4,14 +4,11 @@ using ShikshaMitra.Library.Reservations;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Threading.Tasks;
-using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
-using static ShikshaMitra.Security.Permissions.ShikshaMitraPermissions;
 
 namespace ShikshaMitra.Library.Books;
 

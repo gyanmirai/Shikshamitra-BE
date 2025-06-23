@@ -1,15 +1,12 @@
-﻿using AutoMapper.Internal.Mappers;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
-using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Library.Setting.GeneralSetting.LoanPolicies;
 public class LoanPolicyAppService(IRepository<LoanPolicy, Guid> loanPolicyRepository,IGuidGenerator guidGenerator) : ApplicationService, ILoanPolicyAppService

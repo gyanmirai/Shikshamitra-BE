@@ -7,12 +7,6 @@ namespace ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 
 public interface IBookCategoryAppService : IApplicationService
 {
-	/// <summary>
-	/// Create a new BookCategory
-	/// </summary>
-	/// <param name="input">The input to create a new BookCategory</param>
-	/// <returns>The created BookCategory</returns>	
-
 	Task<BookCategoryDto> GetAsync(Guid id);
 	Task<PagedResultDto<BookCategoryDto>> GetListAsync(PagedAndSortedResultRequestDto input);
 

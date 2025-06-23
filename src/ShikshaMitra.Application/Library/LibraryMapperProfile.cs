@@ -7,11 +7,6 @@ using ShikshaMitra.Library.Members;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using ShikshaMitra.Library.Setting.GeneralSetting.LoanPolicies;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ShikshaMitra.Library;
 

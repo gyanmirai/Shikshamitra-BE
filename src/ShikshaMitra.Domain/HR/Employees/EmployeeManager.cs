@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using ShikshaMitra.Common;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,7 +22,8 @@ public class EmployeeManager(
 	IIdentityRoleRepository roleRepository,
 	IBlobContainer blobContainer,
 	IEmployeeDocumentRepository employeeDocumentRepository,
-	UserManager<IdentityUser> userManager
+	UserManager<IdentityUser> userManager,
+	IEducationMediumStageRepository _educationMediumStageRepository
 ) : DomainService
 {
 	// Private helper method to get an employee by ID
@@ -80,9 +83,13 @@ public class EmployeeManager(
 		// Validate role existence
 		IdentityRole role = await GetRoleAsync(roleId);
 
+		// i have educationMediumStageId, it stores educationMediumId, educationMedium table stores educationBoardId, I want boardName from educationBoard table using educationMediumStageId in ef core
+		var boardType = (await _educationMediumStageRepository.GetQueryableAsync())
+			.Where(ems => ems.Id == educationMediumStageId)
+			.Select(ems => ems.EducationMedium.EducationBoard.Type).FirstOrDefault();
 
 		// Generate employee code
-		string employeeCode = await GenerateEmployeeCodeAsync();
+		string employeeCode = await GenerateEmployeeCodeAsync(boardType, dateOfJoining ?? DateTime.Now, role.Name);
 
 		// Create employee entity
 		var employee = new Employee(
@@ -422,7 +429,7 @@ public class EmployeeManager(
 		return document;
 	}
 
-	private async Task<string> GenerateEmployeeCodeAsync()
+	private async Task<string> GenerateEmployeeCodeAsync(EducationBoardType boardType, DateOnly dateOfJoining, string roleName)
 	{
 		// Get the last EmployeeCode
 		Employee? lastEmployee = await employeeRepository.GetLastEmployeeAsync();
@@ -440,9 +447,7 @@ public class EmployeeManager(
 			}
 		}
 
-		// Format the new EmployeeCode as "EMP" followed by a 3-digit number with leading zeros
-		var newEmployeeCode = $"EMP{nextNumber:D3}";
-
-		return newEmployeeCode;
+		// board - role - joining year - sequence number
+		return $"{boardType.ToString().Substring(0,2)}{roleName.Substring(0, 3)}{dateOfJoining.Year.ToString().Substring(2)}{nextNumber:D3}";
 	}
 }

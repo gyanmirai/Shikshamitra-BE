@@ -64,6 +64,7 @@ public class EmployeeManager(
 		MaritalStatusType? maritalStatus = null,
 		string? bloodGroup = null,
 		string? mobileNo = null,
+		string? secondaryMobileNo = null,
 		string? email = null,
 		string? address1 = null,
 		string? address2 = null,
@@ -89,7 +90,7 @@ public class EmployeeManager(
 			.Select(ems => ems.EducationMedium.EducationBoard.Type).FirstOrDefault();
 
 		// Generate employee code
-		string employeeCode = await GenerateEmployeeCodeAsync(boardType, dateOfJoining ?? DateTime.Now, role.Name);
+		string employeeCode = await GenerateEmployeeCodeAsync(boardType, dateOfJoining ?? DateOnly.FromDateTime(DateTime.Now), role.Name);
 
 		// Create employee entity
 		var employee = new Employee(
@@ -111,6 +112,7 @@ public class EmployeeManager(
 			maritalStatus: maritalStatus,
 			bloodGroup: bloodGroup,
 			mobileNo: mobileNo,
+			secondaryMobileNo: secondaryMobileNo,
 			email: email,
 			address1: address1,
 			address2: address2,
@@ -223,6 +225,7 @@ public class EmployeeManager(
 		MaritalStatusType? maritalStatus = null,
 		string? bloodGroup = null,
 		string? mobileNo = null,
+		string? secondaryMobileNo = null,
 		string? email = null,
 		string? address1 = null,
 		string? address2 = null,
@@ -275,6 +278,7 @@ public class EmployeeManager(
 			maritalStatus: maritalStatus,
 			bloodGroup: bloodGroup,
 			mobileNo: mobileNo,
+			secondaryMobileNo: secondaryMobileNo,
 			email: email,
 			address1: address1,
 			address2: address2,

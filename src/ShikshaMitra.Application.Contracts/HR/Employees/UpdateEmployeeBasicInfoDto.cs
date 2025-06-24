@@ -24,6 +24,7 @@ public class UpdateEmployeeBasicInfoDto
 	public MaritalStatusType? MaritalStatus { get; set; }
 	public string? BloodGroup { get; set; }
 	public string? MobileNo { get; set; }
+	public string? SecondaryMobileNo { get; set; }
 
 	[EmailAddress] public string? Email { get; set; }
 

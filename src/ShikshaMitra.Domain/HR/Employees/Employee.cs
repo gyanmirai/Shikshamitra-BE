@@ -127,6 +127,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		MaritalStatusType? maritalStatus,
 		string? bloodGroup,
 		string? mobileNo,
+		string? secondaryMobileNo,
 		string? email,
 		string? address1,
 		string? address2,
@@ -168,6 +169,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		MaritalStatus = maritalStatus;
 		BloodGroup = bloodGroup;
 		MobileNo = mobileNo;
+		SecondaryMobileNo = secondaryMobileNo;
 		Email = email;
 		Address1 = address1;
 		Address2 = address2;
@@ -206,6 +208,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		MaritalStatusType? maritalStatus,
 		string? bloodGroup,
 		string? mobileNo,
+		string? secondaryMobileNo,
 		string? email,
 		string? address1,
 		string? address2,
@@ -239,6 +242,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		MaritalStatus = maritalStatus;
 		BloodGroup = bloodGroup;
 		MobileNo = mobileNo;
+		SecondaryMobileNo = secondaryMobileNo;
 		Email = email;
 		Address1 = address1;
 		Address2 = address2;

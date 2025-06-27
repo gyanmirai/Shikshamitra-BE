@@ -1,7 +1,7 @@
-﻿using Microsoft.Extensions.Logging;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -12,7 +12,8 @@ namespace ShikshaMitra.Academic.Curriculum;
 public class SubjectAppService(
 	IRepository<Subject, Guid> subjectRepository,
 	SubjectManager subjectManager,
-	ILogger<SubjectAppService> logger) : ApplicationService, ISubjectAppService
+	ILogger<SubjectAppService> logger
+) : ApplicationService, ISubjectAppService
 {
 	public async Task<SubjectDto> CreateAsync(CreateUpdateSubjectDto createSubjectDto)
 	{
@@ -35,7 +36,12 @@ public class SubjectAppService(
 		}
 		catch (Exception ex)
 		{
-			logger.LogError(ex, "Error creating subject with name {SubjectName} for medium {EducationMediumId}", createSubjectDto.Name, createSubjectDto.EducationMediumId);
+			logger.LogError(
+				ex,
+				"Error creating subject with name {SubjectName} for medium {EducationMediumId}",
+				createSubjectDto.Name,
+				createSubjectDto.EducationMediumId
+			);
 			throw new UserFriendlyException("Error occurred while creating subject");
 		}
 	}
@@ -63,7 +69,9 @@ public class SubjectAppService(
 	{
 		try
 		{
-			List<Subject> subjects = await subjectRepository.GetListAsync(m => m.EducationMediumId == educationMediumId);
+			List<Subject> subjects = await subjectRepository.GetListAsync(m =>
+				m.EducationMediumId == educationMediumId
+			);
 
 			return ObjectMapper.Map<List<Subject>, List<SubjectDto>>(subjects);
 		}
@@ -74,7 +82,11 @@ public class SubjectAppService(
 		}
 		catch (Exception ex)
 		{
-			logger.LogError(ex, "Error retrieving subjects for medium {EducationMediumId}", educationMediumId);
+			logger.LogError(
+				ex,
+				"Error retrieving subjects for medium {EducationMediumId}",
+				educationMediumId
+			);
 			throw new UserFriendlyException("Error occurred while retrieving subjects");
 		}
 	}
@@ -83,7 +95,12 @@ public class SubjectAppService(
 	{
 		try
 		{
-			var subject = await subjectManager.UpdateAsync(id, updateSubjectDto.Name, updateSubjectDto.Color, updateSubjectDto.EducationMediumId);
+			var subject = await subjectManager.UpdateAsync(
+				id,
+				updateSubjectDto.Name,
+				updateSubjectDto.Color,
+				updateSubjectDto.EducationMediumId
+			);
 
 			await subjectRepository.UpdateAsync(subject, autoSave: true);
 

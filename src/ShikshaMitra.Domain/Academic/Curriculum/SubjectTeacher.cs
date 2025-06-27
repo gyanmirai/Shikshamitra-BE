@@ -1,6 +1,6 @@
-﻿using ShikshaMitra.HR.Employees;
-using System;
+﻿using System;
 using System.ComponentModel.DataAnnotations.Schema;
+using ShikshaMitra.HR.Employees;
 using Volo.Abp.Domain.Entities;
 
 namespace ShikshaMitra.Academic.Curriculum;

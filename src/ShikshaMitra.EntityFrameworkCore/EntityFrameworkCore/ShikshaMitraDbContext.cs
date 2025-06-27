@@ -55,10 +55,10 @@ namespace ShikshaMitra.EntityFrameworkCore;
 [ReplaceDbContext(typeof(IIdentityDbContext))]
 [ReplaceDbContext(typeof(ITenantManagementDbContext))]
 [ConnectionStringName("Default")]
-public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> options) :
-	AbpDbContext<ShikshaMitraDbContext>(options),
-	IIdentityDbContext,
-	ITenantManagementDbContext
+public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> options)
+	: AbpDbContext<ShikshaMitraDbContext>(options),
+		IIdentityDbContext,
+		ITenantManagementDbContext
 {
 	/* Add DbSet properties for your Aggregate Roots / Entities here. */
 
@@ -122,10 +122,8 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	DbSet<StudentEnrollment> StudentEnrollments { get; set; }
 	DbSet<FollowUpMessage> FollowUpMessages { get; set; }
 
-
 	public DbSet<StudentDocument> StudentDocuments { get; set; }
 	DbSet<EntranceExam> EntranceExams { get; set; }
-
 
 	#region Settings
 	DbSet<StudentDocumentSetting> StudentDocumentSettings { get; set; }
@@ -153,7 +151,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	DbSet<AttendanceType> AttendanceTypes { get; set; }
 	DbSet<StudentAttendanceRule> StudentAttendanceRules { get; set; }
-
 
 	#endregion
 
@@ -186,7 +183,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	DbSet<NotificationInfo> NotificationInfos { get; set; }
 
 	DbSet<LeavePolicy> LeavePolicies { get; set; }
-
 
 	#endregion
 
@@ -232,6 +228,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Curriculum
 
 	public DbSet<Subject> Subjects { get; set; }
+	public DbSet<ElectiveSubject> ElectiveSubjects { get; set; }
 	public DbSet<StandardSubjectAssignment> StandardSubjectAssignments { get; set; }
 	#endregion
 
@@ -250,7 +247,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region GeneralSetting
 	public DbSet<LibraryTiming> LibraryTimings { get; set; }
 	public DbSet<BookCategory> BookCategories { get; set; } //here <BookCategory> is the entity class name and BookCategory is the table name
-
 	#endregion
 	#endregion
 
@@ -260,7 +256,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	// builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 
 	// Add more entity configurations here as needed
-
 
 	protected override void OnModelCreating(ModelBuilder builder)
 	{

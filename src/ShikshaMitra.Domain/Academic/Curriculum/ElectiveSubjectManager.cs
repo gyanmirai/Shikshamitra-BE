@@ -30,12 +30,12 @@ public class ElectiveSubjectManager : DomainService
 	public async Task<ElectiveSubject> CreateAsync(
 		[NotNull] string name,
 		[NotNull] string color,
-		Guid educationMediumId,
+		[NotNull] Guid educationMediumId,
 		[CanBeNull] IEnumerable<Guid> subjectIds
 	)
 	{
-		await CheckNameIsUniqueAsync(name, educationMediumId);
-		await ValidateSubjectIdsAsync(subjectIds, educationMediumId);
+		await CheckNameIsUniqueAsync(name);
+		await ValidateSubjectIdsAsync(subjectIds);
 
 		var electiveSubject = new ElectiveSubject(
 			guidGenerator.Create(),
@@ -54,45 +54,37 @@ public class ElectiveSubjectManager : DomainService
 		Guid id,
 		[NotNull] string name,
 		[NotNull] string color,
-		Guid educationMediumId,
 		[CanBeNull] IEnumerable<Guid> subjectIds
 	)
 	{
 		var electiveSubject = await electiveSubjectRepository.GetAsync(id, includeDetails: true);
 
-		if (electiveSubject.Name != name || electiveSubject.EducationMediumId != educationMediumId)
+		if (electiveSubject.Name != name)
 		{
-			await CheckNameIsUniqueAsync(name, educationMediumId, id);
+			await CheckNameIsUniqueAsync(name, id);
 			electiveSubject.SetName(name);
 		}
 
-		await ValidateSubjectIdsAsync(subjectIds, educationMediumId);
+		await ValidateSubjectIdsAsync(subjectIds);
 
 		electiveSubject.SetColor(color);
-		electiveSubject.SetEducationMedium(educationMediumId);
 		electiveSubject.ReplaceSubjects(subjectIds);
 
 		return electiveSubject;
 	}
 
-	private async Task CheckNameIsUniqueAsync(
-		string name,
-		Guid educationMediumId,
-		Guid? expectedId = null
-	)
+	private async Task CheckNameIsUniqueAsync(string name, Guid? expectedId = null)
 	{
-		var existing = await electiveSubjectRepository.FindAsync(es =>
-			es.Name == name && es.EducationMediumId == educationMediumId
-		);
+		var existing = await electiveSubjectRepository.FindAsync(es => es.Name == name);
 		if (existing != null && existing.Id != expectedId)
 		{
 			throw new UserFriendlyException(
-				$"An elective subject with the name '{name}' already exists for this education medium."
+				$"An elective subject with the name '{name}' already exists."
 			);
 		}
 	}
 
-	private async Task ValidateSubjectIdsAsync(IEnumerable<Guid> subjectIds, Guid educationMediumId)
+	private async Task ValidateSubjectIdsAsync(IEnumerable<Guid> subjectIds)
 	{
 		if (subjectIds == null || !subjectIds.Any())
 		{
@@ -101,7 +93,7 @@ public class ElectiveSubjectManager : DomainService
 
 		var distinctIds = subjectIds.Distinct().ToList();
 		var existingSubjectsCount = await subjectRepository.CountAsync(s =>
-			distinctIds.Contains(s.Id) && s.EducationMediumId == educationMediumId
+			distinctIds.Contains(s.Id)
 		);
 
 		if (existingSubjectsCount != distinctIds.Count)

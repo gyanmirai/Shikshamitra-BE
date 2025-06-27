@@ -7,7 +7,8 @@ public class CreateStandardSubjectAssignmentDto
 {
 	public Guid StandardId { get; set; }
 	public Guid SubjectId { get; set; }
-	public string SubjectCode { get; set; }
+	public Guid? ElectiveSubjectId { get; set; }
+	public required string SubjectCode { get; set; }
 	public Guid? PrimaryTeacherId { get; set; }
 	public List<Guid> SecondaryTeacherIds { get; set; } = new List<Guid>();
 	public string? LearningGoals { get; set; }

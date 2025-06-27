@@ -38,9 +38,8 @@ public class SubjectAppService(
 		{
 			logger.LogError(
 				ex,
-				"Error creating subject with name {SubjectName} for medium {EducationMediumId}",
-				createSubjectDto.Name,
-				createSubjectDto.EducationMediumId
+				"Error creating subject with name {SubjectName}",
+				createSubjectDto.Name
 			);
 			throw new UserFriendlyException("Error occurred while creating subject");
 		}
@@ -69,8 +68,8 @@ public class SubjectAppService(
 	{
 		try
 		{
-			List<Subject> subjects = await subjectRepository.GetListAsync(m =>
-				m.EducationMediumId == educationMediumId
+			List<Subject> subjects = await subjectRepository.GetListAsync(x =>
+				x.EducationMediumId == educationMediumId
 			);
 
 			return ObjectMapper.Map<List<Subject>, List<SubjectDto>>(subjects);
@@ -102,7 +101,7 @@ public class SubjectAppService(
 				updateSubjectDto.EducationMediumId
 			);
 
-			await subjectRepository.UpdateAsync(subject, autoSave: true);
+			await subjectRepository.UpdateAsync(subject);
 
 			return ObjectMapper.Map<Subject, SubjectDto>(subject);
 		}

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -13,8 +14,9 @@ public class ElectiveSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; private set; }
 	public string Name { get; private set; }
 	public string Color { get; private set; }
-	public Guid EducationMediumId { get; private set; }
 	public virtual ICollection<ElectiveSubjectComponent> Subjects { get; set; }
+	public Guid EducationMediumId { get; set; }
+	public EducationMedium EducationMedium { get; set; }
 	#endregion
 
 	#region Constructors
@@ -36,7 +38,7 @@ public class ElectiveSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		TenantId = tenantId;
 		SetName(name);
 		SetColor(color);
-		SetEducationMedium(educationMediumId);
+		EducationMediumId = educationMediumId;
 		Subjects = new HashSet<ElectiveSubjectComponent>();
 	}
 	#endregion
@@ -52,11 +54,6 @@ public class ElectiveSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		Check.NotNullOrWhiteSpace(color, nameof(color));
 		Color = color;
-	}
-
-	public void SetEducationMedium(Guid educationMediumId)
-	{
-		EducationMediumId = educationMediumId;
 	}
 
 	public void AddSubject(Guid subjectId)

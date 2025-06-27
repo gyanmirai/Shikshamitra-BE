@@ -13,11 +13,8 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; private set; }
 	public string Name { get; set; }
 	public string Color { get; set; }
-
-	[ForeignKey(nameof(EducationMedium))]
 	public Guid EducationMediumId { get; set; }
-
-	public virtual EducationMedium EducationMedium { get; set; }
+	public EducationMedium EducationMedium { get; set; }
 	#endregion
 
 	#region Constructors
@@ -26,13 +23,13 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
-	public Subject(Guid id, Guid? tenantId, string name, string color, Guid mediumId)
+	public Subject(Guid id, Guid? tenantId, string name, string color, Guid educationMediumId)
 		: base(id)
 	{
 		TenantId = tenantId;
 		SetName(name);
-		SetMedium(mediumId);
 		SetColor(color);
+		EducationMediumId = educationMediumId;
 	}
 	#endregion
 
@@ -43,8 +40,6 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Name = name;
 	}
 
-	public void SetMedium(Guid mediumId) => EducationMediumId = mediumId;
-
-	public void SetColor(string? color) => Color = color;
+	public void SetColor(string color) => Color = color;
 	#endregion
 }

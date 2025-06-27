@@ -13,15 +13,36 @@ public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiT
 {
 	#region Properties
 	public Guid? TenantId { get; private set; }
-	public Guid AcademicMediumId { get; set; }
 
-	[ForeignKey(nameof(Standard))]
+	/// <summary>
+	/// Gets or sets the ID of the standard (e.g., Grade 1, Grade 2) to which the subject is assigned.
+	/// </summary>
 	public Guid StandardId { get; set; }
+
+	/// <summary>
+	/// Navigation property to the associated Standard entity.
+	/// </summary>
 	public virtual Standard Standard { get; set; }
 
-	[ForeignKey(nameof(Subject))]
+	/// <summary>
+	/// Gets or sets the ID of the subject (e.g., Math, Science) that is assigned.
+	/// </summary>
 	public Guid SubjectId { get; set; }
+
+	/// <summary>
+	/// Navigation property to the associated Subject entity.
+	/// </summary>
 	public virtual Subject Subject { get; set; }
+
+	/// <summary>
+	/// Gets or sets the ID of the elective subject, if this assignment is for an elective.
+	/// </summary>
+	public Guid? ElectiveSubjectId { get; set; }
+
+	/// <summary>
+	/// Navigation property to the associated ElectiveSubject entity.
+	/// </summary>
+	public ElectiveSubject? ElectiveSubject { get; set; }
 
 	/// <summary>
 	/// Unique code representing the subject.
@@ -29,24 +50,9 @@ public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiT
 	public string SubjectCode { get; set; }
 
 	/// <summary>
-	/// Name of the subject.
-	/// </summary>
-	public string SubjectName { get; set; }
-
-	/// <summary>
 	/// Collection of teachers assigned to the subject.
 	/// </summary>
 	public ICollection<SubjectTeacher> Teachers { get; set; } = new HashSet<SubjectTeacher>();
-
-	/// <summary>
-	/// Scheduled date for the subject.
-	/// </summary>
-	public DateTimeOffset ScheduledDate { get; set; }
-
-	/// <summary>
-	/// Color associated with the subject for identification or categorization.
-	/// </summary>
-	public string SubjectColor { get; set; }
 
 	/// <summary>
 	/// Learning goals or objectives for the subject.
@@ -89,7 +95,6 @@ public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiT
 	public StandardSubjectAssignment(
 		Guid id,
 		Guid? tenantId,
-		Guid academicMediumId,
 		Guid standardId,
 		Guid subjectId,
 		string subjectCode,
@@ -103,7 +108,6 @@ public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiT
 	{
 		Check.NotNullOrEmpty(subjectCode, nameof(SubjectCode));
 		TenantId = tenantId;
-		AcademicMediumId = academicMediumId;
 		StandardId = standardId;
 		SubjectId = subjectId;
 		SubjectCode = subjectCode;

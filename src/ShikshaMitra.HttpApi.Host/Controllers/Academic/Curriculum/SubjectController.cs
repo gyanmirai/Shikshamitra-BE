@@ -1,9 +1,8 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using System;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.Curriculum;
-using ShikshaMitra.Extensions;
-using System;
-using System.Threading.Tasks;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Academic.Curriculum;
@@ -21,14 +20,19 @@ public class SubjectController(ISubjectAppService subjectAppService) : AbpContro
 	}
 
 	[HttpPost]
-	public async Task<IActionResult> CreateSubject([FromBody] CreateUpdateSubjectDto createSubjectDto)
+	public async Task<IActionResult> CreateSubject(
+		[FromBody] CreateUpdateSubjectDto createSubjectDto
+	)
 	{
 		var subject = await subjectAppService.CreateAsync(createSubjectDto);
 		return Ok(subject);
 	}
 
 	[HttpPut("{id}")]
-	public async Task<IActionResult> UpdateSubject(Guid id, [FromBody] CreateUpdateSubjectDto updateSubjectDto)
+	public async Task<IActionResult> UpdateSubject(
+		Guid id,
+		[FromBody] CreateUpdateSubjectDto updateSubjectDto
+	)
 	{
 		var subject = await subjectAppService.UpdateAsync(id, updateSubjectDto);
 		return Ok(subject);
@@ -40,6 +44,4 @@ public class SubjectController(ISubjectAppService subjectAppService) : AbpContro
 		await subjectAppService.DeleteAsync(id);
 		return NoContent();
 	}
-
-
 }

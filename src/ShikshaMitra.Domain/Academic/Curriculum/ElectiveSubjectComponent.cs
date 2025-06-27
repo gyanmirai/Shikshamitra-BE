@@ -10,6 +10,7 @@ namespace ShikshaMitra.Academic.Curriculum;
 /// </summary>
 public class ElectiveSubjectComponent : Entity
 {
+	#region Properties
 	/// <summary>
 	/// Foreign key for the ElectiveSubject.
 	/// </summary>
@@ -31,7 +32,9 @@ public class ElectiveSubjectComponent : Entity
 	/// Navigation property to the Subject.
 	/// </summary>
 	public virtual Subject Subject { get; set; }
+	#endregion
 
+	#region Constructors
 	private ElectiveSubjectComponent() { }
 
 	internal ElectiveSubjectComponent(Guid electiveSubjectId, Guid subjectId)
@@ -39,9 +42,12 @@ public class ElectiveSubjectComponent : Entity
 		ElectiveSubjectId = electiveSubjectId;
 		SubjectId = subjectId;
 	}
+	#endregion
 
+	#region Methods
 	public override object?[] GetKeys()
 	{
 		return new object?[] { ElectiveSubjectId, SubjectId };
 	}
+	#endregion
 }

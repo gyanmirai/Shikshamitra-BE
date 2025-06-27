@@ -9,7 +9,6 @@ namespace ShikshaMitra.Academic.Curriculum;
 /// </summary>
 public class SubjectDto : EntityDto<Guid>
 {
-	public string Name { get; set; }
-	public string Color { get; set; }
-	public Guid EducationMediumId { get; set; }
+	public required string Name { get; set; }
+	public required string Color { get; set; }
 }

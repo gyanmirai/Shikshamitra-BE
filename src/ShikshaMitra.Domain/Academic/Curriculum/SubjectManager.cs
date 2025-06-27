@@ -1,6 +1,6 @@
-﻿using Microsoft.Extensions.Logging;
-using System;
+﻿using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
@@ -12,19 +12,18 @@ public class SubjectManager(
 	IGuidGenerator guidGenerator,
 	IRepository<Subject> subjectRepository,
 	ILogger<Subject> logger
-	) : DomainService
+) : DomainService
 {
-	public async Task<Subject> CreateSubject(
-		   string name,
-		   string color,
-		   Guid educationMediumId)
+	public async Task<Subject> CreateSubject(string name, string color, Guid educationMediumId)
 	{
 		try
 		{
-			var existingSubject = await subjectRepository.FindAsync(s => s.Name == name && s.EducationMediumId == educationMediumId);
+			var existingSubject = await subjectRepository.FindAsync(s => s.Name == name);
 			if (existingSubject != null)
 			{
-				throw new BusinessException("Subject with the same name already exists for this medium.");
+				throw new BusinessException(
+					"Subject with the same name already exists for this medium."
+				);
 			}
 
 			return new Subject(
@@ -32,7 +31,8 @@ public class SubjectManager(
 				CurrentTenant.Id,
 				name,
 				color,
-				educationMediumId);
+				educationMediumId
+			);
 		}
 		catch (UserFriendlyException ex)
 		{
@@ -41,19 +41,23 @@ public class SubjectManager(
 		}
 		catch (Exception ex)
 		{
-			logger.LogError(ex, "Error creating subject with name {SubjectName} for medium {EducationMediumId}", name, educationMediumId);
+			logger.LogError(ex, "Error creating subject with name {SubjectName}", name);
 			throw new UserFriendlyException("An error occurred while creating the subject.");
 		}
 	}
 
-	public async Task<Subject> UpdateAsync(Guid id, string name, string? color, Guid educationMediumId)
+	public async Task<Subject> UpdateAsync(
+		Guid id,
+		string name,
+		string color,
+		Guid? educationMediumId
+	)
 	{
 		try
 		{
-			var existingSubject = await subjectRepository.FindAsync(s =>
-				s.Id == id &&
-				s.EducationMediumId == educationMediumId
-			) ?? throw new UserFriendlyException("Subject not found");
+			var existingSubject =
+				await subjectRepository.FindAsync(s => s.Id == id)
+				?? throw new UserFriendlyException("Subject not found");
 
 			existingSubject.SetName(name);
 			existingSubject.SetColor(color);

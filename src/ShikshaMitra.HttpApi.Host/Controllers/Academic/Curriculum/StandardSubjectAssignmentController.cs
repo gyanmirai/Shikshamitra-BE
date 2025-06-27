@@ -1,25 +1,37 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.Academic.Curriculum.SubjectAssignment;
-using ShikshaMitra.Academic.Curriculum;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using System;
-using Volo.Abp.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Curriculum.SubjectAssignment;
 using ShikshaMitra.Extensions;
+using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Academic.Curriculum;
 
 [Route("api/academic/curriculum/standard-subject-assignment")]
 [Authorize]
-public class StandardSubjectAssignmentController(IStandardSubjectAssignmentAppService assignmentAppService) : AbpController
+public class StandardSubjectAssignmentController(
+	IStandardSubjectAssignmentAppService assignmentAppService
+) : AbpController
 {
 	[HttpPost]
-	public async Task<IActionResult> CreateAssignmentAsync([FromBody] CreateStandardSubjectAssignmentDto createAssignmentDto)
+	public async Task<IActionResult> CreateAssignmentAsync(
+		[FromBody] List<CreateStandardSubjectAssignmentDto> createAssignmentDto
+	)
 	{
-		var headers = this.Headers();
-		var subject = await assignmentAppService.CreateAssignmentAsync(createAssignmentDto, headers.EducationMediumId);
-		return Ok(subject);
+		var subjects = new List<StandardSubjectAssignmentResponseDto>();
+
+		foreach (var dto in createAssignmentDto)
+		{
+			var subject = await assignmentAppService.CreateAssignmentAsync(
+				createAssignmentDto: dto
+			);
+			subjects.Add(subject);
+		}
+
+		return Ok(subjects);
 	}
 
 	[HttpPut("{assignmentId}/status")]
@@ -36,7 +48,11 @@ public class StandardSubjectAssignmentController(IStandardSubjectAssignmentAppSe
 	}
 
 	[HttpPut("{assignmentId}/teachers")]
-	public async Task UpdateTeachersAsync(Guid assignmentId, [FromQuery] Guid primaryId, [FromBody] List<Guid> secondaryIds)
+	public async Task UpdateTeachersAsync(
+		Guid assignmentId,
+		[FromQuery] Guid primaryId,
+		[FromBody] List<Guid> secondaryIds
+	)
 	{
 		await assignmentAppService.UpdateTeachersAsync(assignmentId, primaryId, secondaryIds);
 	}

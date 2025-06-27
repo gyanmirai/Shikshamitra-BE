@@ -9,14 +9,8 @@ namespace ShikshaMitra.Academic.Curriculum;
 /// </summary>
 public class CreateUpdateElectiveSubjectDto
 {
-	public Guid EducationMediumId { get; set; }
-
 	public required string Name { get; set; }
-
 	public required string Color { get; set; }
-
-	/// <summary>
-	/// IDs of the subjects to be included in this elective subject.
-	/// </summary>
+	public required Guid EducationMediumId { get; set; }
 	public List<Guid> SubjectIds { get; set; } = new List<Guid>();
 }

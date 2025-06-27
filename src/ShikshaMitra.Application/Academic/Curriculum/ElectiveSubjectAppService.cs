@@ -32,7 +32,7 @@ public class ElectiveSubjectAppService(
 				input.SubjectIds
 			);
 
-			await electiveSubjectRepository.InsertAsync(electiveSubject, autoSave: true);
+			await electiveSubjectRepository.InsertAsync(electiveSubject);
 
 			// Re-fetch the entity with all details to ensure correct mapping
 			return await GetAsync(electiveSubject.Id);
@@ -63,7 +63,6 @@ public class ElectiveSubjectAppService(
 				id,
 				input.Name,
 				input.Color,
-				input.EducationMediumId,
 				input.SubjectIds
 			);
 
@@ -110,14 +109,21 @@ public class ElectiveSubjectAppService(
 	{
 		try
 		{
-			var electiveSubject = await electiveSubjectRepository.FindAsync(
-				id,
-				includeDetails: true
-			);
+			var electiveSubject = await electiveSubjectRepository.FindAsync(id);
 
 			return electiveSubject == null
 				? throw new UserFriendlyException("Elective subject not found.")
 				: ObjectMapper.Map<ElectiveSubject, ElectiveSubjectDto>(electiveSubject);
+		}
+		catch (UserFriendlyException ex)
+		{
+			logger.LogError(
+				ex,
+				"A business error occurred while retrieving elective subject {Id}: {Message}",
+				id,
+				ex.Message
+			);
+			throw;
 		}
 		catch (Exception ex)
 		{

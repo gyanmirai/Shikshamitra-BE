@@ -14,5 +14,7 @@ public class ElectiveSubjectConfiguration : IEntityTypeConfiguration<ElectiveSub
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();
+
+		builder.Navigation(x => x.Subjects).AutoInclude();
 	}
 }

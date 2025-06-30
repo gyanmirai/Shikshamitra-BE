@@ -15,7 +15,6 @@ public static class ShikshaMitraPermissions
 		public const string Delete = Default + ".Delete";
 	}
 
-
 	// *** ADDED a NEW NESTED CLASS ***
 	public static class Authors
 	{

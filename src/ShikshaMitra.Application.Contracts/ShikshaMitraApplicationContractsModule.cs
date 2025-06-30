@@ -10,21 +10,19 @@ using Volo.Abp.TenantManagement;
 namespace ShikshaMitra;
 
 [DependsOn(
-    typeof(ShikshaMitraDomainSharedModule),
-    typeof(AbpAccountApplicationContractsModule),
-    typeof(AbpFeatureManagementApplicationContractsModule),
-    typeof(AbpIdentityApplicationContractsModule),
-    typeof(AbpPermissionManagementApplicationContractsModule),
-    typeof(AbpSettingManagementApplicationContractsModule),
-    typeof(AbpTenantManagementApplicationContractsModule),
-    typeof(AbpObjectExtendingModule)
+	typeof(ShikshaMitraDomainSharedModule),
+	typeof(AbpAccountApplicationContractsModule),
+	typeof(AbpFeatureManagementApplicationContractsModule),
+	typeof(AbpIdentityApplicationContractsModule),
+	typeof(AbpPermissionManagementApplicationContractsModule),
+	typeof(AbpSettingManagementApplicationContractsModule),
+	typeof(AbpTenantManagementApplicationContractsModule),
+	typeof(AbpObjectExtendingModule)
 )]
 public class ShikshaMitraApplicationContractsModule : AbpModule
 {
-    public override void PreConfigureServices(ServiceConfigurationContext context)
-    {
-        ShikshaMitraDtoExtensions.Configure();
-    }
-
-
+	public override void PreConfigureServices(ServiceConfigurationContext context)
+	{
+		ShikshaMitraDtoExtensions.Configure();
+	}
 }

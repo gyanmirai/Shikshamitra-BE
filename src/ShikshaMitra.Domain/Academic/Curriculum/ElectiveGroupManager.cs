@@ -10,24 +10,24 @@ using Volo.Abp.Guids;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class ElectiveSubjectManager : DomainService
+public class ElectiveGroupManager : DomainService
 {
-	private readonly IRepository<ElectiveSubject, Guid> electiveSubjectRepository;
+	private readonly IRepository<ElectiveGroup, Guid> ElectiveGroupRepository;
 	private readonly IReadOnlyRepository<Subject, Guid> subjectRepository;
 	private readonly IGuidGenerator guidGenerator;
 
-	public ElectiveSubjectManager(
-		IRepository<ElectiveSubject, Guid> electiveSubjectRepository,
+	public ElectiveGroupManager(
+		IRepository<ElectiveGroup, Guid> ElectiveGroupRepository,
 		IReadOnlyRepository<Subject, Guid> subjectRepository,
 		IGuidGenerator guidGenerator
 	)
 	{
-		this.electiveSubjectRepository = electiveSubjectRepository;
+		this.ElectiveGroupRepository = ElectiveGroupRepository;
 		this.subjectRepository = subjectRepository;
 		this.guidGenerator = guidGenerator;
 	}
 
-	public async Task<ElectiveSubject> CreateAsync(
+	public async Task<ElectiveGroup> CreateAsync(
 		[NotNull] string name,
 		[NotNull] string color,
 		[NotNull] Guid educationMediumId,
@@ -37,7 +37,7 @@ public class ElectiveSubjectManager : DomainService
 		await CheckNameIsUniqueAsync(name);
 		await ValidateSubjectIdsAsync(subjectIds);
 
-		var electiveSubject = new ElectiveSubject(
+		var ElectiveGroup = new ElectiveGroup(
 			guidGenerator.Create(),
 			CurrentTenant.Id,
 			name,
@@ -45,37 +45,37 @@ public class ElectiveSubjectManager : DomainService
 			educationMediumId
 		);
 
-		electiveSubject.ReplaceSubjects(subjectIds);
+		ElectiveGroup.ReplaceSubjects(subjectIds);
 
-		return electiveSubject;
+		return ElectiveGroup;
 	}
 
-	public async Task<ElectiveSubject> UpdateAsync(
+	public async Task<ElectiveGroup> UpdateAsync(
 		Guid id,
 		[NotNull] string name,
 		[NotNull] string color,
 		[CanBeNull] IEnumerable<Guid> subjectIds
 	)
 	{
-		var electiveSubject = await electiveSubjectRepository.GetAsync(id, includeDetails: true);
+		var ElectiveGroup = await ElectiveGroupRepository.GetAsync(id, includeDetails: true);
 
-		if (electiveSubject.Name != name)
+		if (ElectiveGroup.Name != name)
 		{
 			await CheckNameIsUniqueAsync(name, id);
-			electiveSubject.SetName(name);
+			ElectiveGroup.SetName(name);
 		}
 
 		await ValidateSubjectIdsAsync(subjectIds);
 
-		electiveSubject.SetColor(color);
-		electiveSubject.ReplaceSubjects(subjectIds);
+		ElectiveGroup.SetColor(color);
+		ElectiveGroup.ReplaceSubjects(subjectIds);
 
-		return electiveSubject;
+		return ElectiveGroup;
 	}
 
 	private async Task CheckNameIsUniqueAsync(string name, Guid? expectedId = null)
 	{
-		var existing = await electiveSubjectRepository.FindAsync(es => es.Name == name);
+		var existing = await ElectiveGroupRepository.FindAsync(es => es.Name == name);
 		if (existing != null && existing.Id != expectedId)
 		{
 			throw new UserFriendlyException(

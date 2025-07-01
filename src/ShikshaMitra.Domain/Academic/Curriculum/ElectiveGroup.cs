@@ -8,38 +8,32 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class ElectiveSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class ElectiveGroup : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	#region Properties
 	public Guid? TenantId { get; private set; }
 	public string Name { get; private set; }
 	public string Color { get; private set; }
-	public virtual ICollection<ElectiveSubjectComponent> Subjects { get; set; }
+	public virtual ICollection<ElectiveGroupComponent> Subjects { get; set; }
 	public Guid EducationMediumId { get; set; }
 	public EducationMedium EducationMedium { get; set; }
 	#endregion
 
 	#region Constructors
-	private ElectiveSubject()
+	private ElectiveGroup()
 	{
 		/* This constructor is for deserialization / ORM purpose */
-		Subjects = new HashSet<ElectiveSubjectComponent>();
+		Subjects = new HashSet<ElectiveGroupComponent>();
 	}
 
-	public ElectiveSubject(
-		Guid id,
-		Guid? tenantId,
-		string name,
-		string color,
-		Guid educationMediumId
-	)
+	public ElectiveGroup(Guid id, Guid? tenantId, string name, string color, Guid educationMediumId)
 		: base(id)
 	{
 		TenantId = tenantId;
 		SetName(name);
 		SetColor(color);
 		EducationMediumId = educationMediumId;
-		Subjects = new HashSet<ElectiveSubjectComponent>();
+		Subjects = new HashSet<ElectiveGroupComponent>();
 	}
 	#endregion
 
@@ -62,7 +56,7 @@ public class ElectiveSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		{
 			return;
 		}
-		Subjects.Add(new ElectiveSubjectComponent(Id, subjectId));
+		Subjects.Add(new ElectiveGroupComponent(Id, subjectId));
 	}
 
 	public void RemoveSubject(Guid subjectId)

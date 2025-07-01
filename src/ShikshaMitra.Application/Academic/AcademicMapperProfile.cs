@@ -16,7 +16,7 @@ public class AcademicMapperProfile : Profile
 		CreateMap<StandardSubjectAssignment, StandardSubjectAssignmentResponseDto>();
 
 		CreateMap<SubjectChapter, ChapterDto>();
-		CreateMap<ElectiveSubject, ElectiveSubjectDto>()
+		CreateMap<ElectiveGroup, ElectiveGroupDto>()
 			.ForMember(
 				dest => dest.Subjects,
 				opt => opt.MapFrom(src => src.Subjects.Select(s => s.Subject))

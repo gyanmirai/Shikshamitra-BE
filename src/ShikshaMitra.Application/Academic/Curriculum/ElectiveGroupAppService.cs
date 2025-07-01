@@ -11,31 +11,31 @@ namespace ShikshaMitra.Academic.Curriculum;
 
 /*
  * Note: This implementation assumes you have created:
- * 1. An `IElectiveSubjectAppService` interface in your Application.Contracts project.
- * 2. `ElectiveSubjectDto` and `CreateUpdateElectiveSubjectDto` in your Application.Contracts project.
- * 3. An AutoMapper profile to map `ElectiveSubject` -> `ElectiveSubjectDto`.
+ * 1. An `IElectiveGroupAppService` interface in your Application.Contracts project.
+ * 2. `ElectiveGroupDto` and `CreateUpdateElectiveGroupDto` in your Application.Contracts project.
+ * 3. An AutoMapper profile to map `ElectiveGroup` -> `ElectiveGroupDto`.
  */
-public class ElectiveSubjectAppService(
-	IRepository<ElectiveSubject, Guid> electiveSubjectRepository,
-	ElectiveSubjectManager electiveSubjectManager,
-	ILogger<ElectiveSubjectAppService> logger
-) : ApplicationService, IElectiveSubjectAppService
+public class ElectiveGroupAppService(
+	IRepository<ElectiveGroup, Guid> ElectiveGroupRepository,
+	ElectiveGroupManager ElectiveGroupManager,
+	ILogger<ElectiveGroupAppService> logger
+) : ApplicationService, IElectiveGroupAppService
 {
-	public async Task<ElectiveSubjectDto> CreateAsync(CreateUpdateElectiveSubjectDto input)
+	public async Task<ElectiveGroupDto> CreateAsync(CreateUpdateElectiveGroupDto input)
 	{
 		try
 		{
-			var electiveSubject = await electiveSubjectManager.CreateAsync(
+			var ElectiveGroup = await ElectiveGroupManager.CreateAsync(
 				input.Name,
 				input.Color,
 				input.EducationMediumId,
 				input.SubjectIds
 			);
 
-			await electiveSubjectRepository.InsertAsync(electiveSubject);
+			await ElectiveGroupRepository.InsertAsync(ElectiveGroup);
 
 			// Re-fetch the entity with all details to ensure correct mapping
-			return await GetAsync(electiveSubject.Id);
+			return await GetAsync(ElectiveGroup.Id);
 		}
 		catch (UserFriendlyException ex)
 		{
@@ -55,18 +55,18 @@ public class ElectiveSubjectAppService(
 		}
 	}
 
-	public async Task<ElectiveSubjectDto> UpdateAsync(Guid id, CreateUpdateElectiveSubjectDto input)
+	public async Task<ElectiveGroupDto> UpdateAsync(Guid id, CreateUpdateElectiveGroupDto input)
 	{
 		try
 		{
-			var electiveSubject = await electiveSubjectManager.UpdateAsync(
+			var ElectiveGroup = await ElectiveGroupManager.UpdateAsync(
 				id,
 				input.Name,
 				input.Color,
 				input.SubjectIds
 			);
 
-			await electiveSubjectRepository.UpdateAsync(electiveSubject, autoSave: true); // Saves the changes from the manager
+			await ElectiveGroupRepository.UpdateAsync(ElectiveGroup, autoSave: true); // Saves the changes from the manager
 
 			// Re-fetch the entity with all details to ensure correct mapping
 			return await GetAsync(id);
@@ -94,7 +94,7 @@ public class ElectiveSubjectAppService(
 	{
 		try
 		{
-			await electiveSubjectRepository.DeleteAsync(id, autoSave: true);
+			await ElectiveGroupRepository.DeleteAsync(id, autoSave: true);
 		}
 		catch (Exception ex)
 		{
@@ -105,15 +105,15 @@ public class ElectiveSubjectAppService(
 		}
 	}
 
-	public async Task<ElectiveSubjectDto> GetAsync(Guid id)
+	public async Task<ElectiveGroupDto> GetAsync(Guid id)
 	{
 		try
 		{
-			var electiveSubject = await electiveSubjectRepository.FindAsync(id);
+			var ElectiveGroup = await ElectiveGroupRepository.FindAsync(id);
 
-			return electiveSubject == null
+			return ElectiveGroup == null
 				? throw new UserFriendlyException("Elective subject not found.")
-				: ObjectMapper.Map<ElectiveSubject, ElectiveSubjectDto>(electiveSubject);
+				: ObjectMapper.Map<ElectiveGroup, ElectiveGroupDto>(ElectiveGroup);
 		}
 		catch (UserFriendlyException ex)
 		{
@@ -134,17 +134,15 @@ public class ElectiveSubjectAppService(
 		}
 	}
 
-	public async Task<List<ElectiveSubjectDto>> GetListAsync()
+	public async Task<List<ElectiveGroupDto>> GetListAsync()
 	{
 		try
 		{
-			var electiveSubjects = (
-				await electiveSubjectRepository.WithDetailsAsync(x => x.Subjects)
+			var ElectiveGroups = (
+				await ElectiveGroupRepository.WithDetailsAsync(x => x.Subjects)
 			).ToList();
 
-			return ObjectMapper.Map<List<ElectiveSubject>, List<ElectiveSubjectDto>>(
-				electiveSubjects
-			);
+			return ObjectMapper.Map<List<ElectiveGroup>, List<ElectiveGroupDto>>(ElectiveGroups);
 		}
 		catch (Exception ex)
 		{

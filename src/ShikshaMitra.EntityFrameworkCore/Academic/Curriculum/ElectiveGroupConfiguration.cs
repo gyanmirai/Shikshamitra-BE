@@ -5,12 +5,12 @@ using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class ElectiveSubjectConfiguration : IEntityTypeConfiguration<ElectiveSubject>
+public class ElectiveGroupConfiguration : IEntityTypeConfiguration<ElectiveGroup>
 {
-	public void Configure(EntityTypeBuilder<ElectiveSubject> builder)
+	public void Configure(EntityTypeBuilder<ElectiveGroup> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "ElectiveSubjects",
+			ShikshaMitraConsts.DbTablePrefix + "ElectiveGroups",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();

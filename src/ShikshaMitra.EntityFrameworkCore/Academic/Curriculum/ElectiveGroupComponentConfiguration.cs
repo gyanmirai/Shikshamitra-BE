@@ -4,25 +4,24 @@ using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class ElectiveSubjectComponentConfiguration
-	: IEntityTypeConfiguration<ElectiveSubjectComponent>
+public class ElectiveGroupComponentConfiguration : IEntityTypeConfiguration<ElectiveGroupComponent>
 {
-	public void Configure(EntityTypeBuilder<ElectiveSubjectComponent> builder)
+	public void Configure(EntityTypeBuilder<ElectiveGroupComponent> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "ElectiveSubjectComponents",
+			ShikshaMitraConsts.DbTablePrefix + "ElectiveGroupComponents",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();
 
 		// Define composite primary key
-		builder.HasKey(x => new { x.ElectiveSubjectId, x.SubjectId });
+		builder.HasKey(x => new { x.ElectiveGroupId, x.SubjectId });
 
 		// Configure foreign keys
 		builder
-			.HasOne(x => x.ElectiveSubject)
+			.HasOne(x => x.ElectiveGroup)
 			.WithMany(x => x.Subjects)
-			.HasForeignKey(x => x.ElectiveSubjectId);
+			.HasForeignKey(x => x.ElectiveGroupId);
 
 		builder.HasOne(x => x.Subject).WithMany().HasForeignKey(x => x.SubjectId);
 

@@ -37,12 +37,12 @@ public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiT
 	/// <summary>
 	/// Gets or sets the ID of the elective subject, if this assignment is for an elective.
 	/// </summary>
-	public Guid? ElectiveSubjectId { get; set; }
+	public Guid? ElectiveGroupId { get; set; }
 
 	/// <summary>
-	/// Navigation property to the associated ElectiveSubject entity.
+	/// Navigation property to the associated ElectiveGroup entity.
 	/// </summary>
-	public ElectiveSubject? ElectiveSubject { get; set; }
+	public ElectiveGroup? ElectiveGroup { get; set; }
 
 	/// <summary>
 	/// Unique code representing the subject.

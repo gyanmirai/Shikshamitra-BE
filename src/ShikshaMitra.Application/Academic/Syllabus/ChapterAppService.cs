@@ -9,7 +9,10 @@ using Volo.Abp.Guids;
 namespace ShikshaMitra.Academic.Syllabus;
 
 [RemoteService(IsEnabled = false)]
-public class ChapterAppService(IRepository<SubjectChapter, Guid> chapterRepository, IGuidGenerator guidGenerator) : ApplicationService, IChapterAppService
+public class ChapterAppService(
+	IRepository<SubjectChapter, Guid> chapterRepository,
+	IGuidGenerator guidGenerator
+) : ApplicationService, IChapterAppService
 {
 	public async Task<ChapterDto> CreateAsync(CreateUpdateChapterDto createChapterDto)
 	{
@@ -39,7 +42,9 @@ public class ChapterAppService(IRepository<SubjectChapter, Guid> chapterReposito
 	{
 		try
 		{
-			var chapters = await chapterRepository.GetListAsync(x => x.StandardId == standardId && x.SubjectId == subjectId);
+			var chapters = await chapterRepository.GetListAsync(x =>
+				x.StandardId == standardId && x.SubjectId == subjectId
+			);
 
 			return ObjectMapper.Map<List<SubjectChapter>, List<ChapterDto>>(chapters);
 		}
@@ -51,30 +56,32 @@ public class ChapterAppService(IRepository<SubjectChapter, Guid> chapterReposito
 
 	public async Task<ChapterDto> UpdateAsync(Guid id, CreateUpdateChapterDto updateChapterDto)
 	{
-        try
-        {
-            var chapter = await chapterRepository.FindAsync(id) ?? throw new UserFriendlyException("Chapter not found");
+		try
+		{
+			var chapter =
+				await chapterRepository.FindAsync(id)
+				?? throw new UserFriendlyException("Chapter not found");
 
-            chapter.Update(
-                updateChapterDto.ChapterName,
-                updateChapterDto.ChapterStartTime,
-                updateChapterDto.ChapterEndTime,
-                updateChapterDto.Description
-            );
+			chapter.Update(
+				updateChapterDto.ChapterName,
+				updateChapterDto.ChapterStartTime,
+				updateChapterDto.ChapterEndTime,
+				updateChapterDto.Description
+			);
 
-            chapter.ChapterNumber = updateChapterDto.ChapterNumber;
+			chapter.ChapterNumber = updateChapterDto.ChapterNumber;
 
-            await chapterRepository.UpdateAsync(chapter, autoSave: true);
-            return ObjectMapper.Map<SubjectChapter, ChapterDto>(chapter);
-        }
+			await chapterRepository.UpdateAsync(chapter, autoSave: true);
+			return ObjectMapper.Map<SubjectChapter, ChapterDto>(chapter);
+		}
 		catch (UserFriendlyException ex)
 		{
 			throw;
 		}
-        catch (Exception ex)
-        {
-            throw new UserFriendlyException("Error updating chapter", ex.Message);
-        }
+		catch (Exception ex)
+		{
+			throw new UserFriendlyException("Error updating chapter", ex.Message);
+		}
 	}
 
 	public Task DeleteAsync(Guid id)

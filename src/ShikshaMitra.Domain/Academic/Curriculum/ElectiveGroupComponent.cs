@@ -5,22 +5,22 @@ using Volo.Abp.Domain.Entities;
 namespace ShikshaMitra.Academic.Curriculum;
 
 /// <summary>
-/// Represents the link between an ElectiveSubject and a constituent Subject.
+/// Represents the link between an ElectiveGroup and a constituent Subject.
 /// This is a many-to-many join entity.
 /// </summary>
-public class ElectiveSubjectComponent : Entity
+public class ElectiveGroupComponent : Entity
 {
 	#region Properties
 	/// <summary>
-	/// Foreign key for the ElectiveSubject.
+	/// Foreign key for the ElectiveGroup.
 	/// </summary>
-	[ForeignKey(nameof(ElectiveSubject))]
-	public virtual Guid ElectiveSubjectId { get; private set; }
+	[ForeignKey(nameof(ElectiveGroup))]
+	public virtual Guid ElectiveGroupId { get; private set; }
 
 	/// <summary>
-	/// Navigation property to the ElectiveSubject.
+	/// Navigation property to the ElectiveGroup.
 	/// </summary>
-	public virtual ElectiveSubject ElectiveSubject { get; set; }
+	public virtual ElectiveGroup ElectiveGroup { get; set; }
 
 	/// <summary>
 	/// Foreign key for the Subject.
@@ -35,11 +35,11 @@ public class ElectiveSubjectComponent : Entity
 	#endregion
 
 	#region Constructors
-	private ElectiveSubjectComponent() { }
+	private ElectiveGroupComponent() { }
 
-	internal ElectiveSubjectComponent(Guid electiveSubjectId, Guid subjectId)
+	internal ElectiveGroupComponent(Guid ElectiveGroupId, Guid subjectId)
 	{
-		ElectiveSubjectId = electiveSubjectId;
+		ElectiveGroupId = ElectiveGroupId;
 		SubjectId = subjectId;
 	}
 	#endregion
@@ -47,7 +47,7 @@ public class ElectiveSubjectComponent : Entity
 	#region Methods
 	public override object?[] GetKeys()
 	{
-		return new object?[] { ElectiveSubjectId, SubjectId };
+		return new object?[] { ElectiveGroupId, SubjectId };
 	}
 	#endregion
 }

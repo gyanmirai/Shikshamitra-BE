@@ -93,7 +93,7 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppClassTeachers", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.ElectiveSubject", b =>
+            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.ElectiveGroup", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -125,6 +125,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
+                    b.Property<Guid>("EducationMediumId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -154,22 +157,24 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppElectiveSubjects", (string)null);
+                    b.HasIndex("EducationMediumId");
+
+                    b.ToTable("AppElectiveGroups", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.ElectiveSubjectComponent", b =>
+            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.ElectiveGroupComponent", b =>
                 {
-                    b.Property<Guid>("ElectiveSubjectId")
+                    b.Property<Guid>("ElectiveGroupId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("SubjectId")
                         .HasColumnType("uuid");
 
-                    b.HasKey("ElectiveSubjectId", "SubjectId");
+                    b.HasKey("ElectiveGroupId", "SubjectId");
 
                     b.HasIndex("SubjectId");
 
-                    b.ToTable("AppElectiveSubjectComponents", (string)null);
+                    b.ToTable("AppElectiveGroupComponents", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.StandardSubjectAssignment", b =>
@@ -203,7 +208,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
-                    b.Property<Guid?>("ElectiveSubjectId")
+                    b.Property<Guid?>("ElectiveGroupId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ExtraProperties")
@@ -253,7 +258,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ElectiveSubjectId");
+                    b.HasIndex("ElectiveGroupId");
 
                     b.HasIndex("StandardId");
 
@@ -294,6 +299,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
+                    b.Property<Guid>("EducationMediumId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -322,6 +330,8 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("EducationMediumId");
 
                     b.ToTable("AppSubjects", (string)null);
                 });
@@ -6265,11 +6275,22 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AbpTenantConnectionStrings", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.ElectiveSubjectComponent", b =>
+            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.ElectiveGroup", b =>
                 {
-                    b.HasOne("ShikshaMitra.Academic.Curriculum.ElectiveSubject", "ElectiveSubject")
+                    b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "EducationMedium")
+                        .WithMany()
+                        .HasForeignKey("EducationMediumId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("EducationMedium");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.ElectiveGroupComponent", b =>
+                {
+                    b.HasOne("ShikshaMitra.Academic.Curriculum.ElectiveGroup", "ElectiveGroup")
                         .WithMany("Subjects")
-                        .HasForeignKey("ElectiveSubjectId")
+                        .HasForeignKey("ElectiveGroupId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -6279,16 +6300,16 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("ElectiveSubject");
+                    b.Navigation("ElectiveGroup");
 
                     b.Navigation("Subject");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.StandardSubjectAssignment", b =>
                 {
-                    b.HasOne("ShikshaMitra.Academic.Curriculum.ElectiveSubject", "ElectiveSubject")
+                    b.HasOne("ShikshaMitra.Academic.Curriculum.ElectiveGroup", "ElectiveGroup")
                         .WithMany()
-                        .HasForeignKey("ElectiveSubjectId");
+                        .HasForeignKey("ElectiveGroupId");
 
                     b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
                         .WithMany()
@@ -6302,11 +6323,22 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("ElectiveSubject");
+                    b.Navigation("ElectiveGroup");
 
                     b.Navigation("Standard");
 
                     b.Navigation("Subject");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Subject", b =>
+                {
+                    b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "EducationMedium")
+                        .WithMany()
+                        .HasForeignKey("EducationMediumId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("EducationMedium");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.SubjectTeacher", b =>
@@ -7049,7 +7081,7 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.ElectiveSubject", b =>
+            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.ElectiveGroup", b =>
                 {
                     b.Navigation("Subjects");
                 });

@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
 /// <summary>
-/// DTO for creating or updating an ElectiveSubject.
+/// DTO for creating or updating an ElectiveGroup.
 /// </summary>
-public class CreateUpdateElectiveSubjectDto
+public class CreateUpdateElectiveGroupDto
 {
 	public required string Name { get; set; }
 	public required string Color { get; set; }

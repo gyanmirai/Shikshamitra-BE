@@ -16,13 +16,6 @@ namespace ShikshaMitra.Migrations
 				table: "AppSubjects"
 			);
 
-			migrationBuilder.DropIndex(
-				name: "IX_AppSubjects_AcademicMediumId",
-				table: "AppSubjects"
-			);
-
-			migrationBuilder.DropColumn(name: "AcademicMediumId", table: "AppSubjects");
-
 			migrationBuilder.DropColumn(
 				name: "AcademicMediumId",
 				table: "AppStandardSubjectAssignments"
@@ -43,21 +36,34 @@ namespace ShikshaMitra.Migrations
 				table: "AppStandardSubjectAssignments"
 			);
 
+			migrationBuilder.RenameColumn(
+				name: "AcademicMediumId",
+				table: "AppSubjects",
+				newName: "EducationMediumId"
+			);
+
+			migrationBuilder.RenameIndex(
+				name: "IX_AppSubjects_AcademicMediumId",
+				table: "AppSubjects",
+				newName: "IX_AppSubjects_EducationMediumId"
+			);
+
 			migrationBuilder.AddColumn<Guid>(
-				name: "ElectiveSubjectId",
+				name: "ElectiveGroupId",
 				table: "AppStandardSubjectAssignments",
 				type: "uuid",
 				nullable: true
 			);
 
 			migrationBuilder.CreateTable(
-				name: "AppElectiveSubjects",
+				name: "AppElectiveGroups",
 				columns: table => new
 				{
 					Id = table.Column<Guid>(type: "uuid", nullable: false),
 					TenantId = table.Column<Guid>(type: "uuid", nullable: true),
 					Name = table.Column<string>(type: "text", nullable: false),
 					Color = table.Column<string>(type: "text", nullable: false),
+					EducationMediumId = table.Column<Guid>(type: "uuid", nullable: false),
 					ExtraProperties = table.Column<string>(type: "text", nullable: false),
 					ConcurrencyStamp = table.Column<string>(
 						type: "character varying(40)",
@@ -87,7 +93,14 @@ namespace ShikshaMitra.Migrations
 				},
 				constraints: table =>
 				{
-					table.PrimaryKey("PK_AppElectiveSubjects", x => x.Id);
+					table.PrimaryKey("PK_AppElectiveGroups", x => x.Id);
+					table.ForeignKey(
+						name: "FK_AppElectiveGroups_AppEducationMediums_EducationMediumId",
+						column: x => x.EducationMediumId,
+						principalTable: "AppEducationMediums",
+						principalColumn: "Id",
+						onDelete: ReferentialAction.Cascade
+					);
 				}
 			);
 
@@ -144,27 +157,27 @@ namespace ShikshaMitra.Migrations
 			);
 
 			migrationBuilder.CreateTable(
-				name: "AppElectiveSubjectComponents",
+				name: "AppElectiveGroupComponents",
 				columns: table => new
 				{
-					ElectiveSubjectId = table.Column<Guid>(type: "uuid", nullable: false),
+					ElectiveGroupId = table.Column<Guid>(type: "uuid", nullable: false),
 					SubjectId = table.Column<Guid>(type: "uuid", nullable: false),
 				},
 				constraints: table =>
 				{
 					table.PrimaryKey(
-						"PK_AppElectiveSubjectComponents",
-						x => new { x.ElectiveSubjectId, x.SubjectId }
+						"PK_AppElectiveGroupComponents",
+						x => new { x.ElectiveGroupId, x.SubjectId }
 					);
 					table.ForeignKey(
-						name: "FK_AppElectiveSubjectComponents_AppElectiveSubjects_ElectiveSu~",
-						column: x => x.ElectiveSubjectId,
-						principalTable: "AppElectiveSubjects",
+						name: "FK_AppElectiveGroupComponents_AppElectiveGroups_ElectiveGroupId",
+						column: x => x.ElectiveGroupId,
+						principalTable: "AppElectiveGroups",
 						principalColumn: "Id",
 						onDelete: ReferentialAction.Cascade
 					);
 					table.ForeignKey(
-						name: "FK_AppElectiveSubjectComponents_AppSubjects_SubjectId",
+						name: "FK_AppElectiveGroupComponents_AppSubjects_SubjectId",
 						column: x => x.SubjectId,
 						principalTable: "AppSubjects",
 						principalColumn: "Id",
@@ -174,23 +187,38 @@ namespace ShikshaMitra.Migrations
 			);
 
 			migrationBuilder.CreateIndex(
-				name: "IX_AppStandardSubjectAssignments_ElectiveSubjectId",
+				name: "IX_AppStandardSubjectAssignments_ElectiveGroupId",
 				table: "AppStandardSubjectAssignments",
-				column: "ElectiveSubjectId"
+				column: "ElectiveGroupId"
 			);
 
 			migrationBuilder.CreateIndex(
-				name: "IX_AppElectiveSubjectComponents_SubjectId",
-				table: "AppElectiveSubjectComponents",
+				name: "IX_AppElectiveGroupComponents_SubjectId",
+				table: "AppElectiveGroupComponents",
 				column: "SubjectId"
 			);
 
+			migrationBuilder.CreateIndex(
+				name: "IX_AppElectiveGroups_EducationMediumId",
+				table: "AppElectiveGroups",
+				column: "EducationMediumId"
+			);
+
 			migrationBuilder.AddForeignKey(
-				name: "FK_AppStandardSubjectAssignments_AppElectiveSubjects_ElectiveS~",
+				name: "FK_AppStandardSubjectAssignments_AppElectiveGroups_ElectiveGro~",
 				table: "AppStandardSubjectAssignments",
-				column: "ElectiveSubjectId",
-				principalTable: "AppElectiveSubjects",
+				column: "ElectiveGroupId",
+				principalTable: "AppElectiveGroups",
 				principalColumn: "Id"
+			);
+
+			migrationBuilder.AddForeignKey(
+				name: "FK_AppSubjects_AppEducationMediums_EducationMediumId",
+				table: "AppSubjects",
+				column: "EducationMediumId",
+				principalTable: "AppEducationMediums",
+				principalColumn: "Id",
+				onDelete: ReferentialAction.Cascade
 			);
 		}
 
@@ -198,32 +226,41 @@ namespace ShikshaMitra.Migrations
 		protected override void Down(MigrationBuilder migrationBuilder)
 		{
 			migrationBuilder.DropForeignKey(
-				name: "FK_AppStandardSubjectAssignments_AppElectiveSubjects_ElectiveS~",
+				name: "FK_AppStandardSubjectAssignments_AppElectiveGroups_ElectiveGro~",
 				table: "AppStandardSubjectAssignments"
 			);
 
-			migrationBuilder.DropTable(name: "AppElectiveSubjectComponents");
+			migrationBuilder.DropForeignKey(
+				name: "FK_AppSubjects_AppEducationMediums_EducationMediumId",
+				table: "AppSubjects"
+			);
+
+			migrationBuilder.DropTable(name: "AppElectiveGroupComponents");
 
 			migrationBuilder.DropTable(name: "AppSubjectChapters");
 
-			migrationBuilder.DropTable(name: "AppElectiveSubjects");
+			migrationBuilder.DropTable(name: "AppElectiveGroups");
 
 			migrationBuilder.DropIndex(
-				name: "IX_AppStandardSubjectAssignments_ElectiveSubjectId",
+				name: "IX_AppStandardSubjectAssignments_ElectiveGroupId",
 				table: "AppStandardSubjectAssignments"
 			);
 
 			migrationBuilder.DropColumn(
-				name: "ElectiveSubjectId",
+				name: "ElectiveGroupId",
 				table: "AppStandardSubjectAssignments"
 			);
 
-			migrationBuilder.AddColumn<Guid>(
-				name: "AcademicMediumId",
+			migrationBuilder.RenameColumn(
+				name: "EducationMediumId",
 				table: "AppSubjects",
-				type: "uuid",
-				nullable: false,
-				defaultValue: new Guid("00000000-0000-0000-0000-000000000000")
+				newName: "AcademicMediumId"
+			);
+
+			migrationBuilder.RenameIndex(
+				name: "IX_AppSubjects_EducationMediumId",
+				table: "AppSubjects",
+				newName: "IX_AppSubjects_AcademicMediumId"
 			);
 
 			migrationBuilder.AddColumn<Guid>(
@@ -259,12 +296,6 @@ namespace ShikshaMitra.Migrations
 				type: "text",
 				nullable: false,
 				defaultValue: ""
-			);
-
-			migrationBuilder.CreateIndex(
-				name: "IX_AppSubjects_AcademicMediumId",
-				table: "AppSubjects",
-				column: "AcademicMediumId"
 			);
 
 			migrationBuilder.AddForeignKey(

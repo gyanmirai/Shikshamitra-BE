@@ -5,9 +5,9 @@ using Volo.Abp.Application.Dtos;
 namespace ShikshaMitra.Academic.Curriculum;
 
 /// <summary>
-/// DTO for retrieving ElectiveSubject details.
+/// DTO for retrieving ElectiveGroup details.
 /// </summary>
-public class ElectiveSubjectDto : EntityDto<Guid>
+public class ElectiveGroupDto : EntityDto<Guid>
 {
 	public required string Name { get; set; }
 	public required string Color { get; set; }

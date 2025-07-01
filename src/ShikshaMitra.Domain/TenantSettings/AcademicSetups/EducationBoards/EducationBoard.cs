@@ -1,8 +1,8 @@
-﻿using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+﻿using System;
+using System.Collections.Generic;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationMediums;
-using System;
-using System.Collections.Generic;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -30,7 +30,8 @@ public class EducationBoard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid id,
 		Guid? tenantId,
 		EducationBoardType educationBoardType,
-		Guid academicYearId)
+		Guid academicYearId
+	)
 		: base(id)
 	{
 		TenantId = Check.NotNull(tenantId, nameof(tenantId));

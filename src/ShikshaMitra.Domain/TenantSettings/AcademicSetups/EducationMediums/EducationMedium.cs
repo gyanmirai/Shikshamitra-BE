@@ -25,11 +25,7 @@ public class EducationMedium : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
-	internal EducationMedium(
-		Guid id,
-		Guid? tenantId,
-		string name,
-		Guid educationBoardId)
+	internal EducationMedium(Guid id, Guid? tenantId, string name, Guid educationBoardId)
 		: base(id)
 	{
 		TenantId = Check.NotNull(tenantId, nameof(tenantId));
@@ -39,7 +35,11 @@ public class EducationMedium : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	internal EducationMedium SetName(string name)
 	{
-		Name = Check.NotNullOrWhiteSpace(name, nameof(name), maxLength: EducationMediumConsts.MaxNameLength);
+		Name = Check.NotNullOrWhiteSpace(
+			name,
+			nameof(name),
+			maxLength: EducationMediumConsts.MaxNameLength
+		);
 		return this;
 	}
 }

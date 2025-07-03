@@ -1,9 +1,10 @@
-﻿using ShikshaMitra.Academic.Homework;
-using System;
+﻿using System;
+using ShikshaMitra.Academic.Homework;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
+
 public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; set; }
@@ -38,7 +39,9 @@ public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTe
 		DateTime dueDate,
 		Guid? tenantId = null,
 		Guid? chapterId = null,
-		string? documentUrl = null) : base(id)
+		string? documentUrl = null
+	)
+		: base(id)
 	{
 		StandardId = standardId;
 		DivisionId = divisionId;

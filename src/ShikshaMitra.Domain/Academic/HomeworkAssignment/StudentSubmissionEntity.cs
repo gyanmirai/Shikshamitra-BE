@@ -3,6 +3,7 @@ using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
+
 public class StudentSubmissionEntity : FullAuditedEntity<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; set; }

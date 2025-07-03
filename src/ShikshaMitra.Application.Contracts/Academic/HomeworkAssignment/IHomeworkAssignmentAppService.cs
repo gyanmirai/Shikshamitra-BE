@@ -1,16 +1,26 @@
-﻿using ShikshaMitra.Common;
-using System;
+﻿using System;
 using System.Threading.Tasks;
+using ShikshaMitra.Common;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
-public interface IHomeworkAssignmentTypeAppService : ICrudAppService<HomeworkAssignmentTypeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateHomeworkAssignmentTypeDto>
-{
-}
 
-public interface IHomeworkAssignmentAppService :
-		ICrudAppService<HomeworkAssignmentDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateHomeworkAssignmentDto>
+public interface IHomeworkAssignmentTypeAppService
+	: ICrudAppService<
+		HomeworkAssignmentTypeDto,
+		Guid,
+		PagedAndSortedResultRequestDto,
+		CreateUpdateHomeworkAssignmentTypeDto
+	> { }
+
+public interface IHomeworkAssignmentAppService
+	: ICrudAppService<
+		HomeworkAssignmentDto,
+		Guid,
+		PagedAndSortedResultRequestDto,
+		CreateUpdateHomeworkAssignmentDto
+	>
 {
 	// Additional custom methods
 	Task<HomeworkAssignmentDto> PublishAsync(Guid id, PublishHomeworkAssignmentDto input);

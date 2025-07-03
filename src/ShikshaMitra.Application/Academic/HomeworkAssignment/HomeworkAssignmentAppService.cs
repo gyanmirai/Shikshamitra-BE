@@ -1,26 +1,48 @@
-﻿using ShikshaMitra.Academic.HomeworkAssignment;
-using ShikshaMitra.Common;
-using ShikshaMitra.Students.StudentRecords;
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Academic.HomeworkAssignment;
+using ShikshaMitra.Common;
+using ShikshaMitra.Students.StudentRecords;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Academic.Homework;
-public class HomeworkAssignmentTypeAppService(IRepository<HomeworkAssignmentType, Guid> workTypeRepository) : CrudAppService<HomeworkAssignmentType, HomeworkAssignmentTypeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateHomeworkAssignmentTypeDto>(workTypeRepository),
-		IHomeworkAssignmentTypeAppService
-{
-}
 
-public class HomeworkAssignmentAppService(IRepository<HomeworkAssignmentEntity, Guid> repository, IRepository<Student, Guid> studentRepository, IRepository<StudentSubmissionEntity, Guid> submissionRepository, IBlobContainer blobContainer) :
-		CrudAppService<HomeworkAssignmentEntity, HomeworkAssignmentDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateHomeworkAssignmentDto>(repository),
+public class HomeworkAssignmentTypeAppService(
+	IRepository<HomeworkAssignmentType, Guid> workTypeRepository
+)
+	: CrudAppService<
+		HomeworkAssignmentType,
+		HomeworkAssignmentTypeDto,
+		Guid,
+		PagedAndSortedResultRequestDto,
+		CreateUpdateHomeworkAssignmentTypeDto
+	>(workTypeRepository),
+		IHomeworkAssignmentTypeAppService { }
+
+public class HomeworkAssignmentAppService(
+	IRepository<HomeworkAssignmentEntity, Guid> repository,
+	IRepository<Student, Guid> studentRepository,
+	IRepository<StudentSubmissionEntity, Guid> submissionRepository,
+	IBlobContainer blobContainer
+)
+	: CrudAppService<
+		HomeworkAssignmentEntity,
+		HomeworkAssignmentDto,
+		Guid,
+		PagedAndSortedResultRequestDto,
+		CreateUpdateHomeworkAssignmentDto
+	>(repository),
 		IHomeworkAssignmentAppService
 {
-	public async Task<HomeworkAssignmentDto> PublishAsync(Guid id, PublishHomeworkAssignmentDto input)
+	public async Task<HomeworkAssignmentDto> PublishAsync(
+		Guid id,
+		PublishHomeworkAssignmentDto input
+	)
 	{
 		var entity = await Repository.GetAsync(id);
 
@@ -41,18 +63,21 @@ public class HomeworkAssignmentAppService(IRepository<HomeworkAssignmentEntity, 
 
 	private async Task CreateSubmissionsForDivisionStudents(HomeworkAssignmentEntity homework)
 	{
-		// Get all active students in the division  
+		// Get all active students in the division
 		var students = await studentRepository.GetListAsync(s =>
-			s.DivisionId == homework.DivisionId && !s.IsDeleted);
+			s.DivisionId == homework.DivisionId && !s.IsDeleted
+		);
 
-		// Create submissions in bulk for better performance  
-		var submissions = students.Select(student => new StudentSubmissionEntity
-		{
-			TenantId = homework.TenantId,
-			HomeworkAssignmentId = homework.Id,
-			StudentId = student.Id,
-			Status = SubmissionStatus.NotSubmitted
-		}).ToList();
+		// Create submissions in bulk for better performance
+		var submissions = students
+			.Select(student => new StudentSubmissionEntity
+			{
+				TenantId = homework.TenantId,
+				HomeworkAssignmentId = homework.Id,
+				StudentId = student.Id,
+				Status = SubmissionStatus.NotSubmitted,
+			})
+			.ToList();
 
 		foreach (var submission in submissions)
 		{

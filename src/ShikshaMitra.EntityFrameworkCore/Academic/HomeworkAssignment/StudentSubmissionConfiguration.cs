@@ -1,10 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
+
 public class StudentSubmissionConfiguration : IEntityTypeConfiguration<StudentSubmissionEntity>
 {
-	public void Configure(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<StudentSubmissionEntity> builder)
+	public void Configure(EntityTypeBuilder<StudentSubmissionEntity> builder)
 	{
 		builder.ToTable(
 			ShikshaMitraConsts.DbTablePrefix + "StudentHomeworkAssignmentSubmissions",

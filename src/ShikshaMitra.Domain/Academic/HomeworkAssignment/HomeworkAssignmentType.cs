@@ -1,9 +1,10 @@
-﻿using ShikshaMitra.Academic.HomeworkAssignment;
-using System;
+﻿using System;
+using ShikshaMitra.Academic.HomeworkAssignment;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Academic.Homework;
+
 public class HomeworkAssignmentType : Entity<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; set; }
@@ -14,7 +15,8 @@ public class HomeworkAssignmentType : Entity<Guid>, IMultiTenant
 	private HomeworkAssignmentType() { }
 
 	// Public constructor
-	public HomeworkAssignmentType(Guid id, string name, WorkType type, Guid? tenantId = null) : base(id)
+	public HomeworkAssignmentType(Guid id, string name, WorkType type, Guid? tenantId = null)
+		: base(id)
 	{
 		Name = name;
 		Type = type;

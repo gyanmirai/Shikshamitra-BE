@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -22,7 +23,31 @@ public class HomeworkAssignmentTypeAppService(
 		PagedAndSortedResultRequestDto,
 		CreateUpdateHomeworkAssignmentTypeDto
 	>(workTypeRepository),
-		IHomeworkAssignmentTypeAppService { }
+		IHomeworkAssignmentTypeAppService
+{
+	// implement API to fetch HomeworkAssignmentType by AcademicMediumId
+	public async Task<List<HomeworkAssignmentTypeDto>> GetByAcademicMediumIdAsync(
+		Guid academicMediumId
+	)
+	{
+		try
+		{
+			var workTypes = await workTypeRepository.GetListAsync(x =>
+				x.AcademicMediumId == academicMediumId
+			);
+			return ObjectMapper.Map<List<HomeworkAssignmentType>, List<HomeworkAssignmentTypeDto>>(
+				workTypes
+			);
+		}
+		catch (Exception ex)
+		{
+			throw new ApplicationException(
+				"An error occurred while fetching HomeworkAssignmentTypes by AcademicMediumId.",
+				ex
+			);
+		}
+	}
+}
 
 public class HomeworkAssignmentAppService(
 	IRepository<HomeworkAssignmentEntity, Guid> repository,
@@ -44,7 +69,7 @@ public class HomeworkAssignmentAppService(
 		PublishHomeworkAssignmentDto input
 	)
 	{
-		var entity = await Repository.GetAsync(id);
+		var entity = await repository.GetAsync(id);
 
 		if (input.IsPublished)
 		{
@@ -56,7 +81,7 @@ public class HomeworkAssignmentAppService(
 			entity.Unpublish();
 		}
 
-		entity = await Repository.UpdateAsync(entity, autoSave: true);
+		entity = await repository.UpdateAsync(entity, autoSave: true);
 
 		return await MapToGetOutputDtoAsync(entity);
 	}

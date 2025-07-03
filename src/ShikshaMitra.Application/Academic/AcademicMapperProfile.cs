@@ -31,6 +31,12 @@ public class AcademicMapperProfile : Profile
 
 		CreateMap<HomeworkAssignmentType, HomeworkAssignmentTypeDto>();
 		CreateMap<CreateUpdateHomeworkAssignmentTypeDto, HomeworkAssignmentType>();
+
+		CreateMap<HomeworkAssignmentEntity, HomeworkAssignmentDto>();
+		CreateMap<HomeworkAssignmentDto, HomeworkAssignmentEntity>();
+
+		CreateMap<HomeworkAssignmentEntity, CreateUpdateHomeworkAssignmentDto>();
+		CreateMap<CreateUpdateHomeworkAssignmentDto, HomeworkAssignmentEntity>();
 		#endregion
 	}
 }

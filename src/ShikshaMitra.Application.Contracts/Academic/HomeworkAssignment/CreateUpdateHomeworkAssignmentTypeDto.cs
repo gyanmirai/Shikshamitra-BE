@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
@@ -9,4 +10,7 @@ public class CreateUpdateHomeworkAssignmentTypeDto
 
 	[Required]
 	public WorkType Type { get; set; }
+
+	[Required]
+	public Guid AcademicMediumId { get; set; }
 }

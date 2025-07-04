@@ -1,8 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Extensions;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Academic.ClassTeacher;
@@ -11,7 +11,9 @@ namespace ShikshaMitra.Controllers.Academic.ClassTeacher;
 public class ClassTeacherController(IClassTeacherAppService classTeacherAppService) : AbpController
 {
 	[HttpPut("assign")]
-	public async Task<IActionResult> AssignOrUpdateTeachers([FromBody] List<AssignClassTeacherDto> input)
+	public async Task<IActionResult> AssignOrUpdateTeachers(
+		[FromBody] List<AssignClassTeacherDto> input
+	)
 	{
 		var headers = this.Headers();
 		await classTeacherAppService.AssignOrUpdateTeachersAsync(input, headers.EducationMediumId);
@@ -22,7 +24,9 @@ public class ClassTeacherController(IClassTeacherAppService classTeacherAppServi
 	public async Task<IActionResult> GetAllClassTeachers()
 	{
 		var headers = this.Headers();
-		var classTeachers = await classTeacherAppService.GetAllClassTeachersAsync(headers.EducationMediumId);
+		var classTeachers = await classTeacherAppService.GetAllClassTeachersAsync(
+			headers.EducationMediumId
+		);
 		return Ok(classTeachers);
 	}
 }

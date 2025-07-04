@@ -1,4 +1,4 @@
-# # https://docs.microsoft.com/en-us/dotnet/fundamentals/code-analysis/style-rules/language-rules
+﻿# # https://docs.microsoft.com/en-us/dotnet/fundamentals/code-analysis/style-rules/language-rules
 # ###############################
 # # Core EditorConfig Options   #
 # ###############################
@@ -118,7 +118,7 @@ csharp_style_conditional_delegate_call = true:suggestion
 csharp_prefer_braces = true:silent
 csharp_prefer_simple_using_statement = true:suggestion
 # using directive placement
-csharp_using_directive_placement = outside_namespace
+csharp_using_directive_placement = outside_namespace:silent
 # Modifier preferences
 csharp_prefer_static_local_function = true
 # Unnecessary code rules
@@ -153,6 +153,12 @@ csharp_space_between_method_call_empty_parameter_list_parentheses = false
 # Wrapping preferences
 csharp_preserve_single_line_statements = true
 csharp_preserve_single_line_blocks = true
+csharp_style_namespace_declarations = file_scoped:silent
+csharp_style_prefer_method_group_conversion = true:silent
+csharp_style_prefer_top_level_statements = true:silent
+csharp_style_prefer_primary_constructors = true:suggestion
+csharp_prefer_system_threading_lock = true:suggestion
+csharp_style_allow_blank_lines_between_consecutive_braces_experimental = false:silent
 
 ##########################################
 # .NET Naming Conventions
@@ -317,5 +323,9 @@ dotnet_naming_symbols.parameters_group.applicable_kinds = parameter
 dotnet_naming_rule.parameters_rule.symbols = parameters_group
 dotnet_naming_rule.parameters_rule.style = camel_case_style
 dotnet_naming_rule.parameters_rule.severity = warning
+dotnet_style_operator_placement_when_wrapping = beginning_of_line
+tab_width = 4
+dotnet_style_prefer_collection_expression = when_types_loosely_match:suggestion
+dotnet_style_namespace_match_folder = true:suggestion
 
 

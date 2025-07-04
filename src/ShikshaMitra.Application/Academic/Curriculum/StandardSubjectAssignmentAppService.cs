@@ -1,8 +1,8 @@
-﻿using Microsoft.Extensions.Logging;
-using ShikshaMitra.Academic.Curriculum.SubjectAssignment;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using ShikshaMitra.Academic.Curriculum.SubjectAssignment;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -13,17 +13,18 @@ namespace ShikshaMitra.Academic.Curriculum;
 [RemoteService(IsEnabled = false)]
 public class StandardSubjectAssignmentAppService(
 	IRepository<StandardSubjectAssignment, Guid> assignmentRepository,
-	StandardSubjectAssignmentManager manager,
+	StandardSubjectAssignmentManager subjectAssignmentManager,
 	IObjectMapper objectMapper,
 	ILogger<StandardSubjectAssignmentAppService> logger
 ) : ApplicationService, IStandardSubjectAssignmentAppService
 {
-	public async Task<StandardSubjectAssignmentResponseDto> CreateAssignmentAsync(CreateStandardSubjectAssignmentDto createAssignmentDto, Guid academicMediumId)
+	public async Task<StandardSubjectAssignmentResponseDto> CreateAssignmentAsync(
+		CreateStandardSubjectAssignmentDto createAssignmentDto
+	)
 	{
 		try
 		{
-			var assignment = manager.AssignSubject(
-				academicMediumId,
+			var assignment = subjectAssignmentManager.AssignSubject(
 				createAssignmentDto.SubjectId,
 				createAssignmentDto.StandardId,
 				createAssignmentDto.SubjectCode,
@@ -38,19 +39,33 @@ public class StandardSubjectAssignmentAppService(
 				assignment.SetPrimaryTeacher(createAssignmentDto.PrimaryTeacherId.Value);
 			}
 
-			if (createAssignmentDto.SecondaryTeacherIds != null && createAssignmentDto.SecondaryTeacherIds.Count > 0)
+			if (
+				createAssignmentDto.SecondaryTeacherIds != null
+				&& createAssignmentDto.SecondaryTeacherIds.Count > 0
+			)
 			{
 				assignment.SetSecondaryTeachers(createAssignmentDto.SecondaryTeacherIds);
 			}
 
-			await assignmentRepository.InsertAsync(assignment, autoSave: true);
+			await assignmentRepository.InsertAsync(assignment);
 
-			return objectMapper.Map<StandardSubjectAssignment, StandardSubjectAssignmentResponseDto>(assignment);
+			return objectMapper.Map<
+				StandardSubjectAssignment,
+				StandardSubjectAssignmentResponseDto
+			>(assignment);
 		}
 		catch (Exception ex)
 		{
-			logger.LogError(ex, "Failed to assign subject for StandardId: {StandardId}, SubjectId: {SubjectId}", createAssignmentDto.StandardId, createAssignmentDto.SubjectId);
-			throw new BusinessException("SubjectAssignmentCreationFailed", "Failed to create subject assignment.");
+			logger.LogError(
+				ex,
+				"Failed to assign subject for StandardId: {StandardId}, SubjectId: {SubjectId}",
+				createAssignmentDto.StandardId,
+				createAssignmentDto.SubjectId
+			);
+			throw new UserFriendlyException(
+				"SubjectAssignmentCreationFailed",
+				"Failed to create subject assignment. Please try again later."
+			);
 		}
 	}
 
@@ -58,8 +73,12 @@ public class StandardSubjectAssignmentAppService(
 	{
 		try
 		{
-			var assignment = await assignmentRepository.FindAsync(assignmentId) ??
-				throw new BusinessException("SubjectAssignmentNotFound", "Subject assignment not found.");
+			var assignment =
+				await assignmentRepository.FindAsync(assignmentId)
+				?? throw new BusinessException(
+					"SubjectAssignmentNotFound",
+					"Subject assignment not found."
+				);
 
 			assignment.ChangeStatus(status);
 
@@ -67,8 +86,15 @@ public class StandardSubjectAssignmentAppService(
 		}
 		catch (Exception ex)
 		{
-			logger.LogError(ex, "Failed to change status for assignmentId: {AssignmentId}", assignmentId);
-			throw new BusinessException("SubjectAssignmentStatusChangeFailed", "Failed to change subject assignment status.");
+			logger.LogError(
+				ex,
+				"Failed to change status for assignmentId: {AssignmentId}",
+				assignmentId
+			);
+			throw new BusinessException(
+				"SubjectAssignmentStatusChangeFailed",
+				"Failed to change subject assignment status."
+			);
 		}
 	}
 
@@ -76,17 +102,33 @@ public class StandardSubjectAssignmentAppService(
 	{
 		try
 		{
-			var assignments = await assignmentRepository.GetListAsync(a => a.StandardId == standardId);
-			return objectMapper.Map<List<StandardSubjectAssignment>, List<StandardSubjectAssignmentResponseDto>>(assignments);
+			var assignments = await assignmentRepository.GetListAsync(a =>
+				a.StandardId == standardId
+			);
+			return objectMapper.Map<
+				List<StandardSubjectAssignment>,
+				List<StandardSubjectAssignmentResponseDto>
+			>(assignments);
 		}
 		catch (Exception ex)
 		{
-			logger.LogError(ex, "Failed to get list of assignments for StandardId: {StandardId}", standardId);
-			throw new BusinessException("SubjectAssignmentListRetrievalFailed", "Failed to retrieve subject assignment list.");
+			logger.LogError(
+				ex,
+				"Failed to get list of assignments for StandardId: {StandardId}",
+				standardId
+			);
+			throw new BusinessException(
+				"SubjectAssignmentListRetrievalFailed",
+				"Failed to retrieve subject assignment list."
+			);
 		}
 	}
 
-	public async Task UpdateTeachersAsync(Guid assignmentId, Guid primaryId, List<Guid> secondaryIds)
+	public async Task UpdateTeachersAsync(
+		Guid assignmentId,
+		Guid primaryId,
+		List<Guid> secondaryIds
+	)
 	{
 		try
 		{
@@ -97,8 +139,15 @@ public class StandardSubjectAssignmentAppService(
 		}
 		catch (Exception ex)
 		{
-			logger.LogError(ex, "Failed to update teachers for assignmentId: {AssignmentId}", assignmentId);
-			throw new BusinessException("SubjectAssignmentTeacherUpdateFailed", "Failed to update subject assignment teachers.");
+			logger.LogError(
+				ex,
+				"Failed to update teachers for assignmentId: {AssignmentId}",
+				assignmentId
+			);
+			throw new BusinessException(
+				"SubjectAssignmentTeacherUpdateFailed",
+				"Failed to update subject assignment teachers."
+			);
 		}
 	}
 }

@@ -1,6 +1,8 @@
-﻿using AutoMapper;
+﻿using System.Linq;
+using AutoMapper;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.SubjectAssignment;
+using ShikshaMitra.Academic.Syllabus;
 
 namespace ShikshaMitra.Academic;
 
@@ -12,6 +14,13 @@ public class AcademicMapperProfile : Profile
 		CreateMap<Subject, SubjectDto>();
 
 		CreateMap<StandardSubjectAssignment, StandardSubjectAssignmentResponseDto>();
+
+		CreateMap<SubjectChapter, ChapterDto>();
+		CreateMap<ElectiveGroup, ElectiveGroupDto>()
+			.ForMember(
+				dest => dest.Subjects,
+				opt => opt.MapFrom(src => src.Subjects.Select(s => s.Subject))
+			);
 		#endregion
 	}
 }

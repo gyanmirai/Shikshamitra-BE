@@ -1,7 +1,10 @@
-﻿namespace ShikshaMitra.Academic.Curriculum;
+﻿using System;
+
+namespace ShikshaMitra.Academic.Curriculum;
 
 public class CreateUpdateSubjectDto
 {
-	public string Name { get; set; }
-	public string Color { get; set; }
+	public required string Name { get; set; }
+	public required string Color { get; set; }
+	public required Guid EducationMediumId { get; set; }
 }

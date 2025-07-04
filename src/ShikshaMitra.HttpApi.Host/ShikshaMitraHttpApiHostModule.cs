@@ -36,6 +36,8 @@ using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Http;
 using ShikshaMitra.Middleware;
+using System.Net;
+using Volo.Abp.AspNetCore.ExceptionHandling;
 
 namespace ShikshaMitra;
 
@@ -96,7 +98,19 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		ConfigureCors(context, configuration);
 
 		ConfigureSwaggerServices(context, configuration);
+
+		//ConfigureExceptionServices(context);
 	}
+
+	// TODO: Need to figure this out
+    private void ConfigureExceptionServices(ServiceConfigurationContext context)
+    {
+        context.Services.Configure<AbpExceptionHttpStatusCodeOptions>(options =>
+        {
+            // Map the exception using the error code instead of the generic type  
+            options.Map(typeof(UserFriendlyException).FullName, HttpStatusCode.BadRequest);
+        });
+    }
 
 	private void ConfigureAuthentication(ServiceConfigurationContext context)
 	{

@@ -1,7 +1,7 @@
-﻿using ShikshaMitra.TenantSettings.EducationMediums;
-using ShikshaMitra.TenantSettings.Standards;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -15,7 +15,6 @@ public class EducationMediumStage : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string Name { get; private set; }
 	public byte[]? BannerPicture { get; private set; }
 
-
 	private EducationMediumStage()
 	{
 		/* This constructor is for deserialization / ORM purpose */
@@ -26,7 +25,8 @@ public class EducationMediumStage : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? tenantId,
 		string name,
 		byte[]? bannerPicture,
-		Guid educationMediumId)
+		Guid educationMediumId
+	)
 		: base(id)
 	{
 		TenantId = Check.NotNull(tenantId, nameof(tenantId));
@@ -35,10 +35,13 @@ public class EducationMediumStage : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SetName(name);
 	}
 
-
 	internal EducationMediumStage SetName(string name)
 	{
-		Name = Check.NotNullOrWhiteSpace(name, nameof(name), maxLength: EducationMediumStageConsts.MaxNameLength);
+		Name = Check.NotNullOrWhiteSpace(
+			name,
+			nameof(name),
+			maxLength: EducationMediumStageConsts.MaxNameLength
+		);
 		return this;
 	}
 

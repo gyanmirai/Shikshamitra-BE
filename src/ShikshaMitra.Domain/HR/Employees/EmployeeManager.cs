@@ -1,11 +1,13 @@
-﻿using Microsoft.AspNetCore.Identity;
-using ShikshaMitra.Common;
-using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
-using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Identity;
+using ShikshaMitra.Common;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using Volo.Abp;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Repositories;
@@ -23,14 +25,17 @@ public class EmployeeManager(
 	IBlobContainer blobContainer,
 	IEmployeeDocumentRepository employeeDocumentRepository,
 	UserManager<IdentityUser> userManager,
-	IEducationMediumStageRepository _educationMediumStageRepository
+	IEducationMediumStageRepository educationMediumStageRepository,
+	IRepository<EducationBoard, Guid> educationBoardRepository,
+	IRepository<EducationMedium, Guid> educationMediumRepository
 ) : DomainService
 {
 	// Private helper method to get an employee by ID
 	private async Task<Employee> GetEmployeeAsync(Guid employeeId)
 	{
 		var employee = await employeeRepository.GetAsync(employeeId);
-		return employee ?? throw new BusinessException($"Employee with ID {employeeId} does not exist.");
+		return employee
+			?? throw new BusinessException($"Employee with ID {employeeId} does not exist.");
 	}
 
 	// Private helper method to get a user by ID
@@ -79,18 +84,39 @@ public class EmployeeManager(
 		State? state = null,
 		Country? country = null,
 		string? pinCode = null,
-		Guid? shiftId = null)
+		Guid? shiftId = null
+	)
 	{
 		// Validate role existence
 		IdentityRole role = await GetRoleAsync(roleId);
 
 		// i have educationMediumStageId, it stores educationMediumId, educationMedium table stores educationBoardId, I want boardName from educationBoard table using educationMediumStageId in ef core
-		var boardType = (await _educationMediumStageRepository.GetQueryableAsync())
-			.Where(ems => ems.Id == educationMediumStageId)
-			.Select(ems => ems.EducationMedium.EducationBoard.Type).FirstOrDefault();
+		var stages = await educationMediumStageRepository.GetQueryableAsync();
+		var mediums = await educationMediumRepository.GetQueryableAsync();
+		var boards = await educationBoardRepository.GetQueryableAsync();
+
+		var query =
+			from stage in stages
+			join medium in mediums on stage.EducationMediumId equals medium.Id
+			join board in boards on medium.EducationBoardId equals board.Id
+			where stage.Id == educationMediumStageId
+			select new // Creates a new anonymous object, NOT an EducationMediumStage
+			{
+				StageId = stage.Id,
+				StageName = stage.Name,
+				MediumName = medium.Name,
+				BoardType = board.Type,
+			};
+
+		// 3. Execute the query
+		var boardType = await AsyncExecuter.FirstOrDefaultAsync(query);
 
 		// Generate employee code
-		string employeeCode = await GenerateEmployeeCodeAsync(boardType, dateOfJoining ?? DateOnly.FromDateTime(DateTime.Now), role.Name);
+		var employeeCode = await GenerateEmployeeCodeAsync(
+			boardType!.BoardType,
+			dateOfJoining ?? DateOnly.FromDateTime(DateTime.Now),
+			role.Name
+		);
 
 		// Create employee entity
 		var employee = new Employee(
@@ -129,8 +155,7 @@ public class EmployeeManager(
 			country: country,
 			pinCode: pinCode,
 			educationMediumStageId: educationMediumStageId,
-			fatherDetails:
-			new ContactDetails(
+			fatherDetails: new ContactDetails(
 				name: null,
 				occupation: null,
 				contactNo: null,
@@ -142,12 +167,13 @@ public class EmployeeManager(
 				stateIsoCode: null,
 				countryName: null,
 				countryIsoCode: null,
-				pinCode: null),
+				pinCode: null
+			),
 			motherDetails: new ContactDetails(
 				name: null,
 				occupation: null,
 				contactNo: null,
-						address1: null,
+				address1: null,
 				address2: null,
 				address3: null,
 				city: null,
@@ -155,12 +181,13 @@ public class EmployeeManager(
 				stateIsoCode: null,
 				countryName: null,
 				countryIsoCode: null,
-				pinCode: null),
+				pinCode: null
+			),
 			spouseDetails: new ContactDetails(
 				name: null,
 				occupation: null,
 				contactNo: null,
-						address1: null,
+				address1: null,
 				address2: null,
 				address3: null,
 				city: null,
@@ -168,7 +195,8 @@ public class EmployeeManager(
 				stateIsoCode: null,
 				countryName: null,
 				countryIsoCode: null,
-				pinCode: null),
+				pinCode: null
+			),
 			bankDetails: new BankDetails(
 				bankName: null,
 				branchName: null,
@@ -191,7 +219,10 @@ public class EmployeeManager(
 		if (!userCreateResult.Succeeded)
 		{
 			// Handle user creation errors (e.g., duplicate email, weak password)
-			throw new UserFriendlyException("Failed to create user: " + string.Join(", ", userCreateResult.Errors.Select(e => e.Description)));
+			throw new UserFriendlyException(
+				"Failed to create user: "
+					+ string.Join(", ", userCreateResult.Errors.Select(e => e.Description))
+			);
 		}
 
 		// 2. Assign the role to the user
@@ -200,9 +231,11 @@ public class EmployeeManager(
 		{
 			// Handle role assignment errors
 			await userManager.DeleteAsync(user); // Rollback user creation
-			throw new UserFriendlyException("Failed to add user to role: " + string.Join(", ", roleAddResult.Errors.Select(e => e.Description)));
+			throw new UserFriendlyException(
+				"Failed to add user to role: "
+					+ string.Join(", ", roleAddResult.Errors.Select(e => e.Description))
+			);
 		}
-
 
 		employee.UpdateUserId(user.Id);
 		return employee;
@@ -251,16 +284,18 @@ public class EmployeeManager(
 		if (roleId.HasValue && employee.RoleId != roleId.Value && employee.UserId != null)
 		{
 			// Get the associated user
-			IdentityUser user = await GetUserAsync((Guid) employee.UserId);
+			IdentityUser user = await GetUserAsync((Guid)employee.UserId);
 
 			// Remove the user from the old role
 			IdentityRole? oldRole = await roleRepository.GetAsync(employee.RoleId);
-			IdentityResult? removeResult = await userManager.RemoveFromRoleAsync(user, oldRole.Name);
+			IdentityResult? removeResult = await userManager.RemoveFromRoleAsync(
+				user,
+				oldRole.Name
+			);
 			// Add the user to the new role
 			IdentityRole? newRole = await roleRepository.GetAsync(roleId.Value);
 			IdentityResult? addResult = await userManager.AddToRoleAsync(user, newRole.Name);
 		}
-
 
 		// Update the employee
 		employee.UpdateBasicInfo(
@@ -303,8 +338,11 @@ public class EmployeeManager(
 		return employee;
 	}
 
-	public async Task<Employee> UpdateEmployeeStatusAsync(Guid employeeId, EmployeeStatusType employeeStatusType,
-		string? changeReason)
+	public async Task<Employee> UpdateEmployeeStatusAsync(
+		Guid employeeId,
+		EmployeeStatusType employeeStatusType,
+		string? changeReason
+	)
 	{
 		// Get the employee
 		var employee = await GetEmployeeAsync(employeeId);
@@ -332,8 +370,12 @@ public class EmployeeManager(
 		// Add more validations as needed
 	}
 
-	public async Task<Employee> UpdateFamilyInfoByEmployeeIdAsync(Guid employeeId, ContactDetails fatherDetails,
-		ContactDetails motherDetails, ContactDetails spouseDetails)
+	public async Task<Employee> UpdateFamilyInfoByEmployeeIdAsync(
+		Guid employeeId,
+		ContactDetails fatherDetails,
+		ContactDetails motherDetails,
+		ContactDetails spouseDetails
+	)
 	{
 		// Get the employee
 		var employee = await GetEmployeeAsync(employeeId);
@@ -344,8 +386,10 @@ public class EmployeeManager(
 		return employee;
 	}
 
-	public async Task<Employee> UpdateExperienceInfoByEmployeeIdAsync(Guid employeeId,
-		List<WorkExperience> workExperiences)
+	public async Task<Employee> UpdateExperienceInfoByEmployeeIdAsync(
+		Guid employeeId,
+		List<WorkExperience> workExperiences
+	)
 	{
 		// Get the employee
 		var employee = await GetEmployeeAsync(employeeId);
@@ -355,7 +399,10 @@ public class EmployeeManager(
 		return employee;
 	}
 
-	public async Task<Employee> UpdateBankDetailsByEmployeeIdAsync(Guid employeeId, BankDetails bankDetails)
+	public async Task<Employee> UpdateBankDetailsByEmployeeIdAsync(
+		Guid employeeId,
+		BankDetails bankDetails
+	)
 	{
 		// Get the employee
 		var employee = await GetEmployeeAsync(employeeId);
@@ -384,9 +431,9 @@ public class EmployeeManager(
 				employeeId: employeeId,
 				documentName: docData.FileName,
 				contentType: docData.ContentType,
-				size: docData.Size
-				,
-				blobName: blobName);
+				size: docData.Size,
+				blobName: blobName
+			);
 
 			await employeeDocumentRepository.InsertAsync(document);
 
@@ -400,15 +447,18 @@ public class EmployeeManager(
 
 	public async Task<EmployeeDocument> GetDocumentAsync(Guid employeeId, Guid documentId)
 	{
-		var document =
-			await employeeDocumentRepository.FirstOrDefaultAsync(d => d.EmployeeId == employeeId && d.Id == documentId);
-		return document ?? throw new BusinessException($"Document with ID {documentId} does not exist.");
+		var document = await employeeDocumentRepository.FirstOrDefaultAsync(d =>
+			d.EmployeeId == employeeId && d.Id == documentId
+		);
+		return document
+			?? throw new BusinessException($"Document with ID {documentId} does not exist.");
 	}
 
 	public async Task<List<EmployeeDocument>> GetDocumentsAsync(Guid employeeId)
 	{
-		List<EmployeeDocument>
-			documents = await employeeDocumentRepository.GetListAsync(d => d.EmployeeId == employeeId);
+		List<EmployeeDocument> documents = await employeeDocumentRepository.GetListAsync(d =>
+			d.EmployeeId == employeeId
+		);
 		return documents;
 	}
 
@@ -433,7 +483,11 @@ public class EmployeeManager(
 		return document;
 	}
 
-	private async Task<string> GenerateEmployeeCodeAsync(EducationBoardType boardType, DateOnly dateOfJoining, string roleName)
+	private async Task<string> GenerateEmployeeCodeAsync(
+		EducationBoardType boardType,
+		DateOnly dateOfJoining,
+		string roleName
+	)
 	{
 		// Get the last EmployeeCode
 		Employee? lastEmployee = await employeeRepository.GetLastEmployeeAsync();
@@ -452,6 +506,6 @@ public class EmployeeManager(
 		}
 
 		// board - role - joining year - sequence number
-		return $"{boardType.ToString().Substring(0,2)}{roleName.Substring(0, 3)}{dateOfJoining.Year.ToString().Substring(2)}{nextNumber:D3}";
+		return $"{boardType.ToString().Substring(0, 2)}{roleName.Substring(0, 3)}{dateOfJoining.Year.ToString().Substring(2)}{nextNumber:D3}";
 	}
 }

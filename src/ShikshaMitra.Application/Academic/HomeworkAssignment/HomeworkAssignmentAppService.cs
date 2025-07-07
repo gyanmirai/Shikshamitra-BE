@@ -12,43 +12,6 @@ using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Academic.Homework;
-
-public class HomeworkAssignmentTypeAppService(
-	IRepository<HomeworkAssignmentType, Guid> workTypeRepository
-)
-	: CrudAppService<
-		HomeworkAssignmentType,
-		HomeworkAssignmentTypeDto,
-		Guid,
-		PagedAndSortedResultRequestDto,
-		CreateUpdateHomeworkAssignmentTypeDto
-	>(workTypeRepository),
-		IHomeworkAssignmentTypeAppService
-{
-	// implement API to fetch HomeworkAssignmentType by AcademicMediumId
-	public async Task<List<HomeworkAssignmentTypeDto>> GetByAcademicMediumIdAsync(
-		Guid academicMediumId
-	)
-	{
-		try
-		{
-			var workTypes = await workTypeRepository.GetListAsync(x =>
-				x.AcademicMediumId == academicMediumId
-			);
-			return ObjectMapper.Map<List<HomeworkAssignmentType>, List<HomeworkAssignmentTypeDto>>(
-				workTypes
-			);
-		}
-		catch (Exception ex)
-		{
-			throw new ApplicationException(
-				"An error occurred while fetching HomeworkAssignmentTypes by AcademicMediumId.",
-				ex
-			);
-		}
-	}
-}
-
 public class HomeworkAssignmentAppService(
 	IRepository<HomeworkAssignmentEntity, Guid> repository,
 	IRepository<Student, Guid> studentRepository,

@@ -1,6 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Homework;
+using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Academic.Syllabus;
 using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
 using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
@@ -239,6 +241,12 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region Syllabus
 	public DbSet<SubjectChapter> SubjectChapters { get; set; }
+	#endregion
+
+	#region HomeworkAssignment
+	public DbSet<HomeworkAssignmentType> HomeworkAssignmentTypes { get; set; }
+	public DbSet<HomeworkAssignmentEntity> HomeworkAssignments { get; set; }
+	public DbSet<StudentSubmissionEntity> StudentSubmissions { get; set; }
 	#endregion
 
 	#endregion

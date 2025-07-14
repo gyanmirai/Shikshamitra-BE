@@ -6,8 +6,8 @@ namespace ShikshaMitra.Students;
 
 public class StudentAttendance : FullAuditedEntity<Guid>, IMultiTenant
 {
-	public Guid? TenantId { get; set; }
-	public DateTimeOffset AttendanceDate { get; set; }
-	public AttendanceStatusEnum Status { get; set; }
-	public string? Remarks { get; set; }
+	public Guid? TenantId { get; private set; }
+	public DateTimeOffset AttendanceDate { get; private set; }
+	public AttendanceStatusEnum Status { get; private set; }
+	public string? Remarks { get; private set; }
 }

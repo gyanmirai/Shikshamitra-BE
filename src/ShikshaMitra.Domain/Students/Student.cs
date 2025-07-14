@@ -6,14 +6,14 @@ namespace ShikshaMitra.Students;
 
 public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
-	public Guid? TenantId { get; set; }
-	public string? FirstName { get; set; }
-	public string? MiddleName { get; set; }
-	public string? LastName { get; set; }
-	public Guid EducationMediumId { get; set; }
-	public Guid? StandardId { get; set; }
-	public Guid? DivisionId { get; set; }
-	public int? GrNo { get; set; }
-	public int? RollNo { get; set; }
-	public StudentLifeCycleStatusEnum Status { get; set; }
+	public Guid? TenantId { get; private set; }
+	public string? FirstName { get; private set; }
+	public string? MiddleName { get; private set; }
+	public string? LastName { get; private set; }
+	public Guid EducationMediumId { get; private set; }
+	public Guid? StandardId { get; private set; }
+	public Guid? DivisionId { get; private set; }
+	public int? GrNo { get; private set; }
+	public int? RollNo { get; private set; }
+	public StudentLifeCycleStatusEnum Status { get; private set; }
 }

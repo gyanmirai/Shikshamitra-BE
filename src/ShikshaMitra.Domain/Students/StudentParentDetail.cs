@@ -6,23 +6,23 @@ namespace ShikshaMitra.Students;
 
 public class StudentParentDetail : FullAuditedEntity<Guid>, IMultiTenant
 {
-	public Guid? TenantId { get; set; }
-	public Guid StudentId { get; set; }
-	public string? FullName { get; set; }
-	public DateTimeOffset DateOfBirth { get; set; }
-	public string? Occupation { get; set; }
-	public string? PrimaryContactNo { get; set; }
-	public string? SecondaryContactNo { get; set; }
-	public string? Qualification { get; set; }
-	public int? YearOfPassing { get; set; }
-	public string? Designation { get; set; }
-	public string? Organization { get; set; }
-	public string? AdharNo { get; set; }
-	public ParentTypeEnum ParentType { get; set; }
-	public string? Address1 { get; set; }
-	public string? Address2 { get; set; }
-	public string? Address3 { get; set; }
-	public string? OfficeAddress1 { get; set; }
-	public string? OfficeAddress2 { get; set; }
-	public string? OfficeAddress3 { get; set; }
+	public Guid? TenantId { get; private set; }
+	public Guid StudentId { get; private set; }
+	public string? FullName { get; private set; }
+	public DateTimeOffset DateOfBirth { get; private set; }
+	public string? Occupation { get; private set; }
+	public string? PrimaryContactNo { get; private set; }
+	public string? SecondaryContactNo { get; private set; }
+	public string? Qualification { get; private set; }
+	public int? YearOfPassing { get; private set; }
+	public string? Designation { get; private set; }
+	public string? Organization { get; private set; }
+	public string? AdharNo { get; private set; }
+	public ParentTypeEnum ParentType { get; private set; }
+	public string? Address1 { get; private set; }
+	public string? Address2 { get; private set; }
+	public string? Address3 { get; private set; }
+	public string? OfficeAddress1 { get; private set; }
+	public string? OfficeAddress2 { get; private set; }
+	public string? OfficeAddress3 { get; private set; }
 }

@@ -655,9 +655,9 @@ public class StudentEnrollmentManager(
 	public async Task<StudentEnrollment> UpdateFamilyDetailsByStudentEnrollmentIdAsync(
 
 		Guid studentEnrollmentId,
-		StudentContactDetails fatherDetails,
-		StudentContactDetails motherDetails,
-		StudentContactDetails guardianDetails
+		StudentContactDetail fatherDetails,
+		StudentContactDetail motherDetails,
+		StudentContactDetail guardianDetails
 	)
 	{
 		// Get the Registration details
@@ -693,7 +693,7 @@ public class StudentEnrollmentManager(
 
 	public async Task<StudentEnrollment> UpdateAdditionalDetailsByStudentEnrollmentIdAsync(
 		Guid studentEnrollmentId,
-		StudentAdditionalDetails studentAdditionalDetails
+		StudentAdditionalDetail studentAdditionalDetails
 	)
 	{
 		// Get the Registration details
@@ -776,7 +776,7 @@ public class StudentEnrollmentManager(
 			await blobContainer.SaveAsync(blobName, docData.Content, overrideExisting: true);
 
 			// Create and save the StudentDocument entity (metadata)
-			var document = new StudentDocument(
+			var document = new Registration.StudentDocument(
 				id: documentId,
 				tenantId: CurrentTenant.Id,
 				studentEnrollmentId: registrationId,
@@ -797,7 +797,7 @@ public class StudentEnrollmentManager(
 	#endregion
 
 	#region Get Document
-	public async Task<StudentDocument> GetDocumentAsync(Guid studentEnrollmentId, Guid documentId)
+	public async Task<Registration.StudentDocument> GetDocumentAsync(Guid studentEnrollmentId, Guid documentId)
 	{
 		var document =
 			await studentDocumentRepository.FirstOrDefaultAsync(d => d.StudentEnrollmentId == studentEnrollmentId && d.Id == documentId);
@@ -807,9 +807,9 @@ public class StudentEnrollmentManager(
 
 	#region Get all Documents
 
-	public async Task<List<StudentDocument>> GetDocumentsAsync(Guid studentEnrollmentId)
+	public async Task<List<Registration.StudentDocument>> GetDocumentsAsync(Guid studentEnrollmentId)
 	{
-		List<StudentDocument>
+		var
 			documents = await studentDocumentRepository.GetListAsync(d => d.StudentEnrollmentId == studentEnrollmentId);
 		return documents;
 	}
@@ -818,7 +818,7 @@ public class StudentEnrollmentManager(
 
 	#region Update Document
 
-	public async Task<StudentDocument> UpdateDocumentAsync(
+	public async Task<Registration.StudentDocument> UpdateDocumentAsync(
 		Guid studentId,
 		Guid documentId,
 		string fileName,
@@ -827,7 +827,7 @@ public class StudentEnrollmentManager(
 		byte[] content
 	)
 	{
-		StudentDocument document = await GetDocumentAsync(studentId, documentId);
+		var document = await GetDocumentAsync(studentId, documentId);
 
 		// Update blob
 		await blobContainer.SaveAsync(document.BlobName, content, overrideExisting: true);
@@ -1013,7 +1013,7 @@ public class StudentEnrollmentManager(
 			studentMedicalRecords: enrollment.StudentMedicalRecords,
 			previousSchoolDetails: enrollment.PreviousSchoolDetails,
 			parentBankDetails: enrollment.ParentBankDetails,
-			documents: new List<StudentDocument>(enrollment.Documents) // Create a new list with the same documents
+			documents: new List<Registration.StudentDocument>(enrollment.Documents) // Create a new list with the same documents
 		);
 
 

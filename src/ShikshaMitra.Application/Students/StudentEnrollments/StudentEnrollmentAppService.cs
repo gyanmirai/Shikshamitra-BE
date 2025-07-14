@@ -377,12 +377,12 @@ public class StudentEnrollmentAppService(
 	public async Task<StudentEnrollmentDto> UpdateFamilyDetails(Guid studentEnrollmentId, UpdateStudentFamilyDetailsDto input)
 	{
 		// convert the input to domain model and update the student enrollment
-		StudentContactDetails? fatherDetails =
-			ObjectMapper.Map<StudentContactDetailsDto, StudentContactDetails>(input.FatherDetails);
-		StudentContactDetails? motherDetails =
-			ObjectMapper.Map<StudentContactDetailsDto, StudentContactDetails>(input.MotherDetails);
-		StudentContactDetails? guardianDetails =
-			ObjectMapper.Map<StudentContactDetailsDto, StudentContactDetails>(input.GuardianDetails);
+		StudentContactDetail? fatherDetails =
+			ObjectMapper.Map<StudentContactDetailsDto, StudentContactDetail>(input.FatherDetails);
+		StudentContactDetail? motherDetails =
+			ObjectMapper.Map<StudentContactDetailsDto, StudentContactDetail>(input.MotherDetails);
+		StudentContactDetail? guardianDetails =
+			ObjectMapper.Map<StudentContactDetailsDto, StudentContactDetail>(input.GuardianDetails);
 
 		StudentEnrollment? studentEnrollment = await studentEnrollmentManager.UpdateFamilyDetailsByStudentEnrollmentIdAsync(studentEnrollmentId, fatherDetails, motherDetails, guardianDetails);
 
@@ -434,7 +434,7 @@ public class StudentEnrollmentAppService(
 
 	public async Task<StudentEnrollmentDto> UpdateStudentAdditionalDetails(Guid studentEnrollmentId, StudentAdditionalDetailsDto input)
 	{
-		StudentAdditionalDetails studentAdditionalDetails = ObjectMapper.Map<StudentAdditionalDetailsDto, StudentAdditionalDetails>(input);
+		StudentAdditionalDetail studentAdditionalDetails = ObjectMapper.Map<StudentAdditionalDetailsDto, StudentAdditionalDetail>(input);
 
 		StudentEnrollment studentEnrollment =
 			await studentEnrollmentManager.UpdateAdditionalDetailsByStudentEnrollmentIdAsync(studentEnrollmentId, studentAdditionalDetails);

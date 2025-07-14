@@ -80,18 +80,18 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	#endregion
 
 	#region Family Details
-	public StudentContactDetails FatherDetails { get; private set; }
-	public StudentContactDetails MotherDetails { get; private set; }
-	public StudentContactDetails GuardianDetails { get; private set; }
+	public StudentContactDetail FatherDetails { get; private set; }
+	public StudentContactDetail MotherDetails { get; private set; }
+	public StudentContactDetail GuardianDetails { get; private set; }
 	#endregion
 
 	#region Additional Details
 	public StudentCommunicationDetails StudentCommunicationDetails { get; private set; }
-	public StudentAdditionalDetails StudentAdditionalDetails { get; private set; }
+	public StudentAdditionalDetail StudentAdditionalDetails { get; private set; }
 	public StudentMedicalRecords StudentMedicalRecords { get; private set; }
 	public PreviousSchoolDetails PreviousSchoolDetails { get; private set; }
 	public ParentBankDetails ParentBankDetails { get; private set; }
-	public List<StudentDocument> Documents { get; private set; } = new List<StudentDocument>();
+	public List<StudentEnrollments.Registration.StudentDocument> Documents { get; private set; } = new List<StudentEnrollments.Registration.StudentDocument>();
 	#endregion
 
 	protected Student() { }
@@ -141,17 +141,17 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		int? rollNo,
 
 		// Family Details
-		StudentContactDetails fatherDetails,
-		StudentContactDetails motherDetails,
-		StudentContactDetails guardianDetails,
+		StudentContactDetail fatherDetails,
+		StudentContactDetail motherDetails,
+		StudentContactDetail guardianDetails,
 
 		// Additional Details
 		StudentCommunicationDetails studentCommunicationDetails,
-		StudentAdditionalDetails studentAdditionalDetails,
+		StudentAdditionalDetail studentAdditionalDetails,
 		StudentMedicalRecords studentMedicalRecords,
 		PreviousSchoolDetails previousSchoolDetails,
 		ParentBankDetails parentBankDetails,
-		List<StudentDocument> documents = null
+		List<StudentEnrollments.Registration.StudentDocument> documents = null
 	) : base(id)
 	{
 		TenantId = tenantId;
@@ -207,7 +207,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		StudentMedicalRecords = studentMedicalRecords;
 		PreviousSchoolDetails = previousSchoolDetails;
 		ParentBankDetails = parentBankDetails;
-		Documents = documents ?? new List<StudentDocument>();
+		Documents = documents ?? new List<StudentEnrollments.Registration.StudentDocument>();
 		Status = StudentStatus.Active;
 	}
 

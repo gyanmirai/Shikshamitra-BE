@@ -25,9 +25,9 @@ public class StudentMapperProfile : Profile
 		CreateMap<CreateUpdateStudentEnrollmentDto, StudentEnrollments.StudentEnrollment>();
 		//CreateMap<StudentBasicDetails, StudentBasicDetailsDto>().ReverseMap();
 		//CreateMap<UpdateStudentBasicDetailsDto, StudentBasicDetails>();
-		CreateMap<StudentContactDetails, StudentContactDetailsDto>().ReverseMap();
+		CreateMap<StudentContactDetail, StudentContactDetailsDto>().ReverseMap();
 		CreateMap<StudentCommunicationDetails, StudentCommunicationDetailsDto>().ReverseMap();
-		CreateMap<StudentAdditionalDetails, StudentAdditionalDetailsDto>().ReverseMap();
+		CreateMap<StudentAdditionalDetail, StudentAdditionalDetailsDto>().ReverseMap();
 		CreateMap<StudentMedicalRecords, StudentMedicalRecordsDto>().ReverseMap();
 		CreateMap<PreviousSchoolDetails, PreviousSchoolDetailsDto>().ReverseMap();
 		CreateMap<ParentBankDetails, ParentBankDetailsDto>().ReverseMap();

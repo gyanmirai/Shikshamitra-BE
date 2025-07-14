@@ -378,7 +378,7 @@ public class StudentCsvImportService(
 		return string.Join(" ", name);
 	}
 
-	private StudentContactDetails CreateContactDetails(
+	private StudentContactDetail CreateContactDetails(
 		string? name,
 		string? dob,
 		string? occupation,

@@ -76,7 +76,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Division Division { get; private set; }
 
 	// Documents Value Object
-	public List<StudentDocument> Documents { get; private set; } = new List<StudentDocument>();
+	public List<Registration.StudentDocument> Documents { get; private set; } = new List<Registration.StudentDocument>();
 
 	// Student Basic Details
 	public Guid? UserId { get; private set; }
@@ -92,11 +92,11 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? DivisionId { get; set; }
 
 	// Registration Details
-	public StudentContactDetails FatherDetails { get; private set; }
-	public StudentContactDetails MotherDetails { get; private set; }
-	public StudentContactDetails GuardianDetails { get; private set; }
+	public StudentContactDetail FatherDetails { get; private set; }
+	public StudentContactDetail MotherDetails { get; private set; }
+	public StudentContactDetail GuardianDetails { get; private set; }
 	public StudentCommunicationDetails StudentCommunicationDetails { get; private set; }
-	public StudentAdditionalDetails StudentAdditionalDetails { get; private set; }
+	public StudentAdditionalDetail StudentAdditionalDetails { get; private set; }
 	public StudentMedicalRecords StudentMedicalRecords { get; private set; }
 	public PreviousSchoolDetails PreviousSchoolDetails { get; private set; }
 	public ParentBankDetails ParentBankDetails { get; private set; }
@@ -151,11 +151,11 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? birthPlace,
 		string? remarks,
 		// Registration Details
-		StudentContactDetails fatherDetails,
-		StudentContactDetails motherDetails,
-		StudentContactDetails guardianDetails,
+		StudentContactDetail fatherDetails,
+		StudentContactDetail motherDetails,
+		StudentContactDetail guardianDetails,
 		StudentCommunicationDetails studentCommunicationDetails,
-		StudentAdditionalDetails studentAdditionalDetails,
+		StudentAdditionalDetail studentAdditionalDetails,
 		StudentMedicalRecords studentMedicalRecords,
 		PreviousSchoolDetails previousSchoolDetails,
 		ParentBankDetails parentBankDetails
@@ -361,9 +361,9 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	internal StudentEnrollment UpdateFamilyDetails(
-		StudentContactDetails fatherDetails,
-		StudentContactDetails motherDetails,
-		StudentContactDetails guardianDetails
+		StudentContactDetail fatherDetails,
+		StudentContactDetail motherDetails,
+		StudentContactDetail guardianDetails
 	)
 	{
 		FatherDetails = fatherDetails;
@@ -381,7 +381,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	internal StudentEnrollment UpdateAdditionalDetails(
-		StudentAdditionalDetails studentAdditionalDetails
+		StudentAdditionalDetail studentAdditionalDetails
 	)
 	{
 		StudentAdditionalDetails = studentAdditionalDetails;
@@ -464,7 +464,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		return this;
 	}
 
-	public void AddDocument(StudentDocument document)
+	public void AddDocument(Registration.StudentDocument document)
 	{
 		Documents.Add(document);
 	}

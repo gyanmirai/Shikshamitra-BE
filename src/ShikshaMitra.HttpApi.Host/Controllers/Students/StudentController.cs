@@ -1,8 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Common.Responses;
 using ShikshaMitra.Students.StudentEnrollments;
+using System.Linq;
 using System.Threading.Tasks;
-using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Students;
@@ -13,10 +14,11 @@ namespace ShikshaMitra.Controllers.Students;
 public class StudentController(IStudentInquiryAppService studentInquiryAppService) : AbpControllerBase
 {
 	[HttpPost("inquiries")]
-	public async Task<StudentInquiryDto> CreateInquiry(
+	public async Task<Result> CreateInquiry(
 		[FromBody] CreateUpdateInquiryDto createInquiryDto)
 	{
-		return await studentInquiryAppService.CreateStudentInquiryAsync(createInquiryDto);
+		var createdInquiry = await studentInquiryAppService.CreateStudentInquiryAsync(createInquiryDto);
+		return Result.Success(createdInquiry);
 	}
 
 	//[HttpGet("inquiries/{academicMediumId}")]

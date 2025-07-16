@@ -1,7 +1,7 @@
-﻿using System;
-using System.Threading.Tasks;
-using ShikshaMitra.TenantSettings.EducationMediums;
+﻿using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
+using System;
+using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -92,12 +92,12 @@ public class StudentInquiryAppService(
 	{
 		if (!await academicMediumRepository.AnyAsync(x => x.Id == inquiryDto.AcademicMediumId))
 		{
-			throw new BusinessException(L["Academic Medium Not Found"]);
+			throw new UserFriendlyException("", L["Academic Medium Not Found"]);
 		}
 
 		if (!await standardRepository.AnyAsync(x => x.Id == inquiryDto.StandardId))
 		{
-			throw new BusinessException(L["Standard Not Found"]);
+			throw new UserFriendlyException("", L["Standard Not Found"]);
 		}
 
 		if (inquiryDto.InquiryPreferenceId.HasValue) { }

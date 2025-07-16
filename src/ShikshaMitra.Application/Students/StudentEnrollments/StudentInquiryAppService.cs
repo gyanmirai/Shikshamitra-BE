@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 
@@ -92,12 +93,12 @@ public class StudentInquiryAppService(
 	{
 		if (!await academicMediumRepository.AnyAsync(x => x.Id == inquiryDto.AcademicMediumId))
 		{
-			throw new UserFriendlyException("", L["Academic Medium Not Found"]);
+			throw new BusinessException("", L["Academic Medium Not Found"]);
 		}
 
 		if (!await standardRepository.AnyAsync(x => x.Id == inquiryDto.StandardId))
 		{
-			throw new UserFriendlyException("", L["Standard Not Found"]);
+			throw new BusinessException("", L["Standard Not Found"]);
 		}
 
 		if (inquiryDto.InquiryPreferenceId.HasValue) { }

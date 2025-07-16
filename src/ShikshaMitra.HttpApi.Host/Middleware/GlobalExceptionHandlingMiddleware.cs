@@ -118,7 +118,7 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 						{
 							foreach (var errorMessage in error.Value.EnumerateArray())
 							{
-								validationErrors.Add($"{fieldName}: {errorMessage.GetString()}");
+								validationErrors.Add($"{errorMessage.GetString()}");
 							}
 						}
 					}
@@ -142,6 +142,16 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 				// Check for ABP error structure
 				else if (jsonDoc.RootElement.TryGetProperty("error", out var errorElement))
 				{
+					// Check for code first
+					if (errorElement.TryGetProperty("code", out var codeElement))
+					{
+						var code = codeElement.GetString();
+						if (!string.IsNullOrEmpty(code))
+						{
+							return code;
+						}
+					}
+
 					if (errorElement.TryGetProperty("message", out var messageElement))
 					{
 						var message = messageElement.GetString();

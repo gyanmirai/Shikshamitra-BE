@@ -13,7 +13,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public string? ProfilePictureUrl { get; private set; }
 
 	public DateTimeOffset? DateOfInquiry { get; private set; }
-	public int? InquiryNo { get; private set; }
+	public string InquiryNo { get; private set; }
 	public Guid? InquiryPreferenceId { get; private set; }
 	public string? RegistrationFormNo { get; private set; }
 
@@ -27,4 +27,28 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public string? EmergencyRelationType { get; private set; }
 	public bool? IsSingleParentChild { get; private set; }
 	public bool? IsSingleChild { get; private set; }
+
+	private StudentAdditionalDetail()
+	{
+		/* This constructor is for deserialization / ORM purpose */
+	}
+
+	public StudentAdditionalDetail(
+		Guid id,
+		Guid? tenantId,
+		DateTimeOffset? dateOfBirthday,
+		GenderEnum? gender,
+		DateTimeOffset? dateOfInquiry,
+		string inquiryNo,
+		Guid? inquiryPreferenceId
+	)
+		: base(id)
+	{
+		TenantId = tenantId;
+		DateOfBirthday = dateOfBirthday;
+		Gender = gender;
+		DateOfInquiry = dateOfInquiry;
+		InquiryNo = inquiryNo;
+		InquiryPreferenceId = inquiryPreferenceId;
+	}
 }

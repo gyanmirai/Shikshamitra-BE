@@ -50,7 +50,8 @@ namespace ShikshaMitra;
 	typeof(AbpAspNetCoreMvcUiLeptonXLiteThemeModule),
 	typeof(AbpAccountWebOpenIddictModule),
 	typeof(AbpAspNetCoreSerilogModule),
-	typeof(AbpSwashbuckleModule)
+	typeof(AbpSwashbuckleModule),
+	typeof(AbpAspNetCoreMvcModule)
 )]
 public class ShikshaMitraHttpApiHostModule : AbpModule
 {

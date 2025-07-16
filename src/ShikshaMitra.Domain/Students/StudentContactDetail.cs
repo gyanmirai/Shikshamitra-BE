@@ -7,7 +7,7 @@ namespace ShikshaMitra.Students;
 public class StudentContactDetail : FullAuditedEntity<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
-	public string? PrimaryContactNo { get; private set; }
+	public string PrimaryContactNo { get; private set; }
 	public string? SecondaryContactNo { get; private set; }
 	public string? Email { get; private set; }
 	public string? Address1 { get; private set; }
@@ -21,11 +21,10 @@ public class StudentContactDetail : FullAuditedEntity<Guid>, IMultiTenant
 
 	protected StudentContactDetail() { }
 
-	internal StudentContactDetail(
+	public StudentContactDetail(
 		Guid id,
 		Guid? tenantId,
-		Guid studentId,
-		string? primaryContactNo = null,
+		string primaryContactNo,
 		string? secondaryContactNo = null,
 		string? email = null,
 		string? address1 = null,

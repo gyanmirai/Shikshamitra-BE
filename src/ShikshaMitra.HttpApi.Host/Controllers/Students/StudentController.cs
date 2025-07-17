@@ -2,8 +2,10 @@
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Common.Responses;
 using ShikshaMitra.Students.StudentEnrollments;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Students;
@@ -21,25 +23,36 @@ public class StudentController(IStudentInquiryAppService studentInquiryAppServic
 		return Result.Success(createdInquiry);
 	}
 
-	//[HttpGet("inquiries/{academicMediumId}")]
-	//public Task<PagedResultDto<StudentInquiryDto>> GetInquiriesByMedium(
-	//	Guid academicMediumId,
-	//	int skipCount = 0,
-	//	int maxResultCount = 10)
-	//{
-	//}
+	[HttpGet("inquiries/{academicMediumId}")]
+	public async Task<Result<PagedResultDto<StudentInquiryDto>>> GetInquiriesByMedium(
+		Guid academicMediumId,
+		[FromQuery] int skipCount = 0,
+		[FromQuery] int maxResultCount = 10)
+	{
+		var studentInquiries = await studentInquiryAppService.GetInquiriesByMediumAsync(
+			academicMediumId,
+			skipCount,
+			maxResultCount
+		);
+		return Result.Success(studentInquiries);
+	}
 
-	//[HttpGet("{studentId}/inquiries")]
-	//public Task<StudentInquiryDto> UpdateInquiry(
-	//	Guid studentId,
-	//	[FromBody] CreateUpdateInquiryDto request)
-	//{
-	//}
+	[HttpPut("{studentId}/inquiries")]
+	public async Task<Result<StudentInquiryDto>> UpdateInquiry(
+		Guid studentId,
+		[FromBody] CreateUpdateInquiryDto updateInquiryDto)
+	{
+		var updatedInquiry = await studentInquiryAppService.UpdateInquiryAsync(studentId, updateInquiryDto);
+		return Result.Success(updatedInquiry);
+	}
 
-	//[HttpGet("{studentId}/inquiries/registration-forms")]
-	//public Task AssignRegistrationForm(
-	//	Guid studentId,
-	//	[FromBody] CreateUpdateInquiryDto request)
-	//{
-	//}
+	[HttpPost("{studentId}/inquiries/registration-forms")]
+	public async Task<Result> AssignRegistrationForm(
+		Guid studentId,
+		[FromBody] IssueRegistrationFormDto issueFormDto)
+	{
+		await studentInquiryAppService.AssignRegistrationFormAsync(studentId, issueFormDto);
+
+		return Result.Success();
+	}
 }

@@ -16,6 +16,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public string InquiryNo { get; private set; }
 	public Guid? InquiryPreferenceId { get; private set; }
 	public string? RegistrationFormNo { get; private set; }
+	public double? RegistrationAmount { get; private set; }
 
 	public string? Category { get; private set; }
 	public bool? IsBPLStudent { get; private set; }
@@ -50,5 +51,25 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		DateOfInquiry = dateOfInquiry;
 		InquiryNo = inquiryNo;
 		InquiryPreferenceId = inquiryPreferenceId;
+	}
+
+	public void UpdateDetails(
+	DateTimeOffset? dateOfBirth,
+	GenderEnum? gender,
+	DateTimeOffset? dateOfInquiry,
+	Guid? inquiryPreferenceId)
+	{
+		DateOfBirthday = dateOfBirth;
+		Gender = gender;
+		DateOfInquiry = dateOfInquiry;
+		InquiryPreferenceId = inquiryPreferenceId;
+	}
+
+	public void IssueRegistrationForm(
+		string formNumber,
+		double amount)
+	{
+		RegistrationFormNo = formNumber;
+		RegistrationAmount = amount;
 	}
 }

@@ -2115,6 +2115,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("ProfilePictureUrl")
                         .HasColumnType("text");
 
+                    b.Property<double?>("RegistrationAmount")
+                        .HasColumnType("double precision");
+
                     b.Property<string>("RegistrationFormNo")
                         .HasColumnType("text");
 

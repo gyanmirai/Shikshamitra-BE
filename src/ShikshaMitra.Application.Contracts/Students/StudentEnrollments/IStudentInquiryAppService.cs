@@ -10,7 +10,7 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 public interface IStudentInquiryAppService
 {
 	Task<StudentInquiryDto> CreateStudentInquiryAsync(CreateUpdateInquiryDto createStudentInquiryDto);
-	Task<PagedResultDto<StudentInquiryDto>> GetInquiriesByMediumAsync(Guid academicMediumId, int skipCount = 0, int maxResultCount = 10);
+	Task<PagedResultDto<StudentInquiryDto>> GetInquiriesByMediumAsync(Guid academicMediumId, int skipCount = 0, int maxResultCount = 10, string? searchTerm = null);
 	Task<StudentInquiryDto> UpdateInquiryAsync(Guid studentId, CreateUpdateInquiryDto updateInquiryDto);
-	Task AssignRegistrationFormAsync(Guid studentId, CreateUpdateInquiryDto createUpdateInquiryDto);
+	Task AssignRegistrationFormAsync(Guid studentId, IssueRegistrationFormDto issueFormDto);
 }

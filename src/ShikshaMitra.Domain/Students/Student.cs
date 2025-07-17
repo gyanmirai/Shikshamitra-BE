@@ -48,4 +48,26 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		RollNo = rollNo;
 		Status = status;
 	}
+
+	public void UpdateDetails(
+		string? firstName,
+		string? middleName,
+		string? lastName,
+		Guid academicMediumId,
+		Guid? standardId = null,
+		StudentLifeCycleStatusEnum status = StudentLifeCycleStatusEnum.New
+	)
+	{
+		FirstName = firstName;
+		MiddleName = middleName;
+		LastName = lastName;
+		EducationMediumId = academicMediumId;
+		StandardId = standardId;
+		Status = status;
+	}
+
+	public void ChangeStatus(StudentLifeCycleStatusEnum status)
+	{
+		Status = status;
+	}
 }

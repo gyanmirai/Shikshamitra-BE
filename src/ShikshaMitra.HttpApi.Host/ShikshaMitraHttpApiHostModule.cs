@@ -1,43 +1,44 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using ShikshaMitra.EntityFrameworkCore;
-using ShikshaMitra.MultiTenancy;
-using Volo.Abp.AspNetCore.Mvc.UI.Theme.LeptonXLite;
-using Volo.Abp.AspNetCore.Mvc.UI.Theme.LeptonXLite.Bundling;
 using Microsoft.OpenApi.Models;
 using OpenIddict.Validation.AspNetCore;
+using QuestPDF.Infrastructure;
+using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.Extensions;
+using ShikshaMitra.Middleware;
+using ShikshaMitra.MultiTenancy;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Volo.Abp;
 using Volo.Abp.Account;
 using Volo.Abp.Account.Web;
+using Volo.Abp.AspNetCore.ExceptionHandling;
 using Volo.Abp.AspNetCore.MultiTenancy;
 using Volo.Abp.AspNetCore.Mvc;
 using Volo.Abp.AspNetCore.Mvc.UI.Bundling;
+using Volo.Abp.AspNetCore.Mvc.UI.Theme.LeptonXLite;
+using Volo.Abp.AspNetCore.Mvc.UI.Theme.LeptonXLite.Bundling;
 using Volo.Abp.AspNetCore.Mvc.UI.Theme.Shared;
 using Volo.Abp.AspNetCore.Serilog;
 using Volo.Abp.Autofac;
 using Volo.Abp.Modularity;
+using Volo.Abp.OpenIddict;
 using Volo.Abp.Security.Claims;
 using Volo.Abp.Swashbuckle;
 using Volo.Abp.UI.Navigation.Urls;
 using Volo.Abp.VirtualFileSystem;
-using Volo.Abp.OpenIddict;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc;
-using QuestPDF.Infrastructure;
-using System.Security.Cryptography.X509Certificates;
-using System.Security.Cryptography;
-using Microsoft.AspNetCore.Http;
-using ShikshaMitra.Middleware;
-using System.Net;
-using Volo.Abp.AspNetCore.ExceptionHandling;
 
 namespace ShikshaMitra;
 
@@ -50,7 +51,8 @@ namespace ShikshaMitra;
 	typeof(AbpAspNetCoreMvcUiLeptonXLiteThemeModule),
 	typeof(AbpAccountWebOpenIddictModule),
 	typeof(AbpAspNetCoreSerilogModule),
-	typeof(AbpSwashbuckleModule)
+	typeof(AbpSwashbuckleModule),
+	typeof(AbpAspNetCoreMvcModule)
 )]
 public class ShikshaMitraHttpApiHostModule : AbpModule
 {
@@ -103,14 +105,14 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 	}
 
 	// TODO: Need to figure this out
-    private void ConfigureExceptionServices(ServiceConfigurationContext context)
-    {
-        context.Services.Configure<AbpExceptionHttpStatusCodeOptions>(options =>
-        {
-            // Map the exception using the error code instead of the generic type  
-            options.Map(typeof(UserFriendlyException).FullName, HttpStatusCode.BadRequest);
-        });
-    }
+	private void ConfigureExceptionServices(ServiceConfigurationContext context)
+	{
+		context.Services.Configure<AbpExceptionHttpStatusCodeOptions>(options =>
+		{
+			// Map the exception using the error code instead of the generic type  
+			options.Map(typeof(UserFriendlyException).FullName, HttpStatusCode.BadRequest);
+		});
+	}
 
 	private void ConfigureAuthentication(ServiceConfigurationContext context)
 	{
@@ -293,6 +295,8 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		var env = context.GetEnvironment();
 
 		QuestPDF.Settings.License = LicenseType.Community;
+
+		app.UseGlobalExceptionHandling();
 
 		if (env.IsDevelopment())
 		{

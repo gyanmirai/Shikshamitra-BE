@@ -7,7 +7,6 @@ namespace ShikshaMitra.Students;
 public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
-	public string? FormNo { get; private set; }
 	public DateTimeOffset? DateOfBirthday { get; private set; }
 	public GenderEnum? Gender { get; private set; }
 	public string? ProfilePictureUrl { get; private set; }
@@ -18,7 +17,16 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public string? RegistrationFormNo { get; private set; }
 	public double? RegistrationAmount { get; private set; }
 
-	public string? Category { get; private set; }
+	public string? AdharNo { get; private set; }
+	public string? ApparId { get; private set; }
+	public string? PanNo { get; private set; }
+	public ReligionEnum? Religion { get; private set; }
+	public string FamilyCast { get; private set; }
+	public CastCategoryEnum? CastCategory { get; private set; }
+	public string? Nationality { get; private set; }
+	public string? BirthPlace { get; private set; }
+	public MotherTongueEnum? MotherTongue { get; private set; }
+
 	public bool? IsBPLStudent { get; private set; }
 	public string? BPLCardNo { get; private set; }
 	public bool? HaveDisability { get; private set; }
@@ -28,6 +36,9 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public string? EmergencyRelationType { get; private set; }
 	public bool? IsSingleParentChild { get; private set; }
 	public bool? IsSingleChild { get; private set; }
+
+	public string? PreviousSchool { get; private set; }
+	public string? LastClassPassed { get; private set; }
 
 	private StudentAdditionalDetail()
 	{
@@ -63,6 +74,39 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		Gender = gender;
 		DateOfInquiry = dateOfInquiry;
 		InquiryPreferenceId = inquiryPreferenceId;
+	}
+
+	public void UpdateGeneralInformation(
+		DateTimeOffset dateOfBirth,
+		GenderEnum gender,
+		string? profilePictureUrl,
+		string? adharNo,
+		string? apparId,
+		string? panNo,
+		ReligionEnum? religion,
+		string familyCast,
+		CastCategoryEnum? castCategory,
+		string? nationality,
+		string? birthPlace,
+		MotherTongueEnum? motherTongue,
+		string? previousSchool,
+		string? lastClassPassed
+		)
+	{
+		DateOfBirthday = dateOfBirth;
+		Gender = gender;
+		ProfilePictureUrl = profilePictureUrl;
+		AdharNo = adharNo;
+		ApparId = apparId;
+		PanNo = panNo;
+		Religion = religion;
+		FamilyCast = familyCast;
+		CastCategory = castCategory;
+		Nationality = nationality;
+		BirthPlace = birthPlace;
+		MotherTongue = motherTongue;
+		PreviousSchool = previousSchool;
+		LastClassPassed = lastClassPassed;
 	}
 
 	public void IssueRegistrationForm(

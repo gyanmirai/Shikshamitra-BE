@@ -6,15 +6,30 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
+
+[RemoteService(false)]
 public class StudentAppService(StudentQueryService studentQueryService,
 	IRepository<Student, Guid> studentRepository,
 	IRepository<StudentAdditionalDetail, Guid> studentAdditionalDetailRepository,
-	IRepository<StudentContactDetail, Guid> studentContactDetailRepository) : ApplicationService, IStudentAppService
+	IRepository<StudentContactDetail, Guid> studentContactDetailRepository,
+	EntityValidationService entityValidationService) : ApplicationService, IStudentAppService
 {
-	public Task<StudentGeneralInformationDto> GetStudentGeneralInformationAsync(Guid studentId)
+	public async Task<StudentGeneralInformationDto> GetStudentGeneralInformationAsync(Guid studentId)
 	{
-		// Implementation to retrieve student general information
-		throw new NotImplementedException();
+		try
+		{
+			var studentQuery = await studentQueryService.GetStudentWithDetailsQueryAsync(studentFilter: s =>
+				s.Id == studentId && s.TenantId == CurrentTenant.Id);
+
+			var studentResult = await AsyncExecuter.FirstOrDefaultAsync(studentQuery) ?? throw new BusinessException("Student not found");
+
+			return ObjectMapper.Map<StudentQueryResult, StudentGeneralInformationDto>(studentResult);
+		}
+		catch (Exception ex)
+		{
+			// Handle exceptions appropriately, possibly logging them
+			throw new ApplicationException("An error occurred while retrieving student general information.", ex);
+		}
 	}
 	public async Task<StudentGeneralInformationDto> UpdateStudentGeneralInformationAsync(Guid studentId, CreateUpdateStudentGeneralInformationDto updateStudentGeneralInfoDto)
 	{
@@ -38,6 +53,14 @@ public class StudentAppService(StudentQueryService studentQueryService,
 			// TO DO: upload profile picture and get the URL
 			var profilePictureUrl = string.Empty;
 
+			var updatedState = studentAdditionalDetail.StudentRegistrationState > StudentRegistrationStateEnum.General
+				? studentAdditionalDetail.StudentRegistrationState
+				: StudentRegistrationStateEnum.General;
+			if (studentAdditionalDetail.StudentRegistrationState == StudentRegistrationStateEnum.Default)
+			{
+				student.ChangeStatus(StudentLifeCycleStatusEnum.Registation);
+			}
+
 			studentAdditionalDetail.UpdateGeneralInformation(
 				updateStudentGeneralInfoDto.DateOfBirth,
 				updateStudentGeneralInfoDto.Gender,
@@ -52,7 +75,8 @@ public class StudentAppService(StudentQueryService studentQueryService,
 				updateStudentGeneralInfoDto.BirthPlace,
 				updateStudentGeneralInfoDto.MotherTongue,
 				updateStudentGeneralInfoDto.PreviousSchool,
-				updateStudentGeneralInfoDto.LastClassPassed);
+				updateStudentGeneralInfoDto.LastClassPassed,
+				updatedState);
 
 			studentContactDetail.UpdateGeneralInformation(
 				updateStudentGeneralInfoDto.PrimaryContactNo,
@@ -71,7 +95,7 @@ public class StudentAppService(StudentQueryService studentQueryService,
 			await studentAdditionalDetailRepository.UpdateAsync(studentAdditionalDetail);
 			await studentContactDetailRepository.UpdateAsync(studentContactDetail);
 
-			return ObjectMapper.Map<Student, StudentGeneralInformationDto>(student);
+			return ObjectMapper.Map<StudentQueryResult, StudentGeneralInformationDto>(studentResult);
 		}
 		catch (Exception ex)
 		{

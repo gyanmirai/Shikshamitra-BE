@@ -17,9 +17,10 @@ namespace ShikshaMitra.Controllers.Students;
 public class StudentController(IStudentInquiryAppService studentInquiryAppService, IStudentRegistrationAppService studentRegistrationAppService,
 	IStudentAppService studentAppService) : AbpControllerBase
 {
+	#region Inquiry
 	[HttpPost("inquiries")]
 	public async Task<Result> CreateInquiry(
-		[FromBody] CreateUpdateInquiryDto createInquiryDto)
+	[FromBody] CreateUpdateInquiryDto createInquiryDto)
 	{
 		var createdInquiry = await studentInquiryAppService.CreateStudentInquiryAsync(createInquiryDto);
 		return Result.Success(createdInquiry);
@@ -47,11 +48,13 @@ public class StudentController(IStudentInquiryAppService studentInquiryAppServic
 		var updatedInquiry = await studentInquiryAppService.UpdateInquiryAsync(studentId, updateInquiryDto);
 		return Result.Success(updatedInquiry);
 	}
+	#endregion
 
+	#region Registration Forms
 	[HttpPost("{studentId}/inquiries/registration-forms")]
 	public async Task<Result> AssignRegistrationForm(
-		Guid studentId,
-		[FromBody] IssueRegistrationFormDto issueFormDto)
+	Guid studentId,
+	[FromBody] IssueRegistrationFormDto issueFormDto)
 	{
 		await studentInquiryAppService.AssignRegistrationFormAsync(studentId, issueFormDto);
 
@@ -72,6 +75,23 @@ public class StudentController(IStudentInquiryAppService studentInquiryAppServic
 			searchTerm
 		);
 		return Result.Success(registrationForms);
+	}
+	#endregion
+
+	[HttpGet("registrations/{academicMediumId}")]
+	public async Task<Result<PagedResultDto<StudentRegistrationDto>>> GetRegistrationsByMedium(
+		Guid academicMediumId,
+		[FromQuery] int skipCount = 0,
+		[FromQuery] int maxResultCount = 10,
+		[FromQuery] string? searchTerm = null)
+	{
+		var registrations = await studentRegistrationAppService.GetRegistrationsByMediumAsync(
+			academicMediumId,
+			skipCount,
+			maxResultCount,
+			searchTerm
+		);
+		return Result.Success(registrations);
 	}
 
 	[HttpGet("{studentId}/general-information")]

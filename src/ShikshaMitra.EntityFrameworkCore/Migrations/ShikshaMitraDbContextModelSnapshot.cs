@@ -2152,6 +2152,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("SecondLanguage")
                         .HasColumnType("text");
 
+                    b.Property<int>("StudentRegistrationState")
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");

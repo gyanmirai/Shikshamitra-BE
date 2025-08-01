@@ -13,4 +13,10 @@ public interface IStudentRegistrationAppService
 		int skipCount = 0, 
 		int maxResultCount = 10, 
 		string? searchTerm = null);
+
+	Task<PagedResultDto<StudentRegistrationDto>> GetRegistrationsByMediumAsync(
+		Guid academicMediumId,
+		int skipCount = 0,
+		int maxResultCount = 10,
+		string? searchTerm = null);
 }

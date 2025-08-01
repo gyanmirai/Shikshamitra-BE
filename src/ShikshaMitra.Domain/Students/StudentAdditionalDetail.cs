@@ -40,6 +40,8 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public string? PreviousSchool { get; private set; }
 	public string? LastClassPassed { get; private set; }
 
+	public StudentRegistrationStateEnum StudentRegistrationState { get; private set; }
+
 	private StudentAdditionalDetail()
 	{
 		/* This constructor is for deserialization / ORM purpose */
@@ -62,6 +64,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		DateOfInquiry = dateOfInquiry;
 		InquiryNo = inquiryNo;
 		InquiryPreferenceId = inquiryPreferenceId;
+		StudentRegistrationState = StudentRegistrationStateEnum.Default;
 	}
 
 	public void UpdateDetails(
@@ -90,8 +93,10 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		string? birthPlace,
 		MotherTongueEnum? motherTongue,
 		string? previousSchool,
-		string? lastClassPassed
-		)
+		string? lastClassPassed,
+        StudentRegistrationStateEnum state
+
+        )
 	{
 		DateOfBirthday = dateOfBirth;
 		Gender = gender;
@@ -107,7 +112,8 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		MotherTongue = motherTongue;
 		PreviousSchool = previousSchool;
 		LastClassPassed = lastClassPassed;
-	}
+        StudentRegistrationState = state;
+    }
 
 	public void IssueRegistrationForm(
 		string formNumber,

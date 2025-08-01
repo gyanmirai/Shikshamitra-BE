@@ -27,7 +27,7 @@ public class StudentGeneralInformationDto : EntityDto
 	public  string? PanNo { get; set; }
 	public Guid? InquiryPreferenceId { get; set; }
 	public ReligionEnum? Religion { get; set; }
-	public required string FamilyCase { get; set; }
+	public required string FamilyCast { get; set; }
 	public CastCategoryEnum CastCategory { get; set; }
 	public string? Nationality { get; set; }
 	public string? BirthPlace { get; set; }

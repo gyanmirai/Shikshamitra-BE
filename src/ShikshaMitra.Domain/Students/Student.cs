@@ -66,6 +66,17 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Status = status;
 	}
 
+	public void UpdateGeneralInformation(
+		string? firstName,
+		string? middleName,
+		string? lastName
+	)
+	{
+		FirstName = firstName;
+		MiddleName = middleName;
+		LastName = lastName;
+	}
+
 	public void ChangeStatus(StudentLifeCycleStatusEnum status)
 	{
 		Status = status;

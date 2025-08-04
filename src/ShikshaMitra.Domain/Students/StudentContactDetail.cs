@@ -73,4 +73,28 @@ public class StudentContactDetail : FullAuditedEntity<Guid>, IMultiTenant
 		Country = country;
 		Pincode = pinCode;
 	}
+
+	public void UpdateGeneralInformation(
+		string primaryContactNo,
+		string? secondaryContactNo,
+		string? email,
+		string? address1,
+		string? address2,
+		string? address3,
+		string city,
+		string state,
+		string country,
+		string? pinCode)
+	{
+		PrimaryContactNo = primaryContactNo;
+		SecondaryContactNo = secondaryContactNo;
+		Email = email;
+		Address1 = address1;
+		Address2 = address2;
+		Address3 = address3;
+		City = city;
+		State = state;
+		Country = country;
+		Pincode = pinCode;
+	}
 }

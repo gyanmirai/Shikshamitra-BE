@@ -1,8 +1,11 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Curriculum.Setting;
+using ShikshaMitra.Academic.Examination.Setting;
 using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Academic.HomeworkAssignment;
+using ShikshaMitra.Academic.HomeworkAssignment.Setting;
 using ShikshaMitra.Academic.Syllabus;
 using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
 using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
@@ -208,9 +211,9 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Academic
 
 	#region Curriculum
-
 	public DbSet<Subject> Subjects { get; set; }
 	public DbSet<ElectiveGroup> ElectiveGroups { get; set; }
+	public DbSet<ElectiveGroupComponent> ElectiveGroupComponents { get; set; }
 	public DbSet<StandardSubjectAssignment> StandardSubjectAssignments { get; set; }
 	#endregion
 
@@ -224,12 +227,19 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#endregion
 
 	#region HomeworkAssignment
+	public DbSet<HomeWorkType> HomeworkTypes { get; set; }
+	public DbSet<AssigmentType> AssigmentTypes { get; set; }
 	public DbSet<HomeworkAssignmentType> HomeworkAssignmentTypes { get; set; }
 	public DbSet<HomeworkAssignmentEntity> HomeworkAssignments { get; set; }
 	public DbSet<StudentSubmissionEntity> StudentSubmissions { get; set; }
 	#endregion
 
-	#endregion
+	#region Examinations
+	public DbSet<ExamType> ExamTypes { get; set; }
+	public DbSet<GradeScale> GradeScales { get; set; }
+	public DbSet<GradeRange> GradeRanges { get; set; }
+
+	#endregion // Examinations
 
 	#region Library
 	#region GeneralSetting
@@ -237,6 +247,8 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<BookCategory> BookCategories { get; set; } //here <BookCategory> is the entity class name and BookCategory is the table name
 	#endregion
 	#endregion
+
+	#endregion // Academic
 
 	// Apply BookCategory configuration
 
@@ -248,7 +260,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	protected override void OnModelCreating(ModelBuilder builder)
 	{
 		base.OnModelCreating(builder);
-
+		
 		/* Include modules to your migration db context */
 
 		builder.ConfigurePermissionManagement();
@@ -261,5 +273,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 		builder.ConfigureTenantManagement();
 		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 		builder.ConfigureBlobStoring();
+		
 	}
 }

@@ -36,7 +36,7 @@ public class HomeworkAssignmentTypeAppService(
 		catch (Exception ex)
 		{
 			throw new ApplicationException(
-				"An error occurred while fetching HomeworkAssignmentTypes by AcademicMediumId.",
+				"An error occurred while fetching HomeworkAssignmentTypes by EducationMediumId.",
 				ex
 			);
 		}

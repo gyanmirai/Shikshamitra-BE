@@ -7,6 +7,7 @@ using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Academic.HomeworkAssignment.Setting;
 using ShikshaMitra.Academic.Syllabus;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq;
 
@@ -30,9 +31,18 @@ public class AcademicMapperProfile : Profile
                     Name = s.Subject != null ? s.Subject.Name : string.Empty,
                     Color = s.Subject != null ? s.Subject.Color : string.Empty
                 }).ToList()));
-
 		CreateMap<ElectiveGroupDto, ElectiveGroup>()
             .ForMember(dest => dest.Subjects, opt => opt.Ignore());
+
+		CreateMap<Chapter, ChapterrDto>()
+	       .ForMember(dest => dest.Documents,
+		    opt => opt.MapFrom(src => src.Documents));
+
+		CreateMap<ChapterDocument, ChapterDocumentDto>()
+			.ForMember(dest => dest.Base64Content,
+				opt => opt.MapFrom(src => src.Base64Content));
+
+
 
 		#endregion
 

@@ -215,6 +215,8 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<ElectiveGroup> ElectiveGroups { get; set; }
 	public DbSet<ElectiveGroupComponent> ElectiveGroupComponents { get; set; }
 	public DbSet<StandardSubjectAssignment> StandardSubjectAssignments { get; set; }
+	public DbSet<Chapter> Chapters { get; set; }
+	public DbSet<ChapterDocument> ChapterDocuments { get; set; }
 	#endregion
 
 	#region ClassTeacher

@@ -2036,11 +2036,20 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AdharNo")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ApparId")
+                        .HasColumnType("text");
+
                     b.Property<string>("BPLCardNo")
                         .HasColumnType("text");
 
-                    b.Property<string>("Category")
+                    b.Property<string>("BirthPlace")
                         .HasColumnType("text");
+
+                    b.Property<int?>("CastCategory")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone")
@@ -2073,7 +2082,8 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("EmergencyRelationType")
                         .HasColumnType("text");
 
-                    b.Property<string>("FormNo")
+                    b.Property<string>("FamilyCast")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<int?>("Gender")
@@ -2104,6 +2114,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<bool?>("IsSingleParentChild")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("LastClassPassed")
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("LastModificationTime");
@@ -2111,6 +2124,18 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("LastModifierId")
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
+
+                    b.Property<int?>("MotherTongue")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Nationality")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PanNo")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PreviousSchool")
+                        .HasColumnType("text");
 
                     b.Property<string>("ProfilePictureUrl")
                         .HasColumnType("text");
@@ -2121,8 +2146,14 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("RegistrationFormNo")
                         .HasColumnType("text");
 
+                    b.Property<int?>("Religion")
+                        .HasColumnType("integer");
+
                     b.Property<string>("SecondLanguage")
                         .HasColumnType("text");
+
+                    b.Property<int>("StudentRegistrationState")
+                        .HasColumnType("integer");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")

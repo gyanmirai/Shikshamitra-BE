@@ -7,7 +7,7 @@ namespace ShikshaMitra.Students;
 public class StudentContactDetail : FullAuditedEntity<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
-	public string? PrimaryContactNo { get; private set; }
+	public string PrimaryContactNo { get; private set; }
 	public string? SecondaryContactNo { get; private set; }
 	public string? Email { get; private set; }
 	public string? Address1 { get; private set; }
@@ -21,11 +21,10 @@ public class StudentContactDetail : FullAuditedEntity<Guid>, IMultiTenant
 
 	protected StudentContactDetail() { }
 
-	internal StudentContactDetail(
+	public StudentContactDetail(
 		Guid id,
 		Guid? tenantId,
-		Guid studentId,
-		string? primaryContactNo = null,
+		string primaryContactNo,
 		string? secondaryContactNo = null,
 		string? email = null,
 		string? address1 = null,
@@ -49,5 +48,53 @@ public class StudentContactDetail : FullAuditedEntity<Guid>, IMultiTenant
 		State = state;
 		Country = country;
 		Pincode = pincode;
+	}
+
+	public void UpdateContactInfo(
+	string primaryContactNo,
+	string? secondaryContactNo,
+	string? email,
+	string? address1,
+	string? address2,
+	string? address3,
+	string? city,
+	string? state,
+	string? country,
+	string? pinCode)
+	{
+		PrimaryContactNo = primaryContactNo;
+		SecondaryContactNo = secondaryContactNo;
+		Email = email;
+		Address1 = address1;
+		Address2 = address2;
+		Address3 = address3;
+		City = city;
+		State = state;
+		Country = country;
+		Pincode = pinCode;
+	}
+
+	public void UpdateGeneralInformation(
+		string primaryContactNo,
+		string? secondaryContactNo,
+		string? email,
+		string? address1,
+		string? address2,
+		string? address3,
+		string city,
+		string state,
+		string country,
+		string? pinCode)
+	{
+		PrimaryContactNo = primaryContactNo;
+		SecondaryContactNo = secondaryContactNo;
+		Email = email;
+		Address1 = address1;
+		Address2 = address2;
+		Address3 = address3;
+		City = city;
+		State = state;
+		Country = country;
+		Pincode = pinCode;
 	}
 }

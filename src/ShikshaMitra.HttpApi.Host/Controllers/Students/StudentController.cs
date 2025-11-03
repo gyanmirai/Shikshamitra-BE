@@ -20,7 +20,7 @@ public class StudentController(IStudentInquiryAppService studentInquiryAppServic
 	#region Inquiry
 	[HttpPost("inquiries")]
 	public async Task<Result> CreateInquiry(
-	[FromBody] CreateUpdateInquiryDto createInquiryDto)
+		[FromBody] CreateUpdateInquiryDto createInquiryDto)
 	{
 		var createdInquiry = await studentInquiryAppService.CreateStudentInquiryAsync(createInquiryDto);
 		return Result.Success(createdInquiry);
@@ -53,8 +53,8 @@ public class StudentController(IStudentInquiryAppService studentInquiryAppServic
 	#region Registration Forms
 	[HttpPost("{studentId}/inquiries/registration-forms")]
 	public async Task<Result> AssignRegistrationForm(
-	Guid studentId,
-	[FromBody] IssueRegistrationFormDto issueFormDto)
+		Guid studentId,
+		[FromBody] IssueRegistrationFormDto issueFormDto)
 	{
 		await studentInquiryAppService.AssignRegistrationFormAsync(studentId, issueFormDto);
 

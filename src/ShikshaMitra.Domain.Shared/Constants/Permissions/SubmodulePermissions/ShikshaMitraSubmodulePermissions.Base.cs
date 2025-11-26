@@ -24,7 +24,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 	/// Each module creates its own group: ShikshaMitra.ModuleName
 	/// </summary>
 	public const string GroupName = "ShikshaMitra";
-	
+
 	/// <summary>
 	/// Display name prefix for localization
 	/// </summary>

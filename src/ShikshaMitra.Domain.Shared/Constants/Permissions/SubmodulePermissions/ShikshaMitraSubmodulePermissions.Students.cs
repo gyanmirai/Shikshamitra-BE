@@ -17,7 +17,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 		/// This creates a separate permission group in ABP for better organization.
 		/// </summary>
 		public const string GroupName = "Students";
-		
+
 		/// <summary>
 		/// Display name for Students module permission group
 		/// </summary>

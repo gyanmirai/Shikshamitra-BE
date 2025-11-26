@@ -16,7 +16,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 		/// Permission group name for Finance module.
 		/// This creates a separate permission group in ABP for better organization.
 		/// </summary>
-		public const string GroupName = $"{ShikshaMitraSubmodulePermissions.GroupName}.Finance";
+		public const string GroupName = "Finance";
 		
 		/// <summary>
 		/// Display name for Finance module permission group

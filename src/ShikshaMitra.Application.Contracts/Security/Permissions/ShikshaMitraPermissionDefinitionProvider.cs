@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Constants;
+﻿using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Localization;
 using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.Localization;

@@ -1,4 +1,6 @@
-﻿namespace ShikshaMitra.Constants;
+﻿using System.Collections.Generic;
+
+namespace ShikshaMitra.Constants;
 
 public static class ShikshaMitraModulePermissions
 {
@@ -35,5 +37,24 @@ public static class ShikshaMitraModulePermissions
         Security,
         SecurityGuard,
         InstituteSetup
+    };
+
+    public static readonly Dictionary<string, string> DisplayNames = new()
+    {
+        { Dashboard, "Permission:Module.Dashboard" },
+        { Students, "Permission:Module.Students" },
+        { Academics, "Permission:Module.Academics" },
+        { ClassManagement, "Permission:Module.ClassManagement" },
+        { HR, "Permission:Module.HR" },
+        { Finance, "Permission:Module.Finance" },
+        { Communication, "Permission:Module.Communication" },
+        { Calendar, "Permission:Module.Calendar" },
+        { Library, "Permission:Module.Library" },
+        { Transport, "Permission:Module.Transport" },
+        { ResourceManagement, "Permission:Module.ResourceManagement" },
+        { Hostel, "Permission:Module.Hostel" },
+        { Security, "Permission:Module.Security" },
+        { SecurityGuard, "Permission:Module.SecurityGuard" },
+        { InstituteSetup, "Permission:Module.InstituteSetup" }
     };
 }

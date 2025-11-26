@@ -4,57 +4,61 @@ namespace ShikshaMitra.Constants;
 
 public static class ShikshaMitraModulePermissions
 {
-    public const string Dashboard = "ShikshaMitra.Module.Dashboard";
-    public const string Students = "ShikshaMitra.Module.Students";
-    public const string Academics = "ShikshaMitra.Module.Academics";
-    public const string ClassManagement = "ShikshaMitra.Module.ClassManagement";
-    public const string HR = "ShikshaMitra.Module.HR";
-    public const string Finance = "ShikshaMitra.Module.Finance";
-    public const string Communication = "ShikshaMitra.Module.Communication";
-    public const string Calendar = "ShikshaMitra.Module.Calender";
-    public const string Library = "ShikshaMitra.Module.Library";
-    public const string Transport = "ShikshaMitra.Module.Transport";
-    public const string ResourceManagement = "ShikshaMitra.Module.ResourceManagement";
-    public const string Hostel = "ShikshaMitra.Module.Hostel";
-    public const string Security = "ShikshaMitra.Module.Security";
-    public const string SecurityGuard = "ShikshaMitra.Module.SecurityGuard";
-    public const string InstituteSetup = "ShikshaMitra.Module.InstituteSetup";
+	public const string GroupName = "ShikshaMitra.Module";
 
-    public static readonly string[] All =
-    {
-        Dashboard,
-        Students,
-        Academics,
-        ClassManagement,
-        HR,
-        Finance,
-        Communication,
-        Calendar,
-        Library,
-        Transport,
-        ResourceManagement,
-        Hostel,
-        Security,
-        SecurityGuard,
-        InstituteSetup
-    };
+	public const string Dashboard = $"{GroupName}.Dashboard";
+	public const string Students = $"{GroupName}.Students";
+	public const string Academics = $"{GroupName}.Academics";
+	public const string ClassManagement = $"{GroupName}.ClassManagement";
+	public const string HR = $"{GroupName}.HR";
+	public const string Finance = $"{GroupName}.Finance";
+	public const string Communication = $"{GroupName}.Communication";
+	public const string Calendar = $"{GroupName}.Calender";
+	public const string Library = $"{GroupName}.Library";
+	public const string Transport = $"{GroupName}.Transport";
+	public const string ResourceManagement = $"{GroupName}.ResourceManagement";
+	public const string Hostel = $"{GroupName}.Hostel";
+	public const string Security = $"{GroupName}.Security";
+	public const string SecurityGuard = $"{GroupName}.SecurityGuard";
+	public const string InstituteSetup = $"{GroupName}.InstituteSetup";
 
-    public static readonly Dictionary<string, string> DisplayNames = new()
-    {
-        { Dashboard, "Permission:Module.Dashboard" },
-        { Students, "Permission:Module.Students" },
-        { Academics, "Permission:Module.Academics" },
-        { ClassManagement, "Permission:Module.ClassManagement" },
-        { HR, "Permission:Module.HR" },
-        { Finance, "Permission:Module.Finance" },
-        { Communication, "Permission:Module.Communication" },
-        { Calendar, "Permission:Module.Calendar" },
-        { Library, "Permission:Module.Library" },
-        { Transport, "Permission:Module.Transport" },
-        { ResourceManagement, "Permission:Module.ResourceManagement" },
-        { Hostel, "Permission:Module.Hostel" },
-        { Security, "Permission:Module.Security" },
-        { SecurityGuard, "Permission:Module.SecurityGuard" },
-        { InstituteSetup, "Permission:Module.InstituteSetup" }
-    };
+	public static readonly string[] All =
+	{
+		Dashboard,
+		Students,
+		Academics,
+		ClassManagement,
+		HR,
+		Finance,
+		Communication,
+		Calendar,
+		Library,
+		Transport,
+		ResourceManagement,
+		Hostel,
+		Security,
+		SecurityGuard,
+		InstituteSetup
+	};
+
+	private const string DisplayNamePrefix = "Permission:Module";
+
+	public static readonly Dictionary<string, string> DisplayNames = new()
+	{
+		{ Dashboard, $"{DisplayNamePrefix}.Dashboard" },
+		{ Students, $"{DisplayNamePrefix}.Students" },
+		{ Academics, $"{DisplayNamePrefix}.Academics" },
+		{ ClassManagement, $"{DisplayNamePrefix}.ClassManagement" },
+		{ HR, $"{DisplayNamePrefix}.HR" },
+		{ Finance, $"{DisplayNamePrefix}.Finance" },
+		{ Communication, $"{DisplayNamePrefix}.Communication" },
+		{ Calendar, $"{DisplayNamePrefix}.Calendar" },
+		{ Library, $"{DisplayNamePrefix}.Library" },
+		{ Transport, $"{DisplayNamePrefix}.Transport" },
+		{ ResourceManagement, $"{DisplayNamePrefix}.ResourceManagement" },
+		{ Hostel, $"{DisplayNamePrefix}.Hostel" },
+		{ Security, $"{DisplayNamePrefix}.Security" },
+		{ SecurityGuard, $"{DisplayNamePrefix}.SecurityGuard" },
+		{ InstituteSetup, $"{DisplayNamePrefix}.InstituteSetup" }
+	};
 }

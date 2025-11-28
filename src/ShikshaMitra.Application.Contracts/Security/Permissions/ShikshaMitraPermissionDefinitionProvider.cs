@@ -1,7 +1,9 @@
-﻿using Volo.Abp.Authorization.Permissions;
+﻿using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Localization;
+using Volo.Abp.Authorization.Permissions;
+using Volo.Abp.Localization;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.TenantManagement;
-using static ShikshaMitra.Localization.LocalizationHelper;
 
 namespace ShikshaMitra.Security.Permissions;
 
@@ -10,6 +12,24 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
 	public override void Define(IPermissionDefinitionContext context)
 	{
 		SetTenantPermissionMultiTenancySide(context);
+		var group = context.AddGroup(ShikshaMitraPermissions.GroupName, L("Permission:ShikshaMitra"));
+
+		// Define Module Visibility Permissions (these go in JWT)
+		DefineModulePermissions(group);
+	}
+
+	private static void DefineModulePermissions(PermissionGroupDefinition group)
+	{
+		// Use ShikshaMitraModulePermissions from the domain shared project
+		foreach (var modulePermission in ShikshaMitraModulePermissions.All)
+		{
+			group.AddPermission(modulePermission, L(ShikshaMitraModulePermissions.DisplayNames[modulePermission]));
+		}
+	}
+
+	private static LocalizableString L(string name)
+	{
+		return LocalizableString.Create<ShikshaMitraResource>(name);
 	}
 
 	private void SetTenantPermissionMultiTenancySide(IPermissionDefinitionContext context)

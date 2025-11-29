@@ -29,12 +29,14 @@ public class StudentController(IStudentInquiryAppService studentInquiryAppServic
 	public async Task<Result<PagedResultDto<StudentInquiryDto>>> GetInquiriesByMedium(
 		Guid academicMediumId,
 		[FromQuery] int skipCount = 0,
-		[FromQuery] int maxResultCount = 10)
+		[FromQuery] int maxResultCount = 10,
+		[FromQuery] string? searchTerm = null)
 	{
 		var studentInquiries = await studentInquiryAppService.GetInquiriesByMediumAsync(
 			academicMediumId,
 			skipCount,
-			maxResultCount
+			maxResultCount,
+			searchTerm
 		);
 		return Result.Success(studentInquiries);
 	}

@@ -26,6 +26,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.DocumentTypes;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
@@ -107,6 +108,8 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<ShiftManagement> ShiftManagements { get; set; }
 
 	public DbSet<InstituteSetupExtraProperties> InstituteSetupExtraProperties { get; set; }
+
+	public DbSet<DocumentType> DocumentTypes { get; set; }
 
 	#endregion
 

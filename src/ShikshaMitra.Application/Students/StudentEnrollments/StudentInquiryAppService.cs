@@ -11,15 +11,12 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
-using Volo.Abp.ObjectMapping;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
 [RemoteService(false)]
 public class StudentInquiryAppService(
 	IRepository<Student, Guid> studentRepository,
-	IRepository<StudentAdditionalDetail, Guid> studentAdditionalDetailRepository,
-	IRepository<StudentContactDetail, Guid> studentContactDetailRepository,
 	IRepository<EducationMedium, Guid> academicMediumRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IGuidGenerator guidGenerator,
@@ -32,34 +29,26 @@ public class StudentInquiryAppService(
 	{
 		await ValidateReferencesAsync(createStudentInquiryDto);
 
-		Guid studentId = guidGenerator.Create();
+		// Generate inquiry number before creating entities
 		var inquiryNo = await studentEnrollmentManager.GenerateInquiryNumberAsync(
 			createStudentInquiryDto.AcademicMediumId
 		);
-		var student = new Student(
-			studentId,
+
+		// Create the complete aggregate using factory method
+		// This ensures all parts are created together in a valid state
+		var student = Student.CreateInquiry(
+			guidGenerator.Create(),
 			CurrentTenant.Id,
 			createStudentInquiryDto.FirstName,
 			createStudentInquiryDto.MiddleName,
 			createStudentInquiryDto.LastName,
 			createStudentInquiryDto.AcademicMediumId,
 			createStudentInquiryDto.StandardId,
-			status: StudentLifeCycleStatusEnum.Inquiry
-		);
-
-		var studentAdditionalDetail = new StudentAdditionalDetail(
-			studentId,
-			CurrentTenant.Id,
 			createStudentInquiryDto.DateOfBirth,
 			createStudentInquiryDto.Gender,
 			createStudentInquiryDto.DateOfInquiry,
 			inquiryNo,
-			createStudentInquiryDto.InquiryPreferenceId
-		);
-
-		var studentContactDetails = new StudentContactDetail(
-			studentId,
-			CurrentTenant.Id,
+			createStudentInquiryDto.InquiryPreferenceId,
 			createStudentInquiryDto.PrimaryContactNo,
 			createStudentInquiryDto.SecondaryContactNo,
 			createStudentInquiryDto.Email,
@@ -72,9 +61,9 @@ public class StudentInquiryAppService(
 			createStudentInquiryDto.PinCode
 		);
 
-		await studentRepository.InsertAsync(student);
-		await studentAdditionalDetailRepository.InsertAsync(studentAdditionalDetail);
-		await studentContactDetailRepository.InsertAsync(studentContactDetails);
+		// Single repository call - EF Core will handle all child entities
+		// due to cascade configuration
+		await studentRepository.InsertAsync(student, autoSave: true);
 
 		return ObjectMapper.Map<Student, StudentInquiryDto>(student);
 	}
@@ -86,31 +75,45 @@ public class StudentInquiryAppService(
 		string? searchTerm = null
 	)
 	{
-		try
-		{
-			await CheckAcademicMediumExistsAsync(academicMediumId);
+		await CheckAcademicMediumExistsAsync(academicMediumId);
 
-			var query = await GetStudentWithDetailsQueryAsync(studentFilter: s =>
-				s.Status == StudentLifeCycleStatusEnum.Inquiry
+		// Get queryable with aggregate parts auto-included
+		var queryable = await studentRepository.GetQueryableAsync();
+		
+		var query = queryable
+			.Where(s => s.Status == StudentLifeCycleStatusEnum.Inquiry
 				&& s.EducationMediumId == academicMediumId
-				&& s.TenantId == CurrentTenant.Id
-			);
+				&& s.TenantId == CurrentTenant.Id);
 
-			var totalCount = query.Count();
-			var pagedQuery = query.Skip(skipCount).Take(maxResultCount);
-
-			var results = await AsyncExecuter.ToListAsync(pagedQuery);
-			var resultList = ObjectMapper.Map<List<StudentQueryResult>, List<StudentInquiryDto>>(
-				results
-			);
-
-			return new PagedResultDto<StudentInquiryDto>(totalCount, resultList.ToList());
-		}
-		catch (Exception ex)
+		// Implement search functionality
+		if (!string.IsNullOrWhiteSpace(searchTerm))
 		{
-			// Handle exception as needed
-			throw;
+			var normalizedSearchTerm = searchTerm.Trim().ToLower();
+			query = query.Where(x =>
+				(x.FirstName != null && x.FirstName.ToLower().Contains(normalizedSearchTerm)) ||
+				(x.LastName != null && x.LastName.ToLower().Contains(normalizedSearchTerm)) ||
+				(x.AdditionalDetail != null && x.AdditionalDetail.InquiryNo != null && x.AdditionalDetail.InquiryNo.ToLower().Contains(normalizedSearchTerm)) ||
+				(x.ContactDetail != null && x.ContactDetail.PrimaryContactNo != null && x.ContactDetail.PrimaryContactNo.Contains(normalizedSearchTerm)) ||
+				(x.ContactDetail != null && x.ContactDetail.Email != null && x.ContactDetail.Email.ToLower().Contains(normalizedSearchTerm))
+			);
 		}
+
+		var totalCount = await AsyncExecuter.CountAsync(query);
+		
+		if (totalCount == 0)
+		{
+			return new PagedResultDto<StudentInquiryDto>(0, new List<StudentInquiryDto>());
+		}
+
+		var pagedQuery = query
+			.OrderByDescending(x => x.CreationTime)
+			.Skip(skipCount)
+			.Take(maxResultCount);
+
+		var results = await AsyncExecuter.ToListAsync(pagedQuery);
+		var resultList = ObjectMapper.Map<List<Student>, List<StudentInquiryDto>>(results);
+
+		return new PagedResultDto<StudentInquiryDto>(totalCount, resultList);
 	}
 
 	public async Task<StudentInquiryDto> UpdateInquiryAsync(
@@ -118,33 +121,23 @@ public class StudentInquiryAppService(
 		CreateUpdateInquiryDto updateInquiryDto
 	)
 	{
-		var studentQueryResult = await CheckandReturnStudentExistsAsync(studentId);
 		await ValidateReferencesAsync(updateInquiryDto);
 
-		var student = studentQueryResult.Student;
-		var studentAdditionalDetail = studentQueryResult.AdditionalDetail;
-		var studentContactDetails = studentQueryResult.ContactDetail;
+		// Load the complete aggregate (with all parts due to AutoInclude)
+		var student = await studentRepository.GetAsync(studentId);
 
-		// Update student properties
-		student.UpdateDetails(
+		// Update the aggregate using its business method
+		// This maintains aggregate consistency
+		student.UpdateInquiry(
 			updateInquiryDto.FirstName,
 			updateInquiryDto.MiddleName,
 			updateInquiryDto.LastName,
 			updateInquiryDto.AcademicMediumId,
 			updateInquiryDto.StandardId,
-			StudentLifeCycleStatusEnum.Inquiry
-		);
-
-		// Update additional details
-		studentAdditionalDetail.UpdateDetails(
 			updateInquiryDto.DateOfBirth,
 			updateInquiryDto.Gender,
 			updateInquiryDto.DateOfInquiry,
-			updateInquiryDto.InquiryPreferenceId
-		);
-
-		// Update contact details
-		studentContactDetails.UpdateContactInfo(
+			updateInquiryDto.InquiryPreferenceId,
 			updateInquiryDto.PrimaryContactNo,
 			updateInquiryDto.SecondaryContactNo,
 			updateInquiryDto.Email,
@@ -157,10 +150,8 @@ public class StudentInquiryAppService(
 			updateInquiryDto.PinCode
 		);
 
-		// Save changes
-		await studentRepository.UpdateAsync(student);
-		await studentAdditionalDetailRepository.UpdateAsync(studentAdditionalDetail);
-		await studentContactDetailRepository.UpdateAsync(studentContactDetails);
+		// Single repository call - EF Core tracks changes to all parts
+		await studentRepository.UpdateAsync(student, autoSave: true);
 
 		return ObjectMapper.Map<Student, StudentInquiryDto>(student);
 	}
@@ -170,85 +161,20 @@ public class StudentInquiryAppService(
 		IssueRegistrationFormDto issueFormDto
 	)
 	{
-		try
-		{
-			var studentQueryResult = await CheckandReturnStudentExistsAsync(studentId);
+		// Load the complete aggregate
+		var student = await studentRepository.GetAsync(studentId);
 
-			var student = studentQueryResult.Student;
-			var studentAdditionalDetail = studentQueryResult.AdditionalDetail;
+		// Use aggregate method - it encapsulates business rules
+		student.IssueRegistrationForm(issueFormDto.FormNumber, issueFormDto.Amount);
 
-			studentAdditionalDetail.IssueRegistrationForm(
-				issueFormDto.FormNumber,
-				issueFormDto.Amount);
-			student.ChangeStatus(StudentLifeCycleStatusEnum.RegistrationFormIssued);
-
-			await studentRepository.UpdateAsync(student);
-			await studentAdditionalDetailRepository.UpdateAsync(studentAdditionalDetail);
-		}
-		catch (Exception ex)
-		{
-			// Handle exception as needed
-			throw;
-		}
-	}
-
-	private async Task<IQueryable<StudentQueryResult>> GetStudentWithDetailsQueryAsync(
-		Expression<Func<Student, bool>>? studentFilter = null,
-		Expression<Func<StudentAdditionalDetail, bool>>? additionalDetailFilter = null,
-		Expression<Func<StudentContactDetail, bool>>? contactDetailFilter = null
-	)
-	{
-		var studentQueryable = await studentRepository.GetQueryableAsync();
-		var additionalDetailQueryable = await studentAdditionalDetailRepository.GetQueryableAsync();
-		var contactDetailQueryable = await studentContactDetailRepository.GetQueryableAsync();
-
-		if (studentFilter != null)
-			studentQueryable = studentQueryable.Where(studentFilter);
-
-		if (additionalDetailFilter != null)
-			additionalDetailQueryable = additionalDetailQueryable.Where(additionalDetailFilter);
-
-		if (contactDetailFilter != null)
-			contactDetailQueryable = contactDetailQueryable.Where(contactDetailFilter);
-
-		var query = studentQueryable
-			.Join(
-				additionalDetailQueryable,
-				s => s.Id,
-				sad => sad.Id,
-				(s, sad) => new { Student = s, AdditionalDetail = sad }
-			)
-			.Join(
-				contactDetailQueryable,
-				x => x.Student.Id,
-				scd => scd.Id,
-				(x, scd) =>
-					new StudentQueryResult
-					{
-						Student = x.Student,
-						AdditionalDetail = x.AdditionalDetail,
-						ContactDetail = scd,
-					}
-			);
-
-		return query;
+		// Single update call
+		await studentRepository.UpdateAsync(student, autoSave: true);
 	}
 
 	private async Task ValidateReferencesAsync(CreateUpdateInquiryDto inquiryDto)
 	{
 		await CheckAcademicMediumExistsAsync(inquiryDto.AcademicMediumId);
 		await CheckStandardExistsAsync(inquiryDto.StandardId);
-
-		if (inquiryDto.InquiryPreferenceId.HasValue) { }
-	}
-
-	private async Task<StudentQueryResult> CheckandReturnStudentExistsAsync(Guid studentId)
-	{
-		var query = await GetStudentWithDetailsQueryAsync(
-			studentFilter: s => s.Id == studentId
-		);
-		var result = await AsyncExecuter.FirstOrDefaultAsync(query);
-		return result ?? throw new BusinessException("", L["Student Not Found"]);
 	}
 
 	private async Task CheckStandardExistsAsync(Guid standardId)

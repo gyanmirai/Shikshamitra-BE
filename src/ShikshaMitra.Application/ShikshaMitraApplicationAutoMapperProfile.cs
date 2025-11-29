@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
+
 namespace ShikshaMitra;
 
 public class ShikshaMitraApplicationAutoMapperProfile : Profile
@@ -17,5 +18,6 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		CreateMap<LibraryTiming, LibraryTimingDto>();
 		CreateMap<LibraryTimingDto, LibraryTiming>();
 
+		// Document Types - Manual mapping used due to enum list conversion
 	}
 }

@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -30,6 +30,11 @@
     </PackageReference>
     <ProjectReference Include="..\ShikshaMitra.Application.Contracts\ShikshaMitra.Application.Contracts.csproj" />
     <ProjectReference Include="..\ShikshaMitra.Domain.Shared\ShikshaMitra.Domain.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Controllers\Security\UserScope\" />
+    <Folder Include="Identity\Roles\" />
   </ItemGroup>
 
 </Project>

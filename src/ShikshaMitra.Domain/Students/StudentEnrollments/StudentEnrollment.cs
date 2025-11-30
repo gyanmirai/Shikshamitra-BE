@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.StudentEnrollments.FollowUps;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
@@ -14,7 +15,7 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
-public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScopedEntity
 {
 	#region Properties
 
@@ -63,8 +64,17 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid AcademicYearId { get; private set; }
 	public Guid EducationBoardId { get; private set; }
 	public Guid EducationMediumId { get; private set; }
+	public Guid? EducationMediumStageId { get; private set; } // For IUserScopedEntity
 	public Guid StandardId { get; private set; }
 	public Guid? InquiryPreferenceId { get; private set; }
+	
+	#region IUserScopedEntity Implementation
+	Guid? IUserScopedEntity.EducationBoardId => EducationBoardId;
+	Guid? IUserScopedEntity.EducationMediumId => EducationMediumId;
+	Guid? IUserScopedEntity.EducationMediumStageId => EducationMediumStageId;
+	Guid? IUserScopedEntity.StandardId => StandardId;
+	Guid? IUserScopedEntity.DivisionId => DivisionId;
+	#endregion
 
 	// Navigation Properties
 	public AcademicYear AcademicYear { get; private set; }

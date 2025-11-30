@@ -9,7 +9,46 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
 {
 	public override void Define(IPermissionDefinitionContext context)
 	{
+		DefineUserScopePermissions(context);
 		SetTenantPermissionMultiTenancySide(context);
+	}
+
+	private void DefineUserScopePermissions(IPermissionDefinitionContext context)
+	{
+		var userScopeGroup = context.AddGroup(
+			ShikshaMitraPermissions.GroupName,
+			displayName: L("Permission:ShikshaMitra")
+		);
+
+		var userScopePermission = userScopeGroup.AddPermission(
+			ShikshaMitraPermissions.UserScope.Default,
+			displayName: L("Permission:UserScope")
+		);
+
+		userScopePermission.AddChild(
+			ShikshaMitraPermissions.UserScope.View,
+			displayName: L("Permission:UserScope.View")
+		);
+
+		userScopePermission.AddChild(
+			ShikshaMitraPermissions.UserScope.Assign,
+			displayName: L("Permission:UserScope.Assign")
+		);
+
+		userScopePermission.AddChild(
+			ShikshaMitraPermissions.UserScope.BulkAssign,
+			displayName: L("Permission:UserScope.BulkAssign")
+		);
+
+		userScopePermission.AddChild(
+			ShikshaMitraPermissions.UserScope.Revoke,
+			displayName: L("Permission:UserScope.Revoke")
+		);
+
+		userScopePermission.AddChild(
+			ShikshaMitraPermissions.UserScope.Manage,
+			displayName: L("Permission:UserScope.Manage")
+		);
 	}
 
 	private void SetTenantPermissionMultiTenancySide(IPermissionDefinitionContext context)

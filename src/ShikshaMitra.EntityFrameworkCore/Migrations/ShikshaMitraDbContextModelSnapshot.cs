@@ -59,6 +59,15 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("DivisionId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("EducationBoardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("EducationMediumId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("EducationMediumStageId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -427,6 +436,15 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<DateTime>("DueDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("EducationBoardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("EducationMediumId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("EducationMediumStageId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
@@ -1948,6 +1966,109 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppLibraryTimings", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Security.UserScope.UserScopeAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("DivisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("EducationBoardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("EducationMediumId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("EducationMediumStageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("RoleName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("StandardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "RoleName", "IsActive", "IsDeleted")
+                        .HasDatabaseName("IX_UserScopeAssignments_Role");
+
+                    b.HasIndex("TenantId", "UserId", "IsActive", "IsDeleted")
+                        .HasDatabaseName("IX_UserScopeAssignments_Lookup");
+
+                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex("TenantId", "UserId", "IsActive", "IsDeleted"), new[] { "EducationBoardId", "EducationMediumId", "EducationMediumStageId", "StandardId", "DivisionId" });
+
+                    b.HasIndex("TenantId", "UserId", "RoleName", "AcademicYearId", "EducationBoardId", "EducationMediumId", "EducationMediumStageId", "StandardId", "DivisionId")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_UserScopeAssignment")
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("UserScopeAssignments", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Students.Attendance.Settings.StudentAttendanceRule", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2779,6 +2900,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("EducationMediumId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("EducationMediumStageId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Email")

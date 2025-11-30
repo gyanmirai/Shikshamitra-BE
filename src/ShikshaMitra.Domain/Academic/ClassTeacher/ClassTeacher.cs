@@ -1,4 +1,5 @@
 ﻿using System;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -7,7 +8,7 @@ namespace ShikshaMitra.Academic.ClassTeacher;
 /// <summary>
 /// Represents the assignment of a teacher to a specific division within a standard in the school.
 /// </summary>
-public class ClassTeacher : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class ClassTeacher : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScopedEntity
 {
 	#region Properties
 	/// <summary>
@@ -34,6 +35,16 @@ public class ClassTeacher : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// Gets or sets the tenant identifier for multi-tenancy support.
 	/// </summary>
 	public virtual Guid? TenantId { get; private set; }
+	
+	// IUserScopedEntity implementation
+	public Guid? EducationBoardId { get; private set; }
+	public Guid? EducationMediumId { get; private set; }
+	public Guid? EducationMediumStageId { get; private set; }
+	#endregion
+
+	#region IUserScopedEntity Explicit Implementation
+	Guid? IUserScopedEntity.StandardId => StandardId;
+	Guid? IUserScopedEntity.DivisionId => DivisionId;
 	#endregion
 
 	#region Constructors
@@ -57,7 +68,10 @@ public class ClassTeacher : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid standardId,
 		Guid divisionId,
 		Guid teacherId,
-		Guid academicMediumId
+		Guid academicMediumId,
+		Guid? educationBoardId = null,
+		Guid? educationMediumId = null,
+		Guid? educationMediumStageId = null
 	)
 	{
 		Id = id;
@@ -66,6 +80,9 @@ public class ClassTeacher : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DivisionId = divisionId;
 		TeacherId = teacherId;
 		AcademicMediumId = academicMediumId;
+		EducationBoardId = educationBoardId;
+		EducationMediumId = educationMediumId;
+		EducationMediumStageId = educationMediumStageId;
 	}
 	#endregion
 

@@ -3,7 +3,7 @@
   <Import Project="..\..\common.props" />
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <RootNamespace>ShikshaMitra</RootNamespace>
     <PreserveCompilationReferences>true</PreserveCompilationReferences>
@@ -36,10 +36,10 @@
     <EmbeddedResource Remove="Logs\**" />
     <None Remove="Logs\**" />
 
-    <Content Include="encryption-certificate.pfx">
+    <Content Include="encryption-certificate.pfx" Condition="Exists('encryption-certificate.pfx')">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-    <Content Include="signing-certificate.pfx">
+    <Content Include="signing-certificate.pfx" Condition="Exists('signing-certificate.pfx')">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

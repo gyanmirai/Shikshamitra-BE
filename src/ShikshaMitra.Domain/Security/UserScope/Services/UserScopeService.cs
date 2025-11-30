@@ -1,0 +1,265 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Volo.Abp;
+using Volo.Abp.Caching;
+using Volo.Abp.Domain.Services;
+using Volo.Abp.Identity;
+using Volo.Abp.Users;
+
+namespace ShikshaMitra.Security.UserScope;
+
+/// <summary>
+/// Domain service implementation for user scope operations.
+/// </summary>
+public class UserScopeService : DomainService, IUserScopeService
+{
+    private readonly IUserScopeAssignmentRepository _scopeRepository;
+    private readonly IDistributedCache<UserScopeContext> _cache;
+    private readonly IIdentityUserRepository _userRepository;
+    private readonly IIdentityRoleRepository _roleRepository;
+    private readonly ICurrentUser _currentUser;
+    private readonly ILogger<UserScopeService> _logger;
+    private readonly UserScopeOptions _options;
+
+    public UserScopeService(
+        IUserScopeAssignmentRepository scopeRepository,
+        IDistributedCache<UserScopeContext> cache,
+        IIdentityUserRepository userRepository,
+        IIdentityRoleRepository roleRepository,
+        ICurrentUser currentUser,
+        ILogger<UserScopeService> logger,
+        IOptions<UserScopeOptions> options)
+    {
+        _scopeRepository = scopeRepository;
+        _cache = cache;
+        _userRepository = userRepository;
+        _roleRepository = roleRepository;
+        _currentUser = currentUser;
+        _logger = logger;
+        _options = options.Value;
+    }
+
+    public async Task<UserScopeContext> GetUserScopeAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        // Check cache first
+        if (_options.CacheEnabled)
+        {
+            var cacheKey = GetCacheKey(userId);
+            var cachedScope = await _cache.GetAsync(cacheKey, token: cancellationToken);
+
+            if (cachedScope != null)
+            {
+                _logger.LogDebug("UserScope cache hit for user {UserId}", userId);
+                cachedScope.FromCache = true;
+                return cachedScope;
+            }
+        }
+
+        // Check if user is admin
+        var isAdmin = await IsAdminUserAsync(userId, cancellationToken);
+        if (isAdmin)
+        {
+            var adminScope = CreateAdminScope(userId);
+            await CacheScopeAsync(userId, adminScope, cancellationToken);
+            return adminScope;
+        }
+
+        // Get user's scope assignments
+        var assignments = await _scopeRepository.GetUserAssignmentsAsync(userId, cancellationToken);
+
+        if (!assignments.Any())
+        {
+            _logger.LogWarning("No scope assignments found for user {UserId}", userId);
+            return CreateEmptyScope(userId);
+        }
+
+        // Build scope context from assignments
+        var scope = BuildScopeFromAssignments(userId, assignments);
+
+        // Cache the result
+        await CacheScopeAsync(userId, scope, cancellationToken);
+
+        return scope;
+    }
+
+    public async Task<bool> HasAccessToDivisionAsync(
+        Guid userId,
+        Guid divisionId,
+        CancellationToken cancellationToken = default)
+    {
+        var scope = await GetUserScopeAsync(userId, cancellationToken);
+        return scope.IsAdmin || scope.DivisionIds.Contains(divisionId);
+    }
+
+    public async Task<bool> HasAccessToStandardAsync(
+        Guid userId,
+        Guid standardId,
+        CancellationToken cancellationToken = default)
+    {
+        var scope = await GetUserScopeAsync(userId, cancellationToken);
+        return scope.IsAdmin || scope.StandardIds.Contains(standardId);
+    }
+
+    public async Task<bool> HasAccessToBoardAsync(
+        Guid userId,
+        Guid boardId,
+        CancellationToken cancellationToken = default)
+    {
+        var scope = await GetUserScopeAsync(userId, cancellationToken);
+        return scope.IsAdmin || scope.BoardIds.Contains(boardId);
+    }
+
+    public async Task<List<Guid>> GetAccessibleDivisionIdsAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var scope = await GetUserScopeAsync(userId, cancellationToken);
+        return scope.DivisionIds;
+    }
+
+    public async Task<List<Guid>> GetAccessibleStandardIdsAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var scope = await GetUserScopeAsync(userId, cancellationToken);
+        return scope.StandardIds;
+    }
+
+    public async Task InvalidateUserScopeCacheAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        if (_options.CacheEnabled)
+        {
+            var cacheKey = GetCacheKey(userId);
+            await _cache.RemoveAsync(cacheKey, token: cancellationToken);
+            _logger.LogInformation("Invalidated scope cache for user {UserId}", userId);
+        }
+    }
+
+    public async Task<bool> IsAdminUserAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetAsync(userId, cancellationToken: cancellationToken);
+        var roleIds = user.Roles.Select(r => r.RoleId).ToList();
+        
+        // Get role names from role repository
+        var roles = await _roleRepository.GetListAsync(cancellationToken: cancellationToken);
+        var userRoleNames = roles.Where(r => roleIds.Contains(r.Id)).Select(r => r.Name).ToList();
+
+        return _options.AdminRoles.Any(adminRole =>
+            userRoleNames.Contains(adminRole, StringComparer.OrdinalIgnoreCase));
+    }
+
+    #region Private Methods
+
+    private UserScopeContext BuildScopeFromAssignments(Guid userId, List<UserScopeAssignment> assignments)
+    {
+        var scope = new UserScopeContext
+        {
+            UserId = userId,
+            TenantId = CurrentTenant.Id,
+            IsAdmin = false,
+            CalculatedAt = DateTime.UtcNow,
+            FromCache = false
+        };
+
+        foreach (var assignment in assignments.Where(a => a.IsActive))
+        {
+            // Add IDs to scope lists
+            // Note: We store the actual IDs from assignments, not expanded children
+            // The NULL = ALL logic is applied in the EF Core filter, not here
+
+            if (assignment.AcademicYearId.HasValue)
+                scope.AcademicYearIds.Add(assignment.AcademicYearId.Value);
+
+            if (assignment.EducationBoardId.HasValue)
+                scope.BoardIds.Add(assignment.EducationBoardId.Value);
+
+            if (assignment.EducationMediumId.HasValue)
+                scope.MediumIds.Add(assignment.EducationMediumId.Value);
+
+            if (assignment.EducationMediumStageId.HasValue)
+                scope.MediumStageIds.Add(assignment.EducationMediumStageId.Value);
+
+            if (assignment.StandardId.HasValue)
+                scope.StandardIds.Add(assignment.StandardId.Value);
+
+            if (assignment.DivisionId.HasValue)
+                scope.DivisionIds.Add(assignment.DivisionId.Value);
+        }
+
+        // Remove duplicates
+        scope.AcademicYearIds = scope.AcademicYearIds.Distinct().ToList();
+        scope.BoardIds = scope.BoardIds.Distinct().ToList();
+        scope.MediumIds = scope.MediumIds.Distinct().ToList();
+        scope.MediumStageIds = scope.MediumStageIds.Distinct().ToList();
+        scope.StandardIds = scope.StandardIds.Distinct().ToList();
+        scope.DivisionIds = scope.DivisionIds.Distinct().ToList();
+
+        _logger.LogDebug(
+            "Built scope for user {UserId}: {Boards} boards, {Standards} standards, {Divisions} divisions",
+            userId, scope.BoardIds.Count, scope.StandardIds.Count, scope.DivisionIds.Count);
+
+        return scope;
+    }
+
+    private UserScopeContext CreateAdminScope(Guid userId)
+    {
+        return new UserScopeContext
+        {
+            UserId = userId,
+            TenantId = CurrentTenant.Id,
+            IsAdmin = true,
+            CalculatedAt = DateTime.UtcNow,
+            FromCache = false
+        };
+    }
+
+    private UserScopeContext CreateEmptyScope(Guid userId)
+    {
+        return new UserScopeContext
+        {
+            UserId = userId,
+            TenantId = CurrentTenant.Id,
+            IsAdmin = false,
+            CalculatedAt = DateTime.UtcNow,
+            FromCache = false
+        };
+    }
+
+    private async Task CacheScopeAsync(
+        Guid userId,
+        UserScopeContext scope,
+        CancellationToken cancellationToken)
+    {
+        if (_options.CacheEnabled)
+        {
+            var cacheKey = GetCacheKey(userId);
+            var cacheOptions = new DistributedCacheEntryOptions
+            {
+                SlidingExpiration = TimeSpan.FromMinutes(_options.CacheDurationMinutes)
+            };
+
+            await _cache.SetAsync(cacheKey, scope, cacheOptions, token: cancellationToken);
+            _logger.LogDebug("Cached scope for user {UserId} with TTL {TTL}min",
+                userId, _options.CacheDurationMinutes);
+        }
+    }
+
+    private string GetCacheKey(Guid userId)
+    {
+        return $"UserScope:{CurrentTenant.Id}:{userId}";
+    }
+
+    #endregion
+}

@@ -1,11 +1,12 @@
 ﻿using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.Security.UserScope;
 using System;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.HR.Employees;
 
-public class EmployeeAttendance : FullAuditedEntity<Guid>, IMultiTenant
+public class EmployeeAttendance : FullAuditedEntity<Guid>, IMultiTenant, IUserScopedEntity
 {
 	public Guid? TenantId { get; set; }
 	public Guid EmployeeId { get; set; }
@@ -42,4 +43,13 @@ public class EmployeeAttendance : FullAuditedEntity<Guid>, IMultiTenant
 	}
 
 	public virtual Employee Employee { get; set; }
+
+	#region IUserScopedEntity Explicit Implementation
+	// Delegate to Employee's EducationMediumStage scope
+	Guid? IUserScopedEntity.EducationBoardId => null; // Employee doesn't have board/medium
+	Guid? IUserScopedEntity.EducationMediumId => null;
+	Guid? IUserScopedEntity.EducationMediumStageId => Employee?.EducationMediumStageId;
+	Guid? IUserScopedEntity.StandardId => null;
+	Guid? IUserScopedEntity.DivisionId => null;
+	#endregion
 }

@@ -73,14 +73,44 @@ public class UserScopeContext
     public bool FromCache { get; set; }
 
     /// <summary>
-    /// Checks if user has any scope assigned (at least one non-empty list or IsAdmin).
+    /// Indicates if user has wildcard access to ALL academic years (NULL in assignment).
+    /// </summary>
+    public bool HasWildcardAcademicYear { get; set; }
+
+    /// <summary>
+    /// Indicates if user has wildcard access to ALL boards (NULL in assignment).
+    /// </summary>
+    public bool HasWildcardBoard { get; set; }
+
+    /// <summary>
+    /// Indicates if user has wildcard access to ALL mediums (NULL in assignment).
+    /// </summary>
+    public bool HasWildcardMedium { get; set; }
+
+    /// <summary>
+    /// Indicates if user has wildcard access to ALL medium stages (NULL in assignment).
+    /// </summary>
+    public bool HasWildcardMediumStage { get; set; }
+
+    /// <summary>
+    /// Indicates if user has wildcard access to ALL standards (NULL in assignment).
+    /// </summary>
+    public bool HasWildcardStandard { get; set; }
+
+    /// <summary>
+    /// Indicates if user has wildcard access to ALL divisions (NULL in assignment).
+    /// </summary>
+    public bool HasWildcardDivision { get; set; }
+
+    /// <summary>
+    /// Checks if user has any scope assigned (at least one non-empty list, wildcard, or IsAdmin).
     /// </summary>
     public bool HasAnyAccess =>
         IsAdmin ||
-        AcademicYearIds.Any() ||
-        BoardIds.Any() ||
-        MediumIds.Any() ||
-        MediumStageIds.Any() ||
-        StandardIds.Any() ||
-        DivisionIds.Any();
+        AcademicYearIds.Any() || HasWildcardAcademicYear ||
+        BoardIds.Any() || HasWildcardBoard ||
+        MediumIds.Any() || HasWildcardMedium ||
+        MediumStageIds.Any() || HasWildcardMediumStage ||
+        StandardIds.Any() || HasWildcardStandard ||
+        DivisionIds.Any() || HasWildcardDivision;
 }

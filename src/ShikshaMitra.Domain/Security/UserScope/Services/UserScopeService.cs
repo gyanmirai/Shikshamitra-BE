@@ -175,27 +175,45 @@ public class UserScopeService : DomainService, IUserScopeService
 
         foreach (var assignment in assignments.Where(a => a.IsActive))
         {
-            // Add IDs to scope lists
-            // Note: We store the actual IDs from assignments, not expanded children
-            // The NULL = ALL logic is applied in the EF Core filter, not here
+            // Implement NULL = ALL principle:
+            // - If a field is NULL, user has access to ALL entities at that level
+            // - If a field has a value, user has access to that specific entity and its children
 
+            // Academic Year: NULL = ALL years
             if (assignment.AcademicYearId.HasValue)
                 scope.AcademicYearIds.Add(assignment.AcademicYearId.Value);
+            else
+                scope.HasWildcardAcademicYear = true;
 
+            // Education Board: NULL = ALL boards
             if (assignment.EducationBoardId.HasValue)
                 scope.BoardIds.Add(assignment.EducationBoardId.Value);
+            else
+                scope.HasWildcardBoard = true;
 
+            // Education Medium: NULL = ALL mediums (within assigned board or all if board is also wildcard)
             if (assignment.EducationMediumId.HasValue)
                 scope.MediumIds.Add(assignment.EducationMediumId.Value);
+            else
+                scope.HasWildcardMedium = true;
 
+            // Education Medium Stage: NULL = ALL stages (within assigned medium/board hierarchy)
             if (assignment.EducationMediumStageId.HasValue)
                 scope.MediumStageIds.Add(assignment.EducationMediumStageId.Value);
+            else
+                scope.HasWildcardMediumStage = true;
 
+            // Standard/Class: NULL = ALL standards (within assigned stage/medium/board hierarchy)
             if (assignment.StandardId.HasValue)
                 scope.StandardIds.Add(assignment.StandardId.Value);
+            else
+                scope.HasWildcardStandard = true;
 
+            // Division/Section: NULL = ALL divisions (within assigned standard hierarchy)
             if (assignment.DivisionId.HasValue)
                 scope.DivisionIds.Add(assignment.DivisionId.Value);
+            else
+                scope.HasWildcardDivision = true;
         }
 
         // Remove duplicates
@@ -207,8 +225,11 @@ public class UserScopeService : DomainService, IUserScopeService
         scope.DivisionIds = scope.DivisionIds.Distinct().ToList();
 
         _logger.LogDebug(
-            "Built scope for user {UserId}: {Boards} boards, {Standards} standards, {Divisions} divisions",
-            userId, scope.BoardIds.Count, scope.StandardIds.Count, scope.DivisionIds.Count);
+            "Built scope for user {UserId}: Wildcards=[AY:{WildcardYear},B:{WildcardBoard},M:{WildcardMedium},MS:{WildcardStage},S:{WildcardStd},D:{WildcardDiv}], IDs=[Boards:{Boards},Standards:{Standards},Divisions:{Divisions}]",
+            userId,
+            scope.HasWildcardAcademicYear, scope.HasWildcardBoard, scope.HasWildcardMedium,
+            scope.HasWildcardMediumStage, scope.HasWildcardStandard, scope.HasWildcardDivision,
+            scope.BoardIds.Count, scope.StandardIds.Count, scope.DivisionIds.Count);
 
         return scope;
     }

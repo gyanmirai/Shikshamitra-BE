@@ -35,12 +35,8 @@ public static class UserScopeQueryExtensions
 		if (userScope.IsAdmin)
 			return queryable;
 
-		// If user has no scope assigned at any level, deny access to everything
-		if (!userScope.DivisionIds.Any() &&
-			!userScope.StandardIds.Any() &&
-			!userScope.MediumStageIds.Any() &&
-			!userScope.MediumIds.Any() &&
-			!userScope.BoardIds.Any())
+		// If user has no scope assigned at any level (no IDs and no wildcards), deny access to everything
+		if (!userScope.HasAnyAccess)
 		{
 			// Return empty queryable (no access)
 			return queryable.Where(e => false);
@@ -48,21 +44,37 @@ public static class UserScopeQueryExtensions
 
 		// Apply hierarchical filtering using NULL = ALL logic
 		// User has access if entity matches ANY of their assigned scopes at ANY level
+		// Wildcards grant access to ALL entities at that hierarchy level
 		return queryable.Where(e =>
-			// Division level (most specific) - user has access to specific divisions
-			(e.DivisionId.HasValue && userScope.DivisionIds.Contains(e.DivisionId.Value)) ||
+			// Division level (most specific) - wildcard OR specific divisions
+			(e.DivisionId.HasValue && (
+				userScope.HasWildcardDivision ||
+				userScope.DivisionIds.Contains(e.DivisionId.Value)
+			)) ||
 
-			// Standard/Class level - user has access to all divisions in these classes
-			(e.StandardId.HasValue && userScope.StandardIds.Contains(e.StandardId.Value)) ||
+			// Standard/Class level - wildcard OR specific standards
+			(e.StandardId.HasValue && (
+				userScope.HasWildcardStandard ||
+				userScope.StandardIds.Contains(e.StandardId.Value)
+			)) ||
 
-			// Medium Stage level - user has access to all classes in these stages (Primary, Secondary, etc.)
-			(e.EducationMediumStageId.HasValue && userScope.MediumStageIds.Contains(e.EducationMediumStageId.Value)) ||
+			// Medium Stage level - wildcard OR specific stages
+			(e.EducationMediumStageId.HasValue && (
+				userScope.HasWildcardMediumStage ||
+				userScope.MediumStageIds.Contains(e.EducationMediumStageId.Value)
+			)) ||
 
-			// Medium level - user has access to all stages in these mediums (English, Hindi, etc.)
-			(e.EducationMediumId.HasValue && userScope.MediumIds.Contains(e.EducationMediumId.Value)) ||
+			// Medium level - wildcard OR specific mediums
+			(e.EducationMediumId.HasValue && (
+				userScope.HasWildcardMedium ||
+				userScope.MediumIds.Contains(e.EducationMediumId.Value)
+			)) ||
 
-			// Board level (least specific) - user has access to all mediums in these boards (CBSE, State, etc.)
-			(e.EducationBoardId.HasValue && userScope.BoardIds.Contains(e.EducationBoardId.Value))
+			// Board level (least specific) - wildcard OR specific boards
+			(e.EducationBoardId.HasValue && (
+				userScope.HasWildcardBoard ||
+				userScope.BoardIds.Contains(e.EducationBoardId.Value)
+			))
 		);
 	}
 
@@ -95,25 +107,36 @@ public static class UserScopeQueryExtensions
 			return true;
 
 		// Check each level of the hierarchy from most specific to least specific
+		// Wildcards grant access to ALL entities at that level
 
-		// 1. Division level (most granular)
-		if (entity.DivisionId.HasValue && userScope.DivisionIds.Contains(entity.DivisionId.Value))
+		// 1. Division level (most granular) - wildcard OR specific match
+		if (entity.DivisionId.HasValue && (
+			userScope.HasWildcardDivision ||
+			userScope.DivisionIds.Contains(entity.DivisionId.Value)))
 			return true;
 
-		// 2. Standard/Class level
-		if (entity.StandardId.HasValue && userScope.StandardIds.Contains(entity.StandardId.Value))
+		// 2. Standard/Class level - wildcard OR specific match
+		if (entity.StandardId.HasValue && (
+			userScope.HasWildcardStandard ||
+			userScope.StandardIds.Contains(entity.StandardId.Value)))
 			return true;
 
-		// 3. Medium Stage level
-		if (entity.EducationMediumStageId.HasValue && userScope.MediumStageIds.Contains(entity.EducationMediumStageId.Value))
+		// 3. Medium Stage level - wildcard OR specific match
+		if (entity.EducationMediumStageId.HasValue && (
+			userScope.HasWildcardMediumStage ||
+			userScope.MediumStageIds.Contains(entity.EducationMediumStageId.Value)))
 			return true;
 
-		// 4. Medium level
-		if (entity.EducationMediumId.HasValue && userScope.MediumIds.Contains(entity.EducationMediumId.Value))
+		// 4. Medium level - wildcard OR specific match
+		if (entity.EducationMediumId.HasValue && (
+			userScope.HasWildcardMedium ||
+			userScope.MediumIds.Contains(entity.EducationMediumId.Value)))
 			return true;
 
-		// 5. Board level (least granular)
-		if (entity.EducationBoardId.HasValue && userScope.BoardIds.Contains(entity.EducationBoardId.Value))
+		// 5. Board level (least granular) - wildcard OR specific match
+		if (entity.EducationBoardId.HasValue && (
+			userScope.HasWildcardBoard ||
+			userScope.BoardIds.Contains(entity.EducationBoardId.Value)))
 			return true;
 
 		// No matching scope found - deny access

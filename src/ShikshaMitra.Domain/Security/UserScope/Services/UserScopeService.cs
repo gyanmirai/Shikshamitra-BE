@@ -96,7 +96,10 @@ public class UserScopeService : DomainService, IUserScopeService
         CancellationToken cancellationToken = default)
     {
         var scope = await GetUserScopeAsync(userId, cancellationToken);
-        return scope.IsAdmin || scope.DivisionIds.Contains(divisionId);
+        // Check admin, wildcard division access, or specific division ID
+        return scope.IsAdmin || 
+               scope.HasWildcardDivision || 
+               scope.DivisionIds.Contains(divisionId);
     }
 
     public async Task<bool> HasAccessToStandardAsync(
@@ -105,7 +108,10 @@ public class UserScopeService : DomainService, IUserScopeService
         CancellationToken cancellationToken = default)
     {
         var scope = await GetUserScopeAsync(userId, cancellationToken);
-        return scope.IsAdmin || scope.StandardIds.Contains(standardId);
+        // Check admin, wildcard standard access, or specific standard ID
+        return scope.IsAdmin || 
+               scope.HasWildcardStandard || 
+               scope.StandardIds.Contains(standardId);
     }
 
     public async Task<bool> HasAccessToBoardAsync(
@@ -114,7 +120,10 @@ public class UserScopeService : DomainService, IUserScopeService
         CancellationToken cancellationToken = default)
     {
         var scope = await GetUserScopeAsync(userId, cancellationToken);
-        return scope.IsAdmin || scope.BoardIds.Contains(boardId);
+        // Check admin, wildcard board access, or specific board ID
+        return scope.IsAdmin || 
+               scope.HasWildcardBoard || 
+               scope.BoardIds.Contains(boardId);
     }
 
     public async Task<List<Guid>> GetAccessibleDivisionIdsAsync(

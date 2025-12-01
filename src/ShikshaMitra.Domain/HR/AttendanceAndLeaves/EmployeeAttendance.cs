@@ -46,6 +46,8 @@ public class EmployeeAttendance : FullAuditedEntity<Guid>, IMultiTenant, IUserSc
 
 	#region IUserScopedEntity Explicit Implementation
 	// Delegate to Employee's EducationMediumStage scope
+	// Employee attendance is not filtered by academic year
+	Guid? IUserScopedEntity.AcademicYearId => null;
 	Guid? IUserScopedEntity.EducationBoardId => null; // Employee doesn't have board/medium
 	Guid? IUserScopedEntity.EducationMediumId => null;
 	Guid? IUserScopedEntity.EducationMediumStageId => Employee?.EducationMediumStageId;

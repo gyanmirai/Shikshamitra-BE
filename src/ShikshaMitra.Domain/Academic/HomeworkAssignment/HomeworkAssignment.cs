@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -11,6 +11,7 @@ public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTe
 	public Guid? TenantId { get; set; }
 	
 	// IUserScopedEntity properties
+	public Guid? AcademicYearId { get; set; }
 	public Guid? EducationBoardId { get; set; }
 	public Guid? EducationMediumId { get; set; }
 	public Guid? EducationMediumStageId { get; set; }
@@ -18,6 +19,7 @@ public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTe
 	public Guid DivisionId { get; set; }
 
 	#region IUserScopedEntity Explicit Implementation
+	Guid? IUserScopedEntity.AcademicYearId => AcademicYearId;
 	Guid? IUserScopedEntity.StandardId => StandardId;
 	Guid? IUserScopedEntity.DivisionId => DivisionId;
 	#endregion
@@ -50,6 +52,7 @@ public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTe
 		SubmissionType submissionType,
 		DateTime dueDate,
 		Guid? tenantId = null,
+		Guid? academicYearId = null,
 		Guid? chapterId = null,
 		string? documentUrl = null,
 		Guid? educationBoardId = null,
@@ -69,6 +72,7 @@ public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTe
 		SubmissionType = submissionType;
 		DueDate = dueDate;
 		TenantId = tenantId;
+		AcademicYearId = academicYearId;
 		EducationBoardId = educationBoardId;
 		EducationMediumId = educationMediumId;
 		EducationMediumStageId = educationMediumStageId;
@@ -97,3 +101,4 @@ public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTe
 		IsPublished = false;
 	}
 }
+

@@ -19,6 +19,7 @@ public class StudentAttendance : FullAuditedAggregateRoot<Guid>, IMultiTenant, I
 
 	#region IUserScopedEntity Explicit Implementation
 	// Delegate to Student's scope properties
+	Guid? IUserScopedEntity.AcademicYearId => Student?.AcademicYearId;
 	Guid? IUserScopedEntity.EducationBoardId => Student?.EducationBoardId;
 	Guid? IUserScopedEntity.EducationMediumId => Student?.EducationMediumId;
 	Guid? IUserScopedEntity.EducationMediumStageId => Student?.EducationMediumStageId;

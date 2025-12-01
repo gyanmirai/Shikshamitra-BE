@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -37,12 +37,14 @@ public class ClassTeacher : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserS
 	public virtual Guid? TenantId { get; private set; }
 	
 	// IUserScopedEntity implementation
+	public Guid? AcademicYearId { get; private set; }
 	public Guid? EducationBoardId { get; private set; }
 	public Guid? EducationMediumId { get; private set; }
 	public Guid? EducationMediumStageId { get; private set; }
 	#endregion
 
 	#region IUserScopedEntity Explicit Implementation
+	Guid? IUserScopedEntity.AcademicYearId => AcademicYearId;
 	Guid? IUserScopedEntity.StandardId => StandardId;
 	Guid? IUserScopedEntity.DivisionId => DivisionId;
 	#endregion
@@ -69,6 +71,7 @@ public class ClassTeacher : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserS
 		Guid divisionId,
 		Guid teacherId,
 		Guid academicMediumId,
+		Guid? academicYearId = null,
 		Guid? educationBoardId = null,
 		Guid? educationMediumId = null,
 		Guid? educationMediumStageId = null
@@ -80,6 +83,7 @@ public class ClassTeacher : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserS
 		DivisionId = divisionId;
 		TeacherId = teacherId;
 		AcademicMediumId = academicMediumId;
+		AcademicYearId = academicYearId;
 		EducationBoardId = educationBoardId;
 		EducationMediumId = educationMediumId;
 		EducationMediumStageId = educationMediumStageId;
@@ -89,3 +93,4 @@ public class ClassTeacher : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserS
 	#region Methods
 	#endregion
 }
+

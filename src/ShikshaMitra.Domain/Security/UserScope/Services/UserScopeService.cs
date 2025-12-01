@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -154,6 +154,52 @@ public class UserScopeService : DomainService, IUserScopeService
         }
     }
 
+    public async Task InvalidateRoleScopeCacheAsync(
+        string roleName,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_options.CacheEnabled || string.IsNullOrWhiteSpace(roleName))
+        {
+            return;
+        }
+
+        _logger.LogInformation("Invalidating scope cache for all users with role {RoleName}", roleName);
+
+        // Get the role by name
+        var role = await _roleRepository.FindByNormalizedNameAsync(
+            roleName.ToUpperInvariant(),
+            cancellationToken: cancellationToken);
+
+        if (role == null)
+        {
+            _logger.LogWarning("Role {RoleName} not found, skipping cache invalidation", roleName);
+            return;
+        }
+
+        // Get all users with this role
+        var usersWithRole = await _userRepository.GetListAsync(
+            cancellationToken: cancellationToken);
+
+        var userIdsToInvalidate = usersWithRole
+            .Where(u => u.Roles.Any(r => r.RoleId == role.Id))
+            .Select(u => u.Id)
+            .ToList();
+
+        _logger.LogInformation(
+            "Found {Count} users with role {RoleName}, invalidating their caches",
+            userIdsToInvalidate.Count, roleName);
+
+        // Invalidate cache for each user
+        foreach (var userId in userIdsToInvalidate)
+        {
+            await InvalidateUserScopeCacheAsync(userId, cancellationToken);
+        }
+
+        _logger.LogInformation(
+            "Completed cache invalidation for {Count} users with role {RoleName}",
+            userIdsToInvalidate.Count, roleName);
+    }
+
     public async Task<bool> IsAdminUserAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
@@ -293,3 +339,4 @@ public class UserScopeService : DomainService, IUserScopeService
 
     #endregion
 }
+

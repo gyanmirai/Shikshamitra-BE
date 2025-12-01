@@ -8,12 +8,18 @@ namespace ShikshaMitra.Security.UserScope;
 /// </summary>
 /// <remarks>
 /// The NULL = ALL principle applies:
+/// - If AcademicYearId is NULL in UserScopeAssignment, user has access to ALL academic years
 /// - If EducationBoardId is NULL in UserScopeAssignment, user has access to ALL boards
 /// - If DivisionId is NULL in UserScopeAssignment, user has access to ALL divisions in the specified Standard
 /// - And so on for other hierarchy levels
 /// </remarks>
 public interface IUserScopedEntity
 {
+    /// <summary>
+    /// Academic Year ID. Used for academic-year-level filtering (top of hierarchy).
+    /// </summary>
+    Guid? AcademicYearId { get; }
+
     /// <summary>
     /// Education Board ID. Used for board-level filtering.
     /// </summary>

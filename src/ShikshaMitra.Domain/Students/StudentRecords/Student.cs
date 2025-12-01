@@ -72,6 +72,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 	#endregion
 	
 	#region IUserScopedEntity Implementation
+	Guid? IUserScopedEntity.AcademicYearId => AcademicYearId;
 	Guid? IUserScopedEntity.EducationBoardId => EducationBoardId;
 	Guid? IUserScopedEntity.EducationMediumId => EducationMediumId;
 	Guid? IUserScopedEntity.EducationMediumStageId => EducationMediumStageId;

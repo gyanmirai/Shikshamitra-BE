@@ -45,7 +45,10 @@ public static class UserScopeQueryExtensions
 		// Apply hierarchical filtering using NULL = ALL logic with parent constraints
 		// User has access if entity matches ANY of their assigned scopes at ANY level
 		// Wildcards grant access to ALL entities at that level WITHIN parent hierarchy constraints
-		return queryable.Where(e =>
+		//
+		// IMPORTANT: Academic Year is enforced as a TOP-LEVEL FILTER across all checks.
+		// User must have access to the entity's academic year (or wildcard) to see it at all.
+		var baseFilter = queryable.Where(e =>
 			// Division level (most specific)
 			// Wildcard: ALL divisions WITHIN assigned standards
 			// Specific: exact division match
@@ -86,7 +89,7 @@ public static class UserScopeQueryExtensions
 				userScope.MediumIds.Contains(e.EducationMediumId.Value)
 			)) ||
 
-			// Board level (top of hierarchy)
+			// Board level
 			// Wildcard: ALL boards (no parent constraint)
 			// Specific: exact board match
 			(e.EducationBoardId.HasValue && (
@@ -94,6 +97,28 @@ public static class UserScopeQueryExtensions
 				userScope.BoardIds.Contains(e.EducationBoardId.Value)
 			))
 		);
+
+		// Apply Academic Year filter as a cross-cutting constraint
+		// This ensures that even if a user has access at board/medium/standard/division level,
+		// they can only see entities in their assigned academic year(s)
+		if (userScope.HasWildcardAcademicYear)
+		{
+			// Wildcard academic year: see entities in ALL years (no additional filter needed)
+			return baseFilter;
+		}
+		else if (userScope.AcademicYearIds.Any())
+		{
+			// Specific academic year(s): only see entities in assigned years
+			return baseFilter.Where(e =>
+				!e.AcademicYearId.HasValue ||  // Entities without academic year are accessible
+				userScope.AcademicYearIds.Contains(e.AcademicYearId.Value)
+			);
+		}
+		else
+		{
+			// No academic year assigned and no wildcard: filter out all entities with an academic year
+			return baseFilter.Where(e => !e.AcademicYearId.HasValue);
+		}
 	}
 
 	/// <summary>
@@ -123,6 +148,18 @@ public static class UserScopeQueryExtensions
 		// Admin users have access to everything
 		if (userScope.IsAdmin)
 			return true;
+
+		// First check academic year (cross-cutting constraint)
+		// Academic year restriction applies regardless of hierarchy level
+		if (entity.AcademicYearId.HasValue)
+		{
+			// Entity has an academic year - check if user has access to it
+			if (!userScope.HasWildcardAcademicYear && !userScope.AcademicYearIds.Contains(entity.AcademicYearId.Value))
+			{
+				// User doesn't have access to this academic year
+				return false;
+			}
+		}
 
 		// Check each level of the hierarchy from most specific to least specific
 		// Wildcards grant access to ALL entities at that level WITHIN parent constraints

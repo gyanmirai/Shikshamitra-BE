@@ -107,10 +107,15 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
             await _scopeRepository.InsertAsync(assignment);
 
-            // Invalidate cache for the user
+            // Invalidate cache for the user or role
             if (input.UserId.HasValue)
             {
                 await _userScopeService.InvalidateUserScopeCacheAsync(input.UserId.Value);
+            }
+            else if (!string.IsNullOrWhiteSpace(input.RoleName))
+            {
+                // Invalidate cache for all users with this role
+                await _userScopeService.InvalidateRoleScopeCacheAsync(input.RoleName);
             }
 
             _logger.LogInformation(
@@ -259,10 +264,15 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
             await _repository.DeleteAsync(assignment);
 
-            // Invalidate cache
+            // Invalidate cache for user or role
             if (assignment.UserId.HasValue)
             {
                 await _userScopeService.InvalidateUserScopeCacheAsync(assignment.UserId.Value);
+            }
+            else if (!string.IsNullOrWhiteSpace(assignment.RoleName))
+            {
+                // Invalidate cache for all users with this role
+                await _userScopeService.InvalidateRoleScopeCacheAsync(assignment.RoleName);
             }
 
             _logger.LogInformation("Scope assignment {AssignmentId} revoked successfully", id);
@@ -376,9 +386,14 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         assignment.Activate();
         await _repository.UpdateAsync(assignment);
 
+        // Invalidate cache for user or role
         if (assignment.UserId.HasValue)
         {
             await _userScopeService.InvalidateUserScopeCacheAsync(assignment.UserId.Value);
+        }
+        else if (!string.IsNullOrWhiteSpace(assignment.RoleName))
+        {
+            await _userScopeService.InvalidateRoleScopeCacheAsync(assignment.RoleName);
         }
     }
 
@@ -389,9 +404,14 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         assignment.Deactivate();
         await _repository.UpdateAsync(assignment);
 
+        // Invalidate cache for user or role
         if (assignment.UserId.HasValue)
         {
             await _userScopeService.InvalidateUserScopeCacheAsync(assignment.UserId.Value);
+        }
+        else if (!string.IsNullOrWhiteSpace(assignment.RoleName))
+        {
+            await _userScopeService.InvalidateRoleScopeCacheAsync(assignment.RoleName);
         }
     }
 

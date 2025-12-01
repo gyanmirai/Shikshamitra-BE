@@ -96,6 +96,17 @@ public interface IUserScopeService
     );
 
     /// <summary>
+    /// Invalidates the cached scope for all users with a specific role.
+    /// Should be called whenever role-based scope assignments change.
+    /// </summary>
+    /// <param name="roleName">Role name</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task InvalidateRoleScopeCacheAsync(
+        string roleName,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
     /// Checks if a user is an administrator (bypasses all scope checks).
     /// </summary>
     /// <param name="userId">User ID</param>

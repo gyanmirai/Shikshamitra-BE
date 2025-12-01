@@ -69,6 +69,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant, I
 	public Guid? InquiryPreferenceId { get; private set; }
 	
 	#region IUserScopedEntity Implementation
+	Guid? IUserScopedEntity.AcademicYearId => AcademicYearId;
 	Guid? IUserScopedEntity.EducationBoardId => EducationBoardId;
 	Guid? IUserScopedEntity.EducationMediumId => EducationMediumId;
 	Guid? IUserScopedEntity.EducationMediumStageId => EducationMediumStageId;

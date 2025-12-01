@@ -151,12 +151,20 @@ public class UserScopeService : DomainService, IUserScopeService
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var user = await _userRepository.GetAsync(userId, cancellationToken: cancellationToken);
+        var user = await _userRepository.GetAsync(userId, includeDetails: true, cancellationToken: cancellationToken);
         var roleIds = user.Roles.Select(r => r.RoleId).ToList();
         
-        // Get role names from role repository
-        var roles = await _roleRepository.GetListAsync(cancellationToken: cancellationToken);
-        var userRoleNames = roles.Where(r => roleIds.Contains(r.Id)).Select(r => r.Name).ToList();
+        if (!roleIds.Any())
+        {
+            return false;
+        }
+
+        // Get role names from role repository - only fetch roles matching the user's role IDs
+        var allRoles = await _roleRepository.GetListAsync(cancellationToken: cancellationToken);
+        var userRoleNames = allRoles
+            .Where(r => roleIds.Contains(r.Id))
+            .Select(r => r.Name)
+            .ToList();
 
         return _options.AdminRoles.Any(adminRole =>
             userRoleNames.Contains(adminRole, StringComparer.OrdinalIgnoreCase));

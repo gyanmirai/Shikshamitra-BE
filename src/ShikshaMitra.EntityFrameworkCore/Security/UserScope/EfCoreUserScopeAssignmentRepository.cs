@@ -76,15 +76,49 @@ public class EfCoreUserScopeAssignmentRepository :
         Guid divisionId,
         CancellationToken cancellationToken = default)
     {
-        return await (await GetQueryableAsync())
+        var dbContext = await GetDbContextAsync();
+
+        // Get direct user assignments
+        var directUserIds = await (await GetQueryableAsync())
             .Where(x =>
                 x.UserId.HasValue &&
                 x.IsActive &&
                 !x.IsDeleted &&
-                (x.DivisionId.HasValue && x.DivisionId.Value == divisionId || !x.DivisionId.HasValue)) // NULL = all divisions
+                (x.DivisionId.HasValue && x.DivisionId.Value == divisionId || !x.DivisionId.HasValue))
             .Select(x => x.UserId.Value)
+            .ToListAsync(cancellationToken);
+
+        // Get role-based assignments
+        var roleNames = await (await GetQueryableAsync())
+            .Where(x =>
+                x.RoleName != null &&
+                x.IsActive &&
+                !x.IsDeleted &&
+                (x.DivisionId.HasValue && x.DivisionId.Value == divisionId || !x.DivisionId.HasValue))
+            .Select(x => x.RoleName)
             .Distinct()
             .ToListAsync(cancellationToken);
+
+        // Get users with those roles
+        var roleBasedUserIds = new List<Guid>();
+        if (roleNames.Any())
+        {
+            // Get role IDs for the role names
+            var roles = await dbContext.Set<IdentityRole>()
+                .Where(r => roleNames.Contains(r.Name))
+                .ToListAsync(cancellationToken);
+
+            var roleIds = roles.Select(r => r.Id).ToList();
+
+            // Get users with these roles
+            roleBasedUserIds = await dbContext.Set<IdentityUser>()
+                .Where(u => u.Roles.Any(ur => roleIds.Contains(ur.RoleId)))
+                .Select(u => u.Id)
+                .ToListAsync(cancellationToken);
+        }
+
+        // Combine and return distinct user IDs
+        return directUserIds.Concat(roleBasedUserIds).Distinct().ToList();
     }
 
     public async Task<List<Guid>> GetUserIdsByStandardAsync(

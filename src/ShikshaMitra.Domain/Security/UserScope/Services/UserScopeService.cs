@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -88,58 +88,6 @@ public class UserScopeService : DomainService, IUserScopeService
         await CacheScopeAsync(userId, scope, cancellationToken);
 
         return scope;
-    }
-
-    public async Task<bool> HasAccessToDivisionAsync(
-        Guid userId,
-        Guid divisionId,
-        CancellationToken cancellationToken = default)
-    {
-        var scope = await GetUserScopeAsync(userId, cancellationToken);
-        // Check admin, wildcard division access, or specific division ID
-        return scope.IsAdmin || 
-               scope.HasWildcardDivision || 
-               scope.DivisionIds.Contains(divisionId);
-    }
-
-    public async Task<bool> HasAccessToStandardAsync(
-        Guid userId,
-        Guid standardId,
-        CancellationToken cancellationToken = default)
-    {
-        var scope = await GetUserScopeAsync(userId, cancellationToken);
-        // Check admin, wildcard standard access, or specific standard ID
-        return scope.IsAdmin || 
-               scope.HasWildcardStandard || 
-               scope.StandardIds.Contains(standardId);
-    }
-
-    public async Task<bool> HasAccessToBoardAsync(
-        Guid userId,
-        Guid boardId,
-        CancellationToken cancellationToken = default)
-    {
-        var scope = await GetUserScopeAsync(userId, cancellationToken);
-        // Check admin, wildcard board access, or specific board ID
-        return scope.IsAdmin || 
-               scope.HasWildcardBoard || 
-               scope.BoardIds.Contains(boardId);
-    }
-
-    public async Task<List<Guid>> GetAccessibleDivisionIdsAsync(
-        Guid userId,
-        CancellationToken cancellationToken = default)
-    {
-        var scope = await GetUserScopeAsync(userId, cancellationToken);
-        return scope.DivisionIds;
-    }
-
-    public async Task<List<Guid>> GetAccessibleStandardIdsAsync(
-        Guid userId,
-        CancellationToken cancellationToken = default)
-    {
-        var scope = await GetUserScopeAsync(userId, cancellationToken);
-        return scope.StandardIds;
     }
 
     public async Task InvalidateUserScopeCacheAsync(

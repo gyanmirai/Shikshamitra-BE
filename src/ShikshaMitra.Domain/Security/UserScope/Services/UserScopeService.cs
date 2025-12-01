@@ -22,6 +22,7 @@ public class UserScopeService : DomainService, IUserScopeService
     private readonly IUserScopeAssignmentRepository _scopeRepository;
     private readonly IDistributedCache<UserScopeContext> _cache;
     private readonly IIdentityUserRepository _userRepository;
+    private readonly IIdentityUserRepositoryExtensions _userRepositoryExtensions;
     private readonly IIdentityRoleRepository _roleRepository;
     private readonly ICurrentUser _currentUser;
     private readonly ILogger<UserScopeService> _logger;
@@ -31,6 +32,7 @@ public class UserScopeService : DomainService, IUserScopeService
         IUserScopeAssignmentRepository scopeRepository,
         IDistributedCache<UserScopeContext> cache,
         IIdentityUserRepository userRepository,
+        IIdentityUserRepositoryExtensions userRepositoryExtensions,
         IIdentityRoleRepository roleRepository,
         ICurrentUser currentUser,
         ILogger<UserScopeService> logger,
@@ -39,6 +41,7 @@ public class UserScopeService : DomainService, IUserScopeService
         _scopeRepository = scopeRepository;
         _cache = cache;
         _userRepository = userRepository;
+        _userRepositoryExtensions = userRepositoryExtensions;
         _roleRepository = roleRepository;
         _currentUser = currentUser;
         _logger = logger;
@@ -124,14 +127,10 @@ public class UserScopeService : DomainService, IUserScopeService
             return;
         }
 
-        // Get all users with this role
-        var usersWithRole = await _userRepository.GetListAsync(
-            cancellationToken: cancellationToken);
-
-        var userIdsToInvalidate = usersWithRole
-            .Where(u => u.Roles.Any(r => r.RoleId == role.Id))
-            .Select(u => u.Id)
-            .ToList();
+        // Efficiently get user IDs with this role at the database level
+        var userIdsToInvalidate = await _userRepositoryExtensions.GetUserIdsByRoleIdAsync(
+            role.Id,
+            cancellationToken);
 
         _logger.LogInformation(
             "Found {Count} users with role {RoleName}, invalidating their caches",

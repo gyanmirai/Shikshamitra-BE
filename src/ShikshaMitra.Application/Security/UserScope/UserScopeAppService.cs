@@ -131,8 +131,9 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error assigning user scope. UserId: {UserId}, RoleName: {RoleName}",
-                input.UserId, input.RoleName);
+            var correlationId = Guid.NewGuid();
+            _logger.LogError(ex, "Error assigning user scope. UserId: {UserId}, RoleName: {RoleName}, CorrelationId: {CorrelationId}",
+                input.UserId, input.RoleName, correlationId);
 
             // Check for foreign key violations
             if (ex.Message.Contains("foreign key", StringComparison.OrdinalIgnoreCase) ||
@@ -140,13 +141,13 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 ex.InnerException?.Message.Contains("foreign key", StringComparison.OrdinalIgnoreCase) == true)
             {
                 throw new UserFriendlyException(
-                    "One or more referenced entities (Standard, Division, Board, Medium, etc.) do not exist. Please verify all IDs are valid.",
+                    $"One or more referenced entities (Standard, Division, Board, Medium, etc.) do not exist. Please verify all IDs are valid. (Ref: {correlationId})",
                     code: "UserScope:ForeignKeyViolation"
                 );  
             }
 
             throw new UserFriendlyException(
-                $"An error occurred while assigning the scope: {ex.Message}",
+                $"An error occurred while assigning the scope. Please contact support with reference: {correlationId}",
                 code: "UserScope:AssignmentFailed"
             );
         }
@@ -283,9 +284,10 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error revoking scope assignment {AssignmentId}", id);
+            var correlationId = Guid.NewGuid();
+            _logger.LogError(ex, "Error revoking scope assignment {AssignmentId}, CorrelationId: {CorrelationId}", id, correlationId);
             throw new UserFriendlyException(
-                $"An error occurred while revoking the scope assignment: {ex.Message}",
+                $"An error occurred while revoking the scope assignment. Please contact support with reference: {correlationId}",
                 code: "UserScope:RevokeFailed"
             );
         }
@@ -340,9 +342,10 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting scope for user {UserId}", userId);
+            var correlationId = Guid.NewGuid();
+            _logger.LogError(ex, "Error getting scope for user {UserId}, CorrelationId: {CorrelationId}", userId, correlationId);
             throw new UserFriendlyException(
-                $"An error occurred while retrieving user scope: {ex.Message}",
+                $"An error occurred while retrieving user scope. Please contact support with reference: {correlationId}",
                 code: "UserScope:GetScopeFailed"
             );
         }

@@ -11,9 +11,10 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
 {
 	public override void Define(IPermissionDefinitionContext context)
 	{
-		DefineUserScopePermissions(context);
-		SetTenantPermissionMultiTenancySide(context);
 		var group = context.AddGroup(ShikshaMitraPermissions.GroupName, L("Permission:ShikshaMitra"));
+		
+		DefineUserScopePermissions(group);
+		SetTenantPermissionMultiTenancySide(context);
 
 		// Define Module Visibility Permissions (these go in JWT)
 		DefineModulePermissions(group);
@@ -33,14 +34,9 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
 		return LocalizableString.Create<ShikshaMitraResource>(name);
 	}
 
-	private void DefineUserScopePermissions(IPermissionDefinitionContext context)
+	private void DefineUserScopePermissions(PermissionGroupDefinition group)
 	{
-		var userScopeGroup = context.AddGroup(
-			ShikshaMitraPermissions.GroupName,
-			displayName: L("Permission:ShikshaMitra")
-		);
-
-		var userScopePermission = userScopeGroup.AddPermission(
+		var userScopePermission = group.AddPermission(
 			ShikshaMitraPermissions.UserScope.Default,
 			displayName: L("Permission:UserScope")
 		);

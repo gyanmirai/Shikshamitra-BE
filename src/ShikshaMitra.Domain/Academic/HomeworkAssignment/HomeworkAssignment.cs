@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -20,6 +20,9 @@ public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTe
 
 	#region IUserScopedEntity Explicit Implementation
 	Guid? IUserScopedEntity.AcademicYearId => AcademicYearId;
+	Guid? IUserScopedEntity.EducationBoardId => EducationBoardId;
+	Guid? IUserScopedEntity.EducationMediumId => EducationMediumId;
+	Guid? IUserScopedEntity.EducationMediumStageId => EducationMediumStageId;
 	Guid? IUserScopedEntity.StandardId => StandardId;
 	Guid? IUserScopedEntity.DivisionId => DivisionId;
 	#endregion

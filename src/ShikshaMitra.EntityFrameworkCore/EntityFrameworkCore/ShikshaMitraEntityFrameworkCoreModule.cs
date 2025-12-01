@@ -52,6 +52,9 @@ namespace ShikshaMitra.EntityFrameworkCore;
             // Register custom repositories
             options.AddRepository<UserScopeAssignment, EfCoreUserScopeAssignmentRepository>();
         });
+        
+        // Register custom repository extensions
+        context.Services.AddTransient<IIdentityUserRepositoryExtensions, EfCoreIdentityUserRepositoryExtensions>();
 
         Configure<AbpDbContextOptions>(options =>
         {

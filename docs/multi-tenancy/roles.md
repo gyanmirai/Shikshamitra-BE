@@ -211,9 +211,8 @@ But their **UserScope** determines:
 
 ## 📚 Related Documentation
 
-- [API Quick Reference](./API-Quick-Reference.md)
-- [Postman Collection Guide](./Postman-Collection-Guide.md)
-- [UserScope Documentation](./UserScope-Guide.md) *(if exists)*
+- [API Endpoints](../api/endpoints.md)
+- [UserScope Usage Guide](../UserScope-Usage.md)
 
 ---
 

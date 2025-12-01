@@ -1,0 +1,50 @@
+﻿name: Test Build (No Deployment)
+
+on:
+  push:
+    branches: ["jignesh1604-patch-1"]  # Your current branch
+
+env:
+  DOTNET_VERSION: '9.0.x'
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --configuration Release
+
+    # ⭐ Run ABP DbMigrator with test database
+    - name: Run DbMigrator (Test)
+      env:
+        ConnectionStrings__Default: ${{ secrets.TEST_DB_CONNECTION_STRING }}
+      run: |
+        cd src/ShikshaMitra.DbMigrator
+        dotnet run --configuration Release
+
+    # ⭐ Publish Host App (for verification)
+    - name: Publish
+      run: dotnet publish src/ShikshaMitra.HttpApi.Host -c Release -o ./publish
+
+    - name: Verify Build Success
+      run: |
+        echo "✅ Build completed successfully!"
+        echo "✅ DbMigrator ran successfully!"
+        echo "✅ Publish completed successfully!"
+        echo ""
+        echo "Verifying publish output:"
+        ls -la ./publish
+        echo ""
+        echo "The workflow configuration is correct and ready for deployment."
+        echo "No deployment will occur - this is just a test run."

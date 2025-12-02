@@ -18,6 +18,7 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
 
 		// Define Module Visibility Permissions (these go in JWT)
 		DefineModulePermissions(group);
+		DefineSubmodulePermissions(group);
 	}
 
 	private static void DefineModulePermissions(PermissionGroupDefinition group)
@@ -26,6 +27,15 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
 		foreach (var modulePermission in ShikshaMitraModulePermissions.All)
 		{
 			group.AddPermission(modulePermission, L(ShikshaMitraModulePermissions.DisplayNames[modulePermission]));
+		}
+	}
+
+	private static void DefineSubmodulePermissions(PermissionGroupDefinition group)
+	{
+		// Use ShikshaMitraModulePermissions from the domain shared project
+		foreach (var submodulePermission in ShikshaMitraSubModulePermissions.All)
+		{
+			group.AddPermission(submodulePermission, L(ShikshaMitraSubModulePermissions.DisplayNames[submodulePermission]));
 		}
 	}
 

@@ -13,7 +13,7 @@ public static class ShikshaMitraModulePermissions
 	public const string HR = $"{GroupName}.HR";
 	public const string Finance = $"{GroupName}.Finance";
 	public const string Communication = $"{GroupName}.Communication";
-	public const string Calendar = $"{GroupName}.Calender";
+	public const string Calendar = $"{GroupName}.Calendar";
 	public const string Library = $"{GroupName}.Library";
 	public const string Transport = $"{GroupName}.Transport";
 	public const string ResourceManagement = $"{GroupName}.ResourceManagement";

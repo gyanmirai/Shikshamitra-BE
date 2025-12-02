@@ -17,6 +17,10 @@ public class EmployeeAttendance : FullAuditedEntity<Guid>, IMultiTenant, IUserSc
 
 	public EmployeeAttendanceStatusType StatusType { get; set; }
 
+	// Concrete FK for scope filtering - denormalized from Employee
+	// This ensures EF Core can apply scope filters without relying on navigation properties
+	public Guid EducationMediumStageId { get; set; }
+
 	public double? TotalHoursWorked
 	{
 		get
@@ -45,12 +49,12 @@ public class EmployeeAttendance : FullAuditedEntity<Guid>, IMultiTenant, IUserSc
 	public virtual Employee Employee { get; set; }
 
 	#region IUserScopedEntity Explicit Implementation
-	// Delegate to Employee's EducationMediumStage scope
-	// Employee attendance is not filtered by academic year
+	// Use concrete FK properties instead of navigating through nullable Employee
+	// Employee attendance is not filtered by academic year/board/medium/standard/division
 	Guid? IUserScopedEntity.AcademicYearId => null;
-	Guid? IUserScopedEntity.EducationBoardId => null; // Employee doesn't have board/medium
+	Guid? IUserScopedEntity.EducationBoardId => null;
 	Guid? IUserScopedEntity.EducationMediumId => null;
-	Guid? IUserScopedEntity.EducationMediumStageId => Employee?.EducationMediumStageId;
+	Guid? IUserScopedEntity.EducationMediumStageId => EducationMediumStageId;
 	Guid? IUserScopedEntity.StandardId => null;
 	Guid? IUserScopedEntity.DivisionId => null;
 	#endregion

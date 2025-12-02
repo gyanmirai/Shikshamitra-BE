@@ -144,9 +144,76 @@ public class EfCoreUserScopeAssignmentRepository :
         Guid standardId,
         CancellationToken cancellationToken = default)
     {
-        return await GetUserIdsByFieldAsync(
-            x => x.StandardId == standardId || x.StandardId == null,
-            cancellationToken);
+        var dbContext = await GetDbContextAsync();
+        var baseQuery = await GetQueryableAsync();
+
+        // Get the standard's parent ID (EducationMediumStageId) to enforce hierarchical constraints
+        var standard = await dbContext.Set<ShikshaMitra.TenantSettings.Standards.Standard>()
+            .Where(s => s.Id == standardId)
+            .Select(s => new { s.EducationMediumStageId })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (standard == null)
+        {
+            return new List<Guid>();
+        }
+
+        // Get direct user assignments with hierarchical validation
+        // User has access if:
+        // 1. Exact standard match (StandardId == standardId), OR
+        // 2. Wildcard standard (StandardId == null) WITHIN the standard's parent medium stage, OR
+        // 3. Wildcard medium stage (implies access to all standards in that stage)
+        var directUserIds = await baseQuery
+            .Where(x =>
+                x.UserId.HasValue &&
+                x.IsActive &&
+                !x.IsDeleted &&
+                (
+                    // Exact standard match
+                    (x.StandardId.HasValue && x.StandardId.Value == standardId) ||
+                    // Wildcard standard WITHIN parent medium stage constraint
+                    (!x.StandardId.HasValue && x.EducationMediumStageId.HasValue && 
+                     x.EducationMediumStageId.Value == standard.EducationMediumStageId) ||
+                    // Wildcard medium stage (implies access to all standards in any stage)
+                    (!x.EducationMediumStageId.HasValue && !x.StandardId.HasValue)
+                ))
+            .Select(x => x.UserId.Value)
+            .ToListAsync(cancellationToken);
+
+        // Get role-based assignments with hierarchical validation
+        var roleNames = await baseQuery
+            .Where(x =>
+                x.RoleName != null &&
+                x.IsActive &&
+                !x.IsDeleted &&
+                (
+                    // Exact standard match
+                    (x.StandardId.HasValue && x.StandardId.Value == standardId) ||
+                    // Wildcard standard WITHIN parent medium stage constraint
+                    (!x.StandardId.HasValue && x.EducationMediumStageId.HasValue && 
+                     x.EducationMediumStageId.Value == standard.EducationMediumStageId) ||
+                    // Wildcard medium stage (implies access to all standards in any stage)
+                    (!x.EducationMediumStageId.HasValue && !x.StandardId.HasValue)
+                ))
+            .Select(x => x.RoleName)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        // Get users with those roles
+        var roleBasedUserIds = new List<Guid>();
+        if (roleNames.Any())
+        {
+            roleBasedUserIds = await (
+                from user in dbContext.Set<IdentityUser>()
+                from userRole in user.Roles
+                join role in dbContext.Set<IdentityRole>() on userRole.RoleId equals role.Id
+                where roleNames.Contains(role.Name)
+                select user.Id
+            ).Distinct().ToListAsync(cancellationToken);
+        }
+
+        // Combine and return distinct user IDs
+        return directUserIds.Concat(roleBasedUserIds).Distinct().ToList();
     }
 
     public async Task<bool> ExistsAsync(

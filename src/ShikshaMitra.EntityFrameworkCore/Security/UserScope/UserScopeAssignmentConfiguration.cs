@@ -48,16 +48,19 @@ public class UserScopeAssignmentConfiguration : IEntityTypeConfiguration<UserSco
         builder.Property(x => x.DivisionId).IsRequired(false);
 
         // Indexes for performance
-        builder.HasIndex(x => new { x.TenantId, x.UserId, x.IsActive, x.IsDeleted })
-            .HasDatabaseName("IX_UserScopeAssignments_Lookup")
-            .IncludeProperties(x => new
-            {
-                x.EducationBoardId,
-                x.EducationMediumId,
-                x.EducationMediumStageId,
-                x.StandardId,
-                x.DivisionId
-            });
+        // Capture the index builder to avoid duplicate index creation
+        var lookupIndex = builder.HasIndex(x => new { x.TenantId, x.UserId, x.IsActive, x.IsDeleted })
+            .HasDatabaseName("IX_UserScopeAssignments_Lookup");
+        
+        // Use Npgsql-specific include properties on the same index
+        lookupIndex.IncludeProperties(x => new
+        {
+            x.EducationBoardId,
+            x.EducationMediumId,
+            x.EducationMediumStageId,
+            x.StandardId,
+            x.DivisionId
+        });
 
         builder.HasIndex(x => new { x.TenantId, x.RoleName, x.IsActive, x.IsDeleted })
             .HasDatabaseName("IX_UserScopeAssignments_Role");

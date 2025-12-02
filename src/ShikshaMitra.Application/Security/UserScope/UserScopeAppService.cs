@@ -47,6 +47,8 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
             _logger.LogInformation("Attempting to assign scope. UserId: {UserId}, RoleName: {RoleName}", 
                 input.UserId, input.RoleName);
 
+            // Note: This validation is also enforced at DTO level via IValidatableObject
+            // Keeping it here as a defensive programming practice
             // Validation: Either UserId OR RoleName must be provided
             if ((!input.UserId.HasValue && string.IsNullOrWhiteSpace(input.RoleName)) ||
                 (input.UserId.HasValue && !string.IsNullOrWhiteSpace(input.RoleName)))
@@ -378,7 +380,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
             query = query.Where(x => x.RoleName == roleName);
         }
 
-        var assignments = query.ToList();
+        var assignments = await AsyncExecuter.ToListAsync(query);
         return ObjectMapper.Map<List<UserScopeAssignment>, List<UserScopeAssignmentDto>>(assignments);
     }
 

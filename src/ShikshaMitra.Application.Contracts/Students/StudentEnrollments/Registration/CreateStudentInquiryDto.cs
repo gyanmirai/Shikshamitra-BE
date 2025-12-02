@@ -35,6 +35,7 @@ public class CreateStudentInquiryDto
 	public Guid AcademicYearId { get; set; }
 	public Guid EducationBoardId { get; set; }
 	public Guid EducationMediumId { get; set; }
+	public Guid? EducationMediumStageId { get; set; }
 	public Guid StandardId { get; set; }
 	public Guid? InquiryPreferenceId { get; set; }
 	

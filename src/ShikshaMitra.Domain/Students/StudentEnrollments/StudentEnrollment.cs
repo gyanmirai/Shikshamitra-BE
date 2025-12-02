@@ -147,6 +147,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant, I
 		Guid academicYearId,
 		Guid educationBoardId,
 		Guid educationMediumId,
+		Guid? educationMediumStageId,
 		Guid standardId,
 		Guid? inquiryPreferenceId,
 		// Basic Details
@@ -199,6 +200,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant, I
 		AcademicYearId = academicYearId;
 		EducationBoardId = educationBoardId;
 		EducationMediumId = educationMediumId;
+		EducationMediumStageId = educationMediumStageId;
 		StandardId = standardId;
 		InquiryPreferenceId = inquiryPreferenceId;
 
@@ -257,6 +259,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant, I
 		Guid academicYearId,
 		Guid educationBoardId,
 		Guid educationMediumId,
+		Guid? educationMediumStageId,
 		Guid standardId,
 		Guid? inquiryPreferenceId
 	)
@@ -286,6 +289,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant, I
 		AcademicYearId = academicYearId;
 		EducationBoardId = educationBoardId;
 		EducationMediumId = educationMediumId;
+		EducationMediumStageId = educationMediumStageId;
 		StandardId = standardId;
 		InquiryPreferenceId = inquiryPreferenceId;
 
@@ -315,6 +319,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant, I
 		Guid academicYearId,
 		Guid educationBoardId,
 		Guid educationMediumId,
+		Guid? educationMediumStageId,
 		Guid standardId,
 		Guid? inquiryPreferenceId,
 		// Basic Details
@@ -352,6 +357,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant, I
 		AcademicYearId = academicYearId;
 		EducationBoardId = educationBoardId;
 		EducationMediumId = educationMediumId;
+		EducationMediumStageId = educationMediumStageId;
 		StandardId = standardId;
 		InquiryPreferenceId = inquiryPreferenceId;
 

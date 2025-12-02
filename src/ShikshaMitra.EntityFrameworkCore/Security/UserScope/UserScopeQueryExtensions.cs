@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Security.UserScope;
 
 namespace ShikshaMitra.EntityFrameworkCore.Security.UserScope;
@@ -239,13 +242,14 @@ public static class UserScopeQueryExtensions
 	}
 
 	/// <summary>
-	/// Gets the count of entities the user can access based on their scope.
+	/// Asynchronously gets the count of entities the user can access based on their scope.
 	/// More efficient than loading and counting filtered entities.
 	/// </summary>
 	/// <typeparam name="TEntity">Entity type implementing IUserScopedEntity</typeparam>
 	/// <param name="queryable">The queryable to count</param>
 	/// <param name="userScope">User's scope context</param>
-	/// <returns>Count of accessible entities</returns>
+	/// <param name="cancellationToken">Cancellation token</param>
+	/// <returns>Task containing the count of accessible entities</returns>
 	/// <example>
 	/// <code>
 	/// var query = await _studentRepository.GetQueryableAsync();
@@ -253,26 +257,36 @@ public static class UserScopeQueryExtensions
 	/// var accessibleCount = await query.CountWithUserScopeAsync(userScope);
 	/// </code>
 	/// </example>
-	public static int CountWithUserScope<TEntity>(
+	public static async Task<int> CountWithUserScopeAsync<TEntity>(
 		this IQueryable<TEntity> queryable,
-		UserScopeContext userScope)
+		UserScopeContext userScope,
+		CancellationToken cancellationToken = default)
 		where TEntity : IUserScopedEntity
 	{
-		return queryable.ApplyUserScope(userScope).Count();
+		return await queryable.ApplyUserScope(userScope).CountAsync(cancellationToken);
 	}
 
 	/// <summary>
-	/// Checks if any entities exist that the user can access based on their scope.
+	/// Asynchronously checks if any entities exist that the user can access based on their scope.
 	/// </summary>
 	/// <typeparam name="TEntity">Entity type implementing IUserScopedEntity</typeparam>
 	/// <param name="queryable">The queryable to check</param>
 	/// <param name="userScope">User's scope context</param>
-	/// <returns>True if user can access at least one entity, false otherwise</returns>
-	public static bool AnyWithUserScope<TEntity>(
+	/// <param name="cancellationToken">Cancellation token</param>
+	/// <returns>Task containing true if user can access at least one entity, false otherwise</returns>
+	/// <example>
+	/// <code>
+	/// var query = await _studentRepository.GetQueryableAsync();
+	/// var userScope = await _userScopeService.GetUserScopeAsync(userId);
+	/// var hasAccess = await query.AnyWithUserScopeAsync(userScope);
+	/// </code>
+	/// </example>
+	public static async Task<bool> AnyWithUserScopeAsync<TEntity>(
 		this IQueryable<TEntity> queryable,
-		UserScopeContext userScope)
+		UserScopeContext userScope,
+		CancellationToken cancellationToken = default)
 		where TEntity : IUserScopedEntity
 	{
-		return queryable.ApplyUserScope(userScope).Any();
+		return await queryable.ApplyUserScope(userScope).AnyAsync(cancellationToken);
 	}
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.Security.UserScope;
@@ -6,7 +7,7 @@ namespace ShikshaMitra.Security.UserScope;
 /// <summary>
 /// DTO for creating a new user scope assignment.
 /// </summary>
-public class CreateUserScopeAssignmentDto
+public class CreateUserScopeAssignmentDto : IValidatableObject
 {
     /// <summary>
     /// User ID for user-specific scope. Either UserId OR RoleName must be provided.
@@ -54,4 +55,28 @@ public class CreateUserScopeAssignmentDto
     /// </summary>
     [MaxLength(500)]
     public string? Description { get; set; }
+
+    /// <summary>
+    /// Validates that exactly one of UserId or RoleName is provided (XOR constraint).
+    /// </summary>
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        var hasUserId = UserId.HasValue;
+        var hasRoleName = !string.IsNullOrWhiteSpace(RoleName);
+
+        // Both are missing
+        if (!hasUserId && !hasRoleName)
+        {
+            yield return new ValidationResult(
+                "Either UserId or RoleName must be provided.",
+                new[] { nameof(UserId), nameof(RoleName) });
+        }
+        // Both are provided
+        else if (hasUserId && hasRoleName)
+        {
+            yield return new ValidationResult(
+                "Either UserId or RoleName must be provided, but not both.",
+                new[] { nameof(UserId), nameof(RoleName) });
+        }
+    }
 }

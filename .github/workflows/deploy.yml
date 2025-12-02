@@ -2,7 +2,7 @@
 
 on:
   push:
-    branches: ["user/jjinjala/new-env-setup"] # TODO: Fix it to main once new env setup is done
+    branches: ["main"]
 
 env:
   AZURE_WEBAPP_NAME: staging-gyanmirai-be

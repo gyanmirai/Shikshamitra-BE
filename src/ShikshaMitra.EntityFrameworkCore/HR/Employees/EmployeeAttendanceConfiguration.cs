@@ -47,16 +47,9 @@ public class EmployeeAttendanceConfiguration : IEntityTypeConfiguration<Employee
 		// This allows scope filtering without joining through Employee
 		// The relationship is maintained through application logic
 		
-		// Add check constraint to ensure EducationMediumStageId consistency
-		// This validates that when EducationMediumStageId is not null, it matches the Employee's value
-		builder.ToTable(tb => tb.HasCheckConstraint(
-			"CK_EmployeeAttendance_EducationMediumStageId_Consistency",
-			@"""EducationMediumStageId"" IS NULL OR 
-			  ""EducationMediumStageId"" = (
-				  SELECT ""EducationMediumStageId"" 
-				  FROM ""AppEmployees"" 
-				  WHERE ""Id"" = ""EmployeeId""
-			  )"""
-		));
+		// Note: PostgreSQL CHECK constraints cannot reference other tables via subqueries.
+		// EducationMediumStageId consistency is enforced in the application layer
+		// via EmployeeAttendanceAppService.ValidateAndNormalizeEducationMediumStageIdAsync()
+		// which validates and auto-populates the value from the Employee record.
 	}
 }

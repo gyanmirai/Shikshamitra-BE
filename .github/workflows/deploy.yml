@@ -8,6 +8,8 @@ env:
   AZURE_WEBAPP_NAME: staging-gyanmirai-be
   DOTNET_VERSION: '10.0.x'
   ASPNETCORE_ENVIRONMENT: Staging
+  DOTNET_ENVIRONMENT: Staging
+  DOTNET_USELAUNCHSETTINGS: '0'
 
 jobs:
   build:
@@ -39,7 +41,7 @@ jobs:
         ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
       run: |
         cd src/ShikshaMitra.DbMigrator
-        dotnet run --configuration Release
+        dotnet run --configuration Release --no-launch-profile
 
     # ⭐ Publish Host App
     - name: Publish

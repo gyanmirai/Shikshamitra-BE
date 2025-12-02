@@ -3,12 +3,13 @@
   <Import Project="..\..\common.props" />
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <RootNamespace>ShikshaMitra</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="System.Linq.Dynamic.Core" Version="1.7.1" />
     <ProjectReference Include="..\..\src\ShikshaMitra.EntityFrameworkCore\ShikshaMitra.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\ShikshaMitra.Application.Tests\ShikshaMitra.Application.Tests.csproj" />
     <PackageReference Include="Volo.Abp.EntityFrameworkCore.Sqlite" Version="9.0.0" />

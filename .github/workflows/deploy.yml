@@ -1,0 +1,74 @@
+﻿name: Deploy ABP App using Publish Profile
+
+on:
+  push:
+    branches: ["main"]
+
+env:
+  AZURE_WEBAPP_NAME: staging-gyanmirai-be
+  DOTNET_VERSION: '10.0.x'
+  ASPNETCORE_ENVIRONMENT: Staging
+  DOTNET_ENVIRONMENT: Staging
+  DOTNET_USELAUNCHSETTINGS: '0'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore
+      run: dotnet restore
+
+    - name: Install ABP CLI
+      run: dotnet tool install -g Volo.Abp.Cli
+
+    - name: Download ABP libraries
+      run: abp install-libs
+
+    - name: Build
+      run: dotnet build --configuration Release
+
+    # ⭐ Run ABP DbMigrator
+    - name: Run DbMigrator
+      env:
+        ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
+      run: |
+        cd src/ShikshaMitra.DbMigrator
+        dotnet run --configuration Release --no-launch-profile
+
+    # ⭐ Publish Host App
+    - name: Publish
+      run: dotnet publish src/ShikshaMitra.HttpApi.Host -c Release -o ./publish
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: build_artifact
+        path: ./publish
+
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build_artifact
+          path: ./build_artifact
+
+      # ⭐ Deploy using Publish Profile
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ./build_artifact

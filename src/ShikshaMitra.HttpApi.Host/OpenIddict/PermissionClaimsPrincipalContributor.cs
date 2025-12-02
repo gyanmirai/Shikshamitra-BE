@@ -4,11 +4,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
-using System.Security.Principal;
 using System.Threading.Tasks;
 using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.DependencyInjection;
-using Volo.Abp.PermissionManagement;
 using Volo.Abp.Security.Claims;
 
 namespace ShikshaMitra.OpenIddict;
@@ -17,11 +15,9 @@ public class PermissionClaimsPrincipalContributor
 	: IAbpClaimsPrincipalContributor, ITransientDependency
 {
 	private static readonly string[] ModulePermissions = ShikshaMitraModulePermissions.All;
-	private static readonly string[] SubModulePermissions = ShikshaMitraSubModulePermissions.All;
-	private static readonly HashSet<string> ManagedPermissions = new(
-		ModulePermissions.Concat(SubModulePermissions),
-		StringComparer.OrdinalIgnoreCase
-	);
+	private const char PermissionGrantedBit = '1';
+	private const char PermissionDeniedBit = '0';
+	private const string ModuleMaskClaimType = "module_mask";
 
 	public async Task ContributeAsync(AbpClaimsPrincipalContributorContext context)
 	{
@@ -29,105 +25,27 @@ public class PermissionClaimsPrincipalContributor
 		if (identity is not ClaimsIdentity claimsIdentity || !claimsIdentity.IsAuthenticated)
 			return;
 
-		var userId = context.ClaimsPrincipal.FindUserId();
-		if (userId == null)
-			return;
+		var permissionChecker = context.ServiceProvider.GetRequiredService<IPermissionChecker>();
 
-		// Fetch all permissions with parallel execution
-		var grantedPermissions = await GetGrantedPermissionsAsync(context.ServiceProvider, userId.Value);
-
-		var grantedModuleMask = BuildPermissionBitmask(ModulePermissions, grantedPermissions);
-		claimsIdentity.AddClaim(new Claim("module_mask", grantedModuleMask));
-
-		var grantedSubModuleMask = BuildPermissionBitmask(SubModulePermissions, grantedPermissions);
-		claimsIdentity.AddClaim(new Claim("submodule_mask", grantedSubModuleMask));
+		// Get granted module permissions and add to claims
+		var grantedModulePermissions = await GetGrantedPermissionsAsync(permissionChecker, ModulePermissions);
+		var moduleMask = BuildPermissionBitmask(ModulePermissions, grantedModulePermissions);
+		claimsIdentity.AddClaim(new Claim(ModuleMaskClaimType, moduleMask));
 	}
 
-	private static async Task<HashSet<string>> GetGrantedPermissionsAsync(IServiceProvider serviceProvider, Guid userId)
+	private static async Task<HashSet<string>> GetGrantedPermissionsAsync(
+		IPermissionChecker permissionChecker,
+		string[] permissions)
 	{
-		var permissionGrantRepository = serviceProvider.GetRequiredService<IPermissionGrantRepository>();
-		var currentPrincipalAccessor = serviceProvider.GetRequiredService<ICurrentPrincipalAccessor>();
-		
-		// Get user's roles
-		var roles = currentPrincipalAccessor.Principal?.FindAll(AbpClaimTypes.Role)
-			.Select(c => c.Value)
-			.ToList() ?? new List<string>();
-		
-		// Fetch user permissions and all role permissions IN PARALLEL
-		var userGrantsTask = permissionGrantRepository.GetListAsync(
-			providerName: "U",
-			providerKey: userId.ToString()
-		);
-		
-		var roleGrantsTasks = roles.Select(role =>
-			permissionGrantRepository.GetListAsync(providerName: "R", providerKey: role)
-		).ToList();
-		
-		// Wait for all queries to complete in parallel
-		await Task.WhenAll(roleGrantsTasks.Append(userGrantsTask));
-		
-		// Process results
-		var rolePermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		var userPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		var userManagedPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		
-		// Collect role permissions
-		foreach (var roleGrantsTask in roleGrantsTasks)
+		var granted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var permission in permissions)
 		{
-			foreach (var grant in roleGrantsTask.Result)
+			if (await permissionChecker.IsGrantedAsync(permission))
 			{
-				rolePermissions.Add(grant.Name);
+				granted.Add(permission);
 			}
 		}
-		
-		// Collect user permissions
-		foreach (var grant in userGrantsTask.Result)
-		{
-			userPermissions.Add(grant.Name);
-			if (ManagedPermissions.Contains(grant.Name))
-			{
-				userManagedPermissions.Add(grant.Name);
-			}
-		}
-		
-		// Build final set with user-override logic
-		var finalPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		
-		bool userControlsPermissions = userManagedPermissions.Any();
-		
-		if (userControlsPermissions)
-		{
-			// User has explicit control over managed permissions
-			// For managed permissions: use ONLY user grants
-			// For non-managed permissions: use union of role + user
-			foreach (var permission in rolePermissions)
-			{
-				if (!ManagedPermissions.Contains(permission))
-				{
-					finalPermissions.Add(permission);
-				}
-			}
-			
-			foreach (var permission in userPermissions)
-			{
-				finalPermissions.Add(permission);
-			}
-		}
-		else
-		{
-			// User has no explicit control - use all role permissions + any user permissions
-			foreach (var permission in rolePermissions)
-			{
-				finalPermissions.Add(permission);
-			}
-			
-			foreach (var permission in userPermissions)
-			{
-				finalPermissions.Add(permission);
-			}
-		}
-
-		return finalPermissions;
+		return granted;
 	}
 
 	private static string BuildPermissionBitmask(string[] permissions, HashSet<string> grantedPermissions)
@@ -141,7 +59,6 @@ public class PermissionClaimsPrincipalContributor
 			}
 		}
 
-		var bitString = string.Join(string.Empty, bits.Cast<bool>().Select(b => b ? '1' : '0'));
-		return bitString;
+		return string.Join(string.Empty, bits.Cast<bool>().Select(b => b ? PermissionGrantedBit : PermissionDeniedBit));
 	}
 }

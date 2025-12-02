@@ -198,6 +198,7 @@ public class StudentEnrollmentAppService(
 			academicYearId: input.AcademicYearId,
 			educationBoardId: input.EducationBoardId,
 			educationMediumId: input.EducationMediumId,
+			educationMediumStageId: input.EducationMediumStageId,
 			standardId: input.StandardId,
 			inquiryPreferenceId: input.InquiryPreferenceId,
 			userId: input.UserId,
@@ -259,6 +260,7 @@ public class StudentEnrollmentAppService(
 			academicYearId: input.AcademicYearId,
 			educationBoardId: input.EducationBoardId,
 			educationMediumId: input.EducationMediumId,
+			educationMediumStageId: input.EducationMediumStageId,
 			standardId: input.StandardId,
 			inquiryPreferenceId: input.InquiryPreferenceId
 		);
@@ -312,6 +314,7 @@ public class StudentEnrollmentAppService(
 			academicYearId: input.AcademicYearId,
 			educationBoardId: input.EducationBoardId,
 			educationMediumId: input.EducationMediumId,
+			educationMediumStageId: input.EducationMediumStageId,
 			standardId: input.StandardId,
 			inquiryPreferenceId: input.InquiryPreferenceId
 		);
@@ -347,6 +350,7 @@ public class StudentEnrollmentAppService(
 			academicYearId: input.AcademicYearId,
 			educationBoardId: input.EducationBoardId,
 			educationMediumId: input.EducationMediumId,
+			educationMediumStageId: input.EducationMediumStageId,
 			standardId: input.StandardId,
 			inquiryPreferenceId: input.InquiryPreferenceId,
 			// basic details

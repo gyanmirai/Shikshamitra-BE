@@ -112,6 +112,14 @@
     "Permission:Student.SpecialEducationNeeds": "Special Education Needs",
     "Permission:Student.SpecialEducationNeeds.Create": "Create Special Education Record",
     "Permission:Student.SpecialEducationNeeds.Edit": "Edit Special Education Record",
-    "Permission:Student.SpecialEducationNeeds.Delete": "Delete Special Education Record"
+    "Permission:Student.SpecialEducationNeeds.Delete": "Delete Special Education Record",
+
+    "Permission:ShikshaMitra": "ShikshaMitra",
+    "Permission:UserScope": "User Scope Management",
+    "Permission:UserScope.View": "View User Scopes",
+    "Permission:UserScope.Assign": "Assign User Scope",
+    "Permission:UserScope.BulkAssign": "Bulk Assign User Scopes",
+    "Permission:UserScope.Revoke": "Revoke User Scope",
+    "Permission:UserScope.Manage": "Manage User Scopes"
   }
 }

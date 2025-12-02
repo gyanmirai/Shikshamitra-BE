@@ -9,6 +9,8 @@ public class EmployeeAttendanceDto : EntityDto<Guid>
 
 	public string EmployeeName { get; set; }
 
+	public Guid EducationMediumStageId { get; set; }
+
 	public DateTimeOffset? TimeIn { get; set; }
 	public DateTimeOffset? TimeOut { get; set; }
 

@@ -9,9 +9,11 @@ public class CreateUpdateEmployeeAttendanceDto
 	
 	/// <summary>
 	/// Education Medium Stage ID for scope filtering.
-	/// Must match the employee's EducationMediumStageId.
+	/// If not provided, it will be auto-populated from the associated Employee's EducationMediumStageId.
+	/// If provided, it must match the employee's EducationMediumStageId exactly.
+	/// Nullable to support legacy records created before scope filtering was implemented.
 	/// </summary>
-	[Required] public Guid EducationMediumStageId { get; set; }
+	public Guid? EducationMediumStageId { get; set; }
 	
 	public DateTimeOffset? TimeIn { get; set; }
 	public DateTimeOffset? TimeOut { get; set; }

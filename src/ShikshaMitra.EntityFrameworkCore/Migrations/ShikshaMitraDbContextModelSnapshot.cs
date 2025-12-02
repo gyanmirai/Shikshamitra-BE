@@ -1395,7 +1395,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
-                    b.Property<Guid>("EducationMediumStageId")
+                    b.Property<Guid?>("EducationMediumStageId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("EmployeeId")
@@ -1436,7 +1436,10 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("EmployeeId");
 
-                    b.ToTable("AppEmployeeAttendances", (string)null);
+                    b.ToTable("AppEmployeeAttendances", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EmployeeAttendance_EducationMediumStageId_Consistency", "\"EducationMediumStageId\" IS NULL OR \n			  \"EducationMediumStageId\" = (\n				  SELECT \"EducationMediumStageId\" \n				  FROM \"AppEmployees\" \n				  WHERE \"Id\" = \"EmployeeId\"\n			  )\"");
+                        });
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.EmployeeDocument", b =>

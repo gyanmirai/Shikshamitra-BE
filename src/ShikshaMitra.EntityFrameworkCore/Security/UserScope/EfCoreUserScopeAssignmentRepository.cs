@@ -31,36 +31,30 @@ public class EfCoreUserScopeAssignmentRepository :
     {
         var dbContext = await GetDbContextAsync();
 
-        // Get user's direct assignments
-        var userAssignments = await (await GetQueryableAsync())
-            .Where(x => x.UserId.HasValue && x.UserId.Value == userId && x.IsActive && !x.IsDeleted)
+        // Single query to get user's role names
+        var userRoleNames = await (
+            from user in dbContext.Set<IdentityUser>()
+            where user.Id == userId
+            from userRole in user.Roles
+            join role in dbContext.Set<IdentityRole>() on userRole.RoleId equals role.Id
+            select role.Name
+        ).ToListAsync(cancellationToken);
+
+        // Single query to get both direct user assignments and role-based assignments
+        var allAssignments = await (await GetQueryableAsync())
+            .Where(x =>
+                x.IsActive &&
+                !x.IsDeleted &&
+                (
+                    // Direct user assignments
+                    (x.UserId.HasValue && x.UserId.Value == userId) ||
+                    // Role-based assignments
+                    (x.RoleName != null && userRoleNames.Contains(x.RoleName))
+                )
+            )
             .ToListAsync(cancellationToken);
 
-        // Get user's role names
-        var user = await dbContext.Set<IdentityUser>()
-            .Include(u => u.Roles)
-            .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
-
-        if (user == null)
-        {
-            return userAssignments;
-        }
-
-        var roleIds = user.Roles.Select(r => r.RoleId).ToList();
-        
-        // Get role names from role IDs
-        var userRoleNames = await dbContext.Set<IdentityRole>()
-            .Where(r => roleIds.Contains(r.Id))
-            .Select(r => r.Name)
-            .ToListAsync(cancellationToken);
-
-        // Get role-based assignments
-        var roleAssignments = await (await GetQueryableAsync())
-            .Where(x => userRoleNames.Contains(x.RoleName) && x.IsActive && !x.IsDeleted)
-            .ToListAsync(cancellationToken);
-
-        // Combine and return
-        return userAssignments.Concat(roleAssignments).ToList();
+        return allAssignments;
     }
 
     public async Task<List<UserScopeAssignment>> GetRoleAssignmentsAsync(

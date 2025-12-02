@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -70,10 +71,73 @@ public class EfCoreUserScopeAssignmentRepository :
         Guid divisionId,
         CancellationToken cancellationToken = default)
     {
-        return await GetUserIdsByFieldAsync(
-            x => x.DivisionId,
-            divisionId,
-            cancellationToken);
+        var dbContext = await GetDbContextAsync();
+        var baseQuery = await GetQueryableAsync();
+
+        // Get the division's standard ID to enforce hierarchical constraints
+        var division = await dbContext.Set<ShikshaMitra.TenantSettings.Divisions.Division>()
+            .Where(d => d.Id == divisionId)
+            .Select(d => new { d.StandardId })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (division == null)
+        {
+            return new List<Guid>();
+        }
+
+        // Get direct user assignments with hierarchical validation
+        // User has access if:
+        // 1. Exact division match (DivisionId == divisionId), OR
+        // 2. Wildcard division (DivisionId == null) WITHIN the division's parent standard
+        var directUserIds = await baseQuery
+            .Where(x =>
+                x.UserId.HasValue &&
+                x.IsActive &&
+                !x.IsDeleted &&
+                (
+                    // Exact division match
+                    (x.DivisionId.HasValue && x.DivisionId.Value == divisionId) ||
+                    // Wildcard division WITHIN parent standard constraint
+                    (!x.DivisionId.HasValue && x.StandardId.HasValue && x.StandardId.Value == division.StandardId) ||
+                    // Wildcard standard (implies access to all divisions in that standard)
+                    (!x.StandardId.HasValue && !x.DivisionId.HasValue)
+                ))
+            .Select(x => x.UserId.Value)
+            .ToListAsync(cancellationToken);
+
+        // Get role-based assignments with hierarchical validation
+        var roleNames = await baseQuery
+            .Where(x =>
+                x.RoleName != null &&
+                x.IsActive &&
+                !x.IsDeleted &&
+                (
+                    // Exact division match
+                    (x.DivisionId.HasValue && x.DivisionId.Value == divisionId) ||
+                    // Wildcard division WITHIN parent standard constraint
+                    (!x.DivisionId.HasValue && x.StandardId.HasValue && x.StandardId.Value == division.StandardId) ||
+                    // Wildcard standard (implies access to all divisions in that standard)
+                    (!x.StandardId.HasValue && !x.DivisionId.HasValue)
+                ))
+            .Select(x => x.RoleName)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        // Get users with those roles
+        var roleBasedUserIds = new List<Guid>();
+        if (roleNames.Any())
+        {
+            roleBasedUserIds = await (
+                from user in dbContext.Set<IdentityUser>()
+                from userRole in user.Roles
+                join role in dbContext.Set<IdentityRole>() on userRole.RoleId equals role.Id
+                where roleNames.Contains(role.Name)
+                select user.Id
+            ).Distinct().ToListAsync(cancellationToken);
+        }
+
+        // Combine and return distinct user IDs
+        return directUserIds.Concat(roleBasedUserIds).Distinct().ToList();
     }
 
     public async Task<List<Guid>> GetUserIdsByStandardAsync(
@@ -81,8 +145,7 @@ public class EfCoreUserScopeAssignmentRepository :
         CancellationToken cancellationToken = default)
     {
         return await GetUserIdsByFieldAsync(
-            x => x.StandardId,
-            standardId,
+            x => x.StandardId == standardId || x.StandardId == null,
             cancellationToken);
     }
 
@@ -148,34 +211,27 @@ public class EfCoreUserScopeAssignmentRepository :
     /// Gets user IDs for users who have access to a specific entity field value.
     /// Includes both direct user assignments and role-based assignments, respecting NULL=ALL semantics.
     /// </summary>
-    /// <param name="fieldSelector">Function to select the field from UserScopeAssignment (e.g., x => x.DivisionId)</param>
-    /// <param name="fieldValue">The specific field value to match</param>
+    /// <param name="fieldPredicate">Expression predicate to filter by field (e.g., x => x.DivisionId == divisionId || x.DivisionId == null)</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>List of distinct user IDs with access to the entity</returns>
     private async Task<List<Guid>> GetUserIdsByFieldAsync(
-        Func<UserScopeAssignment, Guid?> fieldSelector,
-        Guid fieldValue,
+        Expression<Func<UserScopeAssignment, bool>> fieldPredicate,
         CancellationToken cancellationToken)
     {
         var dbContext = await GetDbContextAsync();
+        var baseQuery = await GetQueryableAsync();
 
         // Get direct user assignments
-        var directUserIds = await (await GetQueryableAsync())
-            .Where(x =>
-                x.UserId.HasValue &&
-                x.IsActive &&
-                !x.IsDeleted &&
-                (fieldSelector(x).HasValue && fieldSelector(x).Value == fieldValue || !fieldSelector(x).HasValue))
+        var directUserIds = await baseQuery
+            .Where(x => x.UserId.HasValue && x.IsActive && !x.IsDeleted)
+            .Where(fieldPredicate)
             .Select(x => x.UserId.Value)
             .ToListAsync(cancellationToken);
 
         // Get role-based assignments
-        var roleNames = await (await GetQueryableAsync())
-            .Where(x =>
-                x.RoleName != null &&
-                x.IsActive &&
-                !x.IsDeleted &&
-                (fieldSelector(x).HasValue && fieldSelector(x).Value == fieldValue || !fieldSelector(x).HasValue))
+        var roleNames = await baseQuery
+            .Where(x => x.RoleName != null && x.IsActive && !x.IsDeleted)
+            .Where(fieldPredicate)
             .Select(x => x.RoleName)
             .Distinct()
             .ToListAsync(cancellationToken);
@@ -184,18 +240,14 @@ public class EfCoreUserScopeAssignmentRepository :
         var roleBasedUserIds = new List<Guid>();
         if (roleNames.Any())
         {
-            // Get role IDs for the role names
-            var roles = await dbContext.Set<IdentityRole>()
-                .Where(r => roleNames.Contains(r.Name))
-                .ToListAsync(cancellationToken);
-
-            var roleIds = roles.Select(r => r.Id).ToList();
-
-            // Get users with these roles
-            roleBasedUserIds = await dbContext.Set<IdentityUser>()
-                .Where(u => u.Roles.Any(ur => roleIds.Contains(ur.RoleId)))
-                .Select(u => u.Id)
-                .ToListAsync(cancellationToken);
+            // Get user IDs with those roles using a single join query
+            roleBasedUserIds = await (
+                from user in dbContext.Set<IdentityUser>()
+                from userRole in user.Roles
+                join role in dbContext.Set<IdentityRole>() on userRole.RoleId equals role.Id
+                where roleNames.Contains(role.Name)
+                select user.Id
+            ).Distinct().ToListAsync(cancellationToken);
         }
 
         // Combine and return distinct user IDs

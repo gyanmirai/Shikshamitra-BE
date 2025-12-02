@@ -2,11 +2,11 @@
 
 on:
   push:
-    branches: ["main"]
+    branches: ["user/jjinjala/new-env-setup"] # TODO: Fix it to main once new env setup is done
 
 env:
-  AZURE_WEBAPP_NAME: dev-gyanmirai-be
-  DOTNET_VERSION: '9.0.x'
+  AZURE_WEBAPP_NAME: staging-gyanmirai-be
+  DOTNET_VERSION: '10.0.x'
 
 jobs:
   build:
@@ -23,6 +23,12 @@ jobs:
     - name: Restore
       run: dotnet restore
 
+    - name: Install ABP CLI
+      run: dotnet tool install -g Volo.Abp.Cli
+
+    - name: Download ABP libraries
+      run: abp install-libs
+
     - name: Build
       run: dotnet build --configuration Release
 
@@ -30,6 +36,7 @@ jobs:
     - name: Run DbMigrator
       env:
         ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
+        ASPNETCORE_ENVIRONMENT: Staging
       run: |
         cd src/ShikshaMitra.DbMigrator
         dotnet run --configuration Release

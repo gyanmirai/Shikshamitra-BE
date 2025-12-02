@@ -1,0 +1,18 @@
+﻿{
+  "profiles": {
+    "DbMigrator (Development)": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ConnectionStrings__Default": ""
+      }
+    },
+    "DbMigrator (Staging)": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Staging",
+        "ConnectionStrings__Default": ""
+      }
+    }
+  }
+}

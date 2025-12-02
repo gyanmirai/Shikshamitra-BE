@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+﻿ <Project Sdk="Microsoft.NET.Sdk">
 
   <Import Project="..\..\common.props" />
 
@@ -42,6 +42,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Identity\Roles\" />
     <Folder Include="Library\Setting\GeneralSetting\LoanPolicies\" />
   </ItemGroup>
 

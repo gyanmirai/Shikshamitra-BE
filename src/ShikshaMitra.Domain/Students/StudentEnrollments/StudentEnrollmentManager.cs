@@ -72,6 +72,7 @@ public class StudentEnrollmentManager(
 			Guid academicYearId,
 			Guid educationBoardId,
 			Guid educationMediumId,
+			Guid? educationMediumStageId,
 			Guid standardId,
 			Guid? inquiryPreferenceId
 			)
@@ -110,6 +111,7 @@ public class StudentEnrollmentManager(
 			academicYearId: academicYearId,
 			educationBoardId: educationBoardId,
 			educationMediumId: educationMediumId,
+			educationMediumStageId: educationMediumStageId,
 			standardId: standardId,
 			inquiryPreferenceId: inquiryPreferenceId,
 			userId: null,
@@ -286,6 +288,7 @@ public class StudentEnrollmentManager(
 			Guid academicYearId,
 			Guid educationBoardId,
 			Guid educationMediumId,
+			Guid? educationMediumStageId,
 			Guid standardId,
 			Guid? inquiryPreferenceId,
 			// basic details
@@ -336,6 +339,7 @@ public class StudentEnrollmentManager(
 			academicYearId: academicYearId,
 			educationBoardId: educationBoardId,
 			educationMediumId: educationMediumId,
+			educationMediumStageId: educationMediumStageId,
 			standardId: standardId,
 			inquiryPreferenceId: inquiryPreferenceId,
 			// basic details
@@ -519,6 +523,7 @@ public class StudentEnrollmentManager(
 		Guid academicYearId,
 		Guid educationBoardId,
 		Guid educationMediumId,
+		Guid? educationMediumStageId,
 		Guid standardId,
 		Guid? inquiryPreferenceId
 	)
@@ -549,10 +554,11 @@ public class StudentEnrollmentManager(
 			city: city,
 			state: state,
 			pinCode: pinCode,
-			inquiryStatusType: inquiryStatusType,
+		inquiryStatusType: inquiryStatusType,
 			academicYearId: academicYearId,
 			educationBoardId: educationBoardId,
 			educationMediumId: educationMediumId,
+			educationMediumStageId: educationMediumStageId,
 			standardId: standardId,
 			inquiryPreferenceId: inquiryPreferenceId
 		);
@@ -589,6 +595,7 @@ public class StudentEnrollmentManager(
 		Guid academicYearId,
 		Guid educationBoardId,
 		Guid educationMediumId,
+		Guid? educationMediumStageId,
 		Guid standardId,
 		Guid? inquiryPreferenceId,
 		// basic details
@@ -632,6 +639,7 @@ public class StudentEnrollmentManager(
 			academicYearId: academicYearId,
 			educationBoardId: educationBoardId,
 			educationMediumId: educationMediumId,
+			educationMediumStageId: educationMediumStageId,
 			standardId: standardId,
 			inquiryPreferenceId: inquiryPreferenceId,
 			userId: userId,

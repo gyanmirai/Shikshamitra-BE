@@ -33,4 +33,9 @@
     <ProjectReference Include="..\ShikshaMitra.Domain.Shared\ShikshaMitra.Domain.Shared.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Controllers\Security\UserScope\" />
+    <Folder Include="Identity\Roles\" />
+  </ItemGroup>
+
 </Project>

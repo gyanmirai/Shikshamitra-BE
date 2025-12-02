@@ -16,6 +16,7 @@ using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.Attendance.settings;
 using ShikshaMitra.Students.Attendance.Settings;
@@ -94,6 +95,13 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<TenantConnectionString> TenantConnectionStrings { get; set; }
 
 	#endregion
+
+	#endregion
+
+	#region Security
+
+	// UserScope
+	public DbSet<UserScopeAssignment> UserScopeAssignments { get; set; }
 
 	#endregion
 

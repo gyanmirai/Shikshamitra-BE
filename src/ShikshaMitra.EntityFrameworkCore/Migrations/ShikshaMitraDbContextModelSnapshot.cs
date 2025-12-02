@@ -1436,10 +1436,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("EmployeeId");
 
-                    b.ToTable("AppEmployeeAttendances", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_EmployeeAttendance_EducationMediumStageId_Consistency", "\"EducationMediumStageId\" IS NULL OR \n			  \"EducationMediumStageId\" = (\n				  SELECT \"EducationMediumStageId\" \n				  FROM \"AppEmployees\" \n				  WHERE \"Id\" = \"EmployeeId\"\n			  )\"");
-                        });
+                    b.ToTable("AppEmployeeAttendances", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.EmployeeDocument", b =>

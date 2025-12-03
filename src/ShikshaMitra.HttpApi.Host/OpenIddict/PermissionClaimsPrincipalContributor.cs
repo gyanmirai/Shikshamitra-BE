@@ -1,9 +1,10 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Constants;
+using System;
 using ShikshaMitra.Constants.Permissions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
-using System.Security.Principal;
 using System.Threading.Tasks;
 using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.DependencyInjection;
@@ -15,6 +16,9 @@ public class PermissionClaimsPrincipalContributor
 	: IAbpClaimsPrincipalContributor, ITransientDependency
 {
 	private static readonly string[] ModulePermissions = ShikshaMitraModulePermissions.All;
+	private const char PermissionGrantedBit = '1';
+	private const char PermissionDeniedBit = '0';
+	private const string ModuleMaskClaimType = "module_mask";
 
 	public async Task ContributeAsync(AbpClaimsPrincipalContributorContext context)
 	{
@@ -22,24 +26,20 @@ public class PermissionClaimsPrincipalContributor
 		if (identity is not ClaimsIdentity claimsIdentity || !claimsIdentity.IsAuthenticated)
 			return;
 
-		var userId = context.ClaimsPrincipal.FindUserId();
-		if (userId == null)
-			return;
-
 		var permissionChecker = context.ServiceProvider.GetRequiredService<IPermissionChecker>();
 
-		var grantedPermissions = await GetGrantedModulePermissionsAsync(permissionChecker);
-
-		foreach (var permission in grantedPermissions)
-		{
-			claimsIdentity.AddClaim(new Claim("module", permission));
-		}
+		// Get granted module permissions and add to claims
+		var grantedModulePermissions = await GetGrantedPermissionsAsync(permissionChecker, ModulePermissions);
+		var moduleMask = BuildPermissionBitmask(ModulePermissions, grantedModulePermissions);
+		claimsIdentity.AddClaim(new Claim(ModuleMaskClaimType, moduleMask));
 	}
 
-	private static async Task<IEnumerable<string>> GetGrantedModulePermissionsAsync(IPermissionChecker permissionChecker)
+	private static async Task<HashSet<string>> GetGrantedPermissionsAsync(
+		IPermissionChecker permissionChecker,
+		string[] permissions)
 	{
-		var granted = new List<string>();
-		foreach (var permission in ModulePermissions)
+		var granted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var permission in permissions)
 		{
 			if (await permissionChecker.IsGrantedAsync(permission))
 			{
@@ -47,5 +47,19 @@ public class PermissionClaimsPrincipalContributor
 			}
 		}
 		return granted;
+	}
+
+	private static string BuildPermissionBitmask(string[] permissions, HashSet<string> grantedPermissions)
+	{
+		var bits = new System.Collections.BitArray(permissions.Length);
+		for (int i = 0; i < permissions.Length; i++)
+		{
+			if (grantedPermissions.Contains(permissions[i]))
+			{
+				bits[i] = true;
+			}
+		}
+
+		return string.Join(string.Empty, bits.Cast<bool>().Select(b => b ? PermissionGrantedBit : PermissionDeniedBit));
 	}
 }

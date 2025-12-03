@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ShikshaMitra.MultiTenancy;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp.AuditLogging;
 using Volo.Abp.BackgroundJobs;
 using Volo.Abp.BlobStoring;
@@ -59,6 +60,16 @@ namespace ShikshaMitra;
 				container.UseDatabase();
 			});
 		});
+
+		// Configure UserScope options
+		Configure<UserScopeOptions>(options =>
+		{
+			// Default values are already set in UserScopeOptions class
+			// Can be overridden in appsettings.json
+		});
+
+		// Register UserScopeService
+		context.Services.AddTransient<IUserScopeService, UserScopeService>();
 
 		//TODO : Configure TenantResolveContributors
 

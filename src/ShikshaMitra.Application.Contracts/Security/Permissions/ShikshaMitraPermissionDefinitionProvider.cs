@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Constants.Permissions;
+﻿using ShikshaMitra.Constants;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Localization;
 using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.Localization;
@@ -12,7 +13,7 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
 	public override void Define(IPermissionDefinitionContext context)
 	{
 		var group = context.AddGroup(ShikshaMitraPermissions.GroupName, L("Permission:ShikshaMitra"));
-		
+
 		DefineUserScopePermissions(group);
 		SetTenantPermissionMultiTenancySide(context);
 

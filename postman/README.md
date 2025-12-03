@@ -1,6 +1,38 @@
-﻿# ShikshaMitra Postman Collection
+﻿# ShikshaMitra Postman Collections
+
+Multi-tenant school management API testing collections with automated setup.
+
+---
+
+## 🎯 **NEW: UserScope-Focused Collection** ⭐
+
+**Perfect for UserScope development and testing:**
+
+### Quick Start
+📦 **[UserScope-API.postman_collection.json](./UserScope-API.postman_collection.json)**
+- ✅ 25+ UserScope-specific requests
+- ✅ 7 assignment patterns (specific, wildcard, bulk, role-based)
+- ✅ 3 complete workflow examples
+- ✅ Auto-save test scripts
+- ✅ Best practices built-in
+
+### Get Started in 5 Minutes
+1. **Import:** [UserScope-API.postman_collection.json](./UserScope-API.postman_collection.json)
+2. **Configure:** Run [UserScope-Database-Setup.sql](./UserScope-Database-Setup.sql) to get IDs
+3. **Test:** Follow [QUICKSTART.md](./QUICKSTART.md)
+
+### Documentation
+- 📖 **[QUICKSTART.md](./QUICKSTART.md)** - 5-minute setup guide
+- 📘 **[UserScope-API-README.md](./UserScope-API-README.md)** - Complete collection reference
+- 🗄️ **[UserScope-Database-Setup.sql](./UserScope-Database-Setup.sql)** - Get entity IDs
+
+---
+
+## 📦 Original Complete Collection
 
 Multi-tenant school management API testing collection with automated setup.
+
+
 
 ## 📦 Quick Start
 

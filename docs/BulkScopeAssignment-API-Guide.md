@@ -51,7 +51,10 @@ The API operates in two steps within a single transaction:
 | `divisionIds` | `List<Guid>?` | Optional | List of division IDs (null/empty = all divisions) |
 | `description` | `string?` | Optional | Description for all assignments (max 500 chars) |
 
-**Note**: At least one scope parameter (academicYearIds, educationBoardIds, etc.) must be provided.
+**Important Validation Notes:**
+- ⚠️ **At least one scope parameter must be provided with values** (cannot have all parameters as null/empty)
+- NULL or empty list at a hierarchy level means "all access" at that level
+- Example: `educationBoardIds: ["board-x"]` with `standardIds: null` = Board X → All Standards → All Divisions
 
 ## Response Structure
 
@@ -204,22 +207,46 @@ Combinations created:
 
 **Result**: Creates **18 assignments** (3 users × 3 boards × 2 standards = 18)
 
-### Example 4: Assignment with NULL Values (All Access)
+### Example 4: Assignment with Minimal Scope (Board-level Access)
 
 **Request:**
 ```json
 {
   "userIds": ["admin-user-guid"],
-  "educationBoardIds": null,
-  "standardIds": null,
-  "divisionIds": null,
-  "description": "Admin access to all boards, standards, and divisions"
+  "educationBoardIds": ["cbse-board-guid"],
+  "description": "Admin access to all standards and divisions under CBSE board"
 }
 ```
 
-**Result**: Creates **1 assignment** with NULL values (meaning access to all)
+**Explanation:**
+- `educationBoardIds` is specified (required - at least one scope parameter)
+- `academicYearIds`, `educationMediumIds`, `educationMediumStageIds`, `standardIds`, `divisionIds` are null/omitted
+- NULL values at lower hierarchy levels = access to ALL at those levels
+- Result: Access to the specified board, with ALL standards and divisions under it
 
-### Example 5: Overwrite Existing Assignments
+**Result**: Creates **1 assignment** (CBSE Board → All Standards → All Divisions)
+
+### Example 5: Multiple Boards with Specific Standards
+
+**Request:**
+```json
+{
+  "userIds": ["coordinator-guid"],
+  "educationBoardIds": ["cbse-guid", "icse-guid"],
+  "standardIds": ["class-8-guid", "class-9-guid"],
+  "description": "Coordinator for Class 8 and 9 across CBSE and ICSE"
+}
+```
+
+**Result**: Creates **4 assignments** (2 boards × 2 standards = 4)
+- CBSE → Class 8 → All Divisions
+- CBSE → Class 9 → All Divisions
+- ICSE → Class 8 → All Divisions
+- ICSE → Class 9 → All Divisions
+
+**Note**: `divisionIds` is null/omitted, meaning access to ALL divisions in each class.
+
+### Example 6: Overwrite Existing Assignments
 
 **Scenario**: User has 2 existing assignments, we want to replace them completely
 
@@ -253,7 +280,7 @@ Combinations created:
 - ✅ Created: Board B → Standard 2
 - ✅ Created: Board B → Standard 3
 
-### Example 6: Failure - Invalid Board ID
+### Example 7: Failure - Invalid Board ID
 
 **Request:**
 ```json
@@ -276,6 +303,43 @@ Combinations created:
 ```
 
 **Result**: **No changes made** - existing assignments preserved (transaction rolled back)
+
+### Example 8: Validation Failure - All Scope Parameters Null
+
+**Request:**
+```json
+{
+  "userIds": ["user-guid-1"],
+  "educationBoardIds": null,
+  "standardIds": null,
+  "divisionIds": null
+}
+```
+
+**Response (Error - 400 Bad Request):**
+```json
+{
+  "error": {
+    "message": "One or more validation errors occurred.",
+    "validationErrors": [
+      {
+        "members": ["AcademicYearIds", "EducationBoardIds", "EducationMediumIds", "EducationMediumStageIds", "StandardIds", "DivisionIds"],
+        "message": "At least one scope parameter (AcademicYearIds, EducationBoardIds, EducationMediumIds, EducationMediumStageIds, StandardIds, or DivisionIds) must be provided."
+      }
+    ]
+  }
+}
+```
+
+**Result**: **Validation failed** - request rejected before reaching the service
+
+**Fix**: Provide at least one scope parameter with values:
+```json
+{
+  "userIds": ["user-guid-1"],
+  "educationBoardIds": ["cbse-guid"]  // ✅ Now valid
+}
+```
 
 ## Best Practices
 
@@ -316,6 +380,12 @@ Combinations created:
 | `UserScope:UsersNotFound` | One or more users don't exist | Verify all user IDs |
 | `UserScope:InvalidReferences` | Invalid board/standard/etc. | Verify all reference IDs |
 | `UserScope:BulkAssignFailed` | Unexpected error | Contact support with correlation ID |
+
+**Validation Errors** (400 Bad Request):
+- Missing `userIds` or empty list
+- All scope parameters (educationBoardIds, standardIds, etc.) are null/empty
+- Invalid GUID format
+- Description exceeds 500 characters
 
 **Note**: `UserScope:DuplicateAssignment` error is no longer possible due to the overwrite strategy.
 
@@ -359,11 +429,22 @@ catch (UserFriendlyException ex)
 
 ## Validation Rules
 
-1. At least one `userId` is required
-2. At least one scope parameter must be provided
+1. **At least one `userId` is required**
+2. **At least one scope parameter must have values** (cannot have all parameters as null/empty)
+   - Valid: `{ educationBoardIds: ["board1"], standardIds: null }` ✅
+   - Invalid: `{ educationBoardIds: null, standardIds: null, divisionIds: null }` ❌
 3. All `userIds` must exist in the system
 4. Description max length: 500 characters
 5. Duplicate user IDs in the list are automatically deduplicated
+
+### Understanding NULL/Empty Scope Parameters
+
+| Scenario | Meaning |
+|----------|---------|
+| `educationBoardIds: ["board-x"]` | Access to Board X |
+| `standardIds: null` or omitted | Access to ALL standards (within specified board) |
+| `divisionIds: []` (empty array) | Access to ALL divisions (within specified standards) |
+| All parameters null/empty | ❌ **Validation Error** - At least one must have values |
 
 ## HTTP Status Codes
 

@@ -1,5 +1,7 @@
-using System;
+﻿using System;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.EntityFrameworkCore.Security.UserScope;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp.Uow;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
 using Volo.Abp.BackgroundJobs.EntityFrameworkCore;
@@ -46,7 +48,13 @@ namespace ShikshaMitra.EntityFrameworkCore;
                 /* Remove "includeAllEntities: true" to create
                  * default repositories only for aggregate roots */
             options.AddDefaultRepositories(includeAllEntities: true);
+            
+            // Register custom repositories
+            options.AddRepository<UserScopeAssignment, EfCoreUserScopeAssignmentRepository>();
         });
+        
+        // Register custom repository extensions
+        context.Services.AddTransient<IIdentityUserRepositoryExtensions, EfCoreIdentityUserRepositoryExtensions>();
 
         Configure<AbpDbContextOptions>(options =>
         {

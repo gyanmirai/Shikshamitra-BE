@@ -1,0 +1,1350 @@
+﻿{
+	"info": {
+		"_postman_id": "shikshamitra-userscope-collection-v2",
+		"name": "ShikshaMitra - Tenant User Setup & UserScope Management",
+		"description": "Complete API collection for ShikshaMitra with proper tenant user authentication.\n\nWorkflow:\n1. Use Host Admin Login ONLY for tenant creation\n2. Use Tenant User Login (SSVM) for all other operations:\n   - User Management\n   - Role Creation & Assignment\n   - UserScope Assignment\n   - All tenant-specific operations\n\nTenant Info:\n- Name: SSVM\n- ID: 3a1dc7ba-395f-4af3-7ac7-ad923cc1f20e\n- Admin Email: ssvm@gmail.com\n- Admin Password: Temp@123",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "shikshamitra"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Host Admin Login (For Tenant Creation Only)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"admin_access_token\", jsonData.access_token);",
+									"pm.environment.set(\"admin_token_type\", jsonData.token_type);",
+									"console.log('Host Admin token saved as admin_access_token');"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "grant_type",
+									"value": "password",
+									"type": "text"
+								},
+								{
+									"key": "client_id",
+									"value": "ShikshaMitra_App",
+									"type": "text"
+								},
+								{
+									"key": "client_secret",
+									"value": "1q2w3e*",
+									"type": "text"
+								},
+								{
+									"key": "username",
+									"value": "admin",
+									"type": "text"
+								},
+								{
+									"key": "password",
+									"value": "1q2w3E*",
+									"type": "text"
+								},
+								{
+									"key": "scope",
+									"value": "ShikshaMitra",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/connect/token",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"connect",
+								"token"
+							]
+						},
+						"description": "⚠️ USE ONLY FOR TENANT CREATION ⚠️\n\nThis is the host admin login. The token is saved as 'admin_access_token' and should ONLY be used for creating new tenants.\n\nFor all other operations (users, roles, scopes), use the 'Tenant User Login' instead."
+					},
+					"response": []
+				},
+				{
+					"name": "Tenant User Login (SSVM Admin)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"access_token\", jsonData.access_token);",
+									"pm.environment.set(\"token_type\", jsonData.token_type);",
+									"console.log('Tenant user token saved as access_token');",
+									"console.log('Use this token for all tenant operations!');"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text",
+								"description": "SSVM Tenant ID: 3a1dc7ba-395f-4af3-7ac7-ad923cc1f20e"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "grant_type",
+									"value": "password",
+									"type": "text"
+								},
+								{
+									"key": "client_id",
+									"value": "ShikshaMitra_App",
+									"type": "text"
+								},
+								{
+									"key": "client_secret",
+									"value": "1q2w3e*",
+									"type": "text"
+								},
+								{
+									"key": "username",
+									"value": "{{tenant_username}}",
+									"type": "text",
+									"description": "Use tenant admin username"
+								},
+								{
+									"key": "password",
+									"value": "{{tenant_password}}",
+									"type": "text",
+									"description": "Default: Temp@123"
+								},
+								{
+									"key": "scope",
+									"value": "ShikshaMitra",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/connect/token",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"connect",
+								"token"
+							]
+						},
+						"description": "✅ USE THIS FOR ALL TENANT OPERATIONS ✅\n\nLogin as SSVM tenant admin user. This token (saved as 'access_token') should be used for:\n- Creating users\n- Assigning roles\n- UserScope assignments\n- All other tenant-specific operations\n\nCredentials:\n- Username: admin (or tenant-specific admin username)\n- Password: Temp@123 (default from seeder)\n- Tenant ID: 3a1dc7ba-395f-4af3-7ac7-ad923cc1f20e"
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints\n\n⚠️ IMPORTANT:\n- Use 'Host Admin Login' ONLY for creating new tenants\n- Use 'Tenant User Login (SSVM Admin)' for ALL other operations"
+		},
+		{
+			"name": "Tenant Management (Host Admin Only)",
+			"item": [
+				{
+					"name": "Create New Tenant",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.id) {",
+									"    console.log('New Tenant ID: ' + jsonData.id);",
+									"    console.log('Save this ID and use it in __tenant header for tenant-specific operations');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"NewSchool\",\n  \"adminEmailAddress\": \"admin@newschool.com\",\n  \"adminPassword\": \"Temp@123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/multi-tenancy/tenants",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"multi-tenancy",
+								"tenants"
+							]
+						},
+						"description": "Create a new tenant.\n\n⚠️ Uses admin_access_token (Host Admin)\n\nAfter creation:\n1. Note the tenant ID from the response\n2. Use that tenant ID in the __tenant header\n3. Login as the tenant admin to get tenant-specific token"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Tenants",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/multi-tenancy/tenants",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"multi-tenancy",
+								"tenants"
+							]
+						},
+						"description": "List all tenants.\n\n⚠️ Uses admin_access_token (Host Admin)"
+					},
+					"response": []
+				}
+			],
+			"description": "Tenant management operations - ⚠️ USE HOST ADMIN TOKEN ONLY (admin_access_token)"
+		},
+		{
+			"name": "User Management (Tenant)",
+			"item": [
+				{
+					"name": "Create User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"user_id\", jsonData.id);",
+									"console.log('User created with ID: ' + jsonData.id);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userName\": \"teacher.john\",\n  \"name\": \"John\",\n  \"surname\": \"Doe\",\n  \"email\": \"john.doe@ssvm.com\",\n  \"phoneNumber\": \"+1234567890\",\n  \"isActive\": true,\n  \"lockoutEnabled\": false,\n  \"roleNames\": [\"Teacher\"],\n  \"password\": \"Teacher@123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/identity/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"identity",
+								"users"
+							]
+						},
+						"description": "Create a new user in the tenant.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Users",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/identity/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"identity",
+								"users"
+							]
+						},
+						"description": "Get all users in the tenant.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/identity/users/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"identity",
+								"users",
+								"{{user_id}}"
+							]
+						},
+						"description": "Get user details by ID.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				},
+				{
+					"name": "Update User",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userName\": \"teacher.john\",\n  \"name\": \"John\",\n  \"surname\": \"Doe Updated\",\n  \"email\": \"john.doe@ssvm.com\",\n  \"phoneNumber\": \"+1234567890\",\n  \"isActive\": true,\n  \"lockoutEnabled\": false,\n  \"roleNames\": [\"Teacher\"],\n  \"concurrencyStamp\": \"stamp-value-from-get\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/identity/users/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"identity",
+								"users",
+								"{{user_id}}"
+							]
+						},
+						"description": "Update user information.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete User",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/identity/users/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"identity",
+								"users",
+								"{{user_id}}"
+							]
+						},
+						"description": "Delete a user.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				}
+			],
+			"description": "User CRUD operations - ✅ USE TENANT TOKEN (access_token) with __tenant header"
+		},
+		{
+			"name": "Role Management (Tenant)",
+			"item": [
+				{
+					"name": "Get All Roles",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/identity/roles",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"identity",
+								"roles"
+							]
+						},
+						"description": "Get all roles in the tenant.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Role",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.id) {",
+									"    console.log('Role created with ID: ' + jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"CustomRole\",\n  \"isDefault\": false,\n  \"isPublic\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/identity/roles",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"identity",
+								"roles"
+							]
+						},
+						"description": "Create a new role in the tenant.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Role to User",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roleNames\": [\"Teacher\", \"CustomRole\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/identity/users/{{user_id}}/roles",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"identity",
+								"users",
+								"{{user_id}}",
+								"roles"
+							]
+						},
+						"description": "Assign roles to a user.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				}
+			],
+			"description": "Role management operations - ✅ USE TENANT TOKEN (access_token) with __tenant header"
+		},
+		{
+			"name": "UserScope - Assignment",
+			"item": [
+				{
+					"name": "Assign Scope to User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"scope_assignment_id\", jsonData.id);",
+									"console.log('Scope assigned with ID: ' + jsonData.id);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"standardId\": \"{{standard_id}}\",\n  \"divisionId\": \"{{division_id}}\",\n  \"description\": \"Math Teacher - Class 5A\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/assign",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"assign"
+							]
+						},
+						"description": "Assign a scope to a user (Division level - most specific).\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Scope - Class Level (All Divisions)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"standardId\": \"{{standard_id}}\",\n  \"description\": \"Class Teacher - All divisions in Class 5\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/assign",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"assign"
+							]
+						},
+						"description": "Assign scope at Class level (DivisionId = NULL means ALL divisions).\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Scope - Stage Level",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"educationMediumStageId\": \"{{stage_id}}\",\n  \"description\": \"Primary Stage Coordinator - All classes in Primary\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/assign",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"assign"
+							]
+						},
+						"description": "Assign scope at Stage level.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				},
+				{
+					"name": "Bulk Assign Scopes",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"assignments\": [\n    {\n      \"userId\": \"{{user_id}}\",\n      \"standardId\": \"{{standard_id}}\",\n      \"divisionId\": \"{{division_a_id}}\",\n      \"description\": \"Math Teacher - Class 5A\"\n    },\n    {\n      \"userId\": \"{{user_id}}\",\n      \"standardId\": \"{{standard_id}}\",\n      \"divisionId\": \"{{division_b_id}}\",\n      \"description\": \"Math Teacher - Class 5B\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/bulk-assign",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"bulk-assign"
+							]
+						},
+						"description": "Bulk assign multiple scopes to a user.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				}
+			],
+			"description": "UserScope assignment operations - ✅ USE TENANT TOKEN (access_token) with __tenant header"
+		},
+		{
+			"name": "UserScope - Query & Retrieve",
+			"item": [
+				{
+					"name": "Get User Scopes by User ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/by-user/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"by-user",
+								"{{user_id}}"
+							]
+						},
+						"description": "Get all scope assignments for a specific user.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All User Scopes",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope"
+							]
+						},
+						"description": "Get all user scope assignments.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Scope by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/{{scope_assignment_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"{{scope_assignment_id}}"
+							]
+						},
+						"description": "Get a specific scope assignment by ID.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				}
+			],
+			"description": "UserScope query operations - ✅ USE TENANT TOKEN (access_token) with __tenant header"
+		},
+		{
+			"name": "UserScope - Management",
+			"item": [
+				{
+					"name": "Update Scope Assignment",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"standardId\": \"{{standard_id}}\",\n  \"divisionId\": \"{{division_id}}\",\n  \"description\": \"Updated - Math & Science Teacher - Class 5A\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/{{scope_assignment_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"{{scope_assignment_id}}"
+							]
+						},
+						"description": "Update a scope assignment.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Scope Assignment",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/{{scope_assignment_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"{{scope_assignment_id}}"
+							]
+						},
+						"description": "Delete a scope assignment.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				},
+				{
+					"name": "Bulk Delete Scope Assignments",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"ids\": [\n    \"scope-id-1\",\n    \"scope-id-2\"\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/bulk-delete",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"bulk-delete"
+							]
+						},
+						"description": "Delete multiple scope assignments.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				}
+			],
+			"description": "UserScope management operations - ✅ USE TENANT TOKEN (access_token) with __tenant header"
+		},
+		{
+			"name": "Testing & Examples",
+			"item": [
+				{
+					"name": "Example - Create Teacher User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"teacher_user_id\", jsonData.id);",
+									"console.log('Teacher user created with ID: ' + jsonData.id);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userName\": \"teacher.sarah\",\n  \"name\": \"Sarah\",\n  \"surname\": \"Johnson\",\n  \"email\": \"sarah.johnson@ssvm.com\",\n  \"phoneNumber\": \"+1234567891\",\n  \"isActive\": true,\n  \"lockoutEnabled\": false,\n  \"roleNames\": [\"Teacher\"],\n  \"password\": \"Teacher@123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/identity/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"identity",
+								"users"
+							]
+						},
+						"description": "Example: Create a teacher user.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				},
+				{
+					"name": "Example - Assign Multiple Divisions to Teacher",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"assignments\": [\n    {\n      \"userId\": \"{{teacher_user_id}}\",\n      \"academicYearId\": \"{{academic_year_id}}\",\n      \"educationBoardId\": \"{{board_id}}\",\n      \"educationMediumId\": \"{{medium_id}}\",\n      \"educationMediumStageId\": \"{{stage_id}}\",\n      \"standardId\": \"{{standard_id}}\",\n      \"divisionId\": \"{{division_a_id}}\",\n      \"description\": \"Math Teacher - Class 5A\"\n    },\n    {\n      \"userId\": \"{{teacher_user_id}}\",\n      \"academicYearId\": \"{{academic_year_id}}\",\n      \"educationBoardId\": \"{{board_id}}\",\n      \"educationMediumId\": \"{{medium_id}}\",\n      \"educationMediumStageId\": \"{{stage_id}}\",\n      \"standardId\": \"{{standard_id}}\",\n      \"divisionId\": \"{{division_b_id}}\",\n      \"description\": \"Math Teacher - Class 5B\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/bulk-assign",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"bulk-assign"
+							]
+						},
+						"description": "Example: Teacher teaching Math in two divisions.\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				},
+				{
+					"name": "Example - Principal with Full Access",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{principal_user_id}}\",\n  \"educationBoardId\": \"{{board_id}}\",\n  \"description\": \"Principal - Full access to all CBSE classes\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/assign",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"assign"
+							]
+						},
+						"description": "Example: Principal with access to entire board (NULL = ALL for lower levels).\n\n✅ Uses access_token (Tenant User)\n✅ Includes __tenant header"
+					},
+					"response": []
+				}
+			],
+			"description": "Testing examples and common scenarios - ✅ USE TENANT TOKEN (access_token) with __tenant header"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "https://localhost:44300",
+			"type": "string"
+		},
+		{
+			"key": "admin_access_token",
+			"value": "",
+			"type": "string",
+			"description": "Host admin token - USE ONLY for tenant creation"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string",
+			"description": "Tenant user token - USE for all tenant operations"
+		},
+		{
+			"key": "token_type",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "tenant_id",
+			"value": "3a1dc7ba-395f-4af3-7ac7-ad923cc1f20e",
+			"type": "string",
+			"description": "SSVM Tenant ID"
+		},
+		{
+			"key": "tenant_username",
+			"value": "admin",
+			"type": "string",
+			"description": "SSVM tenant admin username"
+		},
+		{
+			"key": "tenant_password",
+			"value": "Temp@123",
+			"type": "string",
+			"description": "SSVM tenant admin password"
+		},
+		{
+			"key": "user_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "teacher_user_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "principal_user_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "scope_assignment_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "academic_year_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "board_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "medium_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "stage_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "standard_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "division_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "division_a_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "division_b_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="System.Linq.Dynamic.Core" Version="1.7.1" />
     <PackageReference Include="Volo.Abp.Account.HttpApi" Version="9.0.0" />
     <PackageReference Include="Volo.Abp.Identity.HttpApi" Version="9.0.0" />
     <PackageReference Include="Volo.Abp.PermissionManagement.HttpApi" Version="9.0.0" />
@@ -30,6 +31,11 @@
     </PackageReference>
     <ProjectReference Include="..\ShikshaMitra.Application.Contracts\ShikshaMitra.Application.Contracts.csproj" />
     <ProjectReference Include="..\ShikshaMitra.Domain.Shared\ShikshaMitra.Domain.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Controllers\Security\UserScope\" />
+    <Folder Include="Identity\Roles\" />
   </ItemGroup>
 
 </Project>

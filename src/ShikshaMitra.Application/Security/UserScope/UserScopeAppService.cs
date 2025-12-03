@@ -157,16 +157,14 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
     }
 
     [Authorize(ShikshaMitraPermissions.UserScope.BulkAssign)]
-    public async Task<int> BulkAssignAsync(BulkScopeAssignmentDto input)
+    public async Task<BulkScopeAssignmentResultDto> BulkAssignAsync(BulkScopeAssignmentDto input)
     {
         var correlationId = Guid.NewGuid();
-        var assignmentsCreated = 0;
-        var successfulUserIds = new List<Guid>();
 
         try
         {
             _logger.LogInformation(
-                "Attempting bulk scope assignment. UserCount: {UserCount}, CorrelationId: {CorrelationId}",
+                "Attempting transactional bulk scope assignment with OVERWRITE strategy. UserCount: {UserCount}, CorrelationId: {CorrelationId}",
                 input.UserIds?.Count ?? 0, correlationId);
 
             // Validate input
@@ -203,150 +201,107 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 );
             }
 
-            var failedAssignments = new List<(Guid UserId, Guid? DivisionId, string Error)>();
+            // Generate all combinations of scope parameters
+            var scopeCombinations = GenerateScopeCombinations(input);
+            var totalCombinations = distinctUserIds.Count * scopeCombinations.Count;
 
-            foreach (var userId in distinctUserIds)
+            _logger.LogInformation(
+                "Generated {CombinationCount} scope combinations for {UserCount} users. Total assignments to create: {TotalAssignments}, CorrelationId: {CorrelationId}",
+                scopeCombinations.Count, distinctUserIds.Count, totalCombinations, correlationId);
+
+            var deletedCount = 0;
+            var createdAssignments = new List<UserScopeAssignment>();
+            var affectedUserIds = new HashSet<Guid>();
+
+            try
             {
-                var userAssignmentCount = 0;
-
-                try
-                {
-                    // If specific divisions are provided, create one assignment per division
-                    if (input.DivisionIds != null && input.DivisionIds.Any())
-                    {
-                        foreach (var divisionId in input.DivisionIds)
-                        {
-                            try
-                            {
-                                var assignment = new UserScopeAssignment(
-                                    GuidGenerator.Create(),
-                                    CurrentTenant.Id,
-                                    userId,
-                                    null,
-                                    input.AcademicYearId,
-                                    input.EducationBoardId,
-                                    input.EducationMediumId,
-                                    input.EducationMediumStageId,
-                                    input.StandardId,
-                                    divisionId,
-                                    input.Description
-                                );
-
-                                await _scopeRepository.InsertAsync(assignment);
-                                assignmentsCreated++;
-                                userAssignmentCount++;
-                            }
-                            catch (Exception dbEx) when (IsConstraintViolationException(dbEx))
-                            {
-                                if (IsUniqueConstraintViolation(dbEx))
-                                {
-                                    _logger.LogDebug(
-                                        "Skipping duplicate assignment for UserId: {UserId}, DivisionId: {DivisionId}, CorrelationId: {CorrelationId}",
-                                        userId, divisionId, correlationId);
-                                    continue;
-                                }
-
-                                if (IsForeignKeyViolation(dbEx))
-                                {
-                                    failedAssignments.Add((userId, divisionId, "Invalid reference data"));
-                                    _logger.LogWarning(dbEx,
-                                        "Foreign key violation in bulk assign for UserId: {UserId}, DivisionId: {DivisionId}, CorrelationId: {CorrelationId}",
-                                        userId, divisionId, correlationId);
-                                    continue;
-                                }
-
-                                throw;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        try
-                        {
-                            var assignment = new UserScopeAssignment(
-                                GuidGenerator.Create(),
-                                CurrentTenant.Id,
-                                userId,
-                                null,
-                                input.AcademicYearId,
-                                input.EducationBoardId,
-                                input.EducationMediumId,
-                                input.EducationMediumStageId,
-                                input.StandardId,
-                                null,
-                                input.Description
-                            );
-
-                            await _scopeRepository.InsertAsync(assignment);
-                            assignmentsCreated++;
-                            userAssignmentCount++;
-                        }
-                        catch (Exception dbEx) when (IsConstraintViolationException(dbEx))
-                        {
-                            if (IsUniqueConstraintViolation(dbEx))
-                            {
-                                _logger.LogDebug(
-                                    "Skipping duplicate assignment for UserId: {UserId}, CorrelationId: {CorrelationId}",
-                                    userId, correlationId);
-                                continue;
-                            }
-
-                            if (IsForeignKeyViolation(dbEx))
-                            {
-                                failedAssignments.Add((userId, null, "Invalid reference data"));
-                                _logger.LogWarning(dbEx,
-                                    "Foreign key violation in bulk assign for UserId: {UserId}, CorrelationId: {CorrelationId}",
-                                    userId, correlationId);
-                                continue;
-                            }
-
-                            throw;
-                        }
-                    }
-
-                    // Track users with successful assignments for cache invalidation
-                    if (userAssignmentCount > 0)
-                    {
-                        successfulUserIds.Add(userId);
-                    }
-                }
-                catch (UserFriendlyException)
-                {
-                    throw;
-                }
-                catch (BusinessException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex,
-                        "Unexpected error processing bulk assignment for UserId: {UserId}, CorrelationId: {CorrelationId}",
-                        userId, correlationId);
-                    throw;
-                }
-            }
-
-            // Invalidate cache for all users with successful assignments
-            foreach (var userId in successfulUserIds)
-            {
-                await _userScopeService.InvalidateUserScopeCacheAsync(userId);
-            }
-
-            if (failedAssignments.Any())
-            {
-                _logger.LogWarning(
-                    "Bulk assign completed with {FailedCount} failures. Assignments created: {Created}, CorrelationId: {CorrelationId}",
-                    failedAssignments.Count, assignmentsCreated, correlationId);
-            }
-            else
-            {
+                // STEP 1: Delete all existing scope assignments for the specified users
                 _logger.LogInformation(
-                    "Bulk scope assignment completed successfully. Assignments created: {Created}, Users processed: {UserCount}, CorrelationId: {CorrelationId}",
-                    assignmentsCreated, successfulUserIds.Count, correlationId);
-            }
+                    "Step 1/2: Deleting existing scope assignments for {UserCount} users. CorrelationId: {CorrelationId}",
+                    distinctUserIds.Count, correlationId);
 
-            return assignmentsCreated;
+                foreach (var userId in distinctUserIds)
+                {
+                    var existingAssignments = await _scopeRepository.GetUserAssignmentsAsync(userId);
+                    foreach (var assignment in existingAssignments)
+                    {
+                        await _scopeRepository.DeleteAsync(assignment, autoSave: false);
+                        deletedCount++;
+                    }
+                }
+
+                _logger.LogInformation(
+                    "Deleted {DeletedCount} existing assignments. CorrelationId: {CorrelationId}",
+                    deletedCount, correlationId);
+
+                // STEP 2: Create all new assignments
+                _logger.LogInformation(
+                    "Step 2/2: Creating {TotalCombinations} new scope assignments. CorrelationId: {CorrelationId}",
+                    totalCombinations, correlationId);
+
+                foreach (var userId in distinctUserIds)
+                {
+                    foreach (var scope in scopeCombinations)
+                    {
+                        var assignment = new UserScopeAssignment(
+                            GuidGenerator.Create(),
+                            CurrentTenant.Id,
+                            userId,
+                            null,
+                            scope.AcademicYearId,
+                            scope.EducationBoardId,
+                            scope.EducationMediumId,
+                            scope.EducationMediumStageId,
+                            scope.StandardId,
+                            scope.DivisionId,
+                            input.Description
+                        );
+
+                        await _scopeRepository.InsertAsync(assignment, autoSave: false);
+                        createdAssignments.Add(assignment);
+                        affectedUserIds.Add(userId);
+                    }
+                }
+
+                // Save all changes at once - this will fail if any constraint is violated
+                // Both deletions and insertions are in the same transaction
+                await CurrentUnitOfWork.SaveChangesAsync();
+
+                // Invalidate cache for all affected users (only after successful save)
+                foreach (var userId in affectedUserIds)
+                {
+                    await _userScopeService.InvalidateUserScopeCacheAsync(userId);
+                }
+
+                _logger.LogInformation(
+                    "Bulk scope assignment completed successfully. Deleted: {Deleted}, Created: {Created}, Users affected: {UserCount}, CorrelationId: {CorrelationId}",
+                    deletedCount, createdAssignments.Count, affectedUserIds.Count, correlationId);
+
+                return new BulkScopeAssignmentResultDto
+                {
+                    DeletedAssignments = deletedCount,
+                    AssignmentsCreated = createdAssignments.Count,
+                    TotalCombinations = totalCombinations,
+                    AffectedUserIds = affectedUserIds.ToList(),
+                    Message = $"Successfully replaced scope assignments for {affectedUserIds.Count} users. Deleted {deletedCount} old assignments and created {createdAssignments.Count} new assignments."
+                };
+            }
+            catch (Exception dbEx) when (IsConstraintViolationException(dbEx))
+            {
+                if (IsForeignKeyViolation(dbEx))
+                {
+                    _logger.LogWarning(dbEx,
+                        "Bulk assignment failed due to invalid references. CorrelationId: {CorrelationId}",
+                        correlationId);
+
+                    throw new UserFriendlyException(
+                        $"One or more referenced entities (Standard, Division, Board, Medium, etc.) do not exist. No changes were made. Please verify all IDs are valid. (Ref: {correlationId})",
+                        code: "UserScope:InvalidReferences"
+                    );
+                }
+
+                throw;
+            }
         }
         catch (UserFriendlyException)
         {
@@ -359,33 +314,88 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "Error during bulk scope assignment. Assignments created: {Created}, CorrelationId: {CorrelationId}",
-                assignmentsCreated, correlationId);
+                "Error during bulk scope assignment. CorrelationId: {CorrelationId}",
+                correlationId);
 
             throw new UserFriendlyException(
-                $"Bulk assignment partially completed ({assignmentsCreated} assignments created) before encountering an error. Please contact support with reference: {correlationId}",
+                $"An error occurred during bulk assignment. No changes were made. Please contact support with reference: {correlationId}",
                 code: "UserScope:BulkAssignFailed"
             );
         }
-        finally
+    }
+
+    /// <summary>
+    /// Generates all combinations (cartesian product) of scope parameters from the input.
+    /// </summary>
+    private List<ScopeParameterCombination> GenerateScopeCombinations(BulkScopeAssignmentDto input)
+    {
+        var combinations = new List<ScopeParameterCombination>();
+
+        // Start with a single empty combination
+        var currentCombinations = new List<ScopeParameterCombination> { new ScopeParameterCombination() };
+
+        // Helper function to multiply combinations with a list of IDs
+        void MultiplyWithIds(List<Guid>? ids, Action<ScopeParameterCombination, Guid?> setter)
         {
-            // Ensure cache invalidation happens even if there's an error after some successful assignments
-            if (successfulUserIds.Any())
+            if (ids == null || !ids.Any())
             {
-                try
+                // If no IDs provided, add null to each combination
+                foreach (var combo in currentCombinations)
                 {
-                    foreach (var userId in successfulUserIds)
-                    {
-                        await _userScopeService.InvalidateUserScopeCacheAsync(userId);
-                    }
-                }
-                catch (Exception cacheEx)
-                {
-                    _logger.LogWarning(cacheEx,
-                        "Failed to invalidate cache for some users during bulk assignment. CorrelationId: {CorrelationId}",
-                        correlationId);
+                    setter(combo, null);
                 }
             }
+            else
+            {
+                // Create new combinations for each ID
+                var newCombinations = new List<ScopeParameterCombination>();
+                foreach (var combo in currentCombinations)
+                {
+                    foreach (var id in ids)
+                    {
+                        var newCombo = combo.Clone();
+                        setter(newCombo, id);
+                        newCombinations.Add(newCombo);
+                    }
+                }
+                currentCombinations = newCombinations;
+            }
+        }
+
+        // Multiply combinations for each hierarchical level
+        MultiplyWithIds(input.AcademicYearIds, (combo, id) => combo.AcademicYearId = id);
+        MultiplyWithIds(input.EducationBoardIds, (combo, id) => combo.EducationBoardId = id);
+        MultiplyWithIds(input.EducationMediumIds, (combo, id) => combo.EducationMediumId = id);
+        MultiplyWithIds(input.EducationMediumStageIds, (combo, id) => combo.EducationMediumStageId = id);
+        MultiplyWithIds(input.StandardIds, (combo, id) => combo.StandardId = id);
+        MultiplyWithIds(input.DivisionIds, (combo, id) => combo.DivisionId = id);
+
+        return currentCombinations;
+    }
+
+    /// <summary>
+    /// Helper class to represent a single scope parameter combination.
+    /// </summary>
+    private class ScopeParameterCombination
+    {
+        public Guid? AcademicYearId { get; set; }
+        public Guid? EducationBoardId { get; set; }
+        public Guid? EducationMediumId { get; set; }
+        public Guid? EducationMediumStageId { get; set; }
+        public Guid? StandardId { get; set; }
+        public Guid? DivisionId { get; set; }
+
+        public ScopeParameterCombination Clone()
+        {
+            return new ScopeParameterCombination
+            {
+                AcademicYearId = this.AcademicYearId,
+                EducationBoardId = this.EducationBoardId,
+                EducationMediumId = this.EducationMediumId,
+                EducationMediumStageId = this.EducationMediumStageId,
+                StandardId = this.StandardId,
+                DivisionId = this.DivisionId
+            };
         }
     }
 

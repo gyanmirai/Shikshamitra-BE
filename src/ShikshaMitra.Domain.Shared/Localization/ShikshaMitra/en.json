@@ -52,6 +52,14 @@
     "ShikshaMitra:00002": "The number should be greater than 0",
 
     "ShikshaMitra.TenantSettings:00001": "{entityName} with the name '{name}' already exists.",
+
+    "SM:EntranceExamSlot:001": "Start time must be before end time. Provided start date: {startDate}, end date: {endDate}.",
+    "SM:EntranceExamSlot:002": "Student limit must be greater than zero. Provided value: {studentLimit}.",
+    "SM:EntranceExamSlot:003": "Room number must be greater than zero. Provided value: {roomNo}.",
+    "SM:EntranceExamSlot:004": "There is an overlapping exam slot '{existingSlotName}' (ID: {existingSlotId}) in room {roomNo} scheduled from {existingStartDate} to {existingEndDate}. Your requested time slot from {requestedStartDate} to {requestedEndDate} conflicts with this existing slot in the same room.",
+    "SM:EntranceExamSlot:005": "Cannot reduce student limit to {studentLimit} as there are already {enrolledCount} students enrolled in this slot.",
+    "SM:EntranceExamSlot:006": "Cannot delete this entrance exam slot as there are {enrolledCount} students currently enrolled.",
+    "SM:EntranceExamSlot:007": "The specified academic year (ID: {academicYearId}) does not exist in the system.",
     
     "Permission:Student": "Student Management",
     "Permission:Student.IndividualStudentProfile": "Individual Student Profile",

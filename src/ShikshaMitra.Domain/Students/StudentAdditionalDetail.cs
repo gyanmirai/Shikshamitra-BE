@@ -18,6 +18,9 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public string? RegistrationFormNo { get; private set; }
 	public double? RegistrationAmount { get; private set; }
 
+	// Entrance Exam Information
+	public Guid? EntranceExamSlotId { get; private set; }
+
 	public string? AdharNo { get; private set; }
 	public string? ApparId { get; private set; }
 	public string? PanNo { get; private set; }

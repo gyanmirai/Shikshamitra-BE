@@ -58,6 +58,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
+				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" }
 			};
 		}
@@ -78,6 +79,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
+				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }

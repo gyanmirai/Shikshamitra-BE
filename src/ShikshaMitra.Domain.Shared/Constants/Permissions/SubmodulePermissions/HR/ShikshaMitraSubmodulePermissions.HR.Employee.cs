@@ -22,6 +22,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
+				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
@@ -41,6 +42,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
+				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
@@ -60,6 +62,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
+				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }

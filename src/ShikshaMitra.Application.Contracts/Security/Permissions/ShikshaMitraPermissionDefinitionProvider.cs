@@ -12,7 +12,7 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
 	public override void Define(IPermissionDefinitionContext context)
 	{
 		var group = context.AddGroup(ShikshaMitraPermissions.GroupName, L("Permission:ShikshaMitra"));
-		
+
 		DefineUserScopePermissions(group);
 		SetTenantPermissionMultiTenancySide(context);
 

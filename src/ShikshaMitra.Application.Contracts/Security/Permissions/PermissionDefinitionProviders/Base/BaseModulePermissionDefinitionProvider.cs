@@ -85,7 +85,7 @@ public abstract class BaseModulePermissionDefinitionProvider : PermissionDefinit
 
 	/// <summary>
 	/// Defines all submodule permissions for the given parent permission.
-	/// This method handles the hierarchical structure of permissions.
+	/// This method creates a flat permission structure where all permissions are direct children of the module root.
 	/// </summary>
 	/// <param name="parent">The parent module permission definition.</param>
 	/// <param name="submodules">Dictionary of submodule information containing permissions and display names.</param>
@@ -95,18 +95,10 @@ public abstract class BaseModulePermissionDefinitionProvider : PermissionDefinit
 	{
 		foreach (var (submoduleName, submoduleInfo) in submodules)
 		{
-			// Create the submodule permission (e.g., Students.StudentRecords)
-			var submodule = parent.AddChild(
-				submoduleName,
-				L(submoduleInfo.DisplayNames[submoduleName]));
-
-			// Add all action permissions for this submodule (e.g., View, Create, Edit, Delete)
+			// Add all permissions directly as children of the module root (flat structure)
 			foreach (var permission in submoduleInfo.Permissions)
 			{
-				// Skip the default/parent permission as it's already defined
-				if (permission == submoduleName) continue;
-
-				submodule.AddChild(
+				parent.AddChild(
 					permission,
 					L(submoduleInfo.DisplayNames[permission]));
 			}

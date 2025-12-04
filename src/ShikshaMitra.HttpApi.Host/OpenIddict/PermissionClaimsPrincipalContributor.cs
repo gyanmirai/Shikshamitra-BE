@@ -1,5 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using ShikshaMitra.Constants;
+using ShikshaMitra.Constants.Permissions;
 using System;
 using System.Collections.Generic;
 using System.Linq;

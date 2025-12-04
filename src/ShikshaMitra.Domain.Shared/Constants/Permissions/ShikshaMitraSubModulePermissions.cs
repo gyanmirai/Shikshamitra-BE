@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
-using System.Globalization;
 
-namespace ShikshaMitra.Constants;
+namespace ShikshaMitra.Constants.Permissions;
 
 public static class ShikshaMitraSubModulePermissions
 {

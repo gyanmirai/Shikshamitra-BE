@@ -9,6 +9,9 @@ using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
+using ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes;
+using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 
 namespace ShikshaMitra.TenantSettings;
 
@@ -47,6 +50,21 @@ public class TenantSettingsMapperProfile : Profile
 		#region ShiftManagemetnt
 		CreateMap<ShiftManagement, ShiftManagementDto>();
 		CreateMap<CreateUpdateShiftManagementDto, ShiftManagement>();
+		#endregion
+
+		#region Rooms Management - Building
+		CreateMap<Building, BuildingDto>();
+		CreateMap<CreateUpdateBuildingDto, Building>();
+		#endregion
+
+		#region Rooms Management - Room Type
+		CreateMap<RoomType, RoomTypeDto>();
+		CreateMap<CreateUpdateRoomTypeDto, RoomType>();
+		#endregion
+
+		#region Rooms Management - Room
+		CreateMap<Room, RoomDto>();
+		CreateMap<CreateUpdateRoomDto, Room>();
 		#endregion
 	}
 }

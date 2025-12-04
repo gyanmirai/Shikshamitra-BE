@@ -18,6 +18,7 @@ using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
+using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
@@ -151,6 +152,9 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#endregion
 
 	#region Attendance
+
+	public DbSet<AttendanceDay> AttendanceDays { get; set; }
+	public DbSet<AttendanceEntry> AttendanceEntries { get; set; }
 
 	#region Settings
 

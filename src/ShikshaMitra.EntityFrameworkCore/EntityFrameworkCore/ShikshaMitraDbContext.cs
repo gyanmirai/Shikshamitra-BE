@@ -38,6 +38,9 @@ using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
+using ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes;
+using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
 using Volo.Abp.BackgroundJobs.EntityFrameworkCore;
 using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
@@ -123,6 +126,12 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<ShiftManagement> ShiftManagements { get; set; }
 
 	public DbSet<InstituteSetupExtraProperties> InstituteSetupExtraProperties { get; set; }
+
+	#region Rooms Management
+	public DbSet<Building> Buildings { get; set; }
+	public DbSet<RoomType> RoomTypes { get; set; }
+	public DbSet<Room> Rooms { get; set; }
+	#endregion
 
 	#endregion
 

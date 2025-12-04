@@ -1,0 +1,240 @@
+﻿{
+	"info": {
+		"_postman_id": "rooms-mgmt-001",
+		"name": "Rooms Management API",
+		"description": "Complete Rooms Management API - Buildings, Room Types & Rooms",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Buildings",
+			"item": [
+				{
+					"name": "Create Building",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Authorization", "value": "Bearer {{access_token}}"},
+							{"key": "__tenant", "value": "{{tenant_id}}"},
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"buildingName\": \"Main Building\",\n  \"totalFloors\": 3,\n  \"description\": \"Main building\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/institute-setup/rooms-management/buildings",
+							"host": ["{{base_url}}"],
+							"path": ["api", "institute-setup", "rooms-management", "buildings"]
+						}
+					}
+				},
+				{
+					"name": "Get All Buildings",
+					"request": {
+						"method": "GET",
+						"header": [
+							{"key": "Authorization", "value": "Bearer {{access_token}}"},
+							{"key": "__tenant", "value": "{{tenant_id}}"}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/institute-setup/rooms-management/buildings",
+							"host": ["{{base_url}}"],
+							"path": ["api", "institute-setup", "rooms-management", "buildings"]
+						}
+					}
+				},
+				{
+					"name": "Update Building",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{"key": "Authorization", "value": "Bearer {{access_token}}"},
+							{"key": "__tenant", "value": "{{tenant_id}}"},
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"buildingName\": \"Updated Building\",\n  \"totalFloors\": 4,\n  \"description\": \"Updated\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/institute-setup/rooms-management/buildings/{{building_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "institute-setup", "rooms-management", "buildings", "{{building_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Building",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{"key": "Authorization", "value": "Bearer {{access_token}}"},
+							{"key": "__tenant", "value": "{{tenant_id}}"}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/institute-setup/rooms-management/buildings/{{building_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "institute-setup", "rooms-management", "buildings", "{{building_id}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Room Types",
+			"item": [
+				{
+					"name": "Create Room Type",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Authorization", "value": "Bearer {{access_token}}"},
+							{"key": "__tenant", "value": "{{tenant_id}}"},
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomTypeName\": \"Classroom\",\n  \"shortName\": \"CR\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/institute-setup/rooms-management/room-types",
+							"host": ["{{base_url}}"],
+							"path": ["api", "institute-setup", "rooms-management", "room-types"]
+						}
+					}
+				},
+				{
+					"name": "Get All Room Types",
+					"request": {
+						"method": "GET",
+						"header": [
+							{"key": "Authorization", "value": "Bearer {{access_token}}"},
+							{"key": "__tenant", "value": "{{tenant_id}}"}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/institute-setup/rooms-management/room-types",
+							"host": ["{{base_url}}"],
+							"path": ["api", "institute-setup", "rooms-management", "room-types"]
+						}
+					}
+				},
+				{
+					"name": "Update Room Type",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{"key": "Authorization", "value": "Bearer {{access_token}}"},
+							{"key": "__tenant", "value": "{{tenant_id}}"},
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomTypeName\": \"Laboratory\",\n  \"shortName\": \"LAB\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/institute-setup/rooms-management/room-types/{{room_type_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "institute-setup", "rooms-management", "room-types", "{{room_type_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Room Type",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{"key": "Authorization", "value": "Bearer {{access_token}}"},
+							{"key": "__tenant", "value": "{{tenant_id}}"}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/institute-setup/rooms-management/room-types/{{room_type_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "institute-setup", "rooms-management", "room-types", "{{room_type_id}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Rooms",
+			"item": [
+				{
+					"name": "Create Room",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Authorization", "value": "Bearer {{access_token}}"},
+							{"key": "__tenant", "value": "{{tenant_id}}"},
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomName\": \"101\",\n  \"capacity\": 50,\n  \"buildingId\": \"{{building_id}}\",\n  \"floor\": 1,\n  \"roomTypeId\": \"{{room_type_id}}\",\n  \"totalBenches\": 25,\n  \"benchCapacity\": 2,\n  \"classBenchesRows\": 5,\n  \"classBenchesColumns\": 5,\n  \"features\": \"Projector, AC, Whiteboard\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/institute-setup/rooms-management/rooms",
+							"host": ["{{base_url}}"],
+							"path": ["api", "institute-setup", "rooms-management", "rooms"]
+						}
+					}
+				},
+				{
+					"name": "Get All Rooms",
+					"request": {
+						"method": "GET",
+						"header": [
+							{"key": "Authorization", "value": "Bearer {{access_token}}"},
+							{"key": "__tenant", "value": "{{tenant_id}}"}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/institute-setup/rooms-management/rooms",
+							"host": ["{{base_url}}"],
+							"path": ["api", "institute-setup", "rooms-management", "rooms"]
+						}
+					}
+				},
+				{
+					"name": "Update Room",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{"key": "Authorization", "value": "Bearer {{access_token}}"},
+							{"key": "__tenant", "value": "{{tenant_id}}"},
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roomName\": \"102\",\n  \"capacity\": 40,\n  \"buildingId\": \"{{building_id}}\",\n  \"floor\": 1,\n  \"roomTypeId\": \"{{room_type_id}}\",\n  \"totalBenches\": 20,\n  \"benchCapacity\": 2,\n  \"classBenchesRows\": 4,\n  \"classBenchesColumns\": 5,\n  \"features\": \"Computers, AC, Whiteboard\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/institute-setup/rooms-management/rooms/{{room_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "institute-setup", "rooms-management", "rooms", "{{room_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Room",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{"key": "Authorization", "value": "Bearer {{access_token}}"},
+							{"key": "__tenant", "value": "{{tenant_id}}"}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/institute-setup/rooms-management/rooms/{{room_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "institute-setup", "rooms-management", "rooms", "{{room_id}}"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{"key": "building_id", "value": ""},
+		{"key": "room_type_id", "value": ""},
+		{"key": "room_id", "value": ""}
+	]
+}

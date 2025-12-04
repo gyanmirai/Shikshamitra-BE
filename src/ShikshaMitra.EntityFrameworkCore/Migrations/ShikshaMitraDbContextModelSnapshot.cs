@@ -2162,7 +2162,7 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("AppStudents", (string)null);
-                });
+                }));
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentAdditionalDetail", b =>
                 {

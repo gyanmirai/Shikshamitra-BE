@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using static ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions;
 
 namespace ShikshaMitra.Constants.Permissions;
 
@@ -15,9 +16,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 	{
 		{ Students.Default, new ModuleInfo(Students.DisplayNames, Students.Submodules) },
 		{ Academics.Default, new ModuleInfo(Academics.DisplayNames, Academics.Submodules) },
-		{ Finance.Default, new ModuleInfo(Finance.DisplayNames, Finance.Submodules) },
 		{ HR.Default, new ModuleInfo(HR.DisplayNames, HR.Submodules) },
-		{ Dashboard.Default, new ModuleInfo(Dashboard.DisplayNames, Dashboard.Submodules) },
 		{ ClassManagement.Default, new ModuleInfo(ClassManagement.DisplayNames, ClassManagement.Submodules) }
 	};
 }

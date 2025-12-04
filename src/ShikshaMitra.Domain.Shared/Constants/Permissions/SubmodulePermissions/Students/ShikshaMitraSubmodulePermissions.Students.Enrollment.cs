@@ -17,19 +17,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleName = $"{ModuleName}.Enrollment.Inquiry";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Enrollment.Inquiry";
 
-			public const string Default = SubmoduleName;
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
-			public const string Update = $"{SubmoduleName}.Update";
+			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { Default, View, Add, Update };
+			public static readonly string[] All = { View, Add, Delete };
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Update, $"{SubmoduleDisplayName}.Update" }
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 
@@ -41,15 +39,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleName = $"{ModuleName}.Enrollment.RegistrationFormIssued";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Enrollment.RegistrationFormIssued";
 
-			public const string Default = SubmoduleName;
 			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { Default, View };
+			public static readonly string[] All = { View, Add, Delete };
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName },
-				{ View, $"{SubmoduleDisplayName}.View" }
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 
@@ -61,19 +61,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleName = $"{ModuleName}.Enrollment.EntranceExam";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Enrollment.EntranceExam";
 
-			public const string Default = SubmoduleName;
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
-			public const string Update = $"{SubmoduleName}.Update";
+			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { Default, View, Add, Update };
+			public static readonly string[] All = { View, Add, Delete };
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Update, $"{SubmoduleDisplayName}.Update" }
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 
@@ -85,19 +83,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleName = $"{ModuleName}.Enrollment.Admission";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Enrollment.Admission";
 
-			public const string Default = SubmoduleName;
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
-			public const string Update = $"{SubmoduleName}.Update";
+			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { Default, View, Add, Update };
+			public static readonly string[] All = { View, Add, Delete };
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Update, $"{SubmoduleDisplayName}.Update" }
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 
@@ -109,17 +105,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleName = $"{ModuleName}.Enrollment.Reports";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Enrollment.Reports";
 
-			public const string Default = SubmoduleName;
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { Default, View, Add };
+			public static readonly string[] All = { View, Add, Delete };
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
-				{ Add, $"{SubmoduleDisplayName}.Add" }
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 
@@ -131,20 +127,16 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleName = $"{ModuleName}.Enrollment.Settings.DocumentTypes";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Enrollment.Settings.DocumentTypes";
 
-			public const string Default = SubmoduleName;
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
-			public const string Update = $"{SubmoduleName}.Update";
 			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { Default, View, Add, Update, Delete };
+			public static readonly string[] All = { View, Add, Delete };
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Update, $"{SubmoduleDisplayName}.Update" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
@@ -157,20 +149,16 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleName = $"{ModuleName}.Enrollment.Settings.InquiryPreference";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Enrollment.Settings.InquiryPreference";
 
-			public const string Default = SubmoduleName;
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
-			public const string Update = $"{SubmoduleName}.Update";
 			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { Default, View, Add, Update, Delete };
+			public static readonly string[] All = { View, Add, Delete };
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Update, $"{SubmoduleDisplayName}.Update" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
@@ -183,20 +171,16 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleName = $"{ModuleName}.Enrollment.Settings.EntranceExamSlots";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Enrollment.Settings.EntranceExamSlots";
 
-			public const string Default = SubmoduleName;
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
-			public const string Update = $"{SubmoduleName}.Update";
 			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { Default, View, Add, Update, Delete };
+			public static readonly string[] All = { View, Add, Delete };
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Update, $"{SubmoduleDisplayName}.Update" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
@@ -209,20 +193,16 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleName = $"{ModuleName}.Enrollment.Settings.RegistrationFormAmount";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Enrollment.Settings.RegistrationFormAmount";
 
-			public const string Default = SubmoduleName;
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
-			public const string Update = $"{SubmoduleName}.Update";
 			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { Default, View, Add, Update, Delete };
+			public static readonly string[] All = { View, Add, Delete };
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Update, $"{SubmoduleDisplayName}.Update" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
@@ -235,20 +215,16 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleName = $"{ModuleName}.Enrollment.Settings.FormNumberSeries";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Enrollment.Settings.FormNumberSeries";
 
-			public const string Default = SubmoduleName;
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
-			public const string Update = $"{SubmoduleName}.Update";
 			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { Default, View, Add, Update, Delete };
+			public static readonly string[] All = { View, Add, Delete };
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Update, $"{SubmoduleDisplayName}.Update" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}

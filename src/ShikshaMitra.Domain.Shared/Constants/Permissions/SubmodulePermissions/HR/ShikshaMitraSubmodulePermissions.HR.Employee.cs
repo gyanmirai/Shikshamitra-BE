@@ -14,15 +14,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Employee.EmployeeList";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Employee.EmployeeList";
-			public const string Default = SubmoduleName;
+			
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
-			public const string Update = $"{SubmoduleName}.Update";
-			public static readonly string[] All = { Default, View, Add, Update };
+			public const string Delete = $"{SubmoduleName}.Delete";
+			
+			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName }, { View, $"{SubmoduleDisplayName}.View" },
-				{ Add, $"{SubmoduleDisplayName}.Add" }, { Update, $"{SubmoduleDisplayName}.Update" }
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 
@@ -31,15 +33,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Employee.ICard";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Employee.ICard";
-			public const string Default = SubmoduleName;
+			
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
-			public const string Update = $"{SubmoduleName}.Update";
-			public static readonly string[] All = { Default, View, Add, Update };
+			public const string Delete = $"{SubmoduleName}.Delete";
+			
+			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName }, { View, $"{SubmoduleDisplayName}.View" },
-				{ Add, $"{SubmoduleDisplayName}.Add" }, { Update, $"{SubmoduleDisplayName}.Update" }
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 
@@ -48,16 +52,16 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Employee.Setting.DocumentTypes";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Employee.Setting.DocumentTypes";
-			public const string Default = SubmoduleName;
+			
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
-			public const string Update = $"{SubmoduleName}.Update";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			public static readonly string[] All = { Default, View, Add, Update, Delete };
+			
+			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName }, { View, $"{SubmoduleDisplayName}.View" },
-				{ Add, $"{SubmoduleDisplayName}.Add" }, { Update, $"{SubmoduleDisplayName}.Update" },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}

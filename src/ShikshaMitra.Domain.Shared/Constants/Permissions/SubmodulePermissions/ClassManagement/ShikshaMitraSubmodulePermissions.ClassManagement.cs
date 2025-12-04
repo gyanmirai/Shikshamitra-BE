@@ -37,12 +37,13 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Dashboard";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Dashboard";
-			public const string Default = SubmoduleName;
+			
 			public const string View = $"{SubmoduleName}.View";
-			public static readonly string[] All = { Default, View };
+			
+			public static readonly string[] All = { View };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName }, { View, $"{SubmoduleDisplayName}.View" }
+				{ View, $"{SubmoduleDisplayName}.View" }
 			};
 		}
 
@@ -51,12 +52,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.StudentElectiveAssignment";
 			private const string SubmoduleDisplayName = $"{DisplayName}.StudentElectiveAssignment";
-			public const string Default = SubmoduleName;
+			
 			public const string View = $"{SubmoduleName}.View";
-			public static readonly string[] All = { Default, View };
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+			
+			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName }, { View, $"{SubmoduleDisplayName}.View" }
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 
@@ -65,14 +71,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.ChaptersProgress";
 			private const string SubmoduleDisplayName = $"{DisplayName}.ChaptersProgress";
-			public const string Default = SubmoduleName;
+			
 			public const string View = $"{SubmoduleName}.View";
-			public const string Update = $"{SubmoduleName}.Update";
-			public static readonly string[] All = { Default, View, Update };
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+			
+			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName }, { View, $"{SubmoduleDisplayName}.View" },
-				{ Update, $"{SubmoduleDisplayName}.Update" }
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 
@@ -81,14 +90,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.TeachersAssignment";
 			private const string SubmoduleDisplayName = $"{DisplayName}.TeachersAssignment";
-			public const string Default = SubmoduleName;
+			
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
-			public static readonly string[] All = { Default, View, Add };
+			public const string Delete = $"{SubmoduleName}.Delete";
+			
+			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName }, { View, $"{SubmoduleDisplayName}.View" },
-				{ Add, $"{SubmoduleDisplayName}.Add" }
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 
@@ -97,14 +109,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.ClassTeacherAssignment";
 			private const string SubmoduleDisplayName = $"{DisplayName}.ClassTeacherAssignment";
-			public const string Default = SubmoduleName;
+			
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
-			public static readonly string[] All = { Default, View, Add };
+			public const string Delete = $"{SubmoduleName}.Delete";
+			
+			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName }, { View, $"{SubmoduleDisplayName}.View" },
-				{ Add, $"{SubmoduleDisplayName}.Add" }
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 
@@ -113,14 +128,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Notification.StudentElectiveAssignment";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Notification.StudentElectiveAssignment";
-			public const string Default = SubmoduleName;
+			
 			public const string View = $"{SubmoduleName}.View";
-			public const string Update = $"{SubmoduleName}.Update";
-			public static readonly string[] All = { Default, View, Update };
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+			
+			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName }, { View, $"{SubmoduleDisplayName}.View" },
-				{ Update, $"{SubmoduleDisplayName}.Update" }
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 
@@ -129,14 +147,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Notification.ChapterProgress";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Notification.ChapterProgress";
-			public const string Default = SubmoduleName;
+			
 			public const string View = $"{SubmoduleName}.View";
-			public const string Update = $"{SubmoduleName}.Update";
-			public static readonly string[] All = { Default, View, Update };
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+			
+			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName }, { View, $"{SubmoduleDisplayName}.View" },
-				{ Update, $"{SubmoduleDisplayName}.Update" }
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 
@@ -145,14 +166,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Notification.TeachersAssignment";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Notification.TeachersAssignment";
-			public const string Default = SubmoduleName;
+			
 			public const string View = $"{SubmoduleName}.View";
-			public const string Update = $"{SubmoduleName}.Update";
-			public static readonly string[] All = { Default, View, Update };
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+			
+			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName }, { View, $"{SubmoduleDisplayName}.View" },
-				{ Update, $"{SubmoduleDisplayName}.Update" }
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 
@@ -161,28 +185,31 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Notification.ClassTeacherAssignment";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Notification.ClassTeacherAssignment";
-			public const string Default = SubmoduleName;
+			
 			public const string View = $"{SubmoduleName}.View";
-			public const string Update = $"{SubmoduleName}.Update";
-			public static readonly string[] All = { Default, View, Update };
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+			
+			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ Default, SubmoduleDisplayName }, { View, $"{SubmoduleDisplayName}.View" },
-				{ Update, $"{SubmoduleDisplayName}.Update" }
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 
 		public static readonly Dictionary<string, SubmoduleInfo> Submodules = new()
 		{
-			{ Dashboard.Default, new SubmoduleInfo(Dashboard.All, Dashboard.DisplayNames) },
-			{ StudentElectiveAssignment.Default, new SubmoduleInfo(StudentElectiveAssignment.All, StudentElectiveAssignment.DisplayNames) },
-			{ ChaptersProgress.Default, new SubmoduleInfo(ChaptersProgress.All, ChaptersProgress.DisplayNames) },
-			{ TeachersAssignment.Default, new SubmoduleInfo(TeachersAssignment.All, TeachersAssignment.DisplayNames) },
-			{ ClassTeacherAssignment.Default, new SubmoduleInfo(ClassTeacherAssignment.All, ClassTeacherAssignment.DisplayNames) },
-			{ Notification_StudentElectiveAssignment.Default, new SubmoduleInfo(Notification_StudentElectiveAssignment.All, Notification_StudentElectiveAssignment.DisplayNames) },
-			{ Notification_ChapterProgress.Default, new SubmoduleInfo(Notification_ChapterProgress.All, Notification_ChapterProgress.DisplayNames) },
-			{ Notification_TeachersAssignment.Default, new SubmoduleInfo(Notification_TeachersAssignment.All, Notification_TeachersAssignment.DisplayNames) },
-			{ Notification_ClassTeacherAssignment.Default, new SubmoduleInfo(Notification_ClassTeacherAssignment.All, Notification_ClassTeacherAssignment.DisplayNames) }
+			{ "ClassManagement.Dashboard", new SubmoduleInfo(Dashboard.All, Dashboard.DisplayNames) },
+			{ "ClassManagement.StudentElectiveAssignment", new SubmoduleInfo(StudentElectiveAssignment.All, StudentElectiveAssignment.DisplayNames) },
+			{ "ClassManagement.ChaptersProgress", new SubmoduleInfo(ChaptersProgress.All, ChaptersProgress.DisplayNames) },
+			{ "ClassManagement.TeachersAssignment", new SubmoduleInfo(TeachersAssignment.All, TeachersAssignment.DisplayNames) },
+			{ "ClassManagement.ClassTeacherAssignment", new SubmoduleInfo(ClassTeacherAssignment.All, ClassTeacherAssignment.DisplayNames) },
+			{ "ClassManagement.Notification.StudentElectiveAssignment", new SubmoduleInfo(Notification_StudentElectiveAssignment.All, Notification_StudentElectiveAssignment.DisplayNames) },
+			{ "ClassManagement.Notification.ChapterProgress", new SubmoduleInfo(Notification_ChapterProgress.All, Notification_ChapterProgress.DisplayNames) },
+			{ "ClassManagement.Notification.TeachersAssignment", new SubmoduleInfo(Notification_TeachersAssignment.All, Notification_TeachersAssignment.DisplayNames) },
+			{ "ClassManagement.Notification.ClassTeacherAssignment", new SubmoduleInfo(Notification_ClassTeacherAssignment.All, Notification_ClassTeacherAssignment.DisplayNames) }
 		};
 	}
 }

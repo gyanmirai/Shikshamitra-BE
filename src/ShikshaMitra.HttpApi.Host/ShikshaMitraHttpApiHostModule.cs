@@ -101,16 +101,22 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 		ConfigureSwaggerServices(context, configuration);
 
-		//ConfigureExceptionServices(context);
+		ConfigureExceptionHandling(context, hostingEnvironment);
 	}
 
-	// TODO: Need to figure this out
-	private void ConfigureExceptionServices(ServiceConfigurationContext context)
+	private void ConfigureExceptionHandling(ServiceConfigurationContext context, IHostEnvironment environment)
 	{
-		context.Services.Configure<AbpExceptionHttpStatusCodeOptions>(options =>
+		Configure<AbpExceptionHttpStatusCodeOptions>(options =>
 		{
-			// Map the exception using the error code instead of the generic type  
-			options.Map(typeof(UserFriendlyException).FullName, HttpStatusCode.BadRequest);
+			options.Map("Volo.Abp.Authorization.AbpAuthorizationException", HttpStatusCode.Unauthorized);
+			options.Map("Volo.Abp.Validation.AbpValidationException", HttpStatusCode.BadRequest);
+		});
+
+		Configure<AbpExceptionHandlingOptions>(options =>
+		{
+			// Show detailed error messages and stack traces in development
+			options.SendExceptionsDetailsToClients = environment.IsDevelopment();
+			options.SendStackTraceToClients = environment.IsDevelopment();
 		});
 	}
 

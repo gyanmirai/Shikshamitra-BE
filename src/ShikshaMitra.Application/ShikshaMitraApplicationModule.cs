@@ -6,8 +6,6 @@ using Volo.Abp.Modularity;
 using Volo.Abp.PermissionManagement;
 using Volo.Abp.SettingManagement;
 using Volo.Abp.TenantManagement;
-using Microsoft.Extensions.DependencyInjection;
-using ShikshaMitra.Students.StudentRecords.BulkUpload;
 
 namespace ShikshaMitra;
 
@@ -31,6 +29,6 @@ public class ShikshaMitraApplicationModule : AbpModule
         });
 
         // Register the CSV import service
-        context.Services.AddTransient<IStudentCsvImportService, StudentCsvImportService>();
+        //context.Services.AddTransient<IStudentCsvImportService, StudentCsvImportService>();
     }
 }

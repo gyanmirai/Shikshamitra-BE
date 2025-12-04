@@ -17,16 +17,8 @@ using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using ShikshaMitra.Security.UserScope;
-using ShikshaMitra.Students.Attendance;
-using ShikshaMitra.Students.Attendance.settings;
-using ShikshaMitra.Students.Attendance.Settings;
-using ShikshaMitra.Students.Dashboard;
-using ShikshaMitra.Students.StudentEnrollments;
-using ShikshaMitra.Students.StudentEnrollments.EntranceExam;
-using ShikshaMitra.Students.StudentEnrollments.FollowUps;
-using ShikshaMitra.Students.StudentEnrollments.Registration;
+using ShikshaMitra.Students;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
-using ShikshaMitra.Students.StudentRecords;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
@@ -35,6 +27,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.DocumentTypes;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
@@ -133,16 +126,16 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<Room> Rooms { get; set; }
 	#endregion
 
+	public DbSet<DocumentType> DocumentTypes { get; set; }
+
 	#endregion
 
 	#region Student
+	public DbSet<Student> Students { get; set; }
+	public DbSet<StudentAdditionalDetail> StudentAdditionalDetails { get; set; }
+	public DbSet<StudentContactDetail> StudentContactDetails { get; set; }
 
 	#region Student Enrollment
-	DbSet<StudentEnrollment> StudentEnrollments { get; set; }
-	DbSet<FollowUpMessage> FollowUpMessages { get; set; }
-
-	public DbSet<StudentDocument> StudentDocuments { get; set; }
-	DbSet<EntranceExam> EntranceExams { get; set; }
 
 	#region Settings
 	DbSet<StudentDocumentSetting> StudentDocumentSettings { get; set; }
@@ -154,13 +147,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#endregion
 
 	#region Student Record
-	DbSet<Student> Students { get; set; }
-	public DbSet<StudentGroup> StudentGroups { get; set; }
-	public DbSet<StudentAttendance> StudentAttendances { get; set; }
-	public DbSet<StudentLeave> StudentLeaves { get; set; }
-	public DbSet<StudentGroupMember> StudentGroupMembers { get; set; }
-
-	public DbSet<StudentCertificate> StudentCertificates { get; set; }
 
 	#endregion
 
@@ -168,15 +154,12 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region Settings
 
-	DbSet<AttendanceType> AttendanceTypes { get; set; }
-	DbSet<StudentAttendanceRule> StudentAttendanceRules { get; set; }
 
 	#endregion
 
 	#endregion
 
 	#region Dashboard
-	public DbSet<DashboardLayout> Dashboards { get; set; }
 	#endregion
 
 	#endregion

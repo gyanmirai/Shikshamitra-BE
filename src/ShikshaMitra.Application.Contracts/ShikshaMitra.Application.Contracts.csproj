@@ -24,7 +24,6 @@
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.104.2" />
     <PackageReference Include="QuestPDF" Version="2024.10.4" />
-    <PackageReference Include="System.Linq.Dynamic.Core" Version="1.7.1" />
     <PackageReference Include="Volo.Abp.ObjectExtending" Version="9.0.0" />
     <PackageReference Include="Volo.Abp.Account.Application.Contracts" Version="9.0.0" />
     <PackageReference Include="Volo.Abp.Identity.Application.Contracts" Version="9.0.0" />

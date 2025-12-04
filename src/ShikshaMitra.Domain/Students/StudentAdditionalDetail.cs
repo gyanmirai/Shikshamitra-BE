@@ -1,0 +1,126 @@
+﻿using System;
+using Volo.Abp.Domain.Entities.Auditing;
+using Volo.Abp.MultiTenancy;
+
+namespace ShikshaMitra.Students;
+
+public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
+{
+	public Guid? TenantId { get; private set; }
+	public string? FormNo { get; private set; }
+	public DateTimeOffset? DateOfBirthday { get; private set; }
+	public GenderEnum? Gender { get; private set; }
+	public string? ProfilePictureUrl { get; private set; }
+
+	public DateTimeOffset? DateOfInquiry { get; private set; }
+	public string InquiryNo { get; private set; }
+	public Guid? InquiryPreferenceId { get; private set; }
+	public string? RegistrationFormNo { get; private set; }
+	public double? RegistrationAmount { get; private set; }
+
+	public string? AdharNo { get; private set; }
+	public string? ApparId { get; private set; }
+	public string? PanNo { get; private set; }
+	public ReligionEnum? Religion { get; private set; }
+	public string FamilyCast { get; private set; }
+	public CastCategoryEnum? CastCategory { get; private set; }
+	public string? Nationality { get; private set; }
+	public string? BirthPlace { get; private set; }
+	public MotherTongueEnum? MotherTongue { get; private set; }
+
+	public bool? IsBPLStudent { get; private set; }
+	public string? BPLCardNo { get; private set; }
+	public bool? HaveDisability { get; private set; }
+	public string? SecondLanguage { get; private set; }
+	public string? EmergencyContactNo { get; private set; }
+	public string? EmergencyRelationName { get; private set; }
+	public string? EmergencyRelationType { get; private set; }
+	public bool? IsSingleParentChild { get; private set; }
+	public bool? IsSingleChild { get; private set; }
+
+	public string? PreviousSchool { get; private set; }
+	public string? LastClassPassed { get; private set; }
+
+	public StudentRegistrationStateEnum StudentRegistrationState { get; private set; }
+
+	private StudentAdditionalDetail()
+	{
+		/* This constructor is for deserialization / ORM purpose */
+	}
+
+	public StudentAdditionalDetail(
+		Guid id,
+		Guid? tenantId,
+		DateTimeOffset? dateOfBirthday,
+		GenderEnum? gender,
+		DateTimeOffset? dateOfInquiry,
+		string inquiryNo,
+		Guid? inquiryPreferenceId
+	)
+		: base(id)
+	{
+		TenantId = tenantId;
+		DateOfBirthday = dateOfBirthday;
+		Gender = gender;
+		DateOfInquiry = dateOfInquiry;
+		InquiryNo = inquiryNo;
+		InquiryPreferenceId = inquiryPreferenceId;
+		StudentRegistrationState = StudentRegistrationStateEnum.Default;
+	}
+
+	public void UpdateDetails(
+	DateTimeOffset? dateOfBirth,
+	GenderEnum? gender,
+	DateTimeOffset? dateOfInquiry,
+	Guid? inquiryPreferenceId)
+	{
+		DateOfBirthday = dateOfBirth;
+		Gender = gender;
+		DateOfInquiry = dateOfInquiry;
+		InquiryPreferenceId = inquiryPreferenceId;
+	}
+
+	public void UpdateGeneralInformation(
+		DateTimeOffset dateOfBirth,
+		GenderEnum gender,
+		string? profilePictureUrl,
+		string? adharNo,
+		string? apparId,
+		string? panNo,
+		ReligionEnum? religion,
+		string familyCast,
+		CastCategoryEnum? castCategory,
+		string? nationality,
+		string? birthPlace,
+		MotherTongueEnum? motherTongue,
+		string? previousSchool,
+		string? lastClassPassed,
+        StudentRegistrationStateEnum state
+
+        )
+	{
+		DateOfBirthday = dateOfBirth;
+		Gender = gender;
+		ProfilePictureUrl = profilePictureUrl;
+		AdharNo = adharNo;
+		ApparId = apparId;
+		PanNo = panNo;
+		Religion = religion;
+		FamilyCast = familyCast;
+		CastCategory = castCategory;
+		Nationality = nationality;
+		BirthPlace = birthPlace;
+		MotherTongue = motherTongue;
+		PreviousSchool = previousSchool;
+		LastClassPassed = lastClassPassed;
+        StudentRegistrationState = state;
+    }
+
+	public void IssueRegistrationForm(
+		string formNumber,
+		double amount)
+	{
+		RegistrationFormNo = formNumber;
+		RegistrationAmount = amount;
+	}
+}

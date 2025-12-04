@@ -1,11 +1,10 @@
-﻿using System;
+﻿using Microsoft.Extensions.DependencyInjection;
+using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
-using ShikshaMitra.Seeders;
-using Microsoft.Extensions.DependencyInjection;
 using Volo.Abp.MultiTenancy;
-using System.Collections.Generic;
 
 namespace ShikshaMitra;
 public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDependency
@@ -51,8 +50,8 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 					var hrSeeder = scope.ServiceProvider.GetRequiredService<Seeders.HRSeederContributor>();
 					await hrSeeder.SeedAsync(context);
 
-					var studentSeeder = scope.ServiceProvider.GetRequiredService<Seeders.StudentSeederContributor>();
-					await studentSeeder.SeedAsync(context);
+					//var studentSeeder = scope.ServiceProvider.GetRequiredService<Seeders.StudentSeederContributor>();
+					//await studentSeeder.SeedAsync(context);
 				}
 			}
 		}

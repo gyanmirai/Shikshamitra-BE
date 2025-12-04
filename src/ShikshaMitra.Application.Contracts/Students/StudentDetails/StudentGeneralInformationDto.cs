@@ -1,0 +1,46 @@
+﻿using System;
+using Volo.Abp.Application.Dtos;
+
+namespace ShikshaMitra.Students.StudentDetails;
+public class StudentGeneralInformationDto : EntityDto
+{
+	public Guid StudentId { get; set; }
+	public required string FormNo { get; set; }
+	public Guid AcademicYearId { get; set; }
+	public Guid AcademicBoardId { get; set; }
+	public Guid AcademicMediumId { get; set; }
+	public Guid StandardId { get; set; }
+
+	public required string FirstName { get; set; }
+	public string? MiddleName { get; set; }
+	public required string LastName { get; set; }
+	public DateTimeOffset DateOfBirth { get; set; }
+	public GenderEnum Gender { get; set; }
+	public string? ProfilePictureUrl { get; set; }
+
+	public required string PrimaryContactNo { get; set; }
+	public string? SecondaryContactNo { get; set; }
+	public string? Email { get; set; }
+
+	public string? AadharNo { get; set; }
+	public string? ApparId { get; set; }
+	public  string? PanNo { get; set; }
+	public Guid? InquiryPreferenceId { get; set; }
+	public ReligionEnum? Religion { get; set; }
+	public required string FamilyCast { get; set; }
+	public CastCategoryEnum CastCategory { get; set; }
+	public string? Nationality { get; set; }
+	public string? BirthPlace { get; set; }
+	public MotherTongueEnum? MotherTongue { get; set; }
+
+	public string? Address1 { get; set; }
+	public string? Address2 { get; set; }
+	public string? Address3 { get; set; }
+	public required string City { get; set; }
+	public required string State { get; set; }
+	public required string Country { get; set; }
+	public string? Pincode { get; set; }
+
+	public string? PreviousSchool { get; set; }
+	public string? LastClassPassed { get; set; }
+}

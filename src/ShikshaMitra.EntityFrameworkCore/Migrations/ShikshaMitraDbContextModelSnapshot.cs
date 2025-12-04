@@ -4707,7 +4707,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("CreatorId");
 
                     b.Property<string>("Description")
-                        .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
@@ -4723,6 +4722,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("LastModifierId")
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
 
                     b.Property<int>("TotalFloors")
                         .HasColumnType("integer");
@@ -4775,6 +4778,10 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
                     b.HasKey("Id");
 
                     b.ToTable("AppRoomTypes", (string)null);
@@ -4821,7 +4828,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("ExtraProperties");
 
                     b.Property<string>("Features")
-                        .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
@@ -4843,6 +4849,10 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<Guid>("RoomTypeId")
                         .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
 
                     b.Property<int>("TotalBenches")
                         .HasColumnType("integer");

@@ -102,26 +102,54 @@ POST /api/institute-setup/rooms-management/rooms
 ## 🚀 Usage Workflow
 
 1. **Create Building**
-   ```json
-   POST /buildings → Returns buildingId
+   ```http
+   POST /api/institute-setup/rooms-management/buildings
    ```
+   ```json
+   {
+     "buildingName": "Main Building",
+     "totalFloors": 3,
+     "description": "Main building"
+   }
+   ```
+   Response: Returns `buildingId`
 
 2. **Create Room Type**
-   ```json
-   POST /room-types → Returns roomTypeId
+   ```http
+   POST /api/institute-setup/rooms-management/room-types
    ```
+   ```json
+   {
+     "roomTypeName": "Classroom",
+     "shortName": "CR"
+   }
+   ```
+   Response: Returns `roomTypeId`
 
 3. **Create Room**
+   ```http
+   POST /api/institute-setup/rooms-management/rooms
+   ```
    ```json
-   POST /rooms
-   Use buildingId and roomTypeId from steps 1 & 2
+   {
+     "roomName": "101",
+     "capacity": 50,
+     "buildingId": "guid-from-step-1",
+     "floor": 1,
+     "roomTypeId": "guid-from-step-2",
+     "totalBenches": 25,
+     "benchCapacity": 2,
+     "classBenchesRows": 5,
+     "classBenchesColumns": 5,
+     "features": "Projector, AC, Whiteboard"
+   }
    ```
 
 4. **List Rooms**
-   ```json
-   GET /rooms
-   Returns rooms with building names and room type names
+   ```http
+   GET /api/institute-setup/rooms-management/rooms
    ```
+   Response: Returns rooms with building names and room type names
 
 ---
 

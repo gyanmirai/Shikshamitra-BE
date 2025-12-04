@@ -16,5 +16,5 @@ public class RoomDto : AuditedEntityDto<Guid>
 	public int BenchCapacity { get; set; }
 	public int ClassBenchesRows { get; set; }
 	public int ClassBenchesColumns { get; set; }
-	public string Features { get; set; }
+	public string? Features { get; set; }
 }

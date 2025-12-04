@@ -7,5 +7,5 @@ public class BuildingDto : AuditedEntityDto<Guid>
 {
 	public string BuildingName { get; set; }
 	public int TotalFloors { get; set; }
-	public string Description { get; set; }
+	public string? Description { get; set; }
 }

@@ -37,5 +37,5 @@ public class CreateUpdateRoomDto
 	public int ClassBenchesColumns { get; set; }
 
 	[StringLength(RoomConsts.MaxFeaturesLength)]
-	public string Features { get; set; }
+	public string? Features { get; set; }
 }

@@ -14,8 +14,8 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20251204085126_v2")]
-    partial class v2
+    [Migration("20251204111945_v1")]
+    partial class v1
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -2083,7 +2083,7 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("UserScopeAssignments", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Students.Attendance.Settings.StudentAttendanceRule", b =>
+            modelBuilder.Entity("ShikshaMitra.Students.Student", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -2111,18 +2111,21 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
-                    b.Property<bool>("EnableNotificationForUpperAuthority")
-                        .HasColumnType("boolean");
+                    b.Property<Guid?>("DivisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EducationMediumId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
-                    b.Property<int>("HalfDayThreshold")
-                        .HasColumnType("integer");
+                    b.Property<string>("FirstName")
+                        .HasColumnType("text");
 
-                    b.Property<int>("HalfDayThresholdUnit")
+                    b.Property<int?>("GrNo")
                         .HasColumnType("integer");
 
                     b.Property<bool>("IsDeleted")
@@ -2139,200 +2142,49 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<int>("LateThreshold")
+                    b.Property<string>("LastName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("MiddleName")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("RollNo")
                         .HasColumnType("integer");
 
-                    b.Property<int>("LateThresholdUnit")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.Property<int>("Type")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("AppStudentAttendanceRules", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.Attendance.StudentAttendance", b =>
-                {
-                    b.Property<Guid>("Id")
+                    b.Property<Guid?>("StandardId")
                         .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("AttendanceDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
-
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
-
-                    b.Property<bool>("IsPresent")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<string>("Remarks")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("StudentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StudentId");
-
-                    b.ToTable("AppStudentAttendances", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.Attendance.StudentLeave", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<byte[]>("Attachment")
-                        .HasColumnType("bytea");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
-
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("EndDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<bool>("HalfDay")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<Guid>("LeaveTypeId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("RejectionReason")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("StartDate")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
-                    b.Property<Guid>("StudentId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LeaveTypeId");
-
-                    b.HasIndex("StudentId");
-
-                    b.ToTable("AppStudentLeaves", (string)null);
+                    b.ToTable("AppStudents", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Students.Attendance.settings.AttendanceType", b =>
+            modelBuilder.Entity("ShikshaMitra.Students.StudentAdditionalDetail", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Color")
-                        .IsRequired()
+                    b.Property<string>("AdharNo")
                         .HasColumnType("text");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+                    b.Property<string>("ApparId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BPLCardNo")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BirthPlace")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("CastCategory")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone")
@@ -2342,157 +2194,66 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
-
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("AppAttendanceTypes", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.Dashboard.DashboardLayout", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
-
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<string>("Layouts")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("VisibleWidgets")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("AppDashboardLayouts", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.EntranceExam.EntranceExam", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
-
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
-
-                    b.Property<Guid>("EntranceExamSlotId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("ExamDate")
+                    b.Property<DateTimeOffset?>("DateOfBirthday")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("ExtraProperties")
+                    b.Property<DateTimeOffset?>("DateOfInquiry")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("EmergencyContactNo")
+                        .HasColumnType("text");
+
+                    b.Property<string>("EmergencyRelationName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("EmergencyRelationType")
+                        .HasColumnType("text");
+
+                    b.Property<string>("FamilyCast")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+                        .HasColumnType("text");
+
+                    b.Property<string>("FormNo")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("Gender")
+                        .HasColumnType("integer");
+
+                    b.Property<bool?>("HaveDisability")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("InquiryNo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("InquiryPreferenceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool?>("IsBPLStudent")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("IsDeleted");
+
+                    b.Property<bool?>("IsSingleChild")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool?>("IsSingleParentChild")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LastClassPassed")
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")
@@ -2502,46 +2263,64 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<float?>("MarksObtained")
-                        .HasColumnType("real");
+                    b.Property<int?>("MotherTongue")
+                        .HasColumnType("integer");
 
-                    b.Property<float?>("PassingMark")
-                        .HasColumnType("real");
+                    b.Property<string>("Nationality")
+                        .HasColumnType("text");
 
-                    b.Property<Guid>("StudentEnrollmentId")
-                        .HasColumnType("uuid");
+                    b.Property<string>("PanNo")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PreviousSchool")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ProfilePictureUrl")
+                        .HasColumnType("text");
+
+                    b.Property<double?>("RegistrationAmount")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("RegistrationFormNo")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("Religion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SecondLanguage")
+                        .HasColumnType("text");
+
+                    b.Property<int>("StudentRegistrationState")
+                        .HasColumnType("integer");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
-                    b.Property<float?>("TotalMarks")
-                        .HasColumnType("real");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("EntranceExamSlotId");
-
-                    b.HasIndex("StudentEnrollmentId");
-
-                    b.ToTable("AppEntranceExams", (string)null);
+                    b.ToTable("AppStudentAdditionalDetails", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.FollowUps.FollowUpMessage", b =>
+            modelBuilder.Entity("ShikshaMitra.Students.StudentContactDetail", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Author")
-                        .IsRequired()
+                    b.Property<string>("Address1")
                         .HasColumnType("text");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+                    b.Property<string>("Address2")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Address3")
+                        .HasColumnType("text");
+
+                    b.Property<string>("City")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Country")
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone")
@@ -2559,10 +2338,8 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+                    b.Property<string>("Email")
+                        .HasColumnType("text");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -2578,57 +2355,18 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
+                    b.Property<string>("Pincode")
+                        .HasColumnType("text");
 
-                    b.Property<Guid>("StudentEnrollmentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.Property<DateTimeOffset>("Timestamp")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StudentEnrollmentId");
-
-                    b.ToTable("AppFollowUpMessages", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Registration.StudentDocument", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BlobName")
+                    b.Property<string>("PrimaryContactNo")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("ContentType")
-                        .IsRequired()
+                    b.Property<string>("SecondaryContactNo")
                         .HasColumnType("text");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<string>("DocumentName")
-                        .IsRequired()
+                    b.Property<string>("State")
                         .HasColumnType("text");
-
-                    b.Property<long>("Size")
-                        .HasColumnType("bigint");
-
-                    b.Property<Guid>("StudentEnrollmentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("StudentEnrollmentId1")
-                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("StudentId")
                         .HasColumnType("uuid");
@@ -2639,13 +2377,9 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("StudentEnrollmentId");
-
-                    b.HasIndex("StudentEnrollmentId1");
-
                     b.HasIndex("StudentId");
 
-                    b.ToTable("AppStudentDocuments", (string)null);
+                    b.ToTable("AppStudentContactDetails", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.EntranceExamSlot", b =>
@@ -2713,7 +2447,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppEntranceExamSlots", (string)null);
+                    b.ToTable("EntranceExamSlots");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.InquiryPreference", b =>
@@ -2841,1278 +2575,6 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("StudentDocumentSettings");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AadhaarNo")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AddressLine1")
-                        .HasColumnType("text");
-
-                    b.Property<string>("AddressLine2")
-                        .HasColumnType("text");
-
-                    b.Property<string>("AddressLine3")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ApparId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("BirthPlace")
-                        .HasColumnType("text");
-
-                    b.Property<int?>("CastType")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("City")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<DateTimeOffset?>("DateOfBirth")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("DateOfInquiry")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
-
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
-
-                    b.Property<Guid?>("DivisionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("DueDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("EducationBoardId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("EducationMediumId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("EducationMediumStageId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Email")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<string>("FamilyCast")
-                        .HasColumnType("text");
-
-                    b.Property<int>("FeeStatusType")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("FirstName")
-                        .HasColumnType("text");
-
-                    b.Property<int?>("FollowUpStatusType")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
-                    b.Property<string>("FormNumber")
-                        .HasColumnType("text");
-
-                    b.Property<int?>("GenderType")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("InquiryNumber")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid?>("InquiryPreferenceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<string>("LastName")
-                        .HasColumnType("text");
-
-                    b.Property<string>("MiddleName")
-                        .HasColumnType("text");
-
-                    b.Property<string>("MotherTongue")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Nationality")
-                        .HasColumnType("text");
-
-                    b.Property<int>("OnboardingProgressState")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("PAN")
-                        .HasColumnType("text");
-
-                    b.Property<float>("PaidAmount")
-                        .HasColumnType("real");
-
-                    b.Property<string>("PinCode")
-                        .HasColumnType("text");
-
-                    b.Property<string>("PreviousSchoolName")
-                        .HasColumnType("text");
-
-                    b.Property<string>("PrimaryContactNumber")
-                        .HasColumnType("text");
-
-                    b.Property<byte[]>("ProfilePicture")
-                        .HasColumnType("bytea");
-
-                    b.Property<string>("Religion")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Remarks")
-                        .HasColumnType("text");
-
-                    b.Property<string>("SecondaryContactNumber")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("StandardId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("StudentEnrollmentApprovalState")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("StudentEnrollmentInquiryState")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("StudentEnrollmentState")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.Property<float>("TotalAmount")
-                        .HasColumnType("real");
-
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.ComplexProperty<Dictionary<string, object>>("FatherDetails", "ShikshaMitra.Students.StudentEnrollments.StudentEnrollment.FatherDetails#StudentContactDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("AadhaarNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("ContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<DateTimeOffset?>("DateOfBirth")
-                                .HasColumnType("timestamp with time zone");
-
-                            b1.Property<string>("Designation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Email")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Name")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Occupation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Organisation")
-                                .HasColumnType("text");
-
-                            b1.Property<int?>("PassOutYear")
-                                .HasColumnType("integer");
-
-                            b1.Property<string>("Qualification")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Remarks")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("GuardianDetails", "ShikshaMitra.Students.StudentEnrollments.StudentEnrollment.GuardianDetails#StudentContactDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("AadhaarNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("ContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<DateTimeOffset?>("DateOfBirth")
-                                .HasColumnType("timestamp with time zone");
-
-                            b1.Property<string>("Designation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Email")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Name")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Occupation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Organisation")
-                                .HasColumnType("text");
-
-                            b1.Property<int?>("PassOutYear")
-                                .HasColumnType("integer");
-
-                            b1.Property<string>("Qualification")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Remarks")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("MotherDetails", "ShikshaMitra.Students.StudentEnrollments.StudentEnrollment.MotherDetails#StudentContactDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("AadhaarNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("ContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<DateTimeOffset?>("DateOfBirth")
-                                .HasColumnType("timestamp with time zone");
-
-                            b1.Property<string>("Designation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Email")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Name")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Occupation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Organisation")
-                                .HasColumnType("text");
-
-                            b1.Property<int?>("PassOutYear")
-                                .HasColumnType("integer");
-
-                            b1.Property<string>("Qualification")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Remarks")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("ParentBankDetails", "ShikshaMitra.Students.StudentEnrollments.StudentEnrollment.ParentBankDetails#ParentBankDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("AccountHolderName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("AccountNumber")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("BankName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("BranchName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("IfscCode")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("PreviousSchoolDetails", "ShikshaMitra.Students.StudentEnrollments.StudentEnrollment.PreviousSchoolDetails#PreviousSchoolDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("LastClassPassed")
-                                .HasColumnType("text");
-
-                            b1.Property<float?>("Percentage")
-                                .HasColumnType("real");
-
-                            b1.Property<string>("PreviousSchoolAddress")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PreviousSchoolBoard")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PreviousSchoolMedium")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PreviousSchoolName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("TcNo")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("StudentAdditionalDetails", "ShikshaMitra.Students.StudentEnrollments.StudentEnrollment.StudentAdditionalDetails#StudentAdditionalDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("BPLCardNo")
-                                .HasColumnType("text");
-
-                            b1.Property<bool?>("BPLStudent")
-                                .HasColumnType("boolean");
-
-                            b1.Property<int?>("Category")
-                                .HasColumnType("integer");
-
-                            b1.Property<string>("EmergencyContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<bool?>("PersonWithDisability")
-                                .HasColumnType("boolean");
-
-                            b1.Property<bool?>("RightToEducation")
-                                .HasColumnType("boolean");
-
-                            b1.Property<string>("SecondLanguage")
-                                .HasColumnType("text");
-
-                            b1.Property<bool?>("SingleChild")
-                                .HasColumnType("boolean");
-
-                            b1.Property<bool?>("SingleParentChild")
-                                .HasColumnType("boolean");
-
-                            b1.Property<string>("SponsorName")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("StudentCommunicationDetails", "ShikshaMitra.Students.StudentEnrollments.StudentEnrollment.StudentCommunicationDetails#StudentCommunicationDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("EmergencyAddressLine1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("EmergencyAddressLine2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("EmergencyAddressLine3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("EmergencyCity")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("EmergencyCountry")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("EmergencyPinCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("EmergencyState")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalAddressLine1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalAddressLine2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalAddressLine3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalCity")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalCountryIsoCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalCountryName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalPinCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalStateIsoCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalStateName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("ParentContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("ParentEmail")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentAddressLine1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentAddressLine2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentAddressLine3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentCity")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentCountryIsoCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentCountryName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentPinCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentStateIsoCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentStateName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PrimaryContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Remarks")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("StudentContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("StudentEmail")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("WhatsAppNo")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("StudentMedicalRecords", "ShikshaMitra.Students.StudentEnrollments.StudentEnrollment.StudentMedicalRecords#StudentMedicalRecords", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("Allergies")
-                                .HasColumnType("text");
-
-                            b1.Property<float?>("BodyMassIndex")
-                                .HasColumnType("real");
-
-                            b1.Property<string>("ChildImmunisation")
-                                .HasColumnType("text");
-
-                            b1.Property<int?>("CovidVaccination")
-                                .HasColumnType("integer");
-
-                            b1.Property<float?>("Haemoglobin")
-                                .HasColumnType("real");
-
-                            b1.Property<float?>("Height")
-                                .HasColumnType("real");
-
-                            b1.Property<string>("ImmunisationRemarks")
-                                .HasColumnType("text");
-
-                            b1.Property<float?>("PulseRate")
-                                .HasColumnType("real");
-
-                            b1.Property<float?>("Weight")
-                                .HasColumnType("real");
-                        });
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AcademicYearId");
-
-                    b.HasIndex("DivisionId");
-
-                    b.HasIndex("EducationBoardId");
-
-                    b.HasIndex("EducationMediumId");
-
-                    b.HasIndex("InquiryPreferenceId");
-
-                    b.HasIndex("StandardId");
-
-                    b.ToTable("AppStudentEnrollments", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentRecords.Student", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AadhaarNo")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AddressLine1")
-                        .HasColumnType("text");
-
-                    b.Property<string>("AddressLine2")
-                        .HasColumnType("text");
-
-                    b.Property<string>("AddressLine3")
-                        .HasColumnType("text");
-
-                    b.Property<string>("AlternativeContactNumber")
-                        .HasColumnType("text");
-
-                    b.Property<string>("BirthPlace")
-                        .HasColumnType("text");
-
-                    b.Property<int?>("CastType")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("City")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<DateTimeOffset?>("DateOfBirth")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
-
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
-
-                    b.Property<Guid?>("DivisionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("EducationBoardId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("EducationMediumId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("EducationMediumStageId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Email")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<string>("FamilyCast")
-                        .HasColumnType("text");
-
-                    b.Property<string>("FirstName")
-                        .HasColumnType("text");
-
-                    b.Property<string>("FormNumber")
-                        .HasColumnType("text");
-
-                    b.Property<int?>("GenderType")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("GrNoRecord")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<string>("LastName")
-                        .HasColumnType("text");
-
-                    b.Property<string>("MiddleName")
-                        .HasColumnType("text");
-
-                    b.Property<string>("MotherTongue")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Nationality")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ParentContactNumber")
-                        .HasColumnType("text");
-
-                    b.Property<string>("PinCode")
-                        .HasColumnType("text");
-
-                    b.Property<byte[]>("ProfilePicture")
-                        .HasColumnType("bytea");
-
-                    b.Property<string>("Religion")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Remarks")
-                        .HasColumnType("text");
-
-                    b.Property<int?>("RollNo")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid?>("StandardId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("TempGrNo")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.ComplexProperty<Dictionary<string, object>>("FatherDetails", "ShikshaMitra.Students.StudentRecords.Student.FatherDetails#StudentContactDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("AadhaarNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("ContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<DateTimeOffset?>("DateOfBirth")
-                                .HasColumnType("timestamp with time zone");
-
-                            b1.Property<string>("Designation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Email")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Name")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Occupation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Organisation")
-                                .HasColumnType("text");
-
-                            b1.Property<int?>("PassOutYear")
-                                .HasColumnType("integer");
-
-                            b1.Property<string>("Qualification")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Remarks")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("GuardianDetails", "ShikshaMitra.Students.StudentRecords.Student.GuardianDetails#StudentContactDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("AadhaarNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("ContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<DateTimeOffset?>("DateOfBirth")
-                                .HasColumnType("timestamp with time zone");
-
-                            b1.Property<string>("Designation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Email")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Name")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Occupation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Organisation")
-                                .HasColumnType("text");
-
-                            b1.Property<int?>("PassOutYear")
-                                .HasColumnType("integer");
-
-                            b1.Property<string>("Qualification")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Remarks")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("MotherDetails", "ShikshaMitra.Students.StudentRecords.Student.MotherDetails#StudentContactDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("AadhaarNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("ContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<DateTimeOffset?>("DateOfBirth")
-                                .HasColumnType("timestamp with time zone");
-
-                            b1.Property<string>("Designation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Email")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Name")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Occupation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeAddress3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OfficeNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Organisation")
-                                .HasColumnType("text");
-
-                            b1.Property<int?>("PassOutYear")
-                                .HasColumnType("integer");
-
-                            b1.Property<string>("Qualification")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Remarks")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("ParentBankDetails", "ShikshaMitra.Students.StudentRecords.Student.ParentBankDetails#ParentBankDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("AccountHolderName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("AccountNumber")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("BankName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("BranchName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("IfscCode")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("PreviousSchoolDetails", "ShikshaMitra.Students.StudentRecords.Student.PreviousSchoolDetails#PreviousSchoolDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("LastClassPassed")
-                                .HasColumnType("text");
-
-                            b1.Property<float?>("Percentage")
-                                .HasColumnType("real");
-
-                            b1.Property<string>("PreviousSchoolAddress")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PreviousSchoolBoard")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PreviousSchoolMedium")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PreviousSchoolName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("TcNo")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("StudentAdditionalDetails", "ShikshaMitra.Students.StudentRecords.Student.StudentAdditionalDetails#StudentAdditionalDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("BPLCardNo")
-                                .HasColumnType("text");
-
-                            b1.Property<bool?>("BPLStudent")
-                                .HasColumnType("boolean");
-
-                            b1.Property<int?>("Category")
-                                .HasColumnType("integer");
-
-                            b1.Property<string>("EmergencyContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<bool?>("PersonWithDisability")
-                                .HasColumnType("boolean");
-
-                            b1.Property<bool?>("RightToEducation")
-                                .HasColumnType("boolean");
-
-                            b1.Property<string>("SecondLanguage")
-                                .HasColumnType("text");
-
-                            b1.Property<bool?>("SingleChild")
-                                .HasColumnType("boolean");
-
-                            b1.Property<bool?>("SingleParentChild")
-                                .HasColumnType("boolean");
-
-                            b1.Property<string>("SponsorName")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("StudentCommunicationDetails", "ShikshaMitra.Students.StudentRecords.Student.StudentCommunicationDetails#StudentCommunicationDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("EmergencyAddressLine1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("EmergencyAddressLine2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("EmergencyAddressLine3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("EmergencyCity")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("EmergencyCountry")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("EmergencyPinCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("EmergencyState")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalAddressLine1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalAddressLine2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalAddressLine3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalCity")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalCountryIsoCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalCountryName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalPinCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalStateIsoCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("LocalStateName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("ParentContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("ParentEmail")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentAddressLine1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentAddressLine2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentAddressLine3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentCity")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentCountryIsoCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentCountryName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentPinCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentStateIsoCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PermanentStateName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PrimaryContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Remarks")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("StudentContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("StudentEmail")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("WhatsAppNo")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("StudentMedicalRecords", "ShikshaMitra.Students.StudentRecords.Student.StudentMedicalRecords#StudentMedicalRecords", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("Allergies")
-                                .HasColumnType("text");
-
-                            b1.Property<float?>("BodyMassIndex")
-                                .HasColumnType("real");
-
-                            b1.Property<string>("ChildImmunisation")
-                                .HasColumnType("text");
-
-                            b1.Property<int?>("CovidVaccination")
-                                .HasColumnType("integer");
-
-                            b1.Property<float?>("Haemoglobin")
-                                .HasColumnType("real");
-
-                            b1.Property<float?>("Height")
-                                .HasColumnType("real");
-
-                            b1.Property<string>("ImmunisationRemarks")
-                                .HasColumnType("text");
-
-                            b1.Property<float?>("PulseRate")
-                                .HasColumnType("real");
-
-                            b1.Property<float?>("Weight")
-                                .HasColumnType("real");
-                        });
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AcademicYearId");
-
-                    b.HasIndex("DivisionId");
-
-                    b.HasIndex("EducationBoardId");
-
-                    b.HasIndex("EducationMediumId");
-
-                    b.HasIndex("EducationMediumStageId");
-
-                    b.HasIndex("StandardId");
-
-                    b.ToTable("AppStudents", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentRecords.StudentCertificate", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTimeOffset>("CreationTime")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<string>("FileName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<byte[]>("PdfContent")
-                        .IsRequired()
-                        .HasColumnType("bytea");
-
-                    b.Property<string>("Reason")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("StudentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StudentId");
-
-                    b.ToTable("AppStudentCertificates", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentRecords.StudentGroup", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Color")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<string>("Logo")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("AppStudentGroups", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentRecords.StudentGroupMember", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsDivisionLeader")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsLeader")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid>("StudentGroupId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("StudentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StudentGroupId", "IsDivisionLeader");
-
-                    b.HasIndex("StudentGroupId", "IsLeader");
-
-                    b.HasIndex("StudentId", "StudentGroupId")
-                        .IsUnique();
-
-                    b.ToTable("AppStudentGroupMembers", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears.AcademicYearPermission", b =>
@@ -4466,6 +2928,93 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("StandardId");
 
                     b.ToTable("AppDivisions", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.TenantSettings.DocumentTypes.DocumentType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AcceptedFormatsData")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("AcceptedFormats");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<bool>("IsRequired")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<double>("MaxSizeMB")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "DisplayOrder")
+                        .HasDatabaseName("IX_DocumentTypes_TenantId_DisplayOrder");
+
+                    b.HasIndex("TenantId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("IX_DocumentTypes_TenantId_Name");
+
+                    b.ToTable("AppDocumentTypes", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", b =>
@@ -7099,311 +5648,28 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Dependent");
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Students.Attendance.StudentAttendance", b =>
+            modelBuilder.Entity("ShikshaMitra.Students.StudentAdditionalDetail", b =>
                 {
-                    b.HasOne("ShikshaMitra.Students.StudentRecords.Student", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
+                    b.HasOne("ShikshaMitra.Students.Student", null)
+                        .WithOne("AdditionalDetail")
+                        .HasForeignKey("ShikshaMitra.Students.StudentAdditionalDetail", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentContactDetail", b =>
+                {
+                    b.HasOne("ShikshaMitra.Students.Student", null)
+                        .WithOne("ContactDetail")
+                        .HasForeignKey("ShikshaMitra.Students.StudentContactDetail", "Id")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Student");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.Attendance.StudentLeave", b =>
-                {
-                    b.HasOne("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicy", "LeavePolicy")
+                    b.HasOne("ShikshaMitra.Students.Student", "Student")
                         .WithMany()
-                        .HasForeignKey("LeaveTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.Students.StudentRecords.Student", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("LeavePolicy");
-
-                    b.Navigation("Student");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.EntranceExam.EntranceExam", b =>
-                {
-                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.Settings.EntranceExamSlot", "EntranceExamSlot")
-                        .WithMany()
-                        .HasForeignKey("EntranceExamSlotId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", "StudentEnrollment")
-                        .WithMany()
-                        .HasForeignKey("StudentEnrollmentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("EntranceExamSlot");
-
-                    b.Navigation("StudentEnrollment");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.FollowUps.FollowUpMessage", b =>
-                {
-                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", "StudentEnrollment")
-                        .WithMany("FollowUps")
-                        .HasForeignKey("StudentEnrollmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("StudentEnrollment");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Registration.StudentDocument", b =>
-                {
-                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", "StudentEnrollment")
-                        .WithMany()
-                        .HasForeignKey("StudentEnrollmentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", null)
-                        .WithMany("Documents")
-                        .HasForeignKey("StudentEnrollmentId1")
-                        .HasConstraintName("FK_AppStudentDocuments_AppStudentEnrollments_StudentEnrollmen~1");
-
-                    b.HasOne("ShikshaMitra.Students.StudentRecords.Student", null)
-                        .WithMany("Documents")
                         .HasForeignKey("StudentId");
 
-                    b.Navigation("StudentEnrollment");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", "AcademicYear")
-                        .WithMany()
-                        .HasForeignKey("AcademicYearId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.TenantSettings.Divisions.Division", "Division")
-                        .WithMany()
-                        .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", "EducationBoard")
-                        .WithMany()
-                        .HasForeignKey("EducationBoardId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "EducationMedium")
-                        .WithMany()
-                        .HasForeignKey("EducationMediumId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.Settings.InquiryPreference", "InquiryPreference")
-                        .WithMany()
-                        .HasForeignKey("InquiryPreferenceId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
-                        .WithMany()
-                        .HasForeignKey("StandardId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.OwnsOne("ShikshaMitra.Common.Country", "Country", b1 =>
-                        {
-                            b1.Property<Guid>("StudentEnrollmentId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<string>("IsoCode")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("CountryIsoCode");
-
-                            b1.Property<string>("Name")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("CountryName");
-
-                            b1.HasKey("StudentEnrollmentId");
-
-                            b1.ToTable("AppStudentEnrollments");
-
-                            b1.WithOwner()
-                                .HasForeignKey("StudentEnrollmentId");
-                        });
-
-                    b.OwnsOne("ShikshaMitra.Common.State", "State", b1 =>
-                        {
-                            b1.Property<Guid>("StudentEnrollmentId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<string>("IsoCode")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("StateIsoCode");
-
-                            b1.Property<string>("Name")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("StateName");
-
-                            b1.HasKey("StudentEnrollmentId");
-
-                            b1.ToTable("AppStudentEnrollments");
-
-                            b1.WithOwner()
-                                .HasForeignKey("StudentEnrollmentId");
-                        });
-
-                    b.Navigation("AcademicYear");
-
-                    b.Navigation("Country");
-
-                    b.Navigation("Division");
-
-                    b.Navigation("EducationBoard");
-
-                    b.Navigation("EducationMedium");
-
-                    b.Navigation("InquiryPreference");
-
-                    b.Navigation("Standard");
-
-                    b.Navigation("State");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentRecords.Student", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", "AcademicYear")
-                        .WithMany()
-                        .HasForeignKey("AcademicYearId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.TenantSettings.Divisions.Division", "Division")
-                        .WithMany()
-                        .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", "EducationBoard")
-                        .WithMany()
-                        .HasForeignKey("EducationBoardId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "EducationMedium")
-                        .WithMany()
-                        .HasForeignKey("EducationMediumId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
-                        .WithMany()
-                        .HasForeignKey("EducationMediumStageId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
-                        .WithMany()
-                        .HasForeignKey("StandardId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.OwnsOne("ShikshaMitra.Common.Country", "Country", b1 =>
-                        {
-                            b1.Property<Guid>("StudentId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<string>("IsoCode")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("CountryIsoCode");
-
-                            b1.Property<string>("Name")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("CountryName");
-
-                            b1.HasKey("StudentId");
-
-                            b1.ToTable("AppStudents");
-
-                            b1.WithOwner()
-                                .HasForeignKey("StudentId");
-                        });
-
-                    b.OwnsOne("ShikshaMitra.Common.State", "State", b1 =>
-                        {
-                            b1.Property<Guid>("StudentId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<string>("IsoCode")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("StateIsoCode");
-
-                            b1.Property<string>("Name")
-                                .IsRequired()
-                                .HasColumnType("text")
-                                .HasColumnName("StateName");
-
-                            b1.HasKey("StudentId");
-
-                            b1.ToTable("AppStudents");
-
-                            b1.WithOwner()
-                                .HasForeignKey("StudentId");
-                        });
-
-                    b.Navigation("AcademicYear");
-
-                    b.Navigation("Country");
-
-                    b.Navigation("Division");
-
-                    b.Navigation("EducationBoard");
-
-                    b.Navigation("EducationMedium");
-
-                    b.Navigation("EducationMediumStage");
-
-                    b.Navigation("Standard");
-
-                    b.Navigation("State");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentRecords.StudentCertificate", b =>
-                {
-                    b.HasOne("ShikshaMitra.Students.StudentRecords.Student", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.Navigation("Student");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentRecords.StudentGroupMember", b =>
-                {
-                    b.HasOne("ShikshaMitra.Students.StudentRecords.StudentGroup", "StudentGroup")
-                        .WithMany()
-                        .HasForeignKey("StudentGroupId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.Students.StudentRecords.Student", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Student");
-
-                    b.Navigation("StudentGroup");
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.Divisions.Division", b =>
@@ -7646,16 +5912,11 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Documents");
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", b =>
+            modelBuilder.Entity("ShikshaMitra.Students.Student", b =>
                 {
-                    b.Navigation("Documents");
+                    b.Navigation("AdditionalDetail");
 
-                    b.Navigation("FollowUps");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentRecords.Student", b =>
-                {
-                    b.Navigation("Documents");
+                    b.Navigation("ContactDetail");
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", b =>

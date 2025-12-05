@@ -1,5 +1,7 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Common;
+using ShikshaMitra.Students.Attendance.Settings;
+using ShikshaMitra.Students.Attendances.Settings;
 using ShikshaMitra.Students.StudentDetails;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
@@ -45,6 +47,12 @@ public class StudentMapperProfile : Profile
 				opt => opt.Ignore()) // Will be set manually
 			.ForMember(dest => dest.DisplayText,
 				opt => opt.Ignore()); // Will be set manually
+
+
+		// Student Leave Type mappings
+		CreateMap<StudentLeaveType, StudentLeaveTypeDto>();
+		CreateMap<CreateUpdateStudentLeaveTypeDto, StudentLeaveType>();
+
 
 
 		CreateMap<Student, StudentInquiryDto>();

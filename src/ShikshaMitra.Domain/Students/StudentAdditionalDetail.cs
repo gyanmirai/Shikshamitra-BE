@@ -166,6 +166,22 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		decimal passingMarks,
 		decimal obtainedMarks)
 	{
+        // Validate inputs to guard against division by zero and negative values
+        if (totalMarks <= 0)
+        {
+            throw new ArgumentException("Total marks must be greater than zero.", nameof(totalMarks));
+        }
+
+        if (passingMarks < 0)
+        {
+            throw new ArgumentException("Passing marks cannot be negative.", nameof(passingMarks));
+        }
+
+        if (obtainedMarks < 0)
+        {
+            throw new ArgumentException("Obtained marks cannot be negative.", nameof(obtainedMarks));
+        }
+
 		if (obtainedMarks > totalMarks)
 		{
 			throw new ArgumentException("Obtained marks cannot exceed total marks.");
@@ -179,7 +195,8 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		ExamTotalMarks = totalMarks;
 		ExamPassingMarks = passingMarks;
 		ExamObtainedMarks = obtainedMarks;
-		ExamPercentage = (obtainedMarks / totalMarks) * 100;
+        // Safe percentage calculation since totalMarks > 0 is validated
+        ExamPercentage = (obtainedMarks / totalMarks) * 100;
 		ExamStatus = obtainedMarks >= passingMarks 
 			? EntranceExamStatusEnum.Pass 
 			: EntranceExamStatusEnum.Fail;

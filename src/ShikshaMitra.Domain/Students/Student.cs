@@ -1,4 +1,5 @@
 ﻿using System;
+using ShikshaMitra.Students.StudentEnrollments;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -200,5 +201,50 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void ChangeStatus(StudentLifeCycleStatusEnum status)
 	{
 		Status = status;
+	}
+
+	/// <summary>
+	/// Schedules the student for entrance exam using a slot
+	/// </summary>
+	public void ScheduleEntranceExam(
+		Guid entranceExamSlotId,
+		DateTimeOffset slotStartDate,
+		DateTimeOffset slotEndDate,
+		int slotRoomNo)
+	{
+		if (Status != StudentLifeCycleStatusEnum.RegistrationFormIssued)
+		{
+			throw new InvalidOperationException(
+				$"Cannot schedule entrance exam. Student must be in RegistrationFormIssued status. Current status: {Status}");
+		}
+
+		AdditionalDetail?.ScheduleEntranceExam(
+			entranceExamSlotId,
+			slotStartDate,
+			slotStartDate.TimeOfDay,
+			slotEndDate.TimeOfDay,
+			slotRoomNo);
+
+		ChangeStatus(StudentLifeCycleStatusEnum.EntranceExam);
+	}
+
+	/// <summary>
+	/// Moves student to admission stage after passing entrance exam
+	/// </summary>
+	public void MoveToAdmission()
+	{
+		if (Status != StudentLifeCycleStatusEnum.EntranceExam)
+		{
+			throw new InvalidOperationException(
+				$"Cannot move to admission. Student must be in EntranceExam status. Current status: {Status}");
+		}
+
+		if (AdditionalDetail?.ExamStatus != StudentEnrollments.EntranceExamStatusEnum.Pass)
+		{
+			throw new InvalidOperationException(
+				"Cannot move to admission. Student must have passed the entrance exam.");
+		}
+
+		ChangeStatus(StudentLifeCycleStatusEnum.Admission);
 	}
 }

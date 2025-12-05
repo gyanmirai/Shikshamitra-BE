@@ -2214,6 +2214,39 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("EmergencyRelationType")
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("EntranceExamSlotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ExamDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<TimeSpan?>("ExamEndTime")
+                        .HasColumnType("interval");
+
+                    b.Property<decimal?>("ExamObtainedMarks")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("ExamPassingMarks")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("ExamPercentage")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTimeOffset?>("ExamResultDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ExamRoomNo")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeSpan?>("ExamStartTime")
+                        .HasColumnType("interval");
+
+                    b.Property<int?>("ExamStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("ExamTotalMarks")
+                        .HasColumnType("numeric");
+
                     b.Property<string>("FamilyCast")
                         .IsRequired()
                         .HasColumnType("text");
@@ -2384,6 +2417,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -2432,6 +2468,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("RoomNo")
                         .HasColumnType("integer");
 
+                    b.Property<string>("SlotName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<DateTimeOffset>("StartDate")
                         .HasColumnType("timestamp with time zone");
 
@@ -2444,7 +2484,9 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("EntranceExamSlots");
+                    b.HasIndex("AcademicYearId", "StartDate", "TenantId");
+
+                    b.ToTable("AppEntranceExamSlots", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.InquiryPreference", b =>

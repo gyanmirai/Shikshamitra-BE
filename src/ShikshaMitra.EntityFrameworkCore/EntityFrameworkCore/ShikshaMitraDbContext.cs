@@ -138,9 +138,9 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Student Enrollment
 
 	#region Settings
-	DbSet<StudentDocumentSetting> StudentDocumentSettings { get; set; }
-	DbSet<InquiryPreference> InquiryPreferences { get; set; }
-	DbSet<EntranceExamSlot> EntranceExamSlots { get; set; }
+	public DbSet<StudentDocumentSetting> StudentDocumentSettings { get; set; }
+	public DbSet<InquiryPreference> InquiryPreferences { get; set; }
+	public DbSet<EntranceExamSlot> EntranceExamSlots { get; set; }
 
 	#endregion
 

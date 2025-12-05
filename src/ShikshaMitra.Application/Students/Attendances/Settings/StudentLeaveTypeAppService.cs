@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.Permissions;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.Attendance.Settings;
 using System;
 using System.Collections.Generic;
@@ -12,7 +12,7 @@ namespace ShikshaMitra.Students.Attendances.Settings;
 /// <summary>
 /// Application service for managing student leave types
 /// </summary>
-[Authorize(ShikshaMitraPermissions.Students.Attendance.Settings.Default)]
+[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_SettingLeaveType.View)]
 public class StudentLeaveTypeAppService : ApplicationService, IStudentLeaveTypeAppService
 {
 	private readonly IStudentLeaveTypeRepository _studentLeaveTypeRepository;
@@ -26,7 +26,7 @@ public class StudentLeaveTypeAppService : ApplicationService, IStudentLeaveTypeA
 		_studentLeaveTypeManager = studentLeaveTypeManager;
 	}
 
-	[Authorize(ShikshaMitraPermissions.Students.Attendance.Settings.Default)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_SettingLeaveType.View)]
 	public async Task<PagedResultDto<StudentLeaveTypeDto>> GetListAsync(GetStudentLeaveTypeListInput input)
 	{
 		var totalCount = await _studentLeaveTypeRepository.GetCountAsync(
@@ -47,14 +47,14 @@ public class StudentLeaveTypeAppService : ApplicationService, IStudentLeaveTypeA
 			ObjectMapper.Map<List<StudentLeaveType>, List<StudentLeaveTypeDto>>(leaveTypes));
 	}
 
-	[Authorize(ShikshaMitraPermissions.Students.Attendance.Settings.Default)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_SettingLeaveType.View)]
 	public async Task<StudentLeaveTypeDto> GetAsync(Guid id)
 	{
 		var leaveType = await _studentLeaveTypeRepository.GetAsync(id);
 		return ObjectMapper.Map<StudentLeaveType, StudentLeaveTypeDto>(leaveType);
 	}
 
-	[Authorize(ShikshaMitraPermissions.Students.Attendance.Settings.Create)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_SettingLeaveType.Add)]
 	public async Task<StudentLeaveTypeDto> CreateAsync(CreateUpdateStudentLeaveTypeDto input)
 	{
 		var leaveType = await _studentLeaveTypeManager.CreateAsync(
@@ -67,7 +67,7 @@ public class StudentLeaveTypeAppService : ApplicationService, IStudentLeaveTypeA
 		return ObjectMapper.Map<StudentLeaveType, StudentLeaveTypeDto>(leaveType);
 	}
 
-	[Authorize(ShikshaMitraPermissions.Students.Attendance.Settings.Edit)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_SettingLeaveType.Add)]
 	public async Task<StudentLeaveTypeDto> UpdateAsync(Guid id, CreateUpdateStudentLeaveTypeDto input)
 	{
 		var leaveType = await _studentLeaveTypeRepository.GetAsync(id);
@@ -83,7 +83,7 @@ public class StudentLeaveTypeAppService : ApplicationService, IStudentLeaveTypeA
 		return ObjectMapper.Map<StudentLeaveType, StudentLeaveTypeDto>(leaveType);
 	}
 
-	[Authorize(ShikshaMitraPermissions.Students.Attendance.Settings.Delete)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_SettingLeaveType.Delete)]
 	public async Task DeleteAsync(Guid id)
 	{
 		var leaveType = await _studentLeaveTypeRepository.GetAsync(id);
@@ -93,7 +93,7 @@ public class StudentLeaveTypeAppService : ApplicationService, IStudentLeaveTypeA
 		await _studentLeaveTypeRepository.DeleteAsync(leaveType, autoSave: true);
 	}
 
-	[Authorize(ShikshaMitraPermissions.Students.Attendance.Settings.Default)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_SettingLeaveType.View)]
 	public async Task<ListResultDto<StudentLeaveTypeDto>> GetActiveListAsync()
 	{
 		var leaveTypes = await _studentLeaveTypeRepository.GetActiveLeaveTypesAsync(CurrentTenant.Id);

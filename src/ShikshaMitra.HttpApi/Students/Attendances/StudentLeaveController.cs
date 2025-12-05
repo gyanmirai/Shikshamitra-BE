@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
+using ShikshaMitra.Constants.Permissions;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Students.Attendances;
@@ -14,7 +15,6 @@ namespace ShikshaMitra.Students.Attendances;
 [RemoteService(Name = "Students")]
 [Area("students")]
 [Route("api/students/attendance/leaves")]
-[Authorize]
 public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 {
 	private readonly IStudentLeaveAppService _studentLeaveAppService;
@@ -30,7 +30,8 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	/// </summary>
 	/// <param name="input">Filter and pagination parameters</param>
 	/// <returns>Paginated list of student leave requests</returns>
-	[HttpGet]
+    [HttpGet]
+    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
 	public Task<PagedResultDto<StudentLeaveDto>> GetListAsync([FromQuery] GetStudentLeaveListInput input)
 	{
 		return _studentLeaveAppService.GetListAsync(input);
@@ -42,7 +43,8 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	/// </summary>
 	/// <param name="id">Leave request ID</param>
 	/// <returns>Student leave details</returns>
-	[HttpGet("{id}")]
+    [HttpGet("{id}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
 	public Task<StudentLeaveDto> GetAsync(Guid id)
 	{
 		return _studentLeaveAppService.GetAsync(id);
@@ -54,7 +56,8 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	/// </summary>
 	/// <param name="input">Leave request data</param>
 	/// <returns>Created leave request</returns>
-	[HttpPost]
+    [HttpPost]
+    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
 	public Task<StudentLeaveDto> CreateAsync([FromBody] CreateStudentLeaveDto input)
 	{
 		return _studentLeaveAppService.CreateAsync(input);
@@ -67,7 +70,8 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	/// <param name="id">Leave request ID</param>
 	/// <param name="input">Updated leave request data</param>
 	/// <returns>Updated leave request</returns>
-	[HttpPut("{id}")]
+    [HttpPut("{id}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
 	public Task<StudentLeaveDto> UpdateAsync(Guid id, [FromBody] UpdateStudentLeaveDto input)
 	{
 		return _studentLeaveAppService.UpdateAsync(id, input);
@@ -78,7 +82,8 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	/// DELETE: api/students/attendance/leaves/{id}
 	/// </summary>
 	/// <param name="id">Leave request ID</param>
-	[HttpDelete("{id}")]
+    [HttpDelete("{id}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Delete)]
 	public Task DeleteAsync(Guid id)
 	{
 		return _studentLeaveAppService.DeleteAsync(id);
@@ -91,7 +96,8 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	/// <param name="id">Leave request ID</param>
 	/// <param name="input">Approval data with remarks</param>
 	/// <returns>Approved leave request</returns>
-	[HttpPost("{id}/approve")]
+    [HttpPost("{id}/approve")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
 	public Task<StudentLeaveDto> ApproveAsync(Guid id, [FromBody] ApproveRejectStudentLeaveDto input)
 	{
 		return _studentLeaveAppService.ApproveAsync(id, input);
@@ -104,7 +110,8 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	/// <param name="id">Leave request ID</param>
 	/// <param name="input">Rejection data with reason and remarks</param>
 	/// <returns>Rejected leave request</returns>
-	[HttpPost("{id}/reject")]
+    [HttpPost("{id}/reject")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
 	public Task<StudentLeaveDto> RejectAsync(Guid id, [FromBody] ApproveRejectStudentLeaveDto input)
 	{
 		return _studentLeaveAppService.RejectAsync(id, input);
@@ -116,7 +123,8 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	/// </summary>
 	/// <param name="id">Leave request ID</param>
 	/// <returns>File attachment</returns>
-	[HttpGet("{id}/attachment")]
+    [HttpGet("{id}/attachment")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
 	public Task<StudentLeaveAttachmentDto> GetAttachmentAsync(Guid id)
 	{
 		return _studentLeaveAppService.GetAttachmentAsync(id);
@@ -128,7 +136,8 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	/// </summary>
 	/// <param name="id">Leave request ID</param>
 	/// <returns>File download</returns>
-	[HttpGet("{id}/attachment/download")]
+    [HttpGet("{id}/attachment/download")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
 	public async Task<IActionResult> DownloadAttachmentAsync(Guid id)
 	{
 		var attachment = await _studentLeaveAppService.GetAttachmentAsync(id);

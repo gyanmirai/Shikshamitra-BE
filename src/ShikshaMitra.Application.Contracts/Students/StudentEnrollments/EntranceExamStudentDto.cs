@@ -8,7 +8,7 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 public class EntranceExamStudentDto
 {
 	public Guid StudentId { get; set; }
-	public string StudentName { get; set; }
+    public string StudentName { get; set; }
 	public string EducationBoard { get; set; }
 	public string EducationMedium { get; set; }
 	public string Standard { get; set; }
@@ -23,6 +23,12 @@ public class EntranceExamStudentDto
 	public decimal? Percentage { get; set; }
 	public decimal Progress { get; set; } // Enrollment progress percentage
 	public EntranceExamStatusEnum? ExamStatus { get; set; }
-	public string ExamStatusDisplay { get; set; }
+    public string ExamStatusDisplay { get; set; }
 	public StudentLifeCycleStatusEnum EnrollmentState { get; set; }
+
+    // Helper to safely construct and assign StudentName from first/last names
+    public void SetStudentName(string? firstName, string? lastName)
+    {
+        StudentName = ($"{firstName ?? string.Empty} {lastName ?? string.Empty}").Trim();
+    }
 }

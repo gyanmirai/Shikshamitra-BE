@@ -16,6 +16,15 @@ public static class ShikshaMitraPermissions
 			public const string Edit = Default + ".Edit";
 			public const string Delete = Default + ".Delete";
 
+			public static class Leave
+			{
+				public const string Default = Attendance.Default + ".Leave";
+				public const string Create = Default + ".Create";
+				public const string Edit = Default + ".Edit";
+				public const string Delete = Default + ".Delete";
+				public const string Approve = Default + ".Approve";
+			}
+
 			public static class Settings
 			{
 				public const string Default = Attendance.Default + ".Settings";

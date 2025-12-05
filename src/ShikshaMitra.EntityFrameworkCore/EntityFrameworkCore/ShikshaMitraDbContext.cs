@@ -161,6 +161,8 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<ShikshaMitra.Students.Attendance.Settings.StudentLeaveType> StudentLeaveTypes { get; set; }
 
 	#endregion
+	
+	public DbSet<ShikshaMitra.Students.Attendances.StudentLeave> StudentLeaves { get; set; }
 
 	#endregion
 

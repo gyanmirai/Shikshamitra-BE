@@ -1,5 +1,7 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Common;
+using ShikshaMitra.Students.Attendance.Settings;
+using ShikshaMitra.Students.Attendances.Settings;
 using ShikshaMitra.Students.StudentDetails;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
@@ -12,6 +14,10 @@ public class StudentMapperProfile : Profile
 {
 	public StudentMapperProfile()
 	{
+		// Student Leave Type mappings
+		CreateMap<StudentLeaveType, StudentLeaveTypeDto>();
+		CreateMap<CreateUpdateStudentLeaveTypeDto, StudentLeaveType>();
+
 		// Entrance Exam Slot mappings
 		CreateMap<EntranceExamSlot, EntranceExamSlotDto>()
 			.ForMember(dest => dest.Date,

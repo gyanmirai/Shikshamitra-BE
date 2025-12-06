@@ -61,7 +61,6 @@ public class EmployeeManager(
 		string shortName,
 		EmployeeStatusType employeeStatusType,
 		DateOnly? dateOfBirth,
-		byte[]? profilePicture = null,
 		string? familyCast = null,
 		CastType? castType = null,
 		GenderType? genderType = null,
@@ -123,7 +122,7 @@ public class EmployeeManager(
 			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
 			userId: null,
-			profilePicture: profilePicture,
+			profilePictureBlobName: null,
 			employeeCode: employeeCode,
 			lastName: lastName,
 			firstName: firstName,
@@ -250,7 +249,6 @@ public class EmployeeManager(
 		string shortName,
 		EmployeeStatusType employeeStatusType,
 		DateOnly? dateOfBirth,
-		byte[]? profilePicture = null,
 		string? familyCast = null,
 		CastType? castType = null,
 		GenderType? genderType = null,
@@ -305,7 +303,7 @@ public class EmployeeManager(
 			shortName: shortName,
 			employeeStatusType: employeeStatusType,
 			dateOfBirth: dateOfBirth,
-			profilePicture: profilePicture,
+			profilePictureBlobName: null,
 			familyCast: familyCast,
 			castType: castType,
 			genderType: genderType,
@@ -481,6 +479,49 @@ public class EmployeeManager(
 
 		await employeeDocumentRepository.UpdateAsync(document);
 		return document;
+	}
+
+	public async Task DeleteDocumentAsync(Guid employeeId, Guid documentId)
+	{
+		EmployeeDocument document = await GetDocumentAsync(employeeId, documentId);
+
+		// Delete blob
+		await blobContainer.DeleteAsync(document.BlobName);
+
+		// Delete document metadata
+		await employeeDocumentRepository.DeleteAsync(document);
+
+		// Remove from employee's document collection if needed
+		var employee = await employeeRepository.GetAsync(employeeId);
+		var docToRemove = employee.Documents.FirstOrDefault(d => d.Id == documentId);
+		if (docToRemove != null)
+		{
+			employee.Documents.Remove(docToRemove);
+			await employeeRepository.UpdateAsync(employee);
+		}
+	}
+
+	public async Task<string> UploadProfilePictureAsync(Guid employeeId, string fileName, byte[] fileContent)
+	{
+		var employee = await GetEmployeeAsync(employeeId);
+
+		// Delete old profile picture if exists
+		if (!string.IsNullOrEmpty(employee.ProfilePictureBlobName))
+		{
+			await blobContainer.DeleteAsync(employee.ProfilePictureBlobName);
+		}
+
+		// Generate new blob name
+		var blobName = $"profile-pictures/{employeeId}_{fileName}";
+
+		// Save to blob storage
+		await blobContainer.SaveAsync(blobName, fileContent, overrideExisting: true);
+
+		// Update employee with new blob name
+		employee.UpdateProfilePicture(blobName);
+		await employeeRepository.UpdateAsync(employee);
+
+		return blobName;
 	}
 
 	private async Task<string> GenerateEmployeeCodeAsync(

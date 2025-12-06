@@ -52,5 +52,40 @@ public interface
 	Task<DocumentDto> GetDocumentAsync(Guid employeeId, Guid documentId);
 	Task<List<DocumentMetadataDto>> GetDocumentMetadataAsync(Guid employeeId);
 	Task<DocumentDto> UpdateDocumentAsync(Guid employeeId, Guid documentId, DocumentDto documentDto);
+	Task DeleteDocumentAsync(Guid employeeId, Guid documentId);
+
+	/// <summary>
+	/// Uploads a profile picture for an employee.
+	/// </summary>
+	/// <param name="employeeId">The ID of the employee.</param>
+	/// <param name="fileName">The name of the file.</param>
+	/// <param name="fileContent">The file content as byte array.</param>
+	/// <returns>The blob name of the uploaded profile picture.</returns>
+	Task<string> UploadProfilePictureAsync(Guid employeeId, string fileName, byte[] fileContent);
+
+	/// <summary>
+	/// Gets the profile picture for an employee.
+	/// </summary>
+	/// <param name="employeeId">The ID of the employee.</param>
+	/// <returns>The profile picture as a DocumentDto.</returns>
+	Task<DocumentDto?> GetProfilePictureAsync(Guid employeeId);
+
+	/// <summary>
+	/// Updates the basic information of an existing employee.
+	/// </summary>
+	/// <param name="employeeId">The ID of the employee to update.</param>
+	/// <param name="input">The DTO containing updated basic employee information.</param>
+	/// <returns>The updated Employee DTO.</returns>
+	Task<EmployeeDto> UpdateBasicInfoAsync(Guid employeeId, UpdateEmployeeBasicInfoDto input);
+
+	/// <summary>
+	/// Updates the status of an existing employee.
+	/// </summary>
+	/// <param name="employeeId">The ID of the employee to update.</param>
+	/// <param name="employeeStatusType">The new status type.</param>
+	/// <param name="changeReason">The reason for the status change.</param>
+	/// <returns>The updated Employee DTO.</returns>
+	Task<EmployeeDto> UpdateEmployeeStatus(Guid employeeId, EmployeeStatusType employeeStatusType, string? changeReason);
+
 	Task UpdatePayrollStructureAsync(Guid employeeId, CreateUpdateEmployeePayrollStructureDto input);
 }

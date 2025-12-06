@@ -14,18 +14,29 @@ using Volo.Abp.Domain.Entities;
 namespace ShikshaMitra.HR.Employees;
 
 public class EmployeeAppService(
-	IEmployeeRepository employeeRepository,
-	IPayrollStructureRepository payrollStructureRepository,
-	EmployeeManager employeeManager,
-	PayrollStructureManager payrollStructureManager,
-	IBlobContainer blobContainer) :
-	CrudAppService<Employee, EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>(
-		employeeRepository),
-	IEmployeeAppService
+IEmployeeRepository employeeRepository,
+EmployeeManager employeeManager,
+PayrollStructureManager payrollStructureManager,
+IBlobContainer blobContainer,
+IEmployeeCacheManager employeeCacheManager) :
+CrudAppService<Employee, EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>(
+employeeRepository),
+IEmployeeAppService
 {
 	public async Task<EmployeeDto?> GetEmployeeByUserId(Guid userId)
 	{
-		Employee employee = await employeeRepository.GetEmployeeByUserIdAsync(userId) ?? throw new EntityNotFoundException(typeof(Employee), userId);
+		// Navigation properties (Role, EducationMediumStage, Shift) are auto-loaded
+		Employee employee = await employeeRepository.GetEmployeeByUserIdAsync(userId) 
+			?? throw new EntityNotFoundException(typeof(Employee), userId);
+
+		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
+	}
+
+	public override async Task<EmployeeDto> GetAsync(Guid id)
+	{
+		// Use GetWithDetailsAsync for complete employee data including PayrollStructure
+		var employee = await employeeRepository.GetWithDetailsAsync(id, includePayrollStructure: true)
+			?? throw new EntityNotFoundException(typeof(Employee), id);
 
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
 	}
@@ -42,7 +53,6 @@ public class EmployeeAppService(
 			shortName: input.ShortName,
 			employeeStatusType: input.EmployeeStatusType,
 			dateOfBirth: input.DateOfBirth,
-			profilePicture: input.ProfilePicture,
 			familyCast: input.FamilyCast,
 			castType: input.CastType,
 			genderType: input.GenderType,
@@ -86,7 +96,6 @@ public class EmployeeAppService(
 			shortName: input.ShortName,
 			employeeStatusType: input.EmployeeStatusType,
 			dateOfBirth: input.DateOfBirth,
-			profilePicture: input.ProfilePicture,
 			familyCast: input.FamilyCast,
 			castType: input.CastType,
 			genderType: input.GenderType,
@@ -114,7 +123,7 @@ public class EmployeeAppService(
 			shiftId: input.ShiftId
 		);
 
-		// Save the updated employee
+		// Save the updated employee (cache will be invalidated in repository)
 		employee = await employeeRepository.UpdateAsync(employee);
 
 		// Return the updated DTO
@@ -133,7 +142,7 @@ public class EmployeeAppService(
 			await employeeManager.UpdateFamilyInfoByEmployeeIdAsync(employeeId, fatherDetails, motherDetails,
 				spouseDetails);
 
-		// Save the employee
+		// Save the employee (cache invalidation handled in repository)
 		employee = await employeeRepository.UpdateAsync(employee);
 
 		// Return the DTO
@@ -265,6 +274,44 @@ public class EmployeeAppService(
 
 	public async Task UpdatePayrollStructureAsync(Guid employeeId, CreateUpdateEmployeePayrollStructureDto input)
 	{
+		if (input?.PayrollStructures == null || input.PayrollStructures.Count == 0)
+		{
+			throw new UserFriendlyException("Payroll structure is required.");
+		}
 
+		var payrollStructureId = input.PayrollStructures[0].Id;
+		await payrollStructureManager.SetEmployeePayrollStructureAsync(employeeId, payrollStructureId);
+	}
+
+	public async Task DeleteDocumentAsync(Guid employeeId, Guid documentId)
+	{
+		await employeeManager.DeleteDocumentAsync(employeeId, documentId);
+	}
+
+	public async Task<string> UploadProfilePictureAsync(Guid employeeId, string fileName, byte[] fileContent)
+	{
+		return await employeeManager.UploadProfilePictureAsync(employeeId, fileName, fileContent);
+	}
+
+	public async Task<DocumentDto?> GetProfilePictureAsync(Guid employeeId)
+	{
+		var employee = await employeeRepository.GetAsync(employeeId);
+		
+		if (string.IsNullOrEmpty(employee.ProfilePictureBlobName))
+		{
+			return null;
+		}
+
+		await using var stream = await blobContainer.GetAsync(employee.ProfilePictureBlobName);
+		await using var memoryStream = new MemoryStream();
+		await stream.CopyToAsync(memoryStream);
+
+		return new DocumentDto
+		{
+			FileName = employee.ProfilePictureBlobName,
+			ContentType = "image/jpeg", // or determine from blob metadata
+			Content = memoryStream.ToArray(),
+			Size = memoryStream.Length
+		};
 	}
 }

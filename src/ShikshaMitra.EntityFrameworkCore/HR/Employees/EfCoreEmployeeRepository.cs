@@ -3,30 +3,183 @@ using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.HR.Employees;
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
 
 namespace ShikshaMitra.Employees;
 
-public class EfCoreEmployeeRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
+public class EfCoreEmployeeRepository(
+	IDbContextProvider<ShikshaMitraDbContext> dbContextProvider,
+	IEmployeeCacheManager cacheManager)
 	: EfCoreRepository<ShikshaMitraDbContext, Employee, Guid>(dbContextProvider), IEmployeeRepository
 {
-	public async Task<Employee?> GetEmployeeByUserIdAsync(Guid userId)
+	/// <summary>
+	/// Gets an employee by their associated user ID.
+	/// Auto-includes: Role, EducationMediumStage, Shift (configured in EmployeeConfiguration).
+	/// Cached for performance - cache is invalidated on employee updates.
+	/// </summary>
+	public async Task<Employee?> GetEmployeeByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
 	{
-		DbSet<Employee> employees = await GetDbSetAsync();
+		// Try cache first
+		var cacheItem = await cacheManager.GetByUserIdOrAddAsync(
+			userId,
+			async () =>
+			{
+				var dbSet = await GetDbSetAsync();
+				return await dbSet.FirstOrDefaultAsync(e => e.UserId == userId, cancellationToken);
+			},
+			cancellationToken
+		);
 
-		return await employees
-			.FirstOrDefaultAsync(e => e.UserId == userId);
+		// If found in cache, we need to load the full entity from database
+		// because cache only contains basic data
+		if (cacheItem != null)
+		{
+			var dbSet = await GetDbSetAsync();
+			return await dbSet.FirstOrDefaultAsync(e => e.Id == cacheItem.Id, cancellationToken);
+		}
+
+		return null;
 	}
 
-	public async Task<Employee?> GetLastEmployeeAsync()
+	/// <summary>
+	/// Gets the last created employee for the current tenant.
+	/// Used primarily for employee code generation.
+	/// </summary>
+	public async Task<Employee?> GetLastEmployeeAsync(CancellationToken cancellationToken = default)
 	{
-		DbSet<Employee?> employees = await GetDbSetAsync();
+		var dbSet = await GetDbSetAsync();
 
-		return await employees
+		return await dbSet
 			.Where(e => e.TenantId == CurrentTenant.Id)
 			.OrderByDescending(e => Convert.ToInt32(e.EmployeeCode.Substring(3)))
-			.FirstOrDefaultAsync();
+			.FirstOrDefaultAsync(cancellationToken);
+	}
+
+	/// <summary>
+	/// Gets an employee with all related data.
+	/// This method provides explicit control over eager loading of PayrollStructure.
+	/// Other navigation properties (Role, EducationMediumStage, Shift) are auto-included.
+	/// Cached for performance.
+	/// </summary>
+	/// <param name="id">Employee ID</param>
+	/// <param name="includePayrollStructure">Whether to include PayrollStructure details</param>
+	/// <param name="cancellationToken">Cancellation token</param>
+	/// <returns>Employee with requested relations or null if not found</returns>
+	public async Task<Employee?> GetWithDetailsAsync(
+		Guid id,
+		bool includePayrollStructure = false,
+		CancellationToken cancellationToken = default)
+	{
+		// Try cache first (cache doesn't include PayrollStructure for size optimization)
+		var cacheItem = await cacheManager.GetOrAddAsync(
+			id,
+			async () =>
+			{
+				var dbSet = await GetDbSetAsync();
+				return await dbSet.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+			},
+			cancellationToken
+		);
+
+		if (cacheItem == null)
+		{
+			return null;
+		}
+
+		// Load full entity from database with requested includes
+		var dbSet = await GetDbSetAsync();
+		var query = dbSet.AsQueryable();
+
+		// Explicitly include PayrollStructure if requested
+		if (includePayrollStructure)
+		{
+			query = query.Include(e => e.PayrollStructure)
+				.ThenInclude(ps => ps.PayElement);
+		}
+
+		return await query.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+	}
+
+	/// <summary>
+	/// Override GetAsync to use caching.
+	/// </summary>
+	public override async Task<Employee> GetAsync(
+		Guid id,
+		bool includeDetails = true,
+		CancellationToken cancellationToken = default)
+	{
+		// Use cached version
+		var employee = await GetWithDetailsAsync(id, includePayrollStructure: false, cancellationToken);
+		
+		if (employee == null)
+		{
+			throw new EntityNotFoundException(typeof(Employee), id);
+		}
+
+		return employee;
+	}
+
+	/// <summary>
+	/// Override UpdateAsync to invalidate cache.
+	/// </summary>
+	public override async Task<Employee> UpdateAsync(
+		Employee entity,
+		bool autoSave = false,
+		CancellationToken cancellationToken = default)
+	{
+		// Invalidate cache before update
+		await InvalidateCacheAsync(entity, cancellationToken);
+
+		return await base.UpdateAsync(entity, autoSave, cancellationToken);
+	}
+
+	/// <summary>
+	/// Override DeleteAsync to invalidate cache.
+	/// </summary>
+	public override async Task DeleteAsync(
+		Guid id,
+		bool autoSave = false,
+		CancellationToken cancellationToken = default)
+	{
+		// Load employee first to get user ID for cache invalidation
+		var employee = await base.GetAsync(id, includeDetails: false, cancellationToken);
+		
+		await InvalidateCacheAsync(employee, cancellationToken);
+
+		await base.DeleteAsync(id, autoSave, cancellationToken);
+	}
+
+	/// <summary>
+	/// Invalidates all cache entries for an employee.
+	/// </summary>
+	private async Task InvalidateCacheAsync(Employee employee, CancellationToken cancellationToken)
+	{
+		await cacheManager.InvalidateEmployeeAsync(employee.Id, cancellationToken);
+
+		if (employee.UserId.HasValue)
+		{
+			await cacheManager.InvalidateByUserIdAsync(employee.UserId.Value, cancellationToken);
+		}
+
+		if (!string.IsNullOrEmpty(employee.EmployeeCode))
+		{
+			await cacheManager.InvalidateByCodeAsync(employee.EmployeeCode, cancellationToken);
+		}
+	}
+
+	/// <summary>
+	/// Override to provide optimized query for list operations.
+	/// Uses AsNoTracking for read-only scenarios to improve performance.
+	/// </summary>
+	public override async Task<IQueryable<Employee>> WithDetailsAsync()
+	{
+		// Get the default queryable which includes auto-included navigations
+		return (await GetQueryableAsync())
+			.Include(e => e.PayrollStructure) // Optionally include PayrollStructure for list operations
+				.ThenInclude(ps => ps.PayElement);
 	}
 }

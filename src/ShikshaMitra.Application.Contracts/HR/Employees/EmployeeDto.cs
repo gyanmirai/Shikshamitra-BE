@@ -66,8 +66,8 @@ public class EmployeeDto : EntityDto<Guid>
 	public Guid EducationMediumStageId { get; set; }
 	public EducationMediumStageDto EducationMediumStage { get; set; }
 
-	// Profile Picture
-	public byte[]? ProfilePicture { get; set; }
+	// Profile Picture stored in blob storage
+	public string? ProfilePictureBlobName { get; set; }
 
 	public ShiftManagementDto Shift { get; set; }
 }

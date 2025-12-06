@@ -18,8 +18,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? UserId { get; private set; }
 	public Guid EducationMediumStageId { get; private set; }
 
-	// Profile Picture
-	public byte[]? ProfilePicture { get; private set; }
+	// Profile Picture stored in blob storage
+	public string? ProfilePictureBlobName { get; private set; }
 
 	// Basic Details
 	public string EmployeeCode { get; private set; }
@@ -112,7 +112,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? tenantId,
 		Guid? userId,
 		Guid educationMediumStageId,
-		byte[]? profilePicture,
+		string? profilePictureBlobName,
 		string? employeeCode,
 		string? lastName,
 		string? firstName,
@@ -154,7 +154,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		TenantId = tenantId;
 		UserId = userId;
 		EducationMediumStageId = educationMediumStageId;
-		ProfilePicture = profilePicture;
+		ProfilePictureBlobName = profilePictureBlobName;
 		EmployeeCode = employeeCode;
 		LastName = lastName;
 		FirstName = firstName;
@@ -200,7 +200,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? shortName,
 		EmployeeStatusType? employeeStatusType,
 		DateOnly? dateOfBirth,
-		byte[]? profilePicture,
+		string? profilePictureBlobName,
 		string? familyCast,
 		CastType? castType,
 		GenderType? genderType,
@@ -234,7 +234,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ShortName = shortName;
 		EmployeeStatusType = employeeStatusType;
 		DateOfBirth = dateOfBirth;
-		ProfilePicture = profilePicture;
+		ProfilePictureBlobName = profilePictureBlobName;
 		FamilyCast = familyCast;
 		CastType = castType;
 		GenderType = genderType;
@@ -299,6 +299,11 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	internal void AddDocument(EmployeeDocument document) => Documents.Add(document);
+
+	internal void UpdateProfilePicture(string? profilePictureBlobName)
+	{
+		ProfilePictureBlobName = profilePictureBlobName;
+	}
 
 	internal void SetPayrollStructure(Guid payrollStructureId)
 	{

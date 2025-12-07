@@ -1,8 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using ShikshaMitra.Common;
+﻿using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
@@ -15,34 +13,44 @@ using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Volo.Abp.Data;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
-using Volo.Abp.Uow;
 using Volo.Abp.TenantManagement;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Seeders;
 
 public class HRSeederContributor(
-	ICurrentTenant currentTenant,
-	IGuidGenerator guidGenerator,
-	IUnitOfWork unitOfWork,
-	IAcademicYearRepository academicYearRepository,
-	IEducationBoardRepository educationBoardRepository,
-	IEducationMediumRepository educationMediumRepository,
-	IEducationMediumStageRepository educationMediumStageRepository,
-	IStandardRepository standardRepository,
-	IDivisionRepository divisionRepository,
-	IPayElementRepository payElementRepository,
-	IPayrollStructureRepository payrollStructureRepository,
-	IEmployeeRepository employeeRepository,
-	IEmployeeAttendanceRepository employeeAttendanceRepository,
-	ICustomAttendanceRuleRepository customAttendanceRuleRepository,
-	IIdentityUserRepository userRepository,
-	IdentityUserManager userManager,
-	IIdentityRoleRepository roleRepository,
-	ITenantRepository tenantRepository) : BaseSeederContributor(currentTenant, guidGenerator, unitOfWork)
+ICurrentTenant currentTenant,
+IGuidGenerator guidGenerator,
+IUnitOfWork unitOfWork,
+IAcademicYearRepository academicYearRepository,
+IEducationBoardRepository educationBoardRepository,
+IEducationMediumRepository educationMediumRepository,
+IEducationMediumStageRepository educationMediumStageRepository,
+IStandardRepository standardRepository,
+IDivisionRepository divisionRepository,
+IPayElementRepository payElementRepository,
+IPayrollStructureRepository payrollStructureRepository,
+IEarningComponentRepository earningComponentRepository,
+EarningComponentManager earningComponentManager,
+IDeductionComponentRepository deductionComponentRepository,
+DeductionComponentManager deductionComponentManager,
+IEmployeeRepository employeeRepository,
+IEmployeeAttendanceRepository employeeAttendanceRepository,
+ILeaveTypeRepository leaveTypeRepository,
+ILeavePolicyRepository leavePolicyRepository,
+ICustomAttendanceRuleRepository customAttendanceRuleRepository,
+IIdentityUserRepository userRepository,
+IdentityUserManager userManager,
+IIdentityRoleRepository roleRepository,
+ITenantRepository tenantRepository) : BaseSeederContributor(currentTenant, guidGenerator, unitOfWork)
 {
 	public override async Task SeedAsync(DataSeedContext context)
 	{
@@ -133,6 +141,14 @@ public class HRSeederContributor(
 			amount: 10000
 		);
 		await payrollStructureRepository.InsertAsync(payrollStructure);
+
+		// Seed Earning Components (if not already seeded)
+		await SeedEarningComponentsAsync(tenantId);
+		
+		// Seed Deduction Components (if not already seeded)
+		await SeedDeductionComponentsAsync(tenantId);
+
+		await SeedEmployeeLeaveManagementAsync(tenantId);
 
 		// Retrieve the tenant information to decide on the email domain.
 		var tenant = await tenantRepository.GetAsync(tenantId);
@@ -317,6 +333,8 @@ public class HRSeederContributor(
 
 		await employeeRepository.InsertManyAsync(employees);
 
+
+
 		//// Create Employee Attendance.
 		//var employeeAttendance = new EmployeeAttendance
 		//{
@@ -343,5 +361,320 @@ public class HRSeederContributor(
 		//await customAttendanceRuleRepository.InsertAsync(customAttendanceRule);
 
 		//await CurrentUnitOfWork.SaveChangesAsync();
+	}
+
+	/// <summary>
+	/// Seeds sample earning components for payroll management
+	/// </summary>
+	private async Task SeedEarningComponentsAsync(Guid tenantId)
+	{
+		// Check if earning components already exist to avoid duplicates
+		var existingCount = await earningComponentRepository.GetCountAsync();
+		if (existingCount > 0)
+		{
+			// Already seeded, skip
+			return;
+		}
+
+		var earningComponents = new List<EarningComponent>();
+
+		// 1. Basic Salary - Fixed component with no dependency
+		var basicSalary = await earningComponentManager.CreateAsync(
+			name: "Basic Salary",
+			description: "Base salary component for all employees",
+			componentType: EarningComponentType.Fixed,
+			dependOn: ComponentDependency.None,
+			amount: "30000",
+			visibleInPayslip: true,
+			displayOrder: 1
+		);
+		earningComponents.Add(basicSalary);
+
+		// 2. House Rent Allowance (HRA) - Variable component, 40% of Basic
+		var hra = await earningComponentManager.CreateAsync(
+			name: "House Rent Allowance",
+			description: "HRA - 40% of Basic Salary",
+			componentType: EarningComponentType.Variable,
+			dependOn: ComponentDependency.Basic,
+			amount: "40%",
+			visibleInPayslip: true,
+			displayOrder: 2
+		);
+		earningComponents.Add(hra);
+
+		// 3. Transport Allowance - Fixed component
+		var transport = await earningComponentManager.CreateAsync(
+			name: "Transport Allowance",
+			description: "Monthly transportation allowance",
+			componentType: EarningComponentType.Fixed,
+			dependOn: ComponentDependency.None,
+			amount: "3000",
+			visibleInPayslip: true,
+			displayOrder: 3
+		);
+		earningComponents.Add(transport);
+
+		// 4. Medical Allowance - Fixed component
+		var medical = await earningComponentManager.CreateAsync(
+			name: "Medical Allowance",
+			description: "Medical expenses reimbursement",
+			componentType: EarningComponentType.Fixed,
+			dependOn: ComponentDependency.None,
+			amount: "2500",
+			visibleInPayslip: true,
+			displayOrder: 4
+		);
+		earningComponents.Add(medical);
+
+		// 5. Dearness Allowance (DA) - Variable component, 50% of Basic
+		var da = await earningComponentManager.CreateAsync(
+			name: "Dearness Allowance",
+			description: "DA - 50% of Basic Salary",
+			componentType: EarningComponentType.Variable,
+			dependOn: ComponentDependency.Basic,
+			amount: "50%",
+			visibleInPayslip: true,
+			displayOrder: 5
+		);
+		earningComponents.Add(da);
+
+		// 6. Special Allowance - Variable component, 10% of Gross
+		var special = await earningComponentManager.CreateAsync(
+			name: "Special Allowance",
+			description: "Special allowance - 10% of Gross Salary",
+			componentType: EarningComponentType.Variable,
+			dependOn: ComponentDependency.Gross,
+			amount: "10%",
+			visibleInPayslip: false,
+			displayOrder: 6
+		);
+		earningComponents.Add(special);
+
+		// 7. Performance Bonus - Fixed component (given based on performance)
+		var bonus = await earningComponentManager.CreateAsync(
+			name: "Performance Bonus",
+			description: "Annual performance-based bonus",
+			componentType: EarningComponentType.Fixed,
+			dependOn: ComponentDependency.None,
+			amount: "5000",
+			visibleInPayslip: true,
+			displayOrder: 7
+		);
+		earningComponents.Add(bonus);
+
+		// 8. Overtime Allowance - Fixed component
+		var overtime = await earningComponentManager.CreateAsync(
+			name: "Overtime Allowance",
+			description: "Extra hours compensation",
+			componentType: EarningComponentType.Fixed,
+			dependOn: ComponentDependency.None,
+			amount: "1500",
+			visibleInPayslip: true,
+			displayOrder: 8
+		);
+		earningComponents.Add(overtime);
+
+		// Insert all earning components
+		await earningComponentRepository.InsertManyAsync(earningComponents);
+	}
+	
+	/// <summary>
+	/// Seeds sample deduction components for payroll management
+	/// </summary>
+	private async Task SeedDeductionComponentsAsync(Guid tenantId)
+	{
+		// Check if deduction components already exist to avoid duplicates
+		var existingCount = await deductionComponentRepository.GetCountAsync();
+		if (existingCount > 0)
+		{
+			// Already seeded, skip
+			return;
+		}
+
+		var deductionComponents = new List<DeductionComponent>();
+
+		// 1. Provident Fund (PF) - Fixed component
+		var pf = await deductionComponentManager.CreateAsync(
+			name: "Provident Fund (PF)",
+			description: "Mandatory employee provident fund contribution",
+			componentType: DeductionComponentType.Fixed,
+			dependOn: ComponentDependency.None,
+			amount: "1800",
+			visibleInPayslip: true,
+			displayOrder: 1
+		);
+		deductionComponents.Add(pf);
+
+		// 2. Professional Tax - Fixed component
+		var pt = await deductionComponentManager.CreateAsync(
+			name: "Professional Tax",
+			description: "State professional tax deduction",
+			componentType: DeductionComponentType.Fixed,
+			dependOn: ComponentDependency.None,
+			amount: "200",
+			visibleInPayslip: true,
+			displayOrder: 2
+		);
+		deductionComponents.Add(pt);
+
+		// 3. Income Tax (TDS) - Variable component, percentage of Gross
+		var tds = await deductionComponentManager.CreateAsync(
+			name: "Income Tax (TDS)",
+			description: "Tax Deducted at Source - 10% of Gross",
+			componentType: DeductionComponentType.Variable,
+			dependOn: ComponentDependency.Gross,
+			amount: "10%",
+			visibleInPayslip: true,
+			displayOrder: 3
+		);
+		deductionComponents.Add(tds);
+
+		// 4. Health Insurance - Fixed component
+		var insurance = await deductionComponentManager.CreateAsync(
+			name: "Health Insurance",
+			description: "Monthly health insurance premium",
+			componentType: DeductionComponentType.Fixed,
+			dependOn: ComponentDependency.None,
+			amount: "500",
+			visibleInPayslip: true,
+			displayOrder: 4
+		);
+		deductionComponents.Add(insurance);
+
+		// 5. Loan Recovery - Variable component
+		var loan = await deductionComponentManager.CreateAsync(
+			name: "Loan Recovery",
+			description: "Employee loan repayment deduction",
+			componentType: DeductionComponentType.Variable,
+			dependOn: ComponentDependency.Gross,
+			amount: "5%",
+			visibleInPayslip: true,
+			displayOrder: 5
+		);
+		deductionComponents.Add(loan);
+
+		// 6. ESI (Employee State Insurance) - Variable component, percentage of Gross
+		var esi = await deductionComponentManager.CreateAsync(
+			name: "ESI (Employee State Insurance)",
+			description: "Employee State Insurance - 0.75% of Gross",
+			componentType: DeductionComponentType.Variable,
+			dependOn: ComponentDependency.Gross,
+			amount: "0.75%",
+			visibleInPayslip: true,
+			displayOrder: 6
+		);
+		deductionComponents.Add(esi);
+
+		// 7. Canteen Charges - Fixed component
+		var canteen = await deductionComponentManager.CreateAsync(
+			name: "Canteen Charges",
+			description: "Monthly canteen facility charges",
+			componentType: DeductionComponentType.Fixed,
+			dependOn: ComponentDependency.None,
+			amount: "300",
+			visibleInPayslip: false,
+			displayOrder: 7
+		);
+		deductionComponents.Add(canteen);
+
+		// Insert all deduction components
+		await deductionComponentRepository.InsertManyAsync(deductionComponents);
+	}
+
+	/// <summary>
+	/// Seeds sample leave types and policies for employee leave management
+	/// </summary>
+	private async Task SeedEmployeeLeaveManagementAsync(Guid tenantId)
+	{
+		// Check if leave types already exist
+		var leaveTypeCount = await leaveTypeRepository.GetCountAsync();
+		if (leaveTypeCount > 0)
+		{
+			return; // Already seeded
+		}
+
+		// Seed Leave Types
+		var leaveTypes = new List<LeaveType>();
+
+		var paidLeave = new LeaveType(
+			guidGenerator.Create(),
+			tenantId,
+			"Paid Leave",
+			"#1E90FF"
+		);
+		leaveTypes.Add(paidLeave);
+
+		var sickLeave = new LeaveType(
+			guidGenerator.Create(),
+			tenantId,
+			"Sick Leave",
+			"#FF4C4C"
+		);
+		leaveTypes.Add(sickLeave);
+
+		var casualLeave = new LeaveType(
+			guidGenerator.Create(),
+			tenantId,
+			"Casual Leave",
+			"#FFB300"
+		);
+		leaveTypes.Add(casualLeave);
+
+		var earnedLeave = new LeaveType(
+			guidGenerator.Create(),
+			tenantId,
+			"Earned Leave",
+			"#27AE60"
+		);
+		leaveTypes.Add(earnedLeave);
+
+		await leaveTypeRepository.InsertManyAsync(leaveTypes);
+
+		// Seed Leave Policies
+		var policies = new List<LeavePolicy>();
+
+		var sickPolicy = new LeavePolicy(
+			guidGenerator.Create(),
+			tenantId,
+			"Sick Leave Policy",
+			"Sick Leave",
+			12,
+			LeavePaidType.Paid,
+			true,
+			false,
+			false,
+			"12 days paid sick leave per year, can be carried forward"
+		);
+		policies.Add(sickPolicy);
+
+		var casualPolicy = new LeavePolicy(
+			guidGenerator.Create(),
+			tenantId,
+			"Casual Leave Policy",
+			"Casual Leave",
+			8,
+			LeavePaidType.Paid,
+			false,
+			false,
+			true,
+			"8 days casual leave, requires supervisor approval"
+		);
+		policies.Add(casualPolicy);
+
+		var earnedPolicy = new LeavePolicy(
+			guidGenerator.Create(),
+			tenantId,
+			"Earned Leave Policy",
+			"Earned Leave",
+			15,
+			LeavePaidType.Paid,
+			true,
+			true,
+			false,
+			"15 days earned leave, can be carried forward and encashed"
+		);
+		policies.Add(earnedPolicy);
+
+		await leavePolicyRepository.InsertManyAsync(policies);
 	}
 }

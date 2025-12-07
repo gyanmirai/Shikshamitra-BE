@@ -4,12 +4,14 @@ using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Academic.Syllabus;
+using ShikshaMitra.EntityFrameworkCore.HR.Employees.Payroll;
 using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
 using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.EventAndHolidays;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
@@ -169,22 +171,23 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Employee
 
 	DbSet<Employee> Employees { get; set; }
-	DbSet<EmployeeDocument> EmployeeDocuments { get; set; }
 	DbSet<DocumentSetting> DocumentSettings { get; set; }
+	
+	// Employee Payroll
+	public DbSet<EmployeePayrollDetails> EmployeePayrollDetails { get; set; }
+	public DbSet<EmployeePayrollComponent> EmployeePayrollComponents { get; set; }
 
 	#region AttedenceAndLeaves
 
 	DbSet<EmployeeAttendance> EmployeeAttendances { get; set; }
-
 	public DbSet<EmployeeLeave> EmployeeLeaves { get; set; }
-
 	DbSet<CustomAttendanceRule> CustomAttendanceRules { get; set; }
-
 	DbSet<AutomatedNotificationsSettings> AutomatedNotificationsSettings { get; set; }
-
 	DbSet<NotificationInfo> NotificationInfos { get; set; }
 
-	DbSet<LeavePolicy> LeavePolicies { get; set; }
+	// Employee Leave Management
+	public DbSet<LeaveType> EmployeeLeaveTypes { get; set; }
+	public DbSet<LeavePolicy> EmployeeLeavePolicies { get; set; }
 
 	#endregion
 
@@ -196,6 +199,8 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	DbSet<PayrollStructure> PayrollStructures { get; set; }
 	DbSet<ProvidentFund> ProvidentFunds { get; set; }
 	DbSet<ProfessionalTax> ProfessionalTaxes { get; set; }
+	public DbSet<EarningComponent> EarningComponents { get; set; }
+	public DbSet<DeductionComponent> DeductionComponents { get; set; }
 
 	#endregion
 
@@ -281,5 +286,9 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 		builder.ConfigureTenantManagement();
 		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 		builder.ConfigureBlobStoring();
+
+		// Add payroll configurations
+		builder.ApplyConfiguration(new EmployeePayrollDetailsConfiguration());
+		builder.ApplyConfiguration(new EmployeePayrollComponentConfiguration());
 	}
 }

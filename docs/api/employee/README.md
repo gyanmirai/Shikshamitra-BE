@@ -13,6 +13,47 @@ This directory contains comprehensive documentation for the Employee module opti
   - Performance tips
   - Code examples
 
+### API Documentation
+
+#### [Payroll API](./Employee-Payroll-API.md) 💰 **NEW**
+**Best for:** Frontend Developers, Backend Developers
+
+Complete payroll management system:
+- GET/PUT payroll details endpoints
+- Bank information management
+- Earnings and deductions tracking
+- Comprehensive validation rules (IFSC, account numbers, TDS)
+- Request/response examples
+- Integration guides (C#, TypeScript)
+
+**Key Features:**
+- Indian banking validation (IFSC format)
+- Component management (Fixed/Variable/Calculated)
+- Automatic cache invalidation
+- Replace strategy for updates
+
+**Implementation:** See [Payroll Implementation Guide](../../implementation/employee/README.md)
+
+---
+
+#### [Additional Details API](./Employee-AdditionalDetails-API.md) 📋
+**Best for:** Frontend Developers, Backend Developers
+
+API endpoints for managing supplementary employee information:
+- BPL card details
+- Disability status
+- Language preferences
+- Library and transport memberships
+- Complete request/response examples
+
+**What you'll learn:**
+- GET and PUT endpoints
+- Validation rules
+- Error handling
+- Frontend integration examples
+
+---
+
 ### Implementation Guides
 
 #### [Complete Optimization Summary](./Employee-Complete-Optimization-Summary.md) 🎯
@@ -151,6 +192,12 @@ API endpoints for managing supplementary employee information:
 **...use the Employee API**
 → Check [Quick Reference Guide](./Employee-QuickRef.md)
 
+**...use the Payroll API**
+→ See [Payroll API Documentation](./Employee-Payroll-API.md)
+
+**...implement Payroll feature**
+→ Follow [Payroll Implementation Guide](../../implementation/employee/README.md)
+
 **...deploy to production**
 → Use [Complete Optimization Summary](./Employee-Complete-Optimization-Summary.md) deployment checklist
 
@@ -254,6 +301,8 @@ Focus: Going live
 | Document | Version | Last Updated | Status |
 |----------|---------|--------------|--------|
 | Quick Reference | 3.0 | Dec 2024 | Current |
+| Payroll API | 1.0 | Dec 2024 | **NEW** |
+| Additional Details API | 1.0 | Dec 2024 | Current |
 | Complete Summary | 3.0 | Dec 2024 | Current |
 | Improvements Summary | 3.0 | Dec 2024 | Current |
 | Eager Loading | 1.0 | Dec 2024 | Current |

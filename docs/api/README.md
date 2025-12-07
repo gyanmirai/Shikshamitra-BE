@@ -11,6 +11,14 @@ RESTful API documentation for ShikshaMitra.
   - Distributed caching (90% DB load reduction)
   - Eager loading strategies (99.7% query reduction)
   - Production deployment checklists
+  - **NEW**: [Payroll API](./employee/Employee-Payroll-API.md) - Complete payroll management
+
+### Implementation Guides
+- **[Employee Implementations](../implementation/employee/)** - Step-by-step feature implementation guides
+  - Payroll system setup
+  - Database migrations
+  - Code examples
+  - Testing procedures
 
 ### General API Reference
 - **[endpoints.md](./endpoints.md)** - Complete API endpoint reference
@@ -54,8 +62,9 @@ See [../../postman/](../../postman/) for:
   - CRUD operations
   - Profile management
   - Document handling
-  - Payroll integration
+  - **Payroll management** (NEW)
   - Performance: 1-2ms (cached), 99.7% fewer queries
+  - [Implementation Guides](../implementation/employee/) - Step-by-step setup instructions
 
 ### Future Modules (Planned)
 - **Student Management** - Student CRUD and enrollment
@@ -72,7 +81,15 @@ See [../../postman/](../../postman/) for:
 ### For Employee Module
 1. **Overview** → [Employee Module README](./employee/README.md)
 2. **Quick Reference** → [Employee Quick Guide](./employee/Employee-QuickRef.md)
-3. **Performance Optimization** → [Complete Summary](./employee/Employee-Complete-Optimization-Summary.md)
+3. **Payroll API** → [Payroll API Documentation](./employee/Employee-Payroll-API.md)
+4. **Implementation** → [Payroll Implementation Guide](../implementation/employee/README.md)
+5. **Performance Optimization** → [Complete Summary](./employee/Employee-Complete-Optimization-Summary.md)
+
+### For Implementing Features
+1. **Choose Feature** → Browse [implementation/employee/](../implementation/employee/)
+2. **Follow QuickStart** → Get up and running in 15-30 minutes
+3. **Reference API Docs** → Use API documentation for endpoint details
+4. **Test & Deploy** → Follow testing and deployment guides
 
 ### By Role
 - **Backend Developer** → Employee module implementation guides

@@ -23,7 +23,6 @@ public class EmployeeManager(
 	IIdentityUserRepository userRepository,
 	IIdentityRoleRepository roleRepository,
 	IBlobContainer blobContainer,
-	IEmployeeDocumentRepository employeeDocumentRepository,
 	UserManager<IdentityUser> userManager,
 	IEducationMediumStageRepository educationMediumStageRepository,
 	IRepository<EducationBoard, Guid> educationBoardRepository,
@@ -435,7 +434,7 @@ public class EmployeeManager(
 			// Save the file content to blob storage
 			await blobContainer.SaveAsync(blobName, docData.Content, overrideExisting: true);
 
-			// Create and save the EmployeeDocument entity (metadata)
+			// Create the EmployeeDocument entity (metadata)
 			var document = new EmployeeDocument(
 				id: documentId,
 				tenantId: CurrentTenant.Id,
@@ -446,31 +445,26 @@ public class EmployeeManager(
 				blobName: blobName
 			);
 
-			await employeeDocumentRepository.InsertAsync(document);
-
-			// Associate the document with the employee, if needed
+			// Associate the document with the employee (owned entity)
 			employee.AddDocument(document);
 		}
 
-		// Update the employee entity
+		// Update the employee entity (EF Core will handle owned entities)
 		await employeeRepository.UpdateAsync(employee);
 	}
 
 	public async Task<EmployeeDocument> GetDocumentAsync(Guid employeeId, Guid documentId)
 	{
-		var document = await employeeDocumentRepository.FirstOrDefaultAsync(d =>
-			d.EmployeeId == employeeId && d.Id == documentId
-		);
+		var employee = await employeeRepository.GetAsync(employeeId);
+		var document = employee.Documents.FirstOrDefault(d => d.Id == documentId);
 		return document
 			?? throw new BusinessException($"Document with ID {documentId} does not exist.");
 	}
 
 	public async Task<List<EmployeeDocument>> GetDocumentsAsync(Guid employeeId)
 	{
-		List<EmployeeDocument> documents = await employeeDocumentRepository.GetListAsync(d =>
-			d.EmployeeId == employeeId
-		);
-		return documents;
+		var employee = await employeeRepository.GetAsync(employeeId);
+		return employee.Documents.ToList();
 	}
 
 	public async Task<EmployeeDocument> UpdateDocumentAsync(
@@ -482,7 +476,13 @@ public class EmployeeManager(
 		byte[] content
 	)
 	{
-		EmployeeDocument document = await GetDocumentAsync(employeeId, documentId);
+		var employee = await employeeRepository.GetAsync(employeeId);
+		var document = employee.Documents.FirstOrDefault(d => d.Id == documentId);
+		
+		if (document == null)
+		{
+			throw new BusinessException($"Document with ID {documentId} does not exist.");
+		}
 
 		// Update blob
 		await blobContainer.SaveAsync(document.BlobName, content, overrideExisting: true);
@@ -490,20 +490,28 @@ public class EmployeeManager(
 		// Update metadata
 		document.UpdateDocumentMetadata(fileName, contentType, size);
 
-		await employeeDocumentRepository.UpdateAsync(document);
+		await employeeRepository.UpdateAsync(employee);
 		return document;
 	}
 
 	public async Task DeleteDocumentAsync(Guid employeeId, Guid documentId)
 	{
-		EmployeeDocument document = await GetDocumentAsync(employeeId, documentId);
+		var employee = await employeeRepository.GetAsync(employeeId);
+		var document = employee.Documents.FirstOrDefault(d => d.Id == documentId);
+		
+		if (document == null)
+		{
+			throw new BusinessException($"Document with ID {documentId} does not exist.");
+		}
 
 		// Delete blob from storage
 		await blobContainer.DeleteAsync(document.BlobName);
 
-		// Delete document metadata
-		// Note: The Documents collection is an owned entity, so EF Core handles the relationship cleanup automatically
-		await employeeDocumentRepository.DeleteAsync(document);
+		// Remove document from collection (owned entity - EF Core tracks changes)
+		employee.Documents.Remove(document);
+
+		// Update the employee entity
+		await employeeRepository.UpdateAsync(employee);
 	}
 
 	public async Task<string> UploadProfilePictureAsync(Guid employeeId, string fileName, byte[] fileContent)

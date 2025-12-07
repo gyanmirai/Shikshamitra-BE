@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees.Payroll;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -104,4 +105,19 @@ public interface
 	Task<EmployeeDto> UpdateEmployeeStatus(Guid employeeId, EmployeeStatusType employeeStatusType, string? changeReason);
 
 	Task UpdatePayrollStructureAsync(Guid employeeId, CreateUpdateEmployeePayrollStructureDto input);
+
+	/// <summary>
+	/// Gets the complete payroll details for an employee including earnings and deductions.
+	/// </summary>
+	/// <param name="employeeId">The ID of the employee.</param>
+	/// <returns>Complete payroll details including bank info, earnings, and deductions.</returns>
+	Task<EmployeePayrollDetailsDto> GetPayrollDetailsAsync(Guid employeeId);
+
+	/// <summary>
+	/// Updates the complete payroll details for an employee.
+	/// </summary>
+	/// <param name="employeeId">The ID of the employee.</param>
+	/// <param name="input">The payroll details to update.</param>
+	/// <returns>A task representing the asynchronous operation.</returns>
+	Task UpdatePayrollDetailsAsync(Guid employeeId, UpdateEmployeePayrollDetailsDto input);
 }

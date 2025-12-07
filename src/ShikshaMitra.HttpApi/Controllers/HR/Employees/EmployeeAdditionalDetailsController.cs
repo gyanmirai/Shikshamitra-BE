@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees;
 using System;
 using System.Threading.Tasks;
@@ -27,6 +28,7 @@ public class EmployeeAdditionalDetailsController : AbpControllerBase
 	/// <param name="employeeId">Employee ID</param>
 	/// <returns>Employee additional details</returns>
 	[HttpGet("{employeeId}/additional-details")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 	public async Task<EmployeeAdditionalDetailsDto> GetAdditionalDetailsAsync(Guid employeeId)
 	{
 		return await _employeeAppService.GetAdditionalDetailsAsync(employeeId);
@@ -39,6 +41,7 @@ public class EmployeeAdditionalDetailsController : AbpControllerBase
 	/// <param name="input">Updated additional details</param>
 	/// <returns>Updated additional details</returns>
 	[HttpPut("{employeeId}/additional-details")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	public async Task<EmployeeAdditionalDetailsDto> UpdateAdditionalDetailsAsync(
 		Guid employeeId,
 		[FromBody] UpdateEmployeeAdditionalDetailsDto input)

@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using System;
 using System.Collections.Generic;
@@ -10,6 +11,7 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Entities;
+using Volo.Abp.Guids;
 
 namespace ShikshaMitra.HR.Employees;
 
@@ -18,7 +20,10 @@ IEmployeeRepository employeeRepository,
 EmployeeManager employeeManager,
 PayrollStructureManager payrollStructureManager,
 IBlobContainer blobContainer,
-IEmployeeCacheManager employeeCacheManager) :
+IEmployeeCacheManager employeeCacheManager,
+IEmployeePayrollDetailsRepository payrollDetailsRepository,
+IEmployeePayrollComponentRepository payrollComponentRepository,
+IGuidGenerator guidGenerator) :
 CrudAppService<Employee, EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>(
 employeeRepository),
 IEmployeeAppService
@@ -395,4 +400,122 @@ IEmployeeAppService
 			_ => "application/octet-stream" // Fallback for unknown types
 		};
 	}
+
+	public async Task<EmployeePayrollDetailsDto> GetPayrollDetailsAsync(Guid employeeId)
+	{
+		var employee = await employeeRepository.GetAsync(employeeId);
+		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
+		var earnings = await payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
+		var deductions = await payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);
+
+		var result = new EmployeePayrollDetailsDto
+		{
+			EmployeeId = employee.EmployeeCode,
+			PayrollDetails = payrollDetails != null ? new PayrollDetailsDto
+			{
+				BankName = payrollDetails.BankName,
+				BranchName = payrollDetails.BranchName,
+				AccountHolderName = payrollDetails.AccountHolderName,
+				AccountNumber = payrollDetails.AccountNumber,
+				IfscCode = payrollDetails.IfscCode,
+				PfRule = payrollDetails.PfRule,
+				EpfNumber = payrollDetails.EpfNumber,
+				UanNumber = payrollDetails.UanNumber,
+				PunchId = payrollDetails.PunchId,
+				BasicSalary = payrollDetails.BasicSalary,
+				TdsPercentage = payrollDetails.TdsPercentage,
+				TdsAmount = payrollDetails.TdsAmount
+			} : new PayrollDetailsDto(),
+		Earnings = earnings.Select(e => new PayrollComponentDto
+		{
+			ComponentName = e.ComponentName,
+			Type = e.Type,
+			Amount = e.Amount
+		}).ToList(),
+		Deductions = deductions.Select(d => new PayrollComponentDto
+		{
+			ComponentName = d.ComponentName,
+			Type = d.Type,
+			Amount = d.Amount
+		}).ToList()
+		};
+
+		return result;
+	}
+
+	public async Task UpdatePayrollDetailsAsync(Guid employeeId, UpdateEmployeePayrollDetailsDto input)
+	{
+		var employee = await employeeRepository.GetAsync(employeeId);
+		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
+
+		if (payrollDetails == null)
+		{
+			payrollDetails = new EmployeePayrollDetails(guidGenerator.Create(), employeeId);
+			payrollDetails.UpdateDetails(
+				input.PayrollDetails.BankName,
+				input.PayrollDetails.BranchName,
+				input.PayrollDetails.AccountHolderName,
+				input.PayrollDetails.AccountNumber,
+				input.PayrollDetails.IfscCode,
+				input.PayrollDetails.PfRule,
+				input.PayrollDetails.EpfNumber,
+				input.PayrollDetails.UanNumber,
+				input.PayrollDetails.PunchId,
+				input.PayrollDetails.BasicSalary,
+				input.PayrollDetails.TdsPercentage,
+				input.PayrollDetails.TdsAmount
+			);
+			await payrollDetailsRepository.InsertAsync(payrollDetails);
+		}
+		else
+		{
+			payrollDetails.UpdateDetails(
+				input.PayrollDetails.BankName,
+				input.PayrollDetails.BranchName,
+				input.PayrollDetails.AccountHolderName,
+				input.PayrollDetails.AccountNumber,
+				input.PayrollDetails.IfscCode,
+				input.PayrollDetails.PfRule,
+				input.PayrollDetails.EpfNumber,
+				input.PayrollDetails.UanNumber,
+				input.PayrollDetails.PunchId,
+				input.PayrollDetails.BasicSalary,
+				input.PayrollDetails.TdsPercentage,
+				input.PayrollDetails.TdsAmount
+			);
+			await payrollDetailsRepository.UpdateAsync(payrollDetails);
+		}
+
+		await payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: true);
+		await payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: false);
+
+	foreach (var earning in input.Earnings)
+	{
+		var component = new EmployeePayrollComponent(
+			guidGenerator.Create(),
+			employeeId,
+			earning.ComponentName,
+			earning.Type,
+			earning.Amount,
+			isEarning: true
+		);
+		await payrollComponentRepository.InsertAsync(component);
+	}
+
+	foreach (var deduction in input.Deductions)
+	{
+		var component = new EmployeePayrollComponent(
+			guidGenerator.Create(),
+			employeeId,
+			deduction.ComponentName,
+			deduction.Type,
+			deduction.Amount,
+			isEarning: false
+		);
+		await payrollComponentRepository.InsertAsync(component);
+	}
+
+		await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
+	}
+
 }

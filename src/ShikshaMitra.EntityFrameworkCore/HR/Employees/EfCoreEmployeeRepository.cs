@@ -48,6 +48,7 @@ public class EfCoreEmployeeRepository(
 	/// <summary>
 	/// Gets the last created employee for the current tenant.
 	/// Used primarily for employee code generation.
+	/// Orders by CreationTime (descending) to get the most recently created employee.
 	/// </summary>
 	public async Task<Employee?> GetLastEmployeeAsync(CancellationToken cancellationToken = default)
 	{
@@ -55,7 +56,7 @@ public class EfCoreEmployeeRepository(
 
 		return await dbSet
 			.Where(e => e.TenantId == CurrentTenant.Id)
-			.OrderByDescending(e => Convert.ToInt32(e.EmployeeCode.Substring(3)))
+			.OrderByDescending(e => e.CreationTime)
 			.FirstOrDefaultAsync(cancellationToken);
 	}
 
@@ -112,7 +113,13 @@ public class EfCoreEmployeeRepository(
 		bool includeDetails = true,
 		CancellationToken cancellationToken = default)
 	{
-		// Use cached version
+		// When includeDetails is false, use base implementation to skip auto-included navigation properties
+		if (!includeDetails)
+		{
+			return await base.GetAsync(id, includeDetails: false, cancellationToken);
+		}
+
+		// When includeDetails is true, use cached version with navigation properties
 		var employee = await GetWithDetailsAsync(id, includePayrollStructure: false, cancellationToken);
 		
 		if (employee == null)
@@ -180,6 +187,7 @@ public class EfCoreEmployeeRepository(
 		// Get the default queryable which includes auto-included navigations
 		return (await GetQueryableAsync())
 			.Include(e => e.PayrollStructure) // Optionally include PayrollStructure for list operations
-				.ThenInclude(ps => ps.PayElement);
+				.ThenInclude(ps => ps.PayElement)
+			.AsNoTracking(); // Read-only optimization for list queries
 	}
 }

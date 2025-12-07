@@ -303,7 +303,7 @@ public class EmployeeManager(
 			shortName: shortName,
 			employeeStatusType: employeeStatusType,
 			dateOfBirth: dateOfBirth,
-			profilePictureBlobName: null,
+			profilePictureBlobName: employee.ProfilePictureBlobName, // Preserve existing profile picture
 			familyCast: familyCast,
 			castType: castType,
 			genderType: genderType,
@@ -498,24 +498,19 @@ public class EmployeeManager(
 	{
 		EmployeeDocument document = await GetDocumentAsync(employeeId, documentId);
 
-		// Delete blob
+		// Delete blob from storage
 		await blobContainer.DeleteAsync(document.BlobName);
 
 		// Delete document metadata
+		// Note: The Documents collection is an owned entity, so EF Core handles the relationship cleanup automatically
 		await employeeDocumentRepository.DeleteAsync(document);
-
-		// Remove from employee's document collection if needed
-		var employee = await employeeRepository.GetAsync(employeeId);
-		var docToRemove = employee.Documents.FirstOrDefault(d => d.Id == documentId);
-		if (docToRemove != null)
-		{
-			employee.Documents.Remove(docToRemove);
-			await employeeRepository.UpdateAsync(employee);
-		}
 	}
 
 	public async Task<string> UploadProfilePictureAsync(Guid employeeId, string fileName, byte[] fileContent)
 	{
+		// Domain-level validation guards
+		ValidateProfilePictureUpload(fileName, fileContent);
+
 		var employee = await GetEmployeeAsync(employeeId);
 
 		// Delete old profile picture if exists
@@ -535,6 +530,80 @@ public class EmployeeManager(
 		await employeeRepository.UpdateAsync(employee);
 
 		return blobName;
+	}
+
+	private static void ValidateProfilePictureUpload(string fileName, byte[] fileContent)
+	{
+		// Validate file name
+		if (string.IsNullOrWhiteSpace(fileName))
+		{
+			throw new BusinessException("File name cannot be empty.");
+		}
+
+		// Validate file content
+		if (fileContent == null || fileContent.Length == 0)
+		{
+			throw new BusinessException("File content cannot be empty.");
+		}
+
+		// Validate file size (max 5MB)
+		const long maxFileSizeBytes = 5 * 1024 * 1024; // 5MB
+		if (fileContent.Length > maxFileSizeBytes)
+		{
+			throw new BusinessException($"File size cannot exceed {maxFileSizeBytes / 1024 / 1024}MB. Current size: {fileContent.Length / 1024 / 1024}MB.");
+		}
+
+		// Validate file type by extension
+		var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+		var fileExtension = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
+		
+		if (string.IsNullOrEmpty(fileExtension) || !allowedExtensions.Contains(fileExtension))
+		{
+			throw new BusinessException($"Invalid file type. Allowed types: {string.Join(", ", allowedExtensions)}. Provided: {fileExtension}");
+		}
+
+		// Validate file signature (magic bytes) for additional security
+		if (!IsValidImageFile(fileContent))
+		{
+			throw new BusinessException("Invalid image file. The file content does not match a valid image format.");
+		}
+	}
+
+	private static bool IsValidImageFile(byte[] fileContent)
+	{
+		if (fileContent.Length < 4)
+		{
+			return false;
+		}
+
+		// Check magic bytes for common image formats
+		// JPEG: FF D8 FF
+		if (fileContent[0] == 0xFF && fileContent[1] == 0xD8 && fileContent[2] == 0xFF)
+		{
+			return true;
+		}
+
+		// PNG: 89 50 4E 47
+		if (fileContent[0] == 0x89 && fileContent[1] == 0x50 && fileContent[2] == 0x4E && fileContent[3] == 0x47)
+		{
+			return true;
+		}
+
+		// GIF: 47 49 46 38
+		if (fileContent[0] == 0x47 && fileContent[1] == 0x49 && fileContent[2] == 0x46 && fileContent[3] == 0x38)
+		{
+			return true;
+		}
+
+		// WebP: RIFF....WEBP (check for RIFF and WEBP signatures)
+		if (fileContent.Length >= 12 &&
+		    fileContent[0] == 0x52 && fileContent[1] == 0x49 && fileContent[2] == 0x46 && fileContent[3] == 0x46 && // RIFF
+		    fileContent[8] == 0x57 && fileContent[9] == 0x45 && fileContent[10] == 0x42 && fileContent[11] == 0x50) // WEBP
+		{
+			return true;
+		}
+
+		return false;
 	}
 
 	private async Task<string> GenerateEmployeeCodeAsync(

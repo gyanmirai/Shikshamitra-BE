@@ -23,7 +23,7 @@ CrudAppService<Employee, EmployeeDto, Guid, PagedAndSortedResultRequestDto, Crea
 employeeRepository),
 IEmployeeAppService
 {
-	public async Task<EmployeeDto?> GetEmployeeByUserId(Guid userId)
+	public async Task<EmployeeDto> GetEmployeeByUserId(Guid userId)
 	{
 		// Navigation properties (Role, EducationMediumStage, Shift) are auto-loaded
 		Employee employee = await employeeRepository.GetEmployeeByUserIdAsync(userId) 
@@ -354,16 +354,45 @@ IEmployeeAppService
 			return null;
 		}
 
-		await using var stream = await blobContainer.GetAsync(employee.ProfilePictureBlobName);
-		await using var memoryStream = new MemoryStream();
-		await stream.CopyToAsync(memoryStream);
-
-		return new DocumentDto
+		try
 		{
-			FileName = employee.ProfilePictureBlobName,
-			ContentType = "image/jpeg", // or determine from blob metadata
-			Content = memoryStream.ToArray(),
-			Size = memoryStream.Length
+			await using var stream = await blobContainer.GetAsync(employee.ProfilePictureBlobName);
+			await using var memoryStream = new MemoryStream();
+			await stream.CopyToAsync(memoryStream);
+
+			// Determine content type from file extension
+			var contentType = GetContentTypeFromFileName(employee.ProfilePictureBlobName);
+
+			return new DocumentDto
+			{
+				FileName = employee.ProfilePictureBlobName,
+				ContentType = contentType,
+				Content = memoryStream.ToArray(),
+				Size = memoryStream.Length
+			};
+		}
+		catch (Exception)
+		{
+			// Blob was deleted externally or doesn't exist
+			// Return null to indicate profile picture is not available
+			return null;
+		}
+	}
+
+	private static string GetContentTypeFromFileName(string fileName)
+	{
+		var extension = Path.GetExtension(fileName)?.ToLowerInvariant();
+		
+		return extension switch
+		{
+			".jpg" or ".jpeg" => "image/jpeg",
+			".png" => "image/png",
+			".gif" => "image/gif",
+			".bmp" => "image/bmp",
+			".webp" => "image/webp",
+			".svg" => "image/svg+xml",
+			".ico" => "image/x-icon",
+			_ => "application/octet-stream" // Fallback for unknown types
 		};
 	}
 }

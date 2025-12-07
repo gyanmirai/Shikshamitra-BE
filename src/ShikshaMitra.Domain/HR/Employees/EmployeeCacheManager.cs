@@ -242,13 +242,21 @@ public class EmployeeCacheManager : IEmployeeCacheManager, ITransientDependency
 		await _codeToEmployeeIdCache.RemoveAsync(lookupKey, token: cancellationToken);
 	}
 
-	public async Task ClearAllAsync(CancellationToken cancellationToken = default)
+	public Task ClearAllAsync(CancellationToken cancellationToken = default)
 	{
-		// Note: This requires cache key pattern support in your cache provider
-		// For Redis, you can use SCAN command
-		// For in-memory cache, you might need to track keys separately
-		// This is a placeholder - implement based on your cache provider
-		await Task.CompletedTask;
+		// ClearAll is not supported by ABP's IDistributedCache without pattern matching.
+		// Throwing NotSupportedException to prevent misleading behavior where callers
+		// think the cache was cleared but nothing actually happened.
+		throw new NotSupportedException(
+			"ClearAllAsync is not supported. " +
+			"ABP's IDistributedCache does not provide pattern-based key deletion. " +
+			"To invalidate employee caches: " +
+			"(1) Use InvalidateEmployeeAsync(employeeId) for specific employees, " +
+			"(2) Use InvalidateByUserIdAsync(userId) or InvalidateByCodeAsync(code) for lookups, " +
+			"(3) Wait for automatic cache expiration (15 minutes for employee data, 5 minutes for lookups), or " +
+			"(4) Restart the cache server. " +
+			"For bulk cache invalidation, consider implementing a custom Redis-specific solution using the SCAN command."
+		);
 	}
 
 	private static EmployeeCacheItem MapToCache(Employee employee)

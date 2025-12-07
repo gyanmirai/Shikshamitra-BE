@@ -14,8 +14,9 @@ public interface
 	/// Retrieves an employee by the associated user ID.
 	/// </summary>
 	/// <param name="userId">The ID of the user.</param>
-	/// <returns>The Employee DTO if found; otherwise, null.</returns>
-	Task<EmployeeDto?> GetEmployeeByUserId(Guid userId);
+	/// <returns>The Employee DTO.</returns>
+	/// <exception cref="Volo.Abp.Domain.Entities.EntityNotFoundException">Thrown when employee is not found.</exception>
+	Task<EmployeeDto> GetEmployeeByUserId(Guid userId);
 
 	/// <summary>
 	/// Creates a new employee with basic information.

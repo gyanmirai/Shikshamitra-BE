@@ -387,43 +387,149 @@ foreach (var emp in employees)
 
 ## Testing
 
-### Unit Test Example
+> **Note:** The examples below follow ShikshaMitra's actual test patterns.  
+> For runnable examples, see [`test/ShikshaMitra.EntityFrameworkCore.Tests/EntityFrameworkCore/Samples/SampleRepositoryTests.cs`](../../../test/ShikshaMitra.EntityFrameworkCore.Tests/EntityFrameworkCore/Samples/SampleRepositoryTests.cs)
+
+### Unit Test Example - Querying Seeded Data
+
 ```csharp
-[Fact]
-public async Task Should_Load_Employee_With_AutoIncluded_Navigations()
+[Collection(ShikshaMitraTestConsts.CollectionDefinitionName)]
+public class EmployeeRepositoryTests : ShikshaMitraEntityFrameworkCoreTestBase
 {
-    // Arrange
-    var employeeId = Guid.NewGuid();
-    
-    // Act
-    var employee = await _employeeRepository.GetAsync(employeeId);
-    
-    // Assert
-    employee.ShouldNotBeNull();
-    employee.Role.ShouldNotBeNull();  // Auto-included
-    employee.EducationMediumStage.ShouldNotBeNull();  // Auto-included
+    private readonly IEmployeeRepository _employeeRepository;
+    private readonly IRepository<IdentityUser, Guid> _userRepository;
+
+    public EmployeeRepositoryTests()
+    {
+        _employeeRepository = GetRequiredService<IEmployeeRepository>();
+        _userRepository = GetRequiredService<IRepository<IdentityUser, Guid>>();
+    }
+
+    [Fact]
+    public async Task Should_Load_Employee_With_AutoIncluded_Navigations()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            // Arrange - Use seeded admin user
+            var adminUser = await (await _userRepository.GetQueryableAsync())
+                .Where(u => u.UserName == "admin")
+                .FirstOrDefaultAsync();
+            
+            adminUser.ShouldNotBeNull();
+            
+            // Get employee by user ID (from seeded data in HRSeederContributor)
+            var employee = await _employeeRepository.GetEmployeeByUserIdAsync(adminUser.Id);
+            
+            // Assert - Navigation properties should be auto-loaded
+            employee.ShouldNotBeNull();
+            employee.Role.ShouldNotBeNull();  // Auto-included
+            employee.EducationMediumStage.ShouldNotBeNull();  // Auto-included
+        });
+    }
 }
 ```
 
-### Integration Test Example
+### Integration Test Example - Query Optimization Verification
+
+> **Important:** This is a conceptual example showing eager loading verification.  
+> The project does not currently have a `QueryLogger` utility. To verify query counts:
+> - Use EF Core's `ToQueryString()` to inspect generated SQL
+> - Enable EF Core logging in test configuration
+> - Use database profiler tools (SQL Server Profiler, pgAdmin)
+> - Implement custom `DbCommandInterceptor` to count queries
+
+```csharp
+// Conceptual example - Demonstrates the expected behavior
+[Fact]
+public async Task Should_Execute_Single_Query_For_Employee_List_With_EagerLoading()
+{
+    await WithUnitOfWorkAsync(async () =>
+    {
+        // Arrange - Get queryable with eager loading configured
+        var query = await _employeeRepository.GetQueryableAsync();
+        
+        // Act - Execute query (AutoInclude handles Role, EducationMediumStage, Shift)
+        var employees = await query.Take(10).ToListAsync();
+        
+        // Assert - Verify all navigation properties are loaded (no lazy loading!)
+        employees.ShouldNotBeEmpty();
+        employees.All(e => e.Role != null).ShouldBeTrue();
+        employees.All(e => e.EducationMediumStage != null).ShouldBeTrue();
+        
+        // Note: In a real scenario with query counting implemented, you would verify:
+        // queryCounter.Count.ShouldBe(1); // Only 1 query executed
+    });
+}
+```
+
+### Practical Test Example - Filtering with Indexes
+
 ```csharp
 [Fact]
-public async Task Should_Execute_Single_Query_For_Employee_List()
+public async Task Should_Filter_Employees_By_Status_Using_CompositeIndex()
 {
-    // Arrange
-    await CreateTestEmployeesAsync(100);
-    
-    // Act
-    using (var queryLogger = new QueryLogger())
+    await WithUnitOfWorkAsync(async () =>
     {
-        var employees = await _employeeRepository.GetListAsync();
+        // Arrange - Query uses composite index (TenantId + EmployeeStatusType)
+        var queryable = await _employeeRepository.GetQueryableAsync();
+        
+        // Act - Filter by status
+        var activeEmployees = await queryable
+            .Where(e => e.EmployeeStatusType == EmployeeStatusType.Active)
+            .ToListAsync();
         
         // Assert
-        queryLogger.QueryCount.ShouldBe(1);  // Only 1 query!
-        employees.Count.ShouldBe(100);
-        employees.All(e => e.Role != null).ShouldBeTrue();
+        activeEmployees.ShouldNotBeEmpty();
+        activeEmployees.All(e => e.EmployeeStatusType == EmployeeStatusType.Active)
+            .ShouldBeTrue();
+    });
+}
+```
+
+### Test Helpers Reference
+
+**Available in Project:**
+- `ShikshaMitraEntityFrameworkCoreTestBase` - Base class for EF Core tests
+- `WithUnitOfWorkAsync()` - Wraps test code in a unit of work for db context availability
+- `GetRequiredService<T>()` - Resolves dependencies from DI container
+- Seeded data includes:
+  - `admin` user (username: "admin") - See `HRSeederContributor.cs`
+  - Teacher employee with full profile
+  - Associated roles, education medium stages
+
+**For Query Counting (Recommended Implementation):**
+Create a custom interceptor to track SQL queries:
+
+```csharp
+public class QueryCounterInterceptor : DbCommandInterceptor
+{
+    public int QueryCount { get; private set; }
+    
+    public override InterceptionResult<DbDataReader> ReaderExecuting(
+        DbCommand command, 
+        CommandEventData eventData, 
+        InterceptionResult<DbDataReader> result)
+    {
+        QueryCount++;
+        return base.ReaderExecuting(command, eventData, result);
+    }
+    
+    public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<DbDataReader> result,
+        CancellationToken cancellationToken = default)
+    {
+        QueryCount++;
+        return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
     }
 }
+```
+
+**See Also:**
+- [`test/ShikshaMitra.EntityFrameworkCore.Tests/EntityFrameworkCore/Samples/SampleRepositoryTests.cs`](../../../test/ShikshaMitra.EntityFrameworkCore.Tests/EntityFrameworkCore/Samples/SampleRepositoryTests.cs) - Example repository tests following project patterns
+- [`src/ShikshaMitra.Domain/Seeders/HRSeederContributor.cs`](../../../src/ShikshaMitra.Domain/Seeders/HRSeederContributor.cs) - Seeded test data available in tests
+- [ABP Testing Documentation](https://docs.abp.io/en/abp/latest/Testing) - ABP Framework testing best practices
 ```
 
 ## Database Indexes

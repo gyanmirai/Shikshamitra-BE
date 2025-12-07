@@ -189,6 +189,12 @@ public class HRSeederContributor(
 
 		// Get the user id with email address
 		var user = users.Find(u => u.Email == $"{emailDomain}@gmail.com");
+		
+		// Validate that admin user exists before creating employee
+		if (user == null)
+		{
+			throw new Exception($"Admin user with email '{emailDomain}@gmail.com' not found. Please ensure the admin user is created before seeding employee data.");
+		}
 
 		employees.Add(new Employee(
 			id: GuidGenerator.Create(),

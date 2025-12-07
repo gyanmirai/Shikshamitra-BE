@@ -256,15 +256,18 @@ IEmployeeAppService
 		var employee = await employeeRepository.GetAsync(employeeId)
 			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
 
-		// Map to DTO
+		// Handle null AdditionalDetails for older records by initializing with defaults
+		var additionalDetails = employee.AdditionalDetails ?? EmployeeAdditionalDetails.CreateDefault();
+
+		// Map to DTO using null-safe accessors
 		return new EmployeeAdditionalDetailsDto
 		{
 			EmployeeCode = employee.EmployeeCode,
-			BplCardNo = employee.AdditionalDetails.BplCardNo,
-			PersonWithDisability = employee.AdditionalDetails.PersonWithDisability,
-			SecondLanguage = employee.AdditionalDetails.SecondLanguage,
-			LibraryMember = employee.AdditionalDetails.LibraryMember,
-			TransportMember = employee.AdditionalDetails.TransportMember
+			BplCardNo = additionalDetails.BplCardNo,
+			PersonWithDisability = additionalDetails.PersonWithDisability,
+			SecondLanguage = additionalDetails.SecondLanguage,
+			LibraryMember = additionalDetails.LibraryMember,
+			TransportMember = additionalDetails.TransportMember
 		};
 	}
 

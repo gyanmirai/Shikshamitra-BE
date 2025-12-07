@@ -1975,12 +1975,12 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("DisplayOrder")
                         .HasDatabaseName("IX_DeductionComponents_DisplayOrder");
 
-                    b.HasIndex("Name")
-                        .IsUnique()
-                        .HasDatabaseName("IX_DeductionComponents_Name");
-
                     b.HasIndex("TenantId", "IsActive")
                         .HasDatabaseName("IX_DeductionComponents_TenantId_IsActive");
+
+                    b.HasIndex("TenantId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("IX_DeductionComponents_TenantId_Name");
 
                     b.ToTable("AppDeductionComponents", (string)null);
                 });
@@ -2076,12 +2076,12 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("DisplayOrder")
                         .HasDatabaseName("IX_EarningComponents_DisplayOrder");
 
-                    b.HasIndex("Name")
-                        .IsUnique()
-                        .HasDatabaseName("IX_EarningComponents_Name");
-
                     b.HasIndex("TenantId", "IsActive")
                         .HasDatabaseName("IX_EarningComponents_TenantId_IsActive");
+
+                    b.HasIndex("TenantId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("IX_EarningComponents_TenantId_Name");
 
                     b.ToTable("AppEarningComponents", (string)null);
                 });

@@ -46,9 +46,10 @@ public class EarningComponentConfiguration : IEntityTypeConfiguration<EarningCom
 			.HasDefaultValue(true);
 
 		// Indexes for performance
-		builder.HasIndex(x => x.Name)
+		// Unique index on TenantId + Name to ensure uniqueness per tenant
+		builder.HasIndex(x => new { x.TenantId, x.Name })
 			.IsUnique()
-			.HasDatabaseName("IX_EarningComponents_Name");
+			.HasDatabaseName("IX_EarningComponents_TenantId_Name");
 
 		builder.HasIndex(x => new { x.TenantId, x.IsActive })
 			.HasDatabaseName("IX_EarningComponents_TenantId_IsActive");

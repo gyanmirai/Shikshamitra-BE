@@ -23,8 +23,14 @@ public class EarningComponentAppService : CrudAppService<
 {
 	private readonly EarningComponentManager _earningComponentManager;
 	private readonly IDistributedCache<PagedResultDto<EarningComponentDto>> _cache;
+	
+	// Base cache key for all active earning components
+	private string GetBaseCacheKey() => 
+		$"EarningComponents:Active:Tenant:{CurrentTenant?.Id ?? Guid.Empty}";
+	
+	// Paginated cache key
 	private string GetActiveCacheKey(int skipCount, int maxResultCount) => 
-		$"EarningComponents:Active:Tenant:{CurrentTenant?.Id ?? Guid.Empty}:Skip:{skipCount}:Take:{maxResultCount}";
+		$"{GetBaseCacheKey()}:Skip:{skipCount}:Take:{maxResultCount}";
 
 	public EarningComponentAppService(
 		IRepository<EarningComponent, Guid> repository,
@@ -173,20 +179,31 @@ public class EarningComponentAppService : CrudAppService<
 
 	private async Task ClearCacheAsync()
 	{
-		// Clear all pagination cache entries by removing common pagination keys
-		// Note: This is a simplified approach. For production, consider using cache tags or patterns
-		var commonPaginationKeys = new[]
+		// Clear cache by removing common pagination combinations
+		// Since IDistributedCache doesn't support pattern-based removal out of the box,
+		// we generate cache keys for common pagination scenarios
+		
+		var baseCacheKey = GetBaseCacheKey();
+		var cacheKeysToRemove = new List<string>();
+		
+		// Common page sizes used in the application
+		int[] commonPageSizes = { 10, 25, 50, 100 };
+		
+		// For each page size, clear first few pages (covers most access patterns)
+		// Adjust maxPages based on your typical data volume
+		int maxPages = 10;
+		
+		foreach (var pageSize in commonPageSizes)
 		{
-			GetActiveCacheKey(0, 10),
-			GetActiveCacheKey(0, 25),
-			GetActiveCacheKey(0, 50),
-			GetActiveCacheKey(0, 100)
-		};
-
-		foreach (var key in commonPaginationKeys)
-		{
-			await _cache.RemoveAsync(key);
+			for (int page = 0; page < maxPages; page++)
+			{
+				int skipCount = page * pageSize;
+				cacheKeysToRemove.Add(GetActiveCacheKey(skipCount, pageSize));
+			}
 		}
+		
+		// Use RemoveManyAsync for better performance (single operation vs multiple awaits)
+		await _cache.RemoveManyAsync(cacheKeysToRemove);
 	}
 
 	private IQueryable<EarningComponent> ApplySorting(IQueryable<EarningComponent> queryable, string sorting)
@@ -197,30 +214,59 @@ public class EarningComponentAppService : CrudAppService<
 		}
 
 		var sortingParts = sorting.Split(',');
+		IOrderedQueryable<EarningComponent>? orderedQueryable = null;
+		bool isFirstSort = true;
+
 		foreach (var sortPart in sortingParts)
 		{
 			var parts = sortPart.Trim().Split(' ');
 			var property = parts[0];
 			var direction = parts.Length > 1 ? parts[1].ToUpper() : "ASC";
 
-			queryable = property.ToLower() switch
+			if (isFirstSort)
 			{
-				"name" => direction == "DESC" 
-					? queryable.OrderByDescending(x => x.Name) 
-					: queryable.OrderBy(x => x.Name),
-				"componenttype" => direction == "DESC"
-					? queryable.OrderByDescending(x => x.ComponentType)
-					: queryable.OrderBy(x => x.ComponentType),
-				"displayorder" => direction == "DESC"
-					? queryable.OrderByDescending(x => x.DisplayOrder)
-					: queryable.OrderBy(x => x.DisplayOrder),
-				"isactive" => direction == "DESC"
-					? queryable.OrderByDescending(x => x.IsActive)
-					: queryable.OrderBy(x => x.IsActive),
-				_ => queryable.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name)
-			};
+				// First sort: use OrderBy/OrderByDescending
+				orderedQueryable = property.ToLower() switch
+				{
+					"name" => direction == "DESC" 
+						? queryable.OrderByDescending(x => x.Name) 
+						: queryable.OrderBy(x => x.Name),
+					"componenttype" => direction == "DESC"
+						? queryable.OrderByDescending(x => x.ComponentType)
+						: queryable.OrderBy(x => x.ComponentType),
+					"displayorder" => direction == "DESC"
+						? queryable.OrderByDescending(x => x.DisplayOrder)
+						: queryable.OrderBy(x => x.DisplayOrder),
+					"isactive" => direction == "DESC"
+						? queryable.OrderByDescending(x => x.IsActive)
+						: queryable.OrderBy(x => x.IsActive),
+					_ => queryable.OrderBy(x => x.DisplayOrder)
+				};
+				isFirstSort = false;
+			}
+			else
+			{
+				// Subsequent sorts: use ThenBy/ThenByDescending
+				orderedQueryable = property.ToLower() switch
+				{
+					"name" => direction == "DESC" 
+						? orderedQueryable!.ThenByDescending(x => x.Name) 
+						: orderedQueryable!.ThenBy(x => x.Name),
+					"componenttype" => direction == "DESC"
+						? orderedQueryable!.ThenByDescending(x => x.ComponentType)
+						: orderedQueryable!.ThenBy(x => x.ComponentType),
+					"displayorder" => direction == "DESC"
+						? orderedQueryable!.ThenByDescending(x => x.DisplayOrder)
+						: orderedQueryable!.ThenBy(x => x.DisplayOrder),
+					"isactive" => direction == "DESC"
+						? orderedQueryable!.ThenByDescending(x => x.IsActive)
+						: orderedQueryable!.ThenBy(x => x.IsActive),
+					_ => orderedQueryable!.ThenBy(x => x.Name)
+				};
+			}
 		}
 
-		return queryable;
+		// Apply default fallback if no valid sort was applied
+		return orderedQueryable ?? queryable.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name);
 	}
 }

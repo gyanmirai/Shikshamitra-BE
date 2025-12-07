@@ -558,7 +558,7 @@ public class EmployeeManager(
 		const long maxFileSizeBytes = 5 * 1024 * 1024; // 5MB
 		if (fileContent.Length > maxFileSizeBytes)
 		{
-			throw new BusinessException($"File size cannot exceed {maxFileSizeBytes / 1024 / 1024}MB. Current size: {fileContent.Length / 1024 / 1024}MB.");
+			throw new BusinessException($"File size cannot exceed {maxFileSizeBytes / 1024.0 / 1024.0:F2}MB. Current size: {fileContent.Length / 1024.0 / 1024.0:F2}MB.");
 		}
 
 		// Validate file type by extension

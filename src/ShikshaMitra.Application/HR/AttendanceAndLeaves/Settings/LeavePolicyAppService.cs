@@ -20,8 +20,14 @@ public class LeavePolicyAppService : CrudAppService<
 {
 	private readonly LeavePolicyManager _leavePolicyManager;
 	private readonly IDistributedCache<PagedResultDto<LeavePolicyDto>> _cache;
+	
+	// Base cache key for all active leave policies
+	private string GetBaseCacheKey() => 
+		$"EmployeeLeavePolicies:Active:Tenant:{CurrentTenant?.Id ?? Guid.Empty}";
+	
+	// Paginated cache key
 	private string GetActiveCacheKey(int skipCount, int maxResultCount) => 
-		$"EmployeeLeavePolicies:Active:Tenant:{CurrentTenant?.Id ?? Guid.Empty}:Skip:{skipCount}:Take:{maxResultCount}";
+		$"{GetBaseCacheKey()}:Skip:{skipCount}:Take:{maxResultCount}";
 
 	public LeavePolicyAppService(
 		IRepository<LeavePolicy, Guid> repository,
@@ -144,21 +150,30 @@ public class LeavePolicyAppService : CrudAppService<
 
 	private async Task ClearCacheAsync()
 	{
-		// Clear all pagination cache entries by removing with pattern matching
-		// Note: This is a simplified approach. For production, consider using cache tags or patterns
-		var baseCacheKey = $"EmployeeLeavePolicies:Active:Tenant:{CurrentTenant?.Id ?? Guid.Empty}";
-		// Since IDistributedCache doesn't support pattern removal, we'll need to clear specific common pagination keys
-		var commonPaginationKeys = new[]
+		// Clear cache by removing common pagination combinations
+		// Since IDistributedCache doesn't support pattern-based removal out of the box,
+		// we generate cache keys for common pagination scenarios
+		
+		var baseCacheKey = GetBaseCacheKey();
+		var cacheKeysToRemove = new List<string>();
+		
+		// Common page sizes used in the application
+		int[] commonPageSizes = { 10, 25, 50, 100 };
+		
+		// For each page size, clear first few pages (covers most access patterns)
+		// Adjust maxPages based on your typical data volume
+		int maxPages = 10;
+		
+		foreach (var pageSize in commonPageSizes)
 		{
-			GetActiveCacheKey(0, 10),
-			GetActiveCacheKey(0, 25),
-			GetActiveCacheKey(0, 50),
-			GetActiveCacheKey(0, 100)
-		};
-
-		foreach (var key in commonPaginationKeys)
-		{
-			await _cache.RemoveAsync(key);
+			for (int page = 0; page < maxPages; page++)
+			{
+				int skipCount = page * pageSize;
+				cacheKeysToRemove.Add(GetActiveCacheKey(skipCount, pageSize));
+			}
 		}
+		
+		// Use RemoveManyAsync for better performance (single operation vs multiple awaits)
+		await _cache.RemoveManyAsync(cacheKeysToRemove);
 	}
 }

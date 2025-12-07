@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -121,20 +121,22 @@ public class EarningComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Check.NotNullOrWhiteSpace(amount, nameof(amount));
 		Check.Length(amount, nameof(amount), EarningComponentConsts.MaxAmountLength);
 		
-		// Validate amount format based on component type and dependency
-		if (componentType == EarningComponentType.Fixed && dependOn == ComponentDependency.None)
+		var amountTrimmed = amount.Trim();
+		
+		// Validate amount format based on dependency type
+		if (dependOn == ComponentDependency.None)
 		{
-			// For fixed components with no dependency, amount should be numeric
-			if (!decimal.TryParse(amount, out var numericAmount) || numericAmount < 0)
+			// For components with no dependency (regardless of type), amount must be numeric
+			if (!decimal.TryParse(amountTrimmed, out var numericAmount) || numericAmount < 0)
 			{
 				throw new BusinessException("ShikshaMitra:InvalidAmount")
-					.WithData("message", "Amount must be a valid non-negative number for fixed components.");
+					.WithData("message", "Amount must be a valid non-negative number for components with no dependency.");
 			}
+			Amount = amountTrimmed;
 		}
-		else if (dependOn != ComponentDependency.None)
+		else
 		{
 			// For dependent components, amount can be either numeric or percentage
-			var amountTrimmed = amount.Trim();
 			if (amountTrimmed.EndsWith("%"))
 			{
 				var percentageStr = amountTrimmed.TrimEnd('%');
@@ -152,9 +154,8 @@ public class EarningComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 						.WithData("message", "Amount must be a valid non-negative number or percentage.");
 				}
 			}
+			Amount = amount;
 		}
-		
-		Amount = amount;
 	}
 }
 

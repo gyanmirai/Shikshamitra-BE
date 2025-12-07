@@ -245,6 +245,58 @@ IEmployeeAppService
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
 	}
 
+	public async Task<EmployeeAdditionalDetailsDto> GetAdditionalDetailsAsync(Guid employeeId)
+	{
+		// Get employee using cached repository method
+		var employee = await employeeRepository.GetAsync(employeeId)
+			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
+
+		// Map to DTO
+		return new EmployeeAdditionalDetailsDto
+		{
+			EmployeeCode = employee.EmployeeCode,
+			BplCardNo = employee.AdditionalDetails.BplCardNo,
+			PersonWithDisability = employee.AdditionalDetails.PersonWithDisability,
+			SecondLanguage = employee.AdditionalDetails.SecondLanguage,
+			LibraryMember = employee.AdditionalDetails.LibraryMember,
+			TransportMember = employee.AdditionalDetails.TransportMember
+		};
+	}
+
+	public async Task<EmployeeAdditionalDetailsDto> UpdateAdditionalDetailsAsync(
+		Guid employeeId,
+		UpdateEmployeeAdditionalDetailsDto input)
+	{
+		// Create the value object with validation
+		var additionalDetails = new EmployeeAdditionalDetails(
+			input.BplCardNo,
+			input.PersonWithDisability,
+			input.SecondLanguage,
+			input.LibraryMember,
+			input.TransportMember
+		);
+
+		// Update employee using manager
+		var employee = await employeeManager.UpdateAdditionalDetailsByEmployeeIdAsync(
+			employeeId,
+			additionalDetails
+		);
+
+		// Save the employee (cache invalidation handled in repository)
+		employee = await employeeRepository.UpdateAsync(employee);
+
+		// Return success response
+		return new EmployeeAdditionalDetailsDto
+		{
+			EmployeeCode = employee.EmployeeCode,
+			BplCardNo = employee.AdditionalDetails.BplCardNo,
+			PersonWithDisability = employee.AdditionalDetails.PersonWithDisability,
+			SecondLanguage = employee.AdditionalDetails.SecondLanguage,
+			LibraryMember = employee.AdditionalDetails.LibraryMember,
+			TransportMember = employee.AdditionalDetails.TransportMember
+		};
+	}
+
 	public async Task<EmployeeDto> UpdateEmployeeStatus(Guid employeeId, EmployeeStatusType employeeStatusType,
 		string? changeReason)
 	{

@@ -56,6 +56,8 @@ var lastEmployee = await _employeeRepository.GetLastEmployeeAsync();
 | PUT | `/api/app/employee/{id}/bank-details` | Update bank details |
 | PUT | `/api/app/employee/{id}/status` | Update employee status |
 | PUT | `/api/app/employee/{id}/payroll-structure` | Update payroll structure |
+| GET | `/api/app/employee/{id}/additional-details` | Get additional details (BPL, disability, etc.) |
+| PUT | `/api/app/employee/{id}/additional-details` | Update additional details |
 
 ### Profile Picture Operations
 | Method | Endpoint | Description |

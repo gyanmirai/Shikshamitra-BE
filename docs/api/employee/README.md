@@ -80,6 +80,24 @@ Distributed caching strategy and implementation:
 
 ---
 
+#### [Additional Details API](./Employee-AdditionalDetails-API.md) 📋
+**Best for:** Frontend Developers, Backend Developers
+
+API endpoints for managing supplementary employee information:
+- BPL card details
+- Disability status
+- Language preferences
+- Library and transport memberships
+- Complete request/response examples
+
+**What you'll learn:**
+- GET and PUT endpoints
+- Validation rules
+- Error handling
+- Frontend integration examples
+
+---
+
 ## 🎯 Quick Navigation by Role
 
 ### For New Developers

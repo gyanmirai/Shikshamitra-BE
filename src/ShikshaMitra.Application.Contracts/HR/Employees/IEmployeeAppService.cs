@@ -48,6 +48,21 @@ public interface
 	/// <returns>The updated Employee DTO.</returns>
 	Task<EmployeeDto> UpdateBankDetails(Guid employeeId, BankDetailsDto input);
 
+	/// <summary>
+	/// Gets the additional details for an employee.
+	/// </summary>
+	/// <param name="employeeId">The ID of the employee.</param>
+	/// <returns>Employee additional details DTO.</returns>
+	Task<EmployeeAdditionalDetailsDto> GetAdditionalDetailsAsync(Guid employeeId);
+
+	/// <summary>
+	/// Updates the additional details for an employee.
+	/// </summary>
+	/// <param name="employeeId">The ID of the employee.</param>
+	/// <param name="input">The DTO containing updated additional details.</param>
+	/// <returns>Updated additional details DTO.</returns>
+	Task<EmployeeAdditionalDetailsDto> UpdateAdditionalDetailsAsync(Guid employeeId, UpdateEmployeeAdditionalDetailsDto input);
+
 	Task UploadDocumentsAsync(Guid employeeId, List<DocumentDto> documentDtos);
 	Task<DocumentDto> GetDocumentAsync(Guid employeeId, Guid documentId);
 	Task<List<DocumentMetadataDto>> GetDocumentMetadataAsync(Guid employeeId);

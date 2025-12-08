@@ -1,7 +1,10 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Common;
+using ShikshaMitra.Students.Attendance.Settings;
+using ShikshaMitra.Students.Attendances.Settings;
 using ShikshaMitra.Students.StudentDetails;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
 using System;
 using System.Linq;
 
@@ -11,6 +14,47 @@ public class StudentMapperProfile : Profile
 {
 	public StudentMapperProfile()
 	{
+		// Entrance Exam Slot mappings
+		CreateMap<EntranceExamSlot, EntranceExamSlotDto>()
+			.ForMember(dest => dest.Date,
+				opt => opt.MapFrom(src => src.StartDate.Date))
+			.ForMember(dest => dest.StartTime,
+				opt => opt.MapFrom(src => src.StartDate.TimeOfDay))
+			.ForMember(dest => dest.EndTime,
+				opt => opt.MapFrom(src => src.EndDate.TimeOfDay))
+			.ForMember(dest => dest.Duration,
+				opt => opt.MapFrom(src => (int)(src.EndDate - src.StartDate).TotalMinutes))
+			.ForMember(dest => dest.EnrolledStudents,
+				opt => opt.Ignore()) // Will be set manually in app service
+			.ForMember(dest => dest.AvailableSeats,
+				opt => opt.Ignore()); // Will be set manually in app service
+
+		CreateMap<EntranceExamSlot, EntranceExamSlotDetailDto>()
+			.IncludeBase<EntranceExamSlot, EntranceExamSlotDto>()
+			.ForMember(dest => dest.CreatedTime,
+				opt => opt.MapFrom(src => src.CreationTime))
+			.ForMember(dest => dest.LastModifiedTime,
+				opt => opt.MapFrom(src => src.LastModificationTime));
+
+		CreateMap<EntranceExamSlot, AvailableExamSlotDto>()
+			.ForMember(dest => dest.Date,
+				opt => opt.MapFrom(src => src.StartDate.Date))
+			.ForMember(dest => dest.StartTime,
+				opt => opt.MapFrom(src => src.StartDate.TimeOfDay))
+			.ForMember(dest => dest.EndTime,
+				opt => opt.MapFrom(src => src.EndDate.TimeOfDay))
+			.ForMember(dest => dest.AvailableSeats,
+				opt => opt.Ignore()) // Will be set manually
+			.ForMember(dest => dest.DisplayText,
+				opt => opt.Ignore()); // Will be set manually
+
+
+		// Student Leave Type mappings
+		CreateMap<StudentLeaveType, StudentLeaveTypeDto>();
+		CreateMap<CreateUpdateStudentLeaveTypeDto, StudentLeaveType>();
+
+
+
 		CreateMap<Student, StudentInquiryDto>();
 
 		// Create a mapping from the anonymous type result to StudentInquiryDto

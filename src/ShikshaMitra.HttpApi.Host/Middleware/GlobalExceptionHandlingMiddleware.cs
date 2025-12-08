@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common.Responses;
+using ShikshaMitra.Localization;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -21,11 +23,16 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 {
 	private readonly RequestDelegate _next;
 	private readonly ILogger<GlobalExceptionHandlingMiddleware> _logger;
+	private readonly IStringLocalizer<ShikshaMitraResource> _localizer;
 
-	public GlobalExceptionHandlingMiddleware(RequestDelegate next, ILogger<GlobalExceptionHandlingMiddleware> logger)
+	public GlobalExceptionHandlingMiddleware(
+		RequestDelegate next, 
+		ILogger<GlobalExceptionHandlingMiddleware> logger,
+		IStringLocalizer<ShikshaMitraResource> localizer)
 	{
 		_next = next;
 		_logger = logger;
+		_localizer = localizer;
 	}
 
 	public async Task InvokeAsync(HttpContext context)
@@ -74,15 +81,18 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 			context.Response.Clear();
 		}
 
-		var errorMessage = GetErrorMessageFromResponse(responseBody, statusCode);
+		var (errorCode, errorMessage, errorData) = GetErrorDetailsFromResponse(responseBody, statusCode);
+
+		// Localize the error message if it looks like a localization key
+		var localizedMessage = LocalizeErrorMessage(errorCode ?? errorMessage, errorData);
 
 		var error = statusCode switch
 		{
-			400 => Error.Create("VALIDATION_ERROR", errorMessage),
-			401 => Error.Create("UNAUTHORIZED", errorMessage),
-			403 => Error.Create("FORBIDDEN", errorMessage),
-			404 => Error.Create("NOT_FOUND", errorMessage),
-			_ => Error.Create("ERROR", errorMessage)
+			400 => Error.Create("VALIDATION_ERROR", localizedMessage),
+			401 => Error.Create("UNAUTHORIZED", localizedMessage),
+			403 => Error.Create("FORBIDDEN", localizedMessage),
+			404 => Error.Create("NOT_FOUND", localizedMessage),
+			_ => Error.Create("ERROR", localizedMessage)
 		};
 
 		var result = Result.Failure(error);
@@ -98,7 +108,7 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 		await context.Response.WriteAsync(jsonResponse);
 	}
 
-	private static string GetErrorMessageFromResponse(string responseBody, int statusCode)
+	private (string? ErrorCode, string ErrorMessage, Dictionary<string, object>? ErrorData) GetErrorDetailsFromResponse(string responseBody, int statusCode)
 	{
 		try
 		{
@@ -125,7 +135,7 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 
 					if (validationErrors.Any())
 					{
-						return string.Join("; ", validationErrors);
+						return (null, string.Join("; ", validationErrors), null);
 					}
 
 					// If we have a title, use that
@@ -134,7 +144,7 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 						var title = titleElement.GetString();
 						if (!string.IsNullOrEmpty(title))
 						{
-							return title;
+							return (null, title, null);
 						}
 					}
 				}
@@ -142,23 +152,42 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 				// Check for ABP error structure
 				else if (jsonDoc.RootElement.TryGetProperty("error", out var errorElement))
 				{
-					// Check for code first
+					string? errorCode = null;
+					string? errorMessage = null;
+					Dictionary<string, object>? errorData = null;
+
+					// Check for code
 					if (errorElement.TryGetProperty("code", out var codeElement))
 					{
-						var code = codeElement.GetString();
-						if (!string.IsNullOrEmpty(code))
+						errorCode = codeElement.GetString();
+					}
+
+					// Check for message
+					if (errorElement.TryGetProperty("message", out var messageElement))
+					{
+						errorMessage = messageElement.GetString();
+					}
+
+					// Check for data
+					if (errorElement.TryGetProperty("data", out var dataElement))
+					{
+						errorData = new Dictionary<string, object>();
+						foreach (var property in dataElement.EnumerateObject())
 						{
-							return code;
+							errorData[property.Name] = property.Value.ToString();
 						}
 					}
 
-					if (errorElement.TryGetProperty("message", out var messageElement))
+					// If we have a code, return it for localization
+					if (!string.IsNullOrEmpty(errorCode))
 					{
-						var message = messageElement.GetString();
-						if (!string.IsNullOrEmpty(message))
-						{
-							return message;
-						}
+						return (errorCode, errorMessage ?? errorCode, errorData);
+					}
+
+					// Otherwise return message
+					if (!string.IsNullOrEmpty(errorMessage))
+					{
+						return (null, errorMessage, errorData);
 					}
 
 					// If message is empty, try details
@@ -167,7 +196,7 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 						var details = detailsElement.GetString();
 						if (!string.IsNullOrEmpty(details))
 						{
-							return details;
+							return (null, details, errorData);
 						}
 					}
 				}
@@ -178,7 +207,7 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 					var title = simpleTitleElement.GetString();
 					if (!string.IsNullOrEmpty(title))
 					{
-						return title;
+						return (null, title, null);
 					}
 				}
 			}
@@ -189,7 +218,7 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 		}
 
 		// Fallback to default messages based on status code
-		return statusCode switch
+		var defaultMessage = statusCode switch
 		{
 			400 => "Validation failed",
 			401 => "Unauthorized access",
@@ -197,9 +226,47 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 			404 => "Resource not found",
 			_ => "An error occurred"
 		};
+
+		return (null, defaultMessage, null);
 	}
 
-	private static async Task HandleExceptionAsync(HttpContext context, Exception exception)
+	private string LocalizeErrorMessage(string messageOrCode, Dictionary<string, object>? errorData)
+	{
+		try
+		{
+			// Try to localize the message/code
+			var localizedString = _localizer[messageOrCode];
+			
+			// If localization is found and different from the key, use it
+			if (!localizedString.ResourceNotFound)
+			{
+				var message = localizedString.Value;
+				
+				// Replace placeholders with data from error if available
+				if (errorData != null && errorData.Count > 0)
+				{
+					foreach (var key in errorData.Keys)
+					{
+						var placeholder = $"{{{key}}}";
+						var value = errorData[key]?.ToString() ?? string.Empty;
+						message = message.Replace(placeholder, value);
+					}
+				}
+				
+				return message;
+			}
+			
+			// If localization not found, return the original message
+			return messageOrCode;
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "Failed to localize error message: {Message}", messageOrCode);
+			return messageOrCode;
+		}
+	}
+
+	private async Task HandleExceptionAsync(HttpContext context, Exception exception)
 	{
 		var (statusCode, error) = GetErrorDetails(exception);
 
@@ -216,7 +283,7 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 		await context.Response.WriteAsync(jsonResponse);
 	}
 
-	private static (int StatusCode, Error Error) GetErrorDetails(Exception exception)
+	private (int StatusCode, Error Error) GetErrorDetails(Exception exception)
 	{
 		return exception switch
 		{
@@ -238,7 +305,7 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 			),
 			BusinessException businessEx => (
 				(int) HttpStatusCode.BadRequest,
-				Error.Create(businessEx.Code ?? "BUSINESS_ERROR", businessEx.Message)
+				Error.Create(businessEx.Code ?? "BUSINESS_ERROR", GetLocalizedBusinessExceptionMessage(businessEx))
 			),
 			ArgumentException argEx => (
 				(int) HttpStatusCode.BadRequest,
@@ -267,5 +334,48 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 		}
 
 		return validationException.Message;
+	}
+
+	private string GetLocalizedBusinessExceptionMessage(BusinessException businessException)
+	{
+		if (string.IsNullOrEmpty(businessException.Code))
+		{
+			return businessException.Message ?? "A business error occurred";
+		}
+
+		try
+		{
+			// Try to localize the error code
+			var localizedString = _localizer[businessException.Code];
+			
+			// If localization is found and different from the key, use it
+			if (!localizedString.ResourceNotFound)
+			{
+				// Replace placeholders with data from exception if available
+				var message = localizedString.Value;
+				
+				if (businessException.Data != null && businessException.Data.Count > 0)
+				{
+					foreach (var key in businessException.Data.Keys)
+					{
+						var placeholder = $"{{{key}}}";
+						var value = businessException.Data[key]?.ToString() ?? string.Empty;
+						message = message.Replace(placeholder, value);
+					}
+				}
+				
+				return message;
+			}
+			
+			// If localization not found, return the error code or message
+			return !string.IsNullOrEmpty(businessException.Message) 
+				? businessException.Message 
+				: businessException.Code;
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "Failed to localize business exception code: {Code}", businessException.Code);
+			return businessException.Message ?? businessException.Code ?? "A business error occurred";
+		}
 	}
 }

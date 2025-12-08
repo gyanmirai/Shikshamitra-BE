@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -10,4 +11,5 @@ public class Building : AuditedAggregateRoot<Guid>, IMultiTenant
 	public string BuildingName { get; set; }
 	public int TotalFloors { get; set; }
 	public string? Description { get; set; }
+	public ICollection<Floor> Floors { get; set; } = new List<Floor>();
 }

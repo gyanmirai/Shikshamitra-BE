@@ -3,6 +3,8 @@ using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
+using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
+using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 
 namespace ShikshaMitra;
 
@@ -25,6 +27,14 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		
 		// Deduction Components
 		CreateMap<DeductionComponent, DeductionComponentDto>();
+
+		// Building and Floor mappings
+		CreateMap<Building, BuildingDto>();
+		CreateMap<Floor, FloorDto>();
+
+		// Room mappings
+		CreateMap<Room, RoomDto>();
+		CreateMap<CreateUpdateRoomDto, Room>();
 
 		// Document Types - Manual mapping used due to enum list conversion
 

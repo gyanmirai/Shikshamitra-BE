@@ -1,4 +1,5 @@
 ﻿using System;
+using ShikshaMitra.Students.StudentEnrollments;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -17,6 +18,21 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public Guid? InquiryPreferenceId { get; private set; }
 	public string? RegistrationFormNo { get; private set; }
 	public double? RegistrationAmount { get; private set; }
+
+	// Entrance Exam Information
+	public Guid? EntranceExamSlotId { get; private set; }
+	public DateTimeOffset? ExamDate { get; private set; }
+	public TimeSpan? ExamStartTime { get; private set; }
+	public TimeSpan? ExamEndTime { get; private set; }
+	public int? ExamRoomNo { get; private set; }
+
+	// Exam Results
+	public decimal? ExamTotalMarks { get; private set; }
+	public decimal? ExamPassingMarks { get; private set; }
+	public decimal? ExamObtainedMarks { get; private set; }
+	public decimal? ExamPercentage { get; private set; }
+	public EntranceExamStatusEnum? ExamStatus { get; private set; }
+	public DateTimeOffset? ExamResultDate { get; private set; }
 
 	public string? AdharNo { get; private set; }
 	public string? ApparId { get; private set; }
@@ -122,5 +138,68 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	{
 		RegistrationFormNo = formNumber;
 		RegistrationAmount = amount;
+	}
+
+	/// <summary>
+	/// Schedules entrance exam for the student
+	/// </summary>
+	public void ScheduleEntranceExam(
+		Guid entranceExamSlotId,
+		DateTimeOffset examDate,
+		TimeSpan examStartTime,
+		TimeSpan examEndTime,
+		int examRoomNo)
+	{
+		EntranceExamSlotId = entranceExamSlotId;
+		ExamDate = examDate;
+		ExamStartTime = examStartTime;
+		ExamEndTime = examEndTime;
+		ExamRoomNo = examRoomNo;
+		ExamStatus = EntranceExamStatusEnum.Pending;
+	}
+
+	/// <summary>
+	/// Records entrance exam result
+	/// </summary>
+	public void RecordExamResult(
+		decimal totalMarks,
+		decimal passingMarks,
+		decimal obtainedMarks)
+	{
+        // Validate inputs to guard against division by zero and negative values
+        if (totalMarks <= 0)
+        {
+            throw new ArgumentException("Total marks must be greater than zero.", nameof(totalMarks));
+        }
+
+        if (passingMarks < 0)
+        {
+            throw new ArgumentException("Passing marks cannot be negative.", nameof(passingMarks));
+        }
+
+        if (obtainedMarks < 0)
+        {
+            throw new ArgumentException("Obtained marks cannot be negative.", nameof(obtainedMarks));
+        }
+
+		if (obtainedMarks > totalMarks)
+		{
+			throw new ArgumentException("Obtained marks cannot exceed total marks.");
+		}
+
+		if (passingMarks > totalMarks)
+		{
+			throw new ArgumentException("Passing marks cannot exceed total marks.");
+		}
+
+		ExamTotalMarks = totalMarks;
+		ExamPassingMarks = passingMarks;
+		ExamObtainedMarks = obtainedMarks;
+        // Safe percentage calculation since totalMarks > 0 is validated
+        ExamPercentage = (obtainedMarks / totalMarks) * 100;
+		ExamStatus = obtainedMarks >= passingMarks 
+			? EntranceExamStatusEnum.Pass 
+			: EntranceExamStatusEnum.Fail;
+		ExamResultDate = DateTimeOffset.UtcNow;
 	}
 }

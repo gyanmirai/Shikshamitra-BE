@@ -1,5 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
-using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
+﻿using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 
@@ -15,4 +15,20 @@ public class CreateUpdateBuildingDto
 
 	[StringLength(BuildingConsts.MaxDescriptionLength)]
 	public string? Description { get; set; }
+
+	[Required]
+	public List<CreateUpdateFloorDto> Floors { get; set; } = new();
+}
+
+public class CreateUpdateFloorDto
+{
+	public int? Id { get; set; }
+
+	[Required]
+	[StringLength(FloorConsts.MaxFloorNameLength)]
+	public string FloorName { get; set; }
+
+	[Required]
+	[Range(FloorConsts.MinTotalRoom, FloorConsts.MaxTotalRoom)]
+	public int TotalRoom { get; set; }
 }

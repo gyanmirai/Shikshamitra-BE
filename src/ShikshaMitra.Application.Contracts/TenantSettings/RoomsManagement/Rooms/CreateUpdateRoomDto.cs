@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
@@ -27,15 +28,17 @@ public class CreateUpdateRoomDto
 	[Range(0, int.MaxValue)]
 	public int TotalBenches { get; set; }
 
+	[Required]
 	[Range(0, int.MaxValue)]
 	public int BenchCapacity { get; set; }
 
+	[Required]
 	[Range(0, int.MaxValue)]
-	public int ClassBenchesRows { get; set; }
+	public int BenchesPerRow { get; set; }
 
+	[Required]
 	[Range(0, int.MaxValue)]
-	public int ClassBenchesColumns { get; set; }
+	public int BenchesPerColumn { get; set; }
 
-	[StringLength(RoomConsts.MaxFeaturesLength)]
-	public string? Features { get; set; }
+	public List<string>? Features { get; set; }
 }

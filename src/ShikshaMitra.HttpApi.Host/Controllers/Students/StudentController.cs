@@ -7,11 +7,12 @@ using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
+using ShikshaMitra.Constants.Permissions;
 
 namespace ShikshaMitra.Controllers.Students;
 
 [ApiController]
-[Authorize]
+[Authorize(ShikshaMitraSubmodulePermissions.Students.Default)]
 [Route("api/students")]
 public class StudentController(IStudentInquiryAppService studentInquiryAppService, IStudentRegistrationAppService studentRegistrationAppService,
 	IStudentAppService studentAppService) : AbpControllerBase

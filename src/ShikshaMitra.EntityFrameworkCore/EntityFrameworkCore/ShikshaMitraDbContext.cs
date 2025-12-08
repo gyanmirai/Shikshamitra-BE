@@ -19,6 +19,7 @@ using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
+using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
@@ -123,6 +124,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region Rooms Management
 	public DbSet<Building> Buildings { get; set; }
+	public DbSet<Floor> Floors { get; set; }
 	public DbSet<RoomType> RoomTypes { get; set; }
 	public DbSet<Room> Rooms { get; set; }
 	#endregion
@@ -139,9 +141,9 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Student Enrollment
 
 	#region Settings
-	DbSet<StudentDocumentSetting> StudentDocumentSettings { get; set; }
-	DbSet<InquiryPreference> InquiryPreferences { get; set; }
-	DbSet<EntranceExamSlot> EntranceExamSlots { get; set; }
+	public DbSet<StudentDocumentSetting> StudentDocumentSettings { get; set; }
+	public DbSet<InquiryPreference> InquiryPreferences { get; set; }
+	public DbSet<EntranceExamSlot> EntranceExamSlots { get; set; }
 
 	#endregion
 
@@ -153,10 +155,16 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region Attendance
 
+	public DbSet<AttendanceDay> AttendanceDays { get; set; }
+	public DbSet<AttendanceEntry> AttendanceEntries { get; set; }
+
 	#region Settings
 
+	public DbSet<ShikshaMitra.Students.Attendance.Settings.StudentLeaveType> StudentLeaveTypes { get; set; }
 
 	#endregion
+	
+	public DbSet<ShikshaMitra.Students.Attendances.StudentLeave> StudentLeaves { get; set; }
 
 	#endregion
 

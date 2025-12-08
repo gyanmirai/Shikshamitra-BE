@@ -21,6 +21,11 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	// Navigation properties to aggregate parts (1:1 relationships)
 	public StudentAdditionalDetail? AdditionalDetail { get; private set; }
 	public StudentContactDetail? ContactDetail { get; private set; }
+	public StudentFamilyDetail? FamilyDetail { get; private set; }
+	public StudentCommunicationDetail? CommunicationDetail { get; private set; }
+	public StudentMedicalRecord? MedicalRecord { get; private set; }
+	public StudentPreviousSchoolDetail? PreviousSchoolDetail { get; private set; }
+	public StudentBankDetail? BankDetail { get; private set; }
 
 	private Student()
 	{

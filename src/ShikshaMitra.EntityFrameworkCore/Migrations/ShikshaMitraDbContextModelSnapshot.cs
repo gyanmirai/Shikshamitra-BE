@@ -2436,6 +2436,12 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("BankDetailId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CommunicationDetailId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -2470,6 +2476,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
+                    b.Property<Guid?>("FamilyDetailId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("FirstName")
                         .HasColumnType("text");
 
@@ -2493,8 +2502,14 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("LastName")
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("MedicalRecordId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("MiddleName")
                         .HasColumnType("text");
+
+                    b.Property<Guid?>("PreviousSchoolDetailId")
+                        .HasColumnType("uuid");
 
                     b.Property<int?>("RollNo")
                         .HasColumnType("integer");
@@ -2510,6 +2525,16 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BankDetailId");
+
+                    b.HasIndex("CommunicationDetailId");
+
+                    b.HasIndex("FamilyDetailId");
+
+                    b.HasIndex("MedicalRecordId");
+
+                    b.HasIndex("PreviousSchoolDetailId");
 
                     b.ToTable("AppStudents", (string)null);
                 });
@@ -2683,6 +2708,152 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppStudentAdditionalDetails", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Students.StudentBankDetail", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccountHolderName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("AccountNo")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("AccountType")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("BankAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("BankName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("BranchName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("IFSCCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("MICRCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("SwiftCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountNo");
+
+                    b.HasIndex("IFSCCode");
+
+                    b.ToTable("StudentBankDetails", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentCommunicationDetail", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("EmergencyContactName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("EmergencyContactPhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("EmergencyContactRelation")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<bool>("IsEmergencySameAsLocal")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsPermanentSameAsLocal")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("StudentCommunicationDetails", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Students.StudentContactDetail", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2761,6 +2932,80 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("StudentId");
 
                     b.ToTable("AppStudentContactDetails", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BlobName")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<Guid>("DocumentTypeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentTypeId");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("StudentId", "DocumentTypeId");
+
+                    b.ToTable("AppStudentDocuments", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.EntranceExamSlot", b =>
@@ -2965,6 +3210,231 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("StudentDocumentSettings");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentFamilyDetail", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("SiblingStudentIds")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("StudentFamilyDetails", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentMedicalRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Allergies")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("BloodGroup")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<decimal?>("BodyMassIndex")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<string>("ChildImmunization")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ChronicConditions")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int?>("CovidVaccinationDoses")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<string>("CurrentMedications")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<decimal?>("HeightCm")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("Hemoglobin")
+                        .HasPrecision(4, 2)
+                        .HasColumnType("numeric(4,2)");
+
+                    b.Property<string>("ImmunizationRemarks")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<int?>("PulseRate")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<decimal?>("WeightKg")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("StudentMedicalRecords", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentPreviousSchoolDetail", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AcademicYear")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Board")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<DateTimeOffset?>("DateOfLeaving")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<string>("LastClassAttended")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("Medium")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal?>("PercentageObtained")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<string>("ReasonForLeaving")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("SchoolAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("SchoolName")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("TCNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("StudentPreviousSchoolDetails", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears.AcademicYearPermission", b =>
@@ -6076,6 +6546,39 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("StudentLeaveType");
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Students.Student", b =>
+                {
+                    b.HasOne("ShikshaMitra.Students.StudentBankDetail", "BankDetail")
+                        .WithMany()
+                        .HasForeignKey("BankDetailId");
+
+                    b.HasOne("ShikshaMitra.Students.StudentCommunicationDetail", "CommunicationDetail")
+                        .WithMany()
+                        .HasForeignKey("CommunicationDetailId");
+
+                    b.HasOne("ShikshaMitra.Students.StudentFamilyDetail", "FamilyDetail")
+                        .WithMany()
+                        .HasForeignKey("FamilyDetailId");
+
+                    b.HasOne("ShikshaMitra.Students.StudentMedicalRecord", "MedicalRecord")
+                        .WithMany()
+                        .HasForeignKey("MedicalRecordId");
+
+                    b.HasOne("ShikshaMitra.Students.StudentPreviousSchoolDetail", "PreviousSchoolDetail")
+                        .WithMany()
+                        .HasForeignKey("PreviousSchoolDetailId");
+
+                    b.Navigation("BankDetail");
+
+                    b.Navigation("CommunicationDetail");
+
+                    b.Navigation("FamilyDetail");
+
+                    b.Navigation("MedicalRecord");
+
+                    b.Navigation("PreviousSchoolDetail");
+                });
+
             modelBuilder.Entity("ShikshaMitra.Students.StudentAdditionalDetail", b =>
                 {
                     b.HasOne("ShikshaMitra.Students.Student", null)
@@ -6083,6 +6586,165 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("ShikshaMitra.Students.StudentAdditionalDetail", "Id")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentCommunicationDetail", b =>
+                {
+                    b.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "EmergencyAddress", b1 =>
+                        {
+                            b1.Property<Guid>("StudentCommunicationDetailId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("AreaLocalityRoadName")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)")
+                                .HasColumnName("EmergencyAddress_AreaLocalityRoadName");
+
+                            b1.Property<string>("BuildingNo")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("EmergencyAddress_BuildingNo");
+
+                            b1.Property<string>("City")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("EmergencyAddress_City");
+
+                            b1.Property<string>("Country")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("EmergencyAddress_Country");
+
+                            b1.Property<string>("Landmark")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)")
+                                .HasColumnName("EmergencyAddress_Landmark");
+
+                            b1.Property<string>("Pincode")
+                                .HasMaxLength(10)
+                                .HasColumnType("character varying(10)")
+                                .HasColumnName("EmergencyAddress_Pincode");
+
+                            b1.Property<string>("State")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("EmergencyAddress_State");
+
+                            b1.HasKey("StudentCommunicationDetailId");
+
+                            b1.ToTable("StudentCommunicationDetails");
+
+                            b1.WithOwner()
+                                .HasForeignKey("StudentCommunicationDetailId");
+                        });
+
+                    b.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "LocalAddress", b1 =>
+                        {
+                            b1.Property<Guid>("StudentCommunicationDetailId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("AreaLocalityRoadName")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)")
+                                .HasColumnName("LocalAddress_AreaLocalityRoadName");
+
+                            b1.Property<string>("BuildingNo")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("LocalAddress_BuildingNo");
+
+                            b1.Property<string>("City")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("LocalAddress_City");
+
+                            b1.Property<string>("Country")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("LocalAddress_Country");
+
+                            b1.Property<string>("Landmark")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)")
+                                .HasColumnName("LocalAddress_Landmark");
+
+                            b1.Property<string>("Pincode")
+                                .HasMaxLength(10)
+                                .HasColumnType("character varying(10)")
+                                .HasColumnName("LocalAddress_Pincode");
+
+                            b1.Property<string>("State")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("LocalAddress_State");
+
+                            b1.HasKey("StudentCommunicationDetailId");
+
+                            b1.ToTable("StudentCommunicationDetails");
+
+                            b1.WithOwner()
+                                .HasForeignKey("StudentCommunicationDetailId");
+                        });
+
+                    b.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "PermanentAddress", b1 =>
+                        {
+                            b1.Property<Guid>("StudentCommunicationDetailId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("AreaLocalityRoadName")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)")
+                                .HasColumnName("PermanentAddress_AreaLocalityRoadName");
+
+                            b1.Property<string>("BuildingNo")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("PermanentAddress_BuildingNo");
+
+                            b1.Property<string>("City")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("PermanentAddress_City");
+
+                            b1.Property<string>("Country")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("PermanentAddress_Country");
+
+                            b1.Property<string>("Landmark")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)")
+                                .HasColumnName("PermanentAddress_Landmark");
+
+                            b1.Property<string>("Pincode")
+                                .HasMaxLength(10)
+                                .HasColumnType("character varying(10)")
+                                .HasColumnName("PermanentAddress_Pincode");
+
+                            b1.Property<string>("State")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("PermanentAddress_State");
+
+                            b1.HasKey("StudentCommunicationDetailId");
+
+                            b1.ToTable("StudentCommunicationDetails");
+
+                            b1.WithOwner()
+                                .HasForeignKey("StudentCommunicationDetailId");
+                        });
+
+                    b.Navigation("EmergencyAddress");
+
+                    b.Navigation("LocalAddress");
+
+                    b.Navigation("PermanentAddress");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentContactDetail", b =>
@@ -6098,6 +6760,513 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("StudentId");
 
                     b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentDocument", b =>
+                {
+                    b.HasOne("ShikshaMitra.TenantSettings.DocumentTypes.DocumentType", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Students.Student", null)
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentFamilyDetail", b =>
+                {
+                    b.OwnsOne("ShikshaMitra.Students.ValueObjects.ParentGuardianDetails", "FatherDetails", b1 =>
+                        {
+                            b1.Property<Guid>("StudentFamilyDetailId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("AadharNo")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("ContactNo")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<DateTimeOffset?>("DateOfBirth")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<string>("Designation")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<string>("Email")
+                                .HasMaxLength(256)
+                                .HasColumnType("character varying(256)");
+
+                            b1.Property<string>("FullName")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
+                            b1.Property<string>("Occupation")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<string>("OfficeNo")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("Organization")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
+                            b1.Property<string>("Qualification")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<string>("YearOfPassing")
+                                .HasMaxLength(10)
+                                .HasColumnType("character varying(10)");
+
+                            b1.HasKey("StudentFamilyDetailId");
+
+                            b1.ToTable("StudentFamilyDetails");
+
+                            b1.WithOwner()
+                                .HasForeignKey("StudentFamilyDetailId");
+
+                            b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "LocalAddress", b2 =>
+                                {
+                                    b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<string>("AreaLocalityRoadName")
+                                        .HasMaxLength(200)
+                                        .HasColumnType("character varying(200)")
+                                        .HasColumnName("Father_LocalAddress_AreaLocalityRoadName");
+
+                                    b2.Property<string>("BuildingNo")
+                                        .IsRequired()
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Father_LocalAddress_BuildingNo");
+
+                                    b2.Property<string>("City")
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Father_LocalAddress_City");
+
+                                    b2.Property<string>("Country")
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Father_LocalAddress_Country");
+
+                                    b2.Property<string>("Landmark")
+                                        .HasMaxLength(200)
+                                        .HasColumnType("character varying(200)")
+                                        .HasColumnName("Father_LocalAddress_Landmark");
+
+                                    b2.Property<string>("Pincode")
+                                        .HasMaxLength(10)
+                                        .HasColumnType("character varying(10)")
+                                        .HasColumnName("Father_LocalAddress_Pincode");
+
+                                    b2.Property<string>("State")
+                                        .IsRequired()
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Father_LocalAddress_State");
+
+                                    b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
+
+                                    b2.ToTable("StudentFamilyDetails");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
+                                });
+
+                            b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "OfficeAddress", b2 =>
+                                {
+                                    b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<string>("AreaLocalityRoadName")
+                                        .HasMaxLength(200)
+                                        .HasColumnType("character varying(200)")
+                                        .HasColumnName("Father_OfficeAddress_AreaLocalityRoadName");
+
+                                    b2.Property<string>("BuildingNo")
+                                        .IsRequired()
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Father_OfficeAddress_BuildingNo");
+
+                                    b2.Property<string>("City")
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Father_OfficeAddress_City");
+
+                                    b2.Property<string>("Country")
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Father_OfficeAddress_Country");
+
+                                    b2.Property<string>("Landmark")
+                                        .HasMaxLength(200)
+                                        .HasColumnType("character varying(200)")
+                                        .HasColumnName("Father_OfficeAddress_Landmark");
+
+                                    b2.Property<string>("Pincode")
+                                        .HasMaxLength(10)
+                                        .HasColumnType("character varying(10)")
+                                        .HasColumnName("Father_OfficeAddress_Pincode");
+
+                                    b2.Property<string>("State")
+                                        .IsRequired()
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Father_OfficeAddress_State");
+
+                                    b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
+
+                                    b2.ToTable("StudentFamilyDetails");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
+                                });
+
+                            b1.Navigation("LocalAddress");
+
+                            b1.Navigation("OfficeAddress");
+                        });
+
+                    b.OwnsOne("ShikshaMitra.Students.ValueObjects.ParentGuardianDetails", "GuardianDetails", b1 =>
+                        {
+                            b1.Property<Guid>("StudentFamilyDetailId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("AadharNo")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("ContactNo")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<DateTimeOffset?>("DateOfBirth")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<string>("Designation")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<string>("Email")
+                                .HasMaxLength(256)
+                                .HasColumnType("character varying(256)");
+
+                            b1.Property<string>("FullName")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
+                            b1.Property<string>("Occupation")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<string>("OfficeNo")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("Organization")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
+                            b1.Property<string>("Qualification")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<string>("YearOfPassing")
+                                .HasMaxLength(10)
+                                .HasColumnType("character varying(10)");
+
+                            b1.HasKey("StudentFamilyDetailId");
+
+                            b1.ToTable("StudentFamilyDetails");
+
+                            b1.WithOwner()
+                                .HasForeignKey("StudentFamilyDetailId");
+
+                            b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "LocalAddress", b2 =>
+                                {
+                                    b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<string>("AreaLocalityRoadName")
+                                        .HasMaxLength(200)
+                                        .HasColumnType("character varying(200)")
+                                        .HasColumnName("Guardian_LocalAddress_AreaLocalityRoadName");
+
+                                    b2.Property<string>("BuildingNo")
+                                        .IsRequired()
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Guardian_LocalAddress_BuildingNo");
+
+                                    b2.Property<string>("City")
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Guardian_LocalAddress_City");
+
+                                    b2.Property<string>("Country")
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Guardian_LocalAddress_Country");
+
+                                    b2.Property<string>("Landmark")
+                                        .HasMaxLength(200)
+                                        .HasColumnType("character varying(200)")
+                                        .HasColumnName("Guardian_LocalAddress_Landmark");
+
+                                    b2.Property<string>("Pincode")
+                                        .HasMaxLength(10)
+                                        .HasColumnType("character varying(10)")
+                                        .HasColumnName("Guardian_LocalAddress_Pincode");
+
+                                    b2.Property<string>("State")
+                                        .IsRequired()
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Guardian_LocalAddress_State");
+
+                                    b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
+
+                                    b2.ToTable("StudentFamilyDetails");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
+                                });
+
+                            b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "OfficeAddress", b2 =>
+                                {
+                                    b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<string>("AreaLocalityRoadName")
+                                        .HasMaxLength(200)
+                                        .HasColumnType("character varying(200)")
+                                        .HasColumnName("Guardian_OfficeAddress_AreaLocalityRoadName");
+
+                                    b2.Property<string>("BuildingNo")
+                                        .IsRequired()
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Guardian_OfficeAddress_BuildingNo");
+
+                                    b2.Property<string>("City")
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Guardian_OfficeAddress_City");
+
+                                    b2.Property<string>("Country")
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Guardian_OfficeAddress_Country");
+
+                                    b2.Property<string>("Landmark")
+                                        .HasMaxLength(200)
+                                        .HasColumnType("character varying(200)")
+                                        .HasColumnName("Guardian_OfficeAddress_Landmark");
+
+                                    b2.Property<string>("Pincode")
+                                        .HasMaxLength(10)
+                                        .HasColumnType("character varying(10)")
+                                        .HasColumnName("Guardian_OfficeAddress_Pincode");
+
+                                    b2.Property<string>("State")
+                                        .IsRequired()
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Guardian_OfficeAddress_State");
+
+                                    b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
+
+                                    b2.ToTable("StudentFamilyDetails");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
+                                });
+
+                            b1.Navigation("LocalAddress");
+
+                            b1.Navigation("OfficeAddress");
+                        });
+
+                    b.OwnsOne("ShikshaMitra.Students.ValueObjects.ParentGuardianDetails", "MotherDetails", b1 =>
+                        {
+                            b1.Property<Guid>("StudentFamilyDetailId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("AadharNo")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("ContactNo")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<DateTimeOffset?>("DateOfBirth")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<string>("Designation")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<string>("Email")
+                                .HasMaxLength(256)
+                                .HasColumnType("character varying(256)");
+
+                            b1.Property<string>("FullName")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
+                            b1.Property<string>("Occupation")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<string>("OfficeNo")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("Organization")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
+                            b1.Property<string>("Qualification")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<string>("YearOfPassing")
+                                .HasMaxLength(10)
+                                .HasColumnType("character varying(10)");
+
+                            b1.HasKey("StudentFamilyDetailId");
+
+                            b1.ToTable("StudentFamilyDetails");
+
+                            b1.WithOwner()
+                                .HasForeignKey("StudentFamilyDetailId");
+
+                            b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "LocalAddress", b2 =>
+                                {
+                                    b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<string>("AreaLocalityRoadName")
+                                        .HasMaxLength(200)
+                                        .HasColumnType("character varying(200)")
+                                        .HasColumnName("Mother_LocalAddress_AreaLocalityRoadName");
+
+                                    b2.Property<string>("BuildingNo")
+                                        .IsRequired()
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Mother_LocalAddress_BuildingNo");
+
+                                    b2.Property<string>("City")
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Mother_LocalAddress_City");
+
+                                    b2.Property<string>("Country")
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Mother_LocalAddress_Country");
+
+                                    b2.Property<string>("Landmark")
+                                        .HasMaxLength(200)
+                                        .HasColumnType("character varying(200)")
+                                        .HasColumnName("Mother_LocalAddress_Landmark");
+
+                                    b2.Property<string>("Pincode")
+                                        .HasMaxLength(10)
+                                        .HasColumnType("character varying(10)")
+                                        .HasColumnName("Mother_LocalAddress_Pincode");
+
+                                    b2.Property<string>("State")
+                                        .IsRequired()
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Mother_LocalAddress_State");
+
+                                    b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
+
+                                    b2.ToTable("StudentFamilyDetails");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
+                                });
+
+                            b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "OfficeAddress", b2 =>
+                                {
+                                    b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<string>("AreaLocalityRoadName")
+                                        .HasMaxLength(200)
+                                        .HasColumnType("character varying(200)")
+                                        .HasColumnName("Mother_OfficeAddress_AreaLocalityRoadName");
+
+                                    b2.Property<string>("BuildingNo")
+                                        .IsRequired()
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Mother_OfficeAddress_BuildingNo");
+
+                                    b2.Property<string>("City")
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Mother_OfficeAddress_City");
+
+                                    b2.Property<string>("Country")
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Mother_OfficeAddress_Country");
+
+                                    b2.Property<string>("Landmark")
+                                        .HasMaxLength(200)
+                                        .HasColumnType("character varying(200)")
+                                        .HasColumnName("Mother_OfficeAddress_Landmark");
+
+                                    b2.Property<string>("Pincode")
+                                        .HasMaxLength(10)
+                                        .HasColumnType("character varying(10)")
+                                        .HasColumnName("Mother_OfficeAddress_Pincode");
+
+                                    b2.Property<string>("State")
+                                        .IsRequired()
+                                        .HasMaxLength(100)
+                                        .HasColumnType("character varying(100)")
+                                        .HasColumnName("Mother_OfficeAddress_State");
+
+                                    b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
+
+                                    b2.ToTable("StudentFamilyDetails");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
+                                });
+
+                            b1.Navigation("LocalAddress");
+
+                            b1.Navigation("OfficeAddress");
+                        });
+
+                    b.Navigation("FatherDetails");
+
+                    b.Navigation("GuardianDetails");
+
+                    b.Navigation("MotherDetails");
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.Divisions.Division", b =>

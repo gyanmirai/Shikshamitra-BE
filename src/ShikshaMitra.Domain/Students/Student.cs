@@ -14,6 +14,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid EducationMediumId { get; private set; }
 	public Guid? StandardId { get; private set; }
 	public Guid? DivisionId { get; private set; }
+	public Guid? AcademicYearId { get; private set; }
 	public int? GrNo { get; private set; }
 	public int? RollNo { get; private set; }
 	public StudentLifeCycleStatusEnum Status { get; private set; }
@@ -43,6 +44,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid educationMediumId,
 		Guid? standardId = null,
 		Guid? divisionId = null,
+		Guid? academicYearId = null,
 		int? grNo = null,
 		int? rollNo = null,
 		StudentLifeCycleStatusEnum status = StudentLifeCycleStatusEnum.New
@@ -56,6 +58,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EducationMediumId = educationMediumId;
 		StandardId = standardId;
 		DivisionId = divisionId;
+		AcademicYearId = academicYearId;
 		GrNo = grNo;
 		RollNo = rollNo;
 		Status = status;
@@ -238,7 +241,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Moves student to admission stage after passing entrance exam
 	/// </summary>
-	public void MoveToAdmission()
+	public void MoveToAdmission(Guid? academicYearId = null)
 	{
 		if (Status != StudentLifeCycleStatusEnum.EntranceExam)
 		{
@@ -252,6 +255,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				"Cannot move to admission. Student must have passed the entrance exam.");
 		}
 
+		AcademicYearId = academicYearId;
 		ChangeStatus(StudentLifeCycleStatusEnum.Admission);
 		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Pending;
 	}

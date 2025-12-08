@@ -47,7 +47,7 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 		}
 
 		if (!string.IsNullOrWhiteSpace(input.ApprovalStatus) && 
-			Enum.TryParse<StudentEnrollmentApprovalState>(input.ApprovalStatus, out var status))
+			Enum.TryParse<StudentEnrollmentApprovalState>(input.ApprovalStatus, ignoreCase: true, out var status))
 		{
 			query = query.Where(s => s.AdmissionApprovalStatus == status);
 		}
@@ -60,6 +60,11 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 		if (input.StandardId.HasValue)
 		{
 			query = query.Where(s => s.StandardId == input.StandardId.Value);
+		}
+
+		if (input.AcademicYearId.HasValue)
+		{
+			query = query.Where(s => s.AcademicYearId == input.AcademicYearId.Value);
 		}
 
 		// Get total count

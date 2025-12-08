@@ -12,6 +12,11 @@ public class BulkMoveToAdmissionDto
 	[Required]
 	[MinLength(1, ErrorMessage = "At least one student ID is required")]
 	public List<Guid> StudentIds { get; set; }
+	
+	/// <summary>
+	/// The academic year for which the students are being admitted
+	/// </summary>
+	public Guid? AcademicYearId { get; set; }
 }
 
 /// <summary>

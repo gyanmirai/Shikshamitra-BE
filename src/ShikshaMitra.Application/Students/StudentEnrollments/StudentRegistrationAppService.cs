@@ -421,11 +421,16 @@ public class StudentRegistrationAppService(
 				// Update state to Family using reflection (since there's no direct method)
 				var property = student.AdditionalDetail.GetType().GetProperty("StudentRegistrationState");
 				property?.SetValue(student.AdditionalDetail, StudentRegistrationStateEnum.Family);
+				// Persist the registration state change
+				await studentAdditionalDetailRepository.UpdateAsync(student.AdditionalDetail, autoSave: false);
 			}
 		}
 
-		// Save changes
-		await studentFamilyDetailRepository.UpdateAsync(familyDetail, autoSave: true);
+		// Save changes - persist family detail updates
+		await studentFamilyDetailRepository.UpdateAsync(familyDetail, autoSave: false);
+		
+		// Commit all changes in a single transaction
+		await UnitOfWorkManager.Current!.SaveChangesAsync();
 
 		// Return the updated family info
 		return await GetFamilyInfoAsync(studentId);
@@ -584,11 +589,16 @@ public class StudentRegistrationAppService(
 				// Update state to Communication using reflection (since there's no direct method)
 				var property = student.AdditionalDetail.GetType().GetProperty("StudentRegistrationState");
 				property?.SetValue(student.AdditionalDetail, StudentRegistrationStateEnum.Communication);
+				// Persist the registration state change
+				await studentAdditionalDetailRepository.UpdateAsync(student.AdditionalDetail, autoSave: false);
 			}
 		}
 
-		// Save changes
-		await studentCommunicationDetailRepository.UpdateAsync(communicationDetail, autoSave: true);
+		// Save changes - persist communication detail updates
+		await studentCommunicationDetailRepository.UpdateAsync(communicationDetail, autoSave: false);
+		
+		// Commit all changes in a single transaction
+		await UnitOfWorkManager.Current!.SaveChangesAsync();
 
 		// Return the updated communication info
 		return await GetCommunicationInfoAsync(studentId);
@@ -761,11 +771,16 @@ public class StudentRegistrationAppService(
 			{
 				var property = student.AdditionalDetail.GetType().GetProperty("StudentRegistrationState");
 				property?.SetValue(student.AdditionalDetail, StudentRegistrationStateEnum.MedicalRecords);
+				// Persist the registration state change
+				await studentAdditionalDetailRepository.UpdateAsync(student.AdditionalDetail, autoSave: false);
 			}
 		}
 
-		// Save changes
-		await studentMedicalRecordRepository.UpdateAsync(medicalRecord, autoSave: true);
+		// Save changes - persist medical record updates
+		await studentMedicalRecordRepository.UpdateAsync(medicalRecord, autoSave: false);
+		
+		// Commit all changes in a single transaction
+		await UnitOfWorkManager.Current!.SaveChangesAsync();
 
 		// Return the updated medical records
 		return await GetMedicalRecordsAsync(studentId);
@@ -855,11 +870,16 @@ public class StudentRegistrationAppService(
 			{
 				var property = student.AdditionalDetail.GetType().GetProperty("StudentRegistrationState");
 				property?.SetValue(student.AdditionalDetail, StudentRegistrationStateEnum.PrevSchoolDetails);
+				// Persist the registration state change
+				await studentAdditionalDetailRepository.UpdateAsync(student.AdditionalDetail, autoSave: false);
 			}
 		}
 
-		// Save changes
-		await studentPreviousSchoolDetailRepository.UpdateAsync(previousSchoolDetail, autoSave: true);
+		// Save changes - persist previous school detail updates
+		await studentPreviousSchoolDetailRepository.UpdateAsync(previousSchoolDetail, autoSave: false);
+		
+		// Commit all changes in a single transaction
+		await UnitOfWorkManager.Current!.SaveChangesAsync();
 
 		// Return the updated previous school details
 		return await GetPreviousSchoolDetailsAsync(studentId);
@@ -945,11 +965,16 @@ public class StudentRegistrationAppService(
 			{
 				var property = student.AdditionalDetail.GetType().GetProperty("StudentRegistrationState");
 				property?.SetValue(student.AdditionalDetail, StudentRegistrationStateEnum.BankDetails);
+				// Persist the registration state change
+				await studentAdditionalDetailRepository.UpdateAsync(student.AdditionalDetail, autoSave: false);
 			}
 		}
 
-		// Save changes
-		await studentBankDetailRepository.UpdateAsync(bankDetail, autoSave: true);
+		// Save changes - persist bank detail updates
+		await studentBankDetailRepository.UpdateAsync(bankDetail, autoSave: false);
+		
+		// Commit all changes in a single transaction
+		await UnitOfWorkManager.Current!.SaveChangesAsync();
 
 		// Return the updated bank details
 		return await GetBankDetailsAsync(studentId);

@@ -20,8 +20,9 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 		builder.Property(x => x.AdmissionApprovalRemarks)
 			.HasMaxLength(1000);
 		
-		// Add index for filtering by admission status
+		// Add indexes for filtering by admission status and academic year
 		builder.HasIndex(x => new { x.AdmissionApprovalStatus, x.DivisionId });
+		builder.HasIndex(x => new { x.AcademicYearId, x.Status });
 		
 		// Configure navigation properties to load aggregate parts together
 		// This ensures the aggregate is loaded as a complete unit

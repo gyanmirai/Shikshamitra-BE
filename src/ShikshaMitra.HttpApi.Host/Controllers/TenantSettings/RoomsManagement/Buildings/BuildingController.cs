@@ -10,7 +10,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.Controllers.TenantSettings.RoomsManagement.Buildings;
 
 [Authorize]
-[Route("institute-setup/buildings")]
+[Route("api/institute-setup/buildings")]
 [ApiController]
 public class BuildingController(IBuildingAppService buildingAppService) : AbpController
 {

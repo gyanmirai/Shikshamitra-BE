@@ -2436,6 +2436,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AcademicYearId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("AdmissionApprovalRemarks")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
@@ -2544,6 +2547,8 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("MedicalRecordId");
 
                     b.HasIndex("PreviousSchoolDetailId");
+
+                    b.HasIndex("AcademicYearId", "Status");
 
                     b.HasIndex("AdmissionApprovalStatus", "DivisionId");
 

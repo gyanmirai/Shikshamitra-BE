@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace ShikshaMitra.Migrations
 {
     /// <inheritdoc />
-    public partial class v4 : Migration
+    public partial class v5 : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -22,6 +22,12 @@ namespace ShikshaMitra.Migrations
             migrationBuilder.RenameTable(
                 name: "InquiryPreferences",
                 newName: "AppInquiryPreferences");
+
+            migrationBuilder.AddColumn<Guid>(
+                name: "AcademicYearId",
+                table: "AppStudents",
+                type: "uuid",
+                nullable: true);
 
             migrationBuilder.AddColumn<string>(
                 name: "AdmissionApprovalRemarks",
@@ -354,6 +360,11 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_AppStudents_AcademicYearId_Status",
+                table: "AppStudents",
+                columns: new[] { "AcademicYearId", "Status" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AppStudents_AdmissionApprovalStatus_DivisionId",
                 table: "AppStudents",
                 columns: new[] { "AdmissionApprovalStatus", "DivisionId" });
@@ -508,6 +519,10 @@ namespace ShikshaMitra.Migrations
                 name: "StudentPreviousSchoolDetails");
 
             migrationBuilder.DropIndex(
+                name: "IX_AppStudents_AcademicYearId_Status",
+                table: "AppStudents");
+
+            migrationBuilder.DropIndex(
                 name: "IX_AppStudents_AdmissionApprovalStatus_DivisionId",
                 table: "AppStudents");
 
@@ -542,6 +557,10 @@ namespace ShikshaMitra.Migrations
             migrationBuilder.DropIndex(
                 name: "IX_AppInquiryPreferences_TenantId_PreferenceName",
                 table: "AppInquiryPreferences");
+
+            migrationBuilder.DropColumn(
+                name: "AcademicYearId",
+                table: "AppStudents");
 
             migrationBuilder.DropColumn(
                 name: "AdmissionApprovalRemarks",

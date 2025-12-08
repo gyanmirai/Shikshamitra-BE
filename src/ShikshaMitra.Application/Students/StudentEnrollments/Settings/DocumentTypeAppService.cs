@@ -7,7 +7,7 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
-namespace ShikshaMitra.TenantSettings.DocumentTypes;
+namespace ShikshaMitra.Students.StudentEnrollments.Settings;
 
 /// <summary>
 /// Application service for managing document types

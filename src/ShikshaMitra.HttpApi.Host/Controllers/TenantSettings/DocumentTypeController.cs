@@ -1,79 +1,79 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.Common.Responses;
-using ShikshaMitra.TenantSettings.DocumentTypes;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.Controllers.TenantSettings;
+namespace ShikshaMitra.Controllers.Students.StudentEnrollments.Settings;
 
 /// <summary>
 /// API controller for managing document types
 /// </summary>
 [ApiController]
 [Authorize]
-[Route("api/tenant-settings/document-types")]
+[Route("api/student-enrollment/settings/document-types")]
 public class DocumentTypeController(IDocumentTypeAppService documentTypeAppService) : AbpControllerBase
 {
 	/// <summary>
 	/// Gets a paginated list of document types
 	/// </summary>
+	/// <param name="input">Pagination parameters</param>
+	/// <returns>Paginated list of document types</returns>
 	[HttpGet]
-	public async Task<Result<PagedResultDto<DocumentTypeDto>>> GetList(
-		[FromQuery] int skipCount = 0,
-		[FromQuery] int maxResultCount = 10)
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsDocumentTypes.View)]
+	public async Task<PagedResultDto<DocumentTypeDto>> GetListAsync([FromQuery] PagedAndSortedResultRequestDto input)
 	{
-		var result = await documentTypeAppService.GetListAsync(new PagedAndSortedResultRequestDto
-		{
-			SkipCount = skipCount,
-			MaxResultCount = maxResultCount
-		});
-
-		return Result.Success(result);
+		return await documentTypeAppService.GetListAsync(input);
 	}
 
 	/// <summary>
-	/// Gets a document type by ID
+	/// Gets a specific document type by ID
 	/// </summary>
+	/// <param name="id">The document type identifier</param>
+	/// <returns>Document type details</returns>
 	[HttpGet("{id}")]
-	public async Task<Result<DocumentTypeDto>> Get(Guid id)
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsDocumentTypes.View)]
+	public async Task<DocumentTypeDto> GetAsync(Guid id)
 	{
-		var result = await documentTypeAppService.GetAsync(id);
-		return Result.Success(result);
+		return await documentTypeAppService.GetAsync(id);
 	}
 
 	/// <summary>
 	/// Creates a new document type
 	/// </summary>
+	/// <param name="input">Document type creation data</param>
+	/// <returns>Created document type</returns>
 	[HttpPost]
-	public async Task<Result<DocumentTypeDto>> Create(
-		[FromBody] CreateUpdateDocumentTypeDto input)
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsDocumentTypes.Add)]
+	public async Task<DocumentTypeDto> CreateAsync([FromBody] CreateUpdateDocumentTypeDto input)
 	{
-		var result = await documentTypeAppService.CreateAsync(input);
-		return Result.Success(result);
+		return await documentTypeAppService.CreateAsync(input);
 	}
 
 	/// <summary>
 	/// Updates an existing document type
 	/// </summary>
+	/// <param name="id">The document type identifier</param>
+	/// <param name="input">Updated document type data</param>
+	/// <returns>Updated document type</returns>
 	[HttpPut("{id}")]
-	public async Task<Result<DocumentTypeDto>> Update(
-		Guid id,
-		[FromBody] CreateUpdateDocumentTypeDto input)
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsDocumentTypes.Add)]
+	public async Task<DocumentTypeDto> UpdateAsync(Guid id, [FromBody] CreateUpdateDocumentTypeDto input)
 	{
-		var result = await documentTypeAppService.UpdateAsync(id, input);
-		return Result.Success(result);
+		return await documentTypeAppService.UpdateAsync(id, input);
 	}
 
 	/// <summary>
 	/// Deletes a document type
 	/// </summary>
+	/// <param name="id">The document type identifier</param>
 	[HttpDelete("{id}")]
-	public async Task<Result> Delete(Guid id)
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsDocumentTypes.Delete)]
+	public async Task DeleteAsync(Guid id)
 	{
 		await documentTypeAppService.DeleteAsync(id);
-		return Result.Success();
 	}
 }

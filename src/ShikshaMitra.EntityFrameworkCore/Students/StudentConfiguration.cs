@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using ShikshaMitra.Students.StudentEnrollments;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Students;
@@ -11,6 +12,16 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 		
 		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();
+		
+		// Configure admission approval columns
+		builder.Property(x => x.AdmissionApprovalStatus)
+			.HasDefaultValue(StudentEnrollmentApprovalState.Pending);
+		
+		builder.Property(x => x.AdmissionApprovalRemarks)
+			.HasMaxLength(1000);
+		
+		// Add index for filtering by admission status
+		builder.HasIndex(x => new { x.AdmissionApprovalStatus, x.DivisionId });
 		
 		// Configure navigation properties to load aggregate parts together
 		// This ensures the aggregate is loaded as a complete unit

@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
-namespace ShikshaMitra.TenantSettings.DocumentTypes;
+namespace ShikshaMitra.Students.StudentEnrollments.Settings;
 
 /// <summary>
 /// Application service interface for managing document types

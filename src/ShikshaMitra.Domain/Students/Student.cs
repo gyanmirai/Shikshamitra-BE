@@ -17,6 +17,8 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public int? GrNo { get; private set; }
 	public int? RollNo { get; private set; }
 	public StudentLifeCycleStatusEnum Status { get; private set; }
+	public StudentEnrollmentApprovalState AdmissionApprovalStatus { get; private set; }
+	public string? AdmissionApprovalRemarks { get; private set; }
 
 	// Navigation properties to aggregate parts (1:1 relationships)
 	public StudentAdditionalDetail? AdditionalDetail { get; private set; }
@@ -251,5 +253,65 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 
 		ChangeStatus(StudentLifeCycleStatusEnum.Admission);
+		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Pending;
+	}
+
+	/// <summary>
+	/// Assigns or changes division for the student
+	/// </summary>
+	public void AssignDivision(Guid divisionId)
+	{
+		if (Status != StudentLifeCycleStatusEnum.Admission)
+		{
+			throw new InvalidOperationException(
+				$"Cannot assign division. Student must be in Admission status. Current status: {Status}");
+		}
+
+		DivisionId = divisionId;
+	}
+
+	/// <summary>
+	/// Approves the student admission
+	/// </summary>
+	public void ApproveAdmission()
+	{
+		if (Status != StudentLifeCycleStatusEnum.Admission)
+		{
+			throw new InvalidOperationException(
+				$"Cannot approve admission. Student must be in Admission status. Current status: {Status}");
+		}
+
+		if (AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved)
+		{
+			throw new InvalidOperationException("Student admission is already approved.");
+		}
+
+		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Approved;
+		AdmissionApprovalRemarks = null; // Clear any previous rejection remarks
+	}
+
+	/// <summary>
+	/// Rejects the student admission with remarks
+	/// </summary>
+	public void RejectAdmission(string remarks)
+	{
+		if (Status != StudentLifeCycleStatusEnum.Admission)
+		{
+			throw new InvalidOperationException(
+				$"Cannot reject admission. Student must be in Admission status. Current status: {Status}");
+		}
+
+		if (string.IsNullOrWhiteSpace(remarks))
+		{
+			throw new ArgumentException("Remarks are required when rejecting admission.", nameof(remarks));
+		}
+
+		if (AdmissionApprovalStatus == StudentEnrollmentApprovalState.Rejected)
+		{
+			throw new InvalidOperationException("Student admission is already rejected.");
+		}
+
+		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Rejected;
+		AdmissionApprovalRemarks = remarks;
 	}
 }

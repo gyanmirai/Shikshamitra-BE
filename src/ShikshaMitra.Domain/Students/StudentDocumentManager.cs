@@ -1,10 +1,9 @@
-﻿using System;
+﻿using ShikshaMitra.Students.StudentEnrollments.Settings;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using ShikshaMitra.Students.StudentEnrollments;
-using ShikshaMitra.TenantSettings.DocumentTypes;
 using Volo.Abp;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Repositories;

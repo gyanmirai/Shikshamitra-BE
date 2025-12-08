@@ -1,4 +1,4 @@
-﻿namespace ShikshaMitra.TenantSettings.DocumentTypes;
+﻿namespace ShikshaMitra.Students.StudentEnrollments.Settings;
 
 /// <summary>
 /// Constants for DocumentType entity

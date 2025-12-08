@@ -1,4 +1,4 @@
-﻿namespace ShikshaMitra.TenantSettings.DocumentTypes;
+﻿namespace ShikshaMitra.Students.StudentEnrollments.Settings;
 
 /// <summary>
 /// Predefined file formats that can be accepted for document uploads

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Common.Responses;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Models;
 using ShikshaMitra.Students.StudentEnrollments.Documents;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -32,8 +33,7 @@ public class StudentEnrollmentDocumentController : AbpControllerBase
 	/// If a document of the same type already exists, it will be replaced.
 	/// </summary>
 	/// <param name="studentId">The student identifier</param>
-	/// <param name="documentTypeId">The document type identifier from settings</param>
-	/// <param name="file">The document file to upload</param>
+	/// <param name="request">The upload request containing document type and file</param>
 	/// <returns>Upload response with document ID and status</returns>
 	/// <response code="200">Document uploaded successfully</response>
 	/// <response code="400">Invalid file format, size exceeds limit, or student not in valid status</response>
@@ -46,11 +46,10 @@ public class StudentEnrollmentDocumentController : AbpControllerBase
 	[ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
 	public async Task<Result<UploadDocumentResponseDto>> UploadDocumentAsync(
 		Guid studentId,
-		[FromForm] Guid documentTypeId,
-		[FromForm] IFormFile file)
+		[FromForm] StudentDocumentUploadRequest request)
 	{
 		// Validate file
-		if (file == null || file.Length == 0)
+		if (request.File == null || request.File.Length == 0)
 		{
 			return Result.Failure<UploadDocumentResponseDto>(
 				new Common.Responses.Error("Document:NoFileUploaded", "No file was uploaded"));
@@ -58,14 +57,14 @@ public class StudentEnrollmentDocumentController : AbpControllerBase
 
 		// Convert IFormFile to ProcessedStudentDocumentDto
 		await using var memoryStream = new MemoryStream();
-		await file.CopyToAsync(memoryStream);
+		await request.File.CopyToAsync(memoryStream);
 
 		var input = new ProcessedStudentDocumentDto
 		{
-			DocumentTypeId = documentTypeId,
-			FileName = file.FileName,
-			ContentType = file.ContentType,
-			Size = file.Length,
+			DocumentTypeId = request.DocumentTypeId,
+			FileName = request.File.FileName,
+			ContentType = request.File.ContentType,
+			Size = request.File.Length,
 			Content = memoryStream.ToArray()
 		};
 

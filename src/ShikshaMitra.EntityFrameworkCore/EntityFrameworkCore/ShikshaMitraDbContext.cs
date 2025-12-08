@@ -28,7 +28,6 @@ using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.Divisions;
-using ShikshaMitra.TenantSettings.DocumentTypes;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
@@ -127,8 +126,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<Room> Rooms { get; set; }
 	#endregion
 
-	public DbSet<DocumentType> DocumentTypes { get; set; }
-
 	#endregion
 
 	#region Student
@@ -148,6 +145,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<StudentDocumentSetting> StudentDocumentSettings { get; set; }
 	public DbSet<InquiryPreference> InquiryPreferences { get; set; }
 	public DbSet<EntranceExamSlot> EntranceExamSlots { get; set; }
+	public DbSet<DocumentType> DocumentTypes { get; set; }
 
 	#endregion
 

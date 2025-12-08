@@ -6,7 +6,7 @@ using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 
-namespace ShikshaMitra.TenantSettings.DocumentTypes;
+namespace ShikshaMitra.Students.StudentEnrollments.Settings;
 
 /// <summary>
 /// Domain service for DocumentType aggregate

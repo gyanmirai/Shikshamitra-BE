@@ -5,7 +5,7 @@ using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra.TenantSettings.DocumentTypes;
+namespace ShikshaMitra.Students.StudentEnrollments.Settings;
 
 /// <summary>
 /// Represents a type of document that can be uploaded (e.g., Birth Certificate, PAN Card)

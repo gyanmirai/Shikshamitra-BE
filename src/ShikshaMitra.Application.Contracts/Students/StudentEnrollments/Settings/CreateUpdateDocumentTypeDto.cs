@@ -1,8 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using ShikshaMitra.TenantSettings.DocumentTypes;
 
-namespace ShikshaMitra.TenantSettings.DocumentTypes;
+namespace ShikshaMitra.Students.StudentEnrollments.Settings;
 
 /// <summary>
 /// DTO for creating or updating a document type

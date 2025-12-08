@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using ShikshaMitra.TenantSettings.DocumentTypes;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Students;

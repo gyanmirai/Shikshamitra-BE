@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using ShikshaMitra.TenantSettings.DocumentTypes;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Documents;
 

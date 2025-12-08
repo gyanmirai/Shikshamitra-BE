@@ -1,154 +1,221 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-/*
- * Note: This implementation assumes you have created:
- * 1. An `IElectiveGroupAppService` interface in your Application.Contracts project.
- * 2. `ElectiveGroupDto` and `CreateUpdateElectiveGroupDto` in your Application.Contracts project.
- * 3. An AutoMapper profile to map `ElectiveGroup` -> `ElectiveGroupDto`.
- */
+/// <summary>
+/// Application service for managing elective groups
+/// Implements CRUD operations with academic medium scoping and security validation
+/// </summary>
 public class ElectiveGroupAppService(
 	IRepository<ElectiveGroup, Guid> ElectiveGroupRepository,
 	ElectiveGroupManager ElectiveGroupManager,
 	ILogger<ElectiveGroupAppService> logger
 ) : ApplicationService, IElectiveGroupAppService
 {
-	public async Task<ElectiveGroupDto> CreateAsync(CreateUpdateElectiveGroupDto input)
+	/// <summary>
+	/// Get all elective groups for a specific education medium with optional search
+	/// </summary>
+	public async Task<List<ElectiveGroupDto>> GetListAsync(
+		Guid academicMediumId,
+		string? searchTerm = null
+	)
 	{
 		try
 		{
-			var ElectiveGroup = await ElectiveGroupManager.CreateAsync(
+			var query = await ElectiveGroupRepository.WithDetailsAsync(eg => eg.Subjects);
+
+			var electiveGroups = query
+				.Where(eg => eg.EducationMediumId == academicMediumId)
+				.WhereIf(
+					!string.IsNullOrWhiteSpace(searchTerm),
+					eg => eg.Name.Contains(searchTerm!)
+				)
+				.OrderBy(eg => eg.Name)
+				.ToList();
+
+			return ObjectMapper.Map<List<ElectiveGroup>, List<ElectiveGroupDto>>(electiveGroups);
+		}
+		catch (Exception ex)
+		{
+			logger.LogError(
+				ex,
+				"Error retrieving elective groups for medium {MediumId}",
+				academicMediumId
+			);
+			throw new UserFriendlyException(
+				"An error occurred while retrieving elective groups."
+			);
+		}
+	}
+
+	/// <summary>
+	/// Get a single elective group by ID with medium verification
+	/// </summary>
+	public async Task<ElectiveGroupDto> GetAsync(Guid academicMediumId, Guid id)
+	{
+		try
+		{
+			var electiveGroup = await ElectiveGroupRepository.GetAsync(id, includeDetails: true);
+
+			// Verify the group belongs to the specified medium
+			if (electiveGroup.EducationMediumId != academicMediumId)
+			{
+				throw new EntityNotFoundException(typeof(ElectiveGroup), id);
+			}
+
+			return ObjectMapper.Map<ElectiveGroup, ElectiveGroupDto>(electiveGroup);
+		}
+		catch (EntityNotFoundException)
+		{
+			throw;
+		}
+		catch (Exception ex)
+		{
+			logger.LogError(
+				ex,
+				"Error retrieving elective group {Id} for medium {MediumId}",
+				id,
+				academicMediumId
+			);
+			throw new UserFriendlyException(
+				"An error occurred while retrieving the elective group."
+			);
+		}
+	}
+
+	/// <summary>
+	/// Create a new elective group
+	/// </summary>
+	public async Task<ElectiveGroupDto> CreateAsync(
+		Guid academicMediumId,
+		CreateUpdateElectiveGroupDto input
+	)
+	{
+		try
+		{
+			var electiveGroup = await ElectiveGroupManager.CreateAsync(
 				input.Name,
 				input.Color,
-				input.EducationMediumId,
+				academicMediumId, // From route parameter
 				input.SubjectIds
 			);
 
-			await ElectiveGroupRepository.InsertAsync(ElectiveGroup);
+			await ElectiveGroupRepository.InsertAsync(electiveGroup);
 
-			// Re-fetch the entity with all details to ensure correct mapping
-			return await GetAsync(ElectiveGroup.Id);
+			// Re-fetch with details for proper mapping
+			return await GetAsync(academicMediumId, electiveGroup.Id);
 		}
-		catch (UserFriendlyException ex)
+		catch (BusinessException ex)
 		{
-			logger.LogError(
-				ex,
-				"A business error occurred while creating an elective subject: {Message}",
-				ex.Message
-			);
-			throw;
+			logger.LogError(ex, "Business error creating elective group: {Message}", ex.Message);
+			throw new UserFriendlyException(ex.Message, ex.Code);
 		}
 		catch (Exception ex)
 		{
-			logger.LogError(ex, "Error creating elective subject with name {Name}", input.Name);
+			logger.LogError(
+				ex,
+				"Error creating elective group '{Name}' for medium {MediumId}",
+				input.Name,
+				academicMediumId
+			);
 			throw new UserFriendlyException(
-				"An error occurred while creating the elective subject."
+				"An error occurred while creating the elective group."
 			);
 		}
 	}
 
-	public async Task<ElectiveGroupDto> UpdateAsync(Guid id, CreateUpdateElectiveGroupDto input)
+	/// <summary>
+	/// Update an existing elective group
+	/// </summary>
+	public async Task<ElectiveGroupDto> UpdateAsync(
+		Guid academicMediumId,
+		Guid id,
+		CreateUpdateElectiveGroupDto input
+	)
 	{
 		try
 		{
-			var ElectiveGroup = await ElectiveGroupManager.UpdateAsync(
+			var electiveGroup = await ElectiveGroupManager.UpdateAsync(
 				id,
 				input.Name,
 				input.Color,
+				academicMediumId, // Verify medium
 				input.SubjectIds
 			);
 
-			await ElectiveGroupRepository.UpdateAsync(ElectiveGroup, autoSave: true); // Saves the changes from the manager
+			await ElectiveGroupRepository.UpdateAsync(electiveGroup, autoSave: true);
 
-			// Re-fetch the entity with all details to ensure correct mapping
-			return await GetAsync(id);
+			return await GetAsync(academicMediumId, id);
 		}
-		catch (UserFriendlyException ex)
+		catch (BusinessException ex)
 		{
 			logger.LogError(
 				ex,
-				"A business error occurred while updating elective subject {Id}: {Message}",
+				"Business error updating elective group {Id}: {Message}",
 				id,
 				ex.Message
 			);
+			throw new UserFriendlyException(ex.Message, ex.Code);
+		}
+		catch (Exception ex)
+		{
+			logger.LogError(
+				ex,
+				"Error updating elective group {Id} for medium {MediumId}",
+				id,
+				academicMediumId
+			);
+			throw new UserFriendlyException(
+				"An error occurred while updating the elective group."
+			);
+		}
+	}
+
+	/// <summary>
+	/// Delete an elective group
+	/// </summary>
+	public async Task DeleteAsync(Guid academicMediumId, Guid id)
+	{
+		try
+		{
+			var electiveGroup = await ElectiveGroupRepository.GetAsync(id);
+
+			// Verify the group belongs to the specified medium
+			if (electiveGroup.EducationMediumId != academicMediumId)
+			{
+				throw new EntityNotFoundException(typeof(ElectiveGroup), id);
+			}
+
+			await ElectiveGroupRepository.DeleteAsync(id);
+
+			logger.LogInformation(
+				"Deleted elective group {Id} from medium {MediumId}",
+				id,
+				academicMediumId
+			);
+		}
+		catch (EntityNotFoundException)
+		{
 			throw;
 		}
 		catch (Exception ex)
 		{
-			logger.LogError(ex, "Error updating elective subject with ID {Id}", id);
-			throw new UserFriendlyException(
-				"An error occurred while updating the elective subject."
-			);
-		}
-	}
-
-	public async Task DeleteAsync(Guid id)
-	{
-		try
-		{
-			await ElectiveGroupRepository.DeleteAsync(id, autoSave: true);
-		}
-		catch (Exception ex)
-		{
-			logger.LogError(ex, "Error deleting elective subject with ID {Id}", id);
-			throw new UserFriendlyException(
-				"An error occurred while deleting the elective subject."
-			);
-		}
-	}
-
-	public async Task<ElectiveGroupDto> GetAsync(Guid id)
-	{
-		try
-		{
-			var ElectiveGroup = await ElectiveGroupRepository.FindAsync(id);
-
-			return ElectiveGroup == null
-				? throw new UserFriendlyException("Elective subject not found.")
-				: ObjectMapper.Map<ElectiveGroup, ElectiveGroupDto>(ElectiveGroup);
-		}
-		catch (UserFriendlyException ex)
-		{
 			logger.LogError(
 				ex,
-				"A business error occurred while retrieving elective subject {Id}: {Message}",
+				"Error deleting elective group {Id} from medium {MediumId}",
 				id,
-				ex.Message
+				academicMediumId
 			);
-			throw;
-		}
-		catch (Exception ex)
-		{
-			logger.LogError(ex, "Error retrieving elective subject with ID {Id}", id);
 			throw new UserFriendlyException(
-				"An error occurred while retrieving the elective subject."
-			);
-		}
-	}
-
-	public async Task<List<ElectiveGroupDto>> GetListAsync()
-	{
-		try
-		{
-			var ElectiveGroups = (
-				await ElectiveGroupRepository.WithDetailsAsync(x => x.Subjects)
-			).ToList();
-
-			return ObjectMapper.Map<List<ElectiveGroup>, List<ElectiveGroupDto>>(ElectiveGroups);
-		}
-		catch (Exception ex)
-		{
-			logger.LogError(ex, "Error retrieving elective subjects list");
-			throw new UserFriendlyException(
-				"An error occurred while retrieving the elective subjects."
+				"An error occurred while deleting the elective group."
 			);
 		}
 	}

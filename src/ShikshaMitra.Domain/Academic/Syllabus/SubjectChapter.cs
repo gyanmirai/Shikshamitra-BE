@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using ShikshaMitra.Academic.Curriculum;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -50,6 +52,16 @@ public class SubjectChapter : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// </summary>
 	public string? Description { get; set; }
 
+	/// <summary>
+	/// Gets or sets the education medium ID for filtering/validation
+	/// </summary>
+	public Guid EducationMediumId { get; set; }
+
+	/// <summary>
+	/// Navigation property for chapter documents
+	/// </summary>
+	public virtual ICollection<ChapterDocument> Documents { get; set; }
+
 	#endregion
 
 	#region Constructors
@@ -62,6 +74,7 @@ public class SubjectChapter : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid id,
 		Guid standardId,
 		Guid subjectId,
+		Guid educationMediumId,
 		int chapterNumber,
 		string chapterName,
 		DateTimeOffset chapterStartTime,
@@ -72,11 +85,13 @@ public class SubjectChapter : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		StandardId = standardId;
 		SubjectId = subjectId;
+		EducationMediumId = educationMediumId;
 		ChapterNumber = chapterNumber;
 		ChapterName = chapterName;
 		ChapterStartTime = chapterStartTime;
 		ChapterEndTime = chapterEndTime;
 		Description = description;
+		Documents = new List<ChapterDocument>();
 	}
 
 	#endregion
@@ -94,6 +109,42 @@ public class SubjectChapter : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ChapterStartTime = chapterStartTime;
 		ChapterEndTime = chapterEndTime;
 		Description = description;
+	}
+
+	/// <summary>
+	/// Updates the chapter dates
+	/// </summary>
+	public void UpdateDates(DateTimeOffset startTime, DateTimeOffset endTime)
+	{
+		ChapterStartTime = startTime;
+		ChapterEndTime = endTime;
+	}
+
+	/// <summary>
+	/// Updates chapter details
+	/// </summary>
+	public void UpdateDetails(int chapterNumber, string chapterName, string? description)
+	{
+		ChapterNumber = chapterNumber;
+		ChapterName = chapterName;
+		Description = description;
+	}
+
+	/// <summary>
+	/// Adds a document to the chapter
+	/// </summary>
+	public void AddDocument(ChapterDocument document)
+	{
+		Documents ??= new List<ChapterDocument>();
+		Documents.Add(document);
+	}
+
+	/// <summary>
+	/// Removes a document from the chapter
+	/// </summary>
+	public void RemoveDocument(ChapterDocument document)
+	{
+		Documents?.Remove(document);
 	}
 	#endregion
 }

@@ -18,15 +18,19 @@ public class ChapterAppService(
 	{
 		try
 		{
+			// TODO: Get educationMediumId from context or parameter
+			var educationMediumId = Guid.Empty; // Temporary - needs proper value
+			
 			var chapter = new SubjectChapter(
-				guidGenerator.Create(),
-				createChapterDto.StandardId,
-				createChapterDto.SubjectId,
-				createChapterDto.ChapterNumber,
-				createChapterDto.ChapterName,
-				createChapterDto.ChapterStartTime,
-				createChapterDto.ChapterEndTime,
-				createChapterDto.Description
+				id: guidGenerator.Create(),
+				standardId: createChapterDto.StandardId,
+				subjectId: createChapterDto.SubjectId,
+				educationMediumId: educationMediumId,
+				chapterNumber: createChapterDto.ChapterNumber,
+				chapterName: createChapterDto.ChapterName,
+				chapterStartTime: createChapterDto.ChapterStartTime,
+				chapterEndTime: createChapterDto.ChapterEndTime,
+				description: createChapterDto.Description
 			);
 
 			await chapterRepository.InsertAsync(chapter, autoSave: true);

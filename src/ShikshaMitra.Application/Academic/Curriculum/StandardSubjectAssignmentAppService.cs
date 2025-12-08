@@ -25,13 +25,15 @@ public class StandardSubjectAssignmentAppService(
 		try
 		{
 			var assignment = subjectAssignmentManager.AssignSubject(
-				createAssignmentDto.SubjectId,
-				createAssignmentDto.StandardId,
-				createAssignmentDto.SubjectCode,
-				createAssignmentDto.LearningGoals,
-				createAssignmentDto.Prerequisites,
-				createAssignmentDto.Description,
-				createAssignmentDto.Status
+				standardId: createAssignmentDto.StandardId,
+				subjectId: createAssignmentDto.SubjectId,
+				subjectCode: createAssignmentDto.SubjectCode,
+				educationMediumId: createAssignmentDto.ElectiveGroupId ?? Guid.Empty, // Temporary - needs proper medium ID
+				status: createAssignmentDto.Status,
+				subjectType: SubjectType.Core, // Default
+				learningGoals: createAssignmentDto.LearningGoals,
+				prerequisites: createAssignmentDto.Prerequisites,
+				description: createAssignmentDto.Description
 			);
 
 			if (createAssignmentDto.PrimaryTeacherId.HasValue)

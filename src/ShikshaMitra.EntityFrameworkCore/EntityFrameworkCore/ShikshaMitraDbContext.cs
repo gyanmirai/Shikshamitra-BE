@@ -28,7 +28,6 @@ using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.Divisions;
-using ShikshaMitra.TenantSettings.DocumentTypes;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
@@ -128,14 +127,18 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<Room> Rooms { get; set; }
 	#endregion
 
-	public DbSet<DocumentType> DocumentTypes { get; set; }
-
 	#endregion
 
 	#region Student
 	public DbSet<Student> Students { get; set; }
 	public DbSet<StudentAdditionalDetail> StudentAdditionalDetails { get; set; }
 	public DbSet<StudentContactDetail> StudentContactDetails { get; set; }
+	public DbSet<StudentFamilyDetail> StudentFamilyDetails { get; set; }
+	public DbSet<StudentCommunicationDetail> StudentCommunicationDetails { get; set; }
+	public DbSet<StudentMedicalRecord> StudentMedicalRecords { get; set; }
+	public DbSet<StudentPreviousSchoolDetail> StudentPreviousSchoolDetails { get; set; }
+	public DbSet<StudentBankDetail> StudentBankDetails { get; set; }
+	public DbSet<StudentDocument> StudentDocuments { get; set; }
 
 	#region Student Enrollment
 
@@ -143,6 +146,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<StudentDocumentSetting> StudentDocumentSettings { get; set; }
 	public DbSet<InquiryPreference> InquiryPreferences { get; set; }
 	public DbSet<EntranceExamSlot> EntranceExamSlots { get; set; }
+	public DbSet<DocumentType> DocumentTypes { get; set; }
 
 	#endregion
 

@@ -14,13 +14,21 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid EducationMediumId { get; private set; }
 	public Guid? StandardId { get; private set; }
 	public Guid? DivisionId { get; private set; }
+	public Guid? AcademicYearId { get; private set; }
 	public int? GrNo { get; private set; }
 	public int? RollNo { get; private set; }
 	public StudentLifeCycleStatusEnum Status { get; private set; }
+	public StudentEnrollmentApprovalState AdmissionApprovalStatus { get; private set; }
+	public string? AdmissionApprovalRemarks { get; private set; }
 
 	// Navigation properties to aggregate parts (1:1 relationships)
 	public StudentAdditionalDetail? AdditionalDetail { get; private set; }
 	public StudentContactDetail? ContactDetail { get; private set; }
+	public StudentFamilyDetail? FamilyDetail { get; private set; }
+	public StudentCommunicationDetail? CommunicationDetail { get; private set; }
+	public StudentMedicalRecord? MedicalRecord { get; private set; }
+	public StudentPreviousSchoolDetail? PreviousSchoolDetail { get; private set; }
+	public StudentBankDetail? BankDetail { get; private set; }
 
 	private Student()
 	{
@@ -36,6 +44,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid educationMediumId,
 		Guid? standardId = null,
 		Guid? divisionId = null,
+		Guid? academicYearId = null,
 		int? grNo = null,
 		int? rollNo = null,
 		StudentLifeCycleStatusEnum status = StudentLifeCycleStatusEnum.New
@@ -49,6 +58,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EducationMediumId = educationMediumId;
 		StandardId = standardId;
 		DivisionId = divisionId;
+		AcademicYearId = academicYearId;
 		GrNo = grNo;
 		RollNo = rollNo;
 		Status = status;
@@ -231,7 +241,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Moves student to admission stage after passing entrance exam
 	/// </summary>
-	public void MoveToAdmission()
+	public void MoveToAdmission(Guid? academicYearId = null)
 	{
 		if (Status != StudentLifeCycleStatusEnum.EntranceExam)
 		{
@@ -245,6 +255,67 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				"Cannot move to admission. Student must have passed the entrance exam.");
 		}
 
+		AcademicYearId = academicYearId;
 		ChangeStatus(StudentLifeCycleStatusEnum.Admission);
+		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Pending;
+	}
+
+	/// <summary>
+	/// Assigns or changes division for the student
+	/// </summary>
+	public void AssignDivision(Guid divisionId)
+	{
+		if (Status != StudentLifeCycleStatusEnum.Admission)
+		{
+			throw new InvalidOperationException(
+				$"Cannot assign division. Student must be in Admission status. Current status: {Status}");
+		}
+
+		DivisionId = divisionId;
+	}
+
+	/// <summary>
+	/// Approves the student admission
+	/// </summary>
+	public void ApproveAdmission()
+	{
+		if (Status != StudentLifeCycleStatusEnum.Admission)
+		{
+			throw new InvalidOperationException(
+				$"Cannot approve admission. Student must be in Admission status. Current status: {Status}");
+		}
+
+		if (AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved)
+		{
+			throw new InvalidOperationException("Student admission is already approved.");
+		}
+
+		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Approved;
+		AdmissionApprovalRemarks = null; // Clear any previous rejection remarks
+	}
+
+	/// <summary>
+	/// Rejects the student admission with remarks
+	/// </summary>
+	public void RejectAdmission(string remarks)
+	{
+		if (Status != StudentLifeCycleStatusEnum.Admission)
+		{
+			throw new InvalidOperationException(
+				$"Cannot reject admission. Student must be in Admission status. Current status: {Status}");
+		}
+
+		if (string.IsNullOrWhiteSpace(remarks))
+		{
+			throw new ArgumentException("Remarks are required when rejecting admission.", nameof(remarks));
+		}
+
+		if (AdmissionApprovalStatus == StudentEnrollmentApprovalState.Rejected)
+		{
+			throw new InvalidOperationException("Student admission is already rejected.");
+		}
+
+		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Rejected;
+		AdmissionApprovalRemarks = remarks;
 	}
 }

@@ -33,7 +33,7 @@ public interface IStudentEnrollmentEntranceExamAppService : IApplicationService
 	/// <summary>
 	/// Moves a student who passed the entrance exam to admission stage
 	/// </summary>
-	Task MoveToAdmissionAsync(Guid studentId);
+	Task MoveToAdmissionAsync(Guid studentId, Guid? academicYearId = null);
 
 	/// <summary>
 	/// Moves multiple students to admission stage in bulk

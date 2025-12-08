@@ -299,7 +299,7 @@ public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, I
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.Add)]
-	public async Task MoveToAdmissionAsync(Guid studentId)
+	public async Task MoveToAdmissionAsync(Guid studentId, Guid? academicYearId = null)
 	{
 		var student = await _studentRepository.GetAsync(studentId);
 
@@ -318,7 +318,7 @@ public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, I
 		}
 
 		// Move to admission using domain method
-		student.MoveToAdmission();
+		student.MoveToAdmission(academicYearId);
 
 		await _studentRepository.UpdateAsync(student, autoSave: true);
 	}
@@ -339,13 +339,13 @@ public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, I
 		{
 			try
 			{
-				var student = await _studentRepository.GetAsync(studentId);
-				var studentName = $"{student.FirstName} {student.MiddleName ?? ""} {student.LastName}".Trim();
+			var student = await _studentRepository.GetAsync(studentId);
+			var studentName = $"{student.FirstName} {student.MiddleName ?? ""} {student.LastName}".Trim();
 
-				// Validate and move
-				await MoveToAdmissionAsync(studentId);
+			// Validate and move
+			await MoveToAdmissionAsync(studentId, input.AcademicYearId);
 
-				result.SucceededStudents.Add(new StudentSummaryDto
+			result.SucceededStudents.Add(new StudentSummaryDto
 				{
 					StudentId = studentId,
 					StudentName = studentName

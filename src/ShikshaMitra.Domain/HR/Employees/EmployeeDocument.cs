@@ -1,12 +1,12 @@
 ﻿using System;
 using Volo.Abp.Auditing;
-using Volo.Abp.Domain.Entities;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.HR.Employees;
 
-public class EmployeeDocument : Entity<Guid>, IMultiTenant, IHasCreationTime
+public class EmployeeDocument : IMultiTenant, IHasCreationTime
 {
+	public Guid Id { get; private set; }
 	public Guid? TenantId { get; private set; }
 	public Guid EmployeeId { get; private set; }
 	public string DocumentName { get; private set; }

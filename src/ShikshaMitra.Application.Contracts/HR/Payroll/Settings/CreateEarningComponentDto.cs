@@ -1,0 +1,51 @@
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace ShikshaMitra.HR.Payroll.Settings;
+
+/// <summary>
+/// DTO for creating an earning component
+/// </summary>
+public class CreateEarningComponentDto
+{
+	/// <summary>
+	/// Name of the earning component (must be unique)
+	/// </summary>
+	[Required]
+	[StringLength(EarningComponentConsts.MaxNameLength, MinimumLength = 1)]
+	public string Name { get; set; } = string.Empty;
+	
+	/// <summary>
+	/// Optional description
+	/// </summary>
+	[StringLength(EarningComponentConsts.MaxDescriptionLength)]
+	public string? Description { get; set; }
+	
+	/// <summary>
+	/// Component type
+	/// </summary>
+	[Required]
+	public EarningComponentType ComponentType { get; set; }
+	
+	/// <summary>
+	/// Dependency
+	/// </summary>
+	[Required]
+	public ComponentDependency DependOn { get; set; }
+	
+	/// <summary>
+	/// Amount (numeric or percentage)
+	/// </summary>
+	[Required]
+	[StringLength(EarningComponentConsts.MaxAmountLength, MinimumLength = 1)]
+	public string Amount { get; set; } = string.Empty;
+	
+	/// <summary>
+	/// Whether visible in payslip (default: true)
+	/// </summary>
+	public bool VisibleInPayslip { get; set; } = true;
+	
+	/// <summary>
+	/// Display order (default: 0)
+	/// </summary>
+	public int DisplayOrder { get; set; } = 0;
+}

@@ -1,4 +1,6 @@
-﻿using ShikshaMitra.Common;
+﻿using Microsoft.Extensions.Logging;
+using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using System;
 using System.Collections.Generic;
@@ -10,22 +12,38 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Entities;
+using Volo.Abp.Guids;
 
 namespace ShikshaMitra.HR.Employees;
 
 public class EmployeeAppService(
-	IEmployeeRepository employeeRepository,
-	IPayrollStructureRepository payrollStructureRepository,
-	EmployeeManager employeeManager,
-	PayrollStructureManager payrollStructureManager,
-	IBlobContainer blobContainer) :
-	CrudAppService<Employee, EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>(
-		employeeRepository),
-	IEmployeeAppService
+IEmployeeRepository employeeRepository,
+EmployeeManager employeeManager,
+PayrollStructureManager payrollStructureManager,
+IBlobContainer blobContainer,
+IEmployeeCacheManager employeeCacheManager,
+IEmployeePayrollDetailsRepository payrollDetailsRepository,
+IEmployeePayrollComponentRepository payrollComponentRepository,
+IGuidGenerator guidGenerator,
+ILogger<EmployeeAppService> logger) :
+CrudAppService<Employee, EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>(
+employeeRepository),
+IEmployeeAppService
 {
-	public async Task<EmployeeDto?> GetEmployeeByUserId(Guid userId)
+	public async Task<EmployeeDto> GetEmployeeByUserId(Guid userId)
 	{
-		Employee employee = await employeeRepository.GetEmployeeByUserIdAsync(userId) ?? throw new EntityNotFoundException(typeof(Employee), userId);
+		// Navigation properties (Role, EducationMediumStage, Shift) are auto-loaded
+		Employee employee = await employeeRepository.GetEmployeeByUserIdAsync(userId) 
+			?? throw new EntityNotFoundException(typeof(Employee), userId);
+
+		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
+	}
+
+	public override async Task<EmployeeDto> GetAsync(Guid id)
+	{
+		// Use GetWithDetailsAsync for complete employee data including PayrollStructure
+		var employee = await employeeRepository.GetWithDetailsAsync(id, includePayrollStructure: true)
+			?? throw new EntityNotFoundException(typeof(Employee), id);
 
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
 	}
@@ -42,7 +60,6 @@ public class EmployeeAppService(
 			shortName: input.ShortName,
 			employeeStatusType: input.EmployeeStatusType,
 			dateOfBirth: input.DateOfBirth,
-			profilePicture: input.ProfilePicture,
 			familyCast: input.FamilyCast,
 			castType: input.CastType,
 			genderType: input.GenderType,
@@ -86,7 +103,6 @@ public class EmployeeAppService(
 			shortName: input.ShortName,
 			employeeStatusType: input.EmployeeStatusType,
 			dateOfBirth: input.DateOfBirth,
-			profilePicture: input.ProfilePicture,
 			familyCast: input.FamilyCast,
 			castType: input.CastType,
 			genderType: input.GenderType,
@@ -114,7 +130,7 @@ public class EmployeeAppService(
 			shiftId: input.ShiftId
 		);
 
-		// Save the updated employee
+		// Save the updated employee (cache will be invalidated in repository)
 		employee = await employeeRepository.UpdateAsync(employee);
 
 		// Return the updated DTO
@@ -133,7 +149,7 @@ public class EmployeeAppService(
 			await employeeManager.UpdateFamilyInfoByEmployeeIdAsync(employeeId, fatherDetails, motherDetails,
 				spouseDetails);
 
-		// Save the employee
+		// Save the employee (cache invalidation handled in repository)
 		employee = await employeeRepository.UpdateAsync(employee);
 
 		// Return the DTO
@@ -236,6 +252,61 @@ public class EmployeeAppService(
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
 	}
 
+	public async Task<EmployeeAdditionalDetailsDto> GetAdditionalDetailsAsync(Guid employeeId)
+	{
+		// Get employee using cached repository method
+		var employee = await employeeRepository.GetAsync(employeeId)
+			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
+
+		// Handle null AdditionalDetails for older records by initializing with defaults
+		var additionalDetails = employee.AdditionalDetails ?? EmployeeAdditionalDetails.CreateDefault();
+
+		// Map to DTO using null-safe accessors
+		return new EmployeeAdditionalDetailsDto
+		{
+			EmployeeCode = employee.EmployeeCode,
+			BplCardNo = additionalDetails.BplCardNo,
+			PersonWithDisability = additionalDetails.PersonWithDisability,
+			SecondLanguage = additionalDetails.SecondLanguage,
+			LibraryMember = additionalDetails.LibraryMember,
+			TransportMember = additionalDetails.TransportMember
+		};
+	}
+
+	public async Task<EmployeeAdditionalDetailsDto> UpdateAdditionalDetailsAsync(
+		Guid employeeId,
+		UpdateEmployeeAdditionalDetailsDto input)
+	{
+		// Create the value object with validation
+		var additionalDetails = new EmployeeAdditionalDetails(
+			input.BplCardNo,
+			input.PersonWithDisability,
+			input.SecondLanguage,
+			input.LibraryMember,
+			input.TransportMember
+		);
+
+		// Update employee using manager
+		var employee = await employeeManager.UpdateAdditionalDetailsByEmployeeIdAsync(
+			employeeId,
+			additionalDetails
+		);
+
+		// Save the employee (cache invalidation handled in repository)
+		employee = await employeeRepository.UpdateAsync(employee);
+
+		// Return success response
+		return new EmployeeAdditionalDetailsDto
+		{
+			EmployeeCode = employee.EmployeeCode,
+			BplCardNo = employee.AdditionalDetails.BplCardNo,
+			PersonWithDisability = employee.AdditionalDetails.PersonWithDisability,
+			SecondLanguage = employee.AdditionalDetails.SecondLanguage,
+			LibraryMember = employee.AdditionalDetails.LibraryMember,
+			TransportMember = employee.AdditionalDetails.TransportMember
+		};
+	}
+
 	public async Task<EmployeeDto> UpdateEmployeeStatus(Guid employeeId, EmployeeStatusType employeeStatusType,
 		string? changeReason)
 	{
@@ -265,6 +336,223 @@ public class EmployeeAppService(
 
 	public async Task UpdatePayrollStructureAsync(Guid employeeId, CreateUpdateEmployeePayrollStructureDto input)
 	{
+		if (input?.PayrollStructures == null || input.PayrollStructures.Count == 0)
+		{
+			throw new UserFriendlyException("Payroll structure is required.");
+		}
 
+		var payrollStructureId = input.PayrollStructures[0].Id;
+		await payrollStructureManager.SetEmployeePayrollStructureAsync(employeeId, payrollStructureId);
 	}
+
+	public async Task DeleteDocumentAsync(Guid employeeId, Guid documentId)
+	{
+		await employeeManager.DeleteDocumentAsync(employeeId, documentId);
+	}
+
+	public async Task<string> UploadProfilePictureAsync(Guid employeeId, string fileName, byte[] fileContent)
+	{
+		return await employeeManager.UploadProfilePictureAsync(employeeId, fileName, fileContent);
+	}
+
+	public async Task<DocumentDto?> GetProfilePictureAsync(Guid employeeId)
+	{
+		var employee = await employeeRepository.GetAsync(employeeId);
+		
+		if (string.IsNullOrEmpty(employee.ProfilePictureBlobName))
+		{
+			return null;
+		}
+
+		try
+		{
+			await using var stream = await blobContainer.GetAsync(employee.ProfilePictureBlobName);
+			await using var memoryStream = new MemoryStream();
+			await stream.CopyToAsync(memoryStream);
+
+			// Determine content type from file extension
+			var contentType = GetContentTypeFromFileName(employee.ProfilePictureBlobName);
+
+			return new DocumentDto
+			{
+				FileName = employee.ProfilePictureBlobName,
+				ContentType = contentType,
+				Content = memoryStream.ToArray(),
+				Size = memoryStream.Length
+			};
+		}
+		catch (FileNotFoundException)
+		{
+			// Blob was deleted externally or doesn't exist - this is expected behavior
+			logger.LogWarning(
+				"Profile picture blob not found for employee {EmployeeId}. BlobName: {BlobName}",
+				employeeId,
+				employee.ProfilePictureBlobName);
+			return null;
+		}
+		catch (Exception ex) when (ex.GetType().Name == "BlobProviderNotFoundException" || ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+		{
+			// Handle ABP BlobStoring provider-specific "not found" exceptions
+			logger.LogWarning(
+				"Profile picture blob not found for employee {EmployeeId}. BlobName: {BlobName}. Exception: {ExceptionType}",
+				employeeId,
+				employee.ProfilePictureBlobName,
+				ex.GetType().Name);
+			return null;
+		}
+		catch (Exception ex)
+		{
+			// Log unexpected errors and rethrow to surface operational issues
+			logger.LogError(
+				ex,
+				"Unexpected error retrieving profile picture for employee {EmployeeId}. BlobName: {BlobName}",
+				employeeId,
+				employee.ProfilePictureBlobName);
+			throw;
+		}
+	}
+
+	private static string GetContentTypeFromFileName(string fileName)
+	{
+		var extension = Path.GetExtension(fileName)?.ToLowerInvariant();
+		
+		return extension switch
+		{
+			".jpg" or ".jpeg" => "image/jpeg",
+			".png" => "image/png",
+			".gif" => "image/gif",
+			".bmp" => "image/bmp",
+			".webp" => "image/webp",
+			".svg" => "image/svg+xml",
+			".ico" => "image/x-icon",
+			_ => "application/octet-stream" // Fallback for unknown types
+		};
+	}
+
+	public async Task<EmployeePayrollDetailsDto> GetPayrollDetailsAsync(Guid employeeId)
+	{
+		var employee = await employeeRepository.GetAsync(employeeId);
+		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
+		var earnings = await payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
+		var deductions = await payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);
+
+		var result = new EmployeePayrollDetailsDto
+		{
+			// Note: EmployeeId property holds the employee code (string), not the GUID
+			EmployeeId = employee.EmployeeCode,
+			PayrollDetails = payrollDetails != null ? new PayrollDetailsDto
+			{
+				BankName = payrollDetails.BankName,
+				BranchName = payrollDetails.BranchName,
+				AccountHolderName = payrollDetails.AccountHolderName,
+				AccountNumber = payrollDetails.AccountNumber,
+				IfscCode = payrollDetails.IfscCode,
+				PfRule = payrollDetails.PfRule,
+				EpfNumber = payrollDetails.EpfNumber,
+				UanNumber = payrollDetails.UanNumber,
+				PunchId = payrollDetails.PunchId,
+				BasicSalary = payrollDetails.BasicSalary,
+				TdsPercentage = payrollDetails.TdsPercentage,
+				TdsAmount = payrollDetails.TdsAmount
+			} : new PayrollDetailsDto(),
+		Earnings = (earnings ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(e => new PayrollComponentDto
+		{
+			ComponentName = e.ComponentName,
+			Type = e.Type,
+			Amount = e.Amount
+		}).ToList(),
+		Deductions = (deductions ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(d => new PayrollComponentDto
+		{
+			ComponentName = d.ComponentName,
+			Type = d.Type,
+			Amount = d.Amount
+		}).ToList()
+		};
+
+		return result;
+	}
+
+	public async Task UpdatePayrollDetailsAsync(Guid employeeId, UpdateEmployeePayrollDetailsDto input)
+	{
+		// Validate input
+		if (input.PayrollDetails == null)
+		{
+			throw new UserFriendlyException("Payroll details are required.");
+		}
+
+		// Validate employee exists (throws EntityNotFoundException if not found)
+		await employeeRepository.GetAsync(employeeId);
+		
+		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
+
+		if (payrollDetails == null)
+		{
+			payrollDetails = new EmployeePayrollDetails(guidGenerator.Create(), employeeId);
+			payrollDetails.UpdateDetails(
+				input.PayrollDetails.BankName,
+				input.PayrollDetails.BranchName,
+				input.PayrollDetails.AccountHolderName,
+				input.PayrollDetails.AccountNumber,
+				input.PayrollDetails.IfscCode,
+				input.PayrollDetails.PfRule,
+				input.PayrollDetails.EpfNumber,
+				input.PayrollDetails.UanNumber,
+				input.PayrollDetails.PunchId,
+				input.PayrollDetails.BasicSalary,
+				input.PayrollDetails.TdsPercentage,
+				input.PayrollDetails.TdsAmount
+			);
+			await payrollDetailsRepository.InsertAsync(payrollDetails);
+		}
+		else
+		{
+			payrollDetails.UpdateDetails(
+				input.PayrollDetails.BankName,
+				input.PayrollDetails.BranchName,
+				input.PayrollDetails.AccountHolderName,
+				input.PayrollDetails.AccountNumber,
+				input.PayrollDetails.IfscCode,
+				input.PayrollDetails.PfRule,
+				input.PayrollDetails.EpfNumber,
+				input.PayrollDetails.UanNumber,
+				input.PayrollDetails.PunchId,
+				input.PayrollDetails.BasicSalary,
+				input.PayrollDetails.TdsPercentage,
+				input.PayrollDetails.TdsAmount
+			);
+			await payrollDetailsRepository.UpdateAsync(payrollDetails);
+		}
+
+		await payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: true);
+		await payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: false);
+
+		foreach (var earning in input.Earnings ?? Enumerable.Empty<PayrollComponentDto>())
+		{
+			var component = new EmployeePayrollComponent(
+				guidGenerator.Create(),
+				employeeId,
+				earning.ComponentName,
+				earning.Type,
+				earning.Amount,
+				isEarning: true
+			);
+			await payrollComponentRepository.InsertAsync(component);
+		}
+
+		foreach (var deduction in input.Deductions ?? Enumerable.Empty<PayrollComponentDto>())
+		{
+			var component = new EmployeePayrollComponent(
+				guidGenerator.Create(),
+				employeeId,
+				deduction.ComponentName,
+				deduction.Type,
+				deduction.Amount,
+				isEarning: false
+			);
+			await payrollComponentRepository.InsertAsync(component);
+		}
+
+		await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
+	}
+
 }

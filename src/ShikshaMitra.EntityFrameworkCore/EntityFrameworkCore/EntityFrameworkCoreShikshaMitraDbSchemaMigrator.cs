@@ -11,16 +11,16 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 	: IShikshaMitraDbSchemaMigrator, ITransientDependency
 {
 	public async Task MigrateAsync()
-    {
-        /* We intentionally resolve the ShikshaMitraDbContext
+	{
+		/* We intentionally resolve the ShikshaMitraDbContext
          * from IServiceProvider (instead of directly injecting it)
          * to properly get the connection string of the current tenant in the
          * current scope.
          */
 
-        await serviceProvider
-            .GetRequiredService<ShikshaMitraDbContext>()
-            .Database
-            .MigrateAsync();
-    }
+		await serviceProvider
+			.GetRequiredService<ShikshaMitraDbContext>()
+			.Database
+			.MigrateAsync();
+	}
 }

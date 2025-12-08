@@ -1,4 +1,6 @@
 ﻿using AutoMapper;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
@@ -21,6 +23,12 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		CreateMap<LibraryTiming, LibraryTimingDto>();
 		CreateMap<LibraryTimingDto, LibraryTiming>();
 
+		// Earning Components
+		CreateMap<EarningComponent, EarningComponentDto>();
+		
+		// Deduction Components
+		CreateMap<DeductionComponent, DeductionComponentDto>();
+
 		// Building and Floor mappings
 		CreateMap<Building, BuildingDto>();
 		CreateMap<Floor, FloorDto>();
@@ -34,5 +42,13 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		CreateMap<CreateUpdateSubjectDto, Subject>().ForMember(dest => dest.Id, opt => opt.Ignore());
 
 		// Document Types - Manual mapping used due to enum list conversion
+
+		// Employee Leave Management
+		CreateMap<LeaveType, LeaveTypeDto>();
+		
+		// Leave Policy mapping with custom PaidType conversion
+		CreateMap<LeavePolicy, LeavePolicyDto>()
+			.ForMember(dest => dest.PaidType,
+				opt => opt.MapFrom(src => src.PaidType == LeavePaidType.Paid ? "Paid" : "Unpaid"));
 	}
 }

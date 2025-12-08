@@ -1,341 +1,188 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using ShikshaMitra.Common;
-using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
-using ShikshaMitra.HR.Employees;
-using ShikshaMitra.HR.Payroll.PayrollStructures;
+﻿using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Payroll.Settings;
-using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
-using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
-using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
-using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
-using ShikshaMitra.TenantSettings.AcademicYears;
-using ShikshaMitra.TenantSettings.Divisions;
-using ShikshaMitra.TenantSettings.EducationBoards;
-using ShikshaMitra.TenantSettings.EducationMediums;
-using ShikshaMitra.TenantSettings.Standards;
+using System;
+using System.Threading.Tasks;
 using Volo.Abp.Data;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
-using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
-using Volo.Abp.TenantManagement;
 
 namespace ShikshaMitra.Seeders;
 
-public class HRSeederContributor(
-	ICurrentTenant currentTenant,
-	IGuidGenerator guidGenerator,
-	IUnitOfWork unitOfWork,
-	IAcademicYearRepository academicYearRepository,
-	IEducationBoardRepository educationBoardRepository,
-	IEducationMediumRepository educationMediumRepository,
-	IEducationMediumStageRepository educationMediumStageRepository,
-	IStandardRepository standardRepository,
-	IDivisionRepository divisionRepository,
-	IPayElementRepository payElementRepository,
-	IPayrollStructureRepository payrollStructureRepository,
-	IEmployeeRepository employeeRepository,
-	IEmployeeAttendanceRepository employeeAttendanceRepository,
-	ICustomAttendanceRuleRepository customAttendanceRuleRepository,
-	IIdentityUserRepository userRepository,
-	IdentityUserManager userManager,
-	IIdentityRoleRepository roleRepository,
-	ITenantRepository tenantRepository) : BaseSeederContributor(currentTenant, guidGenerator, unitOfWork)
+/// <summary>
+/// Seeds default HR module data for new tenants.
+/// Uses constructor injection to preserve tenant context from parent seeder.
+/// </summary>
+public class HRSeederContributor : BaseSeederContributor
 {
+	private readonly IRepository<LeaveType, Guid> _leaveTypeRepository;
+	private readonly LeaveTypeManager _leaveTypeManager;
+	private readonly IRepository<EarningComponent, Guid> _earningComponentRepository;
+	private readonly EarningComponentManager _earningComponentManager;
+	private readonly IRepository<DeductionComponent, Guid> _deductionComponentRepository;
+	private readonly DeductionComponentManager _deductionComponentManager;
+	private readonly IRepository<LeavePolicy, Guid> _leavePolicyRepository;
+	private readonly LeavePolicyManager _leavePolicyManager;
+
+	public HRSeederContributor(
+		ICurrentTenant currentTenant,
+		IGuidGenerator guidGenerator,
+		IUnitOfWork unitOfWork,
+		IRepository<LeaveType, Guid> leaveTypeRepository,
+		LeaveTypeManager leaveTypeManager,
+		IRepository<EarningComponent, Guid> earningComponentRepository,
+		EarningComponentManager earningComponentManager,
+		IRepository<DeductionComponent, Guid> deductionComponentRepository,
+		DeductionComponentManager deductionComponentManager,
+		IRepository<LeavePolicy, Guid> leavePolicyRepository,
+		LeavePolicyManager leavePolicyManager)
+		: base(currentTenant, guidGenerator, unitOfWork)
+	{
+		_leaveTypeRepository = leaveTypeRepository;
+		_leaveTypeManager = leaveTypeManager;
+		_earningComponentRepository = earningComponentRepository;
+		_earningComponentManager = earningComponentManager;
+		_deductionComponentRepository = deductionComponentRepository;
+		_deductionComponentManager = deductionComponentManager;
+		_leavePolicyRepository = leavePolicyRepository;
+		_leavePolicyManager = leavePolicyManager;
+	}
+
 	public override async Task SeedAsync(DataSeedContext context)
 	{
-		Guid tenantId = CurrentTenant?.Id ?? throw new Exception("TenantId is not set.");
+		// Seed default leave types
+		await SeedLeaveTypesAsync();
 
-		// Create Academic Year.
-		var academicYear = await academicYearRepository.InsertAsync(new AcademicYear(
-			GuidGenerator.Create(),
-			tenantId,
-			"2024-2025",
-			new DateTime(2024, 4, 1),
-			new DateTime(2025, 3, 31)
-		));
+		// Seed default earning components
+		await SeedEarningComponentsAsync();
 
-		// Create Education Board.
-		var educationBoard = await educationBoardRepository.InsertAsync(new EducationBoard(
-			GuidGenerator.Create(),
-			tenantId,
-			EducationBoardType.CBSE,
-			academicYear.Id
-		));
+		// Seed default deduction components
+		await SeedDeductionComponentsAsync();
 
-		// Create Education Medium.
-		var educationMedium = await educationMediumRepository.InsertAsync(new EducationMedium(
-			GuidGenerator.Create(),
-			tenantId,
-			"English",
-			educationBoard.Id
-		));
+		// Seed default leave policies
+		await SeedLeavePoliciesAsync();
+	}
 
-		// Create Education Medium Stage.
-		var educationMediumStage = await educationMediumStageRepository.InsertAsync(new EducationMediumStage(
-			GuidGenerator.Create(),
-			tenantId,
-			"Primary",
-			null,
-			educationMedium.Id
-		));
+	private async Task SeedLeaveTypesAsync()
+	{
+		// Check if already seeded
+		if (await _leaveTypeRepository.AnyAsync())
+			return;
 
-		// Create Standard.
-		var standard = await standardRepository.InsertAsync(new Standard(
-			GuidGenerator.Create(),
-			tenantId,
-			"1",
-			6,
-			educationMediumStage.Id,
-			shiftId: null
-		));
-
-		// Create Division.
-		var division = await divisionRepository.InsertAsync(new Division(
-			GuidGenerator.Create(),
-			tenantId,
-			"A",
-			standard.Id,
-			30,
-			"112"
-		));
-
-		// Store academic-related IDs in the seed context for use by the student seeder.
-		context.Properties["AcademicYearId"] = academicYear.Id;
-		context.Properties["EducationBoardId"] = educationBoard.Id;
-		context.Properties["EducationMediumId"] = educationMedium.Id;
-		context.Properties["EducationMediumStageId"] = educationMediumStage.Id;
-		context.Properties["StandardId"] = standard.Id;
-		context.Properties["DivisionId"] = division.Id;
-
-		// Create Pay Element.
-		var payElement = new PayElement(
-			id: GuidGenerator.Create(),
-			tenantId: tenantId,
-			code: "BE001",
-			name: "Basic",
-			type: PayElementType.Credit,
-			isEmployeeSpecific: false,
-			isDependent: false,
-			dependent: null,
-			isVisibleInPaySlip: true
-		);
-		payElement = await payElementRepository.InsertAsync(payElement);
-
-		// Create Payroll Structure.
-		var payrollStructure = new PayrollStructure(
-			id: GuidGenerator.Create(),
-			tenantId: tenantId,
-			payElementId: payElement.Id,
-			payElementType: PayElementType.Credit,
-			amount: 10000
-		);
-		await payrollStructureRepository.InsertAsync(payrollStructure);
-
-		// Retrieve the tenant information to decide on the email domain.
-		var tenant = await tenantRepository.GetAsync(tenantId);
-		// Try to get a domain or institute name from the tenant's extra properties.
-		string instituteName = tenant.ExtraProperties.ContainsKey("InstituteName")
-			? tenant.ExtraProperties["InstituteName"].ToString()
-			: "defaultdomain";
-		// Build the email dynamically based on the tenant's institute name.
-		var emailDomain = instituteName.Trim().ToLower();
-		var employeeEmail = $"teacher@{emailDomain}.com";
-
-		// Create Employee user with the dynamically generated email.
-		var employeeUser = new IdentityUser(
-			GuidGenerator.Create(),
-			$"teacher{emailDomain.ToLower()}",
-			employeeEmail,
-			tenantId
-		)
+		var leaveTypes = new[]
 		{
-			Name = "Testing",
-			Surname = "Teacher"
+			("Casual Leave", "#4CAF50"),
+			("Sick Leave", "#FF9800"),
+			("Earned Leave", "#2196F3"),
+			("Maternity Leave", "#E91E63"),
+			("Paternity Leave", "#9C27B0"),
+			("Compensatory Off", "#00BCD4"),
+			("Loss of Pay", "#F44336")
 		};
 
-		var password = "Temp@123";
-		var userCreationResult = await userManager.CreateAsync(employeeUser, password);
-		if (!userCreationResult.Succeeded)
+		foreach (var (type, color) in leaveTypes)
 		{
-			throw new Exception("Failed to create employee user: " + string.Join(", ", userCreationResult.Errors));
+			var leaveType = await _leaveTypeManager.CreateAsync(type, color);
+			await _leaveTypeRepository.InsertAsync(leaveType, autoSave: true);
 		}
+	}
 
-		// Assign the "Teacher" role to the employee user.
-		var roleAssignmentResult = await userManager.AddToRoleAsync(employeeUser, "Teacher");
-		if (!roleAssignmentResult.Succeeded)
+	private async Task SeedEarningComponentsAsync()
+	{
+		// Check if already seeded
+		if (await _earningComponentRepository.AnyAsync())
+			return;
+
+		var earningComponents = new[]
 		{
-			throw new Exception("Failed to assign role 'Teacher' to the employee: " + string.Join(", ", roleAssignmentResult.Errors));
-		}
+			new { Name = "Basic Salary", Description = "Base salary component", ComponentType = EarningComponentType.Fixed, DependOn = ComponentDependency.None, Amount = "0", VisibleInPayslip = true, DisplayOrder = 1 },
+			new { Name = "House Rent Allowance (HRA)", Description = "Housing allowance - typically 40% of Basic", ComponentType = EarningComponentType.Fixed, DependOn = ComponentDependency.Basic, Amount = "40", VisibleInPayslip = true, DisplayOrder = 2 },
+			new { Name = "Dearness Allowance (DA)", Description = "Cost of living adjustment", ComponentType = EarningComponentType.Fixed, DependOn = ComponentDependency.Basic, Amount = "0", VisibleInPayslip = true, DisplayOrder = 3 },
+			new { Name = "Transport Allowance", Description = "Conveyance allowance", ComponentType = EarningComponentType.Fixed, DependOn = ComponentDependency.None, Amount = "1600", VisibleInPayslip = true, DisplayOrder = 4 },
+			new { Name = "Medical Allowance", Description = "Medical reimbursement", ComponentType = EarningComponentType.Fixed, DependOn = ComponentDependency.None, Amount = "1250", VisibleInPayslip = true, DisplayOrder = 5 },
+			new { Name = "Special Allowance", Description = "Additional allowance", ComponentType = EarningComponentType.Fixed, DependOn = ComponentDependency.None, Amount = "0", VisibleInPayslip = true, DisplayOrder = 6 },
+			new { Name = "Performance Bonus", Description = "Variable performance-based bonus", ComponentType = EarningComponentType.Variable, DependOn = ComponentDependency.None, Amount = "0", VisibleInPayslip = true, DisplayOrder = 7 },
+			new { Name = "Incentive", Description = "One-time incentive payment", ComponentType = EarningComponentType.Variable, DependOn = ComponentDependency.None, Amount = "0", VisibleInPayslip = true, DisplayOrder = 8 }
+		};
 
-		// Fetch the Teacher role from the repository.
-		var teacherRole = await roleRepository.FindByNormalizedNameAsync("TEACHER");
-		if (teacherRole == null)
+		foreach (var component in earningComponents)
 		{
-			throw new Exception("Teacher role not found.");
+			var earningComponent = await _earningComponentManager.CreateAsync(
+				component.Name,
+				component.Description,
+				component.ComponentType,
+				component.DependOn,
+				component.Amount,
+				component.VisibleInPayslip,
+				component.DisplayOrder
+			);
+			await _earningComponentRepository.InsertAsync(earningComponent, autoSave: true);
 		}
+	}
 
+	private async Task SeedDeductionComponentsAsync()
+	{
+		// Check if already seeded
+		if (await _deductionComponentRepository.AnyAsync())
+			return;
 
-		// Find admin role
-		var adminRole = await roleRepository.FindByNormalizedNameAsync("ADMIN");
+		var deductionComponents = new[]
+		{
+			new { Name = "Provident Fund (PF)", Description = "Employee PF contribution - 12% of Basic", ComponentType = DeductionComponentType.Fixed, DependOn = ComponentDependency.Basic, Amount = "12", VisibleInPayslip = true, DisplayOrder = 1 },
+			new { Name = "Professional Tax", Description = "State professional tax", ComponentType = DeductionComponentType.Fixed, DependOn = ComponentDependency.Gross, Amount = "200", VisibleInPayslip = true, DisplayOrder = 2 },
+			new { Name = "Income Tax (TDS)", Description = "Tax Deducted at Source", ComponentType = DeductionComponentType.Fixed, DependOn = ComponentDependency.Gross, Amount = "0", VisibleInPayslip = true, DisplayOrder = 3 },
+			new { Name = "Employee State Insurance (ESI)", Description = "ESI contribution - 0.75% of Gross", ComponentType = DeductionComponentType.Fixed, DependOn = ComponentDependency.Gross, Amount = "0.75", VisibleInPayslip = true, DisplayOrder = 4 },
+			new { Name = "Loan Repayment", Description = "Employee loan deduction", ComponentType = DeductionComponentType.Fixed, DependOn = ComponentDependency.None, Amount = "0", VisibleInPayslip = true, DisplayOrder = 5 },
+			new { Name = "Advance Salary Deduction", Description = "Salary advance recovery", ComponentType = DeductionComponentType.Variable, DependOn = ComponentDependency.None, Amount = "0", VisibleInPayslip = true, DisplayOrder = 6 },
+			new { Name = "Loss of Pay (LOP)", Description = "Deduction for unauthorized absence", ComponentType = DeductionComponentType.Fixed, DependOn = ComponentDependency.None, Amount = "0", VisibleInPayslip = true, DisplayOrder = 7 }
+		};
 
-		List<Employee> employees = new List<Employee>();
+		foreach (var component in deductionComponents)
+		{
+			var deductionComponent = await _deductionComponentManager.CreateAsync(
+				component.Name,
+				component.Description,
+				component.ComponentType,
+				component.DependOn,
+				component.Amount,
+				component.VisibleInPayslip,
+				component.DisplayOrder
+			);
+			await _deductionComponentRepository.InsertAsync(deductionComponent, autoSave: true);
+		}
+	}
 
-		#region Create admin employee
-		// get all users
-		var users = await userRepository.GetListAsync();
+	private async Task SeedLeavePoliciesAsync()
+	{
+		// Check if already seeded
+		if (await _leavePolicyRepository.AnyAsync())
+			return;
 
-		// Get the user id with email address
-		var user = users.Find(u => u.Email == $"{emailDomain}@gmail.com");
+		var leavePolicies = new[]
+		{
+			new { PolicyName = "Standard Casual Leave Policy", LeaveType = "Casual Leave", MaximumDaysPerYear = 12, PaidType = LeavePaidType.Paid, CarryForward = true, Encashable = false, RequiresApproval = true, Description = "Standard casual leave - 12 days per year, carry forward allowed" },
+			new { PolicyName = "Standard Sick Leave Policy", LeaveType = "Sick Leave", MaximumDaysPerYear = 7, PaidType = LeavePaidType.Paid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Sick leave - 7 days per year, no carry forward" },
+			new { PolicyName = "Standard Earned Leave Policy", LeaveType = "Earned Leave", MaximumDaysPerYear = 15, PaidType = LeavePaidType.Paid, CarryForward = true, Encashable = true, RequiresApproval = true, Description = "Earned/Privilege leave - 15 days per year, carry forward and encashable" },
+			new { PolicyName = "Maternity Leave Policy", LeaveType = "Maternity Leave", MaximumDaysPerYear = 180, PaidType = LeavePaidType.Paid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Maternity leave as per statutory requirements" },
+			new { PolicyName = "Paternity Leave Policy", LeaveType = "Paternity Leave", MaximumDaysPerYear = 15, PaidType = LeavePaidType.Paid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Paternity leave - 15 days" },
+			new { PolicyName = "Compensatory Off Policy", LeaveType = "Compensatory Off", MaximumDaysPerYear = 24, PaidType = LeavePaidType.Paid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Comp-off for working on holidays - maximum 24 days per year" },
+			new { PolicyName = "Loss of Pay Policy", LeaveType = "Loss of Pay", MaximumDaysPerYear = 365, PaidType = LeavePaidType.Unpaid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Unpaid leave when all leave quota is exhausted" }
+		};
 
-		employees.Add(new Employee(
-			id: GuidGenerator.Create(),
-			tenantId: tenantId,
-			userId: user.Id,
-			educationMediumStageId: educationMediumStage.Id,
-			profilePicture: Convert.FromBase64String("Qk1CAAAAAAAAADYAAAAoAAAAAQAAAAD4AAABABgAAAAAACgAAAEDAAEAAAAAAAAAAADEDgAAxA4AAAAAAAAAAAAA//8A/wAA//8A/wD/"),
-			employeeCode: "EMP001",
-			lastName: "LastAdmin",
-			firstName: "FirstAdmin",
-			middleName: "Dineshbhai",
-			shortName: "HVD",
-			employeeStatusType: EmployeeStatusType.Active,
-			dateOfBirth: DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
-			familyCast: "Ahir",
-			castType: CastType.General,
-			genderType: GenderType.Male,
-			religion: "Hindu",
-			maritalStatus: MaritalStatusType.Married,
-			bloodGroup: "O+",
-			mobileNo: "+91-9876543210",
-			secondaryMobileNo: "+91-9876543210",
-			email: "ddvs@gmail.com",
-			address1: "123 Main Stree",
-			address2: "Mumbai",
-			address3: "India",
-			department: "IT",
-			designation: "Software Engineer",
-			dateOfJoining: DateOnly.FromDateTime(new DateTime(2021, 6, 1)),
-			employeeGroup: EmployeeGroupType.Teaching,
-			qualification: "Group A",
-			roleId: adminRole.Id, // Store the Admin role ID here.
-			identificationMark1: "Wear glasses",
-			city: "Gandhinagar",
-			state: new State("Gujarat", "GJ"),
-			country: new Country("India", "In"),
-			pinCode: "382421",
-			fatherDetails: new ContactDetails("Robert Smith", "Engineer", "+91-9876543211", "456, Elm Street",null,null, "Mumbai", stateName: "Maharashtra", stateIsoCode: "MH", countryName: "India", countryIsoCode: "In", "400001"),
-			motherDetails: new ContactDetails("Mary Smith", "Teacher", "+91-9876543212", "Parvat Patiya", null, null , "Surat", stateName: "Gujarat", stateIsoCode: "GJ", countryName: "India", countryIsoCode: "In", "395010"),
-			spouseDetails: new ContactDetails("Jane Doe", "Doctor", "+91-9876543213", "ATPL, Trimandir Road",null,null, "Adalaj", stateName: "Gujarat", stateIsoCode: "GJ", countryName: "India", countryIsoCode: "In", "382421"),
-			bankDetails: new BankDetails("ABC Bank", "Mumbai Main Branch", "John Doe", "123456789012", "ABC123456"),
-			shiftId: null,
-			workExperiences: new List<WorkExperience>
-			{
-				new WorkExperience(
-					"XYZ Technologies",
-					"789, Tech Park, Bangalore",
-					DateOnly.FromDateTime(new DateTime(2015, 6, 1)),
-					DateOnly.FromDateTime(new DateTime(2019, 12, 31)),
-					"Development",
-					"Software Developer",
-					"Developed web applications and maintained databases",
-					"Jane Doe, Senior Manager"
-				)
-			}
-		));
-
-
-		#endregion
-
-		#region create teacheremployee
-		// Create Employee record and store the Teacher role's ID.
-		var teacherEmployee = new Employee(
-			id: GuidGenerator.Create(),
-			tenantId: tenantId,
-			userId: employeeUser.Id,
-			educationMediumStageId: educationMediumStage.Id,
-			profilePicture: Convert.FromBase64String("Qk1CAAAAAAAAADYAAAAoAAAAAQAAAAD4AAABABgAAAAAACgAAAEDAAEAAAAAAAAAAADEDgAAxA4AAAAAAAAAAAAA//8A/wAA//8A/wD/"),
-			employeeCode: "EMP002",
-			lastName: "Vadher",
-			firstName: "Hiren",
-			middleName: "Dineshbhai",
-			shortName: "HVD",
-			employeeStatusType: EmployeeStatusType.Active,
-			dateOfBirth: DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
-			familyCast: "Ahir",
-			castType: CastType.General,
-			genderType: GenderType.Male,
-			religion: "Hindu",
-			maritalStatus: MaritalStatusType.Married,
-			bloodGroup: "O+",
-			mobileNo: "+91-9876543210",
-			secondaryMobileNo: "+91-9876543210",
-			email: employeeEmail,
-			address1: "123 Main Stree",
-			address2: "Mumbai",
-			address3: "India", 
-			department: "IT",
-			designation: "Software Engineer",
-			dateOfJoining: DateOnly.FromDateTime(new DateTime(2021, 6, 1)),
-			employeeGroup: EmployeeGroupType.Teaching,
-			qualification: "Group A",
-			roleId: teacherRole.Id, // Store the Teacher role ID here.
-			identificationMark1: "Wear glasses",
-			city: "Gandhinagar",
-			state: new State("Gujarat", "GJ"),
-			country: new Country("India", "In"),
-			pinCode: "382421",
-			fatherDetails: new ContactDetails("Robert Smith", "Engineer", "+91-9876543211", "456, Elm Street",null,null, "Mumbai", stateName: "Maharashtra", stateIsoCode: "MH", countryName: "India", countryIsoCode: "In", "400001"),
-			motherDetails: new ContactDetails("Mary Smith", "Teacher", "+91-9876543212", "Parvat Patiya", null, null, "Surat", stateName: "Gujarat", stateIsoCode: "GJ", countryName: "India", countryIsoCode: "In", "395010"),
-			spouseDetails: new ContactDetails("Jane Doe", "Doctor", "+91-9876543213", "ATPL, Trimandir Road", null, null, "Adalaj", stateName: "Gujarat", stateIsoCode: "GJ", countryName: "India", countryIsoCode: "In", "382421"),
-			bankDetails: new BankDetails("ABC Bank", "Mumbai Main Branch", "John Doe", "123456789012", "ABC123456"),
-			workExperiences: new List<WorkExperience>
-			{
-				new WorkExperience(
-					"XYZ Technologies",
-					"789, Tech Park, Bangalore",
-					DateOnly.FromDateTime(new DateTime(2015, 6, 1)),
-					DateOnly.FromDateTime(new DateTime(2019, 12, 31)),
-					"Development",
-					"Software Developer",
-					"Developed web applications and maintained databases",
-					"Jane Doe, Senior Manager"
-				)
-			},
-			shiftId: null
-		);
-		employees.Add(teacherEmployee);
-		#endregion
-
-		await employeeRepository.InsertManyAsync(employees);
-
-		//// Create Employee Attendance.
-		//var employeeAttendance = new EmployeeAttendance
-		//{
-		//	TenantId = tenantId,
-		//	EmployeeId = adminRole.Id,
-		//	TimeIn = new DateTimeOffset(new DateTime(2024, 6, 1, 9, 0, 0)),
-		//	TimeOut = new DateTimeOffset(new DateTime(2024, 6, 1, 18, 0, 0)),
-		//	StatusType = EmployeeAttendanceStatusType.Present,
-		//};
-		//await employeeAttendanceRepository.InsertAsync(employeeAttendance);
-
-		//// Create Custom Attendance Rule.
-		//var customAttendanceRule = new CustomAttendanceRule(
-		//	id: GuidGenerator.Create(),
-		//	tenantId: tenantId,
-		//	name: "Custom Rule 1",
-		//	type: EmployeeAttendanceStatusType.FullDayLeave,
-		//	lateThreshold: 20,
-		//	lateThresholdUnit: TimeUnitType.Minutes,
-		//	halfDayThreshold: 20,
-		//	halfDayThresholdUnit: TimeUnitType.Minutes,
-		//	enableNotificationForUpperAuthority: true
-		//);
-		//await customAttendanceRuleRepository.InsertAsync(customAttendanceRule);
-
-		//await CurrentUnitOfWork.SaveChangesAsync();
+		foreach (var policy in leavePolicies)
+		{
+			var leavePolicy = await _leavePolicyManager.CreateAsync(
+				policy.PolicyName,
+				policy.LeaveType,
+				policy.MaximumDaysPerYear,
+				policy.PaidType,
+				policy.CarryForward,
+				policy.Encashable,
+				policy.RequiresApproval,
+				policy.Description
+			);
+			await _leavePolicyRepository.InsertAsync(leavePolicy, autoSave: true);
+		}
 	}
 }

@@ -7,18 +7,26 @@ public static class ShikshaMitraSubModulePermissions
 	// student module submodules
 	public const string StudentDashboard = $"{ShikshaMitraModulePermissions.Students}.Dashboard";
 	public const string Enrollment = $"{ShikshaMitraModulePermissions.Students}.Enrollment";
+	public const string EnrollmentSettings = $"{ShikshaMitraModulePermissions.Students}.Enrollment.Settings";
 	public const string Records = $"{ShikshaMitraModulePermissions.Students}.Records";
+	public const string RecordsSettings = $"{ShikshaMitraModulePermissions.Students}.Records.Settings";
 	public const string Attendance = $"{ShikshaMitraModulePermissions.Students}.Attendance";
+	public const string AttendanceSettings = $"{ShikshaMitraModulePermissions.Students}.Attendance.Settings";
 	public const string Notification = $"{ShikshaMitraModulePermissions.Students}.Notification";
 
 	// Academics module submodules
 	public const string AcademicsDashboard = $"{ShikshaMitraModulePermissions.Academics}.Dashboard";
 	public const string Curriculum = $"{ShikshaMitraModulePermissions.Academics}.Curriculum";
+	public const string CurriculumSettings = $"{ShikshaMitraModulePermissions.Academics}.Curriculum.Settings";
 	public const string Timetable = $"{ShikshaMitraModulePermissions.Academics}.Timetable";
+	public const string TimetableSettings = $"{ShikshaMitraModulePermissions.Academics}.Timetable.Settings";
 	public const string HomeworkAssignment = $"{ShikshaMitraModulePermissions.Academics}.HomeworkAssignment";
+	public const string HomeworkAssignmentSettings = $"{ShikshaMitraModulePermissions.Academics}.HomeworkAssignment.Settings";
 	public const string Examination = $"{ShikshaMitraModulePermissions.Academics}.Examination";
+	public const string ExaminationSettings = $"{ShikshaMitraModulePermissions.Academics}.Examination.Settings";
 	public const string GroupManagement = $"{ShikshaMitraModulePermissions.Academics}.GroupManagement";
 	public const string LMS = $"{ShikshaMitraModulePermissions.Academics}.LMS";
+	public const string LMSSettings = $"{ShikshaMitraModulePermissions.Academics}.LMS.Settings";
 	public const string AcademicsNotification = $"{ShikshaMitraModulePermissions.Academics}.Notification";
 
 	// Class management module submodules
@@ -32,8 +40,11 @@ public static class ShikshaMitraSubModulePermissions
 	// HR module submodules
 	public const string HRDashboard = $"{ShikshaMitraModulePermissions.HR}.Dashboard";
 	public const string EmployeeRecords = $"{ShikshaMitraModulePermissions.HR}.Employee";
+	public const string EmployeeRecordsSettings = $"{ShikshaMitraModulePermissions.HR}.Employee.Settings";
 	public const string Payroll = $"{ShikshaMitraModulePermissions.HR}.Payroll";
+	public const string PayrollSettings = $"{ShikshaMitraModulePermissions.HR}.Payroll.Settings";
 	public const string AttendanceManagement = $"{ShikshaMitraModulePermissions.HR}.AttendanceManagement";
+	public const string AttendanceManagementSettings = $"{ShikshaMitraModulePermissions.HR}.AttendanceManagement.Settings";
 	public const string ProfessionalManagement = $"{ShikshaMitraModulePermissions.HR}.ProfessionalManagement";
 	public const string HRReports = $"{ShikshaMitraModulePermissions.HR}.Reports";
 	public const string HRNotification = $"{ShikshaMitraModulePermissions.HR}.Notification";
@@ -142,16 +153,24 @@ public static class ShikshaMitraSubModulePermissions
 	{
 		StudentDashboard,
 		Enrollment,
+		EnrollmentSettings,
 		Records,
+		RecordsSettings,
 		Attendance,
+		AttendanceSettings,
 		Notification,
 		AcademicsDashboard,
 		Curriculum,
+		CurriculumSettings,
 		Timetable,
+		TimetableSettings,
 		HomeworkAssignment,
+		HomeworkAssignmentSettings,
 		Examination,
+		ExaminationSettings,
 		GroupManagement,
 		LMS,
+		LMSSettings,
 		AcademicsNotification,
 		ClassManagementDashboard,
 		ElectiveAssignment,
@@ -161,8 +180,11 @@ public static class ShikshaMitraSubModulePermissions
 		ClassManagementNotification,
 		HRDashboard,
 		EmployeeRecords,
+		EmployeeRecordsSettings,
 		Payroll,
+		PayrollSettings,
 		AttendanceManagement,
+		AttendanceManagementSettings,
 		ProfessionalManagement,
 		HRReports,
 		HRNotification,
@@ -255,18 +277,26 @@ public static class ShikshaMitraSubModulePermissions
 		// Student module submodules
 		{ StudentDashboard, $"{DisplayNamePrefix}.StudentDashboard" },
 		{ Enrollment, $"{DisplayNamePrefix}.Enrollment" },
+		{ EnrollmentSettings, $"{DisplayNamePrefix}.EnrollmentSettings" },
 		{ Records, $"{DisplayNamePrefix}.Records" },
+		{ RecordsSettings, $"{DisplayNamePrefix}.RecordsSettings" },
 		{ Attendance, $"{DisplayNamePrefix}.Attendance" },
+		{ AttendanceSettings, $"{DisplayNamePrefix}.AttendanceSettings" },
 		{ Notification, $"{DisplayNamePrefix}.Notification" },
 
 		// Academics module submodules
 		{ AcademicsDashboard, $"{DisplayNamePrefix}.AcademicsDashboard" },
 		{ Curriculum, $"{DisplayNamePrefix}.Curriculum" },
+		{ CurriculumSettings, $"{DisplayNamePrefix}.CurriculumSettings" },
 		{ Timetable, $"{DisplayNamePrefix}.Timetable" },
+		{ TimetableSettings, $"{DisplayNamePrefix}.TimetableSettings" },
 		{ HomeworkAssignment, $"{DisplayNamePrefix}.HomeworkAssignment" },
+		{ HomeworkAssignmentSettings, $"{DisplayNamePrefix}.HomeworkAssignmentSettings" },
 		{ Examination, $"{DisplayNamePrefix}.Examination" },
+		{ ExaminationSettings, $"{DisplayNamePrefix}.ExaminationSettings" },
 		{ GroupManagement, $"{DisplayNamePrefix}.GroupManagement" },
 		{ LMS, $"{DisplayNamePrefix}.LMS" },
+		{ LMSSettings, $"{DisplayNamePrefix}.LMSSettings" },
 		{ AcademicsNotification, $"{DisplayNamePrefix}.AcademicsNotification" },
 
 		// Class Management module submodules
@@ -280,8 +310,11 @@ public static class ShikshaMitraSubModulePermissions
 		// HR module submodules
 		{ HRDashboard, $"{DisplayNamePrefix}.HRDashboard" },
 		{ EmployeeRecords, $"{DisplayNamePrefix}.EmployeeRecords" },
+		{ EmployeeRecordsSettings, $"{DisplayNamePrefix}.EmployeeRecordsSettings" },
 		{ Payroll, $"{DisplayNamePrefix}.Payroll" },
+		{ PayrollSettings, $"{DisplayNamePrefix}.PayrollSettings" },
 		{ AttendanceManagement, $"{DisplayNamePrefix}.AttendanceManagement" },
+		{ AttendanceManagementSettings, $"{DisplayNamePrefix}.AttendanceManagementSettings" },
 		{ ProfessionalManagement, $"{DisplayNamePrefix}.ProfessionalManagement" },
 		{ HRReports, $"{DisplayNamePrefix}.HRReports" },
 		{ HRNotification, $"{DisplayNamePrefix}.HRNotification" },

@@ -50,9 +50,10 @@ public class LeavePolicyConfiguration : IEntityTypeConfiguration<LeavePolicy>
 			.HasDefaultValue(true);
 
 		// Indexes for performance
-		builder.HasIndex(x => x.PolicyName)
+		// Unique index scoped per tenant
+		builder.HasIndex(x => new { x.TenantId, x.PolicyName })
 			.IsUnique()
-			.HasDatabaseName("IX_EmployeeLeavePolicies_PolicyName");
+			.HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_PolicyName");
 
 		builder.HasIndex(x => new { x.TenantId, x.IsActive })
 			.HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_IsActive");

@@ -81,6 +81,30 @@ public class LeavePolicyAppService : CrudAppService<
 		await ClearCacheAsync();
 	}
 
+	public override async Task<PagedResultDto<LeavePolicyDto>> GetListAsync(PagedAndSortedResultRequestDto input)
+	{
+		var queryable = await Repository.GetQueryableAsync();
+		
+		// Apply sorting
+		var sorting = input.Sorting ?? "PolicyName ASC";
+		queryable = ApplySorting(queryable, sorting);
+
+		// Get total count
+		var totalCount = await AsyncExecuter.CountAsync(queryable);
+
+		// Get items
+		var items = await AsyncExecuter.ToListAsync(
+			queryable
+				.Skip(input.SkipCount)
+				.Take(input.MaxResultCount)
+		);
+
+		return new PagedResultDto<LeavePolicyDto>(
+			totalCount,
+			items.Select(MapToDto).ToList()
+		);
+	}
+
 	public async Task<PagedResultDto<LeavePolicyDto>> GetAllActiveAsync(PagedResultRequestDto input)
 	{
 		var activeCacheKey = GetActiveCacheKey(input.SkipCount, input.MaxResultCount);
@@ -175,5 +199,69 @@ public class LeavePolicyAppService : CrudAppService<
 		
 		// Use RemoveManyAsync for better performance (single operation vs multiple awaits)
 		await _cache.RemoveManyAsync(cacheKeysToRemove);
+	}
+
+	private IQueryable<LeavePolicy> ApplySorting(IQueryable<LeavePolicy> queryable, string sorting)
+	{
+		if (string.IsNullOrWhiteSpace(sorting))
+		{
+			return queryable.OrderBy(x => x.PolicyName);
+		}
+
+		var sortingParts = sorting.Split(',');
+		IOrderedQueryable<LeavePolicy>? orderedQueryable = null;
+		bool isFirstSort = true;
+
+		foreach (var sortPart in sortingParts)
+		{
+			var parts = sortPart.Trim().Split(' ');
+			var property = parts[0];
+			var direction = parts.Length > 1 ? parts[1].ToUpper() : "ASC";
+
+			if (isFirstSort)
+			{
+				// First sort: use OrderBy/OrderByDescending
+				orderedQueryable = property.ToLower() switch
+				{
+					"policyname" => direction == "DESC" 
+						? queryable.OrderByDescending(x => x.PolicyName) 
+						: queryable.OrderBy(x => x.PolicyName),
+					"leavetype" => direction == "DESC"
+						? queryable.OrderByDescending(x => x.LeaveType)
+						: queryable.OrderBy(x => x.LeaveType),
+					"maximumdaysperyear" => direction == "DESC"
+						? queryable.OrderByDescending(x => x.MaximumDaysPerYear)
+						: queryable.OrderBy(x => x.MaximumDaysPerYear),
+					"isactive" => direction == "DESC"
+						? queryable.OrderByDescending(x => x.IsActive)
+						: queryable.OrderBy(x => x.IsActive),
+					_ => queryable.OrderBy(x => x.PolicyName)
+				};
+				isFirstSort = false;
+			}
+			else
+			{
+				// Subsequent sorts: use ThenBy/ThenByDescending
+				orderedQueryable = property.ToLower() switch
+				{
+					"policyname" => direction == "DESC" 
+						? orderedQueryable!.ThenByDescending(x => x.PolicyName) 
+						: orderedQueryable!.ThenBy(x => x.PolicyName),
+					"leavetype" => direction == "DESC"
+						? orderedQueryable!.ThenByDescending(x => x.LeaveType)
+						: orderedQueryable!.ThenBy(x => x.LeaveType),
+					"maximumdaysperyear" => direction == "DESC"
+						? orderedQueryable!.ThenByDescending(x => x.MaximumDaysPerYear)
+						: orderedQueryable!.ThenBy(x => x.MaximumDaysPerYear),
+					"isactive" => direction == "DESC"
+						? orderedQueryable!.ThenByDescending(x => x.IsActive)
+						: orderedQueryable!.ThenBy(x => x.IsActive),
+					_ => orderedQueryable!.ThenBy(x => x.PolicyName)
+				};
+			}
+		}
+
+		// Apply default fallback if no valid sort was applied
+		return orderedQueryable ?? queryable.OrderBy(x => x.PolicyName);
 	}
 }

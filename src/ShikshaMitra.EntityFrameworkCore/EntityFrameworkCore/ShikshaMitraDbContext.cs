@@ -4,7 +4,6 @@ using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Academic.Syllabus;
-using ShikshaMitra.EntityFrameworkCore.HR.Employees.Payroll;
 using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
 using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
 using ShikshaMitra.HR.AttendanceAndLeaves;
@@ -286,9 +285,5 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 		builder.ConfigureTenantManagement();
 		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 		builder.ConfigureBlobStoring();
-
-		// Add payroll configurations
-		builder.ApplyConfiguration(new EmployeePayrollDetailsConfiguration());
-		builder.ApplyConfiguration(new EmployeePayrollComponentConfiguration());
 	}
 }

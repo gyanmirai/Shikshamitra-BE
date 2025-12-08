@@ -62,6 +62,30 @@ public class LeaveTypeAppService : CrudAppService<
 		await ClearCacheAsync();
 	}
 
+	public override async Task<PagedResultDto<LeaveTypeDto>> GetListAsync(PagedAndSortedResultRequestDto input)
+	{
+		var queryable = await Repository.GetQueryableAsync();
+		
+		// Apply sorting
+		var sorting = input.Sorting ?? "Type ASC";
+		queryable = ApplySorting(queryable, sorting);
+
+		// Get total count
+		var totalCount = await AsyncExecuter.CountAsync(queryable);
+
+		// Get items
+		var items = await AsyncExecuter.ToListAsync(
+			queryable
+				.Skip(input.SkipCount)
+				.Take(input.MaxResultCount)
+		);
+
+		return new PagedResultDto<LeaveTypeDto>(
+			totalCount,
+			ObjectMapper.Map<List<LeaveType>, List<LeaveTypeDto>>(items)
+		);
+	}
+
 	public async Task<PagedResultDto<LeaveTypeDto>> GetAllActiveAsync(PagedResultRequestDto input)
 	{
 		var activeCacheKey = GetActiveCacheKey(input.SkipCount, input.MaxResultCount);
@@ -125,5 +149,63 @@ public class LeaveTypeAppService : CrudAppService<
 		
 		// Use RemoveManyAsync for better performance (single operation vs multiple awaits)
 		await _cache.RemoveManyAsync(cacheKeysToRemove);
+	}
+
+	private IQueryable<LeaveType> ApplySorting(IQueryable<LeaveType> queryable, string sorting)
+	{
+		if (string.IsNullOrWhiteSpace(sorting))
+		{
+			return queryable.OrderBy(x => x.Type);
+		}
+
+		var sortingParts = sorting.Split(',');
+		IOrderedQueryable<LeaveType>? orderedQueryable = null;
+		bool isFirstSort = true;
+
+		foreach (var sortPart in sortingParts)
+		{
+			var parts = sortPart.Trim().Split(' ');
+			var property = parts[0];
+			var direction = parts.Length > 1 ? parts[1].ToUpper() : "ASC";
+
+			if (isFirstSort)
+			{
+				// First sort: use OrderBy/OrderByDescending
+				orderedQueryable = property.ToLower() switch
+				{
+					"type" => direction == "DESC" 
+						? queryable.OrderByDescending(x => x.Type) 
+						: queryable.OrderBy(x => x.Type),
+					"color" => direction == "DESC"
+						? queryable.OrderByDescending(x => x.Color)
+						: queryable.OrderBy(x => x.Color),
+					"isactive" => direction == "DESC"
+						? queryable.OrderByDescending(x => x.IsActive)
+						: queryable.OrderBy(x => x.IsActive),
+					_ => queryable.OrderBy(x => x.Type)
+				};
+				isFirstSort = false;
+			}
+			else
+			{
+				// Subsequent sorts: use ThenBy/ThenByDescending
+				orderedQueryable = property.ToLower() switch
+				{
+					"type" => direction == "DESC" 
+						? orderedQueryable!.ThenByDescending(x => x.Type) 
+						: orderedQueryable!.ThenBy(x => x.Type),
+					"color" => direction == "DESC"
+						? orderedQueryable!.ThenByDescending(x => x.Color)
+						: orderedQueryable!.ThenBy(x => x.Color),
+					"isactive" => direction == "DESC"
+						? orderedQueryable!.ThenByDescending(x => x.IsActive)
+						: orderedQueryable!.ThenBy(x => x.IsActive),
+					_ => orderedQueryable!.ThenBy(x => x.Type)
+				};
+			}
+		}
+
+		// Apply default fallback if no valid sort was applied
+		return orderedQueryable ?? queryable.OrderBy(x => x.Type);
 	}
 }

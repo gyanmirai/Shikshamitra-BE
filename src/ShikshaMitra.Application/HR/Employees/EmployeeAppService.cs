@@ -448,6 +448,12 @@ IEmployeeAppService
 
 	public async Task UpdatePayrollDetailsAsync(Guid employeeId, UpdateEmployeePayrollDetailsDto input)
 	{
+		// Validate input
+		if (input.PayrollDetails == null)
+		{
+			throw new UserFriendlyException("Payroll details are required.");
+		}
+
 		var employee = await employeeRepository.GetAsync(employeeId);
 		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
 

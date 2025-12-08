@@ -22,7 +22,7 @@ This document provides comprehensive information about the End-to-End test suite
 
 ### Test Organization
 
-```
+```text
 test/ShikshaMitra.Application.Tests/
 ├── HR/
 │   ├── Payroll/
@@ -266,7 +266,7 @@ dotnet test --collect:"XPlat Code Coverage"
 
 ### Using Visual Studio Code
 
-```bash
+```text
 # Install .NET Test Explorer extension
 # Then use the test explorer in the sidebar
 ```
@@ -487,31 +487,41 @@ public async Task Should_Not_Create_With_CarryForward_Exceeding_MaxDays()
 
 ### Common Issues
 
-**Issue: Tests fail with "Entity not found"**
-```
-Solution: Ensure test data is created before querying
-Check that helper methods are awaited properly
-```
+### Tests fail with "Entity not found"
 
-**Issue: Duplicate key violations**
-```
-Solution: Use unique names in test data
-Utilize Guid.NewGuid() or timestamp in names
-```
+**Solution:** Ensure test data is created before querying.
 
-**Issue: Validation exceptions**
-```
-Solution: Review DTO validation attributes
-Ensure all required fields are populated
-Check data format (email, phone, IFSC)
-```
+- Check that helper methods are awaited properly
+- Use unique names with `Guid.NewGuid()` or timestamp
+- Validate that test data creation succeeded
+- Verify DTO fields match entity properties
 
-**Issue: Navigation property is null**
-```
-Solution: Verify EF Core configuration
-Check AutoInclude or explicit Include
-Review repository implementation
-```
+### Duplicate key violations
+
+**Solution:** Use unique names in test data to avoid conflicts.
+
+- Utilize `Guid.NewGuid()` in test data names
+- Add timestamps to ensure uniqueness
+- Check for existing data in database
+- Review unique constraints in entity configuration
+
+### Validation exceptions
+
+**Solution:** Review DTO validation attributes and ensure all required fields are populated.
+
+- Ensure all required fields are populated
+- Check data format (email, phone, IFSC)
+- Verify data length constraints
+- Review [Required], [MaxLength], and other validation attributes
+
+### Navigation property is null
+
+**Solution:** Verify EF Core configuration for navigation properties.
+
+- Check AutoInclude configuration in entity configuration
+- Add explicit Include in repository methods
+- Review repository implementation for GetWithDetailsAsync
+- Ensure navigation properties are defined correctly
 
 ### Debugging Tests
 

@@ -1079,12 +1079,12 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("LeaveType")
                         .HasDatabaseName("IX_EmployeeLeavePolicies_LeaveType");
 
-                    b.HasIndex("PolicyName")
-                        .IsUnique()
-                        .HasDatabaseName("IX_EmployeeLeavePolicies_PolicyName");
-
                     b.HasIndex("TenantId", "IsActive")
                         .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_IsActive");
+
+                    b.HasIndex("TenantId", "PolicyName")
+                        .IsUnique()
+                        .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_PolicyName");
 
                     b.ToTable("AppEmployeeLeavePolicies", (string)null);
                 });
@@ -1157,12 +1157,12 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Type")
-                        .IsUnique()
-                        .HasDatabaseName("IX_EmployeeLeaveTypes_Type");
-
                     b.HasIndex("TenantId", "IsActive")
                         .HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_IsActive");
+
+                    b.HasIndex("TenantId", "Type")
+                        .IsUnique()
+                        .HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_Type");
 
                     b.ToTable("AppEmployeeLeaveTypes", (string)null);
                 });

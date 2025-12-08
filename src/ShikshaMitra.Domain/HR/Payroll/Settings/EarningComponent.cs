@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -154,7 +154,7 @@ public class EarningComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 						.WithData("message", "Amount must be a valid non-negative number or percentage.");
 				}
 			}
-			Amount = amount;
+			Amount = amountTrimmed;
 		}
 	}
 }

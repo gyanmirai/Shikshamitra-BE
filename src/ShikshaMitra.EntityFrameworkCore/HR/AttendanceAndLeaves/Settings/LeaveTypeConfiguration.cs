@@ -29,9 +29,10 @@ public class LeaveTypeConfiguration : IEntityTypeConfiguration<LeaveType>
 			.HasDefaultValue(true);
 
 		// Indexes for performance
-		builder.HasIndex(x => x.Type)
+		// Unique index scoped per tenant
+		builder.HasIndex(x => new { x.TenantId, x.Type })
 			.IsUnique()
-			.HasDatabaseName("IX_EmployeeLeaveTypes_Type");
+			.HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_Type");
 
 		builder.HasIndex(x => new { x.TenantId, x.IsActive })
 			.HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_IsActive");

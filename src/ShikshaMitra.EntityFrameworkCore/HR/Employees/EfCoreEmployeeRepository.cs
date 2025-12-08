@@ -121,6 +121,9 @@ public class EfCoreEmployeeRepository(
 				.ThenInclude(ps => ps.PayElement);
 		}
 
+		// Include Documents collection to prevent null reference when accessed
+		query = query.Include(e => e.Documents);
+
 		return await query.FirstOrDefaultAsync(cancellationToken);
 	}
 

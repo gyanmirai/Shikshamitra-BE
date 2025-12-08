@@ -58,7 +58,9 @@ public class LeaveTypeAppService : CrudAppService<
 
 	public override async Task DeleteAsync(Guid id)
 	{
-		await Repository.DeleteAsync(id);
+		var leaveType = await Repository.GetAsync(id);
+		leaveType.Deactivate();
+		await Repository.UpdateAsync(leaveType, autoSave: true);
 		await ClearCacheAsync();
 	}
 

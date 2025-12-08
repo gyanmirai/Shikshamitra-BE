@@ -413,6 +413,7 @@ IEmployeeAppService
 
 		var result = new EmployeePayrollDetailsDto
 		{
+			// Note: EmployeeId property holds the employee code (string), not the GUID
 			EmployeeId = employee.EmployeeCode,
 			PayrollDetails = payrollDetails != null ? new PayrollDetailsDto
 			{
@@ -429,13 +430,13 @@ IEmployeeAppService
 				TdsPercentage = payrollDetails.TdsPercentage,
 				TdsAmount = payrollDetails.TdsAmount
 			} : new PayrollDetailsDto(),
-		Earnings = earnings.Select(e => new PayrollComponentDto
+		Earnings = (earnings ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(e => new PayrollComponentDto
 		{
 			ComponentName = e.ComponentName,
 			Type = e.Type,
 			Amount = e.Amount
 		}).ToList(),
-		Deductions = deductions.Select(d => new PayrollComponentDto
+		Deductions = (deductions ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(d => new PayrollComponentDto
 		{
 			ComponentName = d.ComponentName,
 			Type = d.Type,
@@ -454,7 +455,9 @@ IEmployeeAppService
 			throw new UserFriendlyException("Payroll details are required.");
 		}
 
-		var employee = await employeeRepository.GetAsync(employeeId);
+		// Validate employee exists (throws EntityNotFoundException if not found)
+		await employeeRepository.GetAsync(employeeId);
+		
 		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
 
 		if (payrollDetails == null)
@@ -498,31 +501,31 @@ IEmployeeAppService
 		await payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: true);
 		await payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: false);
 
-	foreach (var earning in input.Earnings)
-	{
-		var component = new EmployeePayrollComponent(
-			guidGenerator.Create(),
-			employeeId,
-			earning.ComponentName,
-			earning.Type,
-			earning.Amount,
-			isEarning: true
-		);
-		await payrollComponentRepository.InsertAsync(component);
-	}
+		foreach (var earning in input.Earnings ?? Enumerable.Empty<PayrollComponentDto>())
+		{
+			var component = new EmployeePayrollComponent(
+				guidGenerator.Create(),
+				employeeId,
+				earning.ComponentName,
+				earning.Type,
+				earning.Amount,
+				isEarning: true
+			);
+			await payrollComponentRepository.InsertAsync(component);
+		}
 
-	foreach (var deduction in input.Deductions)
-	{
-		var component = new EmployeePayrollComponent(
-			guidGenerator.Create(),
-			employeeId,
-			deduction.ComponentName,
-			deduction.Type,
-			deduction.Amount,
-			isEarning: false
-		);
-		await payrollComponentRepository.InsertAsync(component);
-	}
+		foreach (var deduction in input.Deductions ?? Enumerable.Empty<PayrollComponentDto>())
+		{
+			var component = new EmployeePayrollComponent(
+				guidGenerator.Create(),
+				employeeId,
+				deduction.ComponentName,
+				deduction.Type,
+				deduction.Amount,
+				isEarning: false
+			);
+			await payrollComponentRepository.InsertAsync(component);
+		}
 
 		await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
 	}

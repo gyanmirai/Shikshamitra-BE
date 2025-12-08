@@ -18,7 +18,7 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 		// Configure Father Details as owned entity (complex type)
 		builder.OwnsOne(x => x.FatherDetails, fd =>
 		{
-			fd.Property(p => p.FullName).HasMaxLength(200);
+			fd.Property(p => p.FullName).HasMaxLength(200).IsRequired();
 			fd.Property(p => p.Occupation).HasMaxLength(100);
 			fd.Property(p => p.Email).HasMaxLength(256);
 			fd.Property(p => p.ContactNo).HasMaxLength(20);
@@ -60,7 +60,7 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 		// Configure Mother Details as owned entity (complex type)
 		builder.OwnsOne(x => x.MotherDetails, md =>
 		{
-			md.Property(p => p.FullName).HasMaxLength(200);
+			md.Property(p => p.FullName).HasMaxLength(200).IsRequired();
 			md.Property(p => p.Occupation).HasMaxLength(100);
 			md.Property(p => p.Email).HasMaxLength(256);
 			md.Property(p => p.ContactNo).HasMaxLength(20);
@@ -146,6 +146,6 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 			.HasConversion(
 				v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
 				v => System.Text.Json.JsonSerializer.Deserialize<List<Guid>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new List<Guid>())
-			.HasColumnType("nvarchar(max)");
+			.HasColumnType("text");
 	}
 }

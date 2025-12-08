@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using Shouldly;
@@ -35,11 +36,13 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             MiddleName = "Robert",
             LastName = "Doe",
             MobileNo = "9876543210",
-            EmailId = "john.doe@test.com",
-            DateOfBirth = new DateTime(1990, 5, 15),
-            Gender = "Male",
-            DateOfJoining = new DateTime(2023, 1, 1),
-            EmployeeStatusType = EmployeeStatusType.Active
+            Email = "john.doe@test.com",
+            DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 5, 15)),
+            GenderType = GenderType.Male,
+            DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
+            EmployeeStatusType = EmployeeStatusType.Active,
+            RoleId = Guid.NewGuid(),
+            EducationMediumStageId = Guid.NewGuid()
         };
 
         // Act
@@ -52,7 +55,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         result.MiddleName.ShouldBe(input.MiddleName);
         result.LastName.ShouldBe(input.LastName);
         result.MobileNo.ShouldBe(input.MobileNo);
-        result.EmailId.ShouldBe(input.EmailId);
+        result.Email.ShouldBe(input.Email);
         result.EmployeeCode.ShouldNotBeNullOrEmpty();
         result.EmployeeStatusType.ShouldBe(EmployeeStatusType.Active);
     }
@@ -79,8 +82,10 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             FirstName = "", // Empty first name
             LastName = "Doe",
             MobileNo = "9876543210",
-            DateOfBirth = new DateTime(1990, 1, 1),
-            DateOfJoining = new DateTime(2023, 1, 1)
+            DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
+            DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
+            RoleId = Guid.NewGuid(),
+            EducationMediumStageId = Guid.NewGuid()
         };
 
         // Act & Assert
@@ -99,8 +104,10 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             FirstName = "John",
             LastName = "Doe",
             MobileNo = "123", // Invalid mobile number
-            DateOfBirth = new DateTime(1990, 1, 1),
-            DateOfJoining = new DateTime(2023, 1, 1)
+            DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
+            DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
+            RoleId = Guid.NewGuid(),
+            EducationMediumStageId = Guid.NewGuid()
         };
 
         // Act & Assert
@@ -119,9 +126,11 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             FirstName = "John",
             LastName = "Doe",
             MobileNo = "9876543210",
-            EmailId = "invalid-email", // Invalid email format
-            DateOfBirth = new DateTime(1990, 1, 1),
-            DateOfJoining = new DateTime(2023, 1, 1)
+            Email = "invalid-email", // Invalid email format
+            DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
+            DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
+            RoleId = Guid.NewGuid(),
+            EducationMediumStageId = Guid.NewGuid()
         };
 
         // Act & Assert
@@ -204,10 +213,12 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             MiddleName = "Middle",
             LastName = "Name",
             MobileNo = "8888888888",
-            EmailId = "updated@test.com",
-            DateOfBirth = new DateTime(1991, 6, 20),
-            Gender = "Female",
-            DateOfJoining = new DateTime(2023, 6, 1)
+            Email = "updated@test.com",
+            DateOfBirth = DateOnly.FromDateTime(new DateTime(1991, 6, 20)),
+            GenderType = GenderType.Female,
+            DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 6, 1)),
+            RoleId = Guid.NewGuid(),
+            EducationMediumStageId = Guid.NewGuid()
         };
 
         // Act
@@ -219,7 +230,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         result.MiddleName.ShouldBe("Middle");
         result.LastName.ShouldBe("Name");
         result.MobileNo.ShouldBe("8888888888");
-        result.EmailId.ShouldBe("updated@test.com");
+        result.Email.ShouldBe("updated@test.com");
     }
 
     #endregion
@@ -234,11 +245,18 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
         var updateInput = new UpdateEmployeeFamilyDetailsDto
         {
-            FatherName = "John Doe Sr.",
-            MotherName = "Jane Doe",
-            SpouseName = "Mary Doe",
-            MaritalStatus = "Married",
-            NumberOfChildren = 2
+            FatherDetails = new ContactDetailsDto
+            {
+                Name = "John Doe Sr."
+            },
+            MotherDetails = new ContactDetailsDto
+            {
+                Name = "Jane Doe"
+            },
+            SpouseDetails = new ContactDetailsDto
+            {
+                Name = "Mary Doe"
+            }
         };
 
         // Act
@@ -246,10 +264,12 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
         // Assert
         result.ShouldNotBeNull();
-        result.FamilyDetails.ShouldNotBeNull();
-        result.FamilyDetails.FatherName.ShouldBe("John Doe Sr.");
-        result.FamilyDetails.MotherName.ShouldBe("Jane Doe");
-        result.FamilyDetails.SpouseName.ShouldBe("Mary Doe");
+        result.FatherDetails.ShouldNotBeNull();
+        result.FatherDetails.Name.ShouldBe("John Doe Sr.");
+        result.MotherDetails.ShouldNotBeNull();
+        result.MotherDetails.Name.ShouldBe("Jane Doe");
+        result.SpouseDetails.ShouldNotBeNull();
+        result.SpouseDetails.Name.ShouldBe("Mary Doe");
     }
 
     #endregion
@@ -395,13 +415,13 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         var employee = await CreateTestEmployeeAsync("Test", "Employee");
 
         // Act & Assert - Test all status transitions
-        var onLeave = await _employeeAppService.UpdateEmployeeStatus(
-            employee.Id, EmployeeStatusType.OnLeave, "Going on leave");
-        onLeave.EmployeeStatusType.ShouldBe(EmployeeStatusType.OnLeave);
+        var inactive = await _employeeAppService.UpdateEmployeeStatus(
+            employee.Id, EmployeeStatusType.Inactive, "Employee on probation");
+        inactive.EmployeeStatusType.ShouldBe(EmployeeStatusType.Inactive);
 
-        var suspended = await _employeeAppService.UpdateEmployeeStatus(
-            employee.Id, EmployeeStatusType.Suspended, "Suspended for review");
-        suspended.EmployeeStatusType.ShouldBe(EmployeeStatusType.Suspended);
+        var left = await _employeeAppService.UpdateEmployeeStatus(
+            employee.Id, EmployeeStatusType.Left, "Employee resigned");
+        left.EmployeeStatusType.ShouldBe(EmployeeStatusType.Left);
 
         var active = await _employeeAppService.UpdateEmployeeStatus(
             employee.Id, EmployeeStatusType.Active, "Back to active");
@@ -423,7 +443,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
         // Assert
         result.ShouldNotBeNull();
-        result.EmployeeId.ShouldBe(created.Id);
+        result.EmployeeId.ShouldBe(created.EmployeeCode);
     }
 
     [Fact]
@@ -434,11 +454,8 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
         var updateInput = new UpdateEmployeePayrollDetailsDto
         {
-            PayrollDetails = new UpdatePayrollDetailsDto
+            PayrollDetails = new PayrollDetailsDto
             {
-                BankName = "Payroll Bank",
-                AccountNumber = "9876543210",
-                IfscCode = "PAYR0001234",
                 BasicSalary = 50000,
                 TdsPercentage = 10
             },
@@ -473,6 +490,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
         // Assert
         var result = await _employeeAppService.GetPayrollDetailsAsync(created.Id);
+        result.ShouldNotBeNull();
         result.PayrollDetails.ShouldNotBeNull();
         result.PayrollDetails.BasicSalary.ShouldBe(50000);
         result.Earnings.Count.ShouldBe(2);
@@ -488,7 +506,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         // First update with 2 earnings
         var firstUpdate = new UpdateEmployeePayrollDetailsDto
         {
-            PayrollDetails = new UpdatePayrollDetailsDto
+            PayrollDetails = new PayrollDetailsDto
             {
                 BasicSalary = 40000
             },
@@ -505,7 +523,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         // Second update with 1 earning (should replace, not add)
         var secondUpdate = new UpdateEmployeePayrollDetailsDto
         {
-            PayrollDetails = new UpdatePayrollDetailsDto
+            PayrollDetails = new PayrollDetailsDto
             {
                 BasicSalary = 50000
             },
@@ -560,8 +578,10 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             MiddleName = "VeryLongMiddleNameThatExceedsNormalLength",
             LastName = "VeryLongLastNameThatExceedsNormalLength",
             MobileNo = "9876543210",
-            DateOfBirth = new DateTime(1990, 1, 1),
-            DateOfJoining = new DateTime(2023, 1, 1)
+            DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
+            DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
+            RoleId = Guid.NewGuid(),
+            EducationMediumStageId = Guid.NewGuid()
         };
 
         // Act & Assert - Should either succeed or throw validation error
@@ -587,9 +607,11 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             MiddleName = null, // Optional
             LastName = "Doe",
             MobileNo = "9876543210",
-            EmailId = null, // Optional
-            DateOfBirth = new DateTime(1990, 1, 1),
-            DateOfJoining = new DateTime(2023, 1, 1)
+            Email = null, // Optional
+            DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
+            DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
+            RoleId = Guid.NewGuid(),
+            EducationMediumStageId = Guid.NewGuid()
         };
 
         // Act
@@ -598,7 +620,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         // Assert
         result.ShouldNotBeNull();
         result.MiddleName.ShouldBeNull();
-        result.EmailId.ShouldBeNull();
+        result.Email.ShouldBeNull();
     }
 
     [Fact]
@@ -611,8 +633,10 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             MiddleName = "O'Brien",
             LastName = "D'Angelo",
             MobileNo = "9876543210",
-            DateOfBirth = new DateTime(1990, 1, 1),
-            DateOfJoining = new DateTime(2023, 1, 1)
+            DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
+            DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
+            RoleId = Guid.NewGuid(),
+            EducationMediumStageId = Guid.NewGuid()
         };
 
         // Act
@@ -636,11 +660,13 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             FirstName = firstName,
             LastName = lastName,
             MobileNo = "9876543210",
-            EmailId = $"{firstName.ToLower()}.{lastName.ToLower()}@test.com",
-            DateOfBirth = new DateTime(1990, 5, 15),
-            Gender = "Male",
-            DateOfJoining = DateTime.Now.Date,
-            EmployeeStatusType = EmployeeStatusType.Active
+            Email = $"{firstName.ToLower()}.{lastName.ToLower()}@test.com",
+            DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 5, 15)),
+            GenderType = GenderType.Male,
+            DateOfJoining = DateOnly.FromDateTime(DateTime.Now.Date),
+            EmployeeStatusType = EmployeeStatusType.Active,
+            RoleId = Guid.NewGuid(),
+            EducationMediumStageId = Guid.NewGuid()
         };
 
         return await _employeeAppService.CreateBasicInfoAsync(input);

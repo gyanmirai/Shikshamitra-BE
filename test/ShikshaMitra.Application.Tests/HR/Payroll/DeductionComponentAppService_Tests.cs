@@ -25,14 +25,14 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
     #region Create Tests
 
     [Fact]
-    public async Task Should_Create_Statutory_Deduction_Component()
+    public async Task Should_Create_Fixed_Deduction_Component()
     {
         // Arrange
         var input = new CreateDeductionComponentDto
         {
             Name = "Test Provident Fund",
             Description = "Employee PF contribution",
-            ComponentType = DeductionComponentType.Statutory,
+            ComponentType = DeductionComponentType.Fixed,
             DependOn = ComponentDependency.Basic,
             Amount = "12%",
             VisibleInPayslip = true,
@@ -47,7 +47,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         result.Id.ShouldNotBe(Guid.Empty);
         result.Name.ShouldBe(input.Name);
         result.Description.ShouldBe(input.Description);
-        result.ComponentType.ShouldBe(DeductionComponentType.Statutory);
+        result.ComponentType.ShouldBe(DeductionComponentType.Fixed);
         result.DependOn.ShouldBe(ComponentDependency.Basic);
         result.Amount.ShouldBe(input.Amount);
         result.VisibleInPayslip.ShouldBeTrue();
@@ -56,14 +56,14 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
     }
 
     [Fact]
-    public async Task Should_Create_Voluntary_Deduction_Component()
+    public async Task Should_Create_Variable_Deduction_Component()
     {
         // Arrange
         var input = new CreateDeductionComponentDto
         {
             Name = "Test Life Insurance Premium",
             Description = "Monthly insurance premium",
-            ComponentType = DeductionComponentType.Voluntary,
+            ComponentType = DeductionComponentType.Variable,
             DependOn = ComponentDependency.None,
             Amount = "500",
             VisibleInPayslip = true,
@@ -75,33 +75,9 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
 
         // Assert
         result.ShouldNotBeNull();
-        result.ComponentType.ShouldBe(DeductionComponentType.Voluntary);
+        result.ComponentType.ShouldBe(DeductionComponentType.Variable);
         result.DependOn.ShouldBe(ComponentDependency.None);
         result.Amount.ShouldBe("500");
-    }
-
-    [Fact]
-    public async Task Should_Create_Loan_Deduction_Component()
-    {
-        // Arrange
-        var input = new CreateDeductionComponentDto
-        {
-            Name = "Test Home Loan EMI",
-            Description = "Monthly home loan deduction",
-            ComponentType = DeductionComponentType.Loan,
-            DependOn = ComponentDependency.None,
-            Amount = "15000",
-            VisibleInPayslip = true,
-            DisplayOrder = 3
-        };
-
-        // Act
-        var result = await _deductionComponentAppService.CreateAsync(input);
-
-        // Assert
-        result.ShouldNotBeNull();
-        result.ComponentType.ShouldBe(DeductionComponentType.Loan);
-        result.Amount.ShouldBe("15000");
     }
 
     [Fact]
@@ -112,7 +88,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         var input1 = new CreateDeductionComponentDto
         {
             Name = componentName,
-            ComponentType = DeductionComponentType.Statutory,
+            ComponentType = DeductionComponentType.Fixed,
             DependOn = ComponentDependency.None,
             Amount = "1000"
         };
@@ -122,7 +98,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         var input2 = new CreateDeductionComponentDto
         {
             Name = componentName,
-            ComponentType = DeductionComponentType.Voluntary,
+            ComponentType = DeductionComponentType.Variable,
             DependOn = ComponentDependency.None,
             Amount = "500"
         };
@@ -141,7 +117,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         var input = new CreateDeductionComponentDto
         {
             Name = "", // Empty name
-            ComponentType = DeductionComponentType.Statutory,
+            ComponentType = DeductionComponentType.Fixed,
             DependOn = ComponentDependency.None,
             Amount = "1000"
         };
@@ -160,7 +136,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         var input = new CreateDeductionComponentDto
         {
             Name = "  Test Deduction With Spaces  ",
-            ComponentType = DeductionComponentType.Statutory,
+            ComponentType = DeductionComponentType.Fixed,
             DependOn = ComponentDependency.None,
             Amount = "1000"
         };
@@ -213,7 +189,11 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         await CreateTestDeductionComponentAsync("Active Deduction 3");
 
         // Act
-        var result = await _deductionComponentAppService.GetAllActiveAsync();
+        var result = await _deductionComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
 
         // Assert
         result.ShouldNotBeNull();
@@ -249,22 +229,24 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
     public async Task Should_Filter_By_Component_Type()
     {
         // Arrange
-        await CreateTestDeductionComponentAsync("Statutory 1", DeductionComponentType.Statutory);
-        await CreateTestDeductionComponentAsync("Statutory 2", DeductionComponentType.Statutory);
-        await CreateTestDeductionComponentAsync("Voluntary 1", DeductionComponentType.Voluntary);
-        await CreateTestDeductionComponentAsync("Loan 1", DeductionComponentType.Loan);
+        await CreateTestDeductionComponentAsync("Fixed 1", DeductionComponentType.Fixed);
+        await CreateTestDeductionComponentAsync("Fixed 2", DeductionComponentType.Fixed);
+        await CreateTestDeductionComponentAsync("Variable 1", DeductionComponentType.Variable);
+        await CreateTestDeductionComponentAsync("Variable 2", DeductionComponentType.Variable);
 
         // Act
-        var allActive = await _deductionComponentAppService.GetAllActiveAsync();
+        var allActive = await _deductionComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
 
         // Assert
-        var statutory = allActive.Items.Where(x => x.ComponentType == DeductionComponentType.Statutory).ToList();
-        var voluntary = allActive.Items.Where(x => x.ComponentType == DeductionComponentType.Voluntary).ToList();
-        var loan = allActive.Items.Where(x => x.ComponentType == DeductionComponentType.Loan).ToList();
+        var fixedComponents = allActive.Items.Where(x => x.ComponentType == DeductionComponentType.Fixed).ToList();
+        var variable = allActive.Items.Where(x => x.ComponentType == DeductionComponentType.Variable).ToList();
 
-        statutory.Count.ShouldBeGreaterThanOrEqualTo(2);
-        voluntary.Count.ShouldBeGreaterThanOrEqualTo(1);
-        loan.Count.ShouldBeGreaterThanOrEqualTo(1);
+        fixedComponents.Count.ShouldBeGreaterThanOrEqualTo(2);
+        variable.Count.ShouldBeGreaterThanOrEqualTo(2);
     }
 
     #endregion
@@ -281,7 +263,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         {
             Name = "Updated Deduction",
             Description = "Updated description",
-            ComponentType = DeductionComponentType.Voluntary,
+            ComponentType = DeductionComponentType.Variable,
             DependOn = ComponentDependency.Gross,
             Amount = "5%",
             VisibleInPayslip = false,
@@ -296,7 +278,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         result.Id.ShouldBe(created.Id);
         result.Name.ShouldBe("Updated Deduction");
         result.Description.ShouldBe("Updated description");
-        result.ComponentType.ShouldBe(DeductionComponentType.Voluntary);
+        result.ComponentType.ShouldBe(DeductionComponentType.Variable);
         result.DependOn.ShouldBe(ComponentDependency.Gross);
         result.Amount.ShouldBe("5%");
         result.VisibleInPayslip.ShouldBeFalse();
@@ -313,7 +295,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         var updateInput = new UpdateDeductionComponentDto
         {
             Name = "Deduction 1", // Trying to use existing name
-            ComponentType = DeductionComponentType.Statutory,
+            ComponentType = DeductionComponentType.Fixed,
             DependOn = ComponentDependency.None,
             Amount = "1000"
         };
@@ -396,7 +378,11 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         await _deductionComponentAppService.DeactivateAsync(component2.Id);
 
         // Act
-        var activeList = await _deductionComponentAppService.GetAllActiveAsync();
+        var activeList = await _deductionComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
 
         // Assert
         activeList.Items.ShouldContain(x => x.Id == component1.Id);
@@ -434,7 +420,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         var input = new CreateDeductionComponentDto
         {
             Name = "Deduction & Tax (10%) - Test",
-            ComponentType = DeductionComponentType.Statutory,
+            ComponentType = DeductionComponentType.Fixed,
             DependOn = ComponentDependency.None,
             Amount = "1000"
         };
@@ -453,7 +439,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         var input = new CreateDeductionComponentDto
         {
             Name = "Percentage Deduction",
-            ComponentType = DeductionComponentType.Statutory,
+            ComponentType = DeductionComponentType.Fixed,
             DependOn = ComponentDependency.Basic,
             Amount = "12.5%"
         };
@@ -472,7 +458,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         var input = new CreateDeductionComponentDto
         {
             Name = "Large Deduction",
-            ComponentType = DeductionComponentType.Loan,
+            ComponentType = DeductionComponentType.Fixed,
             DependOn = ComponentDependency.None,
             Amount = "500000"
         };
@@ -504,7 +490,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
 
     private async Task<DeductionComponentDto> CreateTestDeductionComponentAsync(
         string name,
-        DeductionComponentType type = DeductionComponentType.Statutory,
+        DeductionComponentType type = DeductionComponentType.Fixed,
         ComponentDependency dependOn = ComponentDependency.None,
         int displayOrder = 0)
     {

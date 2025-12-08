@@ -189,7 +189,11 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         await CreateTestEarningComponentAsync("Active Component 3");
 
         // Act
-        var result = await _earningComponentAppService.GetAllActiveAsync();
+        var result = await _earningComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
 
         // Assert
         result.ShouldNotBeNull();
@@ -230,7 +234,11 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         await CreateTestEarningComponentAsync("Component C", displayOrder: 2);
 
         // Act
-        var result = await _earningComponentAppService.GetAllActiveAsync();
+        var result = await _earningComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
 
         // Assert
         var orderedComponents = result.Items.OrderBy(x => x.DisplayOrder).ToList();
@@ -369,7 +377,11 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         await _earningComponentAppService.DeactivateAsync(component2.Id);
 
         // Act
-        var activeList = await _earningComponentAppService.GetAllActiveAsync();
+        var activeList = await _earningComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
 
         // Assert
         activeList.Items.ShouldContain(x => x.Id == component1.Id);

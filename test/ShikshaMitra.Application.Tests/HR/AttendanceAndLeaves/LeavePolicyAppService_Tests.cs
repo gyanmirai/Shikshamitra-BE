@@ -433,12 +433,10 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
         // Act
         var paidPolicy = await CreateTestLeavePolicyAsync("Paid Policy", leaveType.Type, LeavePaidType.Paid);
         var unpaidPolicy = await CreateTestLeavePolicyAsync("Unpaid Policy", leaveType.Type, LeavePaidType.Unpaid);
-        var halfPaidPolicy = await CreateTestLeavePolicyAsync("HalfPaid Policy", leaveType.Type, LeavePaidType.HalfPaid);
 
         // Assert
         paidPolicy.PaidType.ShouldBe("Paid");
         unpaidPolicy.PaidType.ShouldBe("Unpaid");
-        halfPaidPolicy.PaidType.ShouldBe("HalfPaid");
     }
 
     #endregion

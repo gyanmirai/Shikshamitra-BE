@@ -291,6 +291,11 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 		builder.ConfigureOpenIddict();
 		builder.ConfigureFeatureManagement();
 		builder.ConfigureTenantManagement();
+		
+		// Ignore EmployeeDocument BEFORE ApplyConfigurationsFromAssembly
+		// It's configured as an owned entity in EmployeeConfiguration
+		builder.Ignore<EmployeeDocument>();
+		
 		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 		builder.ConfigureBlobStoring();
 	}

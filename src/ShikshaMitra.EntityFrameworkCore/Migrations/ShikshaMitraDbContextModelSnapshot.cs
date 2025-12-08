@@ -6836,11 +6836,6 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Teachers");
                 });
 
-            modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
-                {
-                    b.Navigation("Documents");
-                });
-
             modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceDay", b =>
                 {
                     b.Navigation("Entries");

@@ -1,4 +1,5 @@
 ﻿using System;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.EntityFrameworkCore.Security.UserScope;
 using ShikshaMitra.Security.UserScope;
@@ -15,6 +16,7 @@ using Volo.Abp.PermissionManagement.EntityFrameworkCore;
 using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.TenantManagement.EntityFrameworkCore;
 using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
+using Volo.Abp.Data;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -43,6 +45,8 @@ namespace ShikshaMitra.EntityFrameworkCore;
 
     public override void ConfigureServices(ServiceConfigurationContext context)
     {
+        var configuration = context.Services.GetConfiguration();
+        
         context.Services.AddAbpDbContext<ShikshaMitraDbContext>(options =>
         {
                 /* Remove "includeAllEntities: true" to create
@@ -61,6 +65,16 @@ namespace ShikshaMitra.EntityFrameworkCore;
                 /* The main point to change your DBMS.
                  * See also ShikshaMitraMigrationsDbContextFactory for EF Core tooling. */
             options.UseNpgsql();
+        });
+        
+        // Ensure connection strings are available from configuration  
+        Configure<AbpDbConnectionOptions>(options =>
+        {
+            var connectionString = configuration["ConnectionStrings:Default"];
+            if (!string.IsNullOrWhiteSpace(connectionString))
+            {
+                options.ConnectionStrings.Default = connectionString;
+            }
         });
 
     }

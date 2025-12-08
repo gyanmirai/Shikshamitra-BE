@@ -199,20 +199,27 @@ ITenantRepository tenantRepository) : BaseSeederContributor(currentTenant, guidG
 
 		List<Employee> employees = new List<Employee>();
 
+		// Get queryable to check for existing employees
+		var employeeQueryable = await employeeRepository.GetQueryableAsync();
+
 		#region Create admin employee
-		// get all users
-		var users = await userRepository.GetListAsync();
+		// Check if admin employee already exists
+		var existingAdminEmployee = employeeQueryable.FirstOrDefault(e => e.EmployeeCode == "EMP001");
+		if (existingAdminEmployee == null)
+		{
+			// get all users
+			var users = await userRepository.GetListAsync();
 
 		// Get the user id with email address
 		var user = users.Find(u => u.Email == $"{emailDomain}@gmail.com");
 		
-		// Validate that admin user exists before creating employee
-		if (user == null)
-		{
-			throw new Exception($"Admin user with email '{emailDomain}@gmail.com' not found. Please ensure the admin user is created before seeding employee data.");
-		}
+			// Validate that admin user exists before creating employee
+			if (user == null)
+			{
+				throw new Exception($"Admin user with email '{emailDomain}@gmail.com' not found. Please ensure the admin user is created before seeding employee data.");
+			}
 
-		employees.Add(new Employee(
+			employees.Add(new Employee(
 			id: GuidGenerator.Create(),
 			tenantId: tenantId,
 			userId: user.Id,
@@ -264,16 +271,21 @@ ITenantRepository tenantRepository) : BaseSeederContributor(currentTenant, guidG
 					"Software Developer",
 					"Developed web applications and maintained databases",
 					"Jane Doe, Senior Manager"
-				)
-			}
-		));
+					)
+				}
+			));
+		}
 
 
 		#endregion
 
 		#region create teacheremployee
-		// Create Employee record and store the Teacher role's ID.
-		var teacherEmployee = new Employee(
+		// Check if teacher employee already exists
+		var existingTeacherEmployee = employeeQueryable.FirstOrDefault(e => e.EmployeeCode == "EMP002");
+		if (existingTeacherEmployee == null)
+		{
+			// Create Employee record and store the Teacher role's ID.
+			var teacherEmployee = new Employee(
 			id: GuidGenerator.Create(),
 			tenantId: tenantId,
 			userId: employeeUser.Id,
@@ -324,14 +336,19 @@ ITenantRepository tenantRepository) : BaseSeederContributor(currentTenant, guidG
 					"Software Developer",
 					"Developed web applications and maintained databases",
 					"Jane Doe, Senior Manager"
-				)
-			},
-			shiftId: null
-		);
-		employees.Add(teacherEmployee);
+					)
+				},
+				shiftId: null
+			);
+			employees.Add(teacherEmployee);
+		}
 		#endregion
 
-		await employeeRepository.InsertManyAsync(employees);
+		// Only insert if there are new employees to add
+		if (employees.Any())
+		{
+			await employeeRepository.InsertManyAsync(employees);
+		}
 
 
 

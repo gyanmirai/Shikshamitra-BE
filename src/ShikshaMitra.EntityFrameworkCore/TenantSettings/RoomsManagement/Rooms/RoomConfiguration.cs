@@ -30,7 +30,7 @@ public class RoomConfiguration : IEntityTypeConfiguration<Room>
 			.IsRequired();
 
 		builder.Property(x => x.Features)
-			.HasMaxLength(RoomConsts.MaxFeaturesLength);
+			.HasColumnType("jsonb");
 
 		// Foreign Key Relationships
 		builder.HasOne<Building>()

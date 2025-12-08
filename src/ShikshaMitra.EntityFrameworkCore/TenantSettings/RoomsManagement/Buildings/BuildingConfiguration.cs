@@ -11,6 +11,9 @@ public class BuildingConfiguration : IEntityTypeConfiguration<Building>
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "Buildings", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
+		builder.Property(x => x.Id)
+			.ValueGeneratedOnAdd();
+
 		builder.Property(x => x.BuildingName)
 			.IsRequired()
 			.HasMaxLength(BuildingConsts.MaxNameLength);
@@ -20,5 +23,10 @@ public class BuildingConfiguration : IEntityTypeConfiguration<Building>
 
 		builder.Property(x => x.Description)
 			.HasMaxLength(BuildingConsts.MaxDescriptionLength);
+
+		builder.HasMany(x => x.Floors)
+			.WithOne(x => x.Building)
+			.HasForeignKey(x => x.BuildingId)
+			.OnDelete(DeleteBehavior.Cascade);
 	}
 }

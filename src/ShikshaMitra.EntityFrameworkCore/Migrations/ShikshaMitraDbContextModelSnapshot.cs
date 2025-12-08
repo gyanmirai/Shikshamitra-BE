@@ -4112,6 +4112,7 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Building", b =>
                 {
                     b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("BuildingName")
@@ -4161,6 +4162,32 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("AppBuildings", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Floor", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("BuildingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FloorName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("TotalRoom")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuildingId");
+
+                    b.ToTable("AppFloors", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes.RoomType", b =>
@@ -4223,16 +4250,16 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("BenchCapacity")
                         .HasColumnType("integer");
 
+                    b.Property<int>("BenchesPerColumn")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BenchesPerRow")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("BuildingId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("Capacity")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ClassBenchesColumns")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ClassBenchesRows")
                         .HasColumnType("integer");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -4255,9 +4282,8 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
-                    b.Property<string>("Features")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                    b.PrimitiveCollection<List<string>>("Features")
+                        .HasColumnType("jsonb");
 
                     b.Property<int>("Floor")
                         .HasColumnType("integer");
@@ -7334,6 +7360,17 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Floor", b =>
+                {
+                    b.HasOne("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Building", "Building")
+                        .WithMany("Floors")
+                        .HasForeignKey("BuildingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Building");
+                });
+
             modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Rooms.Room", b =>
                 {
                     b.HasOne("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Building", null)
@@ -7562,6 +7599,11 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", b =>
                 {
                     b.Navigation("EducationMediumStages");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Building", b =>
+                {
+                    b.Navigation("Floors");
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.Standards.Standard", b =>

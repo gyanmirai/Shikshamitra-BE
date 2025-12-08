@@ -1,11 +1,13 @@
 ﻿using System;
-using Volo.Abp.Application.Dtos;
+using System.Collections.Generic;
 
 namespace ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 
-public class BuildingDto : AuditedEntityDto<Guid>
+public class BuildingDto
 {
+	public Guid Id { get; set; }
 	public string BuildingName { get; set; }
 	public int TotalFloors { get; set; }
 	public string? Description { get; set; }
+	public List<FloorDto> Floors { get; set; } = new();
 }

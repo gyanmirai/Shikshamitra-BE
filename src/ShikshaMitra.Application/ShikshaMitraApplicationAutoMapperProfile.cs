@@ -40,6 +40,10 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 
 		// Employee Leave Management
 		CreateMap<LeaveType, LeaveTypeDto>();
-		// LeavePolicy uses custom mapping in service (MapToDto method)
+		
+		// Leave Policy mapping with custom PaidType conversion
+		CreateMap<LeavePolicy, LeavePolicyDto>()
+			.ForMember(dest => dest.PaidType,
+				opt => opt.MapFrom(src => src.PaidType == LeavePaidType.Paid ? "Paid" : "Unpaid"));
 	}
 }

@@ -53,7 +53,7 @@ public class LeavePolicyAppService : CrudAppService<
 		);
 		await Repository.InsertAsync(policy, autoSave: true);
 		await ClearCacheAsync();
-		return MapToDto(policy);
+		return ObjectMapper.Map<LeavePolicy, LeavePolicyDto>(policy);
 	}
 
 	public override async Task<LeavePolicyDto> UpdateAsync(Guid id, UpdateLeavePolicyDto input)
@@ -72,12 +72,15 @@ public class LeavePolicyAppService : CrudAppService<
 		);
 		await Repository.UpdateAsync(policy, autoSave: true);
 		await ClearCacheAsync();
-		return MapToDto(policy);
+		return ObjectMapper.Map<LeavePolicy, LeavePolicyDto>(policy);
 	}
 
 	public override async Task DeleteAsync(Guid id)
 	{
-		await Repository.DeleteAsync(id);
+		// Use soft delete to preserve historical data integrity
+		var leavePolicy = await Repository.GetAsync(id);
+		leavePolicy.Deactivate();
+		await Repository.UpdateAsync(leavePolicy, autoSave: true);
 		await ClearCacheAsync();
 	}
 
@@ -101,7 +104,7 @@ public class LeavePolicyAppService : CrudAppService<
 
 		return new PagedResultDto<LeavePolicyDto>(
 			totalCount,
-			items.Select(MapToDto).ToList()
+			ObjectMapper.Map<List<LeavePolicy>, List<LeavePolicyDto>>(items)
 		);
 	}
 
@@ -126,7 +129,7 @@ public class LeavePolicyAppService : CrudAppService<
 
 		var result = new PagedResultDto<LeavePolicyDto>(
 			totalCount,
-			items.Select(MapToDto).ToList()
+			ObjectMapper.Map<List<LeavePolicy>, List<LeavePolicyDto>>(items)
 		);
 
 		await _cache.SetAsync(
@@ -139,37 +142,6 @@ public class LeavePolicyAppService : CrudAppService<
 		);
 
 		return result;
-	}
-
-	protected override async Task<LeavePolicyDto> MapToGetOutputDtoAsync(LeavePolicy entity)
-	{
-		return MapToDto(entity);
-	}
-
-	protected override async Task<LeavePolicyDto> MapToGetListOutputDtoAsync(LeavePolicy entity)
-	{
-		return MapToDto(entity);
-	}
-
-	private LeavePolicyDto MapToDto(LeavePolicy policy)
-	{
-		return new LeavePolicyDto
-		{
-			Id = policy.Id,
-			PolicyName = policy.PolicyName,
-			LeaveType = policy.LeaveType,
-			MaximumDaysPerYear = policy.MaximumDaysPerYear,
-			PaidType = policy.PaidType == LeavePaidType.Paid ? "Paid" : "Unpaid",
-			CarryForward = policy.CarryForward,
-			Encashable = policy.Encashable,
-			RequiresApproval = policy.RequiresApproval,
-			Description = policy.Description,
-			IsActive = policy.IsActive,
-			CreationTime = policy.CreationTime,
-			CreatorId = policy.CreatorId,
-			LastModificationTime = policy.LastModificationTime,
-			LastModifierId = policy.LastModifierId
-		};
 	}
 
 	private async Task ClearCacheAsync()

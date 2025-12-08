@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
@@ -14,7 +15,7 @@ public class RoomDto : AuditedEntityDto<Guid>
 	public string RoomTypeName { get; set; }
 	public int TotalBenches { get; set; }
 	public int BenchCapacity { get; set; }
-	public int ClassBenchesRows { get; set; }
-	public int ClassBenchesColumns { get; set; }
-	public string? Features { get; set; }
+	public int BenchesPerRow { get; set; }
+	public int BenchesPerColumn { get; set; }
+	public List<string>? Features { get; set; }
 }

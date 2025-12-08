@@ -123,6 +123,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region Rooms Management
 	public DbSet<Building> Buildings { get; set; }
+	public DbSet<Floor> Floors { get; set; }
 	public DbSet<RoomType> RoomTypes { get; set; }
 	public DbSet<Room> Rooms { get; set; }
 	#endregion

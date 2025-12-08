@@ -23,15 +23,16 @@ namespace ShikshaMitra.Migrations
                 table: "AppRooms",
                 newName: "BenchesPerColumn");
 
-            migrationBuilder.AlterColumn<List<string>>(
-                name: "Features",
-                table: "AppRooms",
-                type: "jsonb",
-                nullable: true,
-                oldClrType: typeof(string),
-                oldType: "character varying(500)",
-                oldMaxLength: 500,
-                oldNullable: true);
+            // Convert Features from varchar to jsonb with proper type casting
+            migrationBuilder.Sql(@"
+                ALTER TABLE ""AppRooms"" 
+                ALTER COLUMN ""Features"" 
+                TYPE jsonb 
+                USING CASE 
+                    WHEN ""Features"" IS NULL OR ""Features"" = '' THEN NULL
+                    ELSE ('""' || ""Features"" || '""')::jsonb
+                END;
+            ");
 
             migrationBuilder.CreateTable(
                 name: "AppFloors",
@@ -76,15 +77,13 @@ namespace ShikshaMitra.Migrations
                 table: "AppRooms",
                 newName: "ClassBenchesColumns");
 
-            migrationBuilder.AlterColumn<string>(
-                name: "Features",
-                table: "AppRooms",
-                type: "character varying(500)",
-                maxLength: 500,
-                nullable: true,
-                oldClrType: typeof(List<string>),
-                oldType: "jsonb",
-                oldNullable: true);
+            // Revert Features from jsonb to varchar
+            migrationBuilder.Sql(@"
+                ALTER TABLE ""AppRooms"" 
+                ALTER COLUMN ""Features"" 
+                TYPE character varying(500) 
+                USING ""Features""::text;
+            ");
         }
     }
 }

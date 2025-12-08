@@ -11,6 +11,32 @@ namespace ShikshaMitra.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropPrimaryKey(
+                name: "PK_InquiryPreferences",
+                table: "InquiryPreferences");
+
+            migrationBuilder.DropColumn(
+                name: "DocumentTypes",
+                table: "StudentDocumentSettings");
+
+            migrationBuilder.RenameTable(
+                name: "InquiryPreferences",
+                newName: "AppInquiryPreferences");
+
+            migrationBuilder.AddColumn<string>(
+                name: "AdmissionApprovalRemarks",
+                table: "AppStudents",
+                type: "character varying(1000)",
+                maxLength: 1000,
+                nullable: true);
+
+            migrationBuilder.AddColumn<int>(
+                name: "AdmissionApprovalStatus",
+                table: "AppStudents",
+                type: "integer",
+                nullable: false,
+                defaultValue: 0);
+
             migrationBuilder.AddColumn<Guid>(
                 name: "BankDetailId",
                 table: "AppStudents",
@@ -40,6 +66,26 @@ namespace ShikshaMitra.Migrations
                 table: "AppStudents",
                 type: "uuid",
                 nullable: true);
+
+            migrationBuilder.AddColumn<Guid>(
+                name: "StudentDocumentSettingId",
+                table: "AppDocumentTypes",
+                type: "uuid",
+                nullable: true);
+
+            migrationBuilder.AlterColumn<string>(
+                name: "PreferenceName",
+                table: "AppInquiryPreferences",
+                type: "character varying(100)",
+                maxLength: 100,
+                nullable: false,
+                oldClrType: typeof(string),
+                oldType: "text");
+
+            migrationBuilder.AddPrimaryKey(
+                name: "PK_AppInquiryPreferences",
+                table: "AppInquiryPreferences",
+                column: "Id");
 
             migrationBuilder.CreateTable(
                 name: "AppStudentDocuments",
@@ -232,7 +278,7 @@ namespace ShikshaMitra.Migrations
                     Guardian_LocalAddress_City = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     Guardian_LocalAddress_Pincode = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
                     Guardian_LocalAddress_Country = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    SiblingStudentIds = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    SiblingStudentIds = table.Column<string>(type: "text", nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
                     LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -308,6 +354,11 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_AppStudents_AdmissionApprovalStatus_DivisionId",
+                table: "AppStudents",
+                columns: new[] { "AdmissionApprovalStatus", "DivisionId" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AppStudents_BankDetailId",
                 table: "AppStudents",
                 column: "BankDetailId");
@@ -333,6 +384,17 @@ namespace ShikshaMitra.Migrations
                 column: "PreviousSchoolDetailId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_AppDocumentTypes_StudentDocumentSettingId",
+                table: "AppDocumentTypes",
+                column: "StudentDocumentSettingId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppInquiryPreferences_TenantId_PreferenceName",
+                table: "AppInquiryPreferences",
+                columns: new[] { "TenantId", "PreferenceName" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AppStudentDocuments_DocumentTypeId",
                 table: "AppStudentDocuments",
                 column: "DocumentTypeId");
@@ -356,6 +418,13 @@ namespace ShikshaMitra.Migrations
                 name: "IX_StudentBankDetails_IFSCCode",
                 table: "StudentBankDetails",
                 column: "IFSCCode");
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_AppDocumentTypes_StudentDocumentSettings_StudentDocumentSet~",
+                table: "AppDocumentTypes",
+                column: "StudentDocumentSettingId",
+                principalTable: "StudentDocumentSettings",
+                principalColumn: "Id");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_AppStudents_StudentBankDetails_BankDetailId",
@@ -397,6 +466,10 @@ namespace ShikshaMitra.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
+                name: "FK_AppDocumentTypes_StudentDocumentSettings_StudentDocumentSet~",
+                table: "AppDocumentTypes");
+
+            migrationBuilder.DropForeignKey(
                 name: "FK_AppStudents_StudentBankDetails_BankDetailId",
                 table: "AppStudents");
 
@@ -435,6 +508,10 @@ namespace ShikshaMitra.Migrations
                 name: "StudentPreviousSchoolDetails");
 
             migrationBuilder.DropIndex(
+                name: "IX_AppStudents_AdmissionApprovalStatus_DivisionId",
+                table: "AppStudents");
+
+            migrationBuilder.DropIndex(
                 name: "IX_AppStudents_BankDetailId",
                 table: "AppStudents");
 
@@ -452,6 +529,26 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropIndex(
                 name: "IX_AppStudents_PreviousSchoolDetailId",
+                table: "AppStudents");
+
+            migrationBuilder.DropIndex(
+                name: "IX_AppDocumentTypes_StudentDocumentSettingId",
+                table: "AppDocumentTypes");
+
+            migrationBuilder.DropPrimaryKey(
+                name: "PK_AppInquiryPreferences",
+                table: "AppInquiryPreferences");
+
+            migrationBuilder.DropIndex(
+                name: "IX_AppInquiryPreferences_TenantId_PreferenceName",
+                table: "AppInquiryPreferences");
+
+            migrationBuilder.DropColumn(
+                name: "AdmissionApprovalRemarks",
+                table: "AppStudents");
+
+            migrationBuilder.DropColumn(
+                name: "AdmissionApprovalStatus",
                 table: "AppStudents");
 
             migrationBuilder.DropColumn(
@@ -473,6 +570,35 @@ namespace ShikshaMitra.Migrations
             migrationBuilder.DropColumn(
                 name: "PreviousSchoolDetailId",
                 table: "AppStudents");
+
+            migrationBuilder.DropColumn(
+                name: "StudentDocumentSettingId",
+                table: "AppDocumentTypes");
+
+            migrationBuilder.RenameTable(
+                name: "AppInquiryPreferences",
+                newName: "InquiryPreferences");
+
+            migrationBuilder.AddColumn<int[]>(
+                name: "DocumentTypes",
+                table: "StudentDocumentSettings",
+                type: "integer[]",
+                nullable: false,
+                defaultValue: new int[0]);
+
+            migrationBuilder.AlterColumn<string>(
+                name: "PreferenceName",
+                table: "InquiryPreferences",
+                type: "text",
+                nullable: false,
+                oldClrType: typeof(string),
+                oldType: "character varying(100)",
+                oldMaxLength: 100);
+
+            migrationBuilder.AddPrimaryKey(
+                name: "PK_InquiryPreferences",
+                table: "InquiryPreferences",
+                column: "Id");
         }
     }
 }

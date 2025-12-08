@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Common;
+﻿using Microsoft.Extensions.Logging;
+using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using System;
@@ -23,7 +24,8 @@ IBlobContainer blobContainer,
 IEmployeeCacheManager employeeCacheManager,
 IEmployeePayrollDetailsRepository payrollDetailsRepository,
 IEmployeePayrollComponentRepository payrollComponentRepository,
-IGuidGenerator guidGenerator) :
+IGuidGenerator guidGenerator,
+ILogger<EmployeeAppService> logger) :
 CrudAppService<Employee, EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>(
 employeeRepository),
 IEmployeeAppService
@@ -379,11 +381,34 @@ IEmployeeAppService
 				Size = memoryStream.Length
 			};
 		}
-		catch (Exception)
+		catch (FileNotFoundException)
 		{
-			// Blob was deleted externally or doesn't exist
-			// Return null to indicate profile picture is not available
+			// Blob was deleted externally or doesn't exist - this is expected behavior
+			logger.LogWarning(
+				"Profile picture blob not found for employee {EmployeeId}. BlobName: {BlobName}",
+				employeeId,
+				employee.ProfilePictureBlobName);
 			return null;
+		}
+		catch (Exception ex) when (ex.GetType().Name == "BlobProviderNotFoundException" || ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+		{
+			// Handle ABP BlobStoring provider-specific "not found" exceptions
+			logger.LogWarning(
+				"Profile picture blob not found for employee {EmployeeId}. BlobName: {BlobName}. Exception: {ExceptionType}",
+				employeeId,
+				employee.ProfilePictureBlobName,
+				ex.GetType().Name);
+			return null;
+		}
+		catch (Exception ex)
+		{
+			// Log unexpected errors and rethrow to surface operational issues
+			logger.LogError(
+				ex,
+				"Unexpected error retrieving profile picture for employee {EmployeeId}. BlobName: {BlobName}",
+				employeeId,
+				employee.ProfilePictureBlobName);
+			throw;
 		}
 	}
 

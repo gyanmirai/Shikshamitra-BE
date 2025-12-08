@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Common;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees;
 using System;
 using System.Collections.Generic;
@@ -16,6 +17,7 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 public class EmployeeController(IEmployeeAppService employeeAppService) : AbpController
 {
 	[HttpPut("{employeeId}/documents")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	public async Task<IActionResult> UploadDocuments(Guid employeeId, [FromForm] IList<IFormFile>? files)
 	{
 		if (files == null || files.Count == 0)
@@ -51,6 +53,7 @@ public class EmployeeController(IEmployeeAppService employeeAppService) : AbpCon
 	}
 
 	[HttpGet("{employeeId}/documents/{documentId}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 	public async Task<IActionResult> GetDocument(Guid employeeId, Guid documentId)
 	{
 		var document = await employeeAppService.GetDocumentAsync(employeeId, documentId);
@@ -59,6 +62,7 @@ public class EmployeeController(IEmployeeAppService employeeAppService) : AbpCon
 	}
 
 	[HttpGet("{employeeId}/documents")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 	public async Task<IActionResult> GetDocuments(Guid employeeId)
 	{
 		List<DocumentMetadataDto> documents = await employeeAppService.GetDocumentMetadataAsync(employeeId);
@@ -68,6 +72,7 @@ public class EmployeeController(IEmployeeAppService employeeAppService) : AbpCon
 
 	[HttpPut("{employeeId}/documents/{documentId}")]
 	[Consumes("multipart/form-data")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	public async Task<IActionResult> UpdateDocument(Guid employeeId, Guid documentId, IFormFile file)
 	{
 		if (file.Length <= 0)
@@ -92,6 +97,7 @@ public class EmployeeController(IEmployeeAppService employeeAppService) : AbpCon
 	}
 
 	[HttpPut("{employeeId}/payroll-structure")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	public async Task<IActionResult> UpdatePayrollStructure(Guid employeeId, [FromBody] CreateUpdateEmployeePayrollStructureDto input)
 	{
 		await employeeAppService.UpdatePayrollStructureAsync(employeeId, input);

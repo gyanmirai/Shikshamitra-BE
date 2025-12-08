@@ -1,5 +1,4 @@
 ﻿using System;
-using System.IO;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
@@ -17,20 +16,11 @@ public class ShikshaMitraDbContextFactory : IDesignTimeDbContextFactory<ShikshaM
 
         ShikshaMitraEfCoreEntityExtensionMappings.Configure();
 
-        var configuration = BuildConfiguration();
+        var configuration = ShikshaMitraConfigurationHelper.BuildConfiguration();
 
         var builder = new DbContextOptionsBuilder<ShikshaMitraDbContext>()
             .UseNpgsql(configuration.GetConnectionString("Default"));
 
         return new ShikshaMitraDbContext(builder.Options);
-    }
-
-    private static IConfigurationRoot BuildConfiguration()
-    {
-        var builder = new ConfigurationBuilder()
-            .SetBasePath(Path.Combine(Directory.GetCurrentDirectory(), "../ShikshaMitra.DbMigrator/"))
-            .AddJsonFile("appsettings.json", optional: false);
-
-        return builder.Build();
     }
 }

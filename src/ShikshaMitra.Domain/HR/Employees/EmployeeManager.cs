@@ -23,7 +23,6 @@ public class EmployeeManager(
 	IIdentityUserRepository userRepository,
 	IIdentityRoleRepository roleRepository,
 	IBlobContainer blobContainer,
-	IEmployeeDocumentRepository employeeDocumentRepository,
 	UserManager<IdentityUser> userManager,
 	IEducationMediumStageRepository educationMediumStageRepository,
 	IRepository<EducationBoard, Guid> educationBoardRepository,
@@ -61,7 +60,6 @@ public class EmployeeManager(
 		string shortName,
 		EmployeeStatusType employeeStatusType,
 		DateOnly? dateOfBirth,
-		byte[]? profilePicture = null,
 		string? familyCast = null,
 		CastType? castType = null,
 		GenderType? genderType = null,
@@ -123,7 +121,7 @@ public class EmployeeManager(
 			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
 			userId: null,
-			profilePicture: profilePicture,
+			profilePictureBlobName: null,
 			employeeCode: employeeCode,
 			lastName: lastName,
 			firstName: firstName,
@@ -250,7 +248,6 @@ public class EmployeeManager(
 		string shortName,
 		EmployeeStatusType employeeStatusType,
 		DateOnly? dateOfBirth,
-		byte[]? profilePicture = null,
 		string? familyCast = null,
 		CastType? castType = null,
 		GenderType? genderType = null,
@@ -305,7 +302,7 @@ public class EmployeeManager(
 			shortName: shortName,
 			employeeStatusType: employeeStatusType,
 			dateOfBirth: dateOfBirth,
-			profilePicture: profilePicture,
+			profilePictureBlobName: employee.ProfilePictureBlobName, // Preserve existing profile picture
 			familyCast: familyCast,
 			castType: castType,
 			genderType: genderType,
@@ -412,6 +409,19 @@ public class EmployeeManager(
 		return employee;
 	}
 
+	public async Task<Employee> UpdateAdditionalDetailsByEmployeeIdAsync(
+		Guid employeeId,
+		EmployeeAdditionalDetails additionalDetails
+	)
+	{
+		// Get the employee
+		var employee = await GetEmployeeAsync(employeeId);
+
+		// Update the additional details
+		employee.UpdateAdditionalDetails(additionalDetails);
+		return employee;
+	}
+
 	public async Task AddDocumentsAsync(Guid employeeId, List<EmployeeDocumentData> documents)
 	{
 		var employee = await employeeRepository.GetAsync(employeeId);
@@ -424,7 +434,7 @@ public class EmployeeManager(
 			// Save the file content to blob storage
 			await blobContainer.SaveAsync(blobName, docData.Content, overrideExisting: true);
 
-			// Create and save the EmployeeDocument entity (metadata)
+			// Create the EmployeeDocument entity (metadata)
 			var document = new EmployeeDocument(
 				id: documentId,
 				tenantId: CurrentTenant.Id,
@@ -435,31 +445,26 @@ public class EmployeeManager(
 				blobName: blobName
 			);
 
-			await employeeDocumentRepository.InsertAsync(document);
-
-			// Associate the document with the employee, if needed
+			// Associate the document with the employee (owned entity)
 			employee.AddDocument(document);
 		}
 
-		// Update the employee entity
+		// Update the employee entity (EF Core will handle owned entities)
 		await employeeRepository.UpdateAsync(employee);
 	}
 
 	public async Task<EmployeeDocument> GetDocumentAsync(Guid employeeId, Guid documentId)
 	{
-		var document = await employeeDocumentRepository.FirstOrDefaultAsync(d =>
-			d.EmployeeId == employeeId && d.Id == documentId
-		);
+		var employee = await employeeRepository.GetAsync(employeeId);
+		var document = employee.Documents.FirstOrDefault(d => d.Id == documentId);
 		return document
 			?? throw new BusinessException($"Document with ID {documentId} does not exist.");
 	}
 
 	public async Task<List<EmployeeDocument>> GetDocumentsAsync(Guid employeeId)
 	{
-		List<EmployeeDocument> documents = await employeeDocumentRepository.GetListAsync(d =>
-			d.EmployeeId == employeeId
-		);
-		return documents;
+		var employee = await employeeRepository.GetAsync(employeeId);
+		return employee.Documents.ToList();
 	}
 
 	public async Task<EmployeeDocument> UpdateDocumentAsync(
@@ -471,7 +476,13 @@ public class EmployeeManager(
 		byte[] content
 	)
 	{
-		EmployeeDocument document = await GetDocumentAsync(employeeId, documentId);
+		var employee = await employeeRepository.GetAsync(employeeId);
+		var document = employee.Documents.FirstOrDefault(d => d.Id == documentId);
+		
+		if (document == null)
+		{
+			throw new BusinessException($"Document with ID {documentId} does not exist.");
+		}
 
 		// Update blob
 		await blobContainer.SaveAsync(document.BlobName, content, overrideExisting: true);
@@ -479,8 +490,128 @@ public class EmployeeManager(
 		// Update metadata
 		document.UpdateDocumentMetadata(fileName, contentType, size);
 
-		await employeeDocumentRepository.UpdateAsync(document);
+		await employeeRepository.UpdateAsync(employee);
 		return document;
+	}
+
+	public async Task DeleteDocumentAsync(Guid employeeId, Guid documentId)
+	{
+		var employee = await employeeRepository.GetAsync(employeeId);
+		var document = employee.Documents.FirstOrDefault(d => d.Id == documentId);
+		
+		if (document == null)
+		{
+			throw new BusinessException($"Document with ID {documentId} does not exist.");
+		}
+
+		// Delete blob from storage
+		await blobContainer.DeleteAsync(document.BlobName);
+
+		// Remove document from collection (owned entity - EF Core tracks changes)
+		employee.Documents.Remove(document);
+
+		// Update the employee entity
+		await employeeRepository.UpdateAsync(employee);
+	}
+
+	public async Task<string> UploadProfilePictureAsync(Guid employeeId, string fileName, byte[] fileContent)
+	{
+		// Domain-level validation guards
+		ValidateProfilePictureUpload(fileName, fileContent);
+
+		var employee = await GetEmployeeAsync(employeeId);
+
+		// Delete old profile picture if exists
+		if (!string.IsNullOrEmpty(employee.ProfilePictureBlobName))
+		{
+			await blobContainer.DeleteAsync(employee.ProfilePictureBlobName);
+		}
+
+		// Generate new blob name
+		var blobName = $"profile-pictures/{employeeId}_{fileName}";
+
+		// Save to blob storage
+		await blobContainer.SaveAsync(blobName, fileContent, overrideExisting: true);
+
+		// Update employee with new blob name
+		employee.UpdateProfilePicture(blobName);
+		await employeeRepository.UpdateAsync(employee);
+
+		return blobName;
+	}
+
+	private static void ValidateProfilePictureUpload(string fileName, byte[] fileContent)
+	{
+		// Validate file name
+		if (string.IsNullOrWhiteSpace(fileName))
+		{
+			throw new BusinessException("File name cannot be empty.");
+		}
+
+		// Validate file content
+		if (fileContent == null || fileContent.Length == 0)
+		{
+			throw new BusinessException("File content cannot be empty.");
+		}
+
+		// Validate file size (max 5MB)
+		const long maxFileSizeBytes = 5 * 1024 * 1024; // 5MB
+		if (fileContent.Length > maxFileSizeBytes)
+		{
+			throw new BusinessException($"File size cannot exceed {maxFileSizeBytes / 1024.0 / 1024.0:F2}MB. Current size: {fileContent.Length / 1024.0 / 1024.0:F2}MB.");
+		}
+
+		// Validate file type by extension
+		var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+		var fileExtension = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
+		
+		if (string.IsNullOrEmpty(fileExtension) || !allowedExtensions.Contains(fileExtension))
+		{
+			throw new BusinessException($"Invalid file type. Allowed types: {string.Join(", ", allowedExtensions)}. Provided: {fileExtension}");
+		}
+
+		// Validate file signature (magic bytes) for additional security
+		if (!IsValidImageFile(fileContent))
+		{
+			throw new BusinessException("Invalid image file. The file content does not match a valid image format.");
+		}
+	}
+
+	private static bool IsValidImageFile(byte[] fileContent)
+	{
+		if (fileContent.Length < 4)
+		{
+			return false;
+		}
+
+		// Check magic bytes for common image formats
+		// JPEG: FF D8 FF
+		if (fileContent[0] == 0xFF && fileContent[1] == 0xD8 && fileContent[2] == 0xFF)
+		{
+			return true;
+		}
+
+		// PNG: 89 50 4E 47
+		if (fileContent[0] == 0x89 && fileContent[1] == 0x50 && fileContent[2] == 0x4E && fileContent[3] == 0x47)
+		{
+			return true;
+		}
+
+		// GIF: 47 49 46 38
+		if (fileContent[0] == 0x47 && fileContent[1] == 0x49 && fileContent[2] == 0x46 && fileContent[3] == 0x38)
+		{
+			return true;
+		}
+
+		// WebP: RIFF....WEBP (check for RIFF and WEBP signatures)
+		if (fileContent.Length >= 12 &&
+		    fileContent[0] == 0x52 && fileContent[1] == 0x49 && fileContent[2] == 0x46 && fileContent[3] == 0x46 && // RIFF
+		    fileContent[8] == 0x57 && fileContent[9] == 0x45 && fileContent[10] == 0x42 && fileContent[11] == 0x50) // WEBP
+		{
+			return true;
+		}
+
+		return false;
 	}
 
 	private async Task<string> GenerateEmployeeCodeAsync(

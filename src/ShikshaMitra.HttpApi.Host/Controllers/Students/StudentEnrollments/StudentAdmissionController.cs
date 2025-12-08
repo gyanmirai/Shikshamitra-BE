@@ -8,7 +8,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.Controllers.Students.Admissions;
+namespace ShikshaMitra.Controllers.Students.StudentEnrollments;
 
 /// <summary>
 /// API controller for managing student admission operations

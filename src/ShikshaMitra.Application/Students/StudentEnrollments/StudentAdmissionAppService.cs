@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Dynamic.Core;
 using System.Threading.Tasks;
-using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.Admissions;
 using ShikshaMitra.TenantSettings.Divisions;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
-namespace ShikshaMitra.Students.Admissions;
+namespace ShikshaMitra.Students.StudentEnrollments;
 
 /// <summary>
 /// Application service for Student Admission operations

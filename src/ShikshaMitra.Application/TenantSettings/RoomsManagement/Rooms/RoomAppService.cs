@@ -9,7 +9,7 @@ using ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes;
 
 namespace ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 
-public class RoomAppService : CrudAppService<Room, RoomDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateRoomDto>, IRoomAppService
+public class RoomAppService : CrudAppService<Room, RoomDto, Guid, GetRoomListDto, CreateUpdateRoomDto>, IRoomAppService
 {
 	private readonly IRepository<Building, Guid> _buildingRepository;
 	private readonly IRepository<RoomType, Guid> _roomTypeRepository;
@@ -23,9 +23,21 @@ public class RoomAppService : CrudAppService<Room, RoomDto, Guid, PagedAndSorted
 		_roomTypeRepository = roomTypeRepository;
 	}
 
-	protected override async Task<IQueryable<Room>> CreateFilteredQueryAsync(PagedAndSortedResultRequestDto input)
+	protected override async Task<IQueryable<Room>> CreateFilteredQueryAsync(GetRoomListDto input)
 	{
-		return await base.CreateFilteredQueryAsync(input);
+		var query = await base.CreateFilteredQueryAsync(input);
+
+		if (input.BuildingId.HasValue)
+		{
+			query = query.Where(r => r.BuildingId == input.BuildingId.Value);
+		}
+
+		if (input.RoomTypeId.HasValue)
+		{
+			query = query.Where(r => r.RoomTypeId == input.RoomTypeId.Value);
+		}
+
+		return query;
 	}
 
 	public override async Task<RoomDto> GetAsync(Guid id)
@@ -41,9 +53,9 @@ public class RoomAppService : CrudAppService<Room, RoomDto, Guid, PagedAndSorted
 		return dto;
 	}
 
-	public override async Task<PagedResultDto<RoomDto>> GetListAsync(PagedAndSortedResultRequestDto input)
+	public override async Task<PagedResultDto<RoomDto>> GetListAsync(GetRoomListDto input)
 	{
-		var query = await Repository.GetQueryableAsync();
+		var query = await CreateFilteredQueryAsync(input);
 		var totalCount = await AsyncExecuter.CountAsync(query);
 
 		query = ApplySorting(query, input);

@@ -1,44 +1,57 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using System;
+using System.Collections.Generic;
+using System.Net;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
-using System;
 using System.Threading.Tasks;
-using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.TenantSettings.RoomsManagement.Buildings;
 
 [Authorize]
-[Route("api/institute-setup/rooms-management/buildings")]
+[Route("institute-setup/buildings")]
+[ApiController]
 public class BuildingController(IBuildingAppService buildingAppService) : AbpController
 {
 	[HttpGet]
-	public async Task<PagedResultDto<BuildingDto>> GetListAsync([FromQuery] PagedAndSortedResultRequestDto input)
+	[ProducesResponseType(typeof(List<BuildingDto>), (int)HttpStatusCode.OK)]
+	public async Task<List<BuildingDto>> GetAllAsync()
 	{
-		return await buildingAppService.GetListAsync(input);
+		return await buildingAppService.GetListAsync();
 	}
 
 	[HttpGet("{id}")]
+	[ProducesResponseType(typeof(BuildingDto), (int)HttpStatusCode.OK)]
+	[ProducesResponseType((int)HttpStatusCode.NotFound)]
 	public async Task<BuildingDto> GetAsync(Guid id)
 	{
 		return await buildingAppService.GetAsync(id);
 	}
 
 	[HttpPost]
-	public async Task<BuildingDto> CreateAsync([FromBody] CreateUpdateBuildingDto input)
+	[ProducesResponseType(typeof(BuildingDto), (int)HttpStatusCode.Created)]
+	[ProducesResponseType((int)HttpStatusCode.BadRequest)]
+	public async Task<ActionResult<BuildingDto>> CreateAsync([FromBody] CreateUpdateBuildingDto input)
 	{
-		return await buildingAppService.CreateAsync(input);
+		var result = await buildingAppService.CreateAsync(input);
+		return StatusCode((int)HttpStatusCode.Created, result);
 	}
 
 	[HttpPut("{id}")]
+	[ProducesResponseType(typeof(BuildingDto), (int)HttpStatusCode.OK)]
+	[ProducesResponseType((int)HttpStatusCode.NotFound)]
 	public async Task<BuildingDto> UpdateAsync(Guid id, [FromBody] CreateUpdateBuildingDto input)
 	{
 		return await buildingAppService.UpdateAsync(id, input);
 	}
 
 	[HttpDelete("{id}")]
-	public async Task DeleteAsync(Guid id)
+	[ProducesResponseType((int)HttpStatusCode.NoContent)]
+	[ProducesResponseType((int)HttpStatusCode.NotFound)]
+	public async Task<IActionResult> DeleteAsync(Guid id)
 	{
 		await buildingAppService.DeleteAsync(id);
+		return NoContent();
 	}
 }

@@ -46,12 +46,6 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 					// Now that the tenant is set, run the remaining seeders.
 					var rolesSeeder = scope.ServiceProvider.GetRequiredService<Seeders.RolesSeederContributor>();
 					await rolesSeeder.SeedAsync(context);
-
-					var hrSeeder = scope.ServiceProvider.GetRequiredService<Seeders.HRSeederContributor>();
-					await hrSeeder.SeedAsync(context);
-
-					//var studentSeeder = scope.ServiceProvider.GetRequiredService<Seeders.StudentSeederContributor>();
-					//await studentSeeder.SeedAsync(context);
 				}
 			}
 		}

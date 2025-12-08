@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Students.ValueObjects;
+using ShikshaMitra.Students.ValueObjects;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -391,8 +391,9 @@ public class StudentRegistrationAppService(
 
 		// Load or create family detail
 		var familyDetail = await studentFamilyDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
+		var isNewFamilyDetail = familyDetail == null;
 		
-		if (familyDetail == null)
+		if (isNewFamilyDetail)
 		{
 			// Create new family detail entity
 			familyDetail = new StudentFamilyDetail(studentId, CurrentTenant.Id);
@@ -426,13 +427,8 @@ public class StudentRegistrationAppService(
 			}
 		}
 
-		// Save changes - persist family detail updates
-		await studentFamilyDetailRepository.UpdateAsync(familyDetail, autoSave: false);
-		
-		// Commit all changes in a single transaction
-		await UnitOfWorkManager.Current!.SaveChangesAsync();
+		// Note: No need to call UpdateAsync on familyDetail if it's new - InsertAsync already tracked it
 
-		// Return the updated family info
 		return await GetFamilyInfoAsync(studentId);
 	}
 
@@ -555,8 +551,9 @@ public class StudentRegistrationAppService(
 
 		// Load or create communication detail
 		var communicationDetail = await studentCommunicationDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
+		var isNewCommunicationDetail = communicationDetail == null;
 		
-		if (communicationDetail == null)
+		if (isNewCommunicationDetail)
 		{
 			// Create new communication detail entity
 			communicationDetail = new StudentCommunicationDetail(studentId, CurrentTenant.Id);
@@ -594,9 +591,6 @@ public class StudentRegistrationAppService(
 			}
 		}
 
-		// Save changes - persist communication detail updates
-		await studentCommunicationDetailRepository.UpdateAsync(communicationDetail, autoSave: false);
-		
 		// Commit all changes in a single transaction
 		await UnitOfWorkManager.Current!.SaveChangesAsync();
 
@@ -739,8 +733,9 @@ public class StudentRegistrationAppService(
 
 		// Load or create medical record
 		var medicalRecord = await studentMedicalRecordRepository.FirstOrDefaultAsync(x => x.Id == studentId);
+		var isNewMedicalRecord = medicalRecord == null;
 		
-		if (medicalRecord == null)
+		if (isNewMedicalRecord)
 		{
 			// Create new medical record entity
 			medicalRecord = new StudentMedicalRecord(studentId, CurrentTenant.Id);
@@ -776,9 +771,6 @@ public class StudentRegistrationAppService(
 			}
 		}
 
-		// Save changes - persist medical record updates
-		await studentMedicalRecordRepository.UpdateAsync(medicalRecord, autoSave: false);
-		
 		// Commit all changes in a single transaction
 		await UnitOfWorkManager.Current!.SaveChangesAsync();
 
@@ -839,8 +831,9 @@ public class StudentRegistrationAppService(
 
 		// Load or create previous school detail
 		var previousSchoolDetail = await studentPreviousSchoolDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
+		var isNewPreviousSchoolDetail = previousSchoolDetail == null;
 		
-		if (previousSchoolDetail == null)
+		if (isNewPreviousSchoolDetail)
 		{
 			// Create new previous school detail entity
 			previousSchoolDetail = new StudentPreviousSchoolDetail(studentId, CurrentTenant.Id);
@@ -875,9 +868,6 @@ public class StudentRegistrationAppService(
 			}
 		}
 
-		// Save changes - persist previous school detail updates
-		await studentPreviousSchoolDetailRepository.UpdateAsync(previousSchoolDetail, autoSave: false);
-		
 		// Commit all changes in a single transaction
 		await UnitOfWorkManager.Current!.SaveChangesAsync();
 
@@ -936,8 +926,9 @@ public class StudentRegistrationAppService(
 
 		// Load or create bank detail
 		var bankDetail = await studentBankDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
+		var isNewBankDetail = bankDetail == null;
 		
-		if (bankDetail == null)
+		if (isNewBankDetail)
 		{
 			// Create new bank detail entity
 			bankDetail = new StudentBankDetail(studentId, CurrentTenant.Id);
@@ -970,9 +961,6 @@ public class StudentRegistrationAppService(
 			}
 		}
 
-		// Save changes - persist bank detail updates
-		await studentBankDetailRepository.UpdateAsync(bankDetail, autoSave: false);
-		
 		// Commit all changes in a single transaction
 		await UnitOfWorkManager.Current!.SaveChangesAsync();
 

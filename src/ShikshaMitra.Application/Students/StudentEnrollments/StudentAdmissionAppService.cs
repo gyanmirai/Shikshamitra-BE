@@ -1,10 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Students.Admissions;
+using ShikshaMitra.TenantSettings.Divisions;
+using System;
 using System.Linq;
 using System.Linq.Dynamic.Core;
 using System.Threading.Tasks;
-using ShikshaMitra.Students.Admissions;
-using ShikshaMitra.TenantSettings.Divisions;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -15,6 +16,8 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 /// <summary>
 /// Application service for Student Admission operations
 /// </summary>
+[Authorize]
+[RemoteService(false)]
 public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionAppService
 {
 	private readonly IRepository<Student, Guid> _studentRepository;
@@ -31,6 +34,7 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 	/// <summary>
 	/// Gets a paginated list of students in admission stage with filters
 	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.View)]
 	public async Task<PagedResultDto<StudentAdmissionListItemDto>> GetListAsync(GetStudentAdmissionsInput input)
 	{
 		var query = (await _studentRepository.GetQueryableAsync())
@@ -99,6 +103,7 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 	/// <summary>
 	/// Assigns or changes division for a student
 	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.Add)]
 	public async Task AssignDivisionAsync(Guid studentId, AssignDivisionDto input)
 	{
 		// Validate division exists
@@ -122,6 +127,7 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 	/// <summary>
 	/// Changes admission status (approve/reject) for multiple students
 	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.Add)]
 	public async Task<BatchAdmissionStatusChangeResultDto> ChangeStatusBatchAsync(BatchAdmissionStatusChangeRequestDto input)
 	{
 		var result = new BatchAdmissionStatusChangeResultDto();

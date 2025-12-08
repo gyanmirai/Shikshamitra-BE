@@ -1,4 +1,4 @@
-using ShikshaMitra.Students.ValueObjects;
+﻿using ShikshaMitra.Students.ValueObjects;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -672,8 +672,17 @@ public class StudentRegistrationAppService(
 			}
 		}
 
+		// Guard against null AdditionalDetail - fail fast with clear business error
+		if (student.AdditionalDetail == null)
+		{
+			throw new BusinessException(
+				"ShikshaMitra:MissingAdditionalDetail",
+				"Student additional detail not found. Please complete the general information step first."
+			);
+		}
+
 		// Save changes
-		await studentAdditionalDetailRepository.UpdateAsync(student.AdditionalDetail!, autoSave: true);
+		await studentAdditionalDetailRepository.UpdateAsync(student.AdditionalDetail, autoSave: true);
 
 		// Return the updated additional details
 		return await GetAdditionalDetailsAsync(studentId);

@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.Admissions;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -163,6 +164,13 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 					itemResult.NewStatus = StudentEnrollmentApprovalState.Rejected.ToString();
 					itemResult.Message = "Admission rejected successfully";
 				}
+				else
+				{
+					// Explicitly handle invalid/unsupported actions
+					throw new BusinessException("StudentAdmission:InvalidAction")
+						.WithData("StudentId", item.StudentId)
+						.WithData("Action", item.Action);
+				}
 
 				// Save changes
 				await _studentRepository.UpdateAsync(student);
@@ -170,11 +178,25 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 				itemResult.Success = true;
 				result.Succeeded++;
 			}
-			catch (Exception ex)
+			catch (BusinessException ex)
 			{
+				// BusinessExceptions are user-facing and safe to expose
 				itemResult.Success = false;
 				itemResult.Message = ex.Message;
 				result.Failed++;
+				
+				// Log the business exception for diagnostics
+				Logger.LogWarning(ex, "Business exception occurred while processing admission status change for student {StudentId}", item.StudentId);
+			}
+			catch (Exception ex)
+			{
+				// Unexpected exceptions get a generic message to avoid leaking internal details
+				itemResult.Success = false;
+				itemResult.Message = "An unexpected error occurred while processing admission status.";
+				result.Failed++;
+				
+				// Log the full exception for diagnostics
+				Logger.LogError(ex, "Unexpected error occurred while processing admission status change for student {StudentId}", item.StudentId);
 			}
 
 			result.Results.Add(itemResult);

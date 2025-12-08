@@ -12,17 +12,21 @@ public static class CacheInvalidationHelper
 	/// <summary>
 	/// Generates common cache keys for pagination scenarios
 	/// </summary>
-	/// <param name="baseCacheKey">The base cache key prefix</param>
-	/// <param name="cacheKeyGenerator">Function to generate cache key from skip/take parameters</param>
+	/// <param name="cacheKeyGenerator">Function to generate cache key from skip/take parameters. Must not be null.</param>
 	/// <param name="pageSizes">Common page sizes to generate keys for (default: 10, 25, 50, 100)</param>
 	/// <param name="maxPages">Maximum number of pages to generate for each size (default: 10)</param>
 	/// <returns>List of cache keys to remove</returns>
+	/// <exception cref="ArgumentNullException">Thrown when cacheKeyGenerator is null</exception>
 	public static List<string> GenerateCommonCacheKeys(
-		string baseCacheKey,
 		Func<int, int, string> cacheKeyGenerator,
 		int[]? pageSizes = null,
 		int maxPages = 10)
 	{
+		if (cacheKeyGenerator == null)
+		{
+			throw new ArgumentNullException(nameof(cacheKeyGenerator));
+		}
+
 		pageSizes ??= new[] { 10, 25, 50, 100 };
 		var cacheKeysToRemove = new List<string>();
 

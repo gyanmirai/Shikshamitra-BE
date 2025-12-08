@@ -1,51 +1,73 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+﻿using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Payroll.Settings;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp.Data;
-using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Guids;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Seeders;
 
 /// <summary>
-/// Seeds default HR module data for new tenants
+/// Seeds default HR module data for new tenants.
+/// Uses constructor injection to preserve tenant context from parent seeder.
 /// </summary>
-public class HRSeederContributor : IDataSeedContributor, ITransientDependency
+public class HRSeederContributor : BaseSeederContributor
 {
-	private readonly IServiceProvider _serviceProvider;
+	private readonly IRepository<LeaveType, Guid> _leaveTypeRepository;
+	private readonly LeaveTypeManager _leaveTypeManager;
+	private readonly IRepository<EarningComponent, Guid> _earningComponentRepository;
+	private readonly EarningComponentManager _earningComponentManager;
+	private readonly IRepository<DeductionComponent, Guid> _deductionComponentRepository;
+	private readonly DeductionComponentManager _deductionComponentManager;
+	private readonly IRepository<LeavePolicy, Guid> _leavePolicyRepository;
+	private readonly LeavePolicyManager _leavePolicyManager;
 
-	public HRSeederContributor(IServiceProvider serviceProvider)
+	public HRSeederContributor(
+		ICurrentTenant currentTenant,
+		IGuidGenerator guidGenerator,
+		IUnitOfWork unitOfWork,
+		IRepository<LeaveType, Guid> leaveTypeRepository,
+		LeaveTypeManager leaveTypeManager,
+		IRepository<EarningComponent, Guid> earningComponentRepository,
+		EarningComponentManager earningComponentManager,
+		IRepository<DeductionComponent, Guid> deductionComponentRepository,
+		DeductionComponentManager deductionComponentManager,
+		IRepository<LeavePolicy, Guid> leavePolicyRepository,
+		LeavePolicyManager leavePolicyManager)
+		: base(currentTenant, guidGenerator, unitOfWork)
 	{
-		_serviceProvider = serviceProvider;
+		_leaveTypeRepository = leaveTypeRepository;
+		_leaveTypeManager = leaveTypeManager;
+		_earningComponentRepository = earningComponentRepository;
+		_earningComponentManager = earningComponentManager;
+		_deductionComponentRepository = deductionComponentRepository;
+		_deductionComponentManager = deductionComponentManager;
+		_leavePolicyRepository = leavePolicyRepository;
+		_leavePolicyManager = leavePolicyManager;
 	}
 
-	public async Task SeedAsync(DataSeedContext context)
+	public override async Task SeedAsync(DataSeedContext context)
 	{
-		using (var scope = _serviceProvider.CreateScope())
-		{
-			// Seed default leave types
-			await SeedLeaveTypesAsync(scope.ServiceProvider);
+		// Seed default leave types
+		await SeedLeaveTypesAsync();
 
-			// Seed default earning components
-			await SeedEarningComponentsAsync(scope.ServiceProvider);
+		// Seed default earning components
+		await SeedEarningComponentsAsync();
 
-			// Seed default deduction components
-			await SeedDeductionComponentsAsync(scope.ServiceProvider);
+		// Seed default deduction components
+		await SeedDeductionComponentsAsync();
 
-			// Seed default leave policies
-			await SeedLeavePoliciesAsync(scope.ServiceProvider);
-		}
+		// Seed default leave policies
+		await SeedLeavePoliciesAsync();
 	}
 
-	private async Task SeedLeaveTypesAsync(IServiceProvider serviceProvider)
+	private async Task SeedLeaveTypesAsync()
 	{
-		var repository = serviceProvider.GetRequiredService<IRepository<LeaveType, Guid>>();
-		var manager = serviceProvider.GetRequiredService<LeaveTypeManager>();
-
 		// Check if already seeded
-		if (await repository.AnyAsync())
+		if (await _leaveTypeRepository.AnyAsync())
 			return;
 
 		var leaveTypes = new[]
@@ -61,18 +83,15 @@ public class HRSeederContributor : IDataSeedContributor, ITransientDependency
 
 		foreach (var (type, color) in leaveTypes)
 		{
-			var leaveType = await manager.CreateAsync(type, color);
-			await repository.InsertAsync(leaveType, autoSave: true);
+			var leaveType = await _leaveTypeManager.CreateAsync(type, color);
+			await _leaveTypeRepository.InsertAsync(leaveType, autoSave: true);
 		}
 	}
 
-	private async Task SeedEarningComponentsAsync(IServiceProvider serviceProvider)
+	private async Task SeedEarningComponentsAsync()
 	{
-		var repository = serviceProvider.GetRequiredService<IRepository<EarningComponent, Guid>>();
-		var manager = serviceProvider.GetRequiredService<EarningComponentManager>();
-
 		// Check if already seeded
-		if (await repository.AnyAsync())
+		if (await _earningComponentRepository.AnyAsync())
 			return;
 
 		var earningComponents = new[]
@@ -89,7 +108,7 @@ public class HRSeederContributor : IDataSeedContributor, ITransientDependency
 
 		foreach (var component in earningComponents)
 		{
-			var earningComponent = await manager.CreateAsync(
+			var earningComponent = await _earningComponentManager.CreateAsync(
 				component.Name,
 				component.Description,
 				component.ComponentType,
@@ -98,17 +117,14 @@ public class HRSeederContributor : IDataSeedContributor, ITransientDependency
 				component.VisibleInPayslip,
 				component.DisplayOrder
 			);
-			await repository.InsertAsync(earningComponent, autoSave: true);
+			await _earningComponentRepository.InsertAsync(earningComponent, autoSave: true);
 		}
 	}
 
-	private async Task SeedDeductionComponentsAsync(IServiceProvider serviceProvider)
+	private async Task SeedDeductionComponentsAsync()
 	{
-		var repository = serviceProvider.GetRequiredService<IRepository<DeductionComponent, Guid>>();
-		var manager = serviceProvider.GetRequiredService<DeductionComponentManager>();
-
 		// Check if already seeded
-		if (await repository.AnyAsync())
+		if (await _deductionComponentRepository.AnyAsync())
 			return;
 
 		var deductionComponents = new[]
@@ -124,7 +140,7 @@ public class HRSeederContributor : IDataSeedContributor, ITransientDependency
 
 		foreach (var component in deductionComponents)
 		{
-			var deductionComponent = await manager.CreateAsync(
+			var deductionComponent = await _deductionComponentManager.CreateAsync(
 				component.Name,
 				component.Description,
 				component.ComponentType,
@@ -133,17 +149,14 @@ public class HRSeederContributor : IDataSeedContributor, ITransientDependency
 				component.VisibleInPayslip,
 				component.DisplayOrder
 			);
-			await repository.InsertAsync(deductionComponent, autoSave: true);
+			await _deductionComponentRepository.InsertAsync(deductionComponent, autoSave: true);
 		}
 	}
 
-	private async Task SeedLeavePoliciesAsync(IServiceProvider serviceProvider)
+	private async Task SeedLeavePoliciesAsync()
 	{
-		var repository = serviceProvider.GetRequiredService<IRepository<LeavePolicy, Guid>>();
-		var manager = serviceProvider.GetRequiredService<LeavePolicyManager>();
-
 		// Check if already seeded
-		if (await repository.AnyAsync())
+		if (await _leavePolicyRepository.AnyAsync())
 			return;
 
 		var leavePolicies = new[]
@@ -159,7 +172,7 @@ public class HRSeederContributor : IDataSeedContributor, ITransientDependency
 
 		foreach (var policy in leavePolicies)
 		{
-			var leavePolicy = await manager.CreateAsync(
+			var leavePolicy = await _leavePolicyManager.CreateAsync(
 				policy.PolicyName,
 				policy.LeaveType,
 				policy.MaximumDaysPerYear,
@@ -169,7 +182,7 @@ public class HRSeederContributor : IDataSeedContributor, ITransientDependency
 				policy.RequiresApproval,
 				policy.Description
 			);
-			await repository.InsertAsync(leavePolicy, autoSave: true);
+			await _leavePolicyRepository.InsertAsync(leavePolicy, autoSave: true);
 		}
 	}
 }

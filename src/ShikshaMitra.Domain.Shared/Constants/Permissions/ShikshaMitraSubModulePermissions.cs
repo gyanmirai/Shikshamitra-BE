@@ -277,18 +277,26 @@ public static class ShikshaMitraSubModulePermissions
 		// Student module submodules
 		{ StudentDashboard, $"{DisplayNamePrefix}.StudentDashboard" },
 		{ Enrollment, $"{DisplayNamePrefix}.Enrollment" },
+		{ EnrollmentSettings, $"{DisplayNamePrefix}.EnrollmentSettings" },
 		{ Records, $"{DisplayNamePrefix}.Records" },
+		{ RecordsSettings, $"{DisplayNamePrefix}.RecordsSettings" },
 		{ Attendance, $"{DisplayNamePrefix}.Attendance" },
+		{ AttendanceSettings, $"{DisplayNamePrefix}.AttendanceSettings" },
 		{ Notification, $"{DisplayNamePrefix}.Notification" },
 
 		// Academics module submodules
 		{ AcademicsDashboard, $"{DisplayNamePrefix}.AcademicsDashboard" },
 		{ Curriculum, $"{DisplayNamePrefix}.Curriculum" },
+		{ CurriculumSettings, $"{DisplayNamePrefix}.CurriculumSettings" },
 		{ Timetable, $"{DisplayNamePrefix}.Timetable" },
+		{ TimetableSettings, $"{DisplayNamePrefix}.TimetableSettings" },
 		{ HomeworkAssignment, $"{DisplayNamePrefix}.HomeworkAssignment" },
+		{ HomeworkAssignmentSettings, $"{DisplayNamePrefix}.HomeworkAssignmentSettings" },
 		{ Examination, $"{DisplayNamePrefix}.Examination" },
+		{ ExaminationSettings, $"{DisplayNamePrefix}.ExaminationSettings" },
 		{ GroupManagement, $"{DisplayNamePrefix}.GroupManagement" },
 		{ LMS, $"{DisplayNamePrefix}.LMS" },
+		{ LMSSettings, $"{DisplayNamePrefix}.LMSSettings" },
 		{ AcademicsNotification, $"{DisplayNamePrefix}.AcademicsNotification" },
 
 		// Class Management module submodules
@@ -302,8 +310,11 @@ public static class ShikshaMitraSubModulePermissions
 		// HR module submodules
 		{ HRDashboard, $"{DisplayNamePrefix}.HRDashboard" },
 		{ EmployeeRecords, $"{DisplayNamePrefix}.EmployeeRecords" },
+		{ EmployeeRecordsSettings, $"{DisplayNamePrefix}.EmployeeRecordsSettings" },
 		{ Payroll, $"{DisplayNamePrefix}.Payroll" },
+		{ PayrollSettings, $"{DisplayNamePrefix}.PayrollSettings" },
 		{ AttendanceManagement, $"{DisplayNamePrefix}.AttendanceManagement" },
+		{ AttendanceManagementSettings, $"{DisplayNamePrefix}.AttendanceManagementSettings" },
 		{ ProfessionalManagement, $"{DisplayNamePrefix}.ProfessionalManagement" },
 		{ HRReports, $"{DisplayNamePrefix}.HRReports" },
 		{ HRNotification, $"{DisplayNamePrefix}.HRNotification" },

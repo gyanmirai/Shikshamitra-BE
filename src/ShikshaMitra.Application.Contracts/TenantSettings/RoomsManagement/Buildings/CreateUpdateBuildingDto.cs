@@ -22,7 +22,9 @@ public class CreateUpdateBuildingDto
 
 public class CreateUpdateFloorDto
 {
-	public int? Id { get; set; }
+	[Required]
+	[StringLength(BuildingConsts.MaxFloorLength)]
+	public int FloorNumber { get; set; }
 
 	[Required]
 	[StringLength(FloorConsts.MaxFloorNameLength)]

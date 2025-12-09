@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Linq;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -48,7 +49,8 @@ public class SubjectAppService(
 				queryable = queryable.Where(x => x.Name.Contains(searchTerm));
 			}
 
-			var subjects = queryable.ToList();
+			// Use ABP's AsyncExecuter for asynchronous query execution
+			var subjects = await AsyncExecuter.ToListAsync(queryable);
 
 			return ObjectMapper.Map<List<Subject>, List<SubjectDto>>(subjects);
 		}

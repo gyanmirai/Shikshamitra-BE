@@ -1,14 +1,20 @@
 ﻿using System;
 using ShikshaMitra.Academic.Syllabus;
 using Volo.Abp.Domain.Entities;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
 /// <summary>
 /// Entity representing a document attached to a chapter
 /// </summary>
-public class ChapterDocument : Entity<Guid>
+public class ChapterDocument : Entity<Guid>, IMultiTenant
 {
+	/// <summary>
+	/// Gets or sets the tenant ID.
+	/// </summary>
+	public Guid? TenantId { get; set; }
+
 	/// <summary>
 	/// The ID of the chapter this document belongs to
 	/// </summary>

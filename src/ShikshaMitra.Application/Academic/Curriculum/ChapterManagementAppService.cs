@@ -9,6 +9,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
+using Volo.Abp.Linq;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -119,22 +120,36 @@ public class ChapterManagementAppService(
 
 		var query = await chapterRepository.GetQueryableAsync();
 
-		var chapters = query
-			.Where(c =>
-				c.SubjectId == subjectId &&
-				c.StandardId == classId &&
-				c.EducationMediumId == academicMediumId
-			)
-			.OrderBy(c => c.ChapterNumber)
-			.ToList();
+		// Load chapters asynchronously using ABP's AsyncExecuter
+		var chapters = await AsyncExecuter.ToListAsync(
+			query
+				.Where(c =>
+					c.SubjectId == subjectId &&
+					c.StandardId == classId &&
+					c.EducationMediumId == academicMediumId
+				)
+				.OrderBy(c => c.ChapterNumber)
+		);
 
-		var responseDtos = new List<ChapterResponseDto>();
-
-		foreach (var chapter in chapters)
+		// If no chapters, return empty list
+		if (!chapters.Any())
 		{
-			var dto = await MapToResponseDtoAsync(chapter);
-			responseDtos.Add(dto);
+			return new List<ChapterResponseDto>();
 		}
+
+		// Batch-load all documents for these chapters in a single query
+		var chapterIds = chapters.Select(c => c.Id).ToList();
+		var allDocuments = await documentRepository.GetListAsync(d => chapterIds.Contains(d.ChapterId));
+
+		// Group documents by chapter ID for efficient lookup
+		var documentsByChapterId = allDocuments
+			.GroupBy(d => d.ChapterId)
+			.ToDictionary(g => g.Key, g => g.ToList());
+
+		// Map chapters to response DTOs using pre-fetched documents
+		var responseDtos = chapters.Select(chapter =>
+			MapToResponseDto(chapter, documentsByChapterId.GetValueOrDefault(chapter.Id) ?? new List<ChapterDocument>())
+		).ToList();
 
 		return responseDtos;
 	}
@@ -266,6 +281,11 @@ public class ChapterManagementAppService(
 		// Get documents for this chapter
 		var documents = await documentRepository.GetListAsync(d => d.ChapterId == chapter.Id);
 
+		return MapToResponseDto(chapter, documents);
+	}
+
+	private ChapterResponseDto MapToResponseDto(SubjectChapter chapter, List<ChapterDocument> documents)
+	{
 		var response = new ChapterResponseDto
 		{
 			Id = chapter.Id,

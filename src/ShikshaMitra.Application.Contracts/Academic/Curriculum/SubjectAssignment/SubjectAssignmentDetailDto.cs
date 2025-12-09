@@ -18,13 +18,13 @@ public class SubjectAssignmentDetailDto
 		MinimumLength = SubjectAssignmentConsts.MinSubjectCodeLength,
 		ErrorMessage = "Subject code must be between {2} and {1} characters"
 	)]
-	public string SubjectCode { get; set; }
+	public required string SubjectCode { get; set; }
 
 	/// <summary>
 	/// Subject name (e.g., "Physics") - from FE
 	/// </summary>
 	[Required(ErrorMessage = "Subject name is required")]
-	public string SubjectName { get; set; }
+	public required string SubjectName { get; set; }
 
 	/// <summary>
 	/// Subject display color (hex format, e.g., "#00AABB")
@@ -34,7 +34,7 @@ public class SubjectAssignmentDetailDto
 		SubjectConsts.ColorRegexPattern,
 		ErrorMessage = "Subject color must be a valid hex code"
 	)]
-	public string SubjectColor { get; set; }
+	public required string SubjectColor { get; set; }
 
 	/// <summary>
 	/// Primary teacher ID (can be string "teacherId_123" from FE)

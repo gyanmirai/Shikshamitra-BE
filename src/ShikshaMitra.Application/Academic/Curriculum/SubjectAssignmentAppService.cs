@@ -9,6 +9,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
+using Volo.Abp.Linq;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -174,21 +175,36 @@ public class SubjectAssignmentAppService(
 			query = query.Where(a => a.Status == statusEnum);
 		}
 
-		var assignments = query.ToList();
+		// Use ABP's AsyncExecuter for asynchronous query execution
+		var assignments = await AsyncExecuter.ToListAsync(query);
 
-		// Group by AssignmentGroupId
-		var groups = assignments
+		var result = new List<SubjectAssignmentGroupResponseDto>();
+
+		// Process grouped assignments (those with AssignmentGroupId)
+		var groupedAssignments = assignments
 			.Where(a => a.AssignmentGroupId.HasValue)
 			.GroupBy(a => a.AssignmentGroupId!.Value)
 			.ToList();
 
-		var result = new List<SubjectAssignmentGroupResponseDto>();
-
-		foreach (var group in groups)
+		foreach (var group in groupedAssignments)
 		{
 			var firstAssignment = group.First();
 			var groupAssignments = group.ToList();
 			var responseDto = await MapToResponseDtoAsync(firstAssignment, groupAssignments);
+			result.Add(responseDto);
+		}
+
+		// Process ungrouped assignments (those without AssignmentGroupId)
+		// Treat each ungrouped assignment as its own solo group
+		var ungroupedAssignments = assignments
+			.Where(a => !a.AssignmentGroupId.HasValue)
+			.ToList();
+
+		foreach (var ungroupedAssignment in ungroupedAssignments)
+		{
+			// Each ungrouped assignment is treated as a solo group
+			var soloGroupList = new List<StandardSubjectAssignment> { ungroupedAssignment };
+			var responseDto = await MapToResponseDtoAsync(ungroupedAssignment, soloGroupList);
 			result.Add(responseDto);
 		}
 

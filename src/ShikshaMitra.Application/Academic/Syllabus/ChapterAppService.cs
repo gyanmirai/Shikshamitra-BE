@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -18,8 +18,8 @@ public class ChapterAppService(
 	{
 		try
 		{
-			// TODO: Get educationMediumId from context or parameter
-			var educationMediumId = Guid.Empty; // Temporary - needs proper value
+			// Validate EducationMediumId is provided`r`n`t`t`tif (createChapterDto.EducationMediumId == Guid.Empty)`r`n`t`t`t{`r`n`t`t`t`tthrow new UserFriendlyException("Education Medium ID is required and cannot be empty.");`r`n`t`t`t}
+			var educationMediumId = createChapterDto.EducationMediumId;
 			
 			var chapter = new SubjectChapter(
 				id: guidGenerator.Create(),

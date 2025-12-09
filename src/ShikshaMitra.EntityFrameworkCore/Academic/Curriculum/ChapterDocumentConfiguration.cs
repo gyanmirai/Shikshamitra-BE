@@ -48,5 +48,13 @@ public class ChapterDocumentConfiguration : IEntityTypeConfiguration<ChapterDocu
 		// Indexes
 		builder.HasIndex(x => x.ChapterId)
 			.HasDatabaseName("IX_ChapterDocuments_ChapterId");
+
+		// Tenant filtering index
+		builder.HasIndex(x => x.TenantId)
+			.HasDatabaseName("IX_ChapterDocuments_TenantId");
+
+		// Composite index for efficient tenant + chapter queries
+		builder.HasIndex(x => new { x.TenantId, x.ChapterId })
+			.HasDatabaseName("IX_ChapterDocuments_TenantId_ChapterId");
 	}
 }

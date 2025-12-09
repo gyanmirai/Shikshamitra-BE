@@ -7,6 +7,7 @@ public class CreateStandardSubjectAssignmentDto
 {
 	public Guid StandardId { get; set; }
 	public Guid SubjectId { get; set; }
+	public Guid EducationMediumId { get; set; }
 	public Guid? ElectiveGroupId { get; set; }
 	public required string SubjectCode { get; set; }
 	public Guid? PrimaryTeacherId { get; set; }
@@ -16,4 +17,5 @@ public class CreateStandardSubjectAssignmentDto
 	public string? Description { get; set; }
 	public string? UploadedDocument { get; set; }
 	public SubjectStatus Status { get; set; }
+	public SubjectType? SubjectType { get; set; }
 }

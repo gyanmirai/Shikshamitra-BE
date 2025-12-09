@@ -115,8 +115,9 @@ public class ElectiveGroupAppService(
 		}
 		catch (BusinessException ex)
 		{
-			logger.LogError(ex, "Business error creating elective group: {Message}", ex.Message);
-			throw new UserFriendlyException(ex.Message, ex.Code);
+			logger.LogError(ex, "Business error creating elective group: {Code}", ex.Code);
+			// Rethrow BusinessException - ABP middleware will handle localization
+			throw;
 		}
 		catch (Exception ex)
 		{
@@ -159,11 +160,12 @@ public class ElectiveGroupAppService(
 		{
 			logger.LogError(
 				ex,
-				"Business error updating elective group {Id}: {Message}",
+				"Business error updating elective group {Id}: {Code}",
 				id,
-				ex.Message
+				ex.Code
 			);
-			throw new UserFriendlyException(ex.Message, ex.Code);
+			// Rethrow BusinessException - ABP middleware will handle localization
+			throw;
 		}
 		catch (Exception ex)
 		{

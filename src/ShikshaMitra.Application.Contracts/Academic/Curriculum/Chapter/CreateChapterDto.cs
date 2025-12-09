@@ -8,7 +8,7 @@ namespace ShikshaMitra.Academic.Curriculum;
 /// DTO for creating a chapter
 /// Aligned with FE contract
 /// </summary>
-public class CreateChapterDto
+public class CreateChapterDto : IValidatableObject
 {
 	/// <summary>
 	/// Chapter number (e.g., 1, 2, 3...)
@@ -49,4 +49,18 @@ public class CreateChapterDto
 	/// Pre-uploaded document URLs (if using JSON approach)
 	/// </summary>
 	public List<ChapterDocumentDto>? Documents { get; set; }
+
+	/// <summary>
+	/// Validates the DTO, ensuring cross-property constraints are met
+	/// </summary>
+	public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+	{
+		if (EndDate < StartDate)
+		{
+			yield return new ValidationResult(
+				"End Date must be greater than or equal to Start Date",
+				new[] { nameof(EndDate) }
+			);
+		}
+	}
 }

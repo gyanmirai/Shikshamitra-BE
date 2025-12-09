@@ -128,7 +128,7 @@ public class ChapterManager : DomainService
 		// Validate dates
 		await ValidateDatesAsync(startDate, endDate, tenantId);
 
-		// Create chapter
+		// Create chapter with explicit UTC timezone (zero offset) to match ValidateDatesAsync UTC usage
 		var chapter = new SubjectChapter(
 			id: _guidGenerator.Create(),
 			standardId: standardId,
@@ -136,8 +136,8 @@ public class ChapterManager : DomainService
 			educationMediumId: educationMediumId,
 			chapterNumber: chapterNumber,
 			chapterName: chapterName,
-			chapterStartTime: new DateTimeOffset(startDate),
-			chapterEndTime: new DateTimeOffset(endDate),
+			chapterStartTime: new DateTimeOffset(startDate, TimeSpan.Zero),
+			chapterEndTime: new DateTimeOffset(endDate, TimeSpan.Zero),
 			description: description
 		);
 
@@ -163,11 +163,11 @@ public class ChapterManager : DomainService
 		// Validate dates
 		await ValidateDatesAsync(startDate, endDate, tenantId);
 
-		// Update chapter
+		// Update chapter with explicit UTC timezone (zero offset) to match ValidateDatesAsync UTC usage
 		chapter.Update(
 			chapterName: chapterName,
-			chapterStartTime: new DateTimeOffset(startDate),
-			chapterEndTime: new DateTimeOffset(endDate),
+			chapterStartTime: new DateTimeOffset(startDate, TimeSpan.Zero),
+			chapterEndTime: new DateTimeOffset(endDate, TimeSpan.Zero),
 			description: description
 		);
 

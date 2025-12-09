@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Constants.Permissions;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Academic.Curriculum;
@@ -30,10 +31,13 @@ public class ChapterController(
 	/// <response code="201">Chapter created successfully</response>
 	/// <response code="400">Validation failed</response>
 	/// <response code="401">Unauthorized</response>
+	/// <response code="403">User lacks Add permission</response>
 	[HttpPost]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_ChapterManagement.Add)]
 	[ProducesResponseType(typeof(ChapterResponseDto), 201)]
 	[ProducesResponseType(400)]
 	[ProducesResponseType(401)]
+	[ProducesResponseType(403)]
 	public async Task<IActionResult> CreateAsync(
 		[FromQuery] Guid academicMediumId,
 		[FromQuery] Guid classId,
@@ -92,9 +96,12 @@ public class ChapterController(
 	/// <returns>List of chapters ordered by chapter number</returns>
 	/// <response code="200">Returns the list of chapters</response>
 	/// <response code="400">Required parameters missing</response>
+	/// <response code="403">User lacks View permission</response>
 	[HttpGet]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_ChapterManagement.View)]
 	[ProducesResponseType(typeof(List<ChapterResponseDto>), 200)]
 	[ProducesResponseType(400)]
+	[ProducesResponseType(403)]
 	public async Task<IActionResult> GetListAsync(
 		[FromQuery] Guid academicMediumId,
 		[FromQuery] Guid classId,
@@ -148,9 +155,12 @@ public class ChapterController(
 	/// <returns>Chapter details</returns>
 	/// <response code="200">Returns the chapter</response>
 	/// <response code="404">Chapter not found</response>
+	/// <response code="403">User lacks View permission</response>
 	[HttpGet("{chapterId}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_ChapterManagement.View)]
 	[ProducesResponseType(typeof(ChapterResponseDto), 200)]
 	[ProducesResponseType(404)]
+	[ProducesResponseType(403)]
 	public async Task<IActionResult> GetAsync([FromRoute] Guid chapterId)
 	{
 		var result = await chapterManagementAppService.GetAsync(chapterId);
@@ -173,10 +183,13 @@ public class ChapterController(
 	/// <response code="200">Chapter updated successfully</response>
 	/// <response code="400">Validation failed</response>
 	/// <response code="404">Chapter not found</response>
+	/// <response code="403">User lacks Add permission</response>
 	[HttpPut("{chapterId}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_ChapterManagement.Add)]
 	[ProducesResponseType(typeof(ChapterResponseDto), 200)]
 	[ProducesResponseType(400)]
 	[ProducesResponseType(404)]
+	[ProducesResponseType(403)]
 	public async Task<IActionResult> UpdateAsync(
 		[FromRoute] Guid chapterId,
 		[FromQuery] Guid academicMediumId,
@@ -235,9 +248,12 @@ public class ChapterController(
 	/// <returns>No content on success</returns>
 	/// <response code="200">Chapter deleted successfully</response>
 	/// <response code="404">Chapter not found</response>
+	/// <response code="403">User lacks Delete permission</response>
 	[HttpDelete("{chapterId}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_ChapterManagement.Delete)]
 	[ProducesResponseType(200)]
 	[ProducesResponseType(404)]
+	[ProducesResponseType(403)]
 	public async Task<IActionResult> DeleteAsync([FromRoute] Guid chapterId)
 	{
 		await chapterManagementAppService.DeleteAsync(chapterId);

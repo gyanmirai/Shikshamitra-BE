@@ -53,9 +53,7 @@ public class SubjectController(ISubjectAppService subjectAppService) : AbpContro
 		// Verify the subject belongs to the specified education medium
 		if (subject.EducationMediumId != academicMediumId)
 		{
-			return NotFound(
-				$"Subject with ID {id} does not belong to education medium {academicMediumId}"
-			);
+			return NotFound();
 		}
 
 		return Ok(subject);
@@ -119,6 +117,13 @@ public class SubjectController(ISubjectAppService subjectAppService) : AbpContro
 			);
 		}
 
+		// Verify the existing subject belongs to the specified education medium before update
+		var existingSubject = await subjectAppService.GetAsync(id);
+		if (existingSubject.EducationMediumId != academicMediumId)
+		{
+			return NotFound();
+		}
+
 		var subject = await subjectAppService.UpdateAsync(id, updateSubjectDto);
 		return Ok(subject);
 	}
@@ -140,9 +145,7 @@ public class SubjectController(ISubjectAppService subjectAppService) : AbpContro
 		var subject = await subjectAppService.GetAsync(id);
 		if (subject.EducationMediumId != academicMediumId)
 		{
-			return NotFound(
-				$"Subject with ID {id} does not belong to education medium {academicMediumId}"
-			);
+			return NotFound();
 		}
 
 		await subjectAppService.DeleteAsync(id);

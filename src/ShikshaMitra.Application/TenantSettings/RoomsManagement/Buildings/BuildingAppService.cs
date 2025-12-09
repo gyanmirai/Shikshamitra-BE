@@ -8,14 +8,14 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 
-public class BuildingAppService(IRepository<Building, Guid> buildingRepository, IRepository<Floor, int> floorRepository)
-	: ApplicationService, IBuildingAppService
+public class BuildingAppService(IRepository<Building, Guid> buildingRepository, IRepository<Floor, Guid> floorRepository)
+: ApplicationService, IBuildingAppService
 {
 	public async Task<List<BuildingDto>> GetListAsync()
 	{
 		var buildings = await buildingRepository
 			.WithDetailsAsync(b => b.Floors);
-		
+
 		var buildingList = await AsyncExecuter.ToListAsync(buildings);
 
 		return ObjectMapper.Map<List<Building>, List<BuildingDto>>(buildingList);
@@ -25,9 +25,9 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 	{
 		var building = await buildingRepository
 			.WithDetailsAsync(b => b.Floors);
-		
+
 		var entity = await AsyncExecuter.FirstOrDefaultAsync(building.Where(b => b.Id == id));
-		
+
 		if (entity == null)
 		{
 			throw new UserFriendlyException("Building not found");
@@ -53,7 +53,8 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 			{
 				FloorName = floorDto.FloorName,
 				TotalRoom = floorDto.TotalRoom,
-				BuildingId = createdBuilding.Id
+				BuildingId = createdBuilding.Id,
+				FloorNo = floorDto.FloorNo,
 			};
 			await floorRepository.InsertAsync(floor, autoSave: false);
 		}
@@ -66,7 +67,7 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 	public async Task<BuildingDto> UpdateAsync(Guid id, CreateUpdateBuildingDto input)
 	{
 		var building = await buildingRepository.GetAsync(id);
-		
+
 		building.BuildingName = input.BuildingName;
 		building.TotalFloors = input.TotalFloors;
 		building.Description = input.Description;
@@ -100,6 +101,7 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 				{
 					existingFloor.FloorName = floorDto.FloorName;
 					existingFloor.TotalRoom = floorDto.TotalRoom;
+					existingFloor.FloorNo = floorDto.FloorNo;
 					await floorRepository.UpdateAsync(existingFloor, autoSave: false);
 				}
 			}
@@ -109,6 +111,7 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 				{
 					FloorName = floorDto.FloorName,
 					TotalRoom = floorDto.TotalRoom,
+					FloorNo = floorDto.FloorNo,
 					BuildingId = id
 				};
 				await floorRepository.InsertAsync(newFloor, autoSave: false);

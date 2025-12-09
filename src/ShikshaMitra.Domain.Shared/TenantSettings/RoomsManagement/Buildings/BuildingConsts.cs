@@ -4,6 +4,7 @@ public static class BuildingConsts
 {
 	public const int MaxNameLength = 128;
 	public const int MaxDescriptionLength = 500;
+	public const int MaxFloorLength = 500;
 }
 
 public static class FloorConsts

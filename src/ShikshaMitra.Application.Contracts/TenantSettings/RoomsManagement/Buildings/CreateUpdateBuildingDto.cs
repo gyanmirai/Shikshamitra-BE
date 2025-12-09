@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
@@ -22,9 +23,11 @@ public class CreateUpdateBuildingDto
 
 public class CreateUpdateFloorDto
 {
+	public Guid? Id { get; set; }
+
 	[Required]
-	[StringLength(BuildingConsts.MaxFloorLength)]
-	public int FloorNumber { get; set; }
+	[Range(0, int.MaxValue, ErrorMessage = "Floor number must be 0 or greater")]
+	public int FloorNo { get; set; }
 
 	[Required]
 	[StringLength(FloorConsts.MaxFloorNameLength)]

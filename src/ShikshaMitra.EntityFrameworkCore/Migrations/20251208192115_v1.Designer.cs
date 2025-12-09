@@ -14,8 +14,13 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
+<<<<<<<< HEAD:src/ShikshaMitra.EntityFrameworkCore/Migrations/20251208190713_v2.Designer.cs
     [Migration("20251208190713_v2")]
     partial class v2
+========
+    [Migration("20251208192115_v1")]
+    partial class v1
+>>>>>>>> main:src/ShikshaMitra.EntityFrameworkCore/Migrations/20251208192115_v1.Designer.cs
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -8138,11 +8143,14 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Teachers");
                 });
 
+<<<<<<<< HEAD:src/ShikshaMitra.EntityFrameworkCore/Migrations/20251208190713_v2.Designer.cs
             modelBuilder.Entity("ShikshaMitra.Academic.Syllabus.SubjectChapter", b =>
                 {
                     b.Navigation("Documents");
                 });
 
+========
+>>>>>>>> main:src/ShikshaMitra.EntityFrameworkCore/Migrations/20251208192115_v1.Designer.cs
             modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceDay", b =>
                 {
                     b.Navigation("Entries");

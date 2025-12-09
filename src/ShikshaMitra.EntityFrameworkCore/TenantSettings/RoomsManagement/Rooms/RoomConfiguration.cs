@@ -38,7 +38,7 @@ public class RoomConfiguration : IEntityTypeConfiguration<Room>
 		// Configure Features as JSONB with proper value conversion
 		var stringListToJsonConverter = new ValueConverter<List<string>?, string>(
 			v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
-			v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>()
+			v => JsonSerializer.Deserialize<List<string>?>(v, (JsonSerializerOptions?)null)
 		);
 
 		var stringListValueComparer = new ValueComparer<List<string>?>(

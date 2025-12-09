@@ -131,6 +131,10 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");
 
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
                     b.Property<DateTime>("UploadedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -138,6 +142,12 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("ChapterId")
                         .HasDatabaseName("IX_ChapterDocuments_ChapterId");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("IX_ChapterDocuments_TenantId");
+
+                    b.HasIndex("TenantId", "ChapterId")
+                        .HasDatabaseName("IX_ChapterDocuments_TenantId_ChapterId");
 
                     b.ToTable("AppChapterDocuments", (string)null);
                 });

@@ -1111,10 +1111,11 @@ namespace ShikshaMitra.Migrations
                     StandardId = table.Column<Guid>(type: "uuid", nullable: false),
                     SubjectId = table.Column<Guid>(type: "uuid", nullable: false),
                     ChapterNumber = table.Column<int>(type: "integer", nullable: false),
-                    ChapterName = table.Column<string>(type: "text", nullable: false),
+                    ChapterName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     ChapterStartTime = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     ChapterEndTime = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    Description = table.Column<string>(type: "text", nullable: true),
+                    Description = table.Column<string>(type: "character varying(5000)", maxLength: 5000, nullable: true),
+                    EducationMediumId = table.Column<Guid>(type: "uuid", nullable: false),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -1905,6 +1906,30 @@ namespace ShikshaMitra.Migrations
                         principalTable: "AppRoomTypes",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppChapterDocuments",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ChapterId = table.Column<Guid>(type: "uuid", nullable: false),
+                    FileName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    FileUrl = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: false),
+                    FileSize = table.Column<long>(type: "bigint", nullable: false),
+                    ContentType = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    UploadedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppChapterDocuments", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppChapterDocuments_AppSubjectChapters_ChapterId",
+                        column: x => x.ChapterId,
+                        principalTable: "AppSubjectChapters",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -2738,12 +2763,20 @@ namespace ShikshaMitra.Migrations
                     StandardId = table.Column<Guid>(type: "uuid", nullable: false),
                     SubjectId = table.Column<Guid>(type: "uuid", nullable: false),
                     ElectiveGroupId = table.Column<Guid>(type: "uuid", nullable: true),
-                    SubjectCode = table.Column<string>(type: "text", nullable: false),
+                    SubjectCode = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
                     LearningGoals = table.Column<string>(type: "text", nullable: true),
                     Prerequisites = table.Column<string>(type: "text", nullable: true),
                     Description = table.Column<string>(type: "text", nullable: true),
                     UploadedDocument = table.Column<string>(type: "text", nullable: true),
                     Status = table.Column<int>(type: "integer", nullable: false),
+                    AssignmentGroupName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    AssignmentGroupId = table.Column<Guid>(type: "uuid", nullable: true),
+                    SubjectType = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    Documents = table.Column<string>(type: "text", nullable: true),
+                    IsSubjectOpen = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    EducationMediumId = table.Column<Guid>(type: "uuid", nullable: false),
+                    SubjectColor = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
+                    PublishedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -3202,6 +3235,21 @@ namespace ShikshaMitra.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_ChapterDocuments_ChapterId",
+                table: "AppChapterDocuments",
+                column: "ChapterId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ChapterDocuments_TenantId",
+                table: "AppChapterDocuments",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ChapterDocuments_TenantId_ChapterId",
+                table: "AppChapterDocuments",
+                columns: new[] { "TenantId", "ChapterId" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_DeductionComponents_DisplayOrder",
                 table: "AppDeductionComponents",
                 column: "DisplayOrder");
@@ -3451,14 +3499,25 @@ namespace ShikshaMitra.Migrations
                 column: "ElectiveGroupId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AppStandardSubjectAssignments_StandardId",
-                table: "AppStandardSubjectAssignments",
-                column: "StandardId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_AppStandardSubjectAssignments_SubjectId",
                 table: "AppStandardSubjectAssignments",
                 column: "SubjectId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_StandardSubjectAssignments_AssignmentGroupId",
+                table: "AppStandardSubjectAssignments",
+                column: "AssignmentGroupId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_StandardSubjectAssignments_EducationMediumId",
+                table: "AppStandardSubjectAssignments",
+                column: "EducationMediumId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_StandardSubjectAssignments_StandardId_SubjectCode",
+                table: "AppStandardSubjectAssignments",
+                columns: new[] { "StandardId", "SubjectCode" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_AppStudentContactDetails_StudentId",
@@ -3564,6 +3623,22 @@ namespace ShikshaMitra.Migrations
                 name: "IX_AppStudents_PreviousSchoolDetailId",
                 table: "AppStudents",
                 column: "PreviousSchoolDetailId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SubjectChapters_EducationMediumId",
+                table: "AppSubjectChapters",
+                column: "EducationMediumId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SubjectChapters_SubjectId",
+                table: "AppSubjectChapters",
+                column: "SubjectId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SubjectChapters_SubjectId_ChapterNumber",
+                table: "AppSubjectChapters",
+                columns: new[] { "SubjectId", "ChapterNumber" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_AppSubjects_EducationMediumId",
@@ -3725,6 +3800,9 @@ namespace ShikshaMitra.Migrations
                 name: "AppBookCategories");
 
             migrationBuilder.DropTable(
+                name: "AppChapterDocuments");
+
+            migrationBuilder.DropTable(
                 name: "AppClassTeachers");
 
             migrationBuilder.DropTable(
@@ -3824,9 +3902,6 @@ namespace ShikshaMitra.Migrations
                 name: "AppStudentLeaves");
 
             migrationBuilder.DropTable(
-                name: "AppSubjectChapters");
-
-            migrationBuilder.DropTable(
                 name: "AppSubjectTeachers");
 
             migrationBuilder.DropTable(
@@ -3858,6 +3933,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "AppAttendanceDays");
+
+            migrationBuilder.DropTable(
+                name: "AppSubjectChapters");
 
             migrationBuilder.DropTable(
                 name: "AppEmployeeLeavePolicies");

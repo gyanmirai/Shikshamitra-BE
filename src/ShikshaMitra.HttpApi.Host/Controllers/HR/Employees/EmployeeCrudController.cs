@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Models;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -166,17 +167,19 @@ public class EmployeeCrudController : AbpController
 	/// Upload employee profile picture
 	/// </summary>
 	/// <param name="id">Employee ID</param>
-	/// <param name="file">Profile picture file</param>
+	/// <param name="request">Profile picture upload request containing the file</param>
 	/// <returns>Blob name of uploaded picture</returns>
 	[HttpPost("{id}/profile-picture")]
 	[Consumes("multipart/form-data")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
-	public virtual async Task<IActionResult> UploadProfilePictureAsync(Guid id, [FromForm] IFormFile file)
+	public virtual async Task<IActionResult> UploadProfilePictureAsync(Guid id, [FromForm] EmployeeProfilePictureUploadRequest request)
 	{
-		if (file == null || file.Length == 0)
+		if (request?.File == null || request.File.Length == 0)
 		{
 			return BadRequest(new { Message = "No file was uploaded." });
 		}
+
+		var file = request.File;
 
 		// Validate file type
 		var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp" };

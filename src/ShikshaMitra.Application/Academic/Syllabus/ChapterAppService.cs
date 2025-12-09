@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -18,15 +18,19 @@ public class ChapterAppService(
 	{
 		try
 		{
+			// Validate EducationMediumId is provided`r`n`t`t`tif (createChapterDto.EducationMediumId == Guid.Empty)`r`n`t`t`t{`r`n`t`t`t`tthrow new UserFriendlyException("Education Medium ID is required and cannot be empty.");`r`n`t`t`t}
+			var educationMediumId = createChapterDto.EducationMediumId;
+			
 			var chapter = new SubjectChapter(
-				guidGenerator.Create(),
-				createChapterDto.StandardId,
-				createChapterDto.SubjectId,
-				createChapterDto.ChapterNumber,
-				createChapterDto.ChapterName,
-				createChapterDto.ChapterStartTime,
-				createChapterDto.ChapterEndTime,
-				createChapterDto.Description
+				id: guidGenerator.Create(),
+				standardId: createChapterDto.StandardId,
+				subjectId: createChapterDto.SubjectId,
+				educationMediumId: educationMediumId,
+				chapterNumber: createChapterDto.ChapterNumber,
+				chapterName: createChapterDto.ChapterName,
+				chapterStartTime: createChapterDto.ChapterStartTime,
+				chapterEndTime: createChapterDto.ChapterEndTime,
+				description: createChapterDto.Description
 			);
 
 			await chapterRepository.InsertAsync(chapter, autoSave: true);

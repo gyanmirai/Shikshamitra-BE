@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Linq;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -15,6 +17,59 @@ public class SubjectAppService(
 	ILogger<SubjectAppService> logger
 ) : ApplicationService, ISubjectAppService
 {
+	public async Task<SubjectDto> GetAsync(Guid id)
+	{
+		try
+		{
+			var subject = await subjectRepository.GetAsync(id);
+			return ObjectMapper.Map<Subject, SubjectDto>(subject);
+		}
+		catch (Exception ex)
+		{
+			logger.LogError(ex, "Error retrieving subject with ID {SubjectId}", id);
+			throw new UserFriendlyException("Error occurred while retrieving subject");
+		}
+	}
+
+	public async Task<List<SubjectDto>> GetListAsync(
+		Guid educationMediumId,
+		string? searchTerm = null
+	)
+	{
+		try
+		{
+			var queryable = await subjectRepository.GetQueryableAsync();
+
+			// Filter by education medium
+			queryable = queryable.Where(x => x.EducationMediumId == educationMediumId);
+
+			// Apply search filter if provided
+			if (!string.IsNullOrWhiteSpace(searchTerm))
+			{
+				queryable = queryable.Where(x => x.Name.Contains(searchTerm));
+			}
+
+			// Use ABP's AsyncExecuter for asynchronous query execution
+			var subjects = await AsyncExecuter.ToListAsync(queryable);
+
+			return ObjectMapper.Map<List<Subject>, List<SubjectDto>>(subjects);
+		}
+		catch (UserFriendlyException ex)
+		{
+			logger.LogError(ex.Message);
+			throw;
+		}
+		catch (Exception ex)
+		{
+			logger.LogError(
+				ex,
+				"Error retrieving subjects for medium {EducationMediumId}",
+				educationMediumId
+			);
+			throw new UserFriendlyException("Error occurred while retrieving subjects");
+		}
+	}
+
 	public async Task<SubjectDto> CreateAsync(CreateUpdateSubjectDto createSubjectDto)
 	{
 		try
@@ -45,51 +100,6 @@ public class SubjectAppService(
 		}
 	}
 
-	public async Task DeleteAsync(Guid id)
-	{
-		try
-		{
-			var subject = await subjectRepository.GetAsync(id);
-			await subjectRepository.DeleteAsync(id);
-		}
-		catch (UserFriendlyException ex)
-		{
-			logger.LogError(ex.Message);
-			throw;
-		}
-		catch (Exception ex)
-		{
-			logger.LogError(ex, "Error deleting subject with ID {SubjectId}", id);
-			throw new UserFriendlyException("Error occurred while deleting subject");
-		}
-	}
-
-	public async Task<List<SubjectDto>> GetListAsync(Guid educationMediumId)
-	{
-		try
-		{
-			List<Subject> subjects = await subjectRepository.GetListAsync(x =>
-				x.EducationMediumId == educationMediumId
-			);
-
-			return ObjectMapper.Map<List<Subject>, List<SubjectDto>>(subjects);
-		}
-		catch (UserFriendlyException ex)
-		{
-			logger.LogError(ex.Message);
-			throw;
-		}
-		catch (Exception ex)
-		{
-			logger.LogError(
-				ex,
-				"Error retrieving subjects for medium {EducationMediumId}",
-				educationMediumId
-			);
-			throw new UserFriendlyException("Error occurred while retrieving subjects");
-		}
-	}
-
 	public async Task<SubjectDto> UpdateAsync(Guid id, CreateUpdateSubjectDto updateSubjectDto)
 	{
 		try
@@ -114,6 +124,25 @@ public class SubjectAppService(
 		{
 			logger.LogError(ex, "Error updating subject with ID {SubjectId}", id);
 			throw new UserFriendlyException("Error occurred while updating subject");
+		}
+	}
+
+	public async Task DeleteAsync(Guid id)
+	{
+		try
+		{
+			var subject = await subjectRepository.GetAsync(id);
+			await subjectRepository.DeleteAsync(id);
+		}
+		catch (UserFriendlyException ex)
+		{
+			logger.LogError(ex.Message);
+			throw;
+		}
+		catch (Exception ex)
+		{
+			logger.LogError(ex, "Error deleting subject with ID {SubjectId}", id);
+			throw new UserFriendlyException("Error occurred while deleting subject");
 		}
 	}
 }

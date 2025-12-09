@@ -22,16 +22,30 @@ public class StandardSubjectAssignmentAppService(
 		CreateStandardSubjectAssignmentDto createAssignmentDto
 	)
 	{
+		// Validate EducationMediumId is provided and not empty
+		if (createAssignmentDto.EducationMediumId == Guid.Empty)
+		{
+			throw new BusinessException(
+				"ShikshaMitra:SubjectAssignment:EducationMediumIdRequired",
+				"Education Medium ID is required and cannot be empty."
+			);
+		}
+
 		try
 		{
+			// Use SubjectType from DTO, default to Core if not provided
+			var subjectType = createAssignmentDto.SubjectType ?? SubjectType.Core;
+
 			var assignment = subjectAssignmentManager.AssignSubject(
-				createAssignmentDto.SubjectId,
-				createAssignmentDto.StandardId,
-				createAssignmentDto.SubjectCode,
-				createAssignmentDto.LearningGoals,
-				createAssignmentDto.Prerequisites,
-				createAssignmentDto.Description,
-				createAssignmentDto.Status
+				standardId: createAssignmentDto.StandardId,
+				subjectId: createAssignmentDto.SubjectId,
+				subjectCode: createAssignmentDto.SubjectCode,
+				educationMediumId: createAssignmentDto.EducationMediumId,
+				status: createAssignmentDto.Status,
+				subjectType: subjectType,
+				learningGoals: createAssignmentDto.LearningGoals,
+				prerequisites: createAssignmentDto.Prerequisites,
+				description: createAssignmentDto.Description
 			);
 
 			if (createAssignmentDto.PrimaryTeacherId.HasValue)

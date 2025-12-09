@@ -6,6 +6,7 @@ public class CreateUpdateChapterDto
 {
 	public Guid StandardId { get; set; }
 	public Guid SubjectId { get; set; }
+	public Guid EducationMediumId { get; set; }
 	public int ChapterNumber { get; set; }
 	public string ChapterName { get; set; } = string.Empty;
 	public DateTimeOffset ChapterStartTime { get; set; }

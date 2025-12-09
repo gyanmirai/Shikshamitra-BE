@@ -207,6 +207,7 @@ public static class ShikshaMitraSubModulePermissions
 		CommunicationNotification,
 		NotificationHistory,
 		CommunicationSettings,
+		CalendarDashboard,
 		CalendarView,
 		Events,
 		Holidays,
@@ -343,6 +344,7 @@ public static class ShikshaMitraSubModulePermissions
 		{ CommunicationSettings, $"{DisplayNamePrefix}.CommunicationSettings" },
 
 		// Calendar module submodules
+		{ CalendarDashboard, $"{DisplayNamePrefix}.CalendarDashboard" },
 		{ CalendarView, $"{DisplayNamePrefix}.CalendarView" },
 		{ Events, $"{DisplayNamePrefix}.Events" },
 		{ Holidays, $"{DisplayNamePrefix}.Holidays" },

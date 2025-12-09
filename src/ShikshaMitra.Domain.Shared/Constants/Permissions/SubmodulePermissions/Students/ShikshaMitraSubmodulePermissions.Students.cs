@@ -65,10 +65,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Students.Records.StudentList", new SubmoduleInfo(Records_StudentList.All, Records_StudentList.DisplayNames) },
 			{ "Students.Records.StudentICard", new SubmoduleInfo(Records_StudentICard.All, Records_StudentICard.DisplayNames) },
 			{ "Students.Records.StudentManagement", new SubmoduleInfo(Records_StudentManagement.All, Records_StudentManagement.DisplayNames) },
-			{ "Students.Records.Certificates.BonafideCertificates", new SubmoduleInfo(Records_CertificatesBonafide.All, Records_CertificatesBonafide.DisplayNames) },
-			{ "Students.Records.Certificates.FirstTrialCertificates", new SubmoduleInfo(Records_CertificatesFirstTrial.All, Records_CertificatesFirstTrial.DisplayNames) },
-			{ "Students.Records.Certificates.LeavingCertificates", new SubmoduleInfo(Records_CertificatesLeaving.All, Records_CertificatesLeaving.DisplayNames) },
-			{ "Students.Records.Certificates.CharacterCertificates", new SubmoduleInfo(Records_CertificatesCharacter.All, Records_CertificatesCharacter.DisplayNames) },
+			{ "Students.Records.Certificates", new SubmoduleInfo(Records_Certificates.All, Records_Certificates.DisplayNames) },
 			{ "Students.Records.Settings", new SubmoduleInfo(Records_Settings.All, Records_Settings.DisplayNames) },
 
 			// Attendance submodules (defined in Students.Attendance.cs)

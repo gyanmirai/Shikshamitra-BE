@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Settings;
 
@@ -14,11 +15,11 @@ namespace ShikshaMitra.Students.StudentEnrollments.Settings;
 [RemoteService(false)]
 public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenceAppService
 {
-	private readonly IInquiryPreferenceRepository _inquiryPreferenceRepository;
+	private readonly IRepository<InquiryPreference, Guid> _inquiryPreferenceRepository;
 	private readonly InquiryPreferenceManager _inquiryPreferenceManager;
 
 	public InquiryPreferenceAppService(
-		IInquiryPreferenceRepository inquiryPreferenceRepository,
+		IRepository<InquiryPreference, Guid> inquiryPreferenceRepository,
 		InquiryPreferenceManager inquiryPreferenceManager)
 	{
 		_inquiryPreferenceRepository = inquiryPreferenceRepository;
@@ -28,13 +29,13 @@ public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenc
 	/// <summary>
 	/// Gets a paginated list of inquiry preferences for the current tenant
 	/// </summary>
-	public async Task<PagedResultDto<InquiryPreferenceDto>> GetListAsync(PagedAndSortedResultRequestDto input)
+    public async Task<PagedResultDto<InquiryPreferenceDto>> GetListAsync(PagedAndSortedResultRequestDto input, Guid academicYearId)
 	{
 		var queryable = await _inquiryPreferenceRepository.GetQueryableAsync();
 
 		// Filter by current tenant
 		var query = queryable
-			.Where(x => x.TenantId == CurrentTenant.Id)
+            .Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId)
 			.OrderBy(x => x.PreferenceName);
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
@@ -50,10 +51,11 @@ public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenc
 
 		var inquiryPreferences = await AsyncExecuter.ToListAsync(pagedQuery);
 
-		var dtos = inquiryPreferences.Select(ip => new InquiryPreferenceDto
+        var dtos = inquiryPreferences.Select(ip => new InquiryPreferenceDto
 		{
 			Id = ip.Id,
 			PreferenceName = ip.PreferenceName,
+            AcademicYearId = ip.AcademicYearId,
 			CreationTime = ip.CreationTime,
 			CreatorId = ip.CreatorId,
 			LastModificationTime = ip.LastModificationTime,
@@ -91,12 +93,13 @@ public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenc
 	/// <summary>
 	/// Creates a new inquiry preference
 	/// </summary>
-	public async Task<InquiryPreferenceDto> CreateAsync(CreateUpdateInquiryPreferenceDto input)
+    public async Task<InquiryPreferenceDto> CreateAsync(Guid academicYearId, CreateUpdateInquiryPreferenceDto input)
 	{
-		var inquiryPreference = await _inquiryPreferenceManager.CreateAsync(
-			CurrentTenant.Id,
-			input.PreferenceName
-		);
+        var inquiryPreference = await _inquiryPreferenceManager.CreateAsync(
+            CurrentTenant.Id,
+            academicYearId,
+            input.PreferenceName
+        );
 
 		await _inquiryPreferenceRepository.InsertAsync(inquiryPreference, autoSave: true);
 
@@ -104,6 +107,7 @@ public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenc
 		{
 			Id = inquiryPreference.Id,
 			PreferenceName = inquiryPreference.PreferenceName,
+            AcademicYearId = inquiryPreference.AcademicYearId,
 			CreationTime = inquiryPreference.CreationTime,
 			CreatorId = inquiryPreference.CreatorId
 		};
@@ -112,7 +116,7 @@ public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenc
 	/// <summary>
 	/// Updates an existing inquiry preference
 	/// </summary>
-	public async Task<InquiryPreferenceDto> UpdateAsync(Guid id, CreateUpdateInquiryPreferenceDto input)
+    public async Task<InquiryPreferenceDto> UpdateAsync(Guid academicYearId, Guid id, CreateUpdateInquiryPreferenceDto input)
 	{
 		var inquiryPreference = await _inquiryPreferenceRepository.GetAsync(id);
 
@@ -123,10 +127,11 @@ public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenc
 				.WithData("Id", id);
 		}
 
-		await _inquiryPreferenceManager.UpdateAsync(
-			inquiryPreference,
-			input.PreferenceName
-		);
+        await _inquiryPreferenceManager.UpdateAsync(
+            inquiryPreference,
+            academicYearId,
+            input.PreferenceName
+        );
 
 		await _inquiryPreferenceRepository.UpdateAsync(inquiryPreference, autoSave: true);
 
@@ -134,6 +139,7 @@ public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenc
 		{
 			Id = inquiryPreference.Id,
 			PreferenceName = inquiryPreference.PreferenceName,
+            AcademicYearId = inquiryPreference.AcademicYearId,
 			CreationTime = inquiryPreference.CreationTime,
 			CreatorId = inquiryPreference.CreatorId,
 			LastModificationTime = inquiryPreference.LastModificationTime,

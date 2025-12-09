@@ -24,8 +24,12 @@ public class InquiryPreferenceConfiguration : IEntityTypeConfiguration<InquiryPr
 			.HasMaxLength(InquiryPreferenceConsts.MaxPreferenceNameLength)
 			.IsRequired();
 
-		// Create unique index on PreferenceName per tenant
-		builder.HasIndex(x => new { x.TenantId, x.PreferenceName })
+		// AcademicYearId is required
+		builder.Property(x => x.AcademicYearId)
+			.IsRequired();
+
+		// Create unique index on PreferenceName per tenant and academic year
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.PreferenceName })
 			.IsUnique();
 	}
 }

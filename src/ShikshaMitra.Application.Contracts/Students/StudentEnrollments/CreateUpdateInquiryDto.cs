@@ -20,13 +20,9 @@ public class CreateUpdateInquiryDto : IValidatableObject
 	public DateTimeOffset DateOfInquiry { get; set; } = DateTimeOffset.Now;
 	public Guid? InquiryPreferenceId { get; set; }
 
-	[EmailAddress]
 	public string? Email { get; set; }
 	[Required]
-	[Phone]
-	[StringLength(15, MinimumLength = 10)]
 	public required string PrimaryContactNo { get; set; }
-	[Phone]
 	public string? SecondaryContactNo { get; set; }
 
 	public string? Address1 { get; set; }

@@ -3702,6 +3702,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -3755,7 +3758,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "PreferenceName")
+                    b.HasIndex("TenantId", "AcademicYearId", "PreferenceName")
                         .IsUnique();
 
                     b.ToTable("AppInquiryPreferences", (string)null);
@@ -4791,7 +4794,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
-                    b.PrimitiveCollection<List<string>>("Features")
+                    b.Property<string>("Features")
                         .HasColumnType("jsonb");
 
                     b.Property<int>("Floor")

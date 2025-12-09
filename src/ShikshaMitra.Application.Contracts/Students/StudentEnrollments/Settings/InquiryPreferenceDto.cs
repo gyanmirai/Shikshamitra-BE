@@ -12,4 +12,9 @@ public class InquiryPreferenceDto : FullAuditedEntityDto<Guid>
 	/// Name of the inquiry preference (e.g., "Online", "Offline", "Facebook", "Walk-in")
 	/// </summary>
 	public string PreferenceName { get; set; } = string.Empty;
+
+	/// <summary>
+	/// Academic year identifier
+	/// </summary>
+	public Guid AcademicYearId { get; set; }
 }

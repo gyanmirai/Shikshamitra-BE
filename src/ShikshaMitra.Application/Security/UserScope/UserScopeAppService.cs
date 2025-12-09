@@ -65,9 +65,9 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 var userExists = await _userRepository.FindAsync(input.UserId.Value);
                 if (userExists == null)
                 {
-                    throw new UserFriendlyException(
-                        $"User with ID '{input.UserId.Value}' does not exist.",
-                        code: "UserScope:UserNotFound"
+                    throw new EntityNotFoundException(
+                        typeof(IdentityUser),
+                        input.UserId.Value
                     );
                 }
             }
@@ -195,9 +195,10 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                     "Bulk assignment failed - users not found. MissingUserIds: [{MissingUserIds}], CorrelationId: {CorrelationId}",
                     string.Join(", ", missingUserIds), correlationId);
 
-                throw new BusinessException(
+                throw new UserFriendlyException(
+                    message: $"The following user IDs do not exist: {string.Join(", ", missingUserIds)}. (Ref: {correlationId})",
                     code: "UserScope:UsersNotFound",
-                    message: $"The following user IDs do not exist: {string.Join(", ", missingUserIds)}. (Ref: {correlationId})"
+                    details: string.Join(", ", missingUserIds)
                 );
             }
 
@@ -459,21 +460,24 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         {
             _logger.LogDebug("Getting scope information for user {UserId}", userId);
 
-            // Get user info
+            // Get user info - throw 404 if user doesn't exist
             var user = await _userRepository.FindAsync(userId);
             if (user == null)
             {
-                throw new UserFriendlyException(
-                    $"User with ID '{userId}' does not exist.",
-                    code: "UserScope:UserNotFound"
-                );
+                _logger.LogWarning("User {UserId} not found when retrieving scope", userId);
+                throw new EntityNotFoundException(typeof(IdentityUser), userId);
             }
 
             // Get user's scope context
+            // Note: Users without scope assignments will get an empty scope (this is valid!)
             var scopeContext = await _userScopeService.GetUserScopeAsync(userId);
 
-            // Get all assignments
+            // Get all assignments (may be empty for users without assignments)
             var assignments = await _scopeRepository.GetUserAssignmentsAsync(userId);
+
+            _logger.LogDebug(
+                "Retrieved scope for user {UserId}. IsAdmin: {IsAdmin}, AssignmentCount: {Count}",
+                userId, scopeContext.IsAdmin, assignments.Count);
 
             var result = new UserScopeDto
             {
@@ -488,8 +492,9 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
             return result;
         }
-        catch (UserFriendlyException)
+        catch (EntityNotFoundException)
         {
+            // Re-throw entity not found (404 response)
             throw;
         }
         catch (Exception ex)

@@ -128,6 +128,20 @@
     "Permission:UserScope.Assign": "Assign User Scope",
     "Permission:UserScope.BulkAssign": "Bulk Assign User Scopes",
     "Permission:UserScope.Revoke": "Revoke User Scope",
-    "Permission:UserScope.Manage": "Manage User Scopes"
+    "Permission:UserScope.Manage": "Manage User Scopes",
+
+    "ShikshaMitra.Homework:FeedbackUpdatedSuccessfully": "Feedback updated successfully",
+    "ShikshaMitra.Homework:StatusUpdatedSuccessfully": "Status updated successfully",
+    "ShikshaMitra.Homework:NotFound": "Homework not found",
+    "ShikshaMitra.Homework:NotAssignedToDivision": "Homework not assigned to this division",
+    "ShikshaMitra.Homework:InvalidMarks": "Marks cannot exceed total marks",
+    "ShikshaMitra.Homework:NegativeMarks": "Marks cannot be negative",
+    "ShikshaMitra.Homework:NegativeTotalMarks": "Total marks cannot be negative",
+
+    "ShikshaMitra.Assignment:FeedbackUpdatedSuccessfully": "Feedback updated successfully",
+    "ShikshaMitra.Assignment:StatusUpdatedSuccessfully": "Status updated successfully",
+    "ShikshaMitra.Assignment:NotFound": "Assignment not found",
+    "ShikshaMitra.Assignment:NotAssignedToDivision": "Assignment not assigned to this division",
+    "ShikshaMitra.Assignment:StudentNotInAssignedDivision": "Student is not in any division assigned to this assignment"
   }
 }

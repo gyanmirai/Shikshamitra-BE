@@ -56,18 +56,17 @@ public class HomeworkAssignmentAppService(
 		);
 
 		// Create submissions in bulk for better performance
-		var submissions = students
-			.Select(student => new StudentSubmissionEntity
-			{
-				TenantId = homework.TenantId,
-				HomeworkAssignmentId = homework.Id,
-				StudentId = student.Id,
-				Status = SubmissionStatus.NotSubmitted,
-			})
-			.ToList();
-
-		foreach (var submission in submissions)
+		foreach (var student in students)
 		{
+			var submission = new StudentSubmissionEntity(
+				GuidGenerator.Create(),
+				homework.Id,
+				student.Id,
+				homework.DivisionId,
+				homework.DueDate,
+				homework.TenantId
+			);
+			submission.UpdateStatus(SubmissionStatus.NotSubmitted);
 			await submissionRepository.InsertAsync(submission);
 		}
 	}

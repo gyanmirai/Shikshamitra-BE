@@ -17,41 +17,6 @@ namespace ShikshaMitra.Controllers.Students;
 public class StudentController(IStudentInquiryAppService studentInquiryAppService, IStudentRegistrationAppService studentRegistrationAppService,
 	IStudentAppService studentAppService) : AbpControllerBase
 {
-	#region Inquiry
-	[HttpPost("inquiries")]
-	public async Task<Result> CreateInquiry(
-		[FromBody] CreateUpdateInquiryDto createInquiryDto)
-	{
-		var createdInquiry = await studentInquiryAppService.CreateStudentInquiryAsync(createInquiryDto);
-		return Result.Success(createdInquiry);
-	}
-
-	[HttpGet("inquiries/{academicMediumId}")]
-	public async Task<Result<PagedResultDto<StudentInquiryDto>>> GetInquiriesByMedium(
-		Guid academicMediumId,
-		[FromQuery] int skipCount = 0,
-		[FromQuery] int maxResultCount = 10,
-		[FromQuery] string? searchTerm = null)
-	{
-		var studentInquiries = await studentInquiryAppService.GetInquiriesByMediumAsync(
-			academicMediumId,
-			skipCount,
-			maxResultCount,
-			searchTerm
-		);
-		return Result.Success(studentInquiries);
-	}
-
-	[HttpPut("{studentId}/inquiries")]
-	public async Task<Result<StudentInquiryDto>> UpdateInquiry(
-		Guid studentId,
-		[FromBody] CreateUpdateInquiryDto updateInquiryDto)
-	{
-		var updatedInquiry = await studentInquiryAppService.UpdateInquiryAsync(studentId, updateInquiryDto);
-		return Result.Success(updatedInquiry);
-	}
-	#endregion
-
 	#region Registration Forms
 	[HttpPost("{studentId}/inquiries/registration-forms")]
 	public async Task<Result> AssignRegistrationForm(

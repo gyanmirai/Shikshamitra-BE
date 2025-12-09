@@ -89,8 +89,8 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 		var error = statusCode switch
 		{
 			400 => Error.Create("VALIDATION_ERROR", localizedMessage),
-			401 => Error.Create("UNAUTHORIZED", localizedMessage),
-			403 => Error.Create("FORBIDDEN", localizedMessage),
+			401 => Error.Create("UNAUTHORIZED", localizedMessage ?? "Authentication required. Please provide valid credentials."),
+			403 => Error.Create("FORBIDDEN", localizedMessage ?? "You don't have permission to access this resource."),
 			404 => Error.Create("NOT_FOUND", localizedMessage),
 			_ => Error.Create("ERROR", localizedMessage)
 		};
@@ -221,8 +221,8 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 		var defaultMessage = statusCode switch
 		{
 			400 => "Validation failed",
-			401 => "Unauthorized access",
-			403 => "Access forbidden",
+			401 => "Authentication required. Please provide valid credentials.",
+			403 => "You don't have permission to access this resource.",
 			404 => "Resource not found",
 			_ => "An error occurred"
 		};

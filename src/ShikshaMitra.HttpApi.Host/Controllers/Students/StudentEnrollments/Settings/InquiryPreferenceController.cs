@@ -14,7 +14,7 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.Settings;
 /// </summary>
 [ApiController]
 [Authorize]
-[Route("api/student-enrollment/settings/inquiry-preferences")]
+[Route("api/student-enrollment/{academicYearId}/settings/inquiry-preferences")]
 public class InquiryPreferenceController(IInquiryPreferenceAppService inquiryPreferenceAppService) : AbpControllerBase
 {
 	/// <summary>
@@ -24,9 +24,9 @@ public class InquiryPreferenceController(IInquiryPreferenceAppService inquiryPre
 	/// <returns>Paginated list of inquiry preferences</returns>
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsInquiryPreference.View)]
-	public async Task<PagedResultDto<InquiryPreferenceDto>> GetListAsync([FromQuery] PagedAndSortedResultRequestDto input)
+	public async Task<PagedResultDto<InquiryPreferenceDto>> GetListAsync([FromRoute] Guid academicYearId, [FromQuery] PagedAndSortedResultRequestDto input)
 	{
-		return await inquiryPreferenceAppService.GetListAsync(input);
+		return await inquiryPreferenceAppService.GetListAsync(input, academicYearId);
 	}
 
 	/// <summary>
@@ -48,9 +48,9 @@ public class InquiryPreferenceController(IInquiryPreferenceAppService inquiryPre
 	/// <returns>Created inquiry preference</returns>
 	[HttpPost]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsInquiryPreference.Add)]
-	public async Task<InquiryPreferenceDto> CreateAsync([FromBody] CreateUpdateInquiryPreferenceDto input)
+    public async Task<InquiryPreferenceDto> CreateAsync([FromRoute] Guid academicYearId, [FromBody] CreateUpdateInquiryPreferenceDto input)
 	{
-		return await inquiryPreferenceAppService.CreateAsync(input);
+        return await inquiryPreferenceAppService.CreateAsync(academicYearId, input);
 	}
 
 	/// <summary>
@@ -61,9 +61,9 @@ public class InquiryPreferenceController(IInquiryPreferenceAppService inquiryPre
 	/// <returns>Updated inquiry preference</returns>
 	[HttpPut("{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsInquiryPreference.Add)]
-	public async Task<InquiryPreferenceDto> UpdateAsync(Guid id, [FromBody] CreateUpdateInquiryPreferenceDto input)
+    public async Task<InquiryPreferenceDto> UpdateAsync([FromRoute] Guid academicYearId, Guid id, [FromBody] CreateUpdateInquiryPreferenceDto input)
 	{
-		return await inquiryPreferenceAppService.UpdateAsync(id, input);
+        return await inquiryPreferenceAppService.UpdateAsync(academicYearId, id, input);
 	}
 
 	/// <summary>

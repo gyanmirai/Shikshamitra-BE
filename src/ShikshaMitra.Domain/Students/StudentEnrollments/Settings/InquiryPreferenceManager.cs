@@ -13,9 +13,9 @@ namespace ShikshaMitra.Students.StudentEnrollments.Settings;
 /// </summary>
 public class InquiryPreferenceManager : DomainService
 {
-	private readonly IInquiryPreferenceRepository _inquiryPreferenceRepository;
+	private readonly IRepository<InquiryPreference, Guid> _inquiryPreferenceRepository;
 
-	public InquiryPreferenceManager(IInquiryPreferenceRepository inquiryPreferenceRepository)
+	public InquiryPreferenceManager(IRepository<InquiryPreference, Guid> inquiryPreferenceRepository)
 	{
 		_inquiryPreferenceRepository = inquiryPreferenceRepository;
 	}
@@ -25,14 +25,16 @@ public class InquiryPreferenceManager : DomainService
 	/// </summary>
 	public async Task<InquiryPreference> CreateAsync(
 		Guid? tenantId,
+		Guid academicYearId,
 		string preferenceName)
 	{
 		// Check if inquiry preference with same name already exists for this tenant
-		await CheckNameUniquenessAsync(tenantId, preferenceName);
+		await CheckNameUniquenessAsync(tenantId, academicYearId, preferenceName);
 
 		var inquiryPreference = new InquiryPreference(
 			GuidGenerator.Create(),
 			tenantId,
+			academicYearId,
 			preferenceName
 		);
 
@@ -44,15 +46,16 @@ public class InquiryPreferenceManager : DomainService
 	/// </summary>
 	public async Task<InquiryPreference> UpdateAsync(
 		InquiryPreference inquiryPreference,
+		Guid academicYearId,
 		string preferenceName)
 	{
 		// Check uniqueness only if name is changing
-		if (inquiryPreference.PreferenceName != preferenceName)
+		if (inquiryPreference.PreferenceName != preferenceName || inquiryPreference.AcademicYearId != academicYearId)
 		{
-			await CheckNameUniquenessAsync(inquiryPreference.TenantId, preferenceName, inquiryPreference.Id);
+			await CheckNameUniquenessAsync(inquiryPreference.TenantId, academicYearId, preferenceName, inquiryPreference.Id);
 		}
 
-		inquiryPreference.Update(preferenceName);
+		inquiryPreference.Update(academicYearId, preferenceName);
 
 		return inquiryPreference;
 	}
@@ -62,6 +65,7 @@ public class InquiryPreferenceManager : DomainService
 	/// </summary>
 	private async Task CheckNameUniquenessAsync(
 		Guid? tenantId,
+		Guid academicYearId,
 		string preferenceName,
 		Guid? excludeId = null)
 	{
@@ -69,6 +73,7 @@ public class InquiryPreferenceManager : DomainService
 
 		if (await AsyncExecuter.AnyAsync(query.Where(x =>
 			x.TenantId == tenantId &&
+			x.AcademicYearId == academicYearId &&
 			x.PreferenceName == preferenceName &&
 			(excludeId == null || x.Id != excludeId))))
 		{

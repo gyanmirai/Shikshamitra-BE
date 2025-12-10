@@ -1,10 +1,11 @@
-﻿using ShikshaMitra.TenantSettings.EducationMediums;
+﻿using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Dynamic.Core;
-using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -19,10 +20,35 @@ public class StudentInquiryAppService(
 	IRepository<Student, Guid> studentRepository,
 	IRepository<EducationMedium, Guid> academicMediumRepository,
 	IRepository<Standard, Guid> standardRepository,
+	IRepository<EducationBoard, Guid> educationBoardRepository,
+	IRepository<AcademicYear, Guid> academicYearRepository,
 	IGuidGenerator guidGenerator,
-	StudentEnrollmentManagerNew studentEnrollmentManager
+	StudentEnrollmentManagerNew studentEnrollmentManager,
+	StudentEnrollmentDtoEnricher dtoEnricher
 ) : ApplicationService, IStudentInquiryAppService
 {
+	public async Task<StudentInquiryDto> GetInquiryByIdAsync(Guid studentId)
+	{
+		// Load the complete aggregate with all details
+		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+
+		// Verify the student is an inquiry
+		if (student.Status != StudentLifeCycleStatusEnum.Inquiry)
+		{
+			throw new BusinessException("", L["Student is not in Inquiry status"]);
+		}
+
+		// Verify tenant isolation
+		if (student.TenantId != CurrentTenant.Id)
+		{
+			throw new BusinessException("", L["Inquiry Not Found"]);
+		}
+
+		var dto = ObjectMapper.Map<Student, StudentInquiryDto>(student);
+		await dtoEnricher.EnrichSingleDtoAsync(dto);
+		return dto;
+	}
+
 	public async Task<StudentInquiryDto> CreateStudentInquiryAsync(
 		CreateUpdateInquiryDto createStudentInquiryDto
 	)
@@ -65,7 +91,11 @@ public class StudentInquiryAppService(
 		// due to cascade configuration
 		await studentRepository.InsertAsync(student, autoSave: true);
 
-		return ObjectMapper.Map<Student, StudentInquiryDto>(student);
+		// Re-load with details to ensure mapper has all data populated
+		var saved = await studentRepository.GetAsync(student.Id, includeDetails: true);
+		var dto = ObjectMapper.Map<Student, StudentInquiryDto>(saved);
+		await dtoEnricher.EnrichSingleDtoAsync(dto);
+		return dto;
 	}
 
 	public async Task<PagedResultDto<StudentInquiryDto>> GetInquiriesByMediumAsync(
@@ -77,8 +107,11 @@ public class StudentInquiryAppService(
 	{
 		await CheckAcademicMediumExistsAsync(academicMediumId);
 
-		// Get queryable with aggregate parts auto-included
-		var queryable = await studentRepository.GetQueryableAsync();
+		// Get queryable with related details included for proper mapping
+		var queryable = await studentRepository.WithDetailsAsync(
+			 s => s.AdditionalDetail,
+			 s => s.ContactDetail
+		);
 		
 		var query = queryable
 			.Where(s => s.Status == StudentLifeCycleStatusEnum.Inquiry
@@ -112,6 +145,9 @@ public class StudentInquiryAppService(
 
 		var results = await AsyncExecuter.ToListAsync(pagedQuery);
 		var resultList = ObjectMapper.Map<List<Student>, List<StudentInquiryDto>>(results);
+		
+		// Use batch enrichment to avoid N+1 problem
+		await dtoEnricher.EnrichDtoListAsync(resultList, results);
 
 		return new PagedResultDto<StudentInquiryDto>(totalCount, resultList);
 	}
@@ -153,7 +189,50 @@ public class StudentInquiryAppService(
 		// Single repository call - EF Core tracks changes to all parts
 		await studentRepository.UpdateAsync(student, autoSave: true);
 
-		return ObjectMapper.Map<Student, StudentInquiryDto>(student);
+		// Re-load with details to ensure mapper has all data populated
+		var saved = await studentRepository.GetAsync(student.Id, includeDetails: true);
+		var dto = ObjectMapper.Map<Student, StudentInquiryDto>(saved);
+		await dtoEnricher.EnrichSingleDtoAsync(dto);
+		return dto;
+	}
+
+	private async Task EnrichInquiryDtoAsync(StudentInquiryDto dto)
+	{
+		// Academic Medium Name and Board Name
+		if (dto.AcademicMediumId != Guid.Empty)
+		{
+			var medium = await academicMediumRepository.FindAsync(dto.AcademicMediumId, includeDetails: true);
+			if (medium != null)
+			{
+				dto.AcademicMediumName = medium.Name;
+				
+				// Get Academic Board Name through Medium
+				dto.AcademicBoardId = medium.EducationBoardId;
+				var board = await educationBoardRepository.FindAsync(medium.EducationBoardId);
+				dto.AcademicBoardName = board?.Type.ToString();
+
+				if (board != null)
+				{
+					dto.AcademicYearId = board.AcademicYearId;
+
+					// Get Academic Year name through board
+					var year = await academicYearRepository.FindAsync(board.AcademicYearId);
+					dto.AcademicYearName = year?.Name;
+				}
+			}
+		}
+
+		// Standard Name
+		if (dto.StudentId != Guid.Empty)
+		{
+			// Get the student to read StandardId (mapping didn't include name)
+			var student = await studentRepository.FindAsync(dto.StudentId);
+			if (student?.StandardId != null)
+			{
+				var std = await standardRepository.FindAsync(student.StandardId.Value);
+		dto.Standard = std?.Name ?? dto.Standard;
+			}
+		}
 	}
 
 	public async Task AssignRegistrationFormAsync(

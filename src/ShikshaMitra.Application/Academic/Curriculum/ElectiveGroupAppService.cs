@@ -108,7 +108,8 @@ public class ElectiveGroupAppService(
 				input.SubjectIds
 			);
 
-			await ElectiveGroupRepository.InsertAsync(electiveGroup);
+			// Ensure the entity is saved before re-fetching with details
+			await ElectiveGroupRepository.InsertAsync(electiveGroup, autoSave: true);
 
 			// Re-fetch with details for proper mapping
 			return await GetAsync(academicMediumId, electiveGroup.Id);

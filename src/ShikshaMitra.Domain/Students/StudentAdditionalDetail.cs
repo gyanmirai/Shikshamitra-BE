@@ -81,6 +81,8 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		DateOfInquiry = dateOfInquiry;
 		InquiryNo = inquiryNo;
 		InquiryPreferenceId = inquiryPreferenceId;
+		// Ensure non-null default to satisfy DB not-null constraint until General Info is provided
+		FamilyCast = string.Empty;
 		StudentRegistrationState = StudentRegistrationStateEnum.Default;
 	}
 

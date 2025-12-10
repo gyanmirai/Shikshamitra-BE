@@ -23,8 +23,9 @@ public class StudentRegistrationAppService(
 	IRepository<StudentPreviousSchoolDetail, Guid> studentPreviousSchoolDetailRepository,
 	IRepository<StudentBankDetail, Guid> studentBankDetailRepository,
 	IRepository<EducationMedium, Guid> academicMediumRepository,
-	IRepository<TenantSettings.Standards.Standard, Guid> standardRepository,
-	IRepository<TenantSettings.Divisions.Division, Guid> divisionRepository
+	IRepository<Standard, Guid> standardRepository,
+	IRepository<Division, Guid> divisionRepository,
+	StudentEnrollmentDtoEnricher dtoEnricher
 ) : ApplicationService, IStudentRegistrationAppService
 {
 	public async Task<PagedResultDto<StudentRegistrationFormDto>> GetRegistrationFormsByMediumAsync(
@@ -71,6 +72,9 @@ public class StudentRegistrationAppService(
 
 		var results = await AsyncExecuter.ToListAsync(pagedQuery);
 		var resultList = ObjectMapper.Map<List<Student>, List<StudentRegistrationFormDto>>(results);
+
+		// Enrich DTOs with related entity names (Standard, Medium, Board, Year)
+		await dtoEnricher.EnrichRegistrationFormDtoListAsync(resultList, results);
 
 		return new PagedResultDto<StudentRegistrationFormDto>(totalCount, resultList);
 	}
@@ -119,6 +123,9 @@ public class StudentRegistrationAppService(
 
 		var results = await AsyncExecuter.ToListAsync(pagedQuery);
 		var resultList = ObjectMapper.Map<List<Student>, List<StudentRegistrationDto>>(results);
+
+		// Enrich DTOs with related entity names (Standard, Medium, Board, Year)
+		await dtoEnricher.EnrichRegistrationDtoListAsync(resultList, results);
 
 		return new PagedResultDto<StudentRegistrationDto>(totalCount, resultList);
 	}

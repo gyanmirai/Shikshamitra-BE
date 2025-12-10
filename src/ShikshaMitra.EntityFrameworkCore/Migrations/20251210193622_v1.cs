@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -882,6 +880,7 @@ namespace ShikshaMitra.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
                     PreferenceName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
@@ -1809,11 +1808,11 @@ namespace ShikshaMitra.Migrations
                 name: "AppFloors",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
                     FloorName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     TotalRoom = table.Column<int>(type: "integer", nullable: false),
-                    BuildingId = table.Column<Guid>(type: "uuid", nullable: false)
+                    BuildingId = table.Column<Guid>(type: "uuid", nullable: false),
+                    FloorNo = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1883,7 +1882,7 @@ namespace ShikshaMitra.Migrations
                     BenchCapacity = table.Column<int>(type: "integer", nullable: false),
                     BenchesPerRow = table.Column<int>(type: "integer", nullable: false),
                     BenchesPerColumn = table.Column<int>(type: "integer", nullable: false),
-                    Features = table.Column<List<string>>(type: "jsonb", nullable: true),
+                    Features = table.Column<string>(type: "jsonb", nullable: true),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -3452,9 +3451,9 @@ namespace ShikshaMitra.Migrations
                 column: "HomeworkAssignmentTypeId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AppInquiryPreferences_TenantId_PreferenceName",
+                name: "IX_AppInquiryPreferences_TenantId_AcademicYearId_PreferenceName",
                 table: "AppInquiryPreferences",
-                columns: new[] { "TenantId", "PreferenceName" },
+                columns: new[] { "TenantId", "AcademicYearId", "PreferenceName" },
                 unique: true);
 
             migrationBuilder.CreateIndex(

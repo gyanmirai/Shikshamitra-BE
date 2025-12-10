@@ -32,7 +32,7 @@ public class BuildingController(IBuildingAppService buildingAppService) : AbpCon
 	[HttpPost]
 	[ProducesResponseType(typeof(BuildingDto), (int)HttpStatusCode.Created)]
 	[ProducesResponseType((int)HttpStatusCode.BadRequest)]
-	public async Task<ActionResult<BuildingDto>> CreateAsync([FromBody] CreateUpdateBuildingDto input)
+	public async Task<ActionResult<BuildingDto>> CreateAsync([FromBody] CreateBuildingDto input)
 	{
 		var result = await buildingAppService.CreateAsync(input);
 		return StatusCode((int)HttpStatusCode.Created, result);
@@ -41,7 +41,7 @@ public class BuildingController(IBuildingAppService buildingAppService) : AbpCon
 	[HttpPut("{id}")]
 	[ProducesResponseType(typeof(BuildingDto), (int)HttpStatusCode.OK)]
 	[ProducesResponseType((int)HttpStatusCode.NotFound)]
-	public async Task<BuildingDto> UpdateAsync(Guid id, [FromBody] CreateUpdateBuildingDto input)
+	public async Task<BuildingDto> UpdateAsync(Guid id, [FromBody] UpdateBuildingDto input)
 	{
 		return await buildingAppService.UpdateAsync(id, input);
 	}

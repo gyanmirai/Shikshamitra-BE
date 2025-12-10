@@ -36,7 +36,7 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 		return ObjectMapper.Map<Building, BuildingDto>(entity);
 	}
 
-	public async Task<BuildingDto> CreateAsync(CreateUpdateBuildingDto input)
+	public async Task<BuildingDto> CreateAsync(CreateBuildingDto input)
 	{
 		var building = new Building
 		{
@@ -64,7 +64,7 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 		return await GetAsync(createdBuilding.Id);
 	}
 
-	public async Task<BuildingDto> UpdateAsync(Guid id, CreateUpdateBuildingDto input)
+	public async Task<BuildingDto> UpdateAsync(Guid id, UpdateBuildingDto input)
 	{
 		var building = await buildingRepository.GetAsync(id);
 
@@ -78,13 +78,29 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 			(await floorRepository.GetQueryableAsync()).Where(f => f.BuildingId == id)
 		);
 
-		var existingFloorIds = input.Floors
-			.Where(f => f.Id.HasValue)
-			.Select(f => f.Id.Value)
-			.ToList();
+		var existingFloorIds = existingFloors.Select(f => f.Id).ToList();
 
+		// Validate that all floor IDs to update exist
+		foreach (var floorDto in input.FloorsToUpdate)
+		{
+			if (!existingFloorIds.Contains(floorDto.Id))
+			{
+				throw new UserFriendlyException($"Floor with ID {floorDto.Id} not found in building {id}");
+			}
+		}
+
+		// Validate that all floor IDs to delete exist
+		foreach (var floorIdToDelete in input.FloorIdsToDelete)
+		{
+			if (!existingFloorIds.Contains(floorIdToDelete))
+			{
+				throw new UserFriendlyException($"Floor with ID {floorIdToDelete} not found in building {id}");
+			}
+		}
+
+		// Delete floors explicitly marked for deletion
 		var floorsToDelete = existingFloors
-			.Where(f => !existingFloorIds.Contains(f.Id))
+			.Where(f => input.FloorIdsToDelete.Contains(f.Id))
 			.ToList();
 
 		foreach (var floor in floorsToDelete)
@@ -92,30 +108,30 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 			await floorRepository.DeleteAsync(floor, autoSave: false);
 		}
 
-		foreach (var floorDto in input.Floors)
+		// Update existing floors
+		foreach (var floorDto in input.FloorsToUpdate)
 		{
-			if (floorDto.Id.HasValue)
+			var existingFloor = existingFloors.FirstOrDefault(f => f.Id == floorDto.Id);
+			if (existingFloor != null)
 			{
-				var existingFloor = existingFloors.FirstOrDefault(f => f.Id == floorDto.Id.Value);
-				if (existingFloor != null)
-				{
-					existingFloor.FloorName = floorDto.FloorName;
-					existingFloor.TotalRoom = floorDto.TotalRoom;
-					existingFloor.FloorNo = floorDto.FloorNo;
-					await floorRepository.UpdateAsync(existingFloor, autoSave: false);
-				}
+				existingFloor.FloorName = floorDto.FloorName;
+				existingFloor.TotalRoom = floorDto.TotalRoom;
+				existingFloor.FloorNo = floorDto.FloorNo;
+				await floorRepository.UpdateAsync(existingFloor, autoSave: false);
 			}
-			else
+		}
+
+		// Add new floors
+		foreach (var floorDto in input.FloorsToAdd)
+		{
+			var newFloor = new Floor
 			{
-				var newFloor = new Floor
-				{
-					FloorName = floorDto.FloorName,
-					TotalRoom = floorDto.TotalRoom,
-					FloorNo = floorDto.FloorNo,
-					BuildingId = id
-				};
-				await floorRepository.InsertAsync(newFloor, autoSave: false);
-			}
+				FloorName = floorDto.FloorName,
+				TotalRoom = floorDto.TotalRoom,
+				FloorNo = floorDto.FloorNo,
+				BuildingId = id
+			};
+			await floorRepository.InsertAsync(newFloor, autoSave: false);
 		}
 
 		await UnitOfWorkManager.Current.SaveChangesAsync();

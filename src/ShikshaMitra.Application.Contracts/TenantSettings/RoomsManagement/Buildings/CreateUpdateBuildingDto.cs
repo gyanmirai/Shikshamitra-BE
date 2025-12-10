@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 
-public class CreateUpdateBuildingDto
+public abstract class BuildingMutationDtoBase
 {
 	[Required]
 	[StringLength(BuildingConsts.MaxNameLength)]
@@ -16,15 +16,25 @@ public class CreateUpdateBuildingDto
 
 	[StringLength(BuildingConsts.MaxDescriptionLength)]
 	public string? Description { get; set; }
-
-	[Required]
-	public List<CreateUpdateFloorDto> Floors { get; set; } = new();
 }
 
-public class CreateUpdateFloorDto
+public class CreateBuildingDto : BuildingMutationDtoBase
 {
-	public Guid? Id { get; set; }
+	[Required]
+	public List<CreateFloorDto> Floors { get; set; } = new();
+}
 
+public class UpdateBuildingDto : BuildingMutationDtoBase
+{
+	public List<UpdateFloorDto> FloorsToUpdate { get; set; } = new();
+
+	public List<CreateFloorDto> FloorsToAdd { get; set; } = new();
+
+	public List<Guid> FloorIdsToDelete { get; set; } = new();
+}
+
+public abstract class FloorMutationDtoBase
+{
 	[Required]
 	[Range(0, int.MaxValue, ErrorMessage = "Floor number must be 0 or greater")]
 	public int FloorNo { get; set; }
@@ -36,4 +46,14 @@ public class CreateUpdateFloorDto
 	[Required]
 	[Range(FloorConsts.MinTotalRoom, FloorConsts.MaxTotalRoom)]
 	public int TotalRoom { get; set; }
+}
+
+public class CreateFloorDto : FloorMutationDtoBase
+{
+}
+
+public class UpdateFloorDto : FloorMutationDtoBase
+{
+	[Required]
+	public Guid Id { get; set; }
 }

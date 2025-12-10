@@ -1,0 +1,231 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Syllabus;
+using ShikshaMitra.TenantSettings.Standards;
+using Volo.Abp;
+using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Guids;
+
+namespace ShikshaMitra.Academic.ClassManagement.ChapterProgress;
+
+[RemoteService(IsEnabled = false)]
+public class ChapterProgressAppService(
+	IRepository<StandardSubjectAssignment, Guid> subjectAssignmentRepository,
+	IRepository<SubjectChapter, Guid> chapterRepository,
+	IRepository<Syllabus.ChapterProgress, Guid> progressRepository,
+	IRepository<Subject, Guid> subjectRepository,
+	IRepository<Standard, Guid> standardRepository,
+	IGuidGenerator guidGenerator,
+	ILogger<ChapterProgressAppService> logger
+) : ApplicationService, IChapterProgressAppService
+{
+	public async Task<List<ClassDivisionSubjectDto>> GetSubjectsForClassDivisionAsync(
+		Guid academicMediumId,
+		Guid classId,
+		Guid divisionId
+	)
+	{
+		logger.LogInformation(
+			"Getting subjects for class {ClassId}, division {DivisionId}",
+			classId, divisionId
+		);
+
+		// Get all subject assignments for the class
+		var assignments = await subjectAssignmentRepository.GetListAsync(a =>
+			a.StandardId == classId &&
+			a.EducationMediumId == academicMediumId
+		);
+
+		var result = new List<ClassDivisionSubjectDto>();
+		if (!assignments.Any())
+		{
+			return result;
+		}
+
+		var subjectIds = assignments.Select(a => a.SubjectId).Distinct().ToList();
+		var subjects = await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id));
+		var subjectLookup = subjects.ToDictionary(s => s.Id);
+
+		var chapters = await chapterRepository.GetListAsync(c => subjectIds.Contains(c.SubjectId));
+		var chaptersBySubject = chapters
+			.GroupBy(c => c.SubjectId)
+			.ToDictionary(g => g.Key, g => g.ToList());
+		var chapterIds = chapters.Select(c => c.Id).ToList();
+		var progresses = chapterIds.Count == 0
+			? new List<Syllabus.ChapterProgress>()
+			: await progressRepository.GetListAsync(p =>
+				chapterIds.Contains(p.ChapterId) &&
+				p.DivisionId == divisionId
+			);
+		var progressLookup = progresses.ToDictionary(p => p.ChapterId);
+
+		foreach (var assignment in assignments)
+		{
+			if (!subjectLookup.TryGetValue(assignment.SubjectId, out var subject))
+			{
+				continue;
+			}
+
+			if (!chaptersBySubject.TryGetValue(subject.Id, out var subjectChapters))
+			{
+				subjectChapters = new List<SubjectChapter>();
+			}
+
+			var totalChapters = subjectChapters.Count;
+			var completedChapters = 0;
+			var progressSum = 0;
+
+			foreach (var chapter in subjectChapters)
+			{
+				if (!progressLookup.TryGetValue(chapter.Id, out var progress))
+				{
+					continue;
+				}
+
+				progressSum += progress.Progress;
+				if (progress.Progress == 100)
+				{
+					completedChapters++;
+				}
+			}
+
+			var progressPercentage = totalChapters > 0
+				? (int)Math.Round(progressSum / (double)totalChapters)
+				: 0;
+
+			result.Add(new ClassDivisionSubjectDto
+			{
+				SubjectId = subject.Id,
+				SubjectName = subject.Name,
+				SubjectCode = assignment.SubjectCode,
+				TotalChapters = totalChapters,
+				CompletedChapters = completedChapters,
+				ProgressPercentage = progressPercentage
+			});
+		}
+
+		return result;
+	}
+
+	public async Task<PaginatedChapterProgressResponseDto> GetChapterProgressListAsync(
+		Guid academicMediumId,
+		Guid classId,
+		Guid divisionId,
+		Guid subjectId,
+		string? search = null
+	)
+	{
+		logger.LogInformation(
+			"Getting chapter progress for subject {SubjectId}, division {DivisionId}",
+			subjectId, divisionId
+		);
+
+		// Get all chapters for the subject
+		var chaptersQuery = await chapterRepository.GetQueryableAsync();
+		chaptersQuery = chaptersQuery.Where(c => c.SubjectId == subjectId);
+
+		if (!string.IsNullOrWhiteSpace(search))
+		{
+			var searchLower = search.ToLower();
+			chaptersQuery = chaptersQuery.Where(c =>
+				c.ChapterName.ToLower().Contains(searchLower) ||
+				c.ChapterNumber.ToString().Contains(searchLower)
+			);
+		}
+
+		var chapters = await AsyncExecuter.ToListAsync(chaptersQuery.OrderBy(c => c.ChapterNumber));
+
+		// Get progress for all chapters
+		var chapterIds = chapters.Select(c => c.Id).ToList();
+		var progresses = await progressRepository.GetListAsync(p =>
+			chapterIds.Contains(p.ChapterId) &&
+			p.DivisionId == divisionId
+		);
+		var progressLookup = progresses.ToDictionary(p => p.ChapterId);
+
+		var result = new PaginatedChapterProgressResponseDto
+		{
+			TotalRecords = chapters.Count,
+			Records = chapters.Select(chapter =>
+			{
+				progressLookup.TryGetValue(chapter.Id, out var progress);
+
+				return new ChapterProgressRecordDto
+				{
+					ChapterId = chapter.Id,
+					ChapterNumber = chapter.ChapterNumber,
+					ChapterName = chapter.ChapterName,
+					StartDate = progress?.StartDate,
+					EndDate = progress?.CompletionDate,
+					Progress = progress?.Progress ?? 0
+				};
+			}).ToList()
+		};
+
+		return result;
+	}
+
+	public async Task<ApiSuccessResponseDto> UpdateChapterProgressAsync(
+		Guid chapterId,
+		UpdateChapterProgressDto input
+	)
+	{
+		logger.LogInformation(
+			"Updating progress for chapter {ChapterId} in division {DivisionId} to {Progress}%",
+			chapterId, input.DivisionId, input.Progress
+		);
+
+		try
+		{
+			// Find existing progress record for the chapter and division
+			var progress = await progressRepository.FirstOrDefaultAsync(p => 
+				p.ChapterId == chapterId && 
+				p.DivisionId == input.DivisionId
+			);
+
+			if (progress != null)
+			{
+				progress.UpdateProgress(input.Progress, input.Description);
+				await progressRepository.UpdateAsync(progress);
+			}
+			else
+			{
+				// Create new progress record if it doesn't exist
+				var newProgress = new Syllabus.ChapterProgress(
+					guidGenerator.Create(),
+					chapterId,
+					input.DivisionId
+				);
+				newProgress.UpdateProgress(input.Progress, input.Description);
+				await progressRepository.InsertAsync(newProgress);
+			}
+
+			return new ApiSuccessResponseDto
+			{
+				Success = true,
+				Message = "Chapter progress updated successfully."
+			};
+		}
+		catch (ArgumentOutOfRangeException ex)
+		{
+			throw new BusinessException("ClassManagement:InvalidProgress")
+				.WithData("Message", ex.Message);
+		}
+		catch (BusinessException)
+		{
+			throw;
+		}
+		catch (Exception ex)
+		{
+			logger.LogError(ex, "Failed to update chapter progress");
+			throw new UserFriendlyException(
+				"Failed to update chapter progress. Please try again later."
+			);
+		}
+	}
+}

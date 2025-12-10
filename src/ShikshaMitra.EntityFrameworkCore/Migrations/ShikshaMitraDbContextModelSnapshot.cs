@@ -4624,7 +4624,6 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Building", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("BuildingName")
@@ -4678,11 +4677,8 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Floor", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("BuildingId")
                         .HasColumnType("uuid");
@@ -4691,6 +4687,9 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<int>("FloorNo")
+                        .HasColumnType("integer");
 
                     b.Property<int>("TotalRoom")
                         .HasColumnType("integer");

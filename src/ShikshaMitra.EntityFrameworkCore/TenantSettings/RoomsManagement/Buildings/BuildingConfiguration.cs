@@ -11,9 +11,6 @@ public class BuildingConfiguration : IEntityTypeConfiguration<Building>
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "Buildings", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
-		builder.Property(x => x.Id)
-			.ValueGeneratedOnAdd();
-
 		builder.Property(x => x.BuildingName)
 			.IsRequired()
 			.HasMaxLength(BuildingConsts.MaxNameLength);

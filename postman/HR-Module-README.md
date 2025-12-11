@@ -16,8 +16,8 @@ This Postman collection provides comprehensive API testing coverage for the **Sh
 2. Click **Import** button
 3. Import both files:
    - `HR-Module.postman_collection.json`
-   - `HR-Module.postman_environment.json`
-4. Select the **"ShikshaMitra - HR Module"** environment from the environment dropdown
+   - `ShikshaMitra-Consolidated.postman_environment.json`
+4. Select the **"ShikshaMitra - All Modules"** environment from the environment dropdown
 
 ### 2. Configure Environment Variables
 

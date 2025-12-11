@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.Common;
+using System;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -14,8 +15,8 @@ public class StudentContactDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public string? Address2 { get; private set; }
 	public string? Address3 { get; private set; }
 	public string? City { get; private set; }
-	public string? State { get; private set; }
-	public string? Country { get; private set; }
+	public State? State { get; private set; }
+	public Country? Country { get; private set; }
 	public string? Pincode { get; private set; }
 	public Student? Student { get; private set; }
 
@@ -31,8 +32,8 @@ public class StudentContactDetail : FullAuditedEntity<Guid>, IMultiTenant
 		string? address2 = null,
 		string? address3 = null,
 		string? city = null,
-		string? state = null,
-		string? country = null,
+		State? state = null,
+		Country? country = null,
 		string? pincode = null
 	)
 		: base(id)
@@ -58,8 +59,8 @@ public class StudentContactDetail : FullAuditedEntity<Guid>, IMultiTenant
 	string? address2,
 	string? address3,
 	string? city,
-	string? state,
-	string? country,
+	State? state,
+	Country? country,
 	string? pinCode)
 	{
 		PrimaryContactNo = primaryContactNo;
@@ -82,8 +83,8 @@ public class StudentContactDetail : FullAuditedEntity<Guid>, IMultiTenant
 		string? address2,
 		string? address3,
 		string city,
-		string state,
-		string country,
+		State state,
+		Country country,
 		string? pinCode)
 	{
 		PrimaryContactNo = primaryContactNo;

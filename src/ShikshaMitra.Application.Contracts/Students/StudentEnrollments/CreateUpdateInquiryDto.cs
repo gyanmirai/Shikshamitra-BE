@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.Common;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -29,8 +30,8 @@ public class CreateUpdateInquiryDto : IValidatableObject
 	public string? Address2 { get; set; }
 	public string? Address3 { get; set; }
 	public required string City { get; set; }
-	public required string State { get; set; }
-	public required string Country { get; set; }
+	public required State State { get; set; }
+	public required Country Country { get; set; }
 	[RegularExpression(@"^\d{5,6}$", ErrorMessage = "Pin code must be 5-6 digits")]
 	public string? PinCode { get; set; }
 

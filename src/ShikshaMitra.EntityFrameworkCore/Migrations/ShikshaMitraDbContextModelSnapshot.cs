@@ -3428,6 +3428,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<int?>("GrNo")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("InquiryPreferenceId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -3473,7 +3476,11 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("CommunicationDetailId");
 
+                    b.HasIndex("EducationMediumId");
+
                     b.HasIndex("FamilyDetailId");
+
+                    b.HasIndex("InquiryPreferenceId");
 
                     b.HasIndex("MedicalRecordId");
 
@@ -3807,19 +3814,20 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("Address1")
-                        .HasColumnType("text");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("Address2")
-                        .HasColumnType("text");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("Address3")
-                        .HasColumnType("text");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("City")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Country")
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone")
@@ -3838,7 +3846,8 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("DeletionTime");
 
                     b.Property<string>("Email")
-                        .HasColumnType("text");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -3855,17 +3864,17 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("LastModifierId");
 
                     b.Property<string>("Pincode")
-                        .HasColumnType("text");
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<string>("PrimaryContactNo")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("SecondaryContactNo")
-                        .HasColumnType("text");
-
-                    b.Property<string>("State")
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<Guid?>("StudentId")
                         .HasColumnType("uuid");
@@ -7676,9 +7685,19 @@ namespace ShikshaMitra.Migrations
                         .WithMany()
                         .HasForeignKey("CommunicationDetailId");
 
+                    b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "EducationMedium")
+                        .WithMany()
+                        .HasForeignKey("EducationMediumId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("ShikshaMitra.Students.StudentFamilyDetail", "FamilyDetail")
                         .WithMany()
                         .HasForeignKey("FamilyDetailId");
+
+                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.Settings.InquiryPreference", "InquiryPreference")
+                        .WithMany()
+                        .HasForeignKey("InquiryPreferenceId");
 
                     b.HasOne("ShikshaMitra.Students.StudentMedicalRecord", "MedicalRecord")
                         .WithMany()
@@ -7692,7 +7711,11 @@ namespace ShikshaMitra.Migrations
 
                     b.Navigation("CommunicationDetail");
 
+                    b.Navigation("EducationMedium");
+
                     b.Navigation("FamilyDetail");
+
+                    b.Navigation("InquiryPreference");
 
                     b.Navigation("MedicalRecord");
 
@@ -7878,6 +7901,60 @@ namespace ShikshaMitra.Migrations
                     b.HasOne("ShikshaMitra.Students.Student", "Student")
                         .WithMany()
                         .HasForeignKey("StudentId");
+
+                    b.OwnsOne("ShikshaMitra.Common.Country", "Country", b1 =>
+                        {
+                            b1.Property<Guid>("StudentContactDetailId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("IsoCode")
+                                .IsRequired()
+                                .HasMaxLength(10)
+                                .HasColumnType("character varying(10)")
+                                .HasColumnName("Country_IsoCode");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("Country_Name");
+
+                            b1.HasKey("StudentContactDetailId");
+
+                            b1.ToTable("AppStudentContactDetails");
+
+                            b1.WithOwner()
+                                .HasForeignKey("StudentContactDetailId");
+                        });
+
+                    b.OwnsOne("ShikshaMitra.Common.State", "State", b1 =>
+                        {
+                            b1.Property<Guid>("StudentContactDetailId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("IsoCode")
+                                .IsRequired()
+                                .HasMaxLength(10)
+                                .HasColumnType("character varying(10)")
+                                .HasColumnName("State_IsoCode");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("State_Name");
+
+                            b1.HasKey("StudentContactDetailId");
+
+                            b1.ToTable("AppStudentContactDetails");
+
+                            b1.WithOwner()
+                                .HasForeignKey("StudentContactDetailId");
+                        });
+
+                    b.Navigation("Country");
+
+                    b.Navigation("State");
 
                     b.Navigation("Student");
                 });

@@ -1,5 +1,8 @@
 ﻿using System;
+using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -29,6 +32,10 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public StudentMedicalRecord? MedicalRecord { get; private set; }
 	public StudentPreviousSchoolDetail? PreviousSchoolDetail { get; private set; }
 	public StudentBankDetail? BankDetail { get; private set; }
+
+	// Navigation for inquiry preference
+	public InquiryPreference? InquiryPreference { get; private set; }
+	public EducationMedium? EducationMedium { get; private set; }
 
 	private Student()
 	{
@@ -88,8 +95,8 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? address2,
 		string? address3,
 		string? city,
-		string? state,
-		string? country,
+		State? state,
+		Country? country,
 		string? pinCode
 	)
 	{
@@ -153,8 +160,8 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? address2,
 		string? address3,
 		string? city,
-		string? state,
-		string? country,
+		State? state,
+		Country? country,
 		string? pinCode
 	)
 	{

@@ -28,18 +28,18 @@ public class TenantSeederContributor(
 			return;
 		}
 
-		// List tenant creation details.
-		var tenants = new List<(string Name, string AdminEmail, string InstituteName, string Address, string City, string State, string Country, string PostalCode, string ContactNo)>
+		// List tenant creation details with hardcoded GUIDs for consistency
+		var tenants = new List<(Guid Id, string Name, string AdminEmail, string InstituteName, string Address, string City, string State, string Country, string PostalCode, string ContactNo)>
 			{
-				("DDVS", "ddvs@gmail.com", "DDVS", "Parvat Patiya", "Surat", "Gujarat", "India", "395010", "+91-9876543210"),
-				("SSVM", "ssvm@gmail.com", "SSVM", "Some Address", "CityName", "StateName", "CountryName", "123456", "+91-1234567890")
+				(Guid.Parse("11111111-1111-1111-1111-111111111111"), "DDVS", "ddvs@gmail.com", "DDVS", "Parvat Patiya", "Surat", "Gujarat", "India", "395010", "+91-9876543210"),
+				(Guid.Parse("22222222-2222-2222-2222-222222222222"), "SSVM", "ssvm@gmail.com", "SSVM", "Some Address", "CityName", "StateName", "CountryName", "123456", "+91-1234567890")
 			};
 
 		var tenantIds = new List<Guid>();
 
 		foreach (var tenantInfo in tenants)
 		{
-			// Check if the tenant already exists.
+			// Check if the tenant already exists by name.
 			var existingTenant = await tenantRepository.FindByNameAsync(tenantInfo.Name);
 			if (existingTenant != null)
 			{
@@ -63,8 +63,11 @@ public class TenantSeederContributor(
 			input.ExtraProperties.Add("PostalCode", tenantInfo.PostalCode);
 			input.ExtraProperties.Add("ContactNo", tenantInfo.ContactNo);
 
-			// Create tenant.
+			// Create tenant using TenantManager.
 			var tenant = await tenantManager.CreateAsync(input.Name);
+			// Override the generated ID with our hardcoded ID
+			typeof(Tenant).GetProperty("Id")?.SetValue(tenant, tenantInfo.Id);
+			
 			input.MapExtraPropertiesTo(tenant);
 
 			await tenantRepository.InsertAsync(tenant);

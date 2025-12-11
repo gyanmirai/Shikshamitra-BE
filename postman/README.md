@@ -301,12 +301,44 @@ For detailed authentication flows and architecture diagrams, see:
 
 ```
 postman/
-├── ShikshaMitra.postman_collection.json    ⭐ Main collection
-├── ShikshaMitra.postman_environment.json   ⭐ Environment variables
-├── DATABASE-SETUP.sql                       📊 Get DB IDs
-├── POSTMAN_VISUAL_GUIDE.md                 📐 Architecture diagrams
-└── README.md                                📖 This file
+├── ShikshaMitra.postman_collection.json       ⭐ Main collection
+├── ShikshaMitra.postman_environment.json      ⭐ Environment variables
+├── HR-Module.postman_collection.json          🆕 HR Module APIs
+├── HR-Module.postman_environment.json         🆕 HR Module environment
+├── HR-Module-README.md                        📖 HR Module documentation
+├── RoomsManagement.postman_collection.json    🏢 Rooms Management APIs
+├── BuildingManagement.postman_collection.json 🏗️ Building Management APIs
+├── DATABASE-SETUP.sql                         📊 Get DB IDs
+├── POSTMAN_VISUAL_GUIDE.md                    📐 Architecture diagrams
+└── README.md                                   📖 This file
 ```
+
+## 🆕 Module-Specific Collections
+
+### HR Module Collection
+**File:** `HR-Module.postman_collection.json`  
+**Documentation:** `HR-Module-README.md`
+
+Comprehensive HR module APIs including:
+- 📋 Leave Management (Types & Policies)
+- 💰 Payroll Management (Earning & Deduction Components)
+- 👤 Employee Management (Documents, Payroll, Additional Details)
+
+**Quick Start:**
+1. Import `HR-Module.postman_collection.json`
+2. Import `HR-Module.postman_environment.json`
+3. Login to get access token
+4. Start testing HR APIs
+
+### Rooms Management Collection
+**File:** `RoomsManagement.postman_collection.json`
+
+Building and room management APIs for institute setup.
+
+### Building Management Collection
+**File:** `BuildingManagement.postman_collection.json`
+
+Building infrastructure management APIs.
 
 ## 🎯 Best Practices
 

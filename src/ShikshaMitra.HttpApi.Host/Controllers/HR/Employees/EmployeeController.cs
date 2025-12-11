@@ -17,6 +17,7 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 public class EmployeeController(IEmployeeAppService employeeAppService) : AbpController
 {
 	[HttpPut("{employeeId}/documents")]
+	[Consumes("multipart/form-data")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	public async Task<IActionResult> UploadDocuments(Guid employeeId, [FromForm] IList<IFormFile>? files)
 	{
@@ -44,6 +45,11 @@ public class EmployeeController(IEmployeeAppService employeeAppService) : AbpCon
 				Content = memoryStream.ToArray(),
 				Size = file.Length
 			});
+		}
+
+		if (documentDtos.Count == 0)
+		{
+			return BadRequest("No valid files were uploaded. All files were empty.");
 		}
 
 		// Pass the data to the application service

@@ -328,7 +328,12 @@ public class TeacherAssignmentAppService(
 		}
 
 		var users = await AsyncExecuter.ToListAsync(usersQuery);
-		var employeeLookup = employees.ToDictionary(e => e.UserId!.Value);
+		
+		// Filter employees to only those with non-null UserId before creating dictionary
+		// This prevents NullReferenceException when employees have null UserId
+		var employeeLookup = employees
+			.Where(e => e.UserId.HasValue)
+			.ToDictionary(e => e.UserId!.Value);
 
 		var result = users
 			.Where(u => employeeLookup.ContainsKey(u.Id))

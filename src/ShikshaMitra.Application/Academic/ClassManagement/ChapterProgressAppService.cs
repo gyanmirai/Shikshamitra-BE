@@ -62,7 +62,13 @@ public class ChapterProgressAppService(
 				chapterIds.Contains(p.ChapterId) &&
 				p.DivisionId == divisionId
 			);
-		var progressLookup = progresses.ToDictionary(p => p.ChapterId);
+		// Group by ChapterId and select most recent to handle duplicates
+		var progressLookup = progresses
+			.GroupBy(p => p.ChapterId)
+			.ToDictionary(
+				g => g.Key,
+				g => g.OrderByDescending(p => p.CreationTime).First()
+			);
 
 		foreach (var assignment in assignments)
 		{
@@ -157,7 +163,13 @@ public class ChapterProgressAppService(
 			chapterIds.Contains(p.ChapterId) &&
 			p.DivisionId == divisionId
 		);
-		var progressLookup = progresses.ToDictionary(p => p.ChapterId);
+		// Group by ChapterId and select most recent to handle duplicates
+		var progressLookup = progresses
+			.GroupBy(p => p.ChapterId)
+			.ToDictionary(
+				g => g.Key,
+				g => g.OrderByDescending(p => p.CreationTime).First()
+			);
 
 		var result = new PaginatedChapterProgressResponseDto
 		{
@@ -193,27 +205,68 @@ public class ChapterProgressAppService(
 
 		try
 		{
-			// Find existing progress record for the chapter and division
-			var progress = await progressRepository.FirstOrDefaultAsync(p => 
-				p.ChapterId == chapterId && 
-				p.DivisionId == input.DivisionId
-			);
+			// Retry logic to handle race conditions when inserting new progress records
+			// If two concurrent requests try to insert for the same (ChapterId, DivisionId),
+			// one will fail with a duplicate key error. We retry by reloading the record.
+			const int maxRetries = 3;
+			for (int attempt = 1; attempt <= maxRetries; attempt++)
+			{
+				try
+				{
+					// Find existing progress record for the chapter and division
+					var progress = await progressRepository.FirstOrDefaultAsync(p => 
+						p.ChapterId == chapterId && 
+						p.DivisionId == input.DivisionId
+					);
 
-			if (progress != null)
-			{
-				progress.UpdateProgress(input.Progress, input.Description);
-				await progressRepository.UpdateAsync(progress);
-			}
-			else
-			{
-				// Create new progress record if it doesn't exist
-				var newProgress = new Syllabus.ChapterProgress(
-					guidGenerator.Create(),
-					chapterId,
-					input.DivisionId
-				);
-				newProgress.UpdateProgress(input.Progress, input.Description);
-				await progressRepository.InsertAsync(newProgress);
+					if (progress != null)
+					{
+						// Update existing record
+						progress.UpdateProgress(input.Progress, input.Description);
+						await progressRepository.UpdateAsync(progress);
+						
+						logger.LogDebug(
+							"Updated existing progress for chapter {ChapterId}, division {DivisionId}",
+							chapterId, input.DivisionId
+						);
+						break; // Success - exit retry loop
+					}
+					else
+					{
+						// Create new progress record
+						var newProgress = new Syllabus.ChapterProgress(
+							guidGenerator.Create(),
+							chapterId,
+							input.DivisionId
+						);
+						newProgress.UpdateProgress(input.Progress, input.Description);
+						await progressRepository.InsertAsync(newProgress);
+						
+						logger.LogDebug(
+							"Created new progress for chapter {ChapterId}, division {DivisionId}",
+							chapterId, input.DivisionId
+						);
+						break; // Success - exit retry loop
+					}
+				}
+				catch (Exception ex) when (
+					attempt < maxRetries && 
+					IsDuplicateKeyException(ex)
+				)
+				{
+					// Concurrent insert detected - another request created the record
+					// Retry by reloading the existing record and updating it
+					logger.LogWarning(
+						ex,
+						"Concurrent insert detected for chapter {ChapterId}, division {DivisionId}. Retry attempt {Attempt}/{MaxRetries}",
+						chapterId, input.DivisionId, attempt, maxRetries
+					);
+					
+					// Brief delay to allow the other transaction to complete
+					await Task.Delay(TimeSpan.FromMilliseconds(50 * attempt));
+					
+					// Continue to next iteration - will reload and update existing record
+				}
 			}
 
 			return new ApiSuccessResponseDto
@@ -233,10 +286,35 @@ public class ChapterProgressAppService(
 		}
 		catch (Exception ex)
 		{
-			logger.LogError(ex, "Failed to update chapter progress");
+			logger.LogError(
+				ex, 
+				"Failed to update chapter progress for chapter {ChapterId}, division {DivisionId}",
+				chapterId, input.DivisionId
+			);
 			throw new UserFriendlyException(
 				"Failed to update chapter progress. Please try again later."
 			);
 		}
+	}
+
+	/// <summary>
+	/// Determines if the exception is a duplicate key/unique constraint violation.
+	/// Handles database-specific exception types.
+	/// </summary>
+	private bool IsDuplicateKeyException(Exception ex)
+	{
+		// Check exception message for common duplicate key patterns
+		// This works across different database providers
+		var message = ex.Message?.ToLowerInvariant() ?? string.Empty;
+		var innerMessage = ex.InnerException?.Message?.ToLowerInvariant() ?? string.Empty;
+		
+		return message.Contains("duplicate key") ||
+		       message.Contains("unique constraint") ||
+		       message.Contains("unique index") ||
+		       message.Contains("cannot insert duplicate") ||
+		       message.Contains("violation of unique key") ||
+		       innerMessage.Contains("duplicate key") ||
+		       innerMessage.Contains("unique constraint") ||
+		       innerMessage.Contains("unique index");
 	}
 }

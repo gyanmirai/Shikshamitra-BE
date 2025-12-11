@@ -3513,6 +3513,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<int?>("CastCategory")
                         .HasColumnType("integer");
 
+                    b.Property<int>("Category")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("CreationTime");

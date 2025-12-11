@@ -46,16 +46,15 @@ public class InquiryPreferenceManager : DomainService
 	/// </summary>
 	public async Task<InquiryPreference> UpdateAsync(
 		InquiryPreference inquiryPreference,
-		Guid academicYearId,
 		string preferenceName)
 	{
 		// Check uniqueness only if name is changing
-		if (inquiryPreference.PreferenceName != preferenceName || inquiryPreference.AcademicYearId != academicYearId)
+		if (inquiryPreference.PreferenceName != preferenceName)
 		{
-			await CheckNameUniquenessAsync(inquiryPreference.TenantId, academicYearId, preferenceName, inquiryPreference.Id);
+			await CheckNameUniquenessAsync(inquiryPreference.TenantId, inquiryPreference.AcademicYearId, preferenceName, inquiryPreference.Id);
 		}
 
-		inquiryPreference.Update(academicYearId, preferenceName);
+		inquiryPreference.Update(inquiryPreference.AcademicYearId, preferenceName);
 
 		return inquiryPreference;
 	}

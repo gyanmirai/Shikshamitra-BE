@@ -1,5 +1,6 @@
 ﻿using System;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.StudentEnrollments.Registration;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -43,6 +44,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public string? Nationality { get; private set; }
 	public string? BirthPlace { get; private set; }
 	public MotherTongueEnum? MotherTongue { get; private set; }
+	public Category Category { get; private set; } = Category.General;
 
 	public bool? IsBPLStudent { get; private set; }
 	public string? BPLCardNo { get; private set; }
@@ -71,7 +73,8 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		GenderEnum? gender,
 		DateTimeOffset? dateOfInquiry,
 		string inquiryNo,
-		Guid? inquiryPreferenceId
+		Guid? inquiryPreferenceId,
+		string? previousSchool
 	)
 		: base(id)
 	{
@@ -83,6 +86,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		InquiryPreferenceId = inquiryPreferenceId;
 		// Ensure non-null default to satisfy DB not-null constraint until General Info is provided
 		FamilyCast = string.Empty;
+		PreviousSchool = previousSchool;
 		StudentRegistrationState = StudentRegistrationStateEnum.Default;
 	}
 
@@ -140,6 +144,39 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	{
 		RegistrationFormNo = formNumber;
 		RegistrationAmount = amount;
+	}
+
+	/// <summary>
+	/// Updates additional student details during registration process
+	/// </summary>
+	public void UpdateAdditionalDetails(
+		bool isBPLStudent,
+		string? bplCardNo,
+		string? secondLanguage,
+		bool haveDisability,
+		string? emergencyRelativeName,
+		string? emergencyRelation,
+		string? emergencyContactNo,
+		bool isSingleChild,
+		bool isSingleParentChild,
+		Category category)
+	{
+		IsBPLStudent = isBPLStudent;
+		BPLCardNo = bplCardNo;
+		SecondLanguage = secondLanguage;
+		HaveDisability = haveDisability;
+		EmergencyRelationName = emergencyRelativeName;
+		EmergencyRelationType = emergencyRelation;
+		EmergencyContactNo = emergencyContactNo;
+		IsSingleChild = isSingleChild;
+		IsSingleParentChild = isSingleParentChild;
+		Category = category;
+
+		// Update registration state
+		if (StudentRegistrationState < StudentRegistrationStateEnum.AdditionalDetails)
+		{
+			StudentRegistrationState = StudentRegistrationStateEnum.AdditionalDetails;
+		}
 	}
 
 	/// <summary>

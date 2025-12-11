@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Onboarding.AcademicYears;
+﻿using ShikshaMitra.Common;
+using ShikshaMitra.Onboarding.AcademicYears;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
@@ -196,7 +197,8 @@ public class StudentSeederContributor : BaseSeederContributor
 			gender: gender,
 			dateOfInquiry: null,
 			inquiryNo: string.Empty,
-			inquiryPreferenceId: null
+			inquiryPreferenceId: null,
+			previousSchool: null
 		);
 
 		var city = _cities[globalCounter % _cities.Length];
@@ -241,8 +243,8 @@ public class StudentSeederContributor : BaseSeederContributor
 			address2: $"Near {GenerateLandmark(random)}",
 			address3: null,
 			city: city,
-			state: "Gujarat",
-			country: "India",
+			state: new State("Gujarat", "GJ"),
+			country: new Country("India", "IN"),
 			pincode: $"3950{random.Next(10, 100)}"
 		);
 

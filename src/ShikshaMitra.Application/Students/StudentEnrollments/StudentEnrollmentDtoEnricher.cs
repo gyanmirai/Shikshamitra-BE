@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.TenantSettings.AcademicYears;
+﻿using ShikshaMitra.Students.StudentEnrollments.Settings;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
@@ -22,6 +23,7 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 	private readonly IRepository<EducationBoard, Guid> _educationBoardRepository;
 	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
 	private readonly IRepository<Student, Guid> _studentRepository;
+	private readonly IRepository<InquiryPreference, Guid> _inquiryPreferenceRepository;
 
 	public StudentEnrollmentDtoEnricher(
 		IRepository<EducationMedium, Guid> academicMediumRepository,
@@ -76,6 +78,15 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 			{
 				var std = await _standardRepository.FindAsync(student.StandardId.Value);
 				dto.Standard = std?.Name ?? dto.Standard;
+			}
+		}
+
+		// Inquiry Preference
+		if (dto.InquiryPreferenceId != null && dto.InquiryPreferenceId != Guid.Empty)
+		{
+			var inquiryPreference = await _inquiryPreferenceRepository.FindAsync(dto.InquiryPreferenceId!.Value);
+			if (inquiryPreference != null) {
+				dto.InquiryPreference = inquiryPreference.PreferenceName;
 			}
 		}
 	}
@@ -291,6 +302,44 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 					dto.Standard = standard.Name;
 				}
 			}
+		}
+	}
+
+	/// <summary>
+	/// Enriches a single StudentRegistrationDto with related entity names.
+	/// Use this for single-item operations.
+	/// </summary>
+	public async Task EnrichRegistrationDtoAsync(StudentRegistrationDto dto, Student student)
+	{
+		// Academic Medium Name and Board Name
+		if (dto.AcademicMediumId != Guid.Empty)
+		{
+			var medium = await _academicMediumRepository.FindAsync(dto.AcademicMediumId);
+			if (medium != null)
+			{
+				dto.AcademicMediumName = medium.Name;
+				
+				// Get Academic Board Name through Medium
+				dto.AcademicBoardId = medium.EducationBoardId;
+				var board = await _educationBoardRepository.FindAsync(medium.EducationBoardId);
+				dto.AcademicBoardName = board?.Type.ToString();
+
+				if (board != null)
+				{
+					dto.AcademicYearId = board.AcademicYearId;
+
+					// Get Academic Year name through board
+					var year = await _academicYearRepository.FindAsync(board.AcademicYearId);
+					dto.AcademicYearName = year?.Name;
+				}
+			}
+		}
+
+		// Standard Name
+		if (student.StandardId.HasValue)
+		{
+			var standard = await _standardRepository.FindAsync(student.StandardId.Value);
+			dto.Standard = standard?.Name;
 		}
 	}
 }

@@ -96,6 +96,19 @@ public class StudentEnrollmentRegistrationController : AbpControllerBase
 	}
 
 	/// <summary>
+	/// Gets a single student registration by student ID
+	/// </summary>
+	/// <param name="studentId">The student identifier</param>
+	/// <returns>Student registration details including progress</returns>
+	[HttpGet("{studentId}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_RegistrationFormIssued.View)]
+	public async Task<Result<StudentRegistrationDto>> GetRegistrationByIdAsync(Guid studentId)
+	{
+		var result = await _registrationAppService.GetRegistrationByIdAsync(studentId);
+		return Result.Success(result);
+	}
+
+	/// <summary>
 	/// Updates general information for a student and moves them to Registration status.
 	/// This endpoint accepts only the General tab information and transitions the student
 	/// from RegistrationFormIssued to Registration status upon successful validation.
@@ -104,7 +117,7 @@ public class StudentEnrollmentRegistrationController : AbpControllerBase
 	/// <param name="studentId">The student identifier</param>
 	/// <param name="input">General information data</param>
 	/// <returns>Updated student information with Registration status</returns>
-	[HttpPatch("{studentId}/general")]
+	[HttpPut("{studentId}/general")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_RegistrationFormIssued.Add)]
 	public async Task<Result<UpdateGeneralInfoOutputDto>> UpdateGeneralInfoAsync(
 		Guid studentId,

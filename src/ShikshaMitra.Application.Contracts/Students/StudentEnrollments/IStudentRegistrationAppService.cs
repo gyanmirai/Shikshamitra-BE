@@ -21,6 +21,13 @@ public interface IStudentRegistrationAppService
 		string? searchTerm = null);
 
 	/// <summary>
+	/// Gets a single student registration by student ID.
+	/// </summary>
+	/// <param name="studentId">The student identifier</param>
+	/// <returns>Student registration details</returns>
+	Task<StudentRegistrationDto> GetRegistrationByIdAsync(Guid studentId);
+
+	/// <summary>
 	/// Updates general information for a student in RegistrationFormIssued status.
 	/// Upon successful validation, transitions the student to Registration status.
 	/// </summary>

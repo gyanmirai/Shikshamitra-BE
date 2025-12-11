@@ -84,7 +84,8 @@ public class StudentInquiryAppService(
 			createStudentInquiryDto.City,
 			createStudentInquiryDto.State,
 			createStudentInquiryDto.Country,
-			createStudentInquiryDto.PinCode
+			createStudentInquiryDto.PinCode,
+			createStudentInquiryDto.PreviousSchool
 		);
 
 		// Single repository call - EF Core will handle all child entities
@@ -194,45 +195,6 @@ public class StudentInquiryAppService(
 		var dto = ObjectMapper.Map<Student, StudentInquiryDto>(saved);
 		await dtoEnricher.EnrichSingleDtoAsync(dto);
 		return dto;
-	}
-
-	private async Task EnrichInquiryDtoAsync(StudentInquiryDto dto)
-	{
-		// Academic Medium Name and Board Name
-		if (dto.AcademicMediumId != Guid.Empty)
-		{
-			var medium = await academicMediumRepository.FindAsync(dto.AcademicMediumId, includeDetails: true);
-			if (medium != null)
-			{
-				dto.AcademicMediumName = medium.Name;
-				
-				// Get Academic Board Name through Medium
-				dto.AcademicBoardId = medium.EducationBoardId;
-				var board = await educationBoardRepository.FindAsync(medium.EducationBoardId);
-				dto.AcademicBoardName = board?.Type.ToString();
-
-				if (board != null)
-				{
-					dto.AcademicYearId = board.AcademicYearId;
-
-					// Get Academic Year name through board
-					var year = await academicYearRepository.FindAsync(board.AcademicYearId);
-					dto.AcademicYearName = year?.Name;
-				}
-			}
-		}
-
-		// Standard Name
-		if (dto.StudentId != Guid.Empty)
-		{
-			// Get the student to read StandardId (mapping didn't include name)
-			var student = await studentRepository.FindAsync(dto.StudentId);
-			if (student?.StandardId != null)
-			{
-				var std = await standardRepository.FindAsync(student.StandardId.Value);
-		dto.Standard = std?.Name ?? dto.Standard;
-			}
-		}
 	}
 
 	public async Task AssignRegistrationFormAsync(

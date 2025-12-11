@@ -1,217 +1,168 @@
-﻿# ShikshaMitra Postman Collections
+﻿# ShikshaMitra API - Postman Collections
 
-> Ready-to-use API testing collections - just import and test!
-
----
-
-## 🚀 Quick Start (2 Minutes)
-
-### Step 1: Import to Postman
-1. Import: `ShikshaMitra.postman_environment.json`
-2. Import: `UserScope-API.postman_collection.json`
-
-### Step 2: Configure (1 minute)
-1. Run SQL: `GET-TENANT-ID.sql` → Get your tenant ID
-2. In Postman: Set `tenant_id` variable
-
-### Step 3: Test
-1. Run: 🔐 Authentication → Login
-2. Token auto-saves ✅
-3. Start testing!
+Comprehensive Postman collections for testing all ShikshaMitra APIs with automated token management, ID extraction, and complete workflow examples.
 
 ---
 
-## 📦 Collections Available
+## 📦 Available Collections
 
-- `UserScope-API.postman_collection.json` ⭐ User permissions (25+ requests)
-- `BuildingManagement.postman_collection.json` - Building APIs
-- `RoomsManagement.postman_collection.json` - Room APIs
-- `ShikshaMitra.postman_collection.json` - General APIs
-
----
-
-## 📚 Documentation (Optional Reading)
-- **[QUICKSTART.md](QUICKSTART.md)** - Setup guide (5 min)
-- **[API-REFERENCE.md](API-REFERENCE.md)** - Complete API patterns & examples (15 min)
-- **[MIGRATION.md](MIGRATION.md)** - Upgrade to v2.0 (if needed)
-
-### Collections
-- **[BuildingManagement-README.md](BuildingManagement-README.md)** - Building APIs
-- **[RoomsManagement-README.md](RoomsManagement-README.md)** - Room APIs
+| Collection | File | Documentation | Endpoints | Description |
+|------------|------|---------------|-----------|-------------|
+| **🏢 Main** | `ShikshaMitra.postman_collection.json` | [README](#main-collection) | 25+ | Auth, Users, Basic UserScope |
+| **👥 HR Module** | `HR-Module.postman_collection.json` | [HR-Module-README.md](./HR-Module-README.md) | 40+ | Leave, Payroll, Employee Management |
+| **🏢 Rooms** | `RoomsManagement.postman_collection.json` | [RoomsManagement-README.md](./RoomsManagement-README.md) | 18+ | Buildings, Room Types, Rooms |
+| **🔍 UserScope** | `UserScope-API.postman_collection.json` | [QUICKSTART.md](./QUICKSTART.md) | 30+ | Advanced UserScope Testing |
 
 ---
 
-## 🎯 Common Tasks
+## 🚀 Quick Start (3 minutes)
 
-**Setup Environment**
-→ [QUICKSTART.md](QUICKSTART.md)
+### 1️⃣ Import Collection (1 min)
 
-**Learn API Patterns**
-→ [API-REFERENCE.md](API-REFERENCE.md)
+**Choose your collection based on what you're testing:**
 
-**Migrate from v1.0**
-→ [MIGRATION.md](MIGRATION.md)
+<details>
+<summary><b>🔹 HR Module APIs</b> (Leave, Payroll, Employees)</summary>
+
+```
+Open Postman → Import:
+  ✅ HR-Module.postman_collection.json
+  ✅ ShikshaMitra-Consolidated.postman_environment.json
+
+Select Environment: "ShikshaMitra - All Modules"
+```
+
+**Pre-configured variables:**
+- ✅ base_url, staging_url
+- ✅ tenant_id, employee_id
+- ✅ username/password
+
+📖 [Full HR Module Guide →](./HR-Module-README.md)
+
+</details>
+
+<details>
+<summary><b>🔹 UserScope APIs</b> (Permissions, Scope Assignment)</summary>
+
+```
+Open Postman → Import:
+  ✅ UserScope-API.postman_collection.json
+  ✅ ShikshaMitra-Consolidated.postman_environment.json
+
+Select Environment: "ShikshaMitra - All Modules"
+```
+
+**Follow quick setup:**
+📖 [6-Step Quick Start →](./QUICKSTART.md)
+
+</details>
+
+<details>
+<summary><b>🔹 Main Collection</b> (Basic APIs)</summary>
+
+```
+Open Postman → Import:
+  ✅ ShikshaMitra.postman_collection.json
+  ✅ ShikshaMitra-Consolidated.postman_environment.json
+
+Select Environment: "ShikshaMitra - All Modules"
+```
+
+</details>
+
+<details>
+<summary><b>🔹 Rooms Management</b> (Buildings, Rooms)</summary>
+
+```
+Open Postman → Import:
+  ✅ RoomsManagement.postman_collection.json
+  ✅ ShikshaMitra-Consolidated.postman_environment.json
+
+Select Environment: "ShikshaMitra - All Modules"
+```
+
+📖 [Rooms Management Guide →](./RoomsManagement-README.md)
+
+</details>
+
+### 2️⃣ Configure Environment (1 min)
+
+**Update these key variables in your environment:**
+
+```javascript
+base_url       = "https://localhost:44300"          // or staging URL
+tenant_id      = "your-tenant-id"                   // Get from database
+username       = "admin"                            // Your username
+password       = "Temp@123"                         // Your password
+```
+
+💡 **Pro Tip:** Use `DATABASE-SETUP.sql` to get IDs from your database
+
+### 3️⃣ Authenticate & Test (1 min)
+
+```
+1. Run: "Authentication → Login"
+   → access_token auto-saved ✅
+
+2. Test any endpoint
+   → All requests use token automatically
+```
 
 ---
 
-## 🔧 Tools
+## 📖 Main Collection
 
-- `GET-TENANT-ID.sql` - Get database IDs
-- `DATABASE-SETUP.sql` - Complete DB setup
+### Features
 
----
+- ✅ **Auto Token Management** - Login once, use everywhere
+- ✅ **Auto ID Extraction** - Response IDs saved to environment
+- ✅ **Host vs Tenant Context** - Clear separation
+- ✅ **Pre-configured Examples** - Real-world workflows
 
-## ❓ Troubleshooting
-
-**401 Unauthorized** → Re-run Login (token expired)  
-**Missing tenant_id** → Run GET-TENANT-ID.sql  
-**Foreign key error** → Verify entity IDs exist in database  
-
----
-
-**Version:** 2.0 | **Updated:** December 2024
-
----
-
-## 📁 Legacy Content Below
-
-
-
-Multi-tenant school management API testing collections with automated setup.
-
----
-
-## 🎯 **NEW: UserScope-Focused Collection** ⭐
-
-**Perfect for UserScope development and testing:**
-
-### Quick Start
-📦 **[UserScope-API.postman_collection.json](./UserScope-API.postman_collection.json)**
-- ✅ 25+ UserScope-specific requests
-- ✅ 7 assignment patterns (specific, wildcard, bulk, role-based)
-- ✅ 3 complete workflow examples
-- ✅ Auto-save test scripts
-- ✅ Best practices built-in
-
-### Get Started in 5 Minutes
-1. **Import:** [UserScope-API.postman_collection.json](./UserScope-API.postman_collection.json)
-2. **Configure:** Run [UserScope-Database-Setup.sql](./UserScope-Database-Setup.sql) to get IDs
-3. **Test:** Follow [QUICKSTART.md](./QUICKSTART.md)
-
-### Documentation
-- 📖 **[QUICKSTART.md](./QUICKSTART.md)** - 5-minute setup guide
-- 📘 **[UserScope-API-README.md](./UserScope-API-README.md)** - Complete collection reference
-- 🗄️ **[UserScope-Database-Setup.sql](./UserScope-Database-Setup.sql)** - Get entity IDs
-
----
-
-## 📦 Original Complete Collection
-
-Multi-tenant school management API testing collection with automated setup.
-
-
-
-## 📦 Quick Start
-
-### 1. Import Files
-```
-Postman → Import → Select both files:
-  ├── ShikshaMitra.postman_collection.json
-  └── ShikshaMitra.postman_environment.json
-```
-
-### 2. Select Environment
-```
-Top-right dropdown → "ShikshaMitra - Development"
-```
-
-### 3. Get Database IDs (One-time)
-Run queries from `DATABASE-SETUP.sql` to get actual entity IDs from your database:
-```sql
--- Copy tenant ID, academic year ID, board ID, etc.
--- Paste into environment variables
-```
-
-### 4. Start Testing
-```
-1. Authentication → Tenant User Login (SSVM)
-   → Automatically saves access_token
-
-2. Create/manage users, roles, scopes
-   → IDs auto-saved to environment
-```
-
-## 🔐 Authentication
-
-### Two Login Types
-
-| Type | Token Variable | Use For | Header |
-|------|---------------|---------|--------|
-| **Host Admin** | `admin_access_token` | ⚠️ Tenant creation ONLY | No `__tenant` |
-| **Tenant User** | `access_token` | ✅ All tenant operations | With `__tenant` |
-
-### Pre-configured SSVM Tenant
-```
-Tenant ID: 3a1dc7ba-395f-4af3-7ac7-ad923cc1f20e
-Username: admin
-Password: Temp@123
-```
-
-## 🎯 Collection Structure
+### API Coverage
 
 ```
-Authentication
-├── Host Admin Login             → admin_access_token (tenant creation only)
-└── Tenant User Login (SSVM)     → access_token (all operations) ✅
+🔐 Authentication
+├── Host Admin Login         → For tenant management
+└── Tenant User Login        → For regular operations
 
-Tenant Management (Host Admin)
-├── Create Tenant
-└── Get All Tenants
-
-User Management
-├── Create User                  → Saves user_id
+👤 User Management
+├── Create User              → Saves user_id
 ├── Get Users
 ├── Update User
 └── Delete User
 
-Role Management
+👥 Role Management
 ├── Get Roles
 ├── Create Role
 └── Assign Role to User
 
-UserScope - Assignment
-├── Assign Scope                 → Saves scope_assignment_id
+🎯 UserScope - Assignment
+├── Assign Scope             → Saves scope_assignment_id
 ├── Bulk Assign
 └── Class/Stage Level Assignment
 
-UserScope - Query
+🎯 UserScope - Query
 └── Get User Scopes
 
-UserScope - Management
+🎯 UserScope - Management
 ├── Update Scope
 └── Delete Scope
 ```
 
-## ⚙️ Automated Features
-
 ### Auto-saved Variables
+
 All IDs are automatically saved to environment after creation:
-- `access_token` - After login
-- `user_id` - After user creation
-- `scope_assignment_id` - After scope assignment
-- `teacher_user_id` - From examples
-- `principal_user_id` - From examples
 
-### Test Scripts
-Each request includes test scripts for:
-- Token extraction and storage
-- ID capture from responses
-- Variable population
-- Response validation
+| Variable | Saved From | Used In |
+|----------|------------|---------|
+| `access_token` | Login response | All authenticated requests |
+| `user_id` | Create User | User operations |
+| `scope_assignment_id` | Assign Scope | Scope management |
 
-## 📝 Common Workflows
+### Common Workflows
 
-### Create User & Assign Scope
+#### Create User & Assign Scope
 ```
 1. Tenant User Login
 2. User Management → Create User
@@ -220,7 +171,7 @@ Each request includes test scripts for:
    → Use {{user_id}} from previous step
 ```
 
-### Setup New Tenant
+#### Setup New Tenant
 ```
 1. Host Admin Login
    → admin_access_token saved
@@ -232,92 +183,392 @@ Each request includes test scripts for:
    → Ready to work with new tenant
 ```
 
-## 🗄️ Database Setup
+---
 
-Use `DATABASE-SETUP.sql` to:
-1. Get existing entity IDs from database
-2. Set up test data
-3. Configure environment variables
+## 🎯 Collection-Specific Guides
 
-```sql
--- Example: Get IDs for your environment
-SELECT Id, Name FROM AbpTenants;
-SELECT Id, Year FROM AcademicYears WHERE TenantId = @tenantId;
-SELECT Id, Type FROM EducationBoards WHERE TenantId = @tenantId;
+### HR Module Collection
+**File:** `HR-Module.postman_collection.json`  
+**Documentation:** [HR-Module-README.md](./HR-Module-README.md)
+
+**Includes:**
+- 📋 Leave Management (Types & Policies)
+- 💰 Payroll Management (Earning & Deduction Components)
+- 👤 Employee Management (Documents, Payroll, Additional Details)
+
+**Features:**
+- ✅ 40+ endpoints
+- ✅ Multipart/form-data for file uploads
+- ✅ Auto-save component IDs
+- ✅ Local & staging environment support
+
+**Quick Example:**
+```json
+POST /api/payroll/earning-components
+{
+  "name": "Basic Salary",
+  "componentType": 0,
+  "amount": "50000"
+}
+→ earning_component_id auto-saved
 ```
 
-## 🔧 Environment Variables
+### UserScope API Collection
+**File:** `UserScope-API.postman_collection.json`  
+**Documentation:** [QUICKSTART.md](./QUICKSTART.md)
 
-### Pre-configured
-- `base_url` = https://localhost:44300
-- `tenant_id` = 3a1dc7ba-395f-4af3-7ac7-ad923cc1f20e
-- `tenant_username` = admin
-- `tenant_password` = Temp@123
+**Includes:**
+- 🎯 7 Assignment Patterns
+- 📊 Scope Query & Verification
+- 🔄 Complete Workflows
 
-### Set from Database
-Run SQL queries to get these IDs:
-- `academic_year_id`
-- `board_id`
-- `medium_id`
-- `stage_id`
-- `standard_id`
-- `division_id`
+**Features:**
+- ✅ 30+ endpoints
+- ✅ Step-by-step examples
+- ✅ Database setup scripts
+- ✅ Detailed validation
 
-### Auto-populated
-These are set automatically by test scripts:
-- `access_token`
-- `admin_access_token`
-- `user_id`
-- `scope_assignment_id`
-
-## 🎨 Visual Guide
-
-For detailed authentication flows and architecture diagrams, see:
-- **[POSTMAN_VISUAL_GUIDE.md](./POSTMAN_VISUAL_GUIDE.md)**
-
-## ⚠️ Important Rules
-
-### ❌ Don't
-- Use Host Admin token for user/role/scope operations
-- Forget `__tenant` header for tenant operations
-- Hardcode IDs (use environment variables)
-
-### ✅ Do
-- Always use Tenant User Login for regular work
-- Let test scripts auto-save IDs
-- Update database IDs in environment from SQL queries
-- Use {{variable}} syntax for all IDs
-
-## 🐛 Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| 401 Unauthorized | Re-run Tenant User Login |
-| 403 Forbidden | Check if using correct token (tenant user, not host admin) |
-| 404 Not Found | Verify entity IDs in environment match your database |
-| Missing __tenant | Ensure environment is selected |
-
-## 📚 Files in This Folder
-
+**Quick Example:**
 ```
-postman/
-├── ShikshaMitra.postman_collection.json    ⭐ Main collection
-├── ShikshaMitra.postman_environment.json   ⭐ Environment variables
-├── DATABASE-SETUP.sql                       📊 Get DB IDs
-├── POSTMAN_VISUAL_GUIDE.md                 📐 Architecture diagrams
-└── README.md                                📖 This file
+Run: "1️⃣ Assign Specific Division"
+→ Teacher assigned to specific division
+→ scope_assignment_id auto-saved
 ```
 
-## 🎯 Best Practices
+### Rooms Management Collection
+**File:** `RoomsManagement.postman_collection.json`  
+**Documentation:** [RoomsManagement-README.md](./RoomsManagement-README.md)
 
-1. **Single Source of Truth**: Use environment variables, not hardcoded values
-2. **Automation First**: Leverage test scripts for ID management
-3. **Separation of Concerns**: Host admin vs tenant user contexts
-4. **Clean Architecture**: Each request does one thing well
-5. **DRY Principle**: Variables eliminate duplication
+**Includes:**
+- 🏢 Building Management
+- 🚪 Room Type Management
+- 📐 Room Management
+
+**Features:**
+- ✅ 18+ endpoints
+- ✅ CRUD operations
+- ✅ Pagination support
 
 ---
 
-**Version**: 2.0  
-**Last Updated**: November 28, 2025  
-**Maintained By**: ShikshaMitra Development Team
+## 🔧 Environment Variables
+
+### Core Variables (All Collections)
+
+| Variable | Description | Example | Required |
+|----------|-------------|---------|----------|
+| `base_url` | API base URL | `https://localhost:44300` | ✅ |
+| `tenant_id` | Tenant identifier | `3a1dc7ba-...` | ✅ |
+| `username` | Login username | `admin` | ✅ |
+| `password` | Login password | `Temp@123` | ✅ |
+| `access_token` | Auth token | Auto-saved | Auto |
+
+### HR Module Variables
+
+| Variable | Description | Auto-saved |
+|----------|-------------|------------|
+| `employee_id` | Test employee ID | ❌ Manual |
+| `document_id` | Document ID | ✅ Yes |
+| `leave_type_id` | Leave type ID | ✅ Yes |
+| `earning_component_id` | Earning component ID | ✅ Yes |
+| `deduction_component_id` | Deduction component ID | ✅ Yes |
+
+### UserScope Variables
+
+| Variable | Description | Auto-saved |
+|----------|-------------|------------|
+| `user_id` | Created user ID | ✅ Yes |
+| `scope_assignment_id` | Scope assignment ID | ✅ Yes |
+| `academic_year_id` | Academic year ID | ❌ From DB |
+| `standard_id` | Standard ID | ❌ From DB |
+| `division_id` | Division ID | ❌ From DB |
+
+💡 **Get DB IDs:** Use `DATABASE-SETUP.sql` queries
+
+---
+
+## 📊 Database Setup
+
+### Quick ID Extraction
+
+Run these queries to get required IDs:
+
+```sql
+-- Set your tenant ID
+DECLARE @TenantId UNIQUEIDENTIFIER = '3a1dc7ba-395f-4af3-7ac7-ad923cc1f20e';
+
+-- Get Academic Year ID
+SELECT Id, Year FROM AcademicYears 
+WHERE TenantId = @TenantId AND IsCurrent = 1;
+
+-- Get Board ID
+SELECT Id, Type FROM EducationBoards WHERE TenantId = @TenantId;
+
+-- Get Standard ID
+SELECT Id, Name FROM Standards WHERE TenantId = @TenantId;
+
+-- Get Division ID
+SELECT Id, Name FROM Divisions WHERE TenantId = @TenantId;
+```
+
+**Update environment with results:**
+1. Click eye icon (top-right)
+2. Edit environment
+3. Paste IDs from SQL results
+4. Save
+
+📄 **Full SQL Script:** [DATABASE-SETUP.sql](./DATABASE-SETUP.sql)
+
+---
+
+## ⚙️ Automated Features
+
+### Token Management
+```javascript
+// Automatically included in all requests
+Authorization: Bearer {{access_token}}
+__tenant: {{tenant_id}}
+```
+
+### ID Auto-Extraction
+```javascript
+// Test script example (auto-included)
+if (pm.response.code === 200) {
+    const response = pm.response.json();
+    pm.environment.set('user_id', response.id);
+    console.log('✅ User ID saved:', response.id);
+}
+```
+
+### Response Validation
+```javascript
+// Validates successful responses
+pm.test("Status is 200", () => {
+    pm.response.to.have.status(200);
+});
+```
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+<details>
+<summary><b>❌ 401 Unauthorized</b></summary>
+
+**Cause:** Token expired or not set
+
+**Solution:**
+```
+1. Run: Authentication → Login
+2. Verify access_token in environment
+3. Retry failed request
+```
+
+</details>
+
+<details>
+<summary><b>❌ 403 Forbidden</b></summary>
+
+**Cause:** Insufficient permissions
+
+**Solution:**
+```
+1. Verify you're using Tenant User token (not Host Admin)
+2. Check user has required permissions
+3. Login with admin account
+```
+
+</details>
+
+<details>
+<summary><b>❌ 404 Not Found</b></summary>
+
+**Cause:** Invalid ID in URL
+
+**Solution:**
+```
+1. Check ID variable exists in environment
+2. Verify ID format is correct GUID
+3. Run "Get All" request to find valid IDs
+```
+
+</details>
+
+<details>
+<summary><b>❌ 415 Unsupported Media Type</b></summary>
+
+**Cause:** Wrong Content-Type for file upload
+
+**Solution:**
+```
+1. Ensure request uses multipart/form-data
+2. Select files in form-data body
+3. Don't add Content-Type header manually
+```
+
+</details>
+
+<details>
+<summary><b>❌ Connection Refused</b></summary>
+
+**Cause:** API not running
+
+**Solution:**
+```
+1. Start API: dotnet run --project src/ShikshaMitra.HttpApi.Host
+2. Verify API is on https://localhost:44300
+3. Check base_url in environment
+```
+
+</details>
+
+### Environment Issues
+
+<details>
+<summary><b>Variables not working</b></summary>
+
+**Solution:**
+```
+1. Verify environment is selected (top-right dropdown)
+2. Check variable names match exactly: {{variable_name}}
+3. Re-import environment file if corrupted
+```
+
+</details>
+
+---
+
+## 🎓 Best Practices
+
+### ✅ Do
+
+- **Use environment variables** for all IDs and URLs
+- **Let test scripts auto-save** response IDs
+- **Use correct token** (Host Admin vs Tenant User)
+- **Follow workflow order** in examples
+- **Check console logs** for auto-saved values
+
+### ❌ Don't
+
+- **Hardcode IDs** in request bodies
+- **Mix Host Admin and Tenant contexts**
+- **Skip login step**
+- **Ignore environment selection**
+- **Manually edit access_token**
+
+---
+
+## 📚 File Structure
+
+```
+postman/
+├── 📄 Collections
+│   ├── ShikshaMitra.postman_collection.json          ⭐ Main
+│   ├── HR-Module.postman_collection.json             👥 HR APIs
+│   ├── UserScope-API.postman_collection.json         🎯 UserScope
+│   └── RoomsManagement.postman_collection.json       🏢 Rooms
+│
+├── 🌍 Environment
+│   └── ShikshaMitra-Consolidated.postman_environment.json All modules
+│
+├── 📖 Documentation
+│   ├── README.md                                     ← You are here
+│   ├── HR-Module-README.md                           HR guide
+│   ├── QUICKSTART.md                                 Quick start
+│   ├── RoomsManagement-README.md                     Rooms guide
+│   └── API-REFERENCE.md                              API reference
+│
+└── 📊 Database
+    ├── DATABASE-SETUP.sql                            ID extraction
+    └── UserScope-Database-Setup.sql                  UserScope setup
+```
+
+---
+
+## 📝 Additional Resources
+
+### Documentation Files
+
+| File | Purpose | When to Use |
+|------|---------|-------------|
+| [QUICKSTART.md](./QUICKSTART.md) | 6-step quick start | First time setup |
+| [HR-Module-README.md](./HR-Module-README.md) | HR APIs guide | Testing HR module |
+| [RoomsManagement-README.md](./RoomsManagement-README.md) | Rooms APIs guide | Testing rooms |
+| [API-REFERENCE.md](./API-REFERENCE.md) | Complete API docs | Reference lookup |
+| [DATABASE-SETUP.sql](./DATABASE-SETUP.sql) | Get DB IDs | Environment setup |
+
+### External Links
+
+- [ABP Framework Docs](https://docs.abp.io/)
+- [Postman Learning Center](https://learning.postman.com/)
+- [ShikshaMitra GitHub](https://github.com/ShikshaMitra-Org)
+
+---
+
+## 🎯 Quick Reference
+
+### Essential Commands
+
+```bash
+# Start API locally
+dotnet run --project src/ShikshaMitra.HttpApi.Host
+
+# Run database migrations
+dotnet run --project src/ShikshaMitra.DbMigrator
+
+# Build solution
+dotnet build
+```
+
+### Essential Requests
+
+| Action | Collection → Request |
+|--------|---------------------|
+| Login | Authentication → Tenant User Login |
+| Create User | User Management → Create User |
+| Assign Scope | UserScope → Assign Specific Division |
+| Get Scopes | UserScope → Get User Scopes |
+| Upload Document | Employee Management → Upload Documents |
+| Create Leave Type | Leave Management → Create Leave Type |
+
+---
+
+## ✅ Collection Status
+
+| Collection | Status | Endpoints | Last Updated |
+|------------|--------|-----------|--------------|
+| Main | ✅ Ready | 25+ | 2024-11 |
+| HR Module | ✅ Ready | 40+ | 2025-01 |
+| UserScope | ✅ Ready | 30+ | 2024-11 |
+| Rooms | ✅ Ready | 18+ | 2024-11 |
+
+---
+
+## 🤝 Contributing
+
+Found an issue or have suggestions?
+
+1. Update the relevant collection
+2. Test all requests
+3. Update documentation
+4. Submit changes
+
+---
+
+**Version:** 3.0  
+**Last Updated:** January 2025  
+**Maintained By:** ShikshaMitra Development Team
+
+---
+
+## 📬 Support
+
+- 📧 Technical issues: See troubleshooting section above
+- 📖 Documentation: Read collection-specific READMEs
+- 💬 Questions: Check existing documentation first
+
+---
+
+**Happy Testing! 🚀**

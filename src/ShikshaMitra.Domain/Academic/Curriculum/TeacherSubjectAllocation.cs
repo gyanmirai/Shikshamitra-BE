@@ -43,6 +43,22 @@ public class TeacherSubjectAllocation : FullAuditedAggregateRoot<Guid>
 		Teachers = new List<AllocatedTeacher>();
 	}
 
+	/// <summary>
+	/// Initializes a new instance with the specified ID and properties.
+	/// </summary>
+	public TeacherSubjectAllocation(
+		Guid id,
+		Guid standardId,
+		Guid divisionId,
+		Guid subjectId
+	) : base(id)
+	{
+		StandardId = standardId;
+		DivisionId = divisionId;
+		SubjectId = subjectId;
+		Teachers = new List<AllocatedTeacher>();
+	}
+
 	#endregion
 
 	#region Methods

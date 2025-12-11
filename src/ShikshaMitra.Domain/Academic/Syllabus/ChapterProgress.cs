@@ -31,6 +31,11 @@ public class ChapterProgress : FullAuditedEntity<Guid>
 	public DateTime? CompletionDate { get; set; }
 
 	/// <summary>
+	/// Gets or sets the progress percentage (0-100).
+	/// </summary>
+	public int Progress { get; set; }
+
+	/// <summary>
 	/// Gets or sets any additional notes or remarks about the progress.
 	/// </summary>
 	public string? Remarks { get; set; }
@@ -46,6 +51,12 @@ public class ChapterProgress : FullAuditedEntity<Guid>
 	private ChapterProgress() { } // Required for EF Core
 
 	public ChapterProgress(Guid chapterId, Guid divisionId)
+		: this(Guid.NewGuid(), chapterId, divisionId)
+	{
+	}
+
+	public ChapterProgress(Guid id, Guid chapterId, Guid divisionId)
+		: base(id)
 	{
 		ChapterId = chapterId;
 		DivisionId = divisionId;
@@ -54,5 +65,35 @@ public class ChapterProgress : FullAuditedEntity<Guid>
 	#endregion
 
 	#region Methods
+	
+	public void UpdateProgress(int progress, string? description = null)
+	{
+		if (progress < 0 || progress > 100)
+		{
+			throw new ArgumentOutOfRangeException(nameof(progress), "Progress must be between 0 and 100.");
+		}
+		
+		Progress = progress;
+		
+		if (!string.IsNullOrWhiteSpace(description))
+		{
+			Remarks = description;
+		}
+		
+		if (progress == 100 && !CompletionDate.HasValue)
+		{
+			CompletionDate = DateTime.UtcNow;
+		}
+		else if (progress < 100)
+		{
+			CompletionDate = null;
+		}
+		
+		if (progress > 0 && !StartDate.HasValue)
+		{
+			StartDate = DateTime.UtcNow;
+		}
+	}
+	
 	#endregion
 }

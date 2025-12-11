@@ -84,7 +84,8 @@ public class StudentInquiryAppService(
 			createStudentInquiryDto.City,
 			createStudentInquiryDto.State,
 			createStudentInquiryDto.Country,
-			createStudentInquiryDto.PinCode
+			createStudentInquiryDto.PinCode,
+			createStudentInquiryDto.PreviousSchool
 		);
 
 		// Single repository call - EF Core will handle all child entities

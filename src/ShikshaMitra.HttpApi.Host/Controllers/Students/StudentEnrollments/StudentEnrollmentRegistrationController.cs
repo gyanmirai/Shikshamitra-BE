@@ -117,7 +117,7 @@ public class StudentEnrollmentRegistrationController : AbpControllerBase
 	/// <param name="studentId">The student identifier</param>
 	/// <param name="input">General information data</param>
 	/// <returns>Updated student information with Registration status</returns>
-	[HttpPatch("{studentId}/general")]
+	[HttpPut("{studentId}/general")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_RegistrationFormIssued.Add)]
 	public async Task<Result<UpdateGeneralInfoOutputDto>> UpdateGeneralInfoAsync(
 		Guid studentId,

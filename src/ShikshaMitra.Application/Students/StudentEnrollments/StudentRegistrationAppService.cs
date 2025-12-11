@@ -649,7 +649,6 @@ public class StudentRegistrationAppService(
 		{
 			StudentId = student.Id,
 			Status = student.Status,
-			Category = null, // This would need to be added to StudentAdditionalDetail domain entity if needed
 			IsBPLStudent = additionalDetail?.IsBPLStudent ?? false,
 			BPLCardNo = additionalDetail?.BPLCardNo,
 			SecondLanguage = additionalDetail?.SecondLanguage,
@@ -678,30 +677,6 @@ public class StudentRegistrationAppService(
 			);
 		}
 
-		// Update additional detail properties using reflection (since the domain entity has private setters)
-		if (student.AdditionalDetail != null)
-		{
-			var additionalDetail = student.AdditionalDetail;
-			var type = additionalDetail.GetType();
-			
-			type.GetProperty("IsBPLStudent")?.SetValue(additionalDetail, input.IsBPLStudent);
-			type.GetProperty("BPLCardNo")?.SetValue(additionalDetail, input.BPLCardNo);
-			type.GetProperty("SecondLanguage")?.SetValue(additionalDetail, input.SecondLanguage);
-			type.GetProperty("HaveDisability")?.SetValue(additionalDetail, input.HaveDisability);
-			type.GetProperty("EmergencyRelationName")?.SetValue(additionalDetail, input.EmergencyRelativeName);
-			type.GetProperty("EmergencyRelationType")?.SetValue(additionalDetail, input.EmergencyRelation);
-			type.GetProperty("EmergencyContactNo")?.SetValue(additionalDetail, input.EmergencyContactNo);
-			type.GetProperty("IsSingleChild")?.SetValue(additionalDetail, input.IsSingleChild);
-			type.GetProperty("IsSingleParentChild")?.SetValue(additionalDetail, input.IsSingleParentChild);
-
-			// Update registration state
-			var currentState = additionalDetail.StudentRegistrationState;
-			if (currentState < StudentRegistrationStateEnum.AdditionalDetails)
-			{
-				type.GetProperty("StudentRegistrationState")?.SetValue(additionalDetail, StudentRegistrationStateEnum.AdditionalDetails);
-			}
-		}
-
 		// Guard against null AdditionalDetail - fail fast with clear business error
 		if (student.AdditionalDetail == null)
 		{
@@ -710,6 +685,20 @@ public class StudentRegistrationAppService(
 				"Student additional detail not found. Please complete the general information step first."
 			);
 		}
+
+		// Update additional details using domain method (proper DDD encapsulation)
+		student.AdditionalDetail.UpdateAdditionalDetails(
+			input.IsBPLStudent,
+			input.BPLCardNo,
+			input.SecondLanguage,
+			input.HaveDisability,
+			input.EmergencyRelativeName,
+			input.EmergencyRelation,
+			input.EmergencyContactNo,
+			input.IsSingleChild,
+			input.IsSingleParentChild,
+			input.Category
+		);
 
 		// Save changes
 		await studentAdditionalDetailRepository.UpdateAsync(student.AdditionalDetail, autoSave: true);

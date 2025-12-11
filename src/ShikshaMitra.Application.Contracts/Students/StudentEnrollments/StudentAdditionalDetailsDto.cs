@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.Students.StudentEnrollments.Registration;
+using System;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
@@ -13,7 +14,7 @@ public class StudentAdditionalDetailsDto
 	/// <summary>
 	/// Student category (General, RTE, etc.)
 	/// </summary>
-	public string? Category { get; set; }
+	public Category Category { get; set; } = Category.General;
 
 	/// <summary>
 	/// Indicates if student is a BPL (Below Poverty Line) student

@@ -35,21 +35,15 @@ public class UserSeederContributor : BaseSeederContributor
 
 	public override async Task SeedAsync(DataSeedContext context)
 	{
-		// Check if users already exist
-		if (await _userRepository.GetCountAsync() > 1) // More than 1 (admin already exists)
-		{
-			return;
-		}
-
 		var tenantId = CurrentTenant.Id;
 
-		// Define users with hardcoded GUIDs
-		var users = new List<(Guid Id, string UserName, string Email, string Name, string Surname, string RoleName)>
+		// Define users (using auto-generated GUIDs to avoid conflicts)
+		var users = new List<(string UserName, string Email, string Name, string Surname, string RoleName)>
 		{
-			(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), "teacher1", "teacher1@school.com", "John", "Doe", "Teacher"),
-			(Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), "teacher2", "teacher2@school.com", "Jane", "Smith", "Teacher"),
-			(Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"), "principal", "principal@school.com", "Robert", "Johnson", "Principal"),
-			(Guid.Parse("dddddddd-dddd-dddd-dddd-dddddddddddd"), "hr", "hr@school.com", "Sarah", "Williams", "HR Manager")
+			("teacher1", "teacher1@school.com", "John", "Doe", "Teacher"),
+			("teacher2", "teacher2@school.com", "Jane", "Smith", "Teacher"),
+			("principal", "principal@school.com", "Robert", "Johnson", "Principal"),
+			("hr", "hr@school.com", "Sarah", "Williams", "HR Manager")
 		};
 
 		foreach (var userInfo in users)
@@ -61,9 +55,9 @@ public class UserSeederContributor : BaseSeederContributor
 				continue;
 			}
 
-			// Create user with hardcoded ID using IdentityUserManager
+			// Create user with auto-generated ID
 			var user = new IdentityUser(
-				userInfo.Id,
+				GuidGenerator.Create(),
 				userInfo.UserName,
 				userInfo.Email,
 				tenantId
@@ -71,24 +65,20 @@ public class UserSeederContributor : BaseSeederContributor
 
 			user.Name = userInfo.Name;
 			user.Surname = userInfo.Surname;
+			user.SetEmailConfirmed(true);
 
-			// Use the manager to create user with password (this handles normalization and hashing)
+			// Use the manager to create user with password
 			var result = await _userManager.CreateAsync(user, "Temp@123");
 			if (!result.Succeeded)
 			{
 				continue;
 			}
 
-			// Confirm email
-			user.SetEmailConfirmed(true);
-			await _userRepository.UpdateAsync(user);
-
 			// Assign role
 			var role = await _roleRepository.FindByNormalizedNameAsync(_lookupNormalizer.NormalizeName(userInfo.RoleName));
 			if (role != null)
 			{
-				user.AddRole(role.Id);
-				await _userRepository.UpdateAsync(user);
+				await _userManager.AddToRoleAsync(user, role.Name);
 			}
 		}
 

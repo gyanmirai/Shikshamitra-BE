@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
@@ -163,25 +164,45 @@ public class TeacherAssignmentAppService(
 
 		try
 		{
+			// Batch load all required data before processing to avoid N+1 queries
+			var allTeacherIds = input.Assignments
+				.SelectMany(a => a.TeacherIds)
+				.Distinct()
+				.ToList();
+
+			// Validate all teachers exist
+			var employees = await employeeRepository.GetListAsync(e => allTeacherIds.Contains(e.Id));
+			var employeeIds = employees.Select(e => e.Id).ToHashSet();
+			
+			var missingTeachers = allTeacherIds.Where(id => !employeeIds.Contains(id)).ToList();
+			if (missingTeachers.Any())
+			{
+				throw new BusinessException("ClassManagement:TeacherNotFound")
+					.WithData("TeacherIds", string.Join(", ", missingTeachers));
+			}
+
+			// Batch load all existing allocations for this class
+			var divisionIds = input.Assignments.Select(a => a.DivisionId).Distinct().ToList();
+			var subjectIds = input.Assignments.Select(a => a.SubjectId).Distinct().ToList();
+			
+			var existingAllocations = await allocationRepository.GetListAsync(
+				a => a.StandardId == input.ClassId &&
+					divisionIds.Contains(a.DivisionId) &&
+					subjectIds.Contains(a.SubjectId),
+				includeDetails: true
+			);
+			
+			// Create lookup for O(1) access
+			var allocationLookup = existingAllocations.ToDictionary(
+				a => (a.DivisionId, a.SubjectId)
+			);
+
 			foreach (var assignment in input.Assignments)
 			{
-				// Validate that all teachers exist
-				foreach (var teacherId in assignment.TeacherIds)
-				{
-					var teacher = await employeeRepository.FindAsync(teacherId);
-					if (teacher == null)
-					{
-						throw new BusinessException("ClassManagement:TeacherNotFound")
-							.WithData("TeacherId", teacherId);
-					}
-				}
-
-				// Find existing allocation
-				var existingAllocation = await allocationRepository.FindAsync(a =>
-					a.StandardId == input.ClassId &&
-					a.DivisionId == assignment.DivisionId &&
-					a.SubjectId == assignment.SubjectId,
-					includeDetails: true
+				// Find existing allocation from in-memory lookup
+				allocationLookup.TryGetValue(
+					(assignment.DivisionId, assignment.SubjectId),
+					out var existingAllocation
 				);
 
 				if (existingAllocation != null)
@@ -268,7 +289,17 @@ public class TeacherAssignmentAppService(
 		}
 
 		// Get all employees who are teachers
+		// Filter by Teacher role or TeachingStaff employee group
 		var employeesQuery = await employeeRepository.GetQueryableAsync();
+		
+		// Apply teacher filtering - adjust based on your domain requirements:
+		// Option 1: Filter by EmployeeGroup if TeachingStaff is used for teachers
+		// Option 2: Filter by Role if you have a "Teacher" role
+		// For now, filtering by EmployeeGroup.TeachingStaff as it's the most common pattern
+		employeesQuery = employeesQuery.Where(e => 
+			e.EmployeeGroup == EmployeeGroupType.Teaching
+		);
+		
 		var employees = await AsyncExecuter.ToListAsync(employeesQuery);
 
 		// Extract user IDs and query only those users (not all users)

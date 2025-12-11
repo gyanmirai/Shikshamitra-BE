@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.ClassManagement;
 using ShikshaMitra.Academic.ClassManagement.StudentElectiveAssignment;
+using ShikshaMitra.Constants.Permissions;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Academic.ClassManagement;
@@ -16,9 +17,11 @@ public class StudentElectiveAssignmentController(
 ) : AbpController
 {
 	[HttpGet]
+	[Authorize(ShikshaMitraSubmodulePermissions.ClassManagement.StudentElectiveAssignment.View)]
 	[ProducesResponseType(typeof(PaginatedStudentElectiveResponseDto), 200)]
 	[ProducesResponseType(400)]
 	[ProducesResponseType(401)]
+	[ProducesResponseType(403)]
 	[ProducesResponseType(404)]
 	public async Task<IActionResult> GetStudentElectiveAssignmentsAsync(
 		[FromQuery] Guid academicMediumId,
@@ -60,9 +63,11 @@ public class StudentElectiveAssignmentController(
 	}
 
 	[HttpPut]
+	[Authorize(ShikshaMitraSubmodulePermissions.ClassManagement.StudentElectiveAssignment.Add)]
 	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
 	[ProducesResponseType(400)]
 	[ProducesResponseType(401)]
+	[ProducesResponseType(403)]
 	public async Task<IActionResult> SaveStudentElectiveAssignmentsAsync(
 		[FromBody] SaveStudentElectiveAssignmentsDto input
 	)

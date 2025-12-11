@@ -23,7 +23,7 @@ public class ClassTeacherAssignmentAppService(
 	IRepository<Division, Guid> divisionRepository,
 	IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
 	IRepository<Employee, Guid> employeeRepository,
-	IIdentityUserRepository userRepository,
+	IdentityUserManager identityUserManager,
 	IGuidGenerator guidGenerator,
 	ILogger<ClassTeacherAssignmentAppService> logger
 ) : ApplicationService, IClassTeacherAssignmentAppService
@@ -40,6 +40,7 @@ public class ClassTeacherAssignmentAppService(
 		// Note: organizationId might map to TenantId or EducationMediumId
 		// Adjust based on your domain model
 		// For now, assuming it's related to the current tenant
+		// ABP automatically filters by current tenant in repositories
 
 		// Get all standards
 		var standards = await standardRepository.GetListAsync();
@@ -50,12 +51,38 @@ public class ClassTeacherAssignmentAppService(
 		// Get all class teacher assignments
 		var classTeachers = await classTeacherRepository.GetListAsync();
 
-		// Get all employees who are assigned as class teachers
+		// Early return if no class teachers
+		if (!classTeachers.Any())
+		{
+			// Return empty assignments for all class-division combinations
+			var emptyResult = new List<ClassTeacherRowDto>();
+			foreach (var standard in standards)
+			{
+				var standardDivisions = divisions.Where(d => d.StandardId == standard.Id);
+				foreach (var division in standardDivisions)
+				{
+					emptyResult.Add(new ClassTeacherRowDto
+					{
+						ClassId = standard.Id,
+						ClassName = standard.Name,
+						DivisionId = division.Id,
+						DivisionName = division.Name,
+						AssignedTeacher = null
+					});
+				}
+			}
+			return emptyResult;
+		}
+
+		// Get employees who are assigned as class teachers with predicate filtering
 		var teacherIds = classTeachers.Select(ct => ct.TeacherId).Distinct().ToList();
 		var employees = await employeeRepository.GetListAsync(e => teacherIds.Contains(e.Id));
-		var userIds = employees.Select(e => e.UserId).ToList();
-		var allUsers = await userRepository.GetListAsync();
-		var users = allUsers.Where(u => userIds.Contains(u.Id)).ToList();
+		
+		// Get only the required users using IdentityUserManager queryable
+		var userIds = employees.Where(e => e.UserId.HasValue).Select(e => e.UserId!.Value).Distinct().ToList();
+		var users = userIds.Any() 
+			? await AsyncExecuter.ToListAsync(identityUserManager.Users.Where(u => userIds.Contains(u.Id)))
+			: new List<IdentityUser>();
 
 		var result = new List<ClassTeacherRowDto>();
 
@@ -135,13 +162,24 @@ public class ClassTeacherAssignmentAppService(
 			var standardIds = standards.Select(s => s.Id).ToHashSet();
 			
 			var missingStandards = classIds.Where(id => !standardIds.Contains(id)).ToList();
-			if (missingStandards.Any())
-			{
-				throw new BusinessException("ClassManagement:StandardNotFound")
-					.WithData("ClassIds", string.Join(", ", missingStandards));
-			}
+		if (missingStandards.Any())
+		{
+			throw new BusinessException("ClassManagement:StandardNotFound")
+				.WithData("ClassIds", string.Join(", ", missingStandards));
+		}
 
-			// Get all education medium stages
+		// Verify all divisions exist
+		var divisions = await divisionRepository.GetListAsync(d => divisionIds.Contains(d.Id));
+		var divisionIdsFound = divisions.Select(d => d.Id).ToHashSet();
+		
+		var missingDivisions = divisionIds.Where(id => !divisionIdsFound.Contains(id)).ToList();
+		if (missingDivisions.Any())
+		{
+			throw new BusinessException("ClassManagement:DivisionNotFound")
+				.WithData("DivisionIds", string.Join(", ", missingDivisions));
+		}
+
+		// Get all education medium stages
 			var educationMediumStageIds = standards.Select(s => s.EducationMediumStageId).Distinct().ToList();
 			var educationMediumStages = await educationMediumStageRepository.GetListAsync(
 				ems => educationMediumStageIds.Contains(ems.Id)

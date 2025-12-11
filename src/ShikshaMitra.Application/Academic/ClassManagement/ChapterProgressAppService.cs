@@ -120,9 +120,20 @@ public class ChapterProgressAppService(
 		string? search = null
 	)
 	{
+		// Validate required parameters
+		if (academicMediumId == Guid.Empty)
+		{
+			throw new ArgumentException("Academic medium ID cannot be empty", nameof(academicMediumId));
+		}
+
+		if (classId == Guid.Empty)
+		{
+			throw new ArgumentException("Class ID cannot be empty", nameof(classId));
+		}
+
 		logger.LogInformation(
-			"Getting chapter progress for subject {SubjectId}, division {DivisionId}",
-			subjectId, divisionId
+			"Getting chapter progress for subject {SubjectId}, division {DivisionId}, class {ClassId}, academicMedium {AcademicMediumId}",
+			subjectId, divisionId, classId, academicMediumId
 		);
 
 		// Get all chapters for the subject

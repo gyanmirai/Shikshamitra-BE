@@ -1,10 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.ClassManagement;
 using ShikshaMitra.Academic.ClassManagement.ClassTeacherAssignment;
+using ShikshaMitra.Constants.Permissions;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Academic.ClassManagement;
@@ -17,6 +18,7 @@ public class ClassTeacherAssignmentController(
 ) : AbpController
 {
 	[HttpGet]
+	[Authorize(ShikshaMitraSubmodulePermissions.ClassManagement.ClassTeacherAssignment.View)]
 	[ProducesResponseType(typeof(List<ClassTeacherRowDto>), 200)]
 	[ProducesResponseType(400)]
 	[ProducesResponseType(401)]
@@ -34,6 +36,7 @@ public class ClassTeacherAssignmentController(
 	}
 
 	[HttpPut]
+	[Authorize(ShikshaMitraSubmodulePermissions.ClassManagement.ClassTeacherAssignment.Add)]
 	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
 	[ProducesResponseType(400)]
 	[ProducesResponseType(401)]

@@ -153,6 +153,15 @@ public class ChapterProgressAppService(
 			throw new ArgumentException("Class ID cannot be empty", nameof(classId));
 		}
 
+		if (divisionId == Guid.Empty)
+		{
+			throw new ArgumentException("Division ID cannot be empty", nameof(divisionId));
+		}
+
+		if (subjectId == Guid.Empty) {
+			throw new ArgumentException("Subject ID cannot be empty", nameof(subjectId));
+		}
+
 		logger.LogInformation(
 			"Getting chapter progress for subject {SubjectId}, division {DivisionId}, class {ClassId}, academicMedium {AcademicMediumId}",
 			subjectId, divisionId, classId, academicMediumId

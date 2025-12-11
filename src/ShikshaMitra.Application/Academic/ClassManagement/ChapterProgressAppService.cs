@@ -30,6 +30,22 @@ public class ChapterProgressAppService(
 		Guid divisionId
 	)
 	{
+		// Validate required parameters
+		if (academicMediumId == Guid.Empty)
+		{
+			throw new ArgumentException("Academic medium ID cannot be empty", nameof(academicMediumId));
+		}
+
+		if (classId == Guid.Empty)
+		{
+			throw new ArgumentException("Class ID cannot be empty", nameof(classId));
+		}
+
+		if (divisionId == Guid.Empty)
+		{
+			throw new ArgumentException("Division ID cannot be empty", nameof(divisionId));
+		}
+
 		logger.LogInformation(
 			"Getting subjects for class {ClassId}, division {DivisionId}",
 			classId, divisionId
@@ -148,10 +164,16 @@ public class ChapterProgressAppService(
 
 		if (!string.IsNullOrWhiteSpace(search))
 		{
-			var searchLower = search.ToLower();
+			// Use culture-invariant, DB-friendly search
+			// Try to parse search as number for ChapterNumber comparison
+			var isNumericSearch = int.TryParse(search, out var searchNumber);
+			
+			// Build pattern for case-insensitive LIKE search
+			var searchPattern = $"%{search}%";
+			
 			chaptersQuery = chaptersQuery.Where(c =>
-				c.ChapterName.ToLower().Contains(searchLower) ||
-				c.ChapterNumber.ToString().Contains(searchLower)
+				c.ChapterName.ToLower().Contains(search.ToLower()) ||
+				(isNumericSearch && c.ChapterNumber == searchNumber)
 			);
 		}
 
@@ -299,22 +321,76 @@ public class ChapterProgressAppService(
 
 	/// <summary>
 	/// Determines if the exception is a duplicate key/unique constraint violation.
-	/// Handles database-specific exception types.
+	/// Handles database-specific exception types using type checking, error codes, and message patterns.
 	/// </summary>
 	private bool IsDuplicateKeyException(Exception ex)
 	{
-		// Check exception message for common duplicate key patterns
-		// This works across different database providers
-		var message = ex.Message?.ToLowerInvariant() ?? string.Empty;
-		var innerMessage = ex.InnerException?.Message?.ToLowerInvariant() ?? string.Empty;
+		if (ex == null)
+		{
+			return false;
+		}
+
+		// Check exception type names for database-specific types
+		var exceptionTypeName = ex.GetType().Name;
+		var innerExceptionTypeName = ex.InnerException?.GetType().Name ?? string.Empty;
 		
-		return message.Contains("duplicate key") ||
-		       message.Contains("unique constraint") ||
-		       message.Contains("unique index") ||
-		       message.Contains("cannot insert duplicate") ||
-		       message.Contains("violation of unique key") ||
-		       innerMessage.Contains("duplicate key") ||
-		       innerMessage.Contains("unique constraint") ||
-		       innerMessage.Contains("unique index");
+		// Common DB exception types that indicate constraint violations
+		if (exceptionTypeName.Contains("DbUpdate", StringComparison.OrdinalIgnoreCase) ||
+		    innerExceptionTypeName.Contains("PostgresException", StringComparison.OrdinalIgnoreCase) ||
+		    innerExceptionTypeName.Contains("SqlException", StringComparison.OrdinalIgnoreCase) ||
+		    innerExceptionTypeName.Contains("MySqlException", StringComparison.OrdinalIgnoreCase))
+		{
+			// Check for PostgreSQL-specific SqlState "23505" (unique violation)
+			if (ex.InnerException != null)
+			{
+				var innerEx = ex.InnerException;
+				
+				// Try to get SqlState property using reflection
+				var sqlStateProperty = innerEx.GetType().GetProperty("SqlState");
+				if (sqlStateProperty != null)
+				{
+					var sqlState = sqlStateProperty.GetValue(innerEx)?.ToString();
+					if (sqlState == "23505") // PostgreSQL unique violation
+					{
+						return true;
+					}
+				}
+				
+				// Try to get ConstraintName property using reflection
+				var constraintNameProperty = innerEx.GetType().GetProperty("ConstraintName");
+				if (constraintNameProperty != null)
+				{
+					var constraintName = constraintNameProperty.GetValue(innerEx)?.ToString();
+					if (!string.IsNullOrEmpty(constraintName))
+					{
+						return true;
+					}
+				}
+				
+				// Check SQL Server error number (2627 = unique constraint, 2601 = unique index)
+				var numberProperty = innerEx.GetType().GetProperty("Number");
+				if (numberProperty != null)
+				{
+					var errorNumber = numberProperty.GetValue(innerEx);
+					if (errorNumber is int number && (number == 2627 || number == 2601))
+					{
+						return true;
+					}
+				}
+			}
+		}
+
+		// Fallback: Check exception messages using culture-invariant comparison
+		var message = ex.Message ?? string.Empty;
+		var innerMessage = ex.InnerException?.Message ?? string.Empty;
+		
+		return message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) ||
+		       message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
+		       message.Contains("unique index", StringComparison.OrdinalIgnoreCase) ||
+		       message.Contains("cannot insert duplicate", StringComparison.OrdinalIgnoreCase) ||
+		       message.Contains("violation of unique key", StringComparison.OrdinalIgnoreCase) ||
+		       innerMessage.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) ||
+		       innerMessage.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
+		       innerMessage.Contains("unique index", StringComparison.OrdinalIgnoreCase);
 	}
 }

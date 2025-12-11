@@ -97,7 +97,8 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? city,
 		State? state,
 		Country? country,
-		string? pinCode
+		string? pinCode,
+		string? previousSchool
 	)
 	{
 		var student = new Student(
@@ -119,7 +120,8 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			gender,
 			dateOfInquiry,
 			inquiryNo,
-			inquiryPreferenceId
+			inquiryPreferenceId,
+			previousSchool
 		);
 
 		student.ContactDetail = new StudentContactDetail(
@@ -135,6 +137,76 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			state,
 			country,
 			pinCode
+		);
+
+		return student;
+	}
+
+	/// <summary>
+	/// Factory method to create a student directly in Registration status.
+	/// This bypasses the inquiry and registration form stages.
+	/// </summary>
+	public static Student CreateDirectRegistration(
+		Guid id,
+		Guid? tenantId,
+		string? firstName,
+		string? middleName,
+		string? lastName,
+		Guid educationMediumId,
+		Guid? standardId,
+		Guid? divisionId,
+		DateTimeOffset dateOfBirth,
+		GenderEnum gender,
+		string primaryContactNo,
+		string? secondaryContactNo = null,
+		string? email = null,
+		string? address1 = null,
+		string? address2 = null,
+		string? address3 = null,
+		string? city = null,
+		State? state = null,
+		Country? country = null,
+		string? pincode = null
+	)
+	{
+		var student = new Student(
+			id,
+			tenantId,
+			firstName,
+			middleName,
+			lastName,
+			educationMediumId,
+			standardId,
+			divisionId,
+			status: StudentLifeCycleStatusEnum.Registation
+		);
+
+		// Create aggregate parts - they share the same ID as the root
+		// For direct registration, inquiry-related fields are not applicable
+		student.AdditionalDetail = new StudentAdditionalDetail(
+			id,
+			tenantId,
+			dateOfBirth,
+			gender,
+			dateOfInquiry: null,
+			inquiryNo: string.Empty,
+			inquiryPreferenceId: null,
+			previousSchool: null
+		);
+
+		student.ContactDetail = new StudentContactDetail(
+			id,
+			tenantId,
+			primaryContactNo,
+			secondaryContactNo,
+			email,
+			address1,
+			address2,
+			address3,
+			city,
+			state,
+			country,
+			pincode
 		);
 
 		return student;

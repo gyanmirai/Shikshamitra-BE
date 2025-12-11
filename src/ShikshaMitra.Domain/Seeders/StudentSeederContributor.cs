@@ -197,7 +197,8 @@ public class StudentSeederContributor : BaseSeederContributor
 			gender: gender,
 			dateOfInquiry: null,
 			inquiryNo: string.Empty,
-			inquiryPreferenceId: null
+			inquiryPreferenceId: null,
+			previousSchool: null
 		);
 
 		var city = _cities[globalCounter % _cities.Length];

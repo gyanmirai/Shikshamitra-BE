@@ -73,7 +73,8 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		GenderEnum? gender,
 		DateTimeOffset? dateOfInquiry,
 		string inquiryNo,
-		Guid? inquiryPreferenceId
+		Guid? inquiryPreferenceId,
+		string? previousSchool
 	)
 		: base(id)
 	{
@@ -85,6 +86,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		InquiryPreferenceId = inquiryPreferenceId;
 		// Ensure non-null default to satisfy DB not-null constraint until General Info is provided
 		FamilyCast = string.Empty;
+		PreviousSchool = previousSchool;
 		StudentRegistrationState = StudentRegistrationStateEnum.Default;
 	}
 

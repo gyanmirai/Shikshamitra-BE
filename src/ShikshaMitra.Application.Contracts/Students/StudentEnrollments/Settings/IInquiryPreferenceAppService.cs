@@ -28,7 +28,7 @@ public interface IInquiryPreferenceAppService : IApplicationService
 	/// <summary>
 	/// Updates an existing inquiry preference
 	/// </summary>
-    Task<InquiryPreferenceDto> UpdateAsync(Guid academicYearId, Guid id, CreateUpdateInquiryPreferenceDto input);
+    Task<InquiryPreferenceDto> UpdateAsync(Guid id, CreateUpdateInquiryPreferenceDto input);
 
 	/// <summary>
 	/// Deletes an inquiry preference

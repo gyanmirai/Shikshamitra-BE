@@ -116,7 +116,7 @@ public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenc
 	/// <summary>
 	/// Updates an existing inquiry preference
 	/// </summary>
-    public async Task<InquiryPreferenceDto> UpdateAsync(Guid academicYearId, Guid id, CreateUpdateInquiryPreferenceDto input)
+    public async Task<InquiryPreferenceDto> UpdateAsync(Guid id, CreateUpdateInquiryPreferenceDto input)
 	{
 		var inquiryPreference = await _inquiryPreferenceRepository.GetAsync(id);
 
@@ -129,7 +129,6 @@ public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenc
 
         await _inquiryPreferenceManager.UpdateAsync(
             inquiryPreference,
-            academicYearId,
             input.PreferenceName
         );
 

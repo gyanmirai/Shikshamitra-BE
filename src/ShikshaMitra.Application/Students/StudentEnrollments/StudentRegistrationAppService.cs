@@ -245,8 +245,9 @@ public class StudentRegistrationAppService(
 		// Create a new student directly in Registration status
 		var studentId = GuidGenerator.Create();
 
-		// Create the student aggregate with minimal initial data
-		var student = new Student(
+		// Use factory method to create the student aggregate with all required parts
+		// This follows DDD principles by encapsulating aggregate creation logic in the domain
+		var student = Student.CreateDirectRegistration(
 			id: studentId,
 			tenantId: CurrentTenant.Id,
 			firstName: input.FirstName,
@@ -255,19 +256,19 @@ public class StudentRegistrationAppService(
 			educationMediumId: input.EducationMediumId,
 			standardId: input.StandardId,
 			divisionId: input.DivisionId,
-			status: StudentLifeCycleStatusEnum.Registation
-		);
-
-		// Create and attach additional details
-		student.GetType().GetProperty("AdditionalDetail")?.SetValue(student, new StudentAdditionalDetail(
-			id: studentId,
-			tenantId: CurrentTenant.Id,
-			dateOfBirthday: input.DateOfBirth,
+			dateOfBirth: input.DateOfBirth,
 			gender: input.Gender,
-			dateOfInquiry: null,
-			inquiryNo: string.Empty,
-			inquiryPreferenceId: null
-		));
+			primaryContactNo: input.PrimaryContactNo,
+			secondaryContactNo: input.SecondaryContactNo,
+			email: input.Email,
+			address1: input.Address1,
+			address2: input.Address2,
+			address3: input.Address3,
+			city: input.City,
+			state: input.State,
+			country: input.Country,
+			pincode: input.Pincode
+		);
 
 		// Update additional details with full information
 		if (student.AdditionalDetail != null)
@@ -291,23 +292,7 @@ public class StudentRegistrationAppService(
 			);
 		}
 
-		// Create and attach contact details
-		student.GetType().GetProperty("ContactDetail")?.SetValue(student, new StudentContactDetail(
-			id: studentId,
-			tenantId: CurrentTenant.Id,
-			primaryContactNo: input.PrimaryContactNo,
-			secondaryContactNo: input.SecondaryContactNo,
-			email: input.Email,
-			address1: input.Address1,
-			address2: input.Address2,
-			address3: input.Address3,
-			city: input.City,
-			state: input.State,
-			country: input.Country,
-			pincode: input.Pincode
-		));
-
-		// Save the new student
+		// Save the new student aggregate
 		await studentRepository.InsertAsync(student, autoSave: true);
 
 		// Return output DTO

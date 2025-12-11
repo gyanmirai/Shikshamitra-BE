@@ -1,0 +1,25 @@
+﻿using System;
+
+namespace ShikshaMitra.Academic.HomeworkAssignment;
+
+/// <summary>
+/// DTO representing a single student's homework submission
+/// </summary>
+public class HomeworkSubmissionDto
+{
+	public string Id { get; set; } = string.Empty;
+	public string RollNumber { get; set; } = string.Empty;
+	public string GrNumber { get; set; } = string.Empty;
+	public string StudentName { get; set; } = string.Empty;
+	public string Homework { get; set; } = string.Empty;
+	public string HomeworkType { get; set; } = string.Empty;
+	public string SubmissionType { get; set; } = string.Empty;
+	public string? SubmissionDate { get; set; }
+	public string DueDate { get; set; } = string.Empty;
+	public decimal? Marks { get; set; }
+	public decimal? TotalMarks { get; set; }
+	public string? Feedback { get; set; }
+	public string? Remarks { get; set; }
+	public int Status { get; set; }
+	public string? SubmittedContent { get; set; }
+}

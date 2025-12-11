@@ -263,6 +263,11 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<HomeworkAssignmentType> HomeworkAssignmentTypes { get; set; }
 	public DbSet<HomeworkAssignmentEntity> HomeworkAssignments { get; set; }
 	public DbSet<StudentSubmissionEntity> StudentSubmissions { get; set; }
+	public DbSet<HomeworkType> HomeworkTypes { get; set; }
+	public DbSet<AssignmentType> AssignmentTypes { get; set; }
+	public DbSet<HomeworkDivisionSchedule> HomeworkDivisionSchedules { get; set; }
+	public DbSet<AssignmentEntity> Assignments { get; set; }
+	public DbSet<AssignmentDivisionSchedule> AssignmentDivisionSchedules { get; set; }
 	#endregion
 
 	#endregion

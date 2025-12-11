@@ -42,7 +42,7 @@ public class HomeworkDivisionScheduleConfiguration
 		builder
 			.HasIndex(x => x.PublishDate)
 			.HasDatabaseName("IX_HomeworkDivisionSchedules_PublishDate")
-			.HasFilter("[PublishDate] IS NOT NULL AND [IsPublished] = 0");
+			.HasFilter("\"PublishDate\" IS NOT NULL AND \"IsPublished\" = false");
 
 		builder
 			.HasIndex(x => new { x.HomeworkId, x.DivisionId })

@@ -25,6 +25,7 @@ public class EfCoreHomeworkTypeRepository
 
 	/// <summary>
 	/// Finds a homework type by name and academic medium ID
+	/// Uses case-insensitive comparison for name matching
 	/// </summary>
 	public async Task<HomeworkType?> FindByNameAndAcademicMediumIdAsync(
 		string name,
@@ -34,7 +35,7 @@ public class EfCoreHomeworkTypeRepository
 	{
 		var dbSet = await GetDbSetAsync();
 		return await dbSet.FirstOrDefaultAsync(
-			x => x.Name == name && x.AcademicMediumId == academicMediumId,
+			x => EF.Functions.Like(x.Name, name) && x.AcademicMediumId == academicMediumId,
 			GetCancellationToken(cancellationToken)
 		);
 	}

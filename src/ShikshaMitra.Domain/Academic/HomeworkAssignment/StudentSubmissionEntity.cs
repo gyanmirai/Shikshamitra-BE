@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -20,7 +20,18 @@ public class StudentSubmissionEntity : FullAuditedEntity<Guid>, IMultiTenant
 	public Guid DivisionId { get; set; }
 
 	public DateTimeOffset? SubmissionDate { get; set; }
-	public DateTime DueDate { get; set; }
+	
+	private DateTime _dueDate;
+	/// <summary>
+	/// Due date for submission. Always stored as UTC.
+	/// </summary>
+	public DateTime DueDate
+	{
+		get => _dueDate;
+		set => _dueDate = value.Kind == DateTimeKind.Utc 
+			? value 
+			: DateTime.SpecifyKind(value, DateTimeKind.Utc);
+	}
 
 	public string? Feedback { get; set; }
 	public string? Remarks { get; set; }
@@ -141,7 +152,9 @@ public class StudentSubmissionEntity : FullAuditedEntity<Guid>, IMultiTenant
 		SubmissionDate = DateTimeOffset.UtcNow;
 		
 		// Determine if submission is late
-		if (DateTimeOffset.UtcNow > DueDate)
+		// Compare UTC times: convert DueDate to DateTimeOffset for accurate comparison
+		var dueDateOffset = new DateTimeOffset(DueDate, TimeSpan.Zero);
+		if (DateTimeOffset.UtcNow > dueDateOffset)
 		{
 			Status = SubmissionStatus.Late;
 		}

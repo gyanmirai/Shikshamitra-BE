@@ -10,9 +10,7 @@ namespace ShikshaMitra.Academic.HomeworkAssignment;
 
 /// <summary>
 /// Homework Assignment Entity
-/// PHASE A: Supports both V1 (single division) and V2 (multi-division) models
-/// V1 APIs use: DivisionId, DueDate, IsPublished, HomeworkAssignmentTypeId, DocumentUrl
-/// V2 APIs use: DivisionSchedules, HomeworkTypeId, ChapterIdsJson, AttachmentsJson
+/// Supports multi-division assignment model with flexible scheduling
 /// </summary>
 public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScopedEntity
 {
@@ -24,7 +22,11 @@ public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTe
 	public Guid? EducationMediumId { get; set; }
 	public Guid? EducationMediumStageId { get; set; }
 	public Guid StandardId { get; set; }
-	public Guid DivisionId { get; set; }
+	/// <summary>
+	/// Legacy single division ID (nullable - for backward compatibility)
+	/// New assignments use DivisionSchedules instead
+	/// </summary>
+	public Guid? DivisionId { get; set; }
 
 	#region IUserScopedEntity Explicit Implementation
 	Guid? IUserScopedEntity.AcademicYearId => AcademicYearId;
@@ -35,42 +37,66 @@ public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTe
 	Guid? IUserScopedEntity.DivisionId => DivisionId;
 	#endregion
 
-	// V1 Properties (Keep for backward compatibility - used by existing APIs)
+	// Core Properties
 	public Guid SubjectId { get; set; }
+	
+	/// <summary>
+	/// Legacy single chapter ID (for backward compatibility)
+	/// New assignments use ChapterIdsJson for multi-chapter support
+	/// </summary>
 	public Guid? ChapterId { get; set; }
+	
 	public string Title { get; set; } = string.Empty;
 	public string Description { get; set; } = string.Empty;
-	public Guid HomeworkAssignmentTypeId { get; set; }
+	
+	/// <summary>
+	/// Legacy homework assignment type ID (nullable - for backward compatibility)
+	/// New assignments use HomeworkTypeId
+	/// </summary>
+	public Guid? HomeworkAssignmentTypeId { get; set; }
+	
+	/// <summary>
+	/// Legacy single document URL (for backward compatibility)
+	/// New assignments use AttachmentsJson for multi-file support
+	/// </summary>
 	public string? DocumentUrl { get; set; }
+	
 	public SubmissionType SubmissionType { get; set; }
-	public DateTime DueDate { get; set; }
+	
+	/// <summary>
+	/// Legacy due date (nullable - for backward compatibility)
+	/// New assignments use division schedules for per-division due dates
+	/// </summary>
+	public DateTime? DueDate { get; set; }
+	
+	/// <summary>
+	/// Legacy publish flag (for backward compatibility)
+	/// New assignments use division-level IsPublished in schedules
+	/// </summary>
 	public bool IsPublished { get; set; } = false;
 
-	// V2 Properties (NEW - Phase A additions for multi-division support)
+	// Multi-Division Support Properties
 	/// <summary>
-	/// JSON array of chapter IDs for V2 multi-chapter support: ["guid1", "guid2"]
-	/// NULL means use ChapterId (V1)
+	/// JSON array of chapter IDs for multi-chapter support: ["guid1", "guid2"]
 	/// </summary>
 	public string? ChapterIdsJson { get; set; }
 
 	/// <summary>
-	/// Reference to new HomeworkType entity (for V2 APIs)
-	/// NULL means use HomeworkAssignmentTypeId (V1)
+	/// Reference to HomeworkType entity
 	/// </summary>
 	public Guid? HomeworkTypeId { get; set; }
 
 	/// <summary>
-	/// JSON array of attachments for V2 multi-file support: [{name, url, size}]
-	/// NULL means use DocumentUrl (V1)
+	/// JSON array of attachments for multi-file support: [{name, url, size}]
 	/// </summary>
 	public string? AttachmentsJson { get; set; }
 
 	// Navigation properties
-	public virtual HomeworkAssignmentType HomeworkAssignmentType { get; set; } = null!;
+	public virtual HomeworkAssignmentType? HomeworkAssignmentType { get; set; }
 	public virtual HomeworkType? HomeworkType { get; set; }
 
 	/// <summary>
-	/// Multi-division schedules (V2 only - empty for V1 homework)
+	/// Multi-division schedules with per-division publish dates and due dates
 	/// </summary>
 	public virtual ICollection<HomeworkDivisionSchedule> DivisionSchedules { get; set; } =
 		new List<HomeworkDivisionSchedule>();
@@ -80,12 +106,12 @@ public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTe
 		DivisionSchedules?.Any(d => d.IsPublished) ?? false;
 	public bool AllDivisionsPublished =>
 		DivisionSchedules?.All(d => d.IsPublished) ?? false;
-	public bool IsV2Homework => DivisionSchedules?.Any() ?? false;
+	public bool IsMultiDivision => DivisionSchedules?.Any() ?? false;
 
 	// Private constructor for EF Core
 	private HomeworkAssignmentEntity() { }
 
-	// V1 Constructor (for existing APIs - backward compatibility)
+	// Legacy Constructor (for backward compatibility)
 	public HomeworkAssignmentEntity(
 		Guid id,
 		Guid standardId,
@@ -125,7 +151,7 @@ public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTe
 		DivisionSchedules = new List<HomeworkDivisionSchedule>();
 	}
 
-	// V2 Constructor (for new multi-division APIs)
+	// Multi-Division Constructor (for new APIs)
 	public HomeworkAssignmentEntity(
 		Guid id,
 		Guid standardId,
@@ -159,16 +185,16 @@ public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTe
 		EducationMediumStageId = educationMediumStageId;
 		DivisionSchedules = new List<HomeworkDivisionSchedule>();
 
-		// V2 uses default values for V1 fields
-		HomeworkAssignmentTypeId = Guid.Empty;
-		DivisionId = Guid.Empty;
-		DueDate = default;
+		// Initialize legacy fields as null (not used in multi-division mode)
+		HomeworkAssignmentTypeId = null;
+		DivisionId = null;
+		DueDate = null;
 		IsPublished = false;
 	}
 
-	#region V1 Methods (for existing APIs - backward compatibility)
+	#region Legacy Methods (for backward compatibility)
 
-	public void UpdateBasicInfo(string title, string description, DateTime dueDate)
+	public void UpdateLegacyInfo(string title, string description, DateTime dueDate)
 	{
 		Title = title;
 		Description = description;
@@ -192,9 +218,9 @@ public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTe
 
 	#endregion
 
-	#region V2 Methods (for new multi-division APIs)
+	#region Multi-Division Methods
 
-	public void UpdateBasicInfoV2(
+	public void UpdateBasicInfo(
 		string title,
 		string description,
 		string? chapterIdsJson = null,

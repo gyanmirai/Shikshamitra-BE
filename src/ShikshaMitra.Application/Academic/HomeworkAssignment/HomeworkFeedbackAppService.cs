@@ -75,7 +75,14 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		}
 
 		// 2. Validate homework is assigned to the requested division
-		if (homework.DivisionId != filter.DivisionId)
+		// V1 homework must have DivisionId
+		if (!homework.DivisionId.HasValue)
+		{
+			throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
+				.WithData("Message", "Homework does not have a division assigned");
+		}
+
+		if (homework.DivisionId.Value != filter.DivisionId)
 		{
 			throw new BusinessException("ShikshaMitra.Homework:NotAssignedToDivision")
 				.WithData("DivisionId", filter.DivisionId);
@@ -104,9 +111,9 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		var submissionDict = submissions.ToDictionary(s => s.StudentId);
 
 		// 5. Get homework type name
-		var homeworkType = await _homeworkTypeRepository.FindAsync(
-			homework.HomeworkAssignmentTypeId
-		);
+		var homeworkType = homework.HomeworkAssignmentTypeId.HasValue
+			? await _homeworkTypeRepository.FindAsync(homework.HomeworkAssignmentTypeId.Value)
+			: null;
 		var homeworkTypeName = homeworkType?.Name ?? "Homework";
 
 		// 6. Build response - Left join students with submissions
@@ -129,7 +136,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 				HomeworkType = homeworkTypeName,
 				SubmissionType = homework.SubmissionType.ToString(),
 				SubmissionDate = submission?.SubmissionDate?.ToString("dd-MM-yyyy"),
-				DueDate = homework.DueDate.ToString("dd-MM-yyyy"),
+				DueDate = homework.DueDate?.ToString("dd-MM-yyyy") ?? string.Empty,
 				Marks = submission?.Marks,
 				TotalMarks = submission?.TotalMarks,
 				Feedback = submission?.Feedback,
@@ -190,6 +197,13 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		// 3. Validate feedback data
 		_submissionManager.ValidateFeedback(input.Marks, input.TotalMarks);
 
+		// V1 homework must have DivisionId and DueDate
+		if (!homework.DivisionId.HasValue || !homework.DueDate.HasValue)
+		{
+			throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
+				.WithData("Message", "Homework does not have division or due date assigned");
+		}
+
 		// 4. Get or create submission
 		var submission = await _submissionRepository.GetSubmissionByStudentAndHomeworkAsync(
 			studentId,
@@ -202,8 +216,8 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			submission = await _submissionManager.CreateOrGetSubmissionAsync(
 				homeworkId,
 				studentId,
-				homework.DivisionId,
-				homework.DueDate,
+				homework.DivisionId.Value,
+				homework.DueDate.Value,
 				CurrentTenant.Id
 			);
 		}
@@ -260,6 +274,13 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 				.WithData("HomeworkId", homeworkId);
 		}
 
+		// V1 homework must have DivisionId and DueDate
+		if (!homework.DivisionId.HasValue || !homework.DueDate.HasValue)
+		{
+			throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
+				.WithData("Message", "Homework does not have division or due date assigned");
+		}
+
 		// 2. Get or create submission
 		var submission = await _submissionRepository.GetSubmissionByStudentAndHomeworkAsync(
 			studentId,
@@ -272,8 +293,8 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			submission = await _submissionManager.CreateOrGetSubmissionAsync(
 				homeworkId,
 				studentId,
-				homework.DivisionId,
-				homework.DueDate,
+				homework.DivisionId.Value,
+				homework.DueDate.Value,
 				CurrentTenant.Id
 			);
 		}

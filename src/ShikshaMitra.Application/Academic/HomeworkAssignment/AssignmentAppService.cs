@@ -20,11 +20,11 @@ using Volo.Abp.Linq;
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
 /// <summary>
-/// Application service for Assignment V2 API
+/// Application service for Assignment API
 /// Implements multi-division assignment management with performance optimizations
 /// </summary>
 [Authorize]
-public class AssignmentV2AppService : ApplicationService, IAssignmentV2AppService
+public class AssignmentAppService : ApplicationService, IAssignmentAppService
 {
 	private readonly IRepository<AssignmentEntity, Guid> _assignmentRepository;
 	private readonly IRepository<AssignmentDivisionSchedule, Guid> _scheduleRepository;
@@ -37,7 +37,7 @@ public class AssignmentV2AppService : ApplicationService, IAssignmentV2AppServic
 	private readonly AssignmentManager _assignmentManager;
 	private readonly IAsyncQueryableExecuter _asyncExecuter;
 
-	public AssignmentV2AppService(
+	public AssignmentAppService(
 		IRepository<AssignmentEntity, Guid> assignmentRepository,
 		IRepository<AssignmentDivisionSchedule, Guid> scheduleRepository,
 		IDivisionRepository divisionRepository,
@@ -68,9 +68,9 @@ public class AssignmentV2AppService : ApplicationService, IAssignmentV2AppServic
 	[Authorize(
 		ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.Add
 	)]
-	public async Task<AssignmentV2CreateResponseDto> CreateAsync(
+	public async Task<AssignmentCreateResponseDto> CreateAsync(
 		Guid academicMediumId,
-		CreateAssignmentV2Dto input
+		CreateAssignmentDto input
 	)
 	{
 		// 1. Validate academic medium exists
@@ -137,9 +137,9 @@ public class AssignmentV2AppService : ApplicationService, IAssignmentV2AppServic
 		await _assignmentRepository.InsertAsync(assignment, autoSave: true);
 
 		// 8. Map to DTO and return
-		var dto = await MapToAssignmentV2DtoAsync(assignment);
+		var dto = await MapToAssignmentDtoAsync(assignment);
 
-		return new AssignmentV2CreateResponseDto
+		return new AssignmentCreateResponseDto
 		{
 			Message = L["ShikshaMitra.Assignment:CreatedSuccessfully"],
 			Data = dto
@@ -153,7 +153,7 @@ public class AssignmentV2AppService : ApplicationService, IAssignmentV2AppServic
 	[Authorize(
 		ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.View
 	)]
-	public async Task<AssignmentV2ListResponseDto> GetAllAsync(
+	public async Task<AssignmentListResponseDto> GetAllAsync(
 		Guid academicMediumId,
 		GetAssignmentFilterDto filter
 	)
@@ -217,15 +217,50 @@ public class AssignmentV2AppService : ApplicationService, IAssignmentV2AppServic
 		// 7. Execute query
 		var assignments = await _asyncExecuter.ToListAsync(query);
 
-		// 8. Map to DTOs
-		var dtos = new List<AssignmentV2Dto>();
+		// 8. Batch-load related entities to prevent N+1 queries
+		var standardIds = assignments.Select(a => a.StandardId).Distinct().ToList();
+		var subjectIds = assignments.Select(a => a.SubjectId).Distinct().ToList();
+		var divisionIds = assignments
+			.SelectMany(a => a.DivisionSchedules.Select(d => d.DivisionId))
+			.Distinct()
+			.ToList();
+		var creatorIds = assignments
+			.Where(a => a.CreatorId.HasValue)
+			.Select(a => a.CreatorId!.Value)
+			.Distinct()
+			.ToList();
+
+		var standards = await _standardRepository.GetListAsync(s => standardIds.Contains(s.Id));
+		var subjects = await _subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id));
+		var divisions = await _divisionRepository.GetListAsync(d => divisionIds.Contains(d.Id));
+		var creators = creatorIds.Any()
+			? await _userRepository.GetListAsync(u => creatorIds.Contains(u.Id))
+			: new List<IdentityUser>();
+
+		// Create lookup dictionaries for O(1) access
+		var standardLookup = standards.ToDictionary(s => s.Id, s => s.Name);
+		var subjectLookup = subjects.ToDictionary(s => s.Id, s => s.Name);
+		var divisionLookup = divisions.ToDictionary(d => d.Id, d => d.Name);
+		var creatorLookup = creators.ToDictionary(
+			c => c.Id,
+			c => $"{c.Name} {c.Surname}".Trim()
+		);
+
+		// 9. Map to DTOs with batch-loaded data
+		var dtos = new List<AssignmentDto>();
 		foreach (var assignment in assignments)
 		{
-			var dto = await MapToAssignmentV2DtoAsync(assignment);
+			var dto = await MapToAssignmentDtoAsync(
+				assignment,
+				standardLookup,
+				subjectLookup,
+				divisionLookup,
+				creatorLookup
+			);
 			dtos.Add(dto);
 		}
 
-		return new AssignmentV2ListResponseDto { Data = dtos };
+		return new AssignmentListResponseDto { Data = dtos };
 	}
 
 	/// <summary>
@@ -234,7 +269,7 @@ public class AssignmentV2AppService : ApplicationService, IAssignmentV2AppServic
 	[Authorize(
 		ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.View
 	)]
-	public async Task<AssignmentV2GetResponseDto> GetAsync(Guid id, Guid academicMediumId)
+	public async Task<AssignmentGetResponseDto> GetAsync(Guid id, Guid academicMediumId)
 	{
 		// 1. Get assignment with eager loading
 		var queryable = await _assignmentRepository.WithDetailsAsync(a =>
@@ -260,9 +295,9 @@ public class AssignmentV2AppService : ApplicationService, IAssignmentV2AppServic
 		}
 
 		// 3. Map to DTO
-		var dto = await MapToAssignmentV2DtoAsync(assignment);
+		var dto = await MapToAssignmentDtoAsync(assignment);
 
-		return new AssignmentV2GetResponseDto { Data = dto };
+		return new AssignmentGetResponseDto { Data = dto };
 	}
 
 	/// <summary>
@@ -274,7 +309,7 @@ public class AssignmentV2AppService : ApplicationService, IAssignmentV2AppServic
 	public async Task<MessageResponseDto> UpdateAsync(
 		Guid id,
 		Guid academicMediumId,
-		UpdateAssignmentV2Dto input
+		UpdateAssignmentDto input
 	)
 	{
 		// 1. Validate can update (not published)
@@ -323,14 +358,16 @@ public class AssignmentV2AppService : ApplicationService, IAssignmentV2AppServic
 		assignment.SubmissionType = (SubmissionType)input.SubmissionType;
 
 		// 6. Update division schedules (delete old, add new)
+		// Capture existing schedules before clearing
+		var schedulesToDelete = assignment.DivisionSchedules.ToList();
+		await _scheduleRepository.DeleteManyAsync(schedulesToDelete);
 		assignment.ClearDivisionSchedules();
-		await _scheduleRepository.DeleteManyAsync(assignment.DivisionSchedules);
 
 		foreach (var divisionInput in input.Divisions)
 		{
 			var schedule = new AssignmentDivisionSchedule(
 				GuidGenerator.Create(),
-				assignment.Id,
+				assignment.Id,          
 				divisionInput.DivisionId,
 				divisionInput.PublishDate,
 				divisionInput.DueDate,
@@ -354,7 +391,7 @@ public class AssignmentV2AppService : ApplicationService, IAssignmentV2AppServic
 	[Authorize(
 		ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.Add
 	)]
-	public async Task<AssignmentV2PublishResponseDto> PublishAsync(
+	public async Task<AssignmentPublishResponseDto> PublishAsync(
 		Guid id,
 		Guid academicMediumId
 	)
@@ -378,7 +415,7 @@ public class AssignmentV2AppService : ApplicationService, IAssignmentV2AppServic
 			.Where(d => d.PublishedAt.HasValue)
 			.Min(d => d.PublishedAt!.Value);
 
-		return new AssignmentV2PublishResponseDto
+		return new AssignmentPublishResponseDto
 		{
 			Message = L["ShikshaMitra.Assignment:PublishedSuccessfully"],
 			Data = new PublishDataDto { Id = assignment.Id, PublishedAt = publishedAt }
@@ -413,13 +450,24 @@ public class AssignmentV2AppService : ApplicationService, IAssignmentV2AppServic
 	#region Helper Methods
 
 	/// <summary>
-	/// Map AssignmentEntity to AssignmentV2Dto with related data
-	/// Performance optimized with batched queries
+	/// Map AssignmentEntity to AssignmentDto with related data
+	/// Performance optimized with batched queries when lookups provided
 	/// </summary>
-	private async Task<AssignmentV2Dto> MapToAssignmentV2DtoAsync(AssignmentEntity assignment)
+	/// <param name="assignment">The assignment entity to map</param>
+	/// <param name="standardLookup">Optional pre-loaded standard names by ID</param>
+	/// <param name="subjectLookup">Optional pre-loaded subject names by ID</param>
+	/// <param name="divisionLookup">Optional pre-loaded division names by ID</param>
+	/// <param name="creatorLookup">Optional pre-loaded creator names by ID</param>
+	private async Task<AssignmentDto> MapToAssignmentDtoAsync(
+		AssignmentEntity assignment,
+		Dictionary<Guid, string>? standardLookup = null,
+		Dictionary<Guid, string>? subjectLookup = null,
+		Dictionary<Guid, string>? divisionLookup = null,
+		Dictionary<Guid, string>? creatorLookup = null
+	)
 	{
 		// 1. Base mapping
-		var dto = ObjectMapper.Map<AssignmentEntity, AssignmentV2Dto>(assignment);
+		var dto = ObjectMapper.Map<AssignmentEntity, AssignmentDto>(assignment);
 
 		// 1.1. Deserialize JSON fields
 		if (!string.IsNullOrEmpty(assignment.ChapterIdsJson))
@@ -441,12 +489,26 @@ public class AssignmentV2AppService : ApplicationService, IAssignmentV2AppServic
 		}
 
 		// 2. Get Standard name
-		var standard = await _standardRepository.FindAsync(assignment.StandardId);
-		dto.ClassName = standard?.Name ?? string.Empty;
+		if (standardLookup != null && standardLookup.TryGetValue(assignment.StandardId, out var standardName))
+		{
+			dto.ClassName = standardName;
+		}
+		else
+		{
+			var standard = await _standardRepository.FindAsync(assignment.StandardId);
+			dto.ClassName = standard?.Name ?? string.Empty;
+		}
 
 		// 3. Get Subject name
-		var subject = await _subjectRepository.FindAsync(assignment.SubjectId);
-		dto.SubjectName = subject?.Name ?? string.Empty;
+		if (subjectLookup != null && subjectLookup.TryGetValue(assignment.SubjectId, out var subjectName))
+		{
+			dto.SubjectName = subjectName;
+		}
+		else
+		{
+			var subject = await _subjectRepository.FindAsync(assignment.SubjectId);
+			dto.SubjectName = subject?.Name ?? string.Empty;
+		}
 
 		// 4. Get AssignmentType name
 		dto.AssignmentTypeName = assignment.AssignmentType?.Name ?? string.Empty;
@@ -454,27 +516,58 @@ public class AssignmentV2AppService : ApplicationService, IAssignmentV2AppServic
 		// 5. Get Division names
 		if (dto.Divisions != null && dto.Divisions.Any())
 		{
-			var divisionIds = dto.Divisions.Select(d => d.DivisionId).ToList();
-			var divisions = await _divisionRepository.GetListAsync(d =>
-				divisionIds.Contains(d.Id)
-			);
-
-			foreach (var divSchedule in dto.Divisions)
+			if (divisionLookup != null)
 			{
-				var division = divisions.FirstOrDefault(d => d.Id == divSchedule.DivisionId);
-				divSchedule.DivisionName = division?.Name ?? string.Empty;
+				// Use pre-loaded lookup
+				foreach (var divSchedule in dto.Divisions)
+				{
+					divSchedule.DivisionName = divisionLookup.TryGetValue(
+						divSchedule.DivisionId,
+						out var divName
+					)
+						? divName
+						: string.Empty;
+				}
+			}
+			else
+			{
+				// Fallback to individual query
+				var divisionIds = dto.Divisions.Select(d => d.DivisionId).ToList();
+				var divisions = await _divisionRepository.GetListAsync(d =>
+					divisionIds.Contains(d.Id)
+				);
+
+				foreach (var divSchedule in dto.Divisions)
+				{
+					var division = divisions.FirstOrDefault(d => d.Id == divSchedule.DivisionId);
+					divSchedule.DivisionName = division?.Name ?? string.Empty;
+				}
 			}
 		}
 
 		// 6. Get creator info
 		if (assignment.CreatorId.HasValue)
 		{
-			var creator = await _userRepository.FindAsync(assignment.CreatorId.Value);
-			dto.CreatedBy = new CreatedByDto
+			if (
+				creatorLookup != null
+				&& creatorLookup.TryGetValue(assignment.CreatorId.Value, out var creatorName)
+			)
 			{
-				Id = assignment.CreatorId.Value,
-				Name = creator != null ? $"{creator.Name} {creator.Surname}".Trim() : string.Empty
-			};
+				dto.CreatedBy = new CreatedByDto
+				{
+					Id = assignment.CreatorId.Value,
+					Name = creatorName
+				};
+			}
+			else
+			{
+				var creator = await _userRepository.FindAsync(assignment.CreatorId.Value);
+				dto.CreatedBy = new CreatedByDto
+				{
+					Id = assignment.CreatorId.Value,
+					Name = creator != null ? $"{creator.Name} {creator.Surname}".Trim() : string.Empty
+				};
+			}
 		}
 
 		return dto;

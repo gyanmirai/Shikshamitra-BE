@@ -43,7 +43,7 @@ public class AssignmentDivisionScheduleConfiguration
 		builder
 			.HasIndex(x => x.PublishDate)
 			.HasDatabaseName("IX_AssignmentDivisionSchedules_PublishDate")
-			.HasFilter("[PublishDate] IS NOT NULL AND [IsPublished] = 0");
+			.HasFilter("\"PublishDate\" IS NOT NULL AND \"IsPublished\" = false");
 
 		// Unique constraint: one assignment can't have duplicate divisions
 		builder

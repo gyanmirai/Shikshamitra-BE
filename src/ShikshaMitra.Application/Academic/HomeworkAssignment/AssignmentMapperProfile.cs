@@ -7,14 +7,14 @@ using ShikshaMitra.Academic.HomeworkAssignment;
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
 /// <summary>
-/// AutoMapper profile for Assignment V2 mappings
+/// AutoMapper profile for Assignment mappings
 /// </summary>
-public class AssignmentV2MapperProfile : Profile
+public class AssignmentMapperProfile : Profile
 {
-	public AssignmentV2MapperProfile()
+	public AssignmentMapperProfile()
 	{
 		// Entity to DTO
-		CreateMap<AssignmentEntity, AssignmentV2Dto>()
+		CreateMap<AssignmentEntity, AssignmentDto>()
 			.ForMember(dest => dest.ClassId, opt => opt.MapFrom(src => src.StandardId))
 			.ForMember(dest => dest.ClassName, opt => opt.Ignore()) // Will be populated in service
 			.ForMember(dest => dest.SubjectName, opt => opt.Ignore()) // Will be populated in service
@@ -60,7 +60,7 @@ public class AssignmentV2MapperProfile : Profile
 			.ForMember(dest => dest.DivisionName, opt => opt.Ignore()); // Will be populated in service
 
 		// Create DTO to Entity
-		CreateMap<CreateAssignmentV2Dto, AssignmentEntity>()
+		CreateMap<CreateAssignmentDto, AssignmentEntity>()
 			.ForMember(dest => dest.Id, opt => opt.Ignore()) // Set in service
 			.ForMember(dest => dest.StandardId, opt => opt.MapFrom(src => src.ClassId))
 			.ForMember(
@@ -94,7 +94,7 @@ public class AssignmentV2MapperProfile : Profile
 			.ForMember(dest => dest.DivisionId, opt => opt.Ignore());
 
 		// Update DTO to Entity
-		CreateMap<UpdateAssignmentV2Dto, AssignmentEntity>()
+		CreateMap<UpdateAssignmentDto, AssignmentEntity>()
 			.ForMember(dest => dest.Id, opt => opt.Ignore())
 			.ForMember(dest => dest.StandardId, opt => opt.MapFrom(src => src.ClassId))
 			.ForMember(

@@ -58,11 +58,11 @@ public class StudentSubmissionConfiguration : IEntityTypeConfiguration<StudentSu
 		builder.HasIndex(x => new { x.StudentId, x.HomeworkAssignmentId })
 			.HasDatabaseName("IX_StudentSubmissions_Student_Homework")
 			.IsUnique()
-			.HasFilter("[AssignmentId] IS NULL"); // Only for homework submissions
+			.HasFilter("\"AssignmentId\" IS NULL"); // Only for homework submissions
 		
 		builder.HasIndex(x => new { x.StudentId, x.AssignmentId })
 			.HasDatabaseName("IX_StudentSubmissions_Student_Assignment")
 			.IsUnique()
-			.HasFilter("[AssignmentId] IS NOT NULL"); // Only for assignment submissions
+			.HasFilter("\"AssignmentId\" IS NOT NULL"); // Only for assignment submissions
 	}
 }

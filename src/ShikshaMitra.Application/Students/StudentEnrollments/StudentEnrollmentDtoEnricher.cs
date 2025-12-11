@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.TenantSettings.AcademicYears;
+﻿using ShikshaMitra.Students.StudentEnrollments.Settings;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
@@ -22,6 +23,7 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 	private readonly IRepository<EducationBoard, Guid> _educationBoardRepository;
 	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
 	private readonly IRepository<Student, Guid> _studentRepository;
+	private readonly IRepository<InquiryPreference, Guid> _inquiryPreferenceRepository;
 
 	public StudentEnrollmentDtoEnricher(
 		IRepository<EducationMedium, Guid> academicMediumRepository,
@@ -76,6 +78,15 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 			{
 				var std = await _standardRepository.FindAsync(student.StandardId.Value);
 				dto.Standard = std?.Name ?? dto.Standard;
+			}
+		}
+
+		// Inquiry Preference
+		if (dto.InquiryPreferenceId != null && dto.InquiryPreferenceId != Guid.Empty)
+		{
+			var inquiryPreference = await _inquiryPreferenceRepository.FindAsync(dto.InquiryPreferenceId!.Value);
+			if (inquiryPreference != null) {
+				dto.InquiryPreference = inquiryPreference.PreferenceName;
 			}
 		}
 	}

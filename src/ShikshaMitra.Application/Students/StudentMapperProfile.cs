@@ -61,9 +61,9 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.InquiryNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.InquiryNo : null))
 			.ForMember(dest => dest.StudentName, opt => opt.MapFrom(src =>
 				$"{src.FirstName} {src.MiddleName} {src.LastName}".Trim()))
-			.ForMember(dest => dest.Standard, opt => opt.Ignore()) // Standard name not available on aggregate
+			.ForMember(dest => dest.Standard, opt => opt.Ignore())
 			.ForMember(dest => dest.AcademicMediumId, opt => opt.MapFrom(src => src.EducationMediumId))
-			.ForMember(dest => dest.AcademicMediumName, opt => opt.Ignore())
+			.ForMember(dest => dest.AcademicMediumName, opt => opt.MapFrom(src => src.EducationMedium != null ? src.EducationMedium.Name : null))
 			.ForMember(dest => dest.AcademicBoardId, opt => opt.Ignore())
 			.ForMember(dest => dest.AcademicBoardName, opt => opt.Ignore())
 			.ForMember(dest => dest.AcademicYearId, opt => opt.MapFrom(src => src.AcademicYearId))
@@ -74,6 +74,12 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.Gender, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.Gender.HasValue
 				? src.AdditionalDetail.Gender.Value.ToString()
 				: null))
+			.ForMember(dest => dest.Address1, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.Address1 : null))
+			.ForMember(dest => dest.Address2, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.Address2 : null))
+			.ForMember(dest => dest.Address3, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.Address3 : null))
+			.ForMember(dest => dest.City, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.City : null))
+			.ForMember(dest => dest.State, opt => opt.MapFrom(src => src.ContactDetail != null && src.ContactDetail.State != null ? src.ContactDetail.State : null))
+			.ForMember(dest => dest.Country, opt => opt.MapFrom(src => src.ContactDetail != null && src.ContactDetail.Country != null ? src.ContactDetail.Country : null))
 			.ForMember(dest => dest.Address, opt => opt.MapFrom(src =>
 				src.ContactDetail == null ? null : string.Join(", ", new[]
 				{
@@ -81,13 +87,14 @@ public class StudentMapperProfile : Profile
 					src.ContactDetail.Address2,
 					src.ContactDetail.Address3,
 					src.ContactDetail.City,
-					src.ContactDetail.State,
-					src.ContactDetail.Country
+					src.ContactDetail.State != null ? src.ContactDetail.State.Name : null,
+					src.ContactDetail.Country != null ? src.ContactDetail.Country.Name : null
 				}.Where(x => !string.IsNullOrWhiteSpace(x)))))
 			.ForMember(dest => dest.PrimaryContactNo, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.PrimaryContactNo : null))
 			.ForMember(dest => dest.SecondaryContactNo, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.SecondaryContactNo : null))
+			.ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.Email : null))
 			.ForMember(dest => dest.PreviousSchool, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.PreviousSchool : null))
-			.ForMember(dest => dest.InquiryPreference, opt => opt.Ignore())
+			.ForMember(dest => dest.InquiryPreference, opt => opt.MapFrom(src => src.InquiryPreference != null ? src.InquiryPreference.PreferenceName : null))
 			.ForMember(dest => dest.NextReminderDate, opt => opt.Ignore())
 			.IncludeAllDerived();
 
@@ -122,8 +129,8 @@ public class StudentMapperProfile : Profile
 					src.ContactDetail.Address2,
 					src.ContactDetail.Address3,
 					src.ContactDetail.City,
-					src.ContactDetail.State,
-					src.ContactDetail.Country
+					src.ContactDetail.State != null ? src.ContactDetail.State.Name : null,
+					src.ContactDetail.Country != null ? src.ContactDetail.Country.Name : null
 				}.Where(x => !string.IsNullOrWhiteSpace(x)))))
 			.ForMember(dest => dest.PrimaryContactNo, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.PrimaryContactNo : null))
 			.ForMember(dest => dest.SecondaryContactNo, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.SecondaryContactNo : null))
@@ -156,8 +163,8 @@ public class StudentMapperProfile : Profile
 					src.ContactDetail.Address2,
 					src.ContactDetail.Address3,
 					src.ContactDetail.City,
-					src.ContactDetail.State,
-					src.ContactDetail.Country
+					src.ContactDetail.State != null ? src.ContactDetail.State.Name : null,
+					src.ContactDetail.Country != null ? src.ContactDetail.Country.Name : null
 				}.Where(x => !string.IsNullOrWhiteSpace(x)))))
 			.ForMember(dest => dest.PrimaryContactNo, opt => opt.MapFrom(src => src.ContactDetail.PrimaryContactNo))
 			.ForMember(dest => dest.SecondaryContactNo, opt => opt.MapFrom(src => src.ContactDetail.SecondaryContactNo));
@@ -181,8 +188,8 @@ public class StudentMapperProfile : Profile
 					src.ContactDetail.Address2,
 					src.ContactDetail.Address3,
 					src.ContactDetail.City,
-					src.ContactDetail.State,
-					src.ContactDetail.Country
+					src.ContactDetail.State != null ? src.ContactDetail.State.Name : null,
+					src.ContactDetail.Country != null ? src.ContactDetail.Country.Name : null
 				}.Where(x => !string.IsNullOrWhiteSpace(x)))))
 			.ForMember(dest => dest.PrimaryContactNo, opt => opt.MapFrom(src => src.ContactDetail.PrimaryContactNo))
 			.ForMember(dest => dest.SecondaryContactNo, opt => opt.MapFrom(src => src.ContactDetail.SecondaryContactNo))
@@ -204,8 +211,8 @@ public class StudentMapperProfile : Profile
 					src.ContactDetail.Address2,
 					src.ContactDetail.Address3,
 					src.ContactDetail.City,
-					src.ContactDetail.State,
-					src.ContactDetail.Country
+					src.ContactDetail.State != null ? src.ContactDetail.State.Name : null,
+					src.ContactDetail.Country != null ? src.ContactDetail.Country.Name : null
 				}.Where(x => !string.IsNullOrWhiteSpace(x)))))
 			.ForMember(dest => dest.PrimaryContactNo, opt => opt.MapFrom(src => src.ContactDetail.PrimaryContactNo))
 			.ForMember(dest => dest.SecondaryContactNo, opt => opt.MapFrom(src => src.ContactDetail.SecondaryContactNo))

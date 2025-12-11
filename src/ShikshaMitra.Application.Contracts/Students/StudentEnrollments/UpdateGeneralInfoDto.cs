@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.Common;
+using System;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
@@ -33,8 +34,8 @@ public class UpdateGeneralInfoDto
 	public string? Address2 { get; set; }
 	public string? Address3 { get; set; }
 	public required string City { get; set; }
-	public required string State { get; set; }
-	public required string Country { get; set; }
+	public required State State { get; set; }
+	public required Country Country { get; set; }
 	public string? Pincode { get; set; }
 
 	public string? PreviousSchool { get; set; }

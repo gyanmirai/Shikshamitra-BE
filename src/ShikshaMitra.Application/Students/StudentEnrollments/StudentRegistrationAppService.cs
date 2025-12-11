@@ -130,6 +130,29 @@ public class StudentRegistrationAppService(
 		return new PagedResultDto<StudentRegistrationDto>(totalCount, resultList);
 	}
 
+	public async Task<StudentRegistrationDto> GetRegistrationByIdAsync(Guid studentId)
+	{
+		// Load the student aggregate
+		var student = await studentRepository.GetAsync(studentId);
+
+		// Validate student is in Registration status
+		if (student.Status != StudentLifeCycleStatusEnum.Registation)
+		{
+			throw new BusinessException(
+				"ShikshaMitra:InvalidStudentStatus",
+				$"Student must be in Registration status. Current status: {student.Status}"
+			);
+		}
+
+		// Map to DTO
+		var result = ObjectMapper.Map<Student, StudentRegistrationDto>(student);
+
+		// Enrich DTO with related entity names
+		await dtoEnricher.EnrichRegistrationDtoAsync(result, student);
+
+		return result;
+	}
+
 	public async Task<UpdateGeneralInfoOutputDto> UpdateGeneralInfoAsync(Guid studentId, UpdateGeneralInfoDto input)
 	{
 		// Load the student aggregate with all parts

@@ -55,7 +55,83 @@ public class StudentMapperProfile : Profile
 
 
 
-		CreateMap<Student, StudentInquiryDto>();
+		// Map Student aggregate to StudentInquiryDto (used in inquiry create/update flows)
+		CreateMap<Student, StudentInquiryDto>()
+			.ForMember(dest => dest.StudentId, opt => opt.MapFrom(src => src.Id))
+			.ForMember(dest => dest.InquiryNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.InquiryNo : null))
+			.ForMember(dest => dest.StudentName, opt => opt.MapFrom(src =>
+				$"{src.FirstName} {src.MiddleName} {src.LastName}".Trim()))
+			.ForMember(dest => dest.Standard, opt => opt.Ignore()) // Standard name not available on aggregate
+			.ForMember(dest => dest.AcademicMediumId, opt => opt.MapFrom(src => src.EducationMediumId))
+			.ForMember(dest => dest.AcademicMediumName, opt => opt.Ignore())
+			.ForMember(dest => dest.AcademicBoardId, opt => opt.Ignore())
+			.ForMember(dest => dest.AcademicBoardName, opt => opt.Ignore())
+			.ForMember(dest => dest.AcademicYearId, opt => opt.MapFrom(src => src.AcademicYearId))
+			.ForMember(dest => dest.AcademicYearName, opt => opt.Ignore())
+			.ForMember(dest => dest.DateOfBirth, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.DateOfBirthday : null))
+			.ForMember(dest => dest.Age, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.DateOfBirthday : null))
+			.ForMember(dest => dest.DateOfInquiry, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.DateOfInquiry : null))
+			.ForMember(dest => dest.Gender, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.Gender.HasValue
+				? src.AdditionalDetail.Gender.Value.ToString()
+				: null))
+			.ForMember(dest => dest.Address, opt => opt.MapFrom(src =>
+				src.ContactDetail == null ? null : string.Join(", ", new[]
+				{
+					src.ContactDetail.Address1,
+					src.ContactDetail.Address2,
+					src.ContactDetail.Address3,
+					src.ContactDetail.City,
+					src.ContactDetail.State,
+					src.ContactDetail.Country
+				}.Where(x => !string.IsNullOrWhiteSpace(x)))))
+			.ForMember(dest => dest.PrimaryContactNo, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.PrimaryContactNo : null))
+			.ForMember(dest => dest.SecondaryContactNo, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.SecondaryContactNo : null))
+			.ForMember(dest => dest.PreviousSchool, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.PreviousSchool : null))
+			.ForMember(dest => dest.InquiryPreference, opt => opt.Ignore())
+			.ForMember(dest => dest.NextReminderDate, opt => opt.Ignore())
+			.IncludeAllDerived();
+
+		// Map Student aggregate to StudentRegistrationFormDto (derived from StudentInquiryDto)
+		CreateMap<Student, StudentRegistrationFormDto>()
+			.IncludeBase<Student, StudentInquiryDto>()
+			.ForMember(dest => dest.FormNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.RegistrationFormNo ?? string.Empty : string.Empty));
+
+		// Map Student aggregate to StudentRegistrationDto
+		CreateMap<Student, StudentRegistrationDto>()
+			.ForMember(dest => dest.StudentId, opt => opt.MapFrom(src => src.Id))
+			.ForMember(dest => dest.InquiryNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.InquiryNo : null))
+			.ForMember(dest => dest.StudentName, opt => opt.MapFrom(src =>
+				$"{src.FirstName} {src.MiddleName} {src.LastName}".Trim()))
+			.ForMember(dest => dest.Standard, opt => opt.Ignore()) // Standard name not available on aggregate
+			.ForMember(dest => dest.AcademicMediumId, opt => opt.MapFrom(src => src.EducationMediumId))
+			.ForMember(dest => dest.AcademicMediumName, opt => opt.Ignore())
+			.ForMember(dest => dest.AcademicBoardId, opt => opt.Ignore())
+			.ForMember(dest => dest.AcademicBoardName, opt => opt.Ignore())
+			.ForMember(dest => dest.AcademicYearId, opt => opt.MapFrom(src => src.AcademicYearId))
+			.ForMember(dest => dest.AcademicYearName, opt => opt.Ignore())
+			.ForMember(dest => dest.DateOfBirth, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.DateOfBirthday : null))
+			.ForMember(dest => dest.Age, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.DateOfBirthday : null))
+			.ForMember(dest => dest.DateOfInquiry, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.DateOfInquiry : null))
+			.ForMember(dest => dest.Gender, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.Gender.HasValue
+				? src.AdditionalDetail.Gender.Value.ToString()
+				: null))
+			.ForMember(dest => dest.Address, opt => opt.MapFrom(src =>
+				src.ContactDetail == null ? null : string.Join(", ", new[]
+				{
+					src.ContactDetail.Address1,
+					src.ContactDetail.Address2,
+					src.ContactDetail.Address3,
+					src.ContactDetail.City,
+					src.ContactDetail.State,
+					src.ContactDetail.Country
+				}.Where(x => !string.IsNullOrWhiteSpace(x)))))
+			.ForMember(dest => dest.PrimaryContactNo, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.PrimaryContactNo : null))
+			.ForMember(dest => dest.SecondaryContactNo, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.SecondaryContactNo : null))
+			.ForMember(dest => dest.PreviousSchool, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.PreviousSchool : null))
+			.ForMember(dest => dest.FormNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.RegistrationFormNo ?? string.Empty : string.Empty))
+			.ForMember(dest => dest.Progress, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.StudentRegistrationState != StudentRegistrationStateEnum.Default 
+				? (double)(int)src.AdditionalDetail.StudentRegistrationState / (Enum.GetValues(typeof(StudentRegistrationStateEnum)).Length - 1) * 100 
+				: 0));
 
 		// Create a mapping from the anonymous type result to StudentInquiryDto
 		CreateMap<StudentQueryResult, StudentInquiryDto>()
@@ -63,7 +139,13 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.InquiryNo, opt => opt.MapFrom(src => src.AdditionalDetail.InquiryNo))
 			.ForMember(dest => dest.StudentName, opt => opt.MapFrom(src =>
 				$"{src.Student.FirstName} {src.Student.MiddleName} {src.Student.LastName}".Trim()))
-			.ForMember(dest => dest.Standard, opt => opt.MapFrom(src => "Standard Name")) // Fix this hardcoded value
+			.ForMember(dest => dest.Standard, opt => opt.Ignore())
+			.ForMember(dest => dest.AcademicMediumId, opt => opt.MapFrom(src => src.Student.EducationMediumId))
+			.ForMember(dest => dest.AcademicMediumName, opt => opt.Ignore())
+			.ForMember(dest => dest.AcademicBoardId, opt => opt.Ignore())
+			.ForMember(dest => dest.AcademicBoardName, opt => opt.Ignore())
+			.ForMember(dest => dest.AcademicYearId, opt => opt.MapFrom(src => src.Student.AcademicYearId))
+			.ForMember(dest => dest.AcademicYearName, opt => opt.Ignore())
 			.ForMember(dest => dest.DateOfBirth, opt => opt.MapFrom(src => src.AdditionalDetail.DateOfBirthday))
 			.ForMember(dest => dest.Age, opt => opt.MapFrom(src => src.AdditionalDetail.DateOfBirthday))
 			.ForMember(dest => dest.DateOfInquiry, opt => opt.MapFrom(src => src.AdditionalDetail.DateOfInquiry))

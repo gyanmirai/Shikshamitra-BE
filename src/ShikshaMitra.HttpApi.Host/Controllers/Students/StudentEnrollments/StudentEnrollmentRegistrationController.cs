@@ -19,10 +19,30 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments;
 public class StudentEnrollmentRegistrationController : AbpControllerBase
 {
 	private readonly IStudentRegistrationAppService _registrationAppService;
+	private readonly IStudentInquiryAppService _inquiryAppService;
 
-	public StudentEnrollmentRegistrationController(IStudentRegistrationAppService registrationAppService)
+	public StudentEnrollmentRegistrationController(
+		IStudentRegistrationAppService registrationAppService,
+		IStudentInquiryAppService inquiryAppService)
 	{
 		_registrationAppService = registrationAppService;
+		_inquiryAppService = inquiryAppService;
+	}
+
+	/// <summary>
+	/// Assigns a registration form to a student inquiry
+	/// </summary>
+	/// <param name="studentId">The student identifier</param>
+	/// <param name="issueFormDto">Registration form details</param>
+	/// <returns>Success result</returns>
+	[HttpPost("{studentId}/forms")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Default)]
+	public async Task<Result> AssignRegistrationFormAsync(
+		Guid studentId,
+		[FromBody] IssueRegistrationFormDto issueFormDto)
+	{
+		await _inquiryAppService.AssignRegistrationFormAsync(studentId, issueFormDto);
+		return Result.Success();
 	}
 
 	/// <summary>

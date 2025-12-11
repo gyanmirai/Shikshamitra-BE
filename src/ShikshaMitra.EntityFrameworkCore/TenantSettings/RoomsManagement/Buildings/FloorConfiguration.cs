@@ -11,12 +11,12 @@ public class FloorConfiguration : IEntityTypeConfiguration<Floor>
 
 		builder.HasKey(x => x.Id);
 
-		builder.Property(x => x.Id)
-			.ValueGeneratedOnAdd();
-
 		builder.Property(x => x.FloorName)
 			.IsRequired()
 			.HasMaxLength(FloorConsts.MaxFloorNameLength);
+
+		builder.Property(x => x.FloorNo)
+			.IsRequired();
 
 		builder.Property(x => x.TotalRoom)
 			.IsRequired();

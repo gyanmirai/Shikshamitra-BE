@@ -108,7 +108,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 	{
 		Configure<AbpExceptionHttpStatusCodeOptions>(options =>
 		{
-			options.Map("Volo.Abp.Authorization.AbpAuthorizationException", HttpStatusCode.Unauthorized);
+			options.Map("Volo.Abp.Authorization.AbpAuthorizationException", HttpStatusCode.Forbidden);
 			options.Map("Volo.Abp.Validation.AbpValidationException", HttpStatusCode.BadRequest);
 		});
 

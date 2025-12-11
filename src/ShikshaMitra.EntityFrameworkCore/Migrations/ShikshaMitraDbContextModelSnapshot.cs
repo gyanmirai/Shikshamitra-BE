@@ -3702,6 +3702,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -3755,7 +3758,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "PreferenceName")
+                    b.HasIndex("TenantId", "AcademicYearId", "PreferenceName")
                         .IsUnique();
 
                     b.ToTable("AppInquiryPreferences", (string)null);
@@ -4621,7 +4624,6 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Building", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("BuildingName")
@@ -4675,11 +4677,8 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Floor", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("BuildingId")
                         .HasColumnType("uuid");
@@ -4688,6 +4687,9 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<int>("FloorNo")
+                        .HasColumnType("integer");
 
                     b.Property<int>("TotalRoom")
                         .HasColumnType("integer");
@@ -4791,7 +4793,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
-                    b.PrimitiveCollection<List<string>>("Features")
+                    b.Property<string>("Features")
                         .HasColumnType("jsonb");
 
                     b.Property<int>("Floor")

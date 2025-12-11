@@ -54,7 +54,13 @@ public class TenantSettingsMapperProfile : Profile
 
 		#region Rooms Management - Building
 		CreateMap<Building, BuildingDto>();
-		CreateMap<CreateUpdateBuildingDto, Building>();
+		CreateMap<CreateBuildingDto, Building>();
+		CreateMap<UpdateBuildingDto, Building>();
+
+		// Floor mappings
+		CreateMap<Floor, FloorDto>();
+		CreateMap<CreateFloorDto, Floor>();
+		CreateMap<UpdateFloorDto, Floor>();
 		#endregion
 
 		#region Rooms Management - Room Type

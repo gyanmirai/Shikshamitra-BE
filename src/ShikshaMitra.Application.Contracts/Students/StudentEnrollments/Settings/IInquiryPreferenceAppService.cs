@@ -13,7 +13,7 @@ public interface IInquiryPreferenceAppService : IApplicationService
 	/// <summary>
 	/// Gets a paginated list of inquiry preferences
 	/// </summary>
-	Task<PagedResultDto<InquiryPreferenceDto>> GetListAsync(PagedAndSortedResultRequestDto input);
+    Task<PagedResultDto<InquiryPreferenceDto>> GetListAsync(PagedAndSortedResultRequestDto input, Guid academicYearId);
 
 	/// <summary>
 	/// Gets an inquiry preference by ID
@@ -23,12 +23,12 @@ public interface IInquiryPreferenceAppService : IApplicationService
 	/// <summary>
 	/// Creates a new inquiry preference
 	/// </summary>
-	Task<InquiryPreferenceDto> CreateAsync(CreateUpdateInquiryPreferenceDto input);
+    Task<InquiryPreferenceDto> CreateAsync(Guid academicYearId, CreateUpdateInquiryPreferenceDto input);
 
 	/// <summary>
 	/// Updates an existing inquiry preference
 	/// </summary>
-	Task<InquiryPreferenceDto> UpdateAsync(Guid id, CreateUpdateInquiryPreferenceDto input);
+    Task<InquiryPreferenceDto> UpdateAsync(Guid academicYearId, Guid id, CreateUpdateInquiryPreferenceDto input);
 
 	/// <summary>
 	/// Deletes an inquiry preference

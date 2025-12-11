@@ -1,0 +1,1282 @@
+﻿{
+	"info": {
+		"_postman_id": "userscope-api-v1",
+		"name": "ShikshaMitra - UserScope API",
+		"description": "Complete UserScope Management API Collection\n\n## 🎯 Quick Start\n1. Import environment file\n2. Run \"Setup\" folder to get entity IDs\n3. Login as Tenant Admin\n4. Start using UserScope APIs\n\n## 📖 Documentation\nSee docs/UserScope-Index.md for complete guide",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "🔐 Authentication",
+			"item": [
+				{
+					"name": "Login (Tenant Admin)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Save access token",
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('access_token', response.access_token);",
+									"    pm.environment.set('token_type', response.token_type);",
+									"    console.log('✅ Token saved:', response.access_token.substring(0, 20) + '...');",
+									"} else {",
+									"    console.error('❌ Login failed');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"description": "Tenant context header"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "grant_type",
+									"value": "password",
+									"type": "text"
+								},
+								{
+									"key": "client_id",
+									"value": "ShikshaMitra_App",
+									"type": "text"
+								},
+								{
+									"key": "username",
+									"value": "{{tenant_username}}",
+									"type": "text"
+								},
+								{
+									"key": "password",
+									"value": "{{tenant_password}}",
+									"type": "text"
+								},
+								{
+									"key": "scope",
+									"value": "offline_access ShikshaMitra",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/connect/token",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"connect",
+								"token"
+							]
+						},
+						"description": "Login as tenant administrator to get access token"
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints"
+		},
+		{
+			"name": "👤 User Management",
+			"item": [
+				{
+					"name": "Create User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Save user ID",
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('user_id', response.id);",
+									"    console.log('✅ User created:', response.userName, '| ID:', response.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userName\": \"teacher.demo\",\n  \"name\": \"Demo\",\n  \"surname\": \"Teacher\",\n  \"email\": \"demo.teacher@school.com\",\n  \"phoneNumber\": \"+1234567890\",\n  \"roleNames\": [\"teacher\"],\n  \"password\": \"Teacher@123\",\n  \"isActive\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/identity/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"identity",
+								"users"
+							]
+						},
+						"description": "Create a new user. User ID is auto-saved to environment."
+					},
+					"response": []
+				},
+				{
+					"name": "Get User by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/identity/users/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"identity",
+								"users",
+								"{{user_id}}"
+							]
+						},
+						"description": "Get user details by ID"
+					},
+					"response": []
+				}
+			],
+			"description": "User management endpoints"
+		},
+		{
+			"name": "🎯 UserScope - Assignment",
+			"item": [
+				{
+					"name": "1️⃣ Assign Specific Division",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('scope_assignment_id', response.id);",
+									"    console.log('✅ Scope assigned | ID:', response.id);",
+									"    console.log('   Level:', response.scopeLevel);",
+									"    console.log('   Description:', response.description);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"academicYearId\": \"{{academic_year_id}}\",\n  \"standardId\": \"{{standard_id}}\",\n  \"divisionId\": \"{{division_id}}\",\n  \"description\": \"Class Teacher - Specific Division\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/assign-scope",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"assign-scope"
+							]
+						},
+						"description": "Assign user to a specific division\n\n**Use Case:** Class teacher for one division\n\n**Access:** Only that division"
+					},
+					"response": []
+				},
+				{
+					"name": "2️⃣ Assign All Divisions (Wildcard)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"academicYearId\": \"{{academic_year_id}}\",\n  \"standardId\": \"{{standard_id}}\",\n  \"description\": \"Subject Teacher - All Divisions\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/assign-scope",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"assign-scope"
+							]
+						},
+						"description": "Assign user to ALL divisions in a standard\n\n**Use Case:** Subject teacher teaching multiple divisions\n\n**Access:** All divisions (NULL = ALL)"
+					},
+					"response": []
+				},
+				{
+					"name": "3️⃣ Bulk Assign (Multiple Divisions)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const count = pm.response.json();",
+									"    console.log('✅ Bulk assignment created:', count, 'assignments');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userIds\": [\"{{user_id}}\"],\n  \"academicYearId\": \"{{academic_year_id}}\",\n  \"standardId\": \"{{standard_id}}\",\n  \"divisionIds\": [\n    \"{{division_a_id}}\",\n    \"{{division_b_id}}\"\n  ],\n  \"description\": \"Teacher - Divisions A & B\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/bulk-assign",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"bulk-assign"
+							]
+						},
+						"description": "Assign specific divisions to user(s) in one request\n\n**Use Case:** Teacher handles 2-3 specific divisions\n\n**Efficient:** Single API call creates multiple assignments"
+					},
+					"response": []
+				},
+				{
+					"name": "4️⃣ Bulk Assign (Multiple Users)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userIds\": [\n    \"{{teacher_user_id}}\",\n    \"{{user_id}}\"\n  ],\n  \"academicYearId\": \"{{academic_year_id}}\",\n  \"standardId\": \"{{standard_id}}\",\n  \"divisionIds\": [\"{{division_id}}\"],\n  \"description\": \"Co-teachers - Same Division\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/bulk-assign",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"bulk-assign"
+							]
+						},
+						"description": "Assign multiple users to same scope\n\n**Use Case:** Multiple teachers for same class\n\n**Efficient:** Batch operation"
+					},
+					"response": []
+				},
+				{
+					"name": "5️⃣ Role-Based Assignment",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roleName\": \"teacher\",\n  \"academicYearId\": \"{{academic_year_id}}\",\n  \"educationBoardId\": \"{{board_id}}\",\n  \"description\": \"Default scope for all teachers\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/assign-scope",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"assign-scope"
+							]
+						},
+						"description": "Assign scope to ALL users in a role\n\n**Use Case:** Default permissions for role\n\n**Note:** Use roleName instead of userId"
+					},
+					"response": []
+				},
+				{
+					"name": "6️⃣ Coordinator (Stage Level)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"academicYearId\": \"{{academic_year_id}}\",\n  \"educationMediumStageId\": \"{{stage_id}}\",\n  \"description\": \"Coordinator - All classes in stage\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/assign-scope",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"assign-scope"
+							]
+						},
+						"description": "Assign coordinator to education stage\n\n**Use Case:** Secondary/Primary coordinator\n\n**Access:** All classes + divisions in stage"
+					},
+					"response": []
+				},
+				{
+					"name": "7️⃣ Principal (Full Access)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{principal_user_id}}\",\n  \"academicYearId\": \"{{academic_year_id}}\",\n  \"description\": \"Principal - Full School Access\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/assign-scope",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"assign-scope"
+							]
+						},
+						"description": "Assign principal with full access\n\n**Use Case:** School principal\n\n**Access:** Everything (all NULLs = wildcards)"
+					},
+					"response": []
+				}
+			],
+			"description": "Create and assign UserScope permissions\n\n## Patterns\n- **Specific:** Provide exact IDs\n- **Wildcard:** Omit field or set to null\n- **Bulk:** Use bulk-assign for efficiency"
+		},
+		{
+			"name": "📊 UserScope - Query",
+			"item": [
+				{
+					"name": "Get User Scope",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    console.log('📊 User Scope for:', response.userName);",
+									"    console.log('   Is Admin:', response.isAdmin);",
+									"    console.log('   Assignments:', response.assignments.length);",
+									"    console.log('   From Cache:', response.fromCache);",
+									"    ",
+									"    if (response.effectiveScope) {",
+									"        const scope = response.effectiveScope;",
+									"        console.log('   Effective Scope:');",
+									"        console.log('     - Wildcard Board:', scope.hasWildcardBoard);",
+									"        console.log('     - Wildcard Division:', scope.hasWildcardDivision);",
+									"        console.log('     - Standards:', scope.standardIds.length);",
+									"        console.log('     - Divisions:', scope.divisionIds.length);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/user-scope/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"user-scope",
+								"{{user_id}}"
+							]
+						},
+						"description": "Get complete scope information for a user\n\n**Returns:**\n- All assignments\n- Effective scope (combined)\n- Wildcard flags\n- Cache status"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Assignments",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/assignments",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"assignments"
+							]
+						},
+						"description": "Get all scope assignments (admin view)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Assignments by User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/assignments?userId={{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"assignments"
+							],
+							"query": [
+								{
+									"key": "userId",
+									"value": "{{user_id}}"
+								}
+							]
+						},
+						"description": "Get all assignments for specific user"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Users by Division",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const userIds = pm.response.json();",
+									"    console.log('👥 Users with access to division:', userIds.length);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/users-by-division/{{division_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"users-by-division",
+								"{{division_id}}"
+							]
+						},
+						"description": "Find all users who have access to a specific division"
+					},
+					"response": []
+				}
+			],
+			"description": "Query UserScope assignments and effective permissions"
+		},
+		{
+			"name": "⚙️ UserScope - Management",
+			"item": [
+				{
+					"name": "Activate Scope",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/{{scope_assignment_id}}/activate",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"{{scope_assignment_id}}",
+								"activate"
+							]
+						},
+						"description": "Activate a deactivated scope assignment"
+					},
+					"response": []
+				},
+				{
+					"name": "Deactivate Scope",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/{{scope_assignment_id}}/deactivate",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"{{scope_assignment_id}}",
+								"deactivate"
+							]
+						},
+						"description": "Temporarily disable scope without deleting\n\n**Use Case:** Temporary suspension, preserves history"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Description",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"description\": \"Updated description for this assignment\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/{{scope_assignment_id}}/description",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"{{scope_assignment_id}}",
+								"description"
+							]
+						},
+						"description": "Update assignment description"
+					},
+					"response": []
+				},
+				{
+					"name": "Revoke Scope (Delete)",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/{{scope_assignment_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"{{scope_assignment_id}}"
+							]
+						},
+						"description": "Permanently delete scope assignment\n\n**Warning:** This cannot be undone. Consider deactivate instead."
+					},
+					"response": []
+				},
+				{
+					"name": "Revoke All User Scopes",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/app/user-scope/user/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"user-scope",
+								"user",
+								"{{user_id}}"
+							]
+						},
+						"description": "Delete ALL scope assignments for a user\n\n**Use Case:** User leaves, role change\n\n**Warning:** Removes all permissions"
+					},
+					"response": []
+				}
+			],
+			"description": "Manage existing UserScope assignments"
+		},
+		{
+			"name": "📚 Examples - Common Scenarios",
+			"item": [
+				{
+					"name": "Example 1: New Teacher Setup",
+					"item": [
+						{
+							"name": "Step 1 - Create Teacher User",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    pm.environment.set('teacher_user_id', response.id);",
+											"    console.log('✅ Step 1 Complete: Teacher created');",
+											"    console.log('   User ID:', response.id);",
+											"    console.log('   Username:', response.userName);",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									},
+									{
+										"key": "__tenant",
+										"value": "{{tenant_id}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"userName\": \"teacher.math\",\n  \"name\": \"Math\",\n  \"surname\": \"Teacher\",\n  \"email\": \"math.teacher@school.com\",\n  \"phoneNumber\": \"+9876543210\",\n  \"roleNames\": [\"teacher\"],\n  \"password\": \"Teacher@123\",\n  \"isActive\": true\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/identity/users",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"identity",
+										"users"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Step 2 - Assign to Class 10-A",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    console.log('✅ Step 2 Complete: Scope assigned');",
+											"    console.log('   Teacher can now access Class 10-A students');",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									},
+									{
+										"key": "__tenant",
+										"value": "{{tenant_id}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"userId\": \"{{teacher_user_id}}\",\n  \"academicYearId\": \"{{academic_year_id}}\",\n  \"standardId\": \"{{standard_id}}\",\n  \"divisionId\": \"{{division_id}}\",\n  \"description\": \"Math Teacher - Class 10-A\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/app/user-scope/assign-scope",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"app",
+										"user-scope",
+										"assign-scope"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Step 3 - Verify Scope",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const response = pm.response.json();",
+											"    console.log('✅ Step 3 Complete: Scope verified');",
+											"    console.log('   Assignments:', response.assignments.length);",
+											"    console.log('   Has access to Division:', response.effectiveScope.divisionIds.length > 0);",
+											"    console.log('');",
+											"    console.log('🎉 Teacher setup complete!');",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									},
+									{
+										"key": "__tenant",
+										"value": "{{tenant_id}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/app/user-scope/user-scope/{{teacher_user_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"app",
+										"user-scope",
+										"user-scope",
+										"{{teacher_user_id}}"
+									]
+								}
+							},
+							"response": []
+						}
+					],
+					"description": "Complete workflow: Create teacher and assign to class"
+				},
+				{
+					"name": "Example 2: Multi-Division Teacher",
+					"item": [
+						{
+							"name": "Bulk Assign to 3 Divisions",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const count = pm.response.json();",
+											"    console.log('✅ Created', count, 'scope assignments');",
+											"    console.log('   Teacher now has access to multiple divisions');",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									},
+									{
+										"key": "__tenant",
+										"value": "{{tenant_id}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"userIds\": [\"{{user_id}}\"],\n  \"academicYearId\": \"{{academic_year_id}}\",\n  \"standardId\": \"{{standard_id}}\",\n  \"divisionIds\": [\n    \"{{division_a_id}}\",\n    \"{{division_b_id}}\",\n    \"{{division_id}}\"\n  ],\n  \"description\": \"English Teacher - 3 Divisions\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/app/user-scope/bulk-assign",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"app",
+										"user-scope",
+										"bulk-assign"
+									]
+								}
+							},
+							"response": []
+						}
+					],
+					"description": "Assign teacher to multiple divisions at once"
+				},
+				{
+					"name": "Example 3: Academic Year Transition",
+					"item": [
+						{
+							"name": "Step 1 - Assign New Year Scope",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									},
+									{
+										"key": "__tenant",
+										"value": "{{tenant_id}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"academicYearId\": \"{{new_academic_year_id}}\",\n  \"standardId\": \"{{standard_id}}\",\n  \"divisionId\": \"{{division_id}}\",\n  \"description\": \"Teacher - 2025-26 Academic Year\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/app/user-scope/assign-scope",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"app",
+										"user-scope",
+										"assign-scope"
+									]
+								},
+								"description": "Assign new academic year permissions"
+							},
+							"response": []
+						},
+						{
+							"name": "Step 2 - Deactivate Old Year",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									},
+									{
+										"key": "__tenant",
+										"value": "{{tenant_id}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/app/user-scope/{{old_scope_assignment_id}}/deactivate",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"app",
+										"user-scope",
+										"{{old_scope_assignment_id}}",
+										"deactivate"
+									]
+								},
+								"description": "Deactivate previous year (preserves history)"
+							},
+							"response": []
+						}
+					],
+					"description": "Handle academic year transitions smoothly"
+				}
+			],
+			"description": "Step-by-step examples for common scenarios"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "https://localhost:44300",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "tenant_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "tenant_username",
+			"value": "admin",
+			"type": "string"
+		},
+		{
+			"key": "tenant_password",
+			"value": "Temp@123",
+			"type": "string"
+		},
+		{
+			"key": "user_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "teacher_user_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "principal_user_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "scope_assignment_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "old_scope_assignment_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "new_academic_year_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "academic_year_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "board_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "medium_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "stage_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "standard_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "division_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "division_a_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "division_b_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

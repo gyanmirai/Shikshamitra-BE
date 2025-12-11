@@ -1,5 +1,82 @@
 ﻿# ShikshaMitra Postman Collections
 
+> Ready-to-use API testing collections - just import and test!
+
+---
+
+## 🚀 Quick Start (2 Minutes)
+
+### Step 1: Import to Postman
+1. Import: `ShikshaMitra.postman_environment.json`
+2. Import: `UserScope-API.postman_collection.json`
+
+### Step 2: Configure (1 minute)
+1. Run SQL: `GET-TENANT-ID.sql` → Get your tenant ID
+2. In Postman: Set `tenant_id` variable
+
+### Step 3: Test
+1. Run: 🔐 Authentication → Login
+2. Token auto-saves ✅
+3. Start testing!
+
+---
+
+## 📦 Collections Available
+
+- `UserScope-API.postman_collection.json` ⭐ User permissions (25+ requests)
+- `BuildingManagement.postman_collection.json` - Building APIs
+- `RoomsManagement.postman_collection.json` - Room APIs
+- `ShikshaMitra.postman_collection.json` - General APIs
+
+---
+
+## 📚 Documentation (Optional Reading)
+- **[QUICKSTART.md](QUICKSTART.md)** - Setup guide (5 min)
+- **[API-REFERENCE.md](API-REFERENCE.md)** - Complete API patterns & examples (15 min)
+- **[MIGRATION.md](MIGRATION.md)** - Upgrade to v2.0 (if needed)
+
+### Collections
+- **[BuildingManagement-README.md](BuildingManagement-README.md)** - Building APIs
+- **[RoomsManagement-README.md](RoomsManagement-README.md)** - Room APIs
+
+---
+
+## 🎯 Common Tasks
+
+**Setup Environment**
+→ [QUICKSTART.md](QUICKSTART.md)
+
+**Learn API Patterns**
+→ [API-REFERENCE.md](API-REFERENCE.md)
+
+**Migrate from v1.0**
+→ [MIGRATION.md](MIGRATION.md)
+
+---
+
+## 🔧 Tools
+
+- `GET-TENANT-ID.sql` - Get database IDs
+- `DATABASE-SETUP.sql` - Complete DB setup
+
+---
+
+## ❓ Troubleshooting
+
+**401 Unauthorized** → Re-run Login (token expired)  
+**Missing tenant_id** → Run GET-TENANT-ID.sql  
+**Foreign key error** → Verify entity IDs exist in database  
+
+---
+
+**Version:** 2.0 | **Updated:** December 2024
+
+---
+
+## 📁 Legacy Content Below
+
+
+
 Multi-tenant school management API testing collections with automated setup.
 
 ---

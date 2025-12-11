@@ -72,6 +72,7 @@ public static class ShikshaMitraSubModulePermissions
 	public const string CommunicationSettings = $"{ShikshaMitraModulePermissions.Communication}.Settings";
 
 	// Calendar module submodules
+	public const string CalendarDashboard = $"{ShikshaMitraModulePermissions.Calendar}.Dashboard";
 	public const string CalendarView = $"{ShikshaMitraModulePermissions.Calendar}.CalendarView";
 	public const string Events = $"{ShikshaMitraModulePermissions.Calendar}.Events";
 	public const string Holidays = $"{ShikshaMitraModulePermissions.Calendar}.Holidays";
@@ -206,6 +207,7 @@ public static class ShikshaMitraSubModulePermissions
 		CommunicationNotification,
 		NotificationHistory,
 		CommunicationSettings,
+		CalendarDashboard,
 		CalendarView,
 		Events,
 		Holidays,
@@ -342,6 +344,7 @@ public static class ShikshaMitraSubModulePermissions
 		{ CommunicationSettings, $"{DisplayNamePrefix}.CommunicationSettings" },
 
 		// Calendar module submodules
+		{ CalendarDashboard, $"{DisplayNamePrefix}.CalendarDashboard" },
 		{ CalendarView, $"{DisplayNamePrefix}.CalendarView" },
 		{ Events, $"{DisplayNamePrefix}.Events" },
 		{ Holidays, $"{DisplayNamePrefix}.Holidays" },

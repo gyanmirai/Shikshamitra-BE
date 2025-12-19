@@ -43,8 +43,16 @@ public class TeacherAssignmentAppService(
 			classId
 		);
 
-		// Get the standard/class details
-		var standard = await standardRepository.GetAsync(classId);
+		// Validate that the standard/class exists
+		var standard = await standardRepository.FindAsync(classId);
+		if (standard == null)
+		{
+			logger.LogWarning("Standard with ID {ClassId} not found", classId);
+			throw new UserFriendlyException(
+				$"Class not found with ID: {classId}",
+				code: "ClassManagement:ClassNotFound"
+			);
+		}
 
 		// Get all divisions for the class
 		var divisions = await divisionRepository.GetListAsync(d => d.StandardId == classId);
@@ -164,6 +172,17 @@ public class TeacherAssignmentAppService(
 
 		try
 		{
+			// Validate that the class exists
+			var classExists = await standardRepository.FindAsync(input.ClassId);
+			if (classExists == null)
+			{
+				logger.LogWarning("Standard with ID {ClassId} not found", input.ClassId);
+				throw new UserFriendlyException(
+					$"Class not found with ID: {input.ClassId}",
+					code: "ClassManagement:ClassNotFound"
+				);
+			}
+
 			// Batch load all required data before processing to avoid N+1 queries
 			var allTeacherIds = input.Assignments
 				.SelectMany(a => a.TeacherIds)
@@ -177,14 +196,55 @@ public class TeacherAssignmentAppService(
 			var missingTeachers = allTeacherIds.Where(id => !employeeIds.Contains(id)).ToList();
 			if (missingTeachers.Any())
 			{
-				throw new BusinessException("ClassManagement:TeacherNotFound")
-					.WithData("TeacherIds", string.Join(", ", missingTeachers));
+				logger.LogWarning(
+					"Teachers not found: {MissingTeachers}",
+					string.Join(", ", missingTeachers)
+				);
+				throw new UserFriendlyException(
+					$"One or more teachers not found. Invalid teacher IDs: {string.Join(", ", missingTeachers)}",
+					code: "ClassManagement:TeacherNotFound"
+				);
+			}
+
+			// Validate divisions exist
+			var divisionIds = input.Assignments.Select(a => a.DivisionId).Distinct().ToList();
+			var divisions = await divisionRepository.GetListAsync(d => 
+				divisionIds.Contains(d.Id) && d.StandardId == input.ClassId);
+			var validDivisionIds = divisions.Select(d => d.Id).ToHashSet();
+			var invalidDivisions = divisionIds.Where(id => !validDivisionIds.Contains(id)).ToList();
+			
+			if (invalidDivisions.Any())
+			{
+				logger.LogWarning(
+					"Divisions not found or don't belong to class {ClassId}: {InvalidDivisions}",
+					input.ClassId,
+					string.Join(", ", invalidDivisions)
+				);
+				throw new UserFriendlyException(
+					$"One or more divisions not found or don't belong to this class. Invalid division IDs: {string.Join(", ", invalidDivisions)}",
+					code: "ClassManagement:DivisionNotFound"
+				);
+			}
+
+			// Validate subjects exist
+			var subjectIds = input.Assignments.Select(a => a.SubjectId).Distinct().ToList();
+			var subjects = await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id));
+			var validSubjectIds = subjects.Select(s => s.Id).ToHashSet();
+			var invalidSubjects = subjectIds.Where(id => !validSubjectIds.Contains(id)).ToList();
+			
+			if (invalidSubjects.Any())
+			{
+				logger.LogWarning(
+					"Subjects not found: {InvalidSubjects}",
+					string.Join(", ", invalidSubjects)
+				);
+				throw new UserFriendlyException(
+					$"One or more subjects not found. Invalid subject IDs: {string.Join(", ", invalidSubjects)}",
+					code: "ClassManagement:SubjectNotFound"
+				);
 			}
 
 			// Batch load all existing allocations for this class
-			var divisionIds = input.Assignments.Select(a => a.DivisionId).Distinct().ToList();
-			var subjectIds = input.Assignments.Select(a => a.SubjectId).Distinct().ToList();
-			
 			var existingAllocations = await allocationRepository.GetListAsync(
 				a => a.StandardId == input.ClassId &&
 					divisionIds.Contains(a.DivisionId) &&
@@ -233,25 +293,31 @@ public class TeacherAssignmentAppService(
 					await allocationRepository.UpdateAsync(existingAllocation);
 				}
 			else
-			{
-				// Create new allocation with proper constructor
-				var allocationId = guidGenerator.Create();
-				var newAllocation = new TeacherSubjectAllocation(
-					allocationId,
-					input.ClassId,
-					assignment.DivisionId,
-					assignment.SubjectId
-				);
-				
-				// Add teachers
-				foreach (var teacherId in assignment.TeacherIds)
 				{
-					newAllocation.Teachers.Add(new AllocatedTeacher(allocationId, teacherId));
+					// Create new allocation with proper constructor
+					var allocationId = guidGenerator.Create();
+					var newAllocation = new TeacherSubjectAllocation(
+						allocationId,
+						input.ClassId,
+						assignment.DivisionId,
+						assignment.SubjectId
+					);
+					
+					// Add teachers
+					foreach (var teacherId in assignment.TeacherIds)
+					{
+						newAllocation.Teachers.Add(new AllocatedTeacher(allocationId, teacherId));
+					}
+					
+					await allocationRepository.InsertAsync(newAllocation);
 				}
-				
-				await allocationRepository.InsertAsync(newAllocation);
 			}
-			}
+
+			logger.LogInformation(
+				"Successfully saved {AssignmentCount} teacher assignments for class {ClassId}",
+				input.Assignments.Count,
+				input.ClassId
+			);
 
 			return new ApiSuccessResponseDto
 			{
@@ -259,13 +325,17 @@ public class TeacherAssignmentAppService(
 				Message = $"Successfully saved {input.Assignments.Count} teacher assignments."
 			};
 		}
+		catch (UserFriendlyException)
+		{
+			throw;
+		}
 		catch (BusinessException)
 		{
 			throw;
 		}
 		catch (Exception ex)
 		{
-			logger.LogError(ex, "Failed to save teacher assignments");
+			logger.LogError(ex, "Failed to save teacher assignments for class {ClassId}", input.ClassId);
 			throw new UserFriendlyException(
 				"Failed to save teacher assignments. Please try again later."
 			);
@@ -276,88 +346,100 @@ public class TeacherAssignmentAppService(
 	{
 		logger.LogInformation("Getting teachers list with search: {Search}", search);
 
-		// Try to get from cache if no search filter
-		if (string.IsNullOrWhiteSpace(search))
+		try
 		{
-			var cacheKey = $"Teachers_All_{CurrentTenant.Id}";
-			var cachedTeachers = await teacherCache.GetAsync(cacheKey);
-			if (cachedTeachers != null)
+			// Try to get from cache if no search filter
+			if (string.IsNullOrWhiteSpace(search))
 			{
-				logger.LogDebug("Returning teachers from cache");
-				return cachedTeachers;
-			}
-		}
-
-		// Get all employees who are teachers
-		// Filter by Teacher role or TeachingStaff employee group
-		var employeesQuery = await employeeRepository.GetQueryableAsync();
-		
-		// Apply teacher filtering - adjust based on your domain requirements:
-		// Option 1: Filter by EmployeeGroup if TeachingStaff is used for teachers
-		// Option 2: Filter by Role if you have a "Teacher" role
-		// For now, filtering by EmployeeGroup.TeachingStaff as it's the most common pattern
-		employeesQuery = employeesQuery.Where(e => 
-			e.EmployeeGroup == EmployeeGroupType.Teaching
-		);
-		
-		var employees = await AsyncExecuter.ToListAsync(employeesQuery);
-
-		// Extract user IDs and query only those users (not all users)
-		var userIds = employees
-			.Where(e => e.UserId.HasValue)
-			.Select(e => e.UserId!.Value)
-			.Distinct()
-			.ToList();
-
-		if (!userIds.Any())
-		{
-			return new List<TeacherInfoDto>();
-		}
-
-		// Query only the required users instead of loading all users
-		var usersQuery = identityUserManager.Users.Where(u => userIds.Contains(u.Id));
-
-		if (!string.IsNullOrWhiteSpace(search))
-		{
-			var searchLower = search.ToLower();
-			usersQuery = usersQuery.Where(u =>
-				u.Name.ToLower().Contains(searchLower) ||
-				u.Surname.ToLower().Contains(searchLower) ||
-				u.UserName.ToLower().Contains(searchLower)
-			);
-		}
-
-		var users = await AsyncExecuter.ToListAsync(usersQuery);
-		
-		// Filter employees to only those with non-null UserId before creating dictionary
-		// This prevents NullReferenceException when employees have null UserId
-		var employeeLookup = employees
-			.Where(e => e.UserId.HasValue)
-			.ToDictionary(e => e.UserId!.Value);
-
-		var result = users
-			.Where(u => employeeLookup.ContainsKey(u.Id))
-			.Select(user => new TeacherInfoDto
-			{
-				TeacherId = employeeLookup[user.Id].Id,
-				TeacherName = $"{user.Name} {user.Surname}".Trim()
-			})
-			.ToList();
-
-		// Cache the result if no search filter (cache for 1 hour)
-		if (string.IsNullOrWhiteSpace(search))
-		{
-			var cacheKey = $"Teachers_All_{CurrentTenant.Id}";
-			await teacherCache.SetAsync(
-				cacheKey,
-				result,
-				new DistributedCacheEntryOptions
+				var cacheKey = $"Teachers_All_{CurrentTenant.Id}";
+				var cachedTeachers = await teacherCache.GetAsync(cacheKey);
+				if (cachedTeachers != null)
 				{
-					AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
+					logger.LogDebug("Returning teachers from cache");
+					return cachedTeachers;
 				}
+			}
+
+			// Get all employees who are teachers
+			// Filter by Teacher role or TeachingStaff employee group
+			var employeesQuery = await employeeRepository.GetQueryableAsync();
+			
+			// Apply teacher filtering - adjust based on your domain requirements:
+			// Option 1: Filter by EmployeeGroup if TeachingStaff is used for teachers
+			// Option 2: Filter by Role if you have a "Teacher" role
+			// For now, filtering by EmployeeGroup.TeachingStaff as it's the most common pattern
+			employeesQuery = employeesQuery.Where(e => 
+				e.EmployeeGroup == EmployeeGroupType.Teaching
+			);
+			
+			var employees = await AsyncExecuter.ToListAsync(employeesQuery);
+
+			// Extract user IDs and query only those users (not all users)
+			var userIds = employees
+				.Where(e => e.UserId.HasValue)
+				.Select(e => e.UserId!.Value)
+				.Distinct()
+				.ToList();
+
+			if (!userIds.Any())
+			{
+				logger.LogWarning("No teachers found with valid user IDs");
+				return new List<TeacherInfoDto>();
+			}
+
+			// Query only the required users instead of loading all users
+			var usersQuery = identityUserManager.Users.Where(u => userIds.Contains(u.Id));
+
+			if (!string.IsNullOrWhiteSpace(search))
+			{
+				var searchLower = search.ToLower();
+				usersQuery = usersQuery.Where(u =>
+					u.Name.ToLower().Contains(searchLower) ||
+					u.Surname.ToLower().Contains(searchLower) ||
+					u.UserName.ToLower().Contains(searchLower)
+				);
+			}
+
+			var users = await AsyncExecuter.ToListAsync(usersQuery);
+			
+			// Filter employees to only those with non-null UserId before creating dictionary
+			// This prevents NullReferenceException when employees have null UserId
+			var employeeLookup = employees
+				.Where(e => e.UserId.HasValue)
+				.ToDictionary(e => e.UserId!.Value);
+
+			var result = users
+				.Where(u => employeeLookup.ContainsKey(u.Id))
+				.Select(user => new TeacherInfoDto
+				{
+					TeacherId = employeeLookup[user.Id].Id,
+					TeacherName = $"{user.Name} {user.Surname}".Trim()
+				})
+				.ToList();
+
+			// Cache the result if no search filter (cache for 1 hour)
+			if (string.IsNullOrWhiteSpace(search))
+			{
+				var cacheKey = $"Teachers_All_{CurrentTenant.Id}";
+				await teacherCache.SetAsync(
+					cacheKey,
+					result,
+					new DistributedCacheEntryOptions
+					{
+						AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
+					}
+				);
+			}
+
+			logger.LogInformation("Successfully retrieved {TeacherCount} teachers", result.Count);
+			return result;
+		}
+		catch (Exception ex)
+		{
+			logger.LogError(ex, "Failed to retrieve teachers list");
+			throw new UserFriendlyException(
+				"Failed to retrieve teachers. Please try again later."
 			);
 		}
-
-		return result;
 	}
 }

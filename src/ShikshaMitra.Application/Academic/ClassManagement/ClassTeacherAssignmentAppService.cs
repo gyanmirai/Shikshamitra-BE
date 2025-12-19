@@ -37,19 +37,24 @@ public class ClassTeacherAssignmentAppService(
 			organizationId
 		);
 
-		// Note: organizationId might map to TenantId or EducationMediumId
-		// Adjust based on your domain model
-		// For now, assuming it's related to the current tenant
-		// ABP automatically filters by current tenant in repositories
+		// Filter standards by EducationMediumStageId (organizationId)
+		var standards = await standardRepository.GetListAsync(s => s.EducationMediumStageId == organizationId);
 
-		// Get all standards
-		var standards = await standardRepository.GetListAsync();
+		// If no standards found for this organization, return empty list
+		if (!standards.Any())
+		{
+			logger.LogWarning("No standards found for organization {OrganizationId}", organizationId);
+			return new List<ClassTeacherRowDto>();
+		}
 
-		// Get all divisions
-		var divisions = await divisionRepository.GetListAsync();
+		// Get standard IDs to filter related data
+		var standardIds = standards.Select(s => s.Id).ToList();
 
-		// Get all class teacher assignments
-		var classTeachers = await classTeacherRepository.GetListAsync();
+		// Get only divisions for the filtered standards
+		var divisions = await divisionRepository.GetListAsync(d => standardIds.Contains(d.StandardId));
+
+		// Get only class teacher assignments for the filtered standards
+		var classTeachers = await classTeacherRepository.GetListAsync(ct => standardIds.Contains(ct.StandardId));
 
 		// Early return if no class teachers
 		if (!classTeachers.Any())

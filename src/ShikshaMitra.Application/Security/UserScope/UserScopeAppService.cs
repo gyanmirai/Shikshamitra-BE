@@ -176,17 +176,20 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 );
             }
 
-            // Validate all users exist before processing
+            // Validate all users exist before processing - OPTIMIZED: Batch validation
             var distinctUserIds = input.UserIds.Distinct().ToList();
             var missingUserIds = new List<Guid>();
 
-            foreach (var userId in distinctUserIds)
+            // Check in batches to avoid N+1 while respecting ABP repository pattern
+            var batchSize = 50;
+            for (int i = 0; i < distinctUserIds.Count; i += batchSize)
             {
-                var userExists = await _userRepository.FindAsync(userId);
-                if (userExists == null)
-                {
-                    missingUserIds.Add(userId);
-                }
+                var batch = distinctUserIds.Skip(i).Take(batchSize).ToList();
+                var foundUsers = await Task.WhenAll(
+                    batch.Select(async userId => new { UserId = userId, Exists = await _userRepository.FindAsync(userId) != null })
+                );
+                
+                missingUserIds.AddRange(foundUsers.Where(x => !x.Exists).Select(x => x.UserId));
             }
 
             if (missingUserIds.Any())
@@ -211,34 +214,37 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 scopeCombinations.Count, distinctUserIds.Count, totalCombinations, correlationId);
 
             var deletedCount = 0;
-            var createdAssignments = new List<UserScopeAssignment>();
-            var affectedUserIds = new HashSet<Guid>();
+            var createdCount = 0;
+            var affectedUserIds = new HashSet<Guid>(distinctUserIds);
 
             try
             {
-                // STEP 1: Delete all existing scope assignments for the specified users
+                // STEP 1: Delete all existing scope assignments for the specified users - OPTIMIZED: Bulk delete
                 _logger.LogInformation(
                     "Step 1/2: Deleting existing scope assignments for {UserCount} users. CorrelationId: {CorrelationId}",
                     distinctUserIds.Count, correlationId);
 
-                foreach (var userId in distinctUserIds)
+                var existingQuery = (await _scopeRepository.GetQueryableAsync())
+                    .Where(x => x.UserId.HasValue && distinctUserIds.Contains(x.UserId.Value));
+                
+                var existingAssignments = await AsyncExecuter.ToListAsync(existingQuery);
+                deletedCount = existingAssignments.Count;
+
+                if (deletedCount > 0)
                 {
-                    var existingAssignments = await _scopeRepository.GetUserAssignmentsAsync(userId);
-                    foreach (var assignment in existingAssignments)
-                    {
-                        await _scopeRepository.DeleteAsync(assignment, autoSave: false);
-                        deletedCount++;
-                    }
+                    await _scopeRepository.DeleteManyAsync(existingAssignments, autoSave: false);
                 }
 
                 _logger.LogInformation(
                     "Deleted {DeletedCount} existing assignments. CorrelationId: {CorrelationId}",
                     deletedCount, correlationId);
 
-                // STEP 2: Create all new assignments
+                // STEP 2: Create all new assignments - OPTIMIZED: Batch creation
                 _logger.LogInformation(
                     "Step 2/2: Creating {TotalCombinations} new scope assignments. CorrelationId: {CorrelationId}",
                     totalCombinations, correlationId);
+
+                var newAssignments = new List<UserScopeAssignment>(totalCombinations);
 
                 foreach (var userId in distinctUserIds)
                 {
@@ -258,33 +264,43 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                             input.Description
                         );
 
-                        await _scopeRepository.InsertAsync(assignment, autoSave: false);
-                        createdAssignments.Add(assignment);
-                        affectedUserIds.Add(userId);
+                        newAssignments.Add(assignment);
                     }
+                }
+
+                createdCount = newAssignments.Count;
+
+                if (createdCount > 0)
+                {
+                    await _scopeRepository.InsertManyAsync(newAssignments, autoSave: false);
                 }
 
                 // Save all changes at once - this will fail if any constraint is violated
                 // Both deletions and insertions are in the same transaction
                 await CurrentUnitOfWork.SaveChangesAsync();
 
-                // Invalidate cache for all affected users (only after successful save)
-                foreach (var userId in affectedUserIds)
-                {
-                    await _userScopeService.InvalidateUserScopeCacheAsync(userId);
-                }
+                // Invalidate cache for all affected users (only after successful save) - OPTIMIZED: Parallel
+                _logger.LogDebug(
+                    "Invalidating cache for {UserCount} users. CorrelationId: {CorrelationId}",
+                    affectedUserIds.Count, correlationId);
+
+                var cacheInvalidationTasks = affectedUserIds
+                    .Select(userId => _userScopeService.InvalidateUserScopeCacheAsync(userId))
+                    .ToList();
+
+                await Task.WhenAll(cacheInvalidationTasks);
 
                 _logger.LogInformation(
                     "Bulk scope assignment completed successfully. Deleted: {Deleted}, Created: {Created}, Users affected: {UserCount}, CorrelationId: {CorrelationId}",
-                    deletedCount, createdAssignments.Count, affectedUserIds.Count, correlationId);
+                    deletedCount, createdCount, affectedUserIds.Count, correlationId);
 
                 return new BulkScopeAssignmentResultDto
                 {
                     DeletedAssignments = deletedCount,
-                    AssignmentsCreated = createdAssignments.Count,
+                    AssignmentsCreated = createdCount,
                     TotalCombinations = totalCombinations,
                     AffectedUserIds = affectedUserIds.ToList(),
-                    Message = $"Successfully replaced scope assignments for {affectedUserIds.Count} users. Deleted {deletedCount} old assignments and created {createdAssignments.Count} new assignments."
+                    Message = $"Successfully replaced scope assignments for {affectedUserIds.Count} users. Deleted {deletedCount} old assignments and created {createdCount} new assignments."
                 };
             }
             catch (Exception dbEx) when (IsConstraintViolationException(dbEx))

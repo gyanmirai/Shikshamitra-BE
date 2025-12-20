@@ -5,6 +5,8 @@ using System.Linq.Dynamic.Core;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Students.Enrollments.Admissions;
+using ShikshaMitra.Students.Enrollments.EntranceExams;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -60,7 +62,7 @@ public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, I
 					join additionalDetail in additionalDetailQueryable
 						on student.Id equals additionalDetail.Id
 					join medium in mediumQueryable
-						on student.EducationMediumId equals medium.Id
+						on student.AcademicMediumId equals medium.Id
 					join standard in standardQueryable
 						on student.StandardId equals standard.Id into standardGroup
 					from standard in standardGroup.DefaultIfEmpty()
@@ -91,7 +93,7 @@ public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, I
 
 		if (input.EducationMediumId.HasValue)
 		{
-			query = query.Where(x => x.student.EducationMediumId == input.EducationMediumId.Value);
+			query = query.Where(x => x.student.AcademicMediumId == input.EducationMediumId.Value);
 		}
 
 		if (input.ExamStatus.HasValue)
@@ -162,7 +164,7 @@ public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, I
 	{
 		var student = await _studentRepository.GetAsync(studentId);
 		var additionalDetail = await _studentAdditionalDetailRepository.GetAsync(studentId);
-		var medium = await _educationMediumRepository.GetAsync(student.EducationMediumId);
+		var medium = await _educationMediumRepository.GetAsync(student.AcademicMediumId);
 		var board = await _educationBoardRepository.GetAsync(medium.EducationBoardId);
 		
 		Standard standard = null;

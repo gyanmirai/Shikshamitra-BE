@@ -94,7 +94,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			studentsQuery.Where(s =>
 				s.DivisionId == filter.DivisionId
 				&& s.StandardId == filter.ClassId
-				&& s.EducationMediumId == academicMediumId
+				&& s.AcademicMediumId == academicMediumId
 				&& s.Status == StudentLifeCycleStatusEnum.Admission
 				&& s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved
 				&& !s.IsDeleted

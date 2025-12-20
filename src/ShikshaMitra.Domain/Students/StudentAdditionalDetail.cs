@@ -10,7 +10,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 	public string? FormNo { get; private set; }
-	public DateTimeOffset? DateOfBirthday { get; private set; }
+	public DateTimeOffset? DateOfBirth { get; private set; }
 	public GenderEnum? Gender { get; private set; }
 	public string? ProfilePictureUrl { get; private set; }
 
@@ -79,7 +79,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		: base(id)
 	{
 		TenantId = tenantId;
-		DateOfBirthday = dateOfBirthday;
+		DateOfBirth = dateOfBirthday;
 		Gender = gender;
 		DateOfInquiry = dateOfInquiry;
 		InquiryNo = inquiryNo;
@@ -96,7 +96,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	DateTimeOffset? dateOfInquiry,
 	Guid? inquiryPreferenceId)
 	{
-		DateOfBirthday = dateOfBirth;
+		DateOfBirth = dateOfBirth;
 		Gender = gender;
 		DateOfInquiry = dateOfInquiry;
 		InquiryPreferenceId = inquiryPreferenceId;
@@ -121,7 +121,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 
         )
 	{
-		DateOfBirthday = dateOfBirth;
+		DateOfBirth = dateOfBirth;
 		Gender = gender;
 		ProfilePictureUrl = profilePictureUrl;
 		AdharNo = adharNo;

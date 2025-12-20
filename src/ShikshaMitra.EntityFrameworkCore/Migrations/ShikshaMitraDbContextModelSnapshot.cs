@@ -458,6 +458,75 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppSubjectTeachers", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.TeacherSubjectAllocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<Guid>("DivisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<Guid>("StandardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SubjectId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DivisionId");
+
+                    b.HasIndex("StandardId");
+
+                    b.HasIndex("SubjectId");
+
+                    b.HasIndex("StandardId", "DivisionId", "SubjectId");
+
+                    b.ToTable("AppTeacherSubjectAllocations", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Academic.Homework.HomeworkAssignmentType", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7271,6 +7340,53 @@ namespace ShikshaMitra.Migrations
                     b.HasOne("ShikshaMitra.Academic.Curriculum.StandardSubjectAssignment", null)
                         .WithMany("Teachers")
                         .HasForeignKey("StandardSubjectAssignmentId");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.TeacherSubjectAllocation", b =>
+                {
+                    b.OwnsMany("ShikshaMitra.Academic.Curriculum.AllocatedTeacher", "Teachers", b1 =>
+                        {
+                            b1.Property<Guid>("TeacherSubjectAllocationId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid>("TeacherId")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("uuid");
+
+                            b1.Property<DateTime>("CreationTime")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<Guid?>("CreatorId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid?>("DeleterId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<DateTime?>("DeletionTime")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<bool>("IsDeleted")
+                                .HasColumnType("boolean");
+
+                            b1.Property<DateTime?>("LastModificationTime")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<Guid?>("LastModifierId")
+                                .HasColumnType("uuid");
+
+                            b1.HasKey("TeacherSubjectAllocationId", "TeacherId");
+
+                            b1.HasIndex("TeacherId");
+
+                            b1.ToTable("AppAllocatedTeachers", (string)null);
+
+                            b1.WithOwner("Allocation")
+                                .HasForeignKey("TeacherSubjectAllocationId");
+
+                            b1.Navigation("Allocation");
+                        });
+
+                    b.Navigation("Teachers");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentDivisionSchedule", b =>

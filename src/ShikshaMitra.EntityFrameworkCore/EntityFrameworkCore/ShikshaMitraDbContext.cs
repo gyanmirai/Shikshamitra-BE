@@ -248,6 +248,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<Subject> Subjects { get; set; }
 	public DbSet<ElectiveGroup> ElectiveGroups { get; set; }
 	public DbSet<StandardSubjectAssignment> StandardSubjectAssignments { get; set; }
+	public DbSet<TeacherSubjectAllocation> TeacherSubjectAllocations { get; set; }
 	#endregion
 
 	#region ClassTeacher
@@ -301,9 +302,11 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 		builder.ConfigureFeatureManagement();
 		builder.ConfigureTenantManagement();
 		
-		// Ignore EmployeeDocument BEFORE ApplyConfigurationsFromAssembly
-		// It's configured as an owned entity in EmployeeConfiguration
+		// Ignore owned entities BEFORE ApplyConfigurationsFromAssembly
+		// EmployeeDocument is configured as an owned entity in EmployeeConfiguration
 		builder.Ignore<EmployeeDocument>();
+		// AllocatedTeacher is configured as an owned entity in TeacherSubjectAllocationConfiguration
+		builder.Ignore<AllocatedTeacher>();
 		
 		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 		builder.ConfigureBlobStoring();

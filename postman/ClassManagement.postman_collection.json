@@ -1,0 +1,653 @@
+{
+	"info": {
+		"_postman_id": "class-management-api-collection",
+		"name": "ShikshaMitra - Class Management",
+		"description": "Comprehensive API collection for Class Management module including:\n- Teacher Assignment (Subject-wise teacher assignments)\n- Class Teacher Assignment (Class teacher assignments)\n- Chapter Progress (Track and update chapter completion)\n- Student Elective Assignment (Assign elective subjects to students)\n- Class Teacher (Legacy class teacher endpoints)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "class-management"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "{{base_url}}",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('access_token', response.access_token);",
+									"    pm.environment.set('token_type', response.token_type);",
+									"    console.log('✅ Token saved to environment');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "grant_type",
+									"value": "password",
+									"type": "text"
+								},
+								{
+									"key": "username",
+									"value": "{{username}}",
+									"type": "text"
+								},
+								{
+									"key": "password",
+									"value": "{{password}}",
+									"type": "text"
+								},
+								{
+									"key": "client_id",
+									"value": "ShikshaMitra_App",
+									"type": "text"
+								},
+								{
+									"key": "scope",
+									"value": "offline_access ShikshaMitra",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/connect/token",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"connect",
+								"token"
+							]
+						},
+						"description": "Login to get access token. Token is automatically saved to environment variable 'access_token'."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Teacher Assignment",
+			"description": "APIs for managing subject-wise teacher assignments to classes and divisions",
+			"item": [
+				{
+					"name": "Get Teacher Assignments for Class",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/teachers/assignments?academicMediumId={{academic_medium_id}}&classId={{class_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"teachers",
+								"assignments"
+							],
+							"query": [
+								{
+									"key": "academicMediumId",
+									"value": "{{academic_medium_id}}",
+									"description": "Academic medium ID (required)"
+								},
+								{
+									"key": "classId",
+									"value": "{{class_id}}",
+									"description": "Class/Standard ID (required)"
+								}
+							]
+						},
+						"description": "Get all teacher assignments for a specific class. Returns assignments grouped by division and subject."
+					},
+					"response": []
+				},
+				{
+					"name": "Save Teacher Assignments for Class",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"academicMediumId\": \"{{academic_medium_id}}\",\n    \"classId\": \"{{class_id}}\",\n    \"assignments\": [\n        {\n            \"divisionId\": \"{{division_id}}\",\n            \"subjectId\": \"{{subject_id}}\",\n            \"teacherIds\": [\n                \"{{teacher_id}}\"\n            ]\n        }\n    ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/teachers/assignments",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"teachers",
+								"assignments"
+							]
+						},
+						"description": "Save or update teacher assignments for a class. Each assignment specifies division, subject, and assigned teachers."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Teachers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/teachers?search={{search}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"teachers"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": "{{search}}",
+									"description": "Optional search term to filter teachers by name",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get list of all teachers. Optionally filter by search term."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Class Teacher Assignment",
+			"description": "APIs for managing class teacher assignments (one teacher per class-division)",
+			"item": [
+				{
+					"name": "Get Class Teacher Assignments",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/class-teachers/assignments?organizationId={{organization_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"class-teachers",
+								"assignments"
+							],
+							"query": [
+								{
+									"key": "organizationId",
+									"value": "{{organization_id}}",
+									"description": "Organization ID (required)"
+								}
+							]
+						},
+						"description": "Get all class teacher assignments for an organization. Returns assignments grouped by class and division."
+					},
+					"response": []
+				},
+				{
+					"name": "Save Class Teacher Assignments",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"organizationId\": \"{{organization_id}}\",\n    \"assignments\": [\n        {\n            \"classId\": \"{{class_id}}\",\n            \"divisionId\": \"{{division_id}}\",\n            \"teacherId\": \"{{teacher_id}}\"\n        }\n    ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/class-teachers/assignments",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"class-teachers",
+								"assignments"
+							]
+						},
+						"description": "Save or update class teacher assignments. Each assignment specifies one teacher per class-division combination."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Chapter Progress",
+			"description": "APIs for tracking and updating chapter completion progress",
+			"item": [
+				{
+					"name": "Get Subjects for Class Division",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/subjects?academicMediumId={{academic_medium_id}}&classId={{class_id}}&divisionId={{division_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"subjects"
+							],
+							"query": [
+								{
+									"key": "academicMediumId",
+									"value": "{{academic_medium_id}}",
+									"description": "Academic medium ID (required)"
+								},
+								{
+									"key": "classId",
+									"value": "{{class_id}}",
+									"description": "Class/Standard ID (required)"
+								},
+								{
+									"key": "divisionId",
+									"value": "{{division_id}}",
+									"description": "Division ID (required)"
+								}
+							]
+						},
+						"description": "Get all subjects for a specific class and division. Returns subjects with their chapter progress information."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Chapter Progress List",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/chapters/progress?academicMediumId={{academic_medium_id}}&classId={{class_id}}&divisionId={{division_id}}&subjectId={{subject_id}}&search={{search}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"chapters",
+								"progress"
+							],
+							"query": [
+								{
+									"key": "academicMediumId",
+									"value": "{{academic_medium_id}}",
+									"description": "Academic medium ID (required)"
+								},
+								{
+									"key": "classId",
+									"value": "{{class_id}}",
+									"description": "Class/Standard ID (required)"
+								},
+								{
+									"key": "divisionId",
+									"value": "{{division_id}}",
+									"description": "Division ID (required)"
+								},
+								{
+									"key": "subjectId",
+									"value": "{{subject_id}}",
+									"description": "Subject ID (required)"
+								},
+								{
+									"key": "search",
+									"value": "{{search}}",
+									"description": "Optional search term to filter chapters",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get paginated list of chapters with their progress for a specific class, division, and subject."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Chapter Progress",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"divisionId\": \"{{division_id}}\",\n    \"progress\": 75,\n    \"description\": \"Chapter completed with exercises\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/chapters/{{chapter_id}}/progress",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"chapters",
+								"{{chapter_id}}",
+								"progress"
+							]
+						},
+						"description": "Update the progress percentage (0-100) for a specific chapter in a division. Progress must be between 0 and 100."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Student Elective Assignment",
+			"description": "APIs for managing elective subject assignments to students",
+			"item": [
+				{
+					"name": "Get Student Elective Assignments",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/electives/assignments?academicMediumId={{academic_medium_id}}&classId={{class_id}}&divisionId={{division_id}}&electiveGroupId={{elective_group_id}}&search={{search}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"electives",
+								"assignments"
+							],
+							"query": [
+								{
+									"key": "academicMediumId",
+									"value": "{{academic_medium_id}}",
+									"description": "Academic medium ID (required)"
+								},
+								{
+									"key": "classId",
+									"value": "{{class_id}}",
+									"description": "Class/Standard ID (required)"
+								},
+								{
+									"key": "divisionId",
+									"value": "{{division_id}}",
+									"description": "Division ID (required)"
+								},
+								{
+									"key": "electiveGroupId",
+									"value": "{{elective_group_id}}",
+									"description": "Elective group ID (required)"
+								},
+								{
+									"key": "search",
+									"value": "{{search}}",
+									"description": "Optional search term to filter students by name or roll number",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get paginated list of students with their elective subject assignments for a specific class, division, and elective group."
+					},
+					"response": []
+				},
+				{
+					"name": "Save Student Elective Assignments",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"academicMediumId\": \"{{academic_medium_id}}\",\n    \"electiveGroupId\": \"{{elective_group_id}}\",\n    \"assignments\": [\n        {\n            \"studentId\": \"{{student_id}}\",\n            \"selectedSubjectId\": \"{{subject_id}}\"\n        }\n    ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/electives/assignments",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"electives",
+								"assignments"
+							]
+						},
+						"description": "Save or update elective subject assignments for students. Each assignment specifies a student and their selected elective subject."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Class Teacher (Legacy)",
+			"description": "Legacy APIs for class teacher management (uses EducationMediumId from headers)",
+			"item": [
+				{
+					"name": "Assign or Update Class Teachers",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "EducationMediumId",
+								"value": "{{academic_medium_id}}",
+								"type": "text",
+								"description": "Required header for legacy endpoints"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "[\n    {\n        \"teacherId\": \"{{teacher_id}}\",\n        \"classId\": \"{{class_id}}\",\n        \"divisionId\": \"{{division_id}}\"\n    }\n]",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/class-teacher/assign",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"class-teacher",
+								"assign"
+							]
+						},
+						"description": "Assign or update class teachers. Requires EducationMediumId header. Accepts array of assignments."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Class Teachers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "__tenant",
+								"value": "{{tenant_id}}",
+								"type": "text"
+							},
+							{
+								"key": "EducationMediumId",
+								"value": "{{academic_medium_id}}",
+								"type": "text",
+								"description": "Required header for legacy endpoints"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/class-teacher/all",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"class-teacher",
+								"all"
+							]
+						},
+						"description": "Get all class teacher assignments. Requires EducationMediumId header."
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
+

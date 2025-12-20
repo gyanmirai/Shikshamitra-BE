@@ -2,4 +2,5 @@
 public class StudentRegistrationDto : StudentRegistrationFormDto
 {
 	public double Progress { get; set; } = 0;
+
 }

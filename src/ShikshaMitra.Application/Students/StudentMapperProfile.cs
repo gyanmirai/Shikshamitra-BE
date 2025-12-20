@@ -80,6 +80,7 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.City, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.City : null))
 			.ForMember(dest => dest.State, opt => opt.MapFrom(src => src.ContactDetail != null && src.ContactDetail.State != null ? src.ContactDetail.State : null))
 			.ForMember(dest => dest.Country, opt => opt.MapFrom(src => src.ContactDetail != null && src.ContactDetail.Country != null ? src.ContactDetail.Country : null))
+			.ForMember(dest => dest.PinCode, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.Pincode : null))
 			.ForMember(dest => dest.Address, opt => opt.MapFrom(src =>
 				src.ContactDetail == null ? null : string.Join(", ", new[]
 				{

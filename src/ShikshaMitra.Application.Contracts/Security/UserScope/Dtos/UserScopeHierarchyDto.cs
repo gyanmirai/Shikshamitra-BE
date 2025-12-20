@@ -33,13 +33,9 @@ public class UserScopeHierarchyDto
     /// <summary>
     /// Fully resolved hierarchy of accessible academic years, boards, mediums, etc.
     /// Each level explicitly shows what is accessible.
+    /// When HasFullAccess is true at any level, nested collections will be empty for performance optimization.
     /// </summary>
     public List<AcademicYearScopeNode> AccessibleHierarchy { get; set; } = new();
-
-    /// <summary>
-    /// Summary statistics for quick UI display.
-    /// </summary>
-    public ScopeSummaryDto Summary { get; set; } = new();
 
     /// <summary>
     /// Whether the scope was loaded from cache.
@@ -186,22 +182,4 @@ public class DivisionScopeNode
     /// Optional: Room number for additional context.
     /// </summary>
     public string? RoomNumber { get; set; }
-}
-
-/// <summary>
-/// Summary statistics for the user's scope.
-/// </summary>
-public class ScopeSummaryDto
-{
-    public int TotalAccessibleBoards { get; set; }
-    public int TotalAccessibleMediums { get; set; }
-    public int TotalAccessibleMediumStages { get; set; }
-    public int TotalAccessibleStandards { get; set; }
-    public int TotalAccessibleDivisions { get; set; }
-
-    /// <summary>
-    /// Human-readable description of the scope level.
-    /// Examples: "Full Access", "Board Level", "Multiple Standards", "Single Division"
-    /// </summary>
-    public string ScopeLevel { get; set; } = string.Empty;
 }

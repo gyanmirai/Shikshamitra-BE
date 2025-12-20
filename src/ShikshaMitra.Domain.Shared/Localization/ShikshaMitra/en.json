@@ -142,6 +142,27 @@
     "ShikshaMitra.Assignment:StatusUpdatedSuccessfully": "Status updated successfully",
     "ShikshaMitra.Assignment:NotFound": "Assignment not found",
     "ShikshaMitra.Assignment:NotAssignedToDivision": "Assignment not assigned to this division",
-    "ShikshaMitra.Assignment:StudentNotInAssignedDivision": "Student is not in any division assigned to this assignment"
+    "ShikshaMitra.Assignment:StudentNotInAssignedDivision": "Student is not in any division assigned to this assignment",
+
+    "ShikshaMitra.Student:AcademicMediumNotFound": "Academic Medium not found with ID: {academicMediumId}",
+    "ShikshaMitra.Student:InvalidStudentStatus": "Student must be in {expectedStatus} status. Current status: {currentStatus}",
+    "ShikshaMitra.Student:InvalidStudentStatusForGeneralInfo": "Student must be in RegistrationFormIssued or Registration status to update general information. Current status: {currentStatus}",
+    "ShikshaMitra.Student:InvalidStudentStatusForFamilyInfo": "Student must be in Registration or Registration Form Issued status to view family information. Current status: {currentStatus}",
+    "ShikshaMitra.Student:InvalidStudentStatusForFamilyUpdate": "Student must be in Registration or Registration Form Issued status to update family information. Current status: {currentStatus}",
+    "ShikshaMitra.Student:InvalidStudentStatusForCommunicationInfo": "Student must be in Registration or Registration Form Issued status to view communication information. Current status: {currentStatus}",
+    "ShikshaMitra.Student:InvalidStudentStatusForCommunicationUpdate": "Student must be in Registration or Registration Form Issued status to update communication information. Current status: {currentStatus}",
+    "ShikshaMitra.Student:InvalidStudentStatusForAdditionalDetails": "Student must be in Registration or Registration Form Issued status to view additional details. Current status: {currentStatus}",
+    "ShikshaMitra.Student:InvalidStudentStatusForAdditionalDetailsUpdate": "Student must be in Registration or Registration Form Issued status to update additional details. Current status: {currentStatus}",
+    "ShikshaMitra.Student:InvalidStudentStatusForMedicalRecords": "Student must be in Registration or Registration Form Issued status to view medical records. Current status: {currentStatus}",
+    "ShikshaMitra.Student:InvalidStudentStatusForMedicalRecordsUpdate": "Student must be in Registration or Registration Form Issued status to update medical records. Current status: {currentStatus}",
+    "ShikshaMitra.Student:InvalidStudentStatusForPreviousSchool": "Student must be in Registration or Registration Form Issued status to view previous school details. Current status: {currentStatus}",
+    "ShikshaMitra.Student:InvalidStudentStatusForPreviousSchoolUpdate": "Student must be in Registration or Registration Form Issued status to update previous school details. Current status: {currentStatus}",
+    "ShikshaMitra.Student:InvalidStudentStatusForBankDetails": "Student must be in Registration or Registration Form Issued status to view bank details. Current status: {currentStatus}",
+    "ShikshaMitra.Student:InvalidStudentStatusForBankDetailsUpdate": "Student must be in Registration or Registration Form Issued status to update bank details. Current status: {currentStatus}",
+    "ShikshaMitra.Student:InvalidSiblingStudent": "Sibling student with ID {siblingId} not found",
+    "ShikshaMitra.Student:MissingAdditionalDetail": "Student additional detail not found. Please complete the general information step first.",
+    "ShikshaMitra.Student:InvalidStatusForRegistrationView": "Student must be in Registration or RegistrationFormIssued status. Current status: {currentStatus}",
+    "ShikshaMitra.Student:InvalidStatusForRegistrationFormView": "Student must be in RegistrationFormIssued status to view registration form. Current status: {currentStatus}",
+    "ShikshaMitra.Student:InvalidStatusForRegistrationListView": "Student must be in Registration status to view registration. Current status: {currentStatus}"
   }
 }

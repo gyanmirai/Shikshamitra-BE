@@ -13,6 +13,11 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
+/// <summary>
+/// Application service for student registration operations.
+/// Follows DDD principles by delegating business logic to domain services and entities,
+/// while orchestrating the flow and data transformations.
+/// </summary>
 [RemoteService(false)]
 public class StudentRegistrationAppService(
 	IRepository<Student, Guid> studentRepository,
@@ -25,16 +30,30 @@ public class StudentRegistrationAppService(
 	IRepository<EducationMedium, Guid> academicMediumRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
+	EntityValidationService validationService,
 	StudentEnrollmentDtoEnricher dtoEnricher
 ) : ApplicationService, IStudentRegistrationAppService
 {
+	// Valid statuses for registration operations
+	private static readonly StudentLifeCycleStatusEnum[] RegistrationStatuses =
+	[
+		StudentLifeCycleStatusEnum.RegistrationFormIssued,
+		StudentLifeCycleStatusEnum.Registation
+	];
+
+	private static readonly StudentLifeCycleStatusEnum[] GeneralInfoUpdateStatuses =
+	[
+		StudentLifeCycleStatusEnum.RegistrationFormIssued,
+		StudentLifeCycleStatusEnum.Registation
+	];
 	public async Task<PagedResultDto<StudentRegistrationFormDto>> GetRegistrationFormsByMediumAsync(
 		Guid academicMediumId, 
 		int skipCount = 0, 
 		int maxResultCount = 10, 
 		string? searchTerm = null)
 	{
-		await CheckAcademicMediumExistsAsync(academicMediumId);
+		// Validate academic medium exists using domain service
+		await validationService.ValidateAcademicMediumExistsAsync(academicMediumId);
 
 		// Get queryable with aggregate parts auto-included
 		var queryable = await studentRepository.GetQueryableAsync();
@@ -44,19 +63,8 @@ public class StudentRegistrationAppService(
 				&& s.EducationMediumId == academicMediumId
 				&& s.TenantId == CurrentTenant.Id);
 
-		// Implement search functionality
-		if (!string.IsNullOrWhiteSpace(searchTerm))
-		{
-			var normalizedSearchTerm = searchTerm.Trim().ToLower();
-			query = query.Where(x =>
-				(x.FirstName != null && x.FirstName.ToLower().Contains(normalizedSearchTerm)) ||
-				(x.LastName != null && x.LastName.ToLower().Contains(normalizedSearchTerm)) ||
-				(x.AdditionalDetail != null && x.AdditionalDetail.RegistrationFormNo != null && x.AdditionalDetail.RegistrationFormNo.ToLower().Contains(normalizedSearchTerm)) ||
-				(x.AdditionalDetail != null && x.AdditionalDetail.InquiryNo != null && x.AdditionalDetail.InquiryNo.ToLower().Contains(normalizedSearchTerm)) ||
-				(x.ContactDetail != null && x.ContactDetail.PrimaryContactNo != null && x.ContactDetail.PrimaryContactNo.Contains(normalizedSearchTerm)) ||
-				(x.ContactDetail != null && x.ContactDetail.Email != null && x.ContactDetail.Email.ToLower().Contains(normalizedSearchTerm))
-			);
-		}
+		// Apply search filter if provided
+		query = ApplySearchFilter(query, searchTerm);
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		
@@ -85,7 +93,8 @@ public class StudentRegistrationAppService(
 		int maxResultCount = 10, 
 		string? searchTerm = null)
 	{
-		await CheckAcademicMediumExistsAsync(academicMediumId);
+		// Validate academic medium exists using domain service
+		await validationService.ValidateAcademicMediumExistsAsync(academicMediumId);
 
 		// Get queryable with aggregate parts auto-included
 		var queryable = await studentRepository.GetQueryableAsync();
@@ -95,19 +104,8 @@ public class StudentRegistrationAppService(
 				&& s.EducationMediumId == academicMediumId
 				&& s.TenantId == CurrentTenant.Id);
 
-		// Implement search functionality
-		if (!string.IsNullOrWhiteSpace(searchTerm))
-		{
-			var normalizedSearchTerm = searchTerm.Trim().ToLower();
-			query = query.Where(x =>
-				(x.FirstName != null && x.FirstName.ToLower().Contains(normalizedSearchTerm)) ||
-				(x.LastName != null && x.LastName.ToLower().Contains(normalizedSearchTerm)) ||
-				(x.AdditionalDetail != null && x.AdditionalDetail.RegistrationFormNo != null && x.AdditionalDetail.RegistrationFormNo.ToLower().Contains(normalizedSearchTerm)) ||
-				(x.AdditionalDetail != null && x.AdditionalDetail.InquiryNo != null && x.AdditionalDetail.InquiryNo.ToLower().Contains(normalizedSearchTerm)) ||
-				(x.ContactDetail != null && x.ContactDetail.PrimaryContactNo != null && x.ContactDetail.PrimaryContactNo.Contains(normalizedSearchTerm)) ||
-				(x.ContactDetail != null && x.ContactDetail.Email != null && x.ContactDetail.Email.ToLower().Contains(normalizedSearchTerm))
-			);
-		}
+		// Apply search filter if provided
+		query = ApplySearchFilter(query, searchTerm);
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		
@@ -135,14 +133,11 @@ public class StudentRegistrationAppService(
 		// Load the student aggregate
 		var student = await studentRepository.GetAsync(studentId);
 
-		// Validate student is in Registration status
-		if (student.Status != StudentLifeCycleStatusEnum.Registation)
-		{
-			throw new BusinessException(
-				"ShikshaMitra:InvalidStudentStatus",
-				$"Student must be in Registration status. Current status: {student.Status}"
-			);
-		}
+		// Validate student status using domain service
+		validationService.ValidateStudentStatus(
+			student,
+			RegistrationStatuses,
+			StudentRegistrationErrorCodes.InvalidStatusForRegistrationView);
 
 		// Map to DTO
 		var result = ObjectMapper.Map<Student, StudentRegistrationDto>(student);
@@ -158,16 +153,11 @@ public class StudentRegistrationAppService(
 		// Load the student aggregate with all parts
 		var student = await studentRepository.GetAsync(studentId);
 
-		// Validate student is in a valid status to move to Registration
-		// Allow from RegistrationFormIssued OR if already in Registration (for updates)
-		if (student.Status != StudentLifeCycleStatusEnum.RegistrationFormIssued && 
-		    student.Status != StudentLifeCycleStatusEnum.Registation)
-		{
-			throw new BusinessException(
-				"ShikshaMitra:InvalidStudentStatus",
-				$"Student must be in RegistrationFormIssued or Registration status to update general information. Current status: {student.Status}"
-			);
-		}
+		// Validate student status using domain service
+		validationService.ValidateStudentStatus(
+			student,
+			GeneralInfoUpdateStatuses,
+			StudentRegistrationErrorCodes.InvalidStudentStatusForGeneralInfo);
 
 		// Update the student's general information (root entity)
 		student.UpdateGeneralInformation(
@@ -239,8 +229,8 @@ public class StudentRegistrationAppService(
 
 	public async Task<UpdateGeneralInfoOutputDto> CreateDirectRegistrationAsync(CreateDirectRegistrationDto input)
 	{
-		// Validate academic medium exists
-		await CheckAcademicMediumExistsAsync(input.EducationMediumId);
+		// Validate academic medium exists using domain service
+		await validationService.ValidateAcademicMediumExistsAsync(input.EducationMediumId);
 
 		// Create a new student directly in Registration status
 		var studentId = GuidGenerator.Create();
@@ -313,14 +303,11 @@ public class StudentRegistrationAppService(
 		// Load the student aggregate
 		var student = await studentRepository.GetAsync(studentId);
 
-		// Validate student is in a valid status
-		if (student.Status != StudentLifeCycleStatusEnum.Registation)
-		{
-			throw new BusinessException(
-				"ShikshaMitra:InvalidStudentStatus",
-				$"Student must be in Registration status to view family information. Current status: {student.Status}"
-			);
-		}
+		// Validate student status using domain service
+		validationService.ValidateStudentStatus(
+			student,
+			RegistrationStatuses,
+			StudentRegistrationErrorCodes.InvalidStudentStatusForFamilyInfo);
 
 		// Load family detail if exists
 		var familyDetail = await studentFamilyDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
@@ -380,29 +367,14 @@ public class StudentRegistrationAppService(
 		// Load the student aggregate
 		var student = await studentRepository.GetAsync(studentId);
 
-		// Validate student is in a valid status
-		if (student.Status != StudentLifeCycleStatusEnum.Registation)
-		{
-			throw new BusinessException(
-				"ShikshaMitra:InvalidStudentStatus",
-				$"Student must be in Registration status to update family information. Current status: {student.Status}"
-			);
-		}
+		// Validate student status using domain service
+		validationService.ValidateStudentStatus(
+			student,
+			RegistrationStatuses,
+			StudentRegistrationErrorCodes.InvalidStudentStatusForFamilyUpdate);
 
-		// Validate sibling student IDs exist if provided
-		if (input.SiblingStudentIds != null && input.SiblingStudentIds.Any())
-		{
-			foreach (var siblingId in input.SiblingStudentIds)
-			{
-				if (!await studentRepository.AnyAsync(x => x.Id == siblingId))
-				{
-					throw new BusinessException(
-						"ShikshaMitra:InvalidSiblingStudent",
-						$"Sibling student with ID {siblingId} not found"
-					);
-				}
-			}
-		}
+		// Validate sibling students exist using domain service
+		await validationService.ValidateSiblingStudentsExistAsync(input.SiblingStudentIds);
 
 		// Load or create family detail
 		var familyDetail = await studentFamilyDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
@@ -521,14 +493,11 @@ public class StudentRegistrationAppService(
 		// Load the student aggregate
 		var student = await studentRepository.GetAsync(studentId);
 
-		// Validate student is in a valid status
-		if (student.Status != StudentLifeCycleStatusEnum.Registation)
-		{
-			throw new BusinessException(
-				"ShikshaMitra:InvalidStudentStatus",
-				$"Student must be in Registration status to view communication information. Current status: {student.Status}"
-			);
-		}
+		// Validate student status using domain service
+		validationService.ValidateStudentStatus(
+			student,
+			RegistrationStatuses,
+			StudentRegistrationErrorCodes.InvalidStudentStatusForCommunicationInfo);
 
 		// Load communication detail if exists
 		var communicationDetail = await studentCommunicationDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
@@ -555,14 +524,11 @@ public class StudentRegistrationAppService(
 		// Load the student aggregate
 		var student = await studentRepository.GetAsync(studentId);
 
-		// Validate student is in a valid status
-		if (student.Status != StudentLifeCycleStatusEnum.Registation)
-		{
-			throw new BusinessException(
-				"ShikshaMitra:InvalidStudentStatus",
-				$"Student must be in Registration status to update communication information. Current status: {student.Status}"
-			);
-		}
+		// Validate student status using domain service
+		validationService.ValidateStudentStatus(
+			student,
+			RegistrationStatuses,
+			StudentRegistrationErrorCodes.InvalidStudentStatusForCommunicationUpdate);
 
 		// Load or create communication detail
 		var communicationDetail = await studentCommunicationDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
@@ -618,14 +584,11 @@ public class StudentRegistrationAppService(
 		// Load the student aggregate
 		var student = await studentRepository.GetAsync(studentId);
 
-		// Validate student is in a valid status
-		if (student.Status != StudentLifeCycleStatusEnum.Registation)
-		{
-			throw new BusinessException(
-				"ShikshaMitra:InvalidStudentStatus",
-				$"Student must be in Registration status to view additional details. Current status: {student.Status}"
-			);
-		}
+		// Validate student status using domain service
+		validationService.ValidateStudentStatus(
+			student,
+			RegistrationStatuses,
+			StudentRegistrationErrorCodes.InvalidStudentStatusForAdditionalDetails);
 
 		// Load additional detail (it should exist from general info step)
 		var additionalDetail = student.AdditionalDetail;
@@ -653,23 +616,14 @@ public class StudentRegistrationAppService(
 		// Load the student aggregate
 		var student = await studentRepository.GetAsync(studentId);
 
-		// Validate student is in a valid status
-		if (student.Status != StudentLifeCycleStatusEnum.Registation)
-		{
-			throw new BusinessException(
-				"ShikshaMitra:InvalidStudentStatus",
-				$"Student must be in Registration status to update additional details. Current status: {student.Status}"
-			);
-		}
+		// Validate student status using domain service
+		validationService.ValidateStudentStatus(
+			student,
+			RegistrationStatuses,
+			StudentRegistrationErrorCodes.InvalidStudentStatusForAdditionalDetailsUpdate);
 
-		// Guard against null AdditionalDetail - fail fast with clear business error
-		if (student.AdditionalDetail == null)
-		{
-			throw new BusinessException(
-				"ShikshaMitra:MissingAdditionalDetail",
-				"Student additional detail not found. Please complete the general information step first."
-			);
-		}
+		// Validate additional detail exists using domain service
+		validationService.ValidateAdditionalDetailExists(student);
 
 		// Update additional details using domain method (proper DDD encapsulation)
 		student.AdditionalDetail.UpdateAdditionalDetails(
@@ -697,14 +651,11 @@ public class StudentRegistrationAppService(
 		// Load the student aggregate
 		var student = await studentRepository.GetAsync(studentId);
 
-		// Validate student is in a valid status
-		if (student.Status != StudentLifeCycleStatusEnum.Registation)
-		{
-			throw new BusinessException(
-				"ShikshaMitra:InvalidStudentStatus",
-				$"Student must be in Registration status to view medical records. Current status: {student.Status}"
-			);
-		}
+		// Validate student status using domain service
+		validationService.ValidateStudentStatus(
+			student,
+			RegistrationStatuses,
+			StudentRegistrationErrorCodes.InvalidStudentStatusForMedicalRecords);
 
 		// Load medical record if exists
 		var medicalRecord = await studentMedicalRecordRepository.FirstOrDefaultAsync(x => x.Id == studentId);
@@ -735,14 +686,11 @@ public class StudentRegistrationAppService(
 		// Load the student aggregate
 		var student = await studentRepository.GetAsync(studentId);
 
-		// Validate student is in a valid status
-		if (student.Status != StudentLifeCycleStatusEnum.Registation)
-		{
-			throw new BusinessException(
-				"ShikshaMitra:InvalidStudentStatus",
-				$"Student must be in Registration status to update medical records. Current status: {student.Status}"
-			);
-		}
+		// Validate student status using domain service
+		validationService.ValidateStudentStatus(
+			student,
+			RegistrationStatuses,
+			StudentRegistrationErrorCodes.InvalidStudentStatusForMedicalRecordsUpdate);
 
 		// Load or create medical record
 		var medicalRecord = await studentMedicalRecordRepository.FirstOrDefaultAsync(x => x.Id == studentId);
@@ -796,14 +744,11 @@ public class StudentRegistrationAppService(
 		// Load the student aggregate
 		var student = await studentRepository.GetAsync(studentId);
 
-		// Validate student is in a valid status
-		if (student.Status != StudentLifeCycleStatusEnum.Registation)
-		{
-			throw new BusinessException(
-				"ShikshaMitra:InvalidStudentStatus",
-				$"Student must be in Registration status to view previous school details. Current status: {student.Status}"
-			);
-		}
+		// Validate student status using domain service
+		validationService.ValidateStudentStatus(
+			student,
+			RegistrationStatuses,
+			StudentRegistrationErrorCodes.InvalidStudentStatusForPreviousSchool);
 
 		// Load previous school detail if exists
 		var previousSchoolDetail = await studentPreviousSchoolDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
@@ -833,14 +778,11 @@ public class StudentRegistrationAppService(
 		// Load the student aggregate
 		var student = await studentRepository.GetAsync(studentId);
 
-		// Validate student is in a valid status
-		if (student.Status != StudentLifeCycleStatusEnum.Registation)
-		{
-			throw new BusinessException(
-				"ShikshaMitra:InvalidStudentStatus",
-				$"Student must be in Registration status to update previous school details. Current status: {student.Status}"
-			);
-		}
+		// Validate student status using domain service
+		validationService.ValidateStudentStatus(
+			student,
+			RegistrationStatuses,
+			StudentRegistrationErrorCodes.InvalidStudentStatusForPreviousSchoolUpdate);
 
 		// Load or create previous school detail
 		var previousSchoolDetail = await studentPreviousSchoolDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
@@ -893,14 +835,11 @@ public class StudentRegistrationAppService(
 		// Load the student aggregate
 		var student = await studentRepository.GetAsync(studentId);
 
-		// Validate student is in a valid status
-		if (student.Status != StudentLifeCycleStatusEnum.Registation)
-		{
-			throw new BusinessException(
-				"ShikshaMitra:InvalidStudentStatus",
-				$"Student must be in Registration status to view bank details. Current status: {student.Status}"
-			);
-		}
+		// Validate student status using domain service
+		validationService.ValidateStudentStatus(
+			student,
+			RegistrationStatuses,
+			StudentRegistrationErrorCodes.InvalidStudentStatusForBankDetails);
 
 		// Load bank detail if exists
 		var bankDetail = await studentBankDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
@@ -928,14 +867,11 @@ public class StudentRegistrationAppService(
 		// Load the student aggregate
 		var student = await studentRepository.GetAsync(studentId);
 
-		// Validate student is in a valid status
-		if (student.Status != StudentLifeCycleStatusEnum.Registation)
-		{
-			throw new BusinessException(
-				"ShikshaMitra:InvalidStudentStatus",
-				$"Student must be in Registration status to update bank details. Current status: {student.Status}"
-			);
-		}
+		// Validate student status using domain service
+		validationService.ValidateStudentStatus(
+			student,
+			RegistrationStatuses,
+			StudentRegistrationErrorCodes.InvalidStudentStatusForBankDetailsUpdate);
 
 		// Load or create bank detail
 		var bankDetail = await studentBankDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
@@ -981,11 +917,32 @@ public class StudentRegistrationAppService(
 		return await GetBankDetailsAsync(studentId);
 	}
 
-	private async Task CheckAcademicMediumExistsAsync(Guid academicMediumId)
+	#region Private Helper Methods
+
+	/// <summary>
+	/// Applies search filter to student query.
+	/// Searches across name, form number, inquiry number, contact, and email fields.
+	/// </summary>
+	private static IQueryable<Student> ApplySearchFilter(IQueryable<Student> query, string? searchTerm)
 	{
-		if (!await academicMediumRepository.AnyAsync(x => x.Id == academicMediumId))
+		if (string.IsNullOrWhiteSpace(searchTerm))
 		{
-			throw new BusinessException("", L["Academic Medium Not Found"]);
+			return query;
 		}
+
+		var normalizedSearchTerm = searchTerm.Trim().ToLower();
+		return query.Where(x =>
+			(x.FirstName != null && x.FirstName.ToLower().Contains(normalizedSearchTerm)) ||
+			(x.LastName != null && x.LastName.ToLower().Contains(normalizedSearchTerm)) ||
+			(x.AdditionalDetail != null && x.AdditionalDetail.RegistrationFormNo != null &&
+			 x.AdditionalDetail.RegistrationFormNo.ToLower().Contains(normalizedSearchTerm)) ||
+			(x.AdditionalDetail != null && x.AdditionalDetail.InquiryNo != null &&
+			 x.AdditionalDetail.InquiryNo.ToLower().Contains(normalizedSearchTerm)) ||
+			(x.ContactDetail != null && x.ContactDetail.PrimaryContactNo != null &&
+			 x.ContactDetail.PrimaryContactNo.Contains(normalizedSearchTerm)) ||
+			(x.ContactDetail != null && x.ContactDetail.Email != null &&
+			 x.ContactDetail.Email.ToLower().Contains(normalizedSearchTerm)));
 	}
+
+	#endregion
 }

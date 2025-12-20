@@ -30,7 +30,7 @@ public class StudentInquiryDto : EntityDto
 	public string? City { get; private set; }
 	public Country? Country { get; set; }
 	public State? State { get; set; }
-	public string? Pincode { get; set; }
+	public string? PinCode { get; set; }
 	public string? PrimaryContactNo { get; set; }
 	public string? SecondaryContactNo { get; set; }
 	public string? Email { get; set; }

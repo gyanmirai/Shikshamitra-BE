@@ -5,6 +5,11 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Security.Permissions;
+using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.TenantSettings.Divisions;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
@@ -24,19 +29,37 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
     private readonly IIdentityUserRepository _userRepository;
     private readonly IRepository<UserScopeAssignment, Guid> _repository;
     private readonly ILogger<UserScopeAppService> _logger;
+    private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
+    private readonly IRepository<EducationBoard, Guid> _educationBoardRepository;
+    private readonly IRepository<EducationMedium, Guid> _educationMediumRepository;
+    private readonly IRepository<EducationMediumStage, Guid> _educationMediumStageRepository;
+    private readonly IRepository<Standard, Guid> _standardRepository;
+    private readonly IRepository<Division, Guid> _divisionRepository;
 
     public UserScopeAppService(
         IUserScopeAssignmentRepository scopeRepository,
         IUserScopeService userScopeService,
         IIdentityUserRepository userRepository,
         IRepository<UserScopeAssignment, Guid> repository,
-        ILogger<UserScopeAppService> logger)
+        ILogger<UserScopeAppService> logger,
+        IRepository<AcademicYear, Guid> academicYearRepository,
+        IRepository<EducationBoard, Guid> educationBoardRepository,
+        IRepository<EducationMedium, Guid> educationMediumRepository,
+        IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
+        IRepository<Standard, Guid> standardRepository,
+        IRepository<Division, Guid> divisionRepository)
     {
         _scopeRepository = scopeRepository;
         _userScopeService = userScopeService;
         _userRepository = userRepository;
         _repository = repository;
         _logger = logger;
+        _academicYearRepository = academicYearRepository;
+        _educationBoardRepository = educationBoardRepository;
+        _educationMediumRepository = educationMediumRepository;
+        _educationMediumStageRepository = educationMediumStageRepository;
+        _standardRepository = standardRepository;
+        _divisionRepository = divisionRepository;
     }
 
     [Authorize(ShikshaMitraPermissions.UserScope.Assign)]
@@ -522,6 +545,395 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 code: "UserScope:GetScopeFailed"
             );
         }
+    }
+
+    [Authorize(ShikshaMitraPermissions.UserScope.View)]
+    public async Task<UserScopeHierarchyDto> GetUserScopeHierarchyAsync(Guid userId, Guid? academicYearId = null)
+    {
+        try
+        {
+            _logger.LogDebug("Getting hierarchical scope information for user {UserId}, AcademicYear filter: {AcademicYearId}", 
+                userId, academicYearId?.ToString() ?? "All");
+
+            // Get user info - throw 404 if user doesn't exist
+            var user = await _userRepository.FindAsync(userId);
+            if (user == null)
+            {
+                _logger.LogWarning("User {UserId} not found when retrieving hierarchical scope", userId);
+                throw new EntityNotFoundException(typeof(IdentityUser), userId);
+            }
+
+            // Validate academic year exists if provided
+            if (academicYearId.HasValue)
+            {
+                var yearExists = await _academicYearRepository.FindAsync(academicYearId.Value);
+                if (yearExists == null)
+                {
+                    throw new UserFriendlyException(
+                        $"Academic year with ID '{academicYearId.Value}' does not exist.",
+                        code: "UserScope:AcademicYearNotFound"
+                    );
+                }
+            }
+
+            // Get user's scope context
+            var scopeContext = await _userScopeService.GetUserScopeAsync(userId);
+
+            // Get all assignments
+            var assignments = await _scopeRepository.GetUserAssignmentsAsync(userId);
+
+            _logger.LogDebug(
+                "Building hierarchy for user {UserId}. IsAdmin: {IsAdmin}, AssignmentCount: {Count}, YearFilter: {YearFilter}",
+                userId, scopeContext.IsAdmin, assignments.Count, academicYearId.HasValue ? "Yes" : "No");
+
+            // Build the hierarchy (with optional year filter)
+            var hierarchy = await BuildHierarchyAsync(scopeContext, assignments, academicYearId);
+
+            // Calculate summary
+            var summary = CalculateSummary(hierarchy, scopeContext.IsAdmin);
+
+            var result = new UserScopeHierarchyDto
+            {
+                UserId = userId,
+                UserName = user.UserName ?? string.Empty,
+                Email = user.Email,
+                IsAdmin = scopeContext.IsAdmin,
+                AccessibleHierarchy = hierarchy,
+                Summary = summary,
+                FromCache = scopeContext.FromCache,
+                GeneratedAt = DateTime.UtcNow
+            };
+
+            _logger.LogDebug(
+                "Generated hierarchy for user {UserId}. Total accessible: Boards={Boards}, Mediums={Mediums}, Standards={Standards}, Divisions={Divisions}",
+                userId, summary.TotalAccessibleBoards, summary.TotalAccessibleMediums, 
+                summary.TotalAccessibleStandards, summary.TotalAccessibleDivisions);
+
+            return result;
+        }
+        catch (EntityNotFoundException)
+        {
+            throw;
+        }
+        catch (UserFriendlyException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var correlationId = Guid.NewGuid();
+            _logger.LogError(ex, "Error getting hierarchical scope for user {UserId}, CorrelationId: {CorrelationId}", userId, correlationId);
+            throw new UserFriendlyException(
+                $"An error occurred while retrieving user scope hierarchy. Please contact support with reference: {correlationId}",
+                code: "UserScope:GetHierarchyFailed"
+            );
+        }
+    }
+
+    /// <summary>
+    /// Builds the complete hierarchical structure with access indicators.
+    /// </summary>
+    /// <param name="academicYearId">Optional: Filter to specific academic year</param>
+    private async Task<List<AcademicYearScopeNode>> BuildHierarchyAsync(
+        UserScopeContext scopeContext,
+        List<UserScopeAssignment> assignments,
+        Guid? academicYearId = null)
+    {
+        // If admin, user has access to everything
+        var isAdmin = scopeContext.IsAdmin;
+
+        // Extract accessible IDs from scope context
+        var accessibleBoardIds = new HashSet<Guid>(scopeContext.BoardIds ?? new List<Guid>());
+        var accessibleMediumIds = new HashSet<Guid>(scopeContext.MediumIds ?? new List<Guid>());
+        var accessibleMediumStageIds = new HashSet<Guid>(scopeContext.MediumStageIds ?? new List<Guid>());
+        var accessibleStandardIds = new HashSet<Guid>(scopeContext.StandardIds ?? new List<Guid>());
+        var accessibleDivisionIds = new HashSet<Guid>(scopeContext.DivisionIds ?? new List<Guid>());
+
+        // Analyze assignments to determine "full access" at each level
+        var fullAccessAnalysis = AnalyzeFullAccessLevels(assignments);
+
+        // Load academic years for the tenant (with optional filter)
+        var academicYearsQuery = await _academicYearRepository.GetQueryableAsync();
+        
+        if (academicYearId.HasValue)
+        {
+            // Filter to specific academic year
+            academicYearsQuery = academicYearsQuery.Where(ay => ay.Id == academicYearId.Value);
+        }
+        
+        var academicYears = await AsyncExecuter.ToListAsync(academicYearsQuery);
+
+        var hierarchy = new List<AcademicYearScopeNode>();
+
+        foreach (var academicYear in academicYears.OrderByDescending(ay => ay.StartDate))
+        {
+            var yearNode = new AcademicYearScopeNode
+            {
+                AcademicYearId = academicYear.Id,
+                AcademicYearName = academicYear.Name
+            };
+
+            // Load all boards for this academic year
+            var boards = await AsyncExecuter.ToListAsync(
+                (await _educationBoardRepository.GetQueryableAsync())
+                .Where(b => b.AcademicYearId == academicYear.Id));
+
+            // Check if user has full board access for this academic year
+            var yearFullAccess = fullAccessAnalysis.AcademicYearFullBoardAccess.Contains(academicYear.Id);
+            yearNode.HasFullBoardAccess = isAdmin || yearFullAccess;
+
+            foreach (var board in boards.OrderBy(b => b.Type))
+            {
+                var boardNode = new BoardScopeNode
+                {
+                    BoardId = board.Id,
+                    BoardName = board.Type.ToString(),
+                    HasAccess = isAdmin || accessibleBoardIds.Contains(board.Id)
+                };
+
+                // Load all mediums for this board
+                var mediums = await AsyncExecuter.ToListAsync(
+                    (await _educationMediumRepository.GetQueryableAsync())
+                    .Where(m => m.EducationBoardId == board.Id));
+
+                // Check if user has full medium access for this board
+                var boardFullMediumAccess = fullAccessAnalysis.BoardFullMediumAccess.Contains(board.Id);
+                boardNode.HasFullMediumAccess = isAdmin || boardFullMediumAccess;
+
+                foreach (var medium in mediums.OrderBy(m => m.Name))
+                {
+                    var mediumNode = new MediumScopeNode
+                    {
+                        MediumId = medium.Id,
+                        MediumName = medium.Name,
+                        HasAccess = isAdmin || accessibleMediumIds.Contains(medium.Id)
+                    };
+
+                    // Load all medium stages for this medium
+                    var mediumStages = await AsyncExecuter.ToListAsync(
+                        (await _educationMediumStageRepository.GetQueryableAsync())
+                        .Where(ms => ms.EducationMediumId == medium.Id));
+
+                    // Check if user has full medium stage access for this medium
+                    var mediumFullMediumStageAccess = fullAccessAnalysis.MediumFullMediumStageAccess.Contains(medium.Id);
+                    mediumNode.HasFullMediumStageAccess = isAdmin || mediumFullMediumStageAccess;
+
+                    foreach (var mediumStage in mediumStages.OrderBy(ms => ms.Name))
+                    {
+                        var mediumStageNode = new MediumStageScopeNode
+                        {
+                            MediumStageId = mediumStage.Id,
+                            MediumStageName = mediumStage.Name,
+                            HasAccess = isAdmin || accessibleMediumStageIds.Contains(mediumStage.Id)
+                        };
+
+                        // Load all standards for this medium stage
+                        var standards = await AsyncExecuter.ToListAsync(
+                            (await _standardRepository.GetQueryableAsync())
+                            .Where(s => s.EducationMediumStageId == mediumStage.Id));
+
+                        // Check if user has full standard access for this medium stage
+                        var mediumStageFullStandardAccess = fullAccessAnalysis.MediumStageFullStandardAccess.Contains(mediumStage.Id);
+                        mediumStageNode.HasFullStandardAccess = isAdmin || mediumStageFullStandardAccess;
+
+                        foreach (var standard in standards.OrderBy(s => s.Name))
+                        {
+                            var standardNode = new StandardScopeNode
+                            {
+                                StandardId = standard.Id,
+                                StandardName = standard.Name,
+                                HasAccess = isAdmin || accessibleStandardIds.Contains(standard.Id)
+                            };
+
+                            // Load all divisions for this standard
+                            var divisions = await AsyncExecuter.ToListAsync(
+                                (await _divisionRepository.GetQueryableAsync())
+                                .Where(d => d.StandardId == standard.Id));
+
+                            // Check if user has full division access for this standard
+                            var standardFullDivisionAccess = fullAccessAnalysis.StandardFullDivisionAccess.Contains(standard.Id);
+                            standardNode.HasFullDivisionAccess = isAdmin || standardFullDivisionAccess;
+
+                            foreach (var division in divisions.OrderBy(d => d.Name))
+                            {
+                                var divisionNode = new DivisionScopeNode
+                                {
+                                    DivisionId = division.Id,
+                                    DivisionName = division.Name,
+                                    HasAccess = isAdmin || accessibleDivisionIds.Contains(division.Id),
+                                    RoomNumber = division.RoomNumber
+                                };
+
+                                standardNode.Divisions.Add(divisionNode);
+                            }
+
+                            mediumStageNode.Standards.Add(standardNode);
+                        }
+
+                        mediumNode.MediumStages.Add(mediumStageNode);
+                    }
+
+                    boardNode.Mediums.Add(mediumNode);
+                }
+
+                yearNode.Boards.Add(boardNode);
+            }
+
+            hierarchy.Add(yearNode);
+        }
+
+        return hierarchy;
+    }
+
+    /// <summary>
+    /// Analyzes assignments to determine where user has "full access" (null at a level means all children).
+    /// </summary>
+    private FullAccessAnalysis AnalyzeFullAccessLevels(List<UserScopeAssignment> assignments)
+    {
+        var analysis = new FullAccessAnalysis();
+
+        foreach (var assignment in assignments.Where(a => a.IsActive))
+        {
+            // Full board access: AcademicYear specified, Board is null
+            if (assignment.AcademicYearId.HasValue && !assignment.EducationBoardId.HasValue)
+            {
+                analysis.AcademicYearFullBoardAccess.Add(assignment.AcademicYearId.Value);
+            }
+
+            // Full medium access: Board specified, Medium is null
+            if (assignment.EducationBoardId.HasValue && !assignment.EducationMediumId.HasValue)
+            {
+                analysis.BoardFullMediumAccess.Add(assignment.EducationBoardId.Value);
+            }
+
+            // Full medium stage access: Medium specified, MediumStage is null
+            if (assignment.EducationMediumId.HasValue && !assignment.EducationMediumStageId.HasValue)
+            {
+                analysis.MediumFullMediumStageAccess.Add(assignment.EducationMediumId.Value);
+            }
+
+            // Full standard access: MediumStage specified, Standard is null
+            if (assignment.EducationMediumStageId.HasValue && !assignment.StandardId.HasValue)
+            {
+                analysis.MediumStageFullStandardAccess.Add(assignment.EducationMediumStageId.Value);
+            }
+
+            // Full division access: Standard specified, Division is null
+            if (assignment.StandardId.HasValue && !assignment.DivisionId.HasValue)
+            {
+                analysis.StandardFullDivisionAccess.Add(assignment.StandardId.Value);
+            }
+        }
+
+        return analysis;
+    }
+
+    /// <summary>
+    /// Calculates summary statistics from the hierarchy.
+    /// </summary>
+    private ScopeSummaryDto CalculateSummary(List<AcademicYearScopeNode> hierarchy, bool isAdmin)
+    {
+        var summary = new ScopeSummaryDto();
+
+        if (isAdmin)
+        {
+            summary.ScopeLevel = "Full Access - Administrator";
+            // Count all entities in hierarchy
+            foreach (var year in hierarchy)
+            {
+                foreach (var board in year.Boards)
+                {
+                    summary.TotalAccessibleBoards++;
+                    foreach (var medium in board.Mediums)
+                    {
+                        summary.TotalAccessibleMediums++;
+                        foreach (var mediumStage in medium.MediumStages)
+                        {
+                            summary.TotalAccessibleMediumStages++;
+                            foreach (var standard in mediumStage.Standards)
+                            {
+                                summary.TotalAccessibleStandards++;
+                                summary.TotalAccessibleDivisions += standard.Divisions.Count;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            // Count only accessible entities
+            foreach (var year in hierarchy)
+            {
+                foreach (var board in year.Boards.Where(b => b.HasAccess))
+                {
+                    summary.TotalAccessibleBoards++;
+                    foreach (var medium in board.Mediums.Where(m => m.HasAccess))
+                    {
+                        summary.TotalAccessibleMediums++;
+                        foreach (var mediumStage in medium.MediumStages.Where(ms => ms.HasAccess))
+                        {
+                            summary.TotalAccessibleMediumStages++;
+                            foreach (var standard in mediumStage.Standards.Where(s => s.HasAccess))
+                            {
+                                summary.TotalAccessibleStandards++;
+                                summary.TotalAccessibleDivisions += standard.Divisions.Count(d => d.HasAccess);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Determine scope level description
+            summary.ScopeLevel = DetermineScopeLevel(summary);
+        }
+
+        return summary;
+    }
+
+    /// <summary>
+    /// Determines a human-readable scope level description.
+    /// </summary>
+    private string DetermineScopeLevel(ScopeSummaryDto summary)
+    {
+        if (summary.TotalAccessibleDivisions == 0)
+        {
+            return "No Access";
+        }
+
+        if (summary.TotalAccessibleDivisions == 1)
+        {
+            return "Single Division Access";
+        }
+
+        if (summary.TotalAccessibleStandards == 1)
+        {
+            return $"Single Class - {summary.TotalAccessibleDivisions} Divisions";
+        }
+
+        if (summary.TotalAccessibleMediums == 1)
+        {
+            return $"Single Medium - {summary.TotalAccessibleStandards} Classes";
+        }
+
+        if (summary.TotalAccessibleBoards == 1)
+        {
+            return $"Single Board - Multiple Mediums";
+        }
+
+        return $"Mixed Access - {summary.TotalAccessibleBoards} Boards, {summary.TotalAccessibleStandards} Classes";
+    }
+
+    /// <summary>
+    /// Helper class to track "full access" flags at different hierarchy levels.
+    /// </summary>
+    private class FullAccessAnalysis
+    {
+        public HashSet<Guid> AcademicYearFullBoardAccess { get; } = new();
+        public HashSet<Guid> BoardFullMediumAccess { get; } = new();
+        public HashSet<Guid> MediumFullMediumStageAccess { get; } = new();
+        public HashSet<Guid> MediumStageFullStandardAccess { get; } = new();
+        public HashSet<Guid> StandardFullDivisionAccess { get; } = new();
     }
 
     [Authorize(ShikshaMitraPermissions.UserScope.View)]

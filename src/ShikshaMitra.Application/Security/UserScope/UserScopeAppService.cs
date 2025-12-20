@@ -589,9 +589,6 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
             // Build the hierarchy (with optional year filter)
             var hierarchy = await BuildHierarchyAsync(scopeContext, assignments, academicYearId);
 
-            // Calculate summary
-            var summary = CalculateSummary(hierarchy, scopeContext.IsAdmin);
-
             var result = new UserScopeHierarchyDto
             {
                 UserId = userId,
@@ -599,15 +596,13 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 Email = user.Email,
                 IsAdmin = scopeContext.IsAdmin,
                 AccessibleHierarchy = hierarchy,
-                Summary = summary,
                 FromCache = scopeContext.FromCache,
                 GeneratedAt = DateTime.UtcNow
             };
 
             _logger.LogDebug(
-                "Generated hierarchy for user {UserId}. Total accessible: Boards={Boards}, Mediums={Mediums}, Standards={Standards}, Divisions={Divisions}",
-                userId, summary.TotalAccessibleBoards, summary.TotalAccessibleMediums, 
-                summary.TotalAccessibleStandards, summary.TotalAccessibleDivisions);
+                "Generated hierarchy for user {UserId}. IsAdmin: {IsAdmin}, HierarchyNodes: {NodeCount}",
+                userId, scopeContext.IsAdmin, hierarchy.Count);
 
             return result;
         }
@@ -632,6 +627,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
     /// <summary>
     /// Builds the complete hierarchical structure with access indicators.
+    /// Optimization: Stops loading nested entities when full access is detected at any level.
     /// </summary>
     /// <param name="academicYearId">Optional: Filter to specific academic year</param>
     private async Task<List<AcademicYearScopeNode>> BuildHierarchyAsync(
@@ -673,14 +669,25 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 AcademicYearName = academicYear.Name
             };
 
+            // Check if user has full board access for this academic year
+            var yearFullAccess = fullAccessAnalysis.AcademicYearFullBoardAccess.Contains(academicYear.Id);
+            yearNode.HasFullBoardAccess = isAdmin || yearFullAccess;
+
+            // OPTIMIZATION: If user has full board access, don't load nested hierarchy
+            // Frontend will understand all boards (and their children) are accessible
+            if (yearNode.HasFullBoardAccess)
+            {
+                _logger.LogDebug(
+                    "User has full board access for academic year {AcademicYearId}. Skipping nested hierarchy load.",
+                    academicYear.Id);
+                hierarchy.Add(yearNode);
+                continue; // Skip loading boards and nested entities
+            }
+
             // Load all boards for this academic year
             var boards = await AsyncExecuter.ToListAsync(
                 (await _educationBoardRepository.GetQueryableAsync())
                 .Where(b => b.AcademicYearId == academicYear.Id));
-
-            // Check if user has full board access for this academic year
-            var yearFullAccess = fullAccessAnalysis.AcademicYearFullBoardAccess.Contains(academicYear.Id);
-            yearNode.HasFullBoardAccess = isAdmin || yearFullAccess;
 
             foreach (var board in boards.OrderBy(b => b.Type))
             {
@@ -691,14 +698,24 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                     HasAccess = isAdmin || accessibleBoardIds.Contains(board.Id)
                 };
 
+                // Check if user has full medium access for this board
+                var boardFullMediumAccess = fullAccessAnalysis.BoardFullMediumAccess.Contains(board.Id);
+                boardNode.HasFullMediumAccess = isAdmin || boardFullMediumAccess;
+
+                // OPTIMIZATION: If user has full medium access, don't load nested hierarchy
+                if (boardNode.HasFullMediumAccess)
+                {
+                    _logger.LogDebug(
+                        "User has full medium access for board {BoardId}. Skipping nested hierarchy load.",
+                        board.Id);
+                    yearNode.Boards.Add(boardNode);
+                    continue; // Skip loading mediums and nested entities
+                }
+
                 // Load all mediums for this board
                 var mediums = await AsyncExecuter.ToListAsync(
                     (await _educationMediumRepository.GetQueryableAsync())
                     .Where(m => m.EducationBoardId == board.Id));
-
-                // Check if user has full medium access for this board
-                var boardFullMediumAccess = fullAccessAnalysis.BoardFullMediumAccess.Contains(board.Id);
-                boardNode.HasFullMediumAccess = isAdmin || boardFullMediumAccess;
 
                 foreach (var medium in mediums.OrderBy(m => m.Name))
                 {
@@ -709,14 +726,24 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                         HasAccess = isAdmin || accessibleMediumIds.Contains(medium.Id)
                     };
 
+                    // Check if user has full medium stage access for this medium
+                    var mediumFullMediumStageAccess = fullAccessAnalysis.MediumFullMediumStageAccess.Contains(medium.Id);
+                    mediumNode.HasFullMediumStageAccess = isAdmin || mediumFullMediumStageAccess;
+
+                    // OPTIMIZATION: If user has full medium stage access, don't load nested hierarchy
+                    if (mediumNode.HasFullMediumStageAccess)
+                    {
+                        _logger.LogDebug(
+                            "User has full medium stage access for medium {MediumId}. Skipping nested hierarchy load.",
+                            medium.Id);
+                        boardNode.Mediums.Add(mediumNode);
+                        continue; // Skip loading medium stages and nested entities
+                    }
+
                     // Load all medium stages for this medium
                     var mediumStages = await AsyncExecuter.ToListAsync(
                         (await _educationMediumStageRepository.GetQueryableAsync())
                         .Where(ms => ms.EducationMediumId == medium.Id));
-
-                    // Check if user has full medium stage access for this medium
-                    var mediumFullMediumStageAccess = fullAccessAnalysis.MediumFullMediumStageAccess.Contains(medium.Id);
-                    mediumNode.HasFullMediumStageAccess = isAdmin || mediumFullMediumStageAccess;
 
                     foreach (var mediumStage in mediumStages.OrderBy(ms => ms.Name))
                     {
@@ -727,14 +754,24 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                             HasAccess = isAdmin || accessibleMediumStageIds.Contains(mediumStage.Id)
                         };
 
+                        // Check if user has full standard access for this medium stage
+                        var mediumStageFullStandardAccess = fullAccessAnalysis.MediumStageFullStandardAccess.Contains(mediumStage.Id);
+                        mediumStageNode.HasFullStandardAccess = isAdmin || mediumStageFullStandardAccess;
+
+                        // OPTIMIZATION: If user has full standard access, don't load nested hierarchy
+                        if (mediumStageNode.HasFullStandardAccess)
+                        {
+                            _logger.LogDebug(
+                                "User has full standard access for medium stage {MediumStageId}. Skipping nested hierarchy load.",
+                                mediumStage.Id);
+                            mediumNode.MediumStages.Add(mediumStageNode);
+                            continue; // Skip loading standards and nested entities
+                        }
+
                         // Load all standards for this medium stage
                         var standards = await AsyncExecuter.ToListAsync(
                             (await _standardRepository.GetQueryableAsync())
                             .Where(s => s.EducationMediumStageId == mediumStage.Id));
-
-                        // Check if user has full standard access for this medium stage
-                        var mediumStageFullStandardAccess = fullAccessAnalysis.MediumStageFullStandardAccess.Contains(mediumStage.Id);
-                        mediumStageNode.HasFullStandardAccess = isAdmin || mediumStageFullStandardAccess;
 
                         foreach (var standard in standards.OrderBy(s => s.Name))
                         {
@@ -745,14 +782,24 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                                 HasAccess = isAdmin || accessibleStandardIds.Contains(standard.Id)
                             };
 
+                            // Check if user has full division access for this standard
+                            var standardFullDivisionAccess = fullAccessAnalysis.StandardFullDivisionAccess.Contains(standard.Id);
+                            standardNode.HasFullDivisionAccess = isAdmin || standardFullDivisionAccess;
+
+                            // OPTIMIZATION: If user has full division access, don't load divisions
+                            if (standardNode.HasFullDivisionAccess)
+                            {
+                                _logger.LogDebug(
+                                    "User has full division access for standard {StandardId}. Skipping divisions load.",
+                                    standard.Id);
+                                mediumStageNode.Standards.Add(standardNode);
+                                continue; // Skip loading divisions
+                            }
+
                             // Load all divisions for this standard
                             var divisions = await AsyncExecuter.ToListAsync(
                                 (await _divisionRepository.GetQueryableAsync())
                                 .Where(d => d.StandardId == standard.Id));
-
-                            // Check if user has full division access for this standard
-                            var standardFullDivisionAccess = fullAccessAnalysis.StandardFullDivisionAccess.Contains(standard.Id);
-                            standardNode.HasFullDivisionAccess = isAdmin || standardFullDivisionAccess;
 
                             foreach (var division in divisions.OrderBy(d => d.Name))
                             {
@@ -826,102 +873,6 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         }
 
         return analysis;
-    }
-
-    /// <summary>
-    /// Calculates summary statistics from the hierarchy.
-    /// </summary>
-    private ScopeSummaryDto CalculateSummary(List<AcademicYearScopeNode> hierarchy, bool isAdmin)
-    {
-        var summary = new ScopeSummaryDto();
-
-        if (isAdmin)
-        {
-            summary.ScopeLevel = "Full Access - Administrator";
-            // Count all entities in hierarchy
-            foreach (var year in hierarchy)
-            {
-                foreach (var board in year.Boards)
-                {
-                    summary.TotalAccessibleBoards++;
-                    foreach (var medium in board.Mediums)
-                    {
-                        summary.TotalAccessibleMediums++;
-                        foreach (var mediumStage in medium.MediumStages)
-                        {
-                            summary.TotalAccessibleMediumStages++;
-                            foreach (var standard in mediumStage.Standards)
-                            {
-                                summary.TotalAccessibleStandards++;
-                                summary.TotalAccessibleDivisions += standard.Divisions.Count;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        else
-        {
-            // Count only accessible entities
-            foreach (var year in hierarchy)
-            {
-                foreach (var board in year.Boards.Where(b => b.HasAccess))
-                {
-                    summary.TotalAccessibleBoards++;
-                    foreach (var medium in board.Mediums.Where(m => m.HasAccess))
-                    {
-                        summary.TotalAccessibleMediums++;
-                        foreach (var mediumStage in medium.MediumStages.Where(ms => ms.HasAccess))
-                        {
-                            summary.TotalAccessibleMediumStages++;
-                            foreach (var standard in mediumStage.Standards.Where(s => s.HasAccess))
-                            {
-                                summary.TotalAccessibleStandards++;
-                                summary.TotalAccessibleDivisions += standard.Divisions.Count(d => d.HasAccess);
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Determine scope level description
-            summary.ScopeLevel = DetermineScopeLevel(summary);
-        }
-
-        return summary;
-    }
-
-    /// <summary>
-    /// Determines a human-readable scope level description.
-    /// </summary>
-    private string DetermineScopeLevel(ScopeSummaryDto summary)
-    {
-        if (summary.TotalAccessibleDivisions == 0)
-        {
-            return "No Access";
-        }
-
-        if (summary.TotalAccessibleDivisions == 1)
-        {
-            return "Single Division Access";
-        }
-
-        if (summary.TotalAccessibleStandards == 1)
-        {
-            return $"Single Class - {summary.TotalAccessibleDivisions} Divisions";
-        }
-
-        if (summary.TotalAccessibleMediums == 1)
-        {
-            return $"Single Medium - {summary.TotalAccessibleStandards} Classes";
-        }
-
-        if (summary.TotalAccessibleBoards == 1)
-        {
-            return $"Single Board - Multiple Mediums";
-        }
-
-        return $"Mixed Access - {summary.TotalAccessibleBoards} Boards, {summary.TotalAccessibleStandards} Classes";
     }
 
     /// <summary>

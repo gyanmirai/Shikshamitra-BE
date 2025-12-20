@@ -18,9 +18,9 @@ public class StudentCommunicationDetailConfiguration : IEntityTypeConfiguration<
 		// Configure Local Address as owned entity (complex type)
 		builder.OwnsOne(x => x.LocalAddress, la =>
 		{
-			la.Property(a => a.BuildingNo).HasMaxLength(100).HasColumnName("LocalAddress_BuildingNo");
-			la.Property(a => a.AreaLocalityRoadName).HasMaxLength(200).HasColumnName("LocalAddress_AreaLocalityRoadName");
-			la.Property(a => a.Landmark).HasMaxLength(200).HasColumnName("LocalAddress_Landmark");
+			la.Property(a => a.Address1).HasMaxLength(100).HasColumnName("LocalAddress_BuildingNo");
+			la.Property(a => a.Address2).HasMaxLength(200).HasColumnName("LocalAddress_AreaLocalityRoadName");
+			la.Property(a => a.Address3).HasMaxLength(200).HasColumnName("LocalAddress_Landmark");
 			la.Property(a => a.State).HasMaxLength(100).HasColumnName("LocalAddress_State").IsRequired();
 			la.Property(a => a.City).HasMaxLength(100).HasColumnName("LocalAddress_City");
 			la.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("LocalAddress_Pincode");
@@ -31,9 +31,9 @@ public class StudentCommunicationDetailConfiguration : IEntityTypeConfiguration<
 		// Configure Permanent Address as owned entity (complex type)
 		builder.OwnsOne(x => x.PermanentAddress, pa =>
 		{
-			pa.Property(a => a.BuildingNo).HasMaxLength(100).HasColumnName("PermanentAddress_BuildingNo");
-			pa.Property(a => a.AreaLocalityRoadName).HasMaxLength(200).HasColumnName("PermanentAddress_AreaLocalityRoadName");
-			pa.Property(a => a.Landmark).HasMaxLength(200).HasColumnName("PermanentAddress_Landmark");
+			pa.Property(a => a.Address1).HasMaxLength(100).HasColumnName("PermanentAddress_BuildingNo");
+			pa.Property(a => a.Address2).HasMaxLength(200).HasColumnName("PermanentAddress_AreaLocalityRoadName");
+			pa.Property(a => a.Address3).HasMaxLength(200).HasColumnName("PermanentAddress_Landmark");
 			pa.Property(a => a.State).HasMaxLength(100).HasColumnName("PermanentAddress_State").IsRequired();
 			pa.Property(a => a.City).HasMaxLength(100).HasColumnName("PermanentAddress_City");
 			pa.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("PermanentAddress_Pincode");
@@ -44,9 +44,9 @@ public class StudentCommunicationDetailConfiguration : IEntityTypeConfiguration<
 		// Configure Emergency Address as owned entity (complex type)
 		builder.OwnsOne(x => x.EmergencyAddress, ea =>
 		{
-			ea.Property(a => a.BuildingNo).HasMaxLength(100).HasColumnName("EmergencyAddress_BuildingNo");
-			ea.Property(a => a.AreaLocalityRoadName).HasMaxLength(200).HasColumnName("EmergencyAddress_AreaLocalityRoadName");
-			ea.Property(a => a.Landmark).HasMaxLength(200).HasColumnName("EmergencyAddress_Landmark");
+			ea.Property(a => a.Address1).HasMaxLength(100).HasColumnName("EmergencyAddress_BuildingNo");
+			ea.Property(a => a.Address2).HasMaxLength(200).HasColumnName("EmergencyAddress_AreaLocalityRoadName");
+			ea.Property(a => a.Address3).HasMaxLength(200).HasColumnName("EmergencyAddress_Landmark");
 			ea.Property(a => a.State).HasMaxLength(100).HasColumnName("EmergencyAddress_State").IsRequired();
 			ea.Property(a => a.City).HasMaxLength(100).HasColumnName("EmergencyAddress_City");
 			ea.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("EmergencyAddress_Pincode");

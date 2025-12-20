@@ -2,15 +2,19 @@
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.Admissions;
+using ShikshaMitra.Students.Enrollments.Admissions;
 using ShikshaMitra.TenantSettings.Divisions;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Dynamic.Core;
+using System.Runtime.Intrinsics.Arm;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.ObjectMapping;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
@@ -21,24 +25,24 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 [RemoteService(false)]
 public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionAppService
 {
-	private readonly IRepository<Student, Guid> _studentRepository;
-	private readonly IRepository<Division, Guid> _divisionRepository;
+	private readonly IRepository<Student, Guid> studentRepository;
+	private readonly IRepository<Division, Guid> divisionRepository;
 
 	public StudentAdmissionAppService(
 		IRepository<Student, Guid> studentRepository,
 		IRepository<Division, Guid> divisionRepository)
 	{
-		_studentRepository = studentRepository;
-		_divisionRepository = divisionRepository;
+		this.studentRepository = studentRepository;
+		this.divisionRepository = divisionRepository;
 	}
 
 	/// <summary>
 	/// Gets a paginated list of students in admission stage with filters
 	/// </summary>
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.View)]
-	public async Task<PagedResultDto<StudentAdmissionListItemDto>> GetListAsync(GetStudentAdmissionsInput input)
+	public async Task<PagedResultDto<StudentEnrollmentListDto>> GetListAsync(GetStudentAdmissionsInput input)
 	{
-		var query = (await _studentRepository.GetQueryableAsync())
+		var query = (await studentRepository.GetQueryableAsync())
 			.Where(s => s.Status == StudentLifeCycleStatusEnum.Admission);
 
 		// Apply filters
@@ -51,29 +55,10 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 				(s.GrNo != null && s.GrNo.ToString().Contains(input.Search)));
 		}
 
-		if (!string.IsNullOrWhiteSpace(input.ApprovalStatus) && 
-			Enum.TryParse<StudentEnrollmentApprovalState>(input.ApprovalStatus, ignoreCase: true, out var status))
-		{
-			query = query.Where(s => s.AdmissionApprovalStatus == status);
-		}
-
-		if (input.DivisionId.HasValue)
-		{
-			query = query.Where(s => s.DivisionId == input.DivisionId.Value);
-		}
-
-		if (input.StandardId.HasValue)
-		{
-			query = query.Where(s => s.StandardId == input.StandardId.Value);
-		}
-
-		if (input.AcademicYearId.HasValue)
-		{
-			query = query.Where(s => s.AcademicYearId == input.AcademicYearId.Value);
-		}
+		query = query.Where(s => s.AdmissionApprovalStatus == input.ApprovalStatus);
 
 		// Get total count
-		var totalCount = await _studentRepository.AsyncExecuter.CountAsync(query);
+		var totalCount = await studentRepository.AsyncExecuter.CountAsync(query);
 
 		// Apply sorting and paging
 		query = query.OrderByDescending(s => s.CreationTime)
@@ -81,24 +66,13 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 			.Take(input.MaxResultCount);
 
 		// Execute query and project to DTO
-		var students = await _studentRepository.AsyncExecuter.ToListAsync(
-			query.Select(s => new StudentAdmissionListItemDto
-			{
-				StudentId = s.Id,
-				FirstName = s.FirstName,
-				MiddleName = s.MiddleName,
-				LastName = s.LastName,
-				RegistrationNo = s.AdditionalDetail != null ? s.AdditionalDetail.RegistrationFormNo : null,
-				DivisionId = s.DivisionId,
-				StandardId = s.StandardId,
-				ApprovalStatus = s.AdmissionApprovalStatus.ToString(),
-				ApprovalRemarks = s.AdmissionApprovalRemarks,
-				RollNo = s.RollNo,
-				GrNo = s.GrNo
-			})
+		var students = await studentRepository.AsyncExecuter.ToListAsync(
+			query
 		);
 
-		return new PagedResultDto<StudentAdmissionListItemDto>(totalCount, students);
+		var studentDtos = ObjectMapper.Map<List<Student>, List<StudentEnrollmentListDto>>(students);
+
+		return new PagedResultDto<StudentEnrollmentListDto>(totalCount, studentDtos);
 	}
 
 	/// <summary>
@@ -108,7 +82,7 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 	public async Task AssignDivisionAsync(Guid studentId, AssignDivisionDto input)
 	{
 		// Validate division exists
-		var divisionExists = await _divisionRepository.AnyAsync(d => d.Id == input.DivisionId);
+		var divisionExists = await divisionRepository.AnyAsync(d => d.Id == input.DivisionId);
 		if (!divisionExists)
 		{
 			throw new BusinessException("StudentAdmission:DivisionNotFound")
@@ -116,13 +90,13 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 		}
 
 		// Get student
-		var student = await _studentRepository.GetAsync(studentId);
+		var student = await studentRepository.GetAsync(studentId);
 
 		// Assign division using domain method
 		student.AssignDivision(input.DivisionId);
 
 		// Save changes
-		await _studentRepository.UpdateAsync(student);
+		await studentRepository.UpdateAsync(student);
 	}
 
 	/// <summary>
@@ -143,7 +117,7 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 			try
 			{
 				// Get student
-				var student = await _studentRepository.GetAsync(item.StudentId);
+				var student = await studentRepository.GetAsync(item.StudentId);
 
 				// Apply action
 				if (item.Action == AdmissionAction.Approve)
@@ -173,7 +147,7 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 				}
 
 				// Save changes
-				await _studentRepository.UpdateAsync(student);
+				await studentRepository.UpdateAsync(student);
 
 				itemResult.Success = true;
 				result.Succeeded++;

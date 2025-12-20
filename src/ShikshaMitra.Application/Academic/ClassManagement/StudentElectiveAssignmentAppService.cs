@@ -38,7 +38,7 @@ public class StudentElectiveAssignmentAppService(
 		// Get students in the specified class and division
 		var studentsQuery = await studentRepository.GetQueryableAsync();
 		studentsQuery = studentsQuery.Where(s =>
-			s.EducationMediumId == academicMediumId &&
+			s.AcademicMediumId == academicMediumId &&
 			s.StandardId == classId &&
 			s.DivisionId == divisionId
 		);

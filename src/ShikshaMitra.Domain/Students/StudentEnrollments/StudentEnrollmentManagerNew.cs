@@ -22,7 +22,7 @@ public class StudentEnrollmentManagerNew(
 		var candidateInquiryNumbers =
 			(from s in studentQueryable
 			 join sad in additionalDetailQueryable on s.Id equals sad.Id
-			 where s.EducationMediumId == academicMediumId && s.TenantId == currentTenant.Id
+			 where s.AcademicMediumId == academicMediumId && s.TenantId == currentTenant.Id
 			 select sad.InquiryNo)
 			.AsEnumerable(); // switch to client-side for safe parsing
 

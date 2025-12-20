@@ -3436,6 +3436,12 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AcademicBoardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicMediumId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("AcademicYearId")
                         .HasColumnType("uuid");
 
@@ -3480,7 +3486,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("DivisionId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("EducationMediumId")
+                    b.Property<Guid?>("EducationMediumId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ExtraProperties")
@@ -3593,7 +3599,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
-                    b.Property<DateTimeOffset?>("DateOfBirthday")
+                    b.Property<DateTimeOffset?>("DateOfBirth")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset?>("DateOfInquiry")
@@ -7806,9 +7812,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "EducationMedium")
                         .WithMany()
-                        .HasForeignKey("EducationMediumId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("EducationMediumId");
 
                     b.HasOne("ShikshaMitra.Students.StudentFamilyDetail", "FamilyDetail")
                         .WithMany()

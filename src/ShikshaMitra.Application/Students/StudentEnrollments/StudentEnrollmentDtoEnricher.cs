@@ -43,7 +43,7 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 	/// Enriches a single DTO with related entity names (makes 4 database calls max).
 	/// Use this for single-item operations.
 	/// </summary>
-	public async Task EnrichSingleDtoAsync(StudentInquiryDto dto)
+	public async Task EnrichSingleDtoAsync(StudentEnrollmentListDto dto)
 	{
 		// Academic Medium Name and Board Name
 		if (dto.AcademicMediumId != Guid.Empty)
@@ -95,7 +95,7 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 	/// Enriches a list of DTOs with related entity names using batch operations
 	/// to avoid N+1 queries. Use this for list operations.
 	/// </summary>
-	public async Task EnrichDtoListAsync(List<StudentInquiryDto> dtos, List<Student> students)
+	public async Task EnrichDtoListAsync(List<StudentEnrollmentListDto> dtos, List<Student> students)
 	{
 		if (dtos.Count == 0) return;
 
@@ -164,9 +164,9 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 	}
 
 	/// <summary>
-	/// Enriches a list of StudentRegistrationFormDto with related entity names using batch operations.
+	/// Enriches a list of StudentEnrollmentListDto with related entity names using batch operations.
 	/// </summary>
-	public async Task EnrichRegistrationFormDtoListAsync(List<StudentRegistrationFormDto> dtos, List<Student> students)
+	public async Task EnrichRegistrationFormDtoListAsync(List<StudentEnrollmentListDto> dtos, List<Student> students)
 	{
 		if (dtos.Count == 0) return;
 
@@ -235,9 +235,9 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 	}
 
 	/// <summary>
-	/// Enriches a list of StudentRegistrationDto with related entity names using batch operations.
+	/// Enriches a list of StudentEnrollmentListDto with related entity names using batch operations.
 	/// </summary>
-	public async Task EnrichRegistrationDtoListAsync(List<StudentRegistrationDto> dtos, List<Student> students)
+	public async Task EnrichRegistrationDtoListAsync(List<StudentEnrollmentListDto> dtos, List<Student> students)
 	{
 		if (dtos.Count == 0) return;
 
@@ -302,44 +302,6 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 					dto.Standard = standard.Name;
 				}
 			}
-		}
-	}
-
-	/// <summary>
-	/// Enriches a single StudentRegistrationDto with related entity names.
-	/// Use this for single-item operations.
-	/// </summary>
-	public async Task EnrichRegistrationDtoAsync(StudentRegistrationDto dto, Student student)
-	{
-		// Academic Medium Name and Board Name
-		if (dto.AcademicMediumId != Guid.Empty)
-		{
-			var medium = await _academicMediumRepository.FindAsync(dto.AcademicMediumId);
-			if (medium != null)
-			{
-				dto.AcademicMediumName = medium.Name;
-				
-				// Get Academic Board Name through Medium
-				dto.AcademicBoardId = medium.EducationBoardId;
-				var board = await _educationBoardRepository.FindAsync(medium.EducationBoardId);
-				dto.AcademicBoardName = board?.Type.ToString();
-
-				if (board != null)
-				{
-					dto.AcademicYearId = board.AcademicYearId;
-
-					// Get Academic Year name through board
-					var year = await _academicYearRepository.FindAsync(board.AcademicYearId);
-					dto.AcademicYearName = year?.Name;
-				}
-			}
-		}
-
-		// Standard Name
-		if (student.StandardId.HasValue)
-		{
-			var standard = await _standardRepository.FindAsync(student.StandardId.Value);
-			dto.Standard = standard?.Name;
 		}
 	}
 }

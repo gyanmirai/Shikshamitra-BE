@@ -14,10 +14,11 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? FirstName { get; private set; }
 	public string? MiddleName { get; private set; }
 	public string? LastName { get; private set; }
-	public Guid EducationMediumId { get; private set; }
+	public Guid? AcademicYearId { get; private set; }
+	public Guid? AcademicBoardId { get; private set; }
+	public Guid AcademicMediumId { get; private set; }
 	public Guid? StandardId { get; private set; }
 	public Guid? DivisionId { get; private set; }
-	public Guid? AcademicYearId { get; private set; }
 	public int? GrNo { get; private set; }
 	public int? RollNo { get; private set; }
 	public StudentLifeCycleStatusEnum Status { get; private set; }
@@ -35,7 +36,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	// Navigation for inquiry preference
 	public InquiryPreference? InquiryPreference { get; private set; }
-	public EducationMedium? EducationMedium { get; private set; }
+	public EducationMedium? AcademicMedium { get; private set; }
 
 	private Student()
 	{
@@ -62,7 +63,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		FirstName = firstName;
 		MiddleName = middleName;
 		LastName = lastName;
-		EducationMediumId = educationMediumId;
+		AcademicMediumId = educationMediumId;
 		StandardId = standardId;
 		DivisionId = divisionId;
 		AcademicYearId = academicYearId;
@@ -271,7 +272,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		FirstName = firstName;
 		MiddleName = middleName;
 		LastName = lastName;
-		EducationMediumId = academicMediumId;
+		AcademicMediumId = academicMediumId;
 		StandardId = standardId;
 		Status = status;
 	}

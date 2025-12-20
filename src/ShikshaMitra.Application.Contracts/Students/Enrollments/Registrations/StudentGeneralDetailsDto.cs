@@ -1,0 +1,45 @@
+﻿using ShikshaMitra.Common;
+using System;
+
+namespace ShikshaMitra.Students.Enrollments.Registrations;
+
+public class StudentGeneralDetailsDto
+{
+	public string FormNo { get; set; }
+	public Guid AcademicYearId { get; set; }
+	public Guid BoardId { get; set; }
+	public Guid EducationMediumId { get; private set; }
+	public Guid StandardId { get; private set; }
+
+	public string FirstName { get; set; }
+	public string? MiddleName { get; set; }
+	public string LastName { get; set; }
+	public DateTimeOffset DateOfBirthday { get; set; }
+	public GenderEnum Gender { get; set; }
+
+	public string PrimaryContactNo { get; set; }
+	public string? SecondaryContactNo { get; set; }
+	public string? Email { get; set; }
+
+	public string? AdharNo { get; set; }
+	public string? ApparId { get; set; }
+	public string? PanNo { get; set; }
+	public Guid? InquiryPreferenceId { get; set; }
+	public ReligionEnum? Religion { get; set; }
+	public string FamilyCast { get; set; }
+	public CastCategoryEnum? CastCategory { get; set; }
+	public string? Nationality { get; set; }
+	public string? BirthPlace { get; set; }
+	public MotherTongueEnum? MotherTongue { get; set; }
+
+	public string Address1 { get; set; }
+	public string Address2 { get; set; }
+	public string? Address3 { get; set; }
+	public Country Country { get; set; }
+	public State State { get; set; }
+	public string City { get; set; }
+	public string? Pincode { get; set; }
+
+	public string? PreviousSchool { get; set; }
+	public string? LastClassPassed { get; set; }
+}

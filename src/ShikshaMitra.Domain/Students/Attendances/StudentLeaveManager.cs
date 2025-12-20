@@ -71,7 +71,7 @@ public class StudentLeaveManager : DomainService
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
 			studentId,
-			student.EducationMediumId,
+			student.AcademicMediumId,
 			student.StandardId,
 			student.DivisionId,
 			studentLeaveTypeId,

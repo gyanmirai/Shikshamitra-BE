@@ -1,4 +1,6 @@
-﻿using ShikshaMitra.TenantSettings.AcademicYears;
+﻿using ShikshaMitra.Students.Enrollments.Inquiries;
+using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
@@ -20,14 +22,12 @@ public class StudentInquiryAppService(
 	IRepository<Student, Guid> studentRepository,
 	IRepository<EducationMedium, Guid> academicMediumRepository,
 	IRepository<Standard, Guid> standardRepository,
-	IRepository<EducationBoard, Guid> educationBoardRepository,
-	IRepository<AcademicYear, Guid> academicYearRepository,
 	IGuidGenerator guidGenerator,
 	StudentEnrollmentManagerNew studentEnrollmentManager,
 	StudentEnrollmentDtoEnricher dtoEnricher
 ) : ApplicationService, IStudentInquiryAppService
 {
-	public async Task<StudentInquiryDto> GetInquiryByIdAsync(Guid studentId)
+	public async Task<StudentEnrollmentListDto> GetInquiryByIdAsync(Guid studentId)
 	{
 		// Load the complete aggregate with all details
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
@@ -44,12 +44,12 @@ public class StudentInquiryAppService(
 			throw new BusinessException("", L["Inquiry Not Found"]);
 		}
 
-		var dto = ObjectMapper.Map<Student, StudentInquiryDto>(student);
+		var dto = ObjectMapper.Map<Student, StudentEnrollmentListDto>(student);
 		await dtoEnricher.EnrichSingleDtoAsync(dto);
 		return dto;
 	}
 
-	public async Task<StudentInquiryDto> CreateStudentInquiryAsync(
+	public async Task<StudentEnrollmentListDto> CreateStudentInquiryAsync(
 		CreateUpdateInquiryDto createStudentInquiryDto
 	)
 	{
@@ -94,12 +94,12 @@ public class StudentInquiryAppService(
 
 		// Re-load with details to ensure mapper has all data populated
 		var saved = await studentRepository.GetAsync(student.Id, includeDetails: true);
-		var dto = ObjectMapper.Map<Student, StudentInquiryDto>(saved);
+		var dto = ObjectMapper.Map<Student, StudentEnrollmentListDto>(saved);
 		await dtoEnricher.EnrichSingleDtoAsync(dto);
 		return dto;
 	}
 
-	public async Task<PagedResultDto<StudentInquiryDto>> GetInquiriesByMediumAsync(
+	public async Task<PagedResultDto<StudentEnrollmentListDto>> GetInquiriesByMediumAsync(
 		Guid academicMediumId,
 		int skipCount = 0,
 		int maxResultCount = 10,
@@ -116,7 +116,7 @@ public class StudentInquiryAppService(
 		
 		var query = queryable
 			.Where(s => s.Status == StudentLifeCycleStatusEnum.Inquiry
-				&& s.EducationMediumId == academicMediumId
+				&& s.AcademicMediumId == academicMediumId
 				&& s.TenantId == CurrentTenant.Id);
 
 		// Implement search functionality
@@ -136,7 +136,7 @@ public class StudentInquiryAppService(
 		
 		if (totalCount == 0)
 		{
-			return new PagedResultDto<StudentInquiryDto>(0, new List<StudentInquiryDto>());
+			return new PagedResultDto<StudentEnrollmentListDto>(0, new List<StudentEnrollmentListDto>());
 		}
 
 		var pagedQuery = query
@@ -145,15 +145,15 @@ public class StudentInquiryAppService(
 			.Take(maxResultCount);
 
 		var results = await AsyncExecuter.ToListAsync(pagedQuery);
-		var resultList = ObjectMapper.Map<List<Student>, List<StudentInquiryDto>>(results);
+		var resultList = ObjectMapper.Map<List<Student>, List<StudentEnrollmentListDto>>(results);
 		
 		// Use batch enrichment to avoid N+1 problem
 		await dtoEnricher.EnrichDtoListAsync(resultList, results);
 
-		return new PagedResultDto<StudentInquiryDto>(totalCount, resultList);
+		return new PagedResultDto<StudentEnrollmentListDto>(totalCount, resultList);
 	}
 
-	public async Task<StudentInquiryDto> UpdateInquiryAsync(
+	public async Task<StudentEnrollmentListDto> UpdateInquiryAsync(
 		Guid studentId,
 		CreateUpdateInquiryDto updateInquiryDto
 	)
@@ -192,7 +192,7 @@ public class StudentInquiryAppService(
 
 		// Re-load with details to ensure mapper has all data populated
 		var saved = await studentRepository.GetAsync(student.Id, includeDetails: true);
-		var dto = ObjectMapper.Map<Student, StudentInquiryDto>(saved);
+		var dto = ObjectMapper.Map<Student, StudentEnrollmentListDto>(saved);
 		await dtoEnricher.EnrichSingleDtoAsync(dto);
 		return dto;
 	}

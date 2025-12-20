@@ -10,6 +10,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using ShikshaMitra.Students.Enrollments.Registrations;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
@@ -46,7 +47,7 @@ public class StudentRegistrationAppService(
 		StudentLifeCycleStatusEnum.RegistrationFormIssued,
 		StudentLifeCycleStatusEnum.Registation
 	];
-	public async Task<PagedResultDto<StudentRegistrationFormDto>> GetRegistrationFormsByMediumAsync(
+	public async Task<PagedResultDto<StudentEnrollmentListDto>> GetRegistrationFormsByMediumAsync(
 		Guid academicMediumId, 
 		int skipCount = 0, 
 		int maxResultCount = 10, 
@@ -60,7 +61,7 @@ public class StudentRegistrationAppService(
 		
 		var query = queryable
 			.Where(s => s.Status == StudentLifeCycleStatusEnum.RegistrationFormIssued
-				&& s.EducationMediumId == academicMediumId
+				&& s.AcademicMediumId == academicMediumId
 				&& s.TenantId == CurrentTenant.Id);
 
 		// Apply search filter if provided
@@ -70,7 +71,7 @@ public class StudentRegistrationAppService(
 		
 		if (totalCount == 0)
 		{
-			return new PagedResultDto<StudentRegistrationFormDto>(0, new List<StudentRegistrationFormDto>());
+			return new PagedResultDto<StudentEnrollmentListDto>(0, new List<StudentEnrollmentListDto>());
 		}
 
 		var pagedQuery = query
@@ -79,15 +80,15 @@ public class StudentRegistrationAppService(
 			.Take(maxResultCount);
 
 		var results = await AsyncExecuter.ToListAsync(pagedQuery);
-		var resultList = ObjectMapper.Map<List<Student>, List<StudentRegistrationFormDto>>(results);
+		var resultList = ObjectMapper.Map<List<Student>, List<StudentEnrollmentListDto>>(results);
 
 		// Enrich DTOs with related entity names (Standard, Medium, Board, Year)
 		await dtoEnricher.EnrichRegistrationFormDtoListAsync(resultList, results);
 
-		return new PagedResultDto<StudentRegistrationFormDto>(totalCount, resultList);
+		return new PagedResultDto<StudentEnrollmentListDto>(totalCount, resultList);
 	}
 
-	public async Task<PagedResultDto<StudentRegistrationDto>> GetRegistrationsByMediumAsync(
+	public async Task<PagedResultDto<StudentEnrollmentListDto>> GetRegistrationsByMediumAsync(
 		Guid academicMediumId, 
 		int skipCount = 0, 
 		int maxResultCount = 10, 
@@ -101,7 +102,7 @@ public class StudentRegistrationAppService(
 		
 		var query = queryable
 			.Where(s => s.Status == StudentLifeCycleStatusEnum.Registation
-				&& s.EducationMediumId == academicMediumId
+				&& s.AcademicMediumId == academicMediumId
 				&& s.TenantId == CurrentTenant.Id);
 
 		// Apply search filter if provided
@@ -111,7 +112,7 @@ public class StudentRegistrationAppService(
 		
 		if (totalCount == 0)
 		{
-			return new PagedResultDto<StudentRegistrationDto>(0, new List<StudentRegistrationDto>());
+			return new PagedResultDto<StudentEnrollmentListDto>(0, new List<StudentEnrollmentListDto>());
 		}
 
 		var pagedQuery = query
@@ -120,15 +121,15 @@ public class StudentRegistrationAppService(
 			.Take(maxResultCount);
 
 		var results = await AsyncExecuter.ToListAsync(pagedQuery);
-		var resultList = ObjectMapper.Map<List<Student>, List<StudentRegistrationDto>>(results);
+		var resultList = ObjectMapper.Map<List<Student>, List<StudentEnrollmentListDto>>(results);
 
 		// Enrich DTOs with related entity names (Standard, Medium, Board, Year)
 		await dtoEnricher.EnrichRegistrationDtoListAsync(resultList, results);
 
-		return new PagedResultDto<StudentRegistrationDto>(totalCount, resultList);
+		return new PagedResultDto<StudentEnrollmentListDto>(totalCount, resultList);
 	}
 
-	public async Task<StudentRegistrationDto> GetRegistrationByIdAsync(Guid studentId)
+	public async Task<StudentGeneralDetailsDto> GetRegistrationGeneralDetailsByIdAsync(Guid studentId)
 	{
 		// Load the student aggregate
 		var student = await studentRepository.GetAsync(studentId);
@@ -140,10 +141,7 @@ public class StudentRegistrationAppService(
 			StudentRegistrationErrorCodes.InvalidStatusForRegistrationView);
 
 		// Map to DTO
-		var result = ObjectMapper.Map<Student, StudentRegistrationDto>(student);
-
-		// Enrich DTO with related entity names
-		await dtoEnricher.EnrichRegistrationDtoAsync(result, student);
+		var result = ObjectMapper.Map<Student, StudentGeneralDetailsDto>(student);
 
 		return result;
 	}
@@ -222,7 +220,7 @@ public class StudentRegistrationAppService(
 			FirstName = student.FirstName,
 			MiddleName = student.MiddleName,
 			LastName = student.LastName,
-			DateOfBirth = student.AdditionalDetail?.DateOfBirthday,
+			DateOfBirth = student.AdditionalDetail?.DateOfBirth,
 			Gender = student.AdditionalDetail?.Gender
 		};
 	}
@@ -230,7 +228,7 @@ public class StudentRegistrationAppService(
 	public async Task<UpdateGeneralInfoOutputDto> CreateDirectRegistrationAsync(CreateDirectRegistrationDto input)
 	{
 		// Validate academic medium exists using domain service
-		await validationService.ValidateAcademicMediumExistsAsync(input.EducationMediumId);
+		await validationService.ValidateAcademicMediumExistsAsync(input.AcademicMediumId);
 
 		// Create a new student directly in Registration status
 		var studentId = GuidGenerator.Create();
@@ -243,7 +241,7 @@ public class StudentRegistrationAppService(
 			firstName: input.FirstName,
 			middleName: input.MiddleName,
 			lastName: input.LastName,
-			educationMediumId: input.EducationMediumId,
+			educationMediumId: input.AcademicMediumId,
 			standardId: input.StandardId,
 			divisionId: input.DivisionId,
 			dateOfBirth: input.DateOfBirth,
@@ -293,7 +291,7 @@ public class StudentRegistrationAppService(
 			FirstName = student.FirstName,
 			MiddleName = student.MiddleName,
 			LastName = student.LastName,
-			DateOfBirth = student.AdditionalDetail?.DateOfBirthday,
+			DateOfBirth = student.AdditionalDetail?.DateOfBirth,
 			Gender = student.AdditionalDetail?.Gender
 		};
 	}
@@ -443,9 +441,9 @@ public class StudentRegistrationAppService(
 	{
 		return new AddressDto
 		{
-			BuildingNo = address.BuildingNo,
-			AreaLocalityRoadName = address.AreaLocalityRoadName,
-			Landmark = address.Landmark,
+			Address1 = address.Address1,
+			Address2 = address.Address2,
+			Address3 = address.Address3,
 			State = address.State,
 			City = address.City,
 			Pincode = address.Pincode,
@@ -478,13 +476,13 @@ public class StudentRegistrationAppService(
 	private AddressDetails MapDtoToAddressDetails(AddressDto dto)
 	{
 		return new AddressDetails(
-			dto.BuildingNo,
-			dto.AreaLocalityRoadName,
-			dto.Landmark,
-			dto.State,
+			dto.Address1,
+			dto.Address2,
+			dto.Address3,
 			dto.City,
-			dto.Pincode,
-			dto.Country
+			dto.State,
+			dto.Country,
+			dto.Pincode
 		);
 	}
 

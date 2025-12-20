@@ -32,9 +32,9 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 			// Configure Office Address
 			fd.OwnsOne(p => p.OfficeAddress, oa =>
 			{
-				oa.Property(a => a.BuildingNo).HasMaxLength(100).HasColumnName("Father_OfficeAddress_BuildingNo");
-				oa.Property(a => a.AreaLocalityRoadName).HasMaxLength(200).HasColumnName("Father_OfficeAddress_AreaLocalityRoadName");
-				oa.Property(a => a.Landmark).HasMaxLength(200).HasColumnName("Father_OfficeAddress_Landmark");
+				oa.Property(a => a.Address1).HasMaxLength(100).HasColumnName("Father_OfficeAddress_BuildingNo");
+				oa.Property(a => a.Address2).HasMaxLength(200).HasColumnName("Father_OfficeAddress_AreaLocalityRoadName");
+				oa.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Father_OfficeAddress_Landmark");
 				oa.Property(a => a.State).HasMaxLength(100).HasColumnName("Father_OfficeAddress_State").IsRequired();
 				oa.Property(a => a.City).HasMaxLength(100).HasColumnName("Father_OfficeAddress_City");
 				oa.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Father_OfficeAddress_Pincode");
@@ -45,9 +45,9 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 			// Configure Local Address
 			fd.OwnsOne(p => p.LocalAddress, la =>
 			{
-				la.Property(a => a.BuildingNo).HasMaxLength(100).HasColumnName("Father_LocalAddress_BuildingNo");
-				la.Property(a => a.AreaLocalityRoadName).HasMaxLength(200).HasColumnName("Father_LocalAddress_AreaLocalityRoadName");
-				la.Property(a => a.Landmark).HasMaxLength(200).HasColumnName("Father_LocalAddress_Landmark");
+				la.Property(a => a.Address1).HasMaxLength(100).HasColumnName("Father_LocalAddress_BuildingNo");
+				la.Property(a => a.Address2).HasMaxLength(200).HasColumnName("Father_LocalAddress_AreaLocalityRoadName");
+				la.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Father_LocalAddress_Landmark");
 				la.Property(a => a.State).HasMaxLength(100).HasColumnName("Father_LocalAddress_State").IsRequired();
 				la.Property(a => a.City).HasMaxLength(100).HasColumnName("Father_LocalAddress_City");
 				la.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Father_LocalAddress_Pincode");
@@ -74,9 +74,9 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 			// Configure Office Address
 			md.OwnsOne(p => p.OfficeAddress, oa =>
 			{
-				oa.Property(a => a.BuildingNo).HasMaxLength(100).HasColumnName("Mother_OfficeAddress_BuildingNo");
-				oa.Property(a => a.AreaLocalityRoadName).HasMaxLength(200).HasColumnName("Mother_OfficeAddress_AreaLocalityRoadName");
-				oa.Property(a => a.Landmark).HasMaxLength(200).HasColumnName("Mother_OfficeAddress_Landmark");
+				oa.Property(a => a.Address1).HasMaxLength(100).HasColumnName("Mother_OfficeAddress_BuildingNo");
+				oa.Property(a => a.Address2).HasMaxLength(200).HasColumnName("Mother_OfficeAddress_AreaLocalityRoadName");
+				oa.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Mother_OfficeAddress_Landmark");
 				oa.Property(a => a.State).HasMaxLength(100).HasColumnName("Mother_OfficeAddress_State").IsRequired();
 				oa.Property(a => a.City).HasMaxLength(100).HasColumnName("Mother_OfficeAddress_City");
 				oa.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Mother_OfficeAddress_Pincode");
@@ -87,9 +87,9 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 			// Configure Local Address
 			md.OwnsOne(p => p.LocalAddress, la =>
 			{
-				la.Property(a => a.BuildingNo).HasMaxLength(100).HasColumnName("Mother_LocalAddress_BuildingNo");
-				la.Property(a => a.AreaLocalityRoadName).HasMaxLength(200).HasColumnName("Mother_LocalAddress_AreaLocalityRoadName");
-				la.Property(a => a.Landmark).HasMaxLength(200).HasColumnName("Mother_LocalAddress_Landmark");
+				la.Property(a => a.Address1).HasMaxLength(100).HasColumnName("Mother_LocalAddress_BuildingNo");
+				la.Property(a => a.Address2).HasMaxLength(200).HasColumnName("Mother_LocalAddress_AreaLocalityRoadName");
+				la.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Mother_LocalAddress_Landmark");
 				la.Property(a => a.State).HasMaxLength(100).HasColumnName("Mother_LocalAddress_State").IsRequired();
 				la.Property(a => a.City).HasMaxLength(100).HasColumnName("Mother_LocalAddress_City");
 				la.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Mother_LocalAddress_Pincode");
@@ -116,9 +116,9 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 			// Configure Office Address
 			gd.OwnsOne(p => p.OfficeAddress, oa =>
 			{
-				oa.Property(a => a.BuildingNo).HasMaxLength(100).HasColumnName("Guardian_OfficeAddress_BuildingNo");
-				oa.Property(a => a.AreaLocalityRoadName).HasMaxLength(200).HasColumnName("Guardian_OfficeAddress_AreaLocalityRoadName");
-				oa.Property(a => a.Landmark).HasMaxLength(200).HasColumnName("Guardian_OfficeAddress_Landmark");
+				oa.Property(a => a.Address1).HasMaxLength(100).HasColumnName("Guardian_OfficeAddress_BuildingNo");
+				oa.Property(a => a.Address2).HasMaxLength(200).HasColumnName("Guardian_OfficeAddress_AreaLocalityRoadName");
+				oa.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Guardian_OfficeAddress_Landmark");
 				oa.Property(a => a.State).HasMaxLength(100).HasColumnName("Guardian_OfficeAddress_State").IsRequired();
 				oa.Property(a => a.City).HasMaxLength(100).HasColumnName("Guardian_OfficeAddress_City");
 				oa.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Guardian_OfficeAddress_Pincode");
@@ -129,9 +129,9 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 			// Configure Local Address
 			gd.OwnsOne(p => p.LocalAddress, la =>
 			{
-				la.Property(a => a.BuildingNo).HasMaxLength(100).HasColumnName("Guardian_LocalAddress_BuildingNo");
-				la.Property(a => a.AreaLocalityRoadName).HasMaxLength(200).HasColumnName("Guardian_LocalAddress_AreaLocalityRoadName");
-				la.Property(a => a.Landmark).HasMaxLength(200).HasColumnName("Guardian_LocalAddress_Landmark");
+				la.Property(a => a.Address1).HasMaxLength(100).HasColumnName("Guardian_LocalAddress_BuildingNo");
+				la.Property(a => a.Address2).HasMaxLength(200).HasColumnName("Guardian_LocalAddress_AreaLocalityRoadName");
+				la.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Guardian_LocalAddress_Landmark");
 				la.Property(a => a.State).HasMaxLength(100).HasColumnName("Guardian_LocalAddress_State").IsRequired();
 				la.Property(a => a.City).HasMaxLength(100).HasColumnName("Guardian_LocalAddress_City");
 				la.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Guardian_LocalAddress_Pincode");

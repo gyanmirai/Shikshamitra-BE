@@ -80,15 +80,15 @@ public class StudentCommunicationDetail : FullAuditedEntity<Guid>, IMultiTenant
 		string? emergencyContactRelation)
 	{
 		LocalAddress = localAddress;
-		
+
 		// If permanent address is same as local, copy local address
 		PermanentAddress = isPermanentSameAsLocal ? localAddress : permanentAddress;
 		IsPermanentSameAsLocal = isPermanentSameAsLocal;
-		
+
 		// If emergency address is same as local, copy local address
 		EmergencyAddress = isEmergencySameAsLocal ? localAddress : emergencyAddress;
 		IsEmergencySameAsLocal = isEmergencySameAsLocal;
-		
+
 		EmergencyContactName = emergencyContactName;
 		EmergencyContactPhone = emergencyContactPhone;
 		EmergencyContactRelation = emergencyContactRelation;

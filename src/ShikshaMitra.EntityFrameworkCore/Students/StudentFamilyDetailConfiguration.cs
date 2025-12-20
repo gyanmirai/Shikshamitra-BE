@@ -35,10 +35,23 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 				oa.Property(a => a.Address1).HasMaxLength(100).HasColumnName("Father_OfficeAddress_BuildingNo");
 				oa.Property(a => a.Address2).HasMaxLength(200).HasColumnName("Father_OfficeAddress_AreaLocalityRoadName");
 				oa.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Father_OfficeAddress_Landmark");
-				oa.Property(a => a.State).HasMaxLength(100).HasColumnName("Father_OfficeAddress_State").IsRequired();
-				oa.Property(a => a.City).HasMaxLength(100).HasColumnName("Father_OfficeAddress_City");
+				oa.Property(a => a.City).HasMaxLength(100).HasColumnName("Father_OfficeAddress_City").IsRequired();
 				oa.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Father_OfficeAddress_Pincode");
-				oa.Property(a => a.Country).HasMaxLength(100).HasColumnName("Father_OfficeAddress_Country");
+				
+				// Configure State as owned entity
+				oa.OwnsOne(a => a.State, s =>
+				{
+					s.Property(st => st.Name).HasMaxLength(100).HasColumnName("Father_OfficeAddress_State_Name");
+					s.Property(st => st.IsoCode).HasMaxLength(10).HasColumnName("Father_OfficeAddress_State_IsoCode");
+				});
+				
+				// Configure Country as owned entity
+				oa.OwnsOne(a => a.Country, c =>
+				{
+					c.Property(ct => ct.Name).HasMaxLength(100).HasColumnName("Father_OfficeAddress_Country_Name");
+					c.Property(ct => ct.IsoCode).HasMaxLength(10).HasColumnName("Father_OfficeAddress_Country_IsoCode");
+				});
+				oa.Navigation(a => a.State).IsRequired();
 			});
 			fd.Navigation(p => p.OfficeAddress).IsRequired(false);
 
@@ -48,10 +61,23 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 				la.Property(a => a.Address1).HasMaxLength(100).HasColumnName("Father_LocalAddress_BuildingNo");
 				la.Property(a => a.Address2).HasMaxLength(200).HasColumnName("Father_LocalAddress_AreaLocalityRoadName");
 				la.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Father_LocalAddress_Landmark");
-				la.Property(a => a.State).HasMaxLength(100).HasColumnName("Father_LocalAddress_State").IsRequired();
-				la.Property(a => a.City).HasMaxLength(100).HasColumnName("Father_LocalAddress_City");
+				la.Property(a => a.City).HasMaxLength(100).HasColumnName("Father_LocalAddress_City").IsRequired();
 				la.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Father_LocalAddress_Pincode");
-				la.Property(a => a.Country).HasMaxLength(100).HasColumnName("Father_LocalAddress_Country");
+				
+				// Configure State as owned entity
+				la.OwnsOne(a => a.State, s =>
+				{
+					s.Property(st => st.Name).HasMaxLength(100).HasColumnName("Father_LocalAddress_State_Name");
+					s.Property(st => st.IsoCode).HasMaxLength(10).HasColumnName("Father_LocalAddress_State_IsoCode");
+				});
+				
+				// Configure Country as owned entity
+				la.OwnsOne(a => a.Country, c =>
+				{
+					c.Property(ct => ct.Name).HasMaxLength(100).HasColumnName("Father_LocalAddress_Country_Name");
+					c.Property(ct => ct.IsoCode).HasMaxLength(10).HasColumnName("Father_LocalAddress_Country_IsoCode");
+				});
+				la.Navigation(a => a.State).IsRequired();
 			});
 			fd.Navigation(p => p.LocalAddress).IsRequired(false);
 		});
@@ -77,10 +103,23 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 				oa.Property(a => a.Address1).HasMaxLength(100).HasColumnName("Mother_OfficeAddress_BuildingNo");
 				oa.Property(a => a.Address2).HasMaxLength(200).HasColumnName("Mother_OfficeAddress_AreaLocalityRoadName");
 				oa.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Mother_OfficeAddress_Landmark");
-				oa.Property(a => a.State).HasMaxLength(100).HasColumnName("Mother_OfficeAddress_State").IsRequired();
-				oa.Property(a => a.City).HasMaxLength(100).HasColumnName("Mother_OfficeAddress_City");
+				oa.Property(a => a.City).HasMaxLength(100).HasColumnName("Mother_OfficeAddress_City").IsRequired();
 				oa.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Mother_OfficeAddress_Pincode");
-				oa.Property(a => a.Country).HasMaxLength(100).HasColumnName("Mother_OfficeAddress_Country");
+				
+				// Configure State as owned entity
+				oa.OwnsOne(a => a.State, s =>
+				{
+					s.Property(st => st.Name).HasMaxLength(100).HasColumnName("Mother_OfficeAddress_State_Name");
+					s.Property(st => st.IsoCode).HasMaxLength(10).HasColumnName("Mother_OfficeAddress_State_IsoCode");
+				});
+				
+				// Configure Country as owned entity
+				oa.OwnsOne(a => a.Country, c =>
+				{
+					c.Property(ct => ct.Name).HasMaxLength(100).HasColumnName("Mother_OfficeAddress_Country_Name");
+					c.Property(ct => ct.IsoCode).HasMaxLength(10).HasColumnName("Mother_OfficeAddress_Country_IsoCode");
+				});
+				oa.Navigation(a => a.State).IsRequired();
 			});
 			md.Navigation(p => p.OfficeAddress).IsRequired(false);
 
@@ -90,10 +129,23 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 				la.Property(a => a.Address1).HasMaxLength(100).HasColumnName("Mother_LocalAddress_BuildingNo");
 				la.Property(a => a.Address2).HasMaxLength(200).HasColumnName("Mother_LocalAddress_AreaLocalityRoadName");
 				la.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Mother_LocalAddress_Landmark");
-				la.Property(a => a.State).HasMaxLength(100).HasColumnName("Mother_LocalAddress_State").IsRequired();
-				la.Property(a => a.City).HasMaxLength(100).HasColumnName("Mother_LocalAddress_City");
+				la.Property(a => a.City).HasMaxLength(100).HasColumnName("Mother_LocalAddress_City").IsRequired();
 				la.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Mother_LocalAddress_Pincode");
-				la.Property(a => a.Country).HasMaxLength(100).HasColumnName("Mother_LocalAddress_Country");
+				
+				// Configure State as owned entity
+				la.OwnsOne(a => a.State, s =>
+				{
+					s.Property(st => st.Name).HasMaxLength(100).HasColumnName("Mother_LocalAddress_State_Name");
+					s.Property(st => st.IsoCode).HasMaxLength(10).HasColumnName("Mother_LocalAddress_State_IsoCode");
+				});
+				
+				// Configure Country as owned entity
+				la.OwnsOne(a => a.Country, c =>
+				{
+					c.Property(ct => ct.Name).HasMaxLength(100).HasColumnName("Mother_LocalAddress_Country_Name");
+					c.Property(ct => ct.IsoCode).HasMaxLength(10).HasColumnName("Mother_LocalAddress_Country_IsoCode");
+				});
+				la.Navigation(a => a.State).IsRequired();
 			});
 			md.Navigation(p => p.LocalAddress).IsRequired(false);
 		});
@@ -119,10 +171,23 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 				oa.Property(a => a.Address1).HasMaxLength(100).HasColumnName("Guardian_OfficeAddress_BuildingNo");
 				oa.Property(a => a.Address2).HasMaxLength(200).HasColumnName("Guardian_OfficeAddress_AreaLocalityRoadName");
 				oa.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Guardian_OfficeAddress_Landmark");
-				oa.Property(a => a.State).HasMaxLength(100).HasColumnName("Guardian_OfficeAddress_State").IsRequired();
-				oa.Property(a => a.City).HasMaxLength(100).HasColumnName("Guardian_OfficeAddress_City");
+				oa.Property(a => a.City).HasMaxLength(100).HasColumnName("Guardian_OfficeAddress_City").IsRequired();
 				oa.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Guardian_OfficeAddress_Pincode");
-				oa.Property(a => a.Country).HasMaxLength(100).HasColumnName("Guardian_OfficeAddress_Country");
+				
+				// Configure State as owned entity
+				oa.OwnsOne(a => a.State, s =>
+				{
+					s.Property(st => st.Name).HasMaxLength(100).HasColumnName("Guardian_OfficeAddress_State_Name").IsRequired();
+					s.Property(st => st.IsoCode).HasMaxLength(10).HasColumnName("Guardian_OfficeAddress_State_IsoCode").IsRequired();
+				});
+				
+				// Configure Country as owned entity
+				oa.OwnsOne(a => a.Country, c =>
+				{
+					c.Property(ct => ct.Name).HasMaxLength(100).HasColumnName("Guardian_OfficeAddress_Country_Name");
+					c.Property(ct => ct.IsoCode).HasMaxLength(10).HasColumnName("Guardian_OfficeAddress_Country_IsoCode");
+				});
+				oa.Navigation(a => a.State).IsRequired();
 			});
 			gd.Navigation(p => p.OfficeAddress).IsRequired(false);
 
@@ -132,10 +197,23 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 				la.Property(a => a.Address1).HasMaxLength(100).HasColumnName("Guardian_LocalAddress_BuildingNo");
 				la.Property(a => a.Address2).HasMaxLength(200).HasColumnName("Guardian_LocalAddress_AreaLocalityRoadName");
 				la.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Guardian_LocalAddress_Landmark");
-				la.Property(a => a.State).HasMaxLength(100).HasColumnName("Guardian_LocalAddress_State").IsRequired();
-				la.Property(a => a.City).HasMaxLength(100).HasColumnName("Guardian_LocalAddress_City");
+				la.Property(a => a.City).HasMaxLength(100).HasColumnName("Guardian_LocalAddress_City").IsRequired();
 				la.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Guardian_LocalAddress_Pincode");
-				la.Property(a => a.Country).HasMaxLength(100).HasColumnName("Guardian_LocalAddress_Country");
+				
+				// Configure State as owned entity
+				la.OwnsOne(a => a.State, s =>
+				{
+					s.Property(st => st.Name).HasMaxLength(100).HasColumnName("Guardian_LocalAddress_State_Name");
+					s.Property(st => st.IsoCode).HasMaxLength(10).HasColumnName("Guardian_LocalAddress_State_IsoCode");
+				});
+				
+				// Configure Country as owned entity
+				la.OwnsOne(a => a.Country, c =>
+				{
+					c.Property(ct => ct.Name).HasMaxLength(100).HasColumnName("Guardian_LocalAddress_Country_Name");
+					c.Property(ct => ct.IsoCode).HasMaxLength(10).HasColumnName("Guardian_LocalAddress_Country_IsoCode");
+				});
+				la.Navigation(a => a.State).IsRequired();
 			});
 			gd.Navigation(p => p.LocalAddress).IsRequired(false);
 		});

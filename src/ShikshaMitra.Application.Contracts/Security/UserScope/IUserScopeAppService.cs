@@ -53,6 +53,17 @@ public interface IUserScopeAppService : IApplicationService
     Task<UserScopeDto> GetUserScopeAsync(Guid userId);
 
     /// <summary>
+    /// Gets the user's scope as a fully resolved hierarchy for frontend display.
+    /// This endpoint is optimized for UI consumption with explicit access flags at each level.
+    /// Use this when you need to display the complete organizational structure with permissions.
+    /// Returns the full hierarchy tree with HasAccess flags indicating what the user can access.
+    /// </summary>
+    /// <param name="userId">User ID</param>
+    /// <param name="academicYearId">Optional: Filter hierarchy to a specific academic year to reduce response size</param>
+    /// <returns>Fully resolved scope hierarchy with access indicators</returns>
+    Task<UserScopeHierarchyDto> GetUserScopeHierarchyAsync(Guid userId, Guid? academicYearId = null);
+
+    /// <summary>
     /// Gets all users who have access to a specific division.
     /// </summary>
     /// <param name="divisionId">Division ID</param>

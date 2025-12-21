@@ -71,15 +71,15 @@ public class SalarySlipConfiguration : IEntityTypeConfiguration<SalarySlip>
 		// JSON columns for line items (EF Core 8+ feature)
 		builder.Property(x => x.Earnings)
 			.HasConversion(
-				v => JsonSerializer.Serialize(v, (JsonSerializerOptions)null),
-				v => JsonSerializer.Deserialize<System.Collections.Generic.List<SalarySlipLineItem>>(v, (JsonSerializerOptions)null) 
+				v => JsonSerializer.Serialize(v, JsonSerializerOptions.Default),
+				v => JsonSerializer.Deserialize<System.Collections.Generic.List<SalarySlipLineItem>>(v, JsonSerializerOptions.Default) 
 					?? new System.Collections.Generic.List<SalarySlipLineItem>())
 			.HasColumnType("nvarchar(max)");
 
 		builder.Property(x => x.Deductions)
 			.HasConversion(
-				v => JsonSerializer.Serialize(v, (JsonSerializerOptions)null),
-				v => JsonSerializer.Deserialize<System.Collections.Generic.List<SalarySlipLineItem>>(v, (JsonSerializerOptions)null) 
+				v => JsonSerializer.Serialize(v, JsonSerializerOptions.Default),
+				v => JsonSerializer.Deserialize<System.Collections.Generic.List<SalarySlipLineItem>>(v, JsonSerializerOptions.Default) 
 					?? new System.Collections.Generic.List<SalarySlipLineItem>())
 			.HasColumnType("nvarchar(max)");
 

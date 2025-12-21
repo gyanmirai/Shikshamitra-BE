@@ -147,6 +147,22 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		Remarks = remarks;
 	}
+
+	/// <summary>
+	/// Updates earnings and deductions line items (only allowed in draft status)
+	/// </summary>
+	internal void UpdateLineItems(
+		List<SalarySlipLineItem> earnings,
+		List<SalarySlipLineItem> deductions)
+	{
+		if (Status == SalarySlipStatus.Finalized)
+			throw new InvalidOperationException("Cannot update finalized salary slip");
+
+		Earnings = earnings ?? new List<SalarySlipLineItem>();
+		Deductions = deductions ?? new List<SalarySlipLineItem>();
+		ProcessedDate = DateTime.UtcNow;
+		RecalculateTotals();
+	}
 }
 
 /// <summary>

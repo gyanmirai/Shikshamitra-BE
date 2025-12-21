@@ -57,7 +57,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 			_salarySlipManager.ValidateMonthYearFormat(monthYear);
 
 			// Check cache first
-			var cacheKey = GetCacheKey(employeeId, monthYear);
+			var cacheKey = GetCacheKey(CurrentTenant.Id, employeeId, monthYear);
 			var cachedDto = await _cache.GetAsync(cacheKey);
 			
 			if (cachedDto != null)
@@ -159,10 +159,11 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 	}
 
 	/// <summary>
-	/// Generates cache key for salary slip
+	/// Generates cache key for salary slip (includes tenant ID for multi-tenancy support)
 	/// </summary>
-	private static string GetCacheKey(Guid employeeId, string monthYear)
+	private string GetCacheKey(Guid? tenantId, Guid employeeId, string monthYear)
 	{
-		return $"SalarySlip:{employeeId}:{monthYear}";
+		var tenantPrefix = tenantId.HasValue ? tenantId.Value.ToString() : "host";
+		return $"SalarySlip:{tenantPrefix}:{employeeId}:{monthYear}";
 	}
 }

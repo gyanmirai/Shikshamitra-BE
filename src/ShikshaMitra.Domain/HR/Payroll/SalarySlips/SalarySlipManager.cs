@@ -53,16 +53,24 @@ public class SalarySlipManager : DomainService
 		// Check if salary slip already exists
 		var existingSlip = await _salarySlipRepository.GetByEmployeeAndMonthAsync(employeeId, monthYear);
 		
+		// If slip exists and is finalized, prevent regeneration
+		if (existingSlip != null && existingSlip.Status == SalarySlipStatus.Finalized)
+		{
+			if (forceRegenerate)
+			{
+				throw new UserFriendlyException("Cannot regenerate a finalized salary slip");
+			}
+			_logger.LogInformation("Finalized salary slip already exists for Employee: {EmployeeId}, Month: {MonthYear}", 
+				employeeId, monthYear);
+			return existingSlip;
+		}
+
+		// If slip exists and not forcing regeneration, return existing draft slip
 		if (existingSlip != null && !forceRegenerate)
 		{
 			_logger.LogInformation("Salary slip already exists for Employee: {EmployeeId}, Month: {MonthYear}", 
 				employeeId, monthYear);
 			return existingSlip;
-		}
-
-		if (existingSlip != null && existingSlip.Status == SalarySlipStatus.Finalized)
-		{
-			throw new UserFriendlyException("Cannot regenerate a finalized salary slip");
 		}
 
 		// Get payroll components
@@ -100,8 +108,13 @@ public class SalarySlipManager : DomainService
 			return salarySlip;
 		}
 
-		_logger.LogInformation("Salary slip generated successfully for Employee: {EmployeeId}, Month: {MonthYear}", 
-			employeeId, monthYear);
+		// Update existing draft slip with new line items
+		existingSlip.UpdateLineItems(earningLineItems, deductionLineItems);
+		await _salarySlipRepository.UpdateAsync(existingSlip);
+
+		_logger.LogInformation("Salary slip regenerated for Employee: {EmployeeId}, Month: {MonthYear}, " +
+			"TotalEarning: {TotalEarning}, TotalDeduction: {TotalDeduction}, NetSalary: {NetSalary}",
+			employeeId, monthYear, existingSlip.TotalEarning, existingSlip.TotalDeduction, existingSlip.NetSalary);
 
 		return existingSlip;
 	}

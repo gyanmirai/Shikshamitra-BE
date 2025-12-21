@@ -69,14 +69,14 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 				return cachedDto;
 			}
 
-			// Verify employee exists with detailed logging
-			var employee = await _employeeRepository.GetAsync(employeeId, includeDetails: false);
-
-			// Generate or retrieve salary slip
+			// Generate or retrieve salary slip (Manager validates employee existence)
 			var salarySlip = await _salarySlipManager.GenerateOrGetSalarySlipAsync(
 				employeeId, 
 				monthYear, 
 				forceRegenerate: false);
+
+			// Get employee for DTO mapping (already validated by Manager)
+			var employee = await _employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
 
 			// Map to DTO
 			var dto = await MapToSalarySlipDtoAsync(salarySlip, employee);
@@ -133,14 +133,14 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 
 		_salarySlipManager.ValidateMonthYearFormat(input.MonthYear);
 
-		// Get employee details
-		var employee = await _employeeRepository.GetAsync(input.EmployeeId, includeDetails: false);
-
-		// Generate or regenerate salary slip
+		// Generate or regenerate salary slip (Manager validates employee existence)
 		var salarySlip = await _salarySlipManager.GenerateOrGetSalarySlipAsync(
 			input.EmployeeId,
 			input.MonthYear,
 			input.ForceRegenerate);
+
+		// Get employee for DTO mapping (already validated by Manager)
+		var employee = await _employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
 
 		// Clear cache
 		var cacheKey = GetCacheKey(CurrentTenant.Id, input.EmployeeId, input.MonthYear);

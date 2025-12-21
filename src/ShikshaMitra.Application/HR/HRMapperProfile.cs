@@ -6,6 +6,7 @@ using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.EventAndHolidays;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
+using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Students;
 
@@ -80,6 +81,13 @@ public class HRMapperProfile : Profile
 
 		CreateMap<PayrollStructure, PayrollStructureDto>();
 		CreateMap<CreateUpdatePayrollStructureDto, PayrollStructure>();
+
+		#endregion
+
+		#region Salary Slips
+
+		CreateMap<SalarySlip, SalarySlipDto>();
+		CreateMap<SalarySlipLineItem, SalarySlipLineItemDto>();
 
 		#endregion
 

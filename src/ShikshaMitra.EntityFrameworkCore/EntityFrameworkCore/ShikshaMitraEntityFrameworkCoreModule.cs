@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.EntityFrameworkCore.Security.UserScope;
+using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp.Uow;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
@@ -55,6 +56,7 @@ namespace ShikshaMitra.EntityFrameworkCore;
             
             // Register custom repositories
             options.AddRepository<UserScopeAssignment, EfCoreUserScopeAssignmentRepository>();
+            options.AddRepository<SalarySlip, EfCoreSalarySlipRepository>();
         });
         
         // Register custom repository extensions

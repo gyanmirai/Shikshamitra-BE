@@ -101,6 +101,10 @@ public class StudentMapperProfile : Profile
 		// Add converter for Age calculation
 		CreateMap<DateTimeOffset?, string>().ConvertUsing<AgeConverter>();
 
-		CreateMap<Student, StudentGeneralDetailsDto>();
-	}
+               CreateMap<Student, StudentGeneralDetailsDto>();
+
+               // StudentNote mappings
+               CreateMap<StudentNote, ShikshaMitra.Students.Enrollments.Notes.StudentNoteDto>();
+               CreateMap<ShikshaMitra.Students.Enrollments.Notes.CreateUpdateStudentNoteDto, StudentNote>();
+       }
 }

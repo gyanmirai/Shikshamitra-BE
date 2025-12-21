@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
@@ -38,6 +39,8 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public InquiryPreference? InquiryPreference { get; private set; }
 	public EducationMedium? AcademicMedium { get; private set; }
 
+	public ICollection<StudentNote> Notes { get; private set; } = new List<StudentNote>(); 
+
 	private Student()
 	{
 		/* This constructor is for deserialization / ORM purpose */
@@ -70,6 +73,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		GrNo = grNo;
 		RollNo = rollNo;
 		Status = status;
+		Notes = new List<StudentNote>();
 	}
 
 	/// <summary>

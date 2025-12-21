@@ -95,6 +95,7 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.PreviousSchool, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.PreviousSchool : null))
 			.ForMember(dest => dest.InquiryPreference, opt => opt.MapFrom(src => src.InquiryPreference != null ? src.InquiryPreference.PreferenceName : null))
 			.ForMember(dest => dest.NextReminderDate, opt => opt.Ignore())
+			.ForMember(dest => dest.FormNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.FormNo : null))
 			.IncludeAllDerived();
 
 		// Add converter for Age calculation

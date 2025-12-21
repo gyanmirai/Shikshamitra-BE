@@ -141,6 +141,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<StudentPreviousSchoolDetail> StudentPreviousSchoolDetails { get; set; }
 	public DbSet<StudentBankDetail> StudentBankDetails { get; set; }
 	public DbSet<StudentDocument> StudentDocuments { get; set; }
+	public DbSet<StudentNote> StudentNotes { get; set; }
 
 	#region Student Enrollment
 

@@ -52,4 +52,6 @@ public class StudentDocumentDto : EntityDto<Guid>
 	/// Who uploaded the document
 	/// </summary>
 	public Guid? CreatorId { get; set; }
+
+	public bool IsUploaded { get; set; } = false;
 }

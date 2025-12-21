@@ -5,16 +5,17 @@ namespace ShikshaMitra.Students.Enrollments.Registrations;
 
 public class StudentGeneralDetailsDto
 {
+	public Guid StudentId { get; set; }
 	public string FormNo { get; set; }
 	public Guid AcademicYearId { get; set; }
-	public Guid BoardId { get; set; }
-	public Guid EducationMediumId { get; private set; }
+	public Guid AcademicBoardId { get; set; }
+	public Guid AcademicMediumId { get; private set; }
 	public Guid StandardId { get; private set; }
 
 	public string FirstName { get; set; }
 	public string? MiddleName { get; set; }
 	public string LastName { get; set; }
-	public DateTimeOffset DateOfBirthday { get; set; }
+	public DateTimeOffset DateOfBirth { get; set; }
 	public GenderEnum Gender { get; set; }
 
 	public string PrimaryContactNo { get; set; }

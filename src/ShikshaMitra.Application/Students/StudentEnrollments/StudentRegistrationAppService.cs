@@ -1,7 +1,8 @@
-﻿using ShikshaMitra.Students.ValueObjects;
+﻿using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.ValueObjects;
 using ShikshaMitra.TenantSettings.Divisions;
-using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,7 +11,6 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
-using ShikshaMitra.Students.Enrollments.Registrations;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
@@ -143,6 +143,9 @@ public class StudentRegistrationAppService(
 		// Map to DTO
 		var result = ObjectMapper.Map<Student, StudentGeneralDetailsDto>(student);
 
+		// enrich result by getting academicBoardId, academicYearId etc
+		await dtoEnricher.EnrichGeneralDetailsDtoAsync(result);
+
 		return result;
 	}
 
@@ -165,9 +168,7 @@ public class StudentRegistrationAppService(
 		);
 
 		// Update additional details
-		if (student.AdditionalDetail != null)
-		{
-			student.AdditionalDetail.UpdateGeneralInformation(
+		student.AdditionalDetail?.UpdateGeneralInformation(
 				input.DateOfBirth,
 				input.Gender,
 				input.ProfilePictureUrl,
@@ -184,12 +185,9 @@ public class StudentRegistrationAppService(
 				input.LastClassPassed,
 				StudentRegistrationStateEnum.General
 			);
-		}
 
 		// Update contact details
-		if (student.ContactDetail != null)
-		{
-			student.ContactDetail.UpdateContactInfo(
+		student.ContactDetail?.UpdateContactInfo(
 				input.PrimaryContactNo,
 				input.SecondaryContactNo,
 				input.Email,
@@ -201,7 +199,6 @@ public class StudentRegistrationAppService(
 				input.Country,
 				input.Pincode
 			);
-		}
 
 		// Transition to Registration status (if not already there)
 		if (student.Status != StudentLifeCycleStatusEnum.Registation)

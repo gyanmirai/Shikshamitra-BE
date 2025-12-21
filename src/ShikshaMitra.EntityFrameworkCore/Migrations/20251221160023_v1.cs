@@ -1176,6 +1176,39 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "HR_SalarySlips",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    MonthYear = table.Column<string>(type: "character varying(7)", maxLength: 7, nullable: false),
+                    Year = table.Column<int>(type: "integer", nullable: false),
+                    Month = table.Column<int>(type: "integer", nullable: false),
+                    TotalEarning = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    TotalDeduction = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    NetSalary = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    ProcessedDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Remarks = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    Earnings = table.Column<string>(type: "jsonb", nullable: false),
+                    Deductions = table.Column<string>(type: "jsonb", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_HR_SalarySlips", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "OpenIddictApplications",
                 columns: table => new
                 {
@@ -4110,6 +4143,32 @@ namespace ShikshaMitra.Migrations
                 column: "SubjectId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_HR_SalarySlips_EmployeeId",
+                table: "HR_SalarySlips",
+                column: "EmployeeId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_HR_SalarySlips_EmployeeId_MonthYear",
+                table: "HR_SalarySlips",
+                columns: new[] { "EmployeeId", "MonthYear" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_HR_SalarySlips_Status",
+                table: "HR_SalarySlips",
+                column: "Status");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_HR_SalarySlips_TenantId",
+                table: "HR_SalarySlips",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_HR_SalarySlips_Year_Month",
+                table: "HR_SalarySlips",
+                columns: new[] { "Year", "Month" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_OpenIddictApplications_ClientId",
                 table: "OpenIddictApplications",
                 column: "ClientId");
@@ -4376,6 +4435,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "FeeHeads");
+
+            migrationBuilder.DropTable(
+                name: "HR_SalarySlips");
 
             migrationBuilder.DropTable(
                 name: "OpenIddictScopes");

@@ -28,7 +28,7 @@ public class EducationMedium : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	internal EducationMedium(Guid id, Guid? tenantId, string name, Guid educationBoardId)
 		: base(id)
 	{
-		TenantId = Check.NotNull(tenantId, nameof(tenantId));
+		TenantId = tenantId;  // Allow null for host-level data
 		EducationBoardId = Check.NotNull(educationBoardId, nameof(educationBoardId));
 		SetName(name);
 	}

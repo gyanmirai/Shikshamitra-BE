@@ -40,15 +40,14 @@ public class SalarySlipManager : DomainService
 		string monthYear,
 		bool forceRegenerate = false)
 	{
+		// Validate month-year format
+		ValidateMonthYearFormat(monthYear);
+		
 		_logger.LogInformation("Generating salary slip for Employee: {EmployeeId}, Month: {MonthYear}", 
 			employeeId, monthYear);
 
-		// Validate employee exists
+		// GetAsync already throws EntityNotFoundException if not found, so no null check needed
 		var employee = await _employeeRepository.GetAsync(employeeId);
-		if (employee == null)
-		{
-			throw new UserFriendlyException($"Employee with ID {employeeId} not found");
-		}
 
 		// Check if salary slip already exists
 		var existingSlip = await _salarySlipRepository.GetByEmployeeAndMonthAsync(employeeId, monthYear);

@@ -111,3 +111,35 @@ public class GetSalarySlipInput
 	/// </summary>
 	public string MonthYear { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Input DTO for generating salary slip
+/// </summary>
+public class GenerateSalarySlipInput
+{
+	/// <summary>
+	/// Employee identifier
+	/// </summary>
+	public Guid EmployeeId { get; set; }
+
+	/// <summary>
+	/// Month and year in YYYY-MM format (e.g., "2025-01")
+	/// </summary>
+	public string MonthYear { get; set; } = string.Empty;
+	
+	/// <summary>
+	/// Force regeneration if salary slip already exists
+	/// </summary>
+	public bool ForceRegenerate { get; set; }
+}
+
+/// <summary>
+/// Input DTO for updating salary slip remarks
+/// </summary>
+public class UpdateSalarySlipInput
+{
+	/// <summary>
+	/// Optional remarks or notes
+	/// </summary>
+	public string? Remarks { get; set; }
+}

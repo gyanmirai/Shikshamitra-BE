@@ -69,19 +69,20 @@ public class SalarySlipConfiguration : IEntityTypeConfiguration<SalarySlip>
 			.HasMaxLength(1000);
 
 		// JSON columns for line items (EF Core 8+ feature)
+		// PostgreSQL uses jsonb for efficient JSON storage
 		builder.Property(x => x.Earnings)
 			.HasConversion(
 				v => JsonSerializer.Serialize(v, JsonSerializerOptions.Default),
 				v => JsonSerializer.Deserialize<System.Collections.Generic.List<SalarySlipLineItem>>(v, JsonSerializerOptions.Default) 
 					?? new System.Collections.Generic.List<SalarySlipLineItem>())
-			.HasColumnType("nvarchar(max)");
+			.HasColumnType("jsonb");
 
 		builder.Property(x => x.Deductions)
 			.HasConversion(
 				v => JsonSerializer.Serialize(v, JsonSerializerOptions.Default),
 				v => JsonSerializer.Deserialize<System.Collections.Generic.List<SalarySlipLineItem>>(v, JsonSerializerOptions.Default) 
 					?? new System.Collections.Generic.List<SalarySlipLineItem>())
-			.HasColumnType("nvarchar(max)");
+			.HasColumnType("jsonb");
 
 		// Multi-tenancy
 		builder.HasIndex(x => x.TenantId)

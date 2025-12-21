@@ -34,7 +34,7 @@ public class EducationBoard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	)
 		: base(id)
 	{
-		TenantId = Check.NotNull(tenantId, nameof(tenantId));
+		TenantId = tenantId;  // Allow null for host-level data
 		AcademicYearId = Check.NotNull(academicYearId, nameof(academicYearId));
 		SetEducationBoardType(educationBoardType);
 	}

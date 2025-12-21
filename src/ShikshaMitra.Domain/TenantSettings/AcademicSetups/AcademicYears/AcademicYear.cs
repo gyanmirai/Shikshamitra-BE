@@ -26,7 +26,7 @@ public class AcademicYear : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DateTime endDate)
 		: base(id)
 	{
-		TenantId = Check.NotNull(tenantId, nameof(tenantId));
+		TenantId = tenantId;  // Allow null for host-level data
 		SetName(name);
 		SetDates(startDate, endDate);
 	}

@@ -15,6 +15,7 @@ using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.EventAndHolidays;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using ShikshaMitra.Security.UserScope;
@@ -212,6 +213,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	DbSet<ProfessionalTax> ProfessionalTaxes { get; set; }
 	public DbSet<EarningComponent> EarningComponents { get; set; }
 	public DbSet<DeductionComponent> DeductionComponents { get; set; }
+	public DbSet<SalarySlip> SalarySlips { get; set; }
 
 	#endregion
 

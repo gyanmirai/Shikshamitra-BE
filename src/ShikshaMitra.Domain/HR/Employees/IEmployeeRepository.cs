@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories;
@@ -35,4 +36,20 @@ public interface IEmployeeRepository : IRepository<Employee, Guid>
 		Guid id, 
 		bool includePayrollStructure = false,
 		CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Gets an employee with reporting manager details.
+	/// </summary>
+	/// <param name="id">Employee ID</param>
+	/// <param name="cancellationToken">Cancellation token</param>
+	/// <returns>Employee entity with reporting manager loaded</returns>
+	Task<Employee?> GetWithReportingManagerAsync(Guid id, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Gets all employees reporting to a specific manager.
+	/// </summary>
+	/// <param name="managerId">The manager's employee ID</param>
+	/// <param name="cancellationToken">Cancellation token</param>
+	/// <returns>List of employees reporting to the manager</returns>
+	Task<List<Employee>> GetEmployeesByManagerAsync(Guid managerId, CancellationToken cancellationToken = default);
 }

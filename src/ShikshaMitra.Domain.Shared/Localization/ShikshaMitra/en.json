@@ -50,6 +50,8 @@
 
     "ShikshaMitra:00001": "The end date '{endDate}' must be greater than the start date '{startDate}'.",
     "ShikshaMitra:00002": "The number should be greater than 0",
+    "ShikshaMitra:00004": "An employee cannot report to themselves.",
+    "ShikshaMitra:00005": "Circular reporting relationship detected. The proposed manager already reports to this employee directly or indirectly.",
 
     "ShikshaMitra.TenantSettings:00001": "{entityName} with the name '{name}' already exists.",
 

@@ -1,5 +1,7 @@
 ﻿using AutoMapper;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.ReportingManager;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
@@ -50,5 +52,9 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		CreateMap<LeavePolicy, LeavePolicyDto>()
 			.ForMember(dest => dest.PaidType,
 				opt => opt.MapFrom(src => src.PaidType == LeavePaidType.Paid ? "Paid" : "Unpaid"));
+
+		// Employee Reporting Manager mappings
+		CreateMap<Employee, EmployeeBasicDto>()
+			.ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.EmployeeName));
 	}
 }

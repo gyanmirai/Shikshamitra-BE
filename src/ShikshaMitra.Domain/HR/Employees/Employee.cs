@@ -72,6 +72,9 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	// Payroll Structure
 	public Guid? PayrollStructureId { get; private set; }
 
+	// Reporting Manager
+	public Guid? ReportingManagerId { get; private set; }
+
 	// Navigation Property for Role
 	public virtual IdentityRole? Role { get; private set; }
 
@@ -82,6 +85,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public virtual PayrollStructure? PayrollStructure { get; private set; }
 	// Navigation property for Shift
 	public virtual ShiftManagement? Shift { get; private set; }
+	// Navigation property for Reporting Manager
+	public virtual Employee? ReportingManager { get; private set; }
 
 	// Full name including middle name
 	public string EmployeeNameWithFather
@@ -327,5 +332,15 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	internal void UpdateUserId(Guid id)
 	{
 		UserId = id;
+	}
+
+	public void AssignReportingManager(Guid reportingManagerId)
+	{
+		ReportingManagerId = reportingManagerId;
+	}
+
+	public void RemoveReportingManager()
+	{
+		ReportingManagerId = null;
 	}
 }

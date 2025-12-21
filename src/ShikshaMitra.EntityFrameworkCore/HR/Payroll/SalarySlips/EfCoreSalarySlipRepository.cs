@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.EntityFrameworkCore;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
@@ -17,13 +18,19 @@ public class EfCoreSalarySlipRepository
 	: EfCoreRepository<ShikshaMitraDbContext, SalarySlip, Guid>, 
 	  ISalarySlipRepository
 {
-	public EfCoreSalarySlipRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider) 
+	private readonly ICurrentTenant _currentTenant;
+
+	public EfCoreSalarySlipRepository(
+		IDbContextProvider<ShikshaMitraDbContext> dbContextProvider,
+		ICurrentTenant currentTenant) 
 		: base(dbContextProvider)
 	{
+		_currentTenant = currentTenant;
 	}
 
 	/// <summary>
-	/// Gets a salary slip by employee ID and month-year with optimized query
+	/// Gets a salary slip by employee ID and month-year
+	/// Note: Entity is tracked since it may be updated later
 	/// </summary>
 	public async Task<SalarySlip?> GetByEmployeeAndMonthAsync(
 		Guid employeeId, 
@@ -33,10 +40,10 @@ public class EfCoreSalarySlipRepository
 		var dbSet = await GetDbSetAsync();
 		
 		return await dbSet
-			.AsNoTracking() // Performance optimization for read-only queries
-			.FirstOrDefaultAsync(
-				x => x.EmployeeId == employeeId && x.MonthYear == monthYear, 
-				cancellationToken);
+			.Where(x => x.TenantId == _currentTenant.Id &&
+			            x.EmployeeId == employeeId && 
+			            x.MonthYear == monthYear)
+			.FirstOrDefaultAsync(cancellationToken);
 	}
 
 	/// <summary>
@@ -52,8 +59,9 @@ public class EfCoreSalarySlipRepository
 		
 		return await dbSet
 			.AsNoTracking()
-			.AnyAsync(
-				x => x.EmployeeId == employeeId && x.MonthYear == monthYear, 
-				cancellationToken);
+			.Where(x => x.TenantId == _currentTenant.Id &&
+			            x.EmployeeId == employeeId && 
+			            x.MonthYear == monthYear)
+			.AnyAsync(cancellationToken);
 	}
 }

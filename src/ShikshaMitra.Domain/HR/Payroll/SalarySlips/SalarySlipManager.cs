@@ -4,6 +4,7 @@ using ShikshaMitra.HR.Employees.Payroll;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
@@ -38,7 +39,8 @@ public class SalarySlipManager : DomainService
 	public async Task<SalarySlip> GenerateOrGetSalarySlipAsync(
 		Guid employeeId, 
 		string monthYear,
-		bool forceRegenerate = false)
+		bool forceRegenerate = false,
+		CancellationToken cancellationToken = default)
 	{
 		// Validate month-year format
 		ValidateMonthYearFormat(monthYear);
@@ -47,10 +49,10 @@ public class SalarySlipManager : DomainService
 			employeeId, monthYear);
 
 		// GetAsync already throws EntityNotFoundException if not found, so no null check needed
-		var employee = await _employeeRepository.GetAsync(employeeId);
+		var employee = await _employeeRepository.GetAsync(employeeId, cancellationToken: cancellationToken);
 
 		// Check if salary slip already exists
-		var existingSlip = await _salarySlipRepository.GetByEmployeeAndMonthAsync(employeeId, monthYear);
+		var existingSlip = await _salarySlipRepository.GetByEmployeeAndMonthAsync(employeeId, monthYear, cancellationToken);
 		
 		// If slip exists and is finalized, prevent regeneration
 		if (existingSlip != null && existingSlip.Status == SalarySlipStatus.Finalized)
@@ -73,8 +75,14 @@ public class SalarySlipManager : DomainService
 		}
 
 		// Get payroll components
-		var earnings = await _payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
-		var deductions = await _payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);
+		var earnings = await _payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId, cancellationToken);
+		var deductions = await _payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId, cancellationToken);
+
+		// Log warning if no payroll components found
+		if (earnings.Count == 0 && deductions.Count == 0)
+		{
+			_logger.LogWarning("No payroll components found for Employee: {EmployeeId}. Generating empty salary slip.", employeeId);
+		}
 
 		// Convert to salary slip line items
 		var earningLineItems = earnings.Select(e => new SalarySlipLineItem(
@@ -98,7 +106,7 @@ public class SalarySlipManager : DomainService
 				earningLineItems,
 				deductionLineItems);
 
-			await _salarySlipRepository.InsertAsync(salarySlip);
+			await _salarySlipRepository.InsertAsync(salarySlip, cancellationToken: cancellationToken);
 			
 			_logger.LogInformation("Salary slip created for Employee: {EmployeeId}, Month: {MonthYear}, " +
 				"TotalEarning: {TotalEarning}, TotalDeduction: {TotalDeduction}, NetSalary: {NetSalary}",
@@ -109,7 +117,7 @@ public class SalarySlipManager : DomainService
 
 		// Update existing draft slip with new line items
 		existingSlip.UpdateLineItems(earningLineItems, deductionLineItems);
-		await _salarySlipRepository.UpdateAsync(existingSlip);
+		await _salarySlipRepository.UpdateAsync(existingSlip, cancellationToken: cancellationToken);
 
 		_logger.LogInformation("Salary slip regenerated for Employee: {EmployeeId}, Month: {MonthYear}, " +
 			"TotalEarning: {TotalEarning}, TotalDeduction: {TotalDeduction}, NetSalary: {NetSalary}",

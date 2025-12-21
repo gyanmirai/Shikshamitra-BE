@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -10,7 +11,8 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.HR.Payroll.Settings;
 
 /// <summary>
-/// API Controller for managing deduction components
+/// API Controller for managing deduction components.
+/// Implements OpenAPI contract-compliant endpoints.
 /// </summary>
 [Area("app")]
 [RemoteService(Name = "Default")]
@@ -26,13 +28,70 @@ public class DeductionComponentController : AbpControllerBase
 	}
 
 	/// <summary>
-	/// Get list of all deduction components (paginated)
+	/// Get list of all deduction components (OpenAPI contract: ComponentListResponse)
+	/// Returns {total, data} format as per OpenAPI specification
 	/// </summary>
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.View)]
-	public virtual Task<PagedResultDto<DeductionComponentDto>> GetListAsync([FromQuery] PagedAndSortedResultRequestDto input)
+	[ProducesResponseType(typeof(ComponentListResponseDto), 200)]
+	public virtual async Task<ComponentListResponseDto> GetListAsync([FromQuery] PagedAndSortedResultRequestDto input)
 	{
-		return _deductionComponentAppService.GetListAsync(input);
+		var result = await _deductionComponentAppService.GetListAsync(input);
+		return DeductionComponentOpenApiMapper.ToListResponse(result);
+	}
+
+	/// <summary>
+	/// Get a specific deduction component by ID (OpenAPI contract: ComponentResponse)
+	/// </summary>
+	[HttpGet("{id}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.View)]
+	[ProducesResponseType(typeof(ComponentResponseDto), 200)]
+	public virtual async Task<ComponentResponseDto> GetAsync(Guid id)
+	{
+		var result = await _deductionComponentAppService.GetAsync(id);
+		return DeductionComponentOpenApiMapper.ToComponentResponse(result);
+	}
+
+	/// <summary>
+	/// Create a new deduction component (OpenAPI contract: accepts ComponentRequest, returns BasicSuccess with 201)
+	/// </summary>
+	[HttpPost]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Add)]
+	[ProducesResponseType(typeof(ApiSuccessResponseDto), 201)]
+	public virtual async Task<IActionResult> CreateAsync([FromBody] ComponentRequestDto input)
+	{
+		var createDto = DeductionComponentOpenApiMapper.ToCreateDto(input);
+		await _deductionComponentAppService.CreateAsync(createDto);
+		
+		return StatusCode(201, ApiSuccessResponseDto.SuccessResult("Component created successfully"));
+	}
+
+	/// <summary>
+	/// Update an existing deduction component (OpenAPI contract: accepts ComponentRequest, returns BasicSuccess)
+	/// </summary>
+	[HttpPut("{id}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Add)]
+	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
+	public virtual async Task<ApiSuccessResponseDto> UpdateAsync(Guid id, [FromBody] ComponentRequestDto input)
+	{
+		// Fetch existing component to preserve display order (not in OpenAPI contract)
+		var existingComponent = await _deductionComponentAppService.GetAsync(id);
+		var updateDto = DeductionComponentOpenApiMapper.ToUpdateDto(input, existingComponent.DisplayOrder);
+		await _deductionComponentAppService.UpdateAsync(id, updateDto);
+		
+		return ApiSuccessResponseDto.SuccessResult("Component updated successfully");
+	}
+
+	/// <summary>
+	/// Delete a deduction component (OpenAPI contract: returns BasicSuccess)
+	/// </summary>
+	[HttpDelete("{id}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Delete)]
+	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
+	public virtual async Task<ApiSuccessResponseDto> DeleteAsync(Guid id)
+	{
+		await _deductionComponentAppService.DeleteAsync(id);
+		return ApiSuccessResponseDto.SuccessResult("Component deleted successfully");
 	}
 
 	/// <summary>
@@ -40,49 +99,11 @@ public class DeductionComponentController : AbpControllerBase
 	/// </summary>
 	[HttpGet("active")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.View)]
-	public virtual Task<PagedResultDto<DeductionComponentDto>> GetAllActiveAsync([FromQuery] PagedResultRequestDto input)
+	[ProducesResponseType(typeof(ComponentListResponseDto), 200)]
+	public virtual async Task<ComponentListResponseDto> GetAllActiveAsync([FromQuery] PagedResultRequestDto input)
 	{
-		return _deductionComponentAppService.GetAllActiveAsync(input);
-	}
-
-	/// <summary>
-	/// Get a specific deduction component by ID
-	/// </summary>
-	[HttpGet("{id}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.View)]
-	public virtual Task<DeductionComponentDto> GetAsync(Guid id)
-	{
-		return _deductionComponentAppService.GetAsync(id);
-	}
-
-	/// <summary>
-	/// Create a new deduction component
-	/// </summary>
-	[HttpPost]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Add)]
-	public virtual Task<DeductionComponentDto> CreateAsync([FromBody] CreateDeductionComponentDto input)
-	{
-		return _deductionComponentAppService.CreateAsync(input);
-	}
-
-	/// <summary>
-	/// Update an existing deduction component
-	/// </summary>
-	[HttpPut("{id}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Add)]
-	public virtual Task<DeductionComponentDto> UpdateAsync(Guid id, [FromBody] UpdateDeductionComponentDto input)
-	{
-		return _deductionComponentAppService.UpdateAsync(id, input);
-	}
-
-	/// <summary>
-	/// Delete a deduction component
-	/// </summary>
-	[HttpDelete("{id}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Delete)]
-	public virtual Task DeleteAsync(Guid id)
-	{
-		return _deductionComponentAppService.DeleteAsync(id);
+		var result = await _deductionComponentAppService.GetAllActiveAsync(input);
+		return DeductionComponentOpenApiMapper.ToListResponse(result);
 	}
 
 	/// <summary>
@@ -90,9 +111,11 @@ public class DeductionComponentController : AbpControllerBase
 	/// </summary>
 	[HttpPost("{id}/activate")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Add)]
-	public virtual Task ActivateAsync(Guid id)
+	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
+	public virtual async Task<ApiSuccessResponseDto> ActivateAsync(Guid id)
 	{
-		return _deductionComponentAppService.ActivateAsync(id);
+		await _deductionComponentAppService.ActivateAsync(id);
+		return ApiSuccessResponseDto.SuccessResult("Component activated successfully");
 	}
 
 	/// <summary>
@@ -100,8 +123,10 @@ public class DeductionComponentController : AbpControllerBase
 	/// </summary>
 	[HttpPost("{id}/deactivate")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Add)]
-	public virtual Task DeactivateAsync(Guid id)
+	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
+	public virtual async Task<ApiSuccessResponseDto> DeactivateAsync(Guid id)
 	{
-		return _deductionComponentAppService.DeactivateAsync(id);
+		await _deductionComponentAppService.DeactivateAsync(id);
+		return ApiSuccessResponseDto.SuccessResult("Component deactivated successfully");
 	}
 }

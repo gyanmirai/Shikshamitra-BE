@@ -12,7 +12,7 @@ namespace ShikshaMitra.HR.Payroll.Settings;
 
 /// <summary>
 /// API Controller for managing earning components.
-/// Implements both OpenAPI contract-compliant endpoints and legacy endpoints for backward compatibility.
+/// Implements OpenAPI contract-compliant endpoints.
 /// </summary>
 [Area("app")]
 [RemoteService(Name = "Default")]
@@ -134,54 +134,6 @@ public class EarningComponentController : AbpControllerBase
 	{
 		await _earningComponentAppService.DeactivateAsync(id);
 		return ApiSuccessResponseDto.SuccessResult("Component deactivated successfully");
-	}
-
-	#endregion
-
-	#region Legacy Endpoints (For Backward Compatibility)
-
-	/// <summary>
-	/// [Legacy] Get list of all earning components with ABP standard response format
-	/// </summary>
-	[HttpGet("legacy")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsEarningComponents.View)]
-	[ProducesResponseType(typeof(PagedResultDto<EarningComponentDto>), 200)]
-	public virtual Task<PagedResultDto<EarningComponentDto>> GetListLegacyAsync([FromQuery] PagedAndSortedResultRequestDto input)
-	{
-		return _earningComponentAppService.GetListAsync(input);
-	}
-
-	/// <summary>
-	/// [Legacy] Get a specific earning component by ID with domain DTO response
-	/// </summary>
-	[HttpGet("legacy/{id}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsEarningComponents.View)]
-	[ProducesResponseType(typeof(EarningComponentDto), 200)]
-	public virtual Task<EarningComponentDto> GetLegacyAsync(Guid id)
-	{
-		return _earningComponentAppService.GetAsync(id);
-	}
-
-	/// <summary>
-	/// [Legacy] Create a new earning component with domain DTO
-	/// </summary>
-	[HttpPost("legacy")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsEarningComponents.Add)]
-	[ProducesResponseType(typeof(EarningComponentDto), 200)]
-	public virtual Task<EarningComponentDto> CreateLegacyAsync([FromBody] CreateEarningComponentDto input)
-	{
-		return _earningComponentAppService.CreateAsync(input);
-	}
-
-	/// <summary>
-	/// [Legacy] Update an existing earning component with domain DTO
-	/// </summary>
-	[HttpPut("legacy/{id}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsEarningComponents.Add)]
-	[ProducesResponseType(typeof(EarningComponentDto), 200)]
-	public virtual Task<EarningComponentDto> UpdateLegacyAsync(Guid id, [FromBody] UpdateEarningComponentDto input)
-	{
-		return _earningComponentAppService.UpdateAsync(id, input);
 	}
 
 	#endregion

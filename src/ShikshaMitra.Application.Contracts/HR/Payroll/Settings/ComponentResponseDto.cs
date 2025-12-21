@@ -3,18 +3,18 @@ using System;
 namespace ShikshaMitra.HR.Payroll.Settings;
 
 /// <summary>
-/// DTO matching the OpenAPI ComponentResponse schema for returning earning component details.
-/// This DTO matches the external API contract for frontend integration.
+/// DTO matching the OpenAPI ComponentResponse schema for returning payroll component details.
+/// This DTO is shared by both Earning and Deduction components for frontend integration.
 /// </summary>
 public class ComponentResponseDto
 {
 	/// <summary>
-	/// Unique identifier of the earning component
+	/// Unique identifier of the component
 	/// </summary>
 	public Guid Id { get; set; }
 	
 	/// <summary>
-	/// Name of the earning component (e.g., "Basic Salary", "House Rent Allowance")
+	/// Name of the component (e.g., "Basic Salary", "Professional Tax")
 	/// Maps from domain property: Name
 	/// </summary>
 	public string ComponentName { get; set; } = string.Empty;
@@ -57,5 +57,15 @@ public class ComponentResponseDto
 	/// Maps from domain: ComponentType.Fixed (true) or ComponentType.Variable (false)
 	/// </summary>
 	public bool IsFixed { get; set; }
+	
+	/// <summary>
+	/// Display order for sorting components in UI
+	/// </summary>
+	public int DisplayOrder { get; set; }
+	
+	/// <summary>
+	/// Whether this component is active
+	/// </summary>
+	public bool IsActive { get; set; }
 }
 

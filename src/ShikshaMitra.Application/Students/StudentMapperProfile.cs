@@ -4,6 +4,7 @@ using ShikshaMitra.Students.Attendance.Settings;
 using ShikshaMitra.Students.Attendances.Settings;
 using ShikshaMitra.Students.Enrollments.Notes;
 using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.Records;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using System;
@@ -138,5 +139,8 @@ public class StudentMapperProfile : Profile
 		// StudentNote mappings
 		CreateMap<StudentNote, StudentNoteDto>();
         CreateMap<CreateUpdateStudentNoteDto, StudentNote>();
+
+		CreateMap<Student, StudentDto>()
+			.IncludeAllDerived();
        }
 }

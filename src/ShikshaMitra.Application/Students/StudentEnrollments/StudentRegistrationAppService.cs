@@ -48,9 +48,9 @@ public class StudentRegistrationAppService(
 		StudentLifeCycleStatusEnum.Registation
 	];
 	public async Task<PagedResultDto<StudentEnrollmentListDto>> GetRegistrationFormsByMediumAsync(
-		Guid academicMediumId, 
-		int skipCount = 0, 
-		int maxResultCount = 10, 
+		Guid academicMediumId,
+		int skipCount = 0,
+		int maxResultCount = 10,
 		string? searchTerm = null)
 	{
 		// Validate academic medium exists using domain service
@@ -58,7 +58,7 @@ public class StudentRegistrationAppService(
 
 		// Get queryable with aggregate parts auto-included
 		var queryable = await studentRepository.GetQueryableAsync();
-		
+
 		var query = queryable
 			.Where(s => s.Status == StudentLifeCycleStatusEnum.RegistrationFormIssued
 				&& s.AcademicMediumId == academicMediumId
@@ -68,7 +68,7 @@ public class StudentRegistrationAppService(
 		query = ApplySearchFilter(query, searchTerm);
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
-		
+
 		if (totalCount == 0)
 		{
 			return new PagedResultDto<StudentEnrollmentListDto>(0, new List<StudentEnrollmentListDto>());
@@ -89,9 +89,9 @@ public class StudentRegistrationAppService(
 	}
 
 	public async Task<PagedResultDto<StudentEnrollmentListDto>> GetRegistrationsByMediumAsync(
-		Guid academicMediumId, 
-		int skipCount = 0, 
-		int maxResultCount = 10, 
+		Guid academicMediumId,
+		int skipCount = 0,
+		int maxResultCount = 10,
 		string? searchTerm = null)
 	{
 		// Validate academic medium exists using domain service
@@ -99,7 +99,7 @@ public class StudentRegistrationAppService(
 
 		// Get queryable with aggregate parts auto-included
 		var queryable = await studentRepository.GetQueryableAsync();
-		
+
 		var query = queryable
 			.Where(s => s.Status == StudentLifeCycleStatusEnum.Registation
 				&& s.AcademicMediumId == academicMediumId
@@ -109,7 +109,7 @@ public class StudentRegistrationAppService(
 		query = ApplySearchFilter(query, searchTerm);
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
-		
+
 		if (totalCount == 0)
 		{
 			return new PagedResultDto<StudentEnrollmentListDto>(0, new List<StudentEnrollmentListDto>());
@@ -321,7 +321,7 @@ public class StudentRegistrationAppService(
 		if (familyDetail?.SiblingStudentIds != null && familyDetail.SiblingStudentIds.Any())
 		{
 			var siblings = new List<SiblingStudentDto>();
-			
+
 			foreach (var siblingId in familyDetail.SiblingStudentIds)
 			{
 				var sibling = await studentRepository.FirstOrDefaultAsync(x => x.Id == siblingId);
@@ -374,7 +374,7 @@ public class StudentRegistrationAppService(
 		// Load or create family detail
 		var familyDetail = await studentFamilyDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 		var isNewFamilyDetail = familyDetail == null;
-		
+
 		if (isNewFamilyDetail)
 		{
 			// Create new family detail entity
@@ -528,7 +528,7 @@ public class StudentRegistrationAppService(
 		// Load or create communication detail
 		var communicationDetail = await studentCommunicationDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 		var isNewCommunicationDetail = communicationDetail == null;
-		
+
 		if (isNewCommunicationDetail)
 		{
 			// Create new communication detail entity
@@ -690,7 +690,7 @@ public class StudentRegistrationAppService(
 		// Load or create medical record
 		var medicalRecord = await studentMedicalRecordRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 		var isNewMedicalRecord = medicalRecord == null;
-		
+
 		if (isNewMedicalRecord)
 		{
 			// Create new medical record entity
@@ -782,7 +782,7 @@ public class StudentRegistrationAppService(
 		// Load or create previous school detail
 		var previousSchoolDetail = await studentPreviousSchoolDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 		var isNewPreviousSchoolDetail = previousSchoolDetail == null;
-		
+
 		if (isNewPreviousSchoolDetail)
 		{
 			// Create new previous school detail entity
@@ -871,7 +871,7 @@ public class StudentRegistrationAppService(
 		// Load or create bank detail
 		var bankDetail = await studentBankDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 		var isNewBankDetail = bankDetail == null;
-		
+
 		if (isNewBankDetail)
 		{
 			// Create new bank detail entity

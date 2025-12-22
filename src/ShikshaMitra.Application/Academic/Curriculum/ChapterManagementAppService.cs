@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using ShikshaMitra.Academic.Syllabus;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -18,8 +17,8 @@ namespace ShikshaMitra.Academic.Curriculum;
 /// </summary>
 [RemoteService(IsEnabled = false)]
 public class ChapterManagementAppService(
-	IRepository<SubjectChapter, Guid> chapterRepository,
-	IRepository<ChapterDocument, Guid> documentRepository,
+	IRepository<AssignedSubjectChapter, Guid> chapterRepository,
+	IRepository<AssignedSubjectDocument, Guid> documentRepository,
 	ChapterManager chapterManager,
 	IGuidGenerator guidGenerator,
 	ILogger<ChapterManagementAppService> logger
@@ -63,7 +62,7 @@ public class ChapterManagementAppService(
 			{
 				foreach (var docDto in input.Documents)
 				{
-					var document = new ChapterDocument(
+					var document = new AssignedSubjectDocument(
 						id: guidGenerator.Create(),
 						chapterId: chapter.Id,
 						fileName: docDto.Name,
@@ -148,7 +147,7 @@ public class ChapterManagementAppService(
 
 		// Map chapters to response DTOs using pre-fetched documents
 		var responseDtos = chapters.Select(chapter =>
-			MapToResponseDto(chapter, documentsByChapterId.GetValueOrDefault(chapter.Id) ?? new List<ChapterDocument>())
+			MapToResponseDto(chapter, documentsByChapterId.GetValueOrDefault(chapter.Id) ?? new List<AssignedSubjectDocument>())
 		).ToList();
 
 		return responseDtos;
@@ -214,7 +213,7 @@ public class ChapterManagementAppService(
 			{
 				foreach (var docDto in input.Documents)
 				{
-					var document = new ChapterDocument(
+					var document = new AssignedSubjectDocument(
 						id: guidGenerator.Create(),
 						chapterId: chapter.Id,
 						fileName: docDto.Name,
@@ -276,7 +275,7 @@ public class ChapterManagementAppService(
 		);
 	}
 
-	private async Task<ChapterResponseDto> MapToResponseDtoAsync(SubjectChapter chapter)
+	private async Task<ChapterResponseDto> MapToResponseDtoAsync(AssignedSubjectChapter chapter)
 	{
 		// Get documents for this chapter
 		var documents = await documentRepository.GetListAsync(d => d.ChapterId == chapter.Id);
@@ -284,7 +283,7 @@ public class ChapterManagementAppService(
 		return MapToResponseDto(chapter, documents);
 	}
 
-	private ChapterResponseDto MapToResponseDto(SubjectChapter chapter, List<ChapterDocument> documents)
+	private ChapterResponseDto MapToResponseDto(AssignedSubjectChapter chapter, List<AssignedSubjectDocument> documents)
 	{
 		var response = new ChapterResponseDto
 		{

@@ -6,6 +6,7 @@ using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
+using ShikshaMitra.Academic.Curriculum.Settings;
 
 namespace ShikshaMitra;
 

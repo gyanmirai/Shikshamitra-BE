@@ -5,7 +5,7 @@ using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra.Academic.Curriculum;
+namespace ShikshaMitra.Academic.Curriculum.Settings;
 
 public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {

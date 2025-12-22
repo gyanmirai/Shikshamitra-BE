@@ -4,14 +4,14 @@ using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class SubjectTeacherConfiguration : IEntityTypeConfiguration<SubjectTeacher>
+public class SubjectTeacherConfiguration : IEntityTypeConfiguration<AssignedSubjectTeacher>
 {
-	public void Configure(EntityTypeBuilder<SubjectTeacher> builder)
+	public void Configure(EntityTypeBuilder<AssignedSubjectTeacher> builder)
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "SubjectTeachers", ShikshaMitraConsts.DbSchema);
 		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();
 
-		builder.HasKey(st => new { st.SubjectId, st.TeacherId });
+		builder.HasKey(st => new { st.AssignedSubjectId, st.TeacherId });
 	}
 }

@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.Academic.Curriculum;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -10,7 +11,7 @@ namespace ShikshaMitra.Academic.Syllabus;
 
 [RemoteService(IsEnabled = false)]
 public class ChapterAppService(
-	IRepository<SubjectChapter, Guid> chapterRepository,
+	IRepository<AssignedSubjectChapter, Guid> chapterRepository,
 	IGuidGenerator guidGenerator
 ) : ApplicationService, IChapterAppService
 {
@@ -21,7 +22,7 @@ public class ChapterAppService(
 			// Validate EducationMediumId is provided`r`n`t`t`tif (createChapterDto.EducationMediumId == Guid.Empty)`r`n`t`t`t{`r`n`t`t`t`tthrow new UserFriendlyException("Education Medium ID is required and cannot be empty.");`r`n`t`t`t}
 			var educationMediumId = createChapterDto.EducationMediumId;
 			
-			var chapter = new SubjectChapter(
+			var chapter = new AssignedSubjectChapter(
 				id: guidGenerator.Create(),
 				standardId: createChapterDto.StandardId,
 				subjectId: createChapterDto.SubjectId,
@@ -34,7 +35,7 @@ public class ChapterAppService(
 			);
 
 			await chapterRepository.InsertAsync(chapter, autoSave: true);
-			return ObjectMapper.Map<SubjectChapter, ChapterDto>(chapter);
+			return ObjectMapper.Map<AssignedSubjectChapter, ChapterDto>(chapter);
 		}
 		catch (Exception ex)
 		{
@@ -50,7 +51,7 @@ public class ChapterAppService(
 				x.StandardId == standardId && x.SubjectId == subjectId
 			);
 
-			return ObjectMapper.Map<List<SubjectChapter>, List<ChapterDto>>(chapters);
+			return ObjectMapper.Map<List<AssignedSubjectChapter>, List<ChapterDto>>(chapters);
 		}
 		catch (Exception ex)
 		{
@@ -76,7 +77,7 @@ public class ChapterAppService(
 			chapter.ChapterNumber = updateChapterDto.ChapterNumber;
 
 			await chapterRepository.UpdateAsync(chapter, autoSave: true);
-			return ObjectMapper.Map<SubjectChapter, ChapterDto>(chapter);
+			return ObjectMapper.Map<AssignedSubjectChapter, ChapterDto>(chapter);
 		}
 		catch (UserFriendlyException ex)
 		{

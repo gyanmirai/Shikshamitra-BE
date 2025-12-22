@@ -3,7 +3,6 @@ using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Academic.HomeworkAssignment;
-using ShikshaMitra.Academic.Syllabus;
 using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
 using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
 using ShikshaMitra.HR.AttendanceAndLeaves;
@@ -50,6 +49,7 @@ using Volo.Abp.PermissionManagement.EntityFrameworkCore;
 using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.TenantManagement;
 using Volo.Abp.TenantManagement.EntityFrameworkCore;
+using ShikshaMitra.Academic.Curriculum.Settings;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -250,7 +250,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	public DbSet<Subject> Subjects { get; set; }
 	public DbSet<ElectiveGroup> ElectiveGroups { get; set; }
-	public DbSet<StandardSubjectAssignment> StandardSubjectAssignments { get; set; }
+	public DbSet<AssignedSubject> StandardSubjectAssignments { get; set; }
 	public DbSet<TeacherSubjectAllocation> TeacherSubjectAllocations { get; set; }
 	#endregion
 
@@ -260,7 +260,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#endregion
 
 	#region Syllabus
-	public DbSet<SubjectChapter> SubjectChapters { get; set; }
+	public DbSet<AssignedSubjectChapter> SubjectChapters { get; set; }
 	#endregion
 
 	#region HomeworkAssignment

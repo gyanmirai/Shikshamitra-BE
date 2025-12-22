@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using ShikshaMitra.Academic.Syllabus;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
@@ -15,12 +14,12 @@ namespace ShikshaMitra.Academic.Curriculum;
 /// </summary>
 public class ChapterManager : DomainService
 {
-	private readonly IRepository<SubjectChapter, Guid> _chapterRepository;
+	private readonly IRepository<AssignedSubjectChapter, Guid> _chapterRepository;
 	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
 	private readonly IGuidGenerator _guidGenerator;
 
 	public ChapterManager(
-		IRepository<SubjectChapter, Guid> chapterRepository,
+		IRepository<AssignedSubjectChapter, Guid> chapterRepository,
 		IRepository<AcademicYear, Guid> academicYearRepository,
 		IGuidGenerator guidGenerator
 	)
@@ -110,7 +109,7 @@ public class ChapterManager : DomainService
 	/// <summary>
 	/// Creates a new chapter with validation
 	/// </summary>
-	public async Task<SubjectChapter> CreateChapterAsync(
+	public async Task<AssignedSubjectChapter> CreateChapterAsync(
 		Guid standardId,
 		Guid subjectId,
 		Guid educationMediumId,
@@ -129,7 +128,7 @@ public class ChapterManager : DomainService
 		await ValidateDatesAsync(startDate, endDate, tenantId);
 
 		// Create chapter with explicit UTC timezone (zero offset) to match ValidateDatesAsync UTC usage
-		var chapter = new SubjectChapter(
+		var chapter = new AssignedSubjectChapter(
 			id: _guidGenerator.Create(),
 			standardId: standardId,
 			subjectId: subjectId,
@@ -148,7 +147,7 @@ public class ChapterManager : DomainService
 	/// Updates an existing chapter with validation
 	/// </summary>
 	public async Task UpdateChapterAsync(
-		SubjectChapter chapter,
+		AssignedSubjectChapter chapter,
 		int chapterNumber,
 		string chapterName,
 		DateTime startDate,

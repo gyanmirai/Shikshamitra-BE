@@ -8,9 +8,9 @@ namespace ShikshaMitra.EntityFrameworkCore.Academic.Curriculum;
 /// <summary>
 /// EF Core configuration for ChapterDocument entity
 /// </summary>
-public class ChapterDocumentConfiguration : IEntityTypeConfiguration<ChapterDocument>
+public class ChapterDocumentConfiguration : IEntityTypeConfiguration<AssignedSubjectDocument>
 {
-	public void Configure(EntityTypeBuilder<ChapterDocument> builder)
+	public void Configure(EntityTypeBuilder<AssignedSubjectDocument> builder)
 	{
 		builder.ToTable(
 			ShikshaMitraConsts.DbTablePrefix + "ChapterDocuments",

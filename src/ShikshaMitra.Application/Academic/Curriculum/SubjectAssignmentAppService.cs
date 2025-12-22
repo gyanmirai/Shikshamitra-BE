@@ -4,12 +4,11 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using ShikshaMitra.Academic.Curriculum.SubjectAssignment;
+using ShikshaMitra.Academic.Curriculum.Settings;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
-using Volo.Abp.Linq;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -18,119 +17,54 @@ namespace ShikshaMitra.Academic.Curriculum;
 /// </summary>
 [RemoteService(IsEnabled = false)]
 public class SubjectAssignmentAppService(
-	IRepository<StandardSubjectAssignment, Guid> assignmentRepository,
-	IRepository<Subject, Guid> subjectRepository,
-	StandardSubjectAssignmentManager assignmentManager,
+	IRepository<AssignedSubject, Guid> assignmentRepository,
 	IGuidGenerator guidGenerator,
 	ILogger<SubjectAssignmentAppService> logger
 ) : ApplicationService, ISubjectAssignmentAppService
 {
-	public async Task<SubjectAssignmentGroupResponseDto> CreateAsync(
+	public async Task<SubjectAssignmentDto> CreateAsync(
 		Guid academicMediumId,
-		CreateSubjectAssignmentGroupDto input
+		CreateUpdateSubjectAssignmentGroupDto input
 	)
 	{
-		logger.LogInformation(
-			"Creating subject assignment group '{GroupName}' for standard {StandardId} in medium {MediumId}",
-			input.SubjectName,
-			input.ClassId,
-			academicMediumId
-		);
-
 		try
 		{
-			// Convert int to enum
-			var status = (SubjectStatus)input.Status;
-			var subjectType = (SubjectType)input.SubjectType;
+			var assignedSubjects = new List<AssignedSubject>();
+			foreach ( var subject in input.Subjects ) {
+				var assignedSubject = 
+					new AssignedSubject(
+						guidGenerator.Create(),
+						CurrentTenant.Id,
+						input.ClassId,
+						subject.AssignedSubjectId,
+						subject.SubjectCode,
+						input.Status,
+						(subject.ElectiveGroupId == Guid.Empty || subject.ElectiveGroupId == null) ? SubjectType.Core : SubjectType.Elective,
+						subject.ElectiveGroupId,
+						subject.LearningGoal,
+						subject.Prerequisites,
+						subject.Description
+					);
 
-			// Validate group name uniqueness
-			await assignmentManager.ValidateGroupNameAsync(input.ClassId, input.SubjectName);
-
-			// Validate subject codes uniqueness
-			var subjectCodes = input.Subjects.Select(s => s.SubjectCode).ToList();
-			await assignmentManager.ValidateSubjectCodesAsync(input.ClassId, subjectCodes);
-
-			// Get subjects by name and validate they belong to the medium
-			var subjectNames = input.Subjects.Select(s => s.SubjectName).Distinct().ToList();
-			var subjects = await subjectRepository.GetListAsync(s =>
-				subjectNames.Contains(s.Name) && s.EducationMediumId == academicMediumId
-			);
-
-			if (subjects.Count != subjectNames.Count)
-			{
-				var foundNames = subjects.Select(s => s.Name).ToList();
-				var missingNames = subjectNames.Where(n => !foundNames.Contains(n)).ToList();
-				throw new BusinessException("SubjectAssignment:SubjectsNotFound")
-					.WithData("MissingSubjects", string.Join(", ", missingNames));
-			}
-
-			// Generate group ID for all assignments
-			var groupId = guidGenerator.Create();
-			var assignments = new List<StandardSubjectAssignment>();
-
-			// Create assignment for each subject
-			foreach (var subjectDetail in input.Subjects)
-			{
-				var subject = subjects.First(s => s.Name == subjectDetail.SubjectName);
-
-				var assignment = assignmentManager.AssignSubject(
-					standardId: input.ClassId,
-					subjectId: subject.Id,
-					subjectCode: subjectDetail.SubjectCode,
-					educationMediumId: academicMediumId,
-					status: status,
-					subjectType: subjectType,
-					learningGoals: subjectDetail.LearningGoal,
-					prerequisites: subjectDetail.Prerequisites,
-					description: subjectDetail.Description,
-					subjectColor: subjectDetail.SubjectColor
-				);
-
-				// Set group info
-				assignment.SetGroupInfo(input.SubjectName, groupId);
-				assignment.SetIsSubjectOpen(subjectDetail.IsSubjectOpen);
+				assignedSubject.SetPrimaryTeacher(subject.PrimaryTeacher);
+				assignedSubject.SetSecondaryTeachers(subject.SecondaryTeachers);
 
 				// Set documents
-				if (subjectDetail.Documents?.Any() == true)
+				if (subject.Documents != null && subject.Documents.Any())
 				{
-					var documentsJson = JsonSerializer.Serialize(subjectDetail.Documents);
-					assignment.SetDocuments(documentsJson);
-				}
-
-				// Set teachers
-				if (!string.IsNullOrEmpty(subjectDetail.PrimaryTeacher) &&
-					Guid.TryParse(subjectDetail.PrimaryTeacher, out var primaryTeacherId))
-				{
-					assignment.SetPrimaryTeacher(primaryTeacherId);
-				}
-
-				if (subjectDetail.SecondaryTeacher?.Any() == true)
-				{
-					var secondaryTeacherIds = subjectDetail.SecondaryTeacher
-						.Where(id => Guid.TryParse(id, out _))
-						.Select(id => Guid.Parse(id))
-						.ToList();
-
-					if (secondaryTeacherIds.Any())
+					foreach (var document in subject.Documents)
 					{
-						assignment.SetSecondaryTeachers(secondaryTeacherIds);
+						assignedSubject.AddDocument(
+								guidGenerator.Create(),
+								document
+						);
 					}
+					assignedSubjects.Add(assignedSubject);
 				}
-
-				assignments.Add(assignment);
 			}
 
-			// Save all assignments
-			await assignmentRepository.InsertManyAsync(assignments, autoSave: true);
-
-			logger.LogInformation(
-				"Successfully created {Count} subject assignments in group '{GroupName}'",
-				assignments.Count,
-				input.SubjectName
-			);
-
-			// Return the first assignment as representative (they all share the same group)
-			return await MapToResponseDtoAsync(assignments.First(), assignments);
+			await assignmentRepository.InsertManyAsync(assignedSubjects, autoSave: true);
+			return await MapToResponseDtoAsync(assignedSubjects);
 		}
 		catch (BusinessException)
 		{
@@ -138,217 +72,74 @@ public class SubjectAssignmentAppService(
 		}
 		catch (Exception ex)
 		{
-			logger.LogError(
-				ex,
-				"Failed to create subject assignment group '{GroupName}'",
-				input.SubjectName
-			);
 			throw new UserFriendlyException(
 				"Failed to create subject assignment. Please try again later."
 			);
 		}
 	}
 
-	public async Task<List<SubjectAssignmentGroupResponseDto>> GetListAsync(
+	public async Task<List<SubjectAssignmentDto>> GetListAsync(
 		Guid academicMediumId,
-		Guid classId,
-		int? status = null
+		Guid classId
 	)
 	{
-		logger.LogInformation(
-			"Getting subject assignments for standard {StandardId} in medium {MediumId} with status {Status}",
-			classId,
-			academicMediumId,
-			status
-		);
-
 		var query = await assignmentRepository.GetQueryableAsync();
 
 		query = query.Where(a =>
-			a.StandardId == classId &&
-			a.EducationMediumId == academicMediumId
+			a.StandardId == classId
 		);
-
-		if (status.HasValue)
-		{
-			var statusEnum = (SubjectStatus)status.Value;
-			query = query.Where(a => a.Status == statusEnum);
-		}
 
 		// Use ABP's AsyncExecuter for asynchronous query execution
 		var assignments = await AsyncExecuter.ToListAsync(query);
 
-		var result = new List<SubjectAssignmentGroupResponseDto>();
+		var result = new List<SubjectAssignmentDto>();
 
-		// Process grouped assignments (those with AssignmentGroupId)
+		// group assignments if it has electiveGroupId and make a one response subject, for others make individual response
 		var groupedAssignments = assignments
-			.Where(a => a.AssignmentGroupId.HasValue)
-			.GroupBy(a => a.AssignmentGroupId!.Value)
+			.GroupBy(a => a.ElectiveGroupId.HasValue ? a.ElectiveGroupId : a.Id)
 			.ToList();
 
 		foreach (var group in groupedAssignments)
 		{
-			var firstAssignment = group.First();
-			var groupAssignments = group.ToList();
-			var responseDto = await MapToResponseDtoAsync(firstAssignment, groupAssignments);
-			result.Add(responseDto);
-		}
-
-		// Process ungrouped assignments (those without AssignmentGroupId)
-		// Treat each ungrouped assignment as its own solo group
-		var ungroupedAssignments = assignments
-			.Where(a => !a.AssignmentGroupId.HasValue)
-			.ToList();
-
-		foreach (var ungroupedAssignment in ungroupedAssignments)
-		{
-			// Each ungrouped assignment is treated as a solo group
-			var soloGroupList = new List<StandardSubjectAssignment> { ungroupedAssignment };
-			var responseDto = await MapToResponseDtoAsync(ungroupedAssignment, soloGroupList);
-			result.Add(responseDto);
+			var subjectAssignmentDto = await MapToResponseDtoAsync(group.ToList());
 		}
 
 		return result;
 	}
 
-	public async Task<SubjectAssignmentGroupResponseDto> GetAsync(Guid assignmentId)
-	{
-		logger.LogInformation("Getting subject assignment group {AssignmentId}", assignmentId);
-
-		var assignment = await assignmentRepository.FindAsync(assignmentId);
-
-		if (assignment == null)
-		{
-			throw new BusinessException("SubjectAssignment:NotFound")
-				.WithData("AssignmentId", assignmentId);
-		}
-
-		// Get all assignments in the same group
-		List<StandardSubjectAssignment> groupAssignments;
-
-		if (assignment.AssignmentGroupId.HasValue)
-		{
-			groupAssignments = await assignmentRepository.GetListAsync(a =>
-				a.AssignmentGroupId == assignment.AssignmentGroupId.Value
-			);
-		}
-		else
-		{
-			groupAssignments = new List<StandardSubjectAssignment> { assignment };
-		}
-
-		return await MapToResponseDtoAsync(assignment, groupAssignments);
-	}
-
-	public async Task<SubjectAssignmentGroupResponseDto> UpdateAsync(
+	public async Task<SubjectAssignmentDto> UpdateAsync(
 		Guid assignmentId,
 		Guid academicMediumId,
-		UpdateSubjectAssignmentGroupDto input
-	)
-	{
-		logger.LogInformation(
-			"Updating subject assignment group {AssignmentId}",
-			assignmentId
-		);
+		CreateUpdateSubjectAssignmentGroupDto input
+	) => throw new NotImplementedException();
 
+	public async Task<PublishResponseDto> PublishAsync(List<Guid> assignmentId)
+	{
 		try
 		{
-			var assignment = await assignmentRepository.GetAsync(assignmentId);
-
-			if (assignment.EducationMediumId != academicMediumId)
-			{
-				throw new BusinessException("SubjectAssignment:MediumMismatch");
-			}
-
-			// Validate group name uniqueness (exclude current group)
-			await assignmentManager.ValidateGroupNameAsync(
-				input.ClassId,
-				input.SubjectName,
-				assignment.AssignmentGroupId
+			var assignments = await assignmentRepository.GetListAsync(a =>
+				assignmentId.Contains(a.Id)
 			);
-
-			// Get all assignments in the group
-			var groupAssignments = assignment.AssignmentGroupId.HasValue
-				? await assignmentRepository.GetListAsync(a =>
-					a.AssignmentGroupId == assignment.AssignmentGroupId.Value)
-				: new List<StandardSubjectAssignment> { assignment };
-
-			// Delete all existing assignments in the group
-			await assignmentRepository.DeleteManyAsync(groupAssignments, autoSave: true);
-
-			// Create new assignments (similar to Create logic)
-			var status = (SubjectStatus)input.Status;
-			var subjectType = (SubjectType)input.SubjectType;
-
-			// Validate subject codes
-			var subjectCodes = input.Subjects.Select(s => s.SubjectCode).ToList();
-			await assignmentManager.ValidateSubjectCodesAsync(input.ClassId, subjectCodes);
-
-			// Get subjects
-			var subjectNames = input.Subjects.Select(s => s.SubjectName).Distinct().ToList();
-			var subjects = await subjectRepository.GetListAsync(s =>
-				subjectNames.Contains(s.Name) && s.EducationMediumId == academicMediumId
-			);
-
-			var groupId = assignment.AssignmentGroupId ?? guidGenerator.Create();
-			var newAssignments = new List<StandardSubjectAssignment>();
-
-			foreach (var subjectDetail in input.Subjects)
+			if (assignments.Count == 0)
 			{
-				var subject = subjects.First(s => s.Name == subjectDetail.SubjectName);
-
-				var newAssignment = assignmentManager.AssignSubject(
-					standardId: input.ClassId,
-					subjectId: subject.Id,
-					subjectCode: subjectDetail.SubjectCode,
-					educationMediumId: academicMediumId,
-					status: status,
-					subjectType: subjectType,
-					learningGoals: subjectDetail.LearningGoal,
-					prerequisites: subjectDetail.Prerequisites,
-					description: subjectDetail.Description,
-					subjectColor: subjectDetail.SubjectColor
-				);
-
-				newAssignment.SetGroupInfo(input.SubjectName, groupId);
-				newAssignment.SetIsSubjectOpen(subjectDetail.IsSubjectOpen);
-
-				if (subjectDetail.Documents?.Any() == true)
-				{
-					var documentsJson = JsonSerializer.Serialize(subjectDetail.Documents);
-					newAssignment.SetDocuments(documentsJson);
-				}
-
-				if (!string.IsNullOrEmpty(subjectDetail.PrimaryTeacher) &&
-					Guid.TryParse(subjectDetail.PrimaryTeacher, out var primaryTeacherId))
-				{
-					newAssignment.SetPrimaryTeacher(primaryTeacherId);
-				}
-
-				if (subjectDetail.SecondaryTeacher?.Any() == true)
-				{
-					var secondaryTeacherIds = subjectDetail.SecondaryTeacher
-						.Where(id => Guid.TryParse(id, out _))
-						.Select(id => Guid.Parse(id))
-						.ToList();
-
-					if (secondaryTeacherIds.Any())
-					{
-						newAssignment.SetSecondaryTeachers(secondaryTeacherIds);
-					}
-				}
-
-				newAssignments.Add(newAssignment);
+				throw new BusinessException("SubjectAssignment:NotFound")
+					.WithData("AssignmentIds", JsonSerializer.Serialize(assignmentId));
 			}
-
-			await assignmentRepository.InsertManyAsync(newAssignments, autoSave: true);
-
+			foreach (var assignment in assignments)
+			{
+				assignment.Status = SubjectStatus.Published;
+				assignment.PublishedAt = DateTime.UtcNow;
+			}
+			await assignmentRepository.UpdateManyAsync(assignments, autoSave: true);
 			logger.LogInformation(
-				"Successfully updated subject assignment group {AssignmentId}",
-				assignmentId
+				"Successfully published {Count} assignments",
+				assignments.Count
 			);
-
-			return await MapToResponseDtoAsync(newAssignments.First(), newAssignments);
+			return new PublishResponseDto
+			{
+				Status = SubjectStatus.Published,
+				PublishedAt = DateTime.UtcNow
+			};
 		}
 		catch (BusinessException)
 		{
@@ -358,168 +149,69 @@ public class SubjectAssignmentAppService(
 		{
 			logger.LogError(
 				ex,
-				"Failed to update subject assignment group {AssignmentId}",
-				assignmentId
+				"Failed to publish subject assignment group {AssignmentId}",
+				JsonSerializer.Serialize(assignmentId)
 			);
 			throw new UserFriendlyException(
-				"Failed to update subject assignment. Please try again later."
+				"Failed to publish subject assignment. Please try again later."
 			);
 		}
-	}
-
-	public async Task<PublishResponseDto> PublishAsync(Guid assignmentId)
-	{
-		logger.LogInformation("Publishing subject assignment group {AssignmentId}", assignmentId);
-
-		var assignment = await assignmentRepository.GetAsync(assignmentId);
-
-		if (assignment.Status == SubjectStatus.Published)
-		{
-			throw new BusinessException("SubjectAssignment:AlreadyPublished");
-		}
-
-		// Get all assignments in the group and publish them
-		var groupAssignments = assignment.AssignmentGroupId.HasValue
-			? await assignmentRepository.GetListAsync(a =>
-				a.AssignmentGroupId == assignment.AssignmentGroupId.Value)
-			: new List<StandardSubjectAssignment> { assignment };
-
-		var publishedAt = DateTime.UtcNow;
-
-		foreach (var groupAssignment in groupAssignments)
-		{
-			groupAssignment.Publish();
-		}
-
-		await assignmentRepository.UpdateManyAsync(groupAssignments, autoSave: true);
-
-		logger.LogInformation(
-			"Successfully published {Count} assignments in group",
-			groupAssignments.Count
-		);
-
-		return new PublishResponseDto
-		{
-			Id = assignmentId,
-			Status = (int)SubjectStatus.Published,
-			PublishedAt = publishedAt
-		};
 	}
 
 	public async Task DeleteAsync(Guid assignmentId)
 	{
-		logger.LogInformation("Deleting subject assignment group {AssignmentId}", assignmentId);
-
-		var assignment = await assignmentRepository.FindAsync(assignmentId);
-
-		if (assignment == null)
+		var assignments = await assignmentRepository.GetListAsync(a =>
+			a.Id == assignmentId
+		);
+		if (assignments.Count == 0)
 		{
 			throw new BusinessException("SubjectAssignment:NotFound")
-				.WithData("AssignmentId", assignmentId);
+				.WithData("AssignmentId", assignmentId.ToString());
 		}
-
-		// Get all assignments in the group
-		var groupAssignments = assignment.AssignmentGroupId.HasValue
-			? await assignmentRepository.GetListAsync(a =>
-				a.AssignmentGroupId == assignment.AssignmentGroupId.Value)
-			: new List<StandardSubjectAssignment> { assignment };
-
-		await assignmentRepository.DeleteManyAsync(groupAssignments, autoSave: true);
-
-		logger.LogInformation(
-			"Successfully deleted {Count} assignments in group",
-			groupAssignments.Count
-		);
+		await assignmentRepository.DeleteManyAsync(assignments, autoSave: true);
 	}
 
-	private async Task<SubjectAssignmentGroupResponseDto> MapToResponseDtoAsync(
-		StandardSubjectAssignment representativeAssignment,
-		List<StandardSubjectAssignment> groupAssignments
+	private async Task<SubjectAssignmentDto> MapToResponseDtoAsync(
+		List<AssignedSubject> groupAssignments
 	)
 	{
-		var response = new SubjectAssignmentGroupResponseDto
+		var subjectAssignmentDto = new SubjectAssignmentDto
 		{
-			Id = representativeAssignment.AssignmentGroupId ?? representativeAssignment.Id,
-			ClassId = representativeAssignment.StandardId,
-			SubjectName = representativeAssignment.AssignmentGroupName ?? "Unnamed Group",
-			Status = (int)representativeAssignment.Status,
-			SubjectType = (int)representativeAssignment.SubjectType,
-			AcademicMediumId = representativeAssignment.EducationMediumId,
-			CreatedAt = representativeAssignment.CreationTime,
-			PublishedAt = representativeAssignment.PublishedAt,
+			Id = groupAssignments.First().Id,
+			Status = groupAssignments.First().Status,
+			SubjectType = groupAssignments.First().SubjectType,
 			Subjects = new List<SubjectAssignmentDetailResponseDto>()
 		};
 
-		// Get all subject IDs to load subject details
-		var subjectIds = groupAssignments.Select(a => a.SubjectId).Distinct().ToList();
-		var subjects = await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id));
-
-		foreach (var assignment in groupAssignments)
+		foreach (var subject in groupAssignments)
 		{
-			var subject = subjects.FirstOrDefault(s => s.Id == assignment.SubjectId);
-
-			var subjectResponse = new SubjectAssignmentDetailResponseDto
+			var subjectDto = new SubjectAssignmentDetailResponseDto
 			{
-				Id = assignment.Id,
-				SubjectCode = assignment.SubjectCode,
-				SubjectId = assignment.SubjectId,
-				SubjectName = subject?.Name ?? "Unknown",
-				SubjectColor = assignment.SubjectColor ?? "#000000",
-				LearningGoal = assignment.LearningGoals,
-				Prerequisites = assignment.Prerequisites,
-				Description = assignment.Description,
-				IsSubjectOpen = assignment.IsSubjectOpen
+				AssignedId = subject.Id,
+				SubjectCode = subject.SubjectCode,
+				Subject = new SubjectDto { 
+					Name = subject.Subject.Name,
+					Color = subject.Subject.Color,
+				},
+				ElectiveGroupId = subject.ElectiveGroupId,
+				LearningGoal = subject.LearningGoals,
+				Prerequisites = subject.Prerequisites,
+				Description = subject.Description,
+				PrimaryTeacher = subject.Teachers
+					.Where(t => t.TeacherType == SubjectTeacherType.Primary)
+					.Select(t => t.TeacherId)
+					.FirstOrDefault(),
+				SecondaryTeachers = subject.Teachers
+					.Where(t => t.TeacherType == SubjectTeacherType.Secondary)
+					.Select(t => t.TeacherId)
+					.ToList(),
+				Documents = subject.Documents.Select(d => d.BlobName).ToList()
 			};
-
-			// Deserialize documents
-			if (!string.IsNullOrEmpty(assignment.Documents))
-			{
-				try
-				{
-					subjectResponse.Documents = JsonSerializer.Deserialize<List<SubjectDocumentDto>>(
-						assignment.Documents
-					) ?? new List<SubjectDocumentDto>();
-				}
-				catch
-				{
-					subjectResponse.Documents = new List<SubjectDocumentDto>();
-				}
-			}
-
-			// Get teacher info
-			var primaryTeacher = assignment.Teachers.FirstOrDefault(t =>
-				t.TeacherType == SubjectTeacherType.Primary
-			);
-
-			if (primaryTeacher != null)
-			{
-				subjectResponse.PrimaryTeacher = primaryTeacher.TeacherId.ToString();
-				// TODO: Fetch teacher name from User/Teacher repository
-				subjectResponse.PrimaryTeacherName = "Teacher"; // Placeholder
-			}
-
-			var secondaryTeachers = assignment.Teachers
-				.Where(t => t.TeacherType == SubjectTeacherType.Secondary)
-				.ToList();
-
-			if (secondaryTeachers.Any())
-			{
-				subjectResponse.SecondaryTeacher = secondaryTeachers
-					.Select(t => t.TeacherId.ToString())
-					.ToList();
-
-				subjectResponse.SecondaryTeacherInfo = secondaryTeachers
-					.Select(t => new TeacherInfoDto
-					{
-						Id = t.TeacherId.ToString(),
-						Name = "Teacher" // Placeholder
-					})
-					.ToList();
-			}
-
-			response.Subjects.Add(subjectResponse);
+			subjectAssignmentDto.Subjects.Add(subjectDto);
 		}
 
-		return response;
+		return subjectAssignmentDto;
 	}
+
+	public Task<SubjectAssignmentDto> GetAsync(Guid assignmentId) => throw new NotImplementedException();
 }

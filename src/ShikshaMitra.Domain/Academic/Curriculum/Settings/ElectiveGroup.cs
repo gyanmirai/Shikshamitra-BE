@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -6,7 +6,7 @@ using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra.Academic.Curriculum;
+namespace ShikshaMitra.Academic.Curriculum.Settings;
 
 public class ElectiveGroup : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
@@ -15,8 +15,8 @@ public class ElectiveGroup : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string Name { get; private set; }
 	public string Color { get; private set; }
 	public virtual ICollection<ElectiveGroupComponent> Subjects { get; set; }
-	public Guid EducationMediumId { get; set; }
-	public EducationMedium EducationMedium { get; set; }
+	public Guid AcademicMediumId { get; set; }
+	public EducationMedium AcademicMedium { get; set; }
 	#endregion
 
 	#region Constructors
@@ -32,7 +32,7 @@ public class ElectiveGroup : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		TenantId = tenantId;
 		SetName(name);
 		SetColor(color);
-		EducationMediumId = educationMediumId;
+		AcademicMediumId = educationMediumId;
 		Subjects = new HashSet<ElectiveGroupComponent>();
 	}
 	#endregion

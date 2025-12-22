@@ -4,8 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.Curriculum;
-using ShikshaMitra.Academic.Syllabus;
-using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.Academic.Curriculum.Settings;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -15,11 +14,10 @@ namespace ShikshaMitra.Academic.ClassManagement.ChapterProgress;
 
 [RemoteService(IsEnabled = false)]
 public class ChapterProgressAppService(
-	IRepository<StandardSubjectAssignment, Guid> subjectAssignmentRepository,
-	IRepository<SubjectChapter, Guid> chapterRepository,
+	IRepository<AssignedSubject, Guid> subjectAssignmentRepository,
+	IRepository<AssignedSubjectChapter, Guid> chapterRepository,
 	IRepository<Syllabus.ChapterProgress, Guid> progressRepository,
 	IRepository<Subject, Guid> subjectRepository,
-	IRepository<Standard, Guid> standardRepository,
 	IGuidGenerator guidGenerator,
 	ILogger<ChapterProgressAppService> logger
 ) : ApplicationService, IChapterProgressAppService
@@ -53,8 +51,7 @@ public class ChapterProgressAppService(
 
 		// Get all subject assignments for the class
 		var assignments = await subjectAssignmentRepository.GetListAsync(a =>
-			a.StandardId == classId &&
-			a.EducationMediumId == academicMediumId
+			a.StandardId == classId
 		);
 
 		var result = new List<ClassDivisionSubjectDto>();
@@ -95,7 +92,7 @@ public class ChapterProgressAppService(
 
 			if (!chaptersBySubject.TryGetValue(subject.Id, out var subjectChapters))
 			{
-				subjectChapters = new List<SubjectChapter>();
+				subjectChapters = new List<AssignedSubjectChapter>();
 			}
 
 			var totalChapters = subjectChapters.Count;

@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Common.Responses;
+using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Academic.Curriculum;
@@ -12,7 +14,7 @@ namespace ShikshaMitra.Controllers.Academic.Curriculum;
 /// Controller for Subject Assignment operations
 /// Aligned with FE contract: /api/subject-assignments
 /// </summary>
-[Route("api/subject-assignments")]
+[Route("api/academics/curriculum")]
 [Authorize]
 [ApiController]
 public class SubjectAssignmentController(
@@ -29,25 +31,23 @@ public class SubjectAssignmentController(
 	/// <response code="400">Validation failed</response>
 	/// <response code="401">Unauthorized</response>
 	[HttpPost]
-	[ProducesResponseType(typeof(SubjectAssignmentGroupResponseDto), 201)]
+	[ProducesResponseType(typeof(SubjectAssignmentDto), 201)]
 	[ProducesResponseType(400)]
 	[ProducesResponseType(401)]
-	public async Task<IActionResult> CreateAsync(
+	public async Task<Result<SubjectAssignmentDto>> CreateAsync(
 		[FromQuery] Guid academicMediumId,
-		[FromBody] CreateSubjectAssignmentGroupDto input
+		[FromBody] CreateUpdateSubjectAssignmentGroupDto input
 	)
 	{
 		if (academicMediumId == Guid.Empty)
 		{
-			return BadRequest(new
-			{
-				error = "Validation failed",
-				details = new { academicMediumId = "academicMediumId is required" }
-			});
+			return Result.Failure<SubjectAssignmentDto>(
+				new Error("Validation failed", "academicMediumId is required")
+			);
 		}
 
 		var result = await subjectAssignmentAppService.CreateAsync(academicMediumId, input);
-		return StatusCode(201, result);
+		return Result.Success(result);
 	}
 
 	/// <summary>
@@ -59,49 +59,30 @@ public class SubjectAssignmentController(
 	/// <returns>List of assignment groups</returns>
 	/// <response code="200">Returns the list of assignments</response>
 	/// <response code="400">Required parameters missing</response>
-	[HttpGet]
-	[ProducesResponseType(typeof(List<SubjectAssignmentGroupResponseDto>), 200)]
+	[HttpGet("{academicMediumId}/subjects/{classId}")]
+	[ProducesResponseType(typeof(List<SubjectAssignmentDto>), 200)]
 	[ProducesResponseType(400)]
-	public async Task<IActionResult> GetListAsync(
-		[FromQuery] Guid academicMediumId,
-		[FromQuery] Guid classId,
-		[FromQuery] int? status = null
+	public async Task<Result<List<SubjectAssignmentDto>>> GetListAsync(
+		Guid academicMediumId,
+		Guid classId
 	)
 	{
-		if (academicMediumId == Guid.Empty)
+		if (academicMediumId == Guid.Empty || classId == Guid.Empty)
 		{
-			return BadRequest(new
-			{
-				error = "Validation failed",
-				details = new { academicMediumId = "academicMediumId is required" }
-			});
-		}
-
-		if (classId == Guid.Empty)
-		{
-			return BadRequest(new
-			{
-				error = "Validation failed",
-				details = new { classId = "classId is required" }
-			});
-		}
-
-		if (status.HasValue && (status.Value < 0 || status.Value > 1))
-		{
-			return BadRequest(new
-			{
-				error = "Validation failed",
-				details = new { status = "status must be 0 (Draft) or 1 (Published)" }
-			});
+			return Result.Failure<List<SubjectAssignmentDto>>(
+				new Error(
+					"Validation failed",
+					"academicMediumId and classId are required"
+				)
+			);
 		}
 
 		var result = await subjectAssignmentAppService.GetListAsync(
 			academicMediumId,
-			classId,
-			status
+			classId
 		);
 
-		return Ok(result);
+		return Result.Success(result);
 	}
 
 	/// <summary>
@@ -112,7 +93,7 @@ public class SubjectAssignmentController(
 	/// <response code="200">Returns the assignment group</response>
 	/// <response code="404">Assignment not found</response>
 	[HttpGet("{assignmentId}")]
-	[ProducesResponseType(typeof(SubjectAssignmentGroupResponseDto), 200)]
+	[ProducesResponseType(typeof(SubjectAssignmentDto), 200)]
 	[ProducesResponseType(404)]
 	public async Task<IActionResult> GetAsync([FromRoute] Guid assignmentId)
 	{
@@ -131,13 +112,13 @@ public class SubjectAssignmentController(
 	/// <response code="400">Validation failed</response>
 	/// <response code="404">Assignment not found</response>
 	[HttpPut("{assignmentId}")]
-	[ProducesResponseType(typeof(SubjectAssignmentGroupResponseDto), 200)]
+	[ProducesResponseType(typeof(SubjectAssignmentDto), 200)]
 	[ProducesResponseType(400)]
 	[ProducesResponseType(404)]
 	public async Task<IActionResult> UpdateAsync(
 		[FromRoute] Guid assignmentId,
 		[FromQuery] Guid academicMediumId,
-		[FromBody] UpdateSubjectAssignmentGroupDto input
+		[FromBody] CreateUpdateSubjectAssignmentGroupDto input
 	)
 	{
 		if (academicMediumId == Guid.Empty)
@@ -165,13 +146,13 @@ public class SubjectAssignmentController(
 	/// <returns>Publish result with new status and timestamp</returns>
 	/// <response code="200">Assignment published successfully</response>
 	/// <response code="404">Assignment not found</response>
-	[HttpPatch("{assignmentId}/publish")]
+	[HttpPatch("publish")]
 	[ProducesResponseType(typeof(PublishResponseDto), 200)]
 	[ProducesResponseType(404)]
-	public async Task<IActionResult> PublishAsync([FromRoute] Guid assignmentId)
+	public async Task<Result<PublishResponseDto>> PublishAsync([FromBody] List<Guid> assignmentIds)
 	{
-		var result = await subjectAssignmentAppService.PublishAsync(assignmentId);
-		return Ok(result);
+		var result = await subjectAssignmentAppService.PublishAsync(assignmentIds);
+		return Result.Success(result);
 	}
 
 	/// <summary>

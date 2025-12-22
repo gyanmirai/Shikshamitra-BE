@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using ShikshaMitra.Academic.Curriculum.Settings;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
@@ -33,7 +34,7 @@ public class ElectiveGroupAppService(
 			var query = await ElectiveGroupRepository.WithDetailsAsync(eg => eg.Subjects);
 
 			var electiveGroups = query
-				.Where(eg => eg.EducationMediumId == academicMediumId)
+				.Where(eg => eg.AcademicMediumId == academicMediumId)
 				.WhereIf(
 					!string.IsNullOrWhiteSpace(searchTerm),
 					eg => eg.Name.Contains(searchTerm!)
@@ -66,7 +67,7 @@ public class ElectiveGroupAppService(
 			var electiveGroup = await ElectiveGroupRepository.GetAsync(id, includeDetails: true);
 
 			// Verify the group belongs to the specified medium
-			if (electiveGroup.EducationMediumId != academicMediumId)
+			if (electiveGroup.AcademicMediumId != academicMediumId)
 			{
 				throw new EntityNotFoundException(typeof(ElectiveGroup), id);
 			}
@@ -192,7 +193,7 @@ public class ElectiveGroupAppService(
 			var electiveGroup = await ElectiveGroupRepository.GetAsync(id);
 
 			// Verify the group belongs to the specified medium
-			if (electiveGroup.EducationMediumId != academicMediumId)
+			if (electiveGroup.AcademicMediumId != academicMediumId)
 			{
 				throw new EntityNotFoundException(typeof(ElectiveGroup), id);
 			}

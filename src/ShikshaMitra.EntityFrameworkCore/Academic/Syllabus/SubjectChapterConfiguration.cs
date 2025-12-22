@@ -5,9 +5,9 @@ using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Academic.Syllabus;
 
-public class SubjectChapterConfiguration : IEntityTypeConfiguration<SubjectChapter>
+public class SubjectChapterConfiguration : IEntityTypeConfiguration<AssignedSubjectChapter>
 {
-	public void Configure(EntityTypeBuilder<SubjectChapter> builder)
+	public void Configure(EntityTypeBuilder<AssignedSubjectChapter> builder)
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "SubjectChapters", ShikshaMitraConsts.DbSchema);
 		

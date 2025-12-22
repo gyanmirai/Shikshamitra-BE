@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.Academic.Curriculum.Settings;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,16 +11,15 @@ using Volo.Abp.Guids;
 namespace ShikshaMitra.Academic.Curriculum;
 
 public class StandardSubjectAssignmentManager(
-	IRepository<StandardSubjectAssignment, Guid> assignmentRepo,
+	IRepository<AssignedSubject, Guid> assignmentRepo,
 	IRepository<Subject, Guid> subjectRepository,
 	IGuidGenerator guidGenerator
 ) : DomainService
 {
-	public StandardSubjectAssignment AssignSubject(
+	public AssignedSubject AssignSubject(
 		Guid standardId,
 		Guid subjectId,
 		string subjectCode,
-		Guid educationMediumId,
 		SubjectStatus status,
 		SubjectType subjectType = SubjectType.Core,
 		string? learningGoals = null,
@@ -27,20 +27,17 @@ public class StandardSubjectAssignmentManager(
 		string? description = null,
 		string? subjectColor = null
 	) =>
-		new StandardSubjectAssignment(
+		new AssignedSubject(
 			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
 			standardId: standardId,
 			subjectId: subjectId,
 			subjectCode: subjectCode,
-			educationMediumId: educationMediumId,
 			status: status,
 			subjectType: subjectType,
 			learningGoals: learningGoals,
 			prerequisites: prerequisites,
-			description: description,
-			uploadedDocument: null,
-			subjectColor: subjectColor
+			description: description
 		);
 
 	public async Task UpdateTeachersAsync(
@@ -63,12 +60,6 @@ public class StandardSubjectAssignmentManager(
 		var existing = query.Where(a =>
 			a.StandardId == standardId &&
 			subjectCodes.Contains(a.SubjectCode));
-
-		// Exclude assignments from the same group (for updates)
-		if (excludeGroupId.HasValue)
-		{
-			existing = existing.Where(a => a.AssignmentGroupId != excludeGroupId.Value);
-		}
 
 		var duplicates = existing.Select(a => a.SubjectCode).ToList();
 
@@ -102,28 +93,6 @@ public class StandardSubjectAssignmentManager(
 		{
 			throw new BusinessException("SubjectAssignment:SubjectsNotFound")
 				.WithData("MissingSubjectIds", string.Join(", ", missingIds));
-		}
-	}
-
-	/// <summary>
-	/// Validates that assignment group name is unique within a standard
-	/// </summary>
-	public async Task ValidateGroupNameAsync(Guid standardId, string groupName, Guid? excludeGroupId = null)
-	{
-		var query = await assignmentRepo.GetQueryableAsync();
-		var existing = query.Where(a =>
-			a.StandardId == standardId &&
-			a.AssignmentGroupName == groupName);
-
-		if (excludeGroupId.HasValue)
-		{
-			existing = existing.Where(a => a.AssignmentGroupId != excludeGroupId.Value);
-		}
-
-		if (existing.Any())
-		{
-			throw new BusinessException("SubjectAssignment:DuplicateGroupName")
-				.WithData("GroupName", groupName);
 		}
 	}
 }

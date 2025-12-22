@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Students;
 using Volo.Abp;
 using Volo.Abp.Application.Services;

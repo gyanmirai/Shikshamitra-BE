@@ -1,15 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using ShikshaMitra.Academic.Curriculum;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra.Academic.Syllabus;
+namespace ShikshaMitra.Academic.Curriculum;
 
 /// <summary>
 /// Represents a chapter in a subject for a specific standard.
 /// </summary>
-public class SubjectChapter : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class AssignedSubjectChapter : FullAuditedEntity<Guid>, IMultiTenant
 {
 	#region Properties
 	/// <summary>
@@ -18,14 +17,9 @@ public class SubjectChapter : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; set; }
 
 	/// <summary>
-	/// Gets or sets the ID of the standard (e.g., Grade 1, Grade 2).
-	/// </summary>
-	public Guid StandardId { get; set; }
-
-	/// <summary>
 	/// Gets or sets the ID of the subject (e.g., Math, Science).
 	/// </summary>
-	public Guid SubjectId { get; set; }
+	public Guid AssignedSubjectId { get; set; }
 
 	/// <summary>
 	/// Gets or sets the chapter number (e.g., 1, 2, 3).
@@ -53,24 +47,19 @@ public class SubjectChapter : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? Description { get; set; }
 
 	/// <summary>
-	/// Gets or sets the education medium ID for filtering/validation
-	/// </summary>
-	public Guid EducationMediumId { get; set; }
-
-	/// <summary>
 	/// Navigation property for chapter documents
 	/// </summary>
-	public virtual ICollection<ChapterDocument> Documents { get; set; }
+	public ICollection<AssignedSubjectDocument> Documents { get; set; } = new List<AssignedSubjectDocument>();
 
 	#endregion
 
 	#region Constructors
 
 	// Default constructor
-	protected SubjectChapter() { }
+	protected AssignedSubjectChapter() { }
 
 	// Parameterized constructor
-	public SubjectChapter(
+	public AssignedSubjectChapter(
 		Guid id,
 		Guid standardId,
 		Guid subjectId,
@@ -91,7 +80,7 @@ public class SubjectChapter : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ChapterStartTime = chapterStartTime;
 		ChapterEndTime = chapterEndTime;
 		Description = description;
-		Documents = new List<ChapterDocument>();
+		Documents = new List<AssignedSubjectDocument>();
 	}
 
 	#endregion
@@ -133,16 +122,16 @@ public class SubjectChapter : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Adds a document to the chapter
 	/// </summary>
-	public void AddDocument(ChapterDocument document)
+	public void AddDocument(AssignedSubjectDocument document)
 	{
-		Documents ??= new List<ChapterDocument>();
+		Documents ??= new List<AssignedSubjectDocument>();
 		Documents.Add(document);
 	}
 
 	/// <summary>
 	/// Removes a document from the chapter
 	/// </summary>
-	public void RemoveDocument(ChapterDocument document)
+	public void RemoveDocument(AssignedSubjectDocument document)
 	{
 		Documents?.Remove(document);
 	}

@@ -39,3 +39,4 @@ public class EmployeeAdditionalDetailsUpsertDto
 	public bool TransportMember { get; set; }
 }
 
+

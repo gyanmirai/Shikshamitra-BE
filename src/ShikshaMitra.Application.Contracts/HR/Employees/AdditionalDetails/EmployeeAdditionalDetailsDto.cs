@@ -49,3 +49,4 @@ public class EmployeeAdditionalDetailsDto : EntityDto<Guid>
 	public DateTime LastModifiedAt { get; set; }
 }
 
+

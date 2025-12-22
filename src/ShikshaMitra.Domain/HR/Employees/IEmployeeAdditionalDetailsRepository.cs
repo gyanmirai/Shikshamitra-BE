@@ -31,3 +31,4 @@ public interface IEmployeeAdditionalDetailsRepository : IRepository<EmployeeAddi
 		CancellationToken cancellationToken = default);
 }
 
+

@@ -49,3 +49,4 @@ public interface IEmployeeAdditionalDetailsAppService : IApplicationService
 		EmployeeAdditionalDetailsPatchDto input);
 }
 
+

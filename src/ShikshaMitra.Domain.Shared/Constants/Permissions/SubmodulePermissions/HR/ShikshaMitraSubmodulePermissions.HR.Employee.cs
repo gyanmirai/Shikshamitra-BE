@@ -86,5 +86,23 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ Update, $"{SubmoduleDisplayName}.Update" }
 			};
 		}
+
+		// Employee - Additional Details
+		public static class Employee_AdditionalDetails
+		{
+			private const string SubmoduleName = $"{ModuleName}.Employee.AdditionalDetails";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Employee.AdditionalDetails";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Update = $"{SubmoduleName}.Update";
+
+			public static readonly string[] All = { View, Update };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Update, $"{SubmoduleDisplayName}.Update" }
+			};
+		}
 	}
 }

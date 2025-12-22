@@ -18,6 +18,7 @@ namespace ShikshaMitra.HR.Employees;
 
 public class EmployeeAppService(
 IEmployeeRepository employeeRepository,
+IEmployeeAdditionalDetailsRepository additionalDetailsRepository,
 EmployeeManager employeeManager,
 PayrollStructureManager payrollStructureManager,
 IBlobContainer blobContainer,
@@ -254,14 +255,28 @@ IEmployeeAppService
 
 	public async Task<EmployeeAdditionalDetailsDto> GetAdditionalDetailsAsync(Guid employeeId)
 	{
-		// Get employee using cached repository method
+		// Get employee to verify existence and get employee code
 		var employee = await employeeRepository.GetAsync(employeeId)
 			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
 
-		// Handle null AdditionalDetails for older records by initializing with defaults
-		var additionalDetails = employee.AdditionalDetails ?? EmployeeAdditionalDetails.CreateDefault();
+		// Get additional details from the new entity-based repository
+		var additionalDetails = await additionalDetailsRepository.GetByEmployeeIdAsync(employeeId);
 
-		// Map to DTO using null-safe accessors
+		// Return defaults if no record exists yet
+		if (additionalDetails == null)
+		{
+			return new EmployeeAdditionalDetailsDto
+			{
+				EmployeeCode = employee.EmployeeCode,
+				BplCardNo = null,
+				PersonWithDisability = false,
+				SecondLanguage = null,
+				LibraryMember = false,
+				TransportMember = false
+			};
+		}
+
+		// Map to DTO
 		return new EmployeeAdditionalDetailsDto
 		{
 			EmployeeCode = employee.EmployeeCode,
@@ -277,33 +292,52 @@ IEmployeeAppService
 		Guid employeeId,
 		UpdateEmployeeAdditionalDetailsDto input)
 	{
-		// Create the value object with validation
-		var additionalDetails = new EmployeeAdditionalDetails(
-			input.BplCardNo,
-			input.PersonWithDisability,
-			input.SecondLanguage,
-			input.LibraryMember,
-			input.TransportMember
-		);
+		// Verify employee exists
+		var employee = await employeeRepository.GetAsync(employeeId)
+			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
 
-		// Update employee using manager
-		var employee = await employeeManager.UpdateAdditionalDetailsByEmployeeIdAsync(
-			employeeId,
-			additionalDetails
-		);
+		// Check if additional details already exist
+		var existingDetails = await additionalDetailsRepository.GetByEmployeeIdAsync(employeeId);
 
-		// Save the employee (cache invalidation handled in repository)
-		employee = await employeeRepository.UpdateAsync(employee);
+		EmployeeAdditionalDetails additionalDetails;
+		if (existingDetails == null)
+		{
+			// Create new additional details entity
+			additionalDetails = new EmployeeAdditionalDetails(
+				id: guidGenerator.Create(),
+				tenantId: CurrentTenant.Id,
+				employeeId: employeeId,
+				bplCardNo: input.BplCardNo,
+				personWithDisability: input.PersonWithDisability,
+				secondLanguage: input.SecondLanguage,
+				libraryMember: input.LibraryMember,
+				transportMember: input.TransportMember);
+
+			await additionalDetailsRepository.InsertAsync(additionalDetails);
+		}
+		else
+		{
+			// Update existing additional details
+			existingDetails.Update(
+				bplCardNo: input.BplCardNo,
+				personWithDisability: input.PersonWithDisability,
+				secondLanguage: input.SecondLanguage,
+				libraryMember: input.LibraryMember,
+				transportMember: input.TransportMember);
+
+			await additionalDetailsRepository.UpdateAsync(existingDetails);
+			additionalDetails = existingDetails;
+		}
 
 		// Return success response
 		return new EmployeeAdditionalDetailsDto
 		{
 			EmployeeCode = employee.EmployeeCode,
-			BplCardNo = employee.AdditionalDetails.BplCardNo,
-			PersonWithDisability = employee.AdditionalDetails.PersonWithDisability,
-			SecondLanguage = employee.AdditionalDetails.SecondLanguage,
-			LibraryMember = employee.AdditionalDetails.LibraryMember,
-			TransportMember = employee.AdditionalDetails.TransportMember
+			BplCardNo = additionalDetails.BplCardNo,
+			PersonWithDisability = additionalDetails.PersonWithDisability,
+			SecondLanguage = additionalDetails.SecondLanguage,
+			LibraryMember = additionalDetails.LibraryMember,
+			TransportMember = additionalDetails.TransportMember
 		};
 	}
 

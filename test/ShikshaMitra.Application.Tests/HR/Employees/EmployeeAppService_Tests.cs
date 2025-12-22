@@ -349,7 +349,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         var updateInput = new UpdateEmployeeAdditionalDetailsDto
         {
             BplCardNo = "BPL-12345",
-            PersonWithDisability = "No",
+            PersonWithDisability = false,
             SecondLanguage = "Hindi",
             LibraryMember = true,
             TransportMember = false
@@ -361,28 +361,32 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         // Assert
         result.ShouldNotBeNull();
         result.BplCardNo.ShouldBe("BPL-12345");
-        result.PersonWithDisability.ShouldBe("No");
+        result.PersonWithDisability.ShouldBeFalse();
         result.SecondLanguage.ShouldBe("Hindi");
         result.LibraryMember.ShouldBeTrue();
         result.TransportMember.ShouldBeFalse();
     }
 
     [Fact]
-    public async Task Should_Not_Update_With_Invalid_Disability_Status()
+    public async Task Should_Update_Additional_Details_With_Disability()
     {
         // Arrange
         var created = await CreateTestEmployeeAsync("Test", "Employee");
 
         var updateInput = new UpdateEmployeeAdditionalDetailsDto
         {
-            PersonWithDisability = "Maybe" // Invalid value
+            PersonWithDisability = true,
+            LibraryMember = false,
+            TransportMember = true
         };
 
-        // Act & Assert
-        await Should.ThrowAsync<AbpValidationException>(async () =>
-        {
-            await _employeeAppService.UpdateAdditionalDetailsAsync(created.Id, updateInput);
-        });
+        // Act
+        var result = await _employeeAppService.UpdateAdditionalDetailsAsync(created.Id, updateInput);
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.PersonWithDisability.ShouldBeTrue();
+        result.TransportMember.ShouldBeTrue();
     }
 
     #endregion

@@ -22,7 +22,7 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 		builder.ComplexProperty(e => e.MotherDetails);
 		builder.ComplexProperty(e => e.SpouseDetails);
 		builder.ComplexProperty(e => e.BankDetails);
-		builder.ComplexProperty(e => e.AdditionalDetails);
+		// Note: AdditionalDetails is now a separate entity with its own table (see EmployeeAdditionalDetailsConfiguration)
 
 		// Configure owned collections (stored as JSON)
 		builder.OwnsMany(e => e.WorkExperiences, ew => ew.ToJson());

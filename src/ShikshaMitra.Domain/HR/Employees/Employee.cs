@@ -63,7 +63,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public ContactDetails MotherDetails { get; private set; }
 	public ContactDetails SpouseDetails { get; private set; }
 	public BankDetails BankDetails { get; private set; }
-	public EmployeeAdditionalDetails AdditionalDetails { get; private set; }
 	public Guid? ShiftId { get; set; }
 
 	public List<WorkExperience> WorkExperiences { get; private set; } = new List<WorkExperience>();
@@ -87,6 +86,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public virtual ShiftManagement? Shift { get; private set; }
 	// Navigation property for Reporting Manager
 	public virtual Employee? ReportingManager { get; private set; }
+	// Navigation property for Additional Details (1:1 relationship)
+	public virtual EmployeeAdditionalDetails? AdditionalDetails { get; private set; }
 
 	// Full name including middle name
 	public string EmployeeNameWithFather
@@ -195,7 +196,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		MotherDetails = motherDetails;
 		SpouseDetails = spouseDetails;
 		BankDetails = bankDetails;
-		AdditionalDetails = EmployeeAdditionalDetails.CreateDefault();
 		WorkExperiences = workExperiences ?? [];
 		ShiftId = shiftId;
 	}
@@ -292,13 +292,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	internal Employee UpdateBankDetails(BankDetails bankDetails)
 	{
 		this.BankDetails = bankDetails;
-
-		return this;
-	}
-
-	internal Employee UpdateAdditionalDetails(EmployeeAdditionalDetails additionalDetails)
-	{
-		this.AdditionalDetails = additionalDetails ?? throw new ArgumentNullException(nameof(additionalDetails));
 
 		return this;
 	}

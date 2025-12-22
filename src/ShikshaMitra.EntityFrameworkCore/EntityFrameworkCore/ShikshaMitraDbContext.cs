@@ -183,6 +183,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Employee
 
 	DbSet<Employee> Employees { get; set; }
+	DbSet<EmployeeAdditionalDetails> EmployeeAdditionalDetails { get; set; }
 	DbSet<DocumentSetting> DocumentSettings { get; set; }
 	
 	// Employee Payroll

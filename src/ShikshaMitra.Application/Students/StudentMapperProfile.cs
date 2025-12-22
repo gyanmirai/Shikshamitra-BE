@@ -92,7 +92,7 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.PreviousSchool, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.PreviousSchool : null))
 			.ForMember(dest => dest.InquiryPreference, opt => opt.MapFrom(src => src.InquiryPreference != null ? src.InquiryPreference.PreferenceName : null))
 			.ForMember(dest => dest.NextReminderDate, opt => opt.Ignore())
-			.ForMember(dest => dest.FormNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.FormNo : null))
+			.ForMember(dest => dest.FormNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.RegistrationFormNo : null))
 			.IncludeAllDerived();
 
 		// Add converter for Age calculation
@@ -100,7 +100,7 @@ public class StudentMapperProfile : Profile
 
         CreateMap<Student, StudentGeneralDetailsDto>()
 			.ForMember(dest => dest.StudentId, opt => opt.MapFrom(src => src.Id))
-			.ForMember(dest => dest.FormNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.FormNo : null))
+			.ForMember(dest => dest.FormNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.RegistrationFormNo : null))
 			.ForMember(dest => dest.AcademicMediumId, opt => opt.MapFrom(src => src.AcademicMediumId))
 			.ForMember(dest => dest.AcademicBoardId, opt => opt.Ignore())
 			.ForMember(dest => dest.AcademicYearId, opt => opt.MapFrom(src => src.AcademicYearId))

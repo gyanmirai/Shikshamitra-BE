@@ -8,7 +8,7 @@ namespace ShikshaMitra.Academic.Syllabus;
 public interface IChapterAppService : IApplicationService
 {
 	Task<ChapterDto> CreateAsync(CreateUpdateChapterDto input);
-	Task<List<ChapterDto>> GetByStandardSubjectIdAsync(Guid standardId, Guid subjectId);
+	Task<List<ChapterDto>> GetByAssignedSubjectIdAsync(Guid assignedSubjectId);
 	Task<ChapterDto> UpdateAsync(Guid id, CreateUpdateChapterDto input);
 	Task DeleteAsync(Guid id);
 

@@ -19,42 +19,5 @@ public class ChapterDocumentConfiguration : IEntityTypeConfiguration<AssignedSub
 
 		// Apply ABP conventions
 		builder.ConfigureByConvention();
-
-		// Properties
-		builder.Property(x => x.FileName)
-			.IsRequired()
-			.HasMaxLength(ChapterConsts.MaxFileNameLength);
-
-		builder.Property(x => x.FileUrl)
-			.IsRequired()
-			.HasMaxLength(ChapterConsts.MaxFileUrlLength);
-
-		builder.Property(x => x.ContentType)
-			.IsRequired()
-			.HasMaxLength(100);
-
-		builder.Property(x => x.FileSize)
-			.IsRequired();
-
-		builder.Property(x => x.UploadedAt)
-			.IsRequired();
-
-		// Relationships
-		builder.HasOne(x => x.Chapter)
-			.WithMany(x => x.Documents)
-			.HasForeignKey(x => x.ChapterId)
-			.OnDelete(DeleteBehavior.Cascade);
-
-		// Indexes
-		builder.HasIndex(x => x.ChapterId)
-			.HasDatabaseName("IX_ChapterDocuments_ChapterId");
-
-		// Tenant filtering index
-		builder.HasIndex(x => x.TenantId)
-			.HasDatabaseName("IX_ChapterDocuments_TenantId");
-
-		// Composite index for efficient tenant + chapter queries
-		builder.HasIndex(x => new { x.TenantId, x.ChapterId })
-			.HasDatabaseName("IX_ChapterDocuments_TenantId_ChapterId");
 	}
 }

@@ -61,9 +61,7 @@ public class AssignedSubjectChapter : FullAuditedEntity<Guid>, IMultiTenant
 	// Parameterized constructor
 	public AssignedSubjectChapter(
 		Guid id,
-		Guid standardId,
-		Guid subjectId,
-		Guid educationMediumId,
+		Guid assignedSubjectId,
 		int chapterNumber,
 		string chapterName,
 		DateTimeOffset chapterStartTime,
@@ -72,9 +70,6 @@ public class AssignedSubjectChapter : FullAuditedEntity<Guid>, IMultiTenant
 	)
 		: base(id)
 	{
-		StandardId = standardId;
-		SubjectId = subjectId;
-		EducationMediumId = educationMediumId;
 		ChapterNumber = chapterNumber;
 		ChapterName = chapterName;
 		ChapterStartTime = chapterStartTime;

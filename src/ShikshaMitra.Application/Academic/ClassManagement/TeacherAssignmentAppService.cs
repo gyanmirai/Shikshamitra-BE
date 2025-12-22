@@ -120,8 +120,7 @@ public class TeacherAssignmentAppService(
 			try
 			{
 				assignments = await subjectAssignmentRepository.GetListAsync(a =>
-					a.StandardId == classId &&
-					a.EducationMediumId == academicMediumId
+					a.StandardId == classId
 				);
 			}
 			catch (Exception ex)

@@ -40,7 +40,6 @@ public class StandardSubjectAssignmentAppService(
 				standardId: createAssignmentDto.StandardId,
 				subjectId: createAssignmentDto.SubjectId,
 				subjectCode: createAssignmentDto.SubjectCode,
-				educationMediumId: createAssignmentDto.EducationMediumId,
 				status: createAssignmentDto.Status,
 				subjectType: subjectType,
 				learningGoals: createAssignmentDto.LearningGoals,

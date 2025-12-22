@@ -186,5 +186,24 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			Documents.Remove(document);
 		}
 	}
+
+	public void AddChapter(Guid id, int chapterNumber, string chapterName, DateTimeOffset startTime, DateTimeOffset endTime, List<string> documents, string? description = null)
+	{
+		var chapter = new AssignedSubjectChapter(id, Id, chapterNumber, chapterName, startTime, endTime, description);
+		foreach (var document in documents)
+		{
+			chapter.AddDocument(new AssignedSubjectDocument(Guid.NewGuid(), Id, chapter.Id, document));
+		}
+		Chapters.Add(chapter);
+	}
+
+	public void RemoveChapter(Guid chapterId)
+	{
+		var chapter = Chapters.FirstOrDefault(c => c.Id == chapterId);
+		if (chapter != null)
+		{
+			Chapters.Remove(chapter);
+		}
+	}
 	#endregion
 }

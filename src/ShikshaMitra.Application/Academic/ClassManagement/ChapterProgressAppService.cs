@@ -64,9 +64,9 @@ public class ChapterProgressAppService(
 		var subjects = await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id));
 		var subjectLookup = subjects.ToDictionary(s => s.Id);
 
-		var chapters = await chapterRepository.GetListAsync(c => subjectIds.Contains(c.SubjectId));
+		var chapters = await chapterRepository.GetListAsync(c => subjectIds.Contains(c.AssignedSubjectId));
 		var chaptersBySubject = chapters
-			.GroupBy(c => c.SubjectId)
+			.GroupBy(c => c.AssignedSubjectId)
 			.ToDictionary(g => g.Key, g => g.ToList());
 		var chapterIds = chapters.Select(c => c.Id).ToList();
 		var progresses = chapterIds.Count == 0
@@ -166,7 +166,7 @@ public class ChapterProgressAppService(
 
 		// Get all chapters for the subject
 		var chaptersQuery = await chapterRepository.GetQueryableAsync();
-		chaptersQuery = chaptersQuery.Where(c => c.SubjectId == subjectId);
+		chaptersQuery = chaptersQuery.Where(c => c.AssignedSubjectId == subjectId);
 
 		if (!string.IsNullOrWhiteSpace(search))
 		{

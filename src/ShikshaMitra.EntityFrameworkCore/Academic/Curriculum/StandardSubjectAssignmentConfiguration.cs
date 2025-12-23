@@ -18,10 +18,6 @@ public class StandardSubjectAssignmentConfiguration : IEntityTypeConfiguration<A
 			.HasMaxLength(SubjectAssignmentConsts.MaxSubjectCodeLength)
 			.IsRequired();
 
-		builder.Property(x => x.Documents)
-			.HasColumnType("text")
-			.IsRequired(false);
-
 		builder.Property(x => x.SubjectType)
 			.HasDefaultValue(SubjectType.Core)
 			.IsRequired();

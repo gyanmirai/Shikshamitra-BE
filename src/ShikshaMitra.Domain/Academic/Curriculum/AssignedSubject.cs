@@ -85,7 +85,7 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// When this assignment was published (null if Draft)
 	/// </summary>
-	public DateTimeOffset PublishedAt { get; set; }
+	public DateTimeOffset? PublishedAt { get; set; }
 
 	public ICollection<AssignedSubjectChapter> Chapters { get; set; } =
 		new HashSet<AssignedSubjectChapter>();

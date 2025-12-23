@@ -7,9 +7,7 @@ namespace ShikshaMitra.Academic.Curriculum;
 public interface ICurriculumFileManagementAppService : IApplicationService
 {
 	Task<string> UploadAsync(
-		string originalFileName,
-		string contentType,
-		long size,
+		string originalFilePath,
 		Stream stream
 	);
 }

@@ -10,7 +10,7 @@ public class CurriculumFileManagementAppService(
 	IBlobContainer blobContainer
 ) : ApplicationService, ICurriculumFileManagementAppService
 {
-	public async Task<string> UploadAsync(string originalFileName, string contentType, long size, Stream stream)
+	public async Task<string> UploadAsync(string originalFileName, Stream stream)
 	{
 		var blobName = $"{Guid.NewGuid()}{Path.GetExtension(originalFileName)}";
 

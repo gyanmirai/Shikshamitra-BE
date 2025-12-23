@@ -83,4 +83,39 @@ public class RoomAppService : CrudAppService<Room, RoomDto, Guid, GetRoomListDto
 
 		return new PagedResultDto<RoomDto>(totalCount, roomDtos);
 	}
+
+	public override async Task<RoomDto> CreateAsync(CreateUpdateRoomDto input)
+	{
+		var room = ObjectMapper.Map<CreateUpdateRoomDto, Room>(input);
+		await Repository.InsertAsync(room, autoSave: true);
+
+		var building = await _buildingRepository.GetAsync(room.BuildingId);
+		var floor = await _floorRepository.GetAsync(room.FloorId);
+		var roomType = await _roomTypeRepository.GetAsync(room.RoomTypeId);
+
+		var dto = ObjectMapper.Map<Room, RoomDto>(room);
+		dto.BuildingName = building.BuildingName;
+		dto.FloorName = floor.FloorName;
+		dto.RoomTypeName = roomType.RoomTypeName;
+
+		return dto;
+	}
+
+	public override async Task<RoomDto> UpdateAsync(Guid id, CreateUpdateRoomDto input)
+	{
+		var room = await Repository.GetAsync(id);
+		ObjectMapper.Map(input, room);
+		await Repository.UpdateAsync(room, autoSave: true);
+
+		var building = await _buildingRepository.GetAsync(room.BuildingId);
+		var floor = await _floorRepository.GetAsync(room.FloorId);
+		var roomType = await _roomTypeRepository.GetAsync(room.RoomTypeId);
+
+		var dto = ObjectMapper.Map<Room, RoomDto>(room);
+		dto.BuildingName = building.BuildingName;
+		dto.FloorName = floor.FloorName;
+		dto.RoomTypeName = roomType.RoomTypeName;
+
+		return dto;
+	}
 }

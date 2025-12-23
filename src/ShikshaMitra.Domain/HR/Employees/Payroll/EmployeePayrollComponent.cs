@@ -10,12 +10,45 @@ public class EmployeePayrollComponent : Entity<Guid>
 {
 	public Guid EmployeeId { get; set; }
 	
-	public string ComponentName { get; set; } = string.Empty;
+	/// <summary>
+	/// Component name (e.g., Basic, PF, Tax).
+	/// </summary>
+	public string Name { get; set; } = string.Empty;
 	
-	public PayrollComponentType Type { get; set; }
+	/// <summary>
+	/// Optional description/explanation of the component.
+	/// </summary>
+	public string? Description { get; set; }
 	
+	/// <summary>
+	/// Final calculated amount.
+	/// </summary>
 	public decimal Amount { get; set; }
 	
+	/// <summary>
+	/// Whether this is a fixed component for all employees or employee-specific.
+	/// </summary>
+	public bool IsFixed { get; set; }
+	
+	/// <summary>
+	/// Whether this is a temporary or one-time component.
+	/// </summary>
+	public bool IsTemp { get; set; }
+	
+	/// <summary>
+	/// Calculation strategy (Fixed amount or Percentage-based).
+	/// </summary>
+	public SalaryComponentType ComponentType { get; set; }
+	
+	/// <summary>
+	/// What this component depends on for calculation (Basic or Gross).
+	/// Only applicable when ComponentType is Percentage.
+	/// </summary>
+	public SalaryComponentDependency? DependOn { get; set; }
+	
+	/// <summary>
+	/// True for earning components, false for deduction components.
+	/// </summary>
 	public bool IsEarning { get; set; }
 
 	// Navigation property
@@ -28,22 +61,42 @@ public class EmployeePayrollComponent : Entity<Guid>
 	public EmployeePayrollComponent(
 		Guid id,
 		Guid employeeId,
-		string componentName,
-		PayrollComponentType type,
+		string name,
+		string? description,
 		decimal amount,
+		bool isFixed,
+		bool isTemp,
+		SalaryComponentType componentType,
+		SalaryComponentDependency? dependOn,
 		bool isEarning) : base(id)
 	{
 		EmployeeId = employeeId;
-		ComponentName = componentName;
-		Type = type;
+		Name = name;
+		Description = description;
 		Amount = amount;
+		IsFixed = isFixed;
+		IsTemp = isTemp;
+		ComponentType = componentType;
+		DependOn = dependOn;
 		IsEarning = isEarning;
 	}
 
-	public void UpdateComponent(PayrollComponentType type, decimal amount)
+	public void UpdateComponent(
+		string name,
+		string? description,
+		decimal amount,
+		bool isFixed,
+		bool isTemp,
+		SalaryComponentType componentType,
+		SalaryComponentDependency? dependOn)
 	{
-		Type = type;
+		Name = name;
+		Description = description;
 		Amount = amount;
+		IsFixed = isFixed;
+		IsTemp = isTemp;
+		ComponentType = componentType;
+		DependOn = dependOn;
 	}
 }
 

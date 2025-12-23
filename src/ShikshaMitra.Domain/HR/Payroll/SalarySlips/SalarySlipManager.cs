@@ -86,14 +86,14 @@ public class SalarySlipManager : DomainService
 
 		// Convert to salary slip line items
 		var earningLineItems = earnings.Select(e => new SalarySlipLineItem(
-			e.ComponentName, 
+			e.Name, 
 			e.Amount, 
-			e.Type.ToString())).ToList();
+			e.ComponentType.ToString())).ToList();
 
 		var deductionLineItems = deductions.Select(d => new SalarySlipLineItem(
-			d.ComponentName, 
+			d.Name, 
 			d.Amount, 
-			d.Type.ToString())).ToList();
+			d.ComponentType.ToString())).ToList();
 
 		// Create or update salary slip
 		if (existingSlip == null)

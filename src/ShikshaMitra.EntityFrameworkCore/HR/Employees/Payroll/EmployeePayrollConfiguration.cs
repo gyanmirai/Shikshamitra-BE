@@ -60,9 +60,13 @@ public class EmployeePayrollComponentConfiguration : IEntityTypeConfiguration<Em
 		builder.HasIndex(x => new { x.EmployeeId, x.IsEarning });
 
 		// Column configurations
-		builder.Property(x => x.ComponentName).IsRequired().HasMaxLength(200);
-		builder.Property(x => x.Type).IsRequired();
+		builder.Property(x => x.Name).IsRequired().HasMaxLength(100);
+		builder.Property(x => x.Description).HasMaxLength(255);
 		builder.Property(x => x.Amount).HasColumnType("decimal(18,2)");
+		builder.Property(x => x.IsFixed).IsRequired();
+		builder.Property(x => x.IsTemp).IsRequired();
+		builder.Property(x => x.ComponentType).IsRequired();
+		builder.Property(x => x.DependOn);
 		builder.Property(x => x.IsEarning).IsRequired();
 	}
 }

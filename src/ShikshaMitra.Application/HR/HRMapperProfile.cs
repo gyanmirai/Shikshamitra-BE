@@ -3,10 +3,12 @@ using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.EventAndHolidays;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.SalarySlips;
+using ShikshaMitra.HR.Payroll.SalaryStructure;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Students;
 
@@ -27,6 +29,14 @@ public class HRMapperProfile : Profile
 
 		CreateMap<ContactDetails, ContactDetailsDto>().ReverseMap();
 		CreateMap<BankDetails, BankDetailsDto>().ReverseMap();
+		
+		// Employee Payroll Component mappings for Salary Structure API
+		CreateMap<EmployeePayrollComponent, SalaryComponentDto>();
+		CreateMap<SalaryComponentDto, EmployeePayrollComponent>();
+		
+		// Also map to the legacy PayrollComponentDto for backward compatibility
+		CreateMap<EmployeePayrollComponent, Employees.Payroll.PayrollComponentDto>();
+		CreateMap<Employees.Payroll.PayrollComponentDto, EmployeePayrollComponent>();
 
 		#region settings
 

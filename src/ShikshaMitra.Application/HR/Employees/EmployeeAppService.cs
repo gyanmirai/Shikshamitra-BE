@@ -491,15 +491,23 @@ IEmployeeAppService
 			} : new PayrollDetailsDto(),
 		Earnings = (earnings ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(e => new PayrollComponentDto
 		{
-			ComponentName = e.ComponentName,
-			Type = e.Type,
-			Amount = e.Amount
+			Name = e.Name,
+			Description = e.Description,
+			Amount = e.Amount,
+			IsFixed = e.IsFixed,
+			IsTemp = e.IsTemp,
+			ComponentType = e.ComponentType,
+			DependOn = e.DependOn
 		}).ToList(),
 		Deductions = (deductions ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(d => new PayrollComponentDto
 		{
-			ComponentName = d.ComponentName,
-			Type = d.Type,
-			Amount = d.Amount
+			Name = d.Name,
+			Description = d.Description,
+			Amount = d.Amount,
+			IsFixed = d.IsFixed,
+			IsTemp = d.IsTemp,
+			ComponentType = d.ComponentType,
+			DependOn = d.DependOn
 		}).ToList()
 		};
 
@@ -565,9 +573,13 @@ IEmployeeAppService
 			var component = new EmployeePayrollComponent(
 				guidGenerator.Create(),
 				employeeId,
-				earning.ComponentName,
-				earning.Type,
+				earning.Name,
+				earning.Description,
 				earning.Amount,
+				earning.IsFixed,
+				earning.IsTemp,
+				earning.ComponentType,
+				earning.DependOn,
 				isEarning: true
 			);
 			await payrollComponentRepository.InsertAsync(component);
@@ -578,9 +590,13 @@ IEmployeeAppService
 			var component = new EmployeePayrollComponent(
 				guidGenerator.Create(),
 				employeeId,
-				deduction.ComponentName,
-				deduction.Type,
+				deduction.Name,
+				deduction.Description,
 				deduction.Amount,
+				deduction.IsFixed,
+				deduction.IsTemp,
+				deduction.ComponentType,
+				deduction.DependOn,
 				isEarning: false
 			);
 			await payrollComponentRepository.InsertAsync(component);

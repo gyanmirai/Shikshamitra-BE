@@ -467,24 +467,31 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             {
                 new PayrollComponentDto
                 {
-                    ComponentName = "HRA",
-                    Type = PayrollComponentType.Fixed,
-                    Amount = 15000
+                    Name = "HRA",
+                    ComponentType = SalaryComponentType.Fixed,
+                    Amount = 15000,
+                    IsFixed = false,
+                    IsTemp = false
                 },
                 new PayrollComponentDto
                 {
-                    ComponentName = "Special Allowance",
-                    Type = PayrollComponentType.Variable,
-                    Amount = 5000
+                    Name = "Special Allowance",
+                    ComponentType = SalaryComponentType.Percentage,
+                    Amount = 5000,
+                    IsFixed = false,
+                    IsTemp = false,
+                    DependOn = SalaryComponentDependency.Basic
                 }
             },
             Deductions = new List<PayrollComponentDto>
             {
                 new PayrollComponentDto
                 {
-                    ComponentName = "PF",
-                    Type = PayrollComponentType.Fixed,
-                    Amount = 6000
+                    Name = "PF",
+                    ComponentType = SalaryComponentType.Fixed,
+                    Amount = 6000,
+                    IsFixed = true,
+                    IsTemp = false
                 }
             }
         };
@@ -516,8 +523,8 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             },
             Earnings = new List<PayrollComponentDto>
             {
-                new PayrollComponentDto { ComponentName = "HRA", Type = PayrollComponentType.Fixed, Amount = 10000 },
-                new PayrollComponentDto { ComponentName = "DA", Type = PayrollComponentType.Fixed, Amount = 5000 }
+                new PayrollComponentDto { Name = "HRA", ComponentType = SalaryComponentType.Fixed, Amount = 10000, IsFixed = false, IsTemp = false },
+                new PayrollComponentDto { Name = "DA", ComponentType = SalaryComponentType.Fixed, Amount = 5000, IsFixed = false, IsTemp = false }
             },
             Deductions = new List<PayrollComponentDto>()
         };
@@ -533,7 +540,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             },
             Earnings = new List<PayrollComponentDto>
             {
-                new PayrollComponentDto { ComponentName = "HRA", Type = PayrollComponentType.Fixed, Amount = 15000 }
+                new PayrollComponentDto { Name = "HRA", ComponentType = SalaryComponentType.Fixed, Amount = 15000, IsFixed = false, IsTemp = false }
             },
             Deductions = new List<PayrollComponentDto>()
         };
@@ -544,7 +551,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         // Assert
         var result = await _employeeAppService.GetPayrollDetailsAsync(created.Id);
         result.Earnings.Count.ShouldBe(1); // Should have only 1, not 3
-        result.Earnings[0].ComponentName.ShouldBe("HRA");
+        result.Earnings[0].Name.ShouldBe("HRA");
         result.Earnings[0].Amount.ShouldBe(15000);
     }
 

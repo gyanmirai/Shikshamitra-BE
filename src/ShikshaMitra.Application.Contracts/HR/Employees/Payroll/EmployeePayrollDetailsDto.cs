@@ -49,14 +49,45 @@ public class PayrollDetailsDto
 
 /// <summary>
 /// DTO for individual payroll components (earnings or deductions).
+/// Matches the OpenAPI SalaryComponent schema.
 /// </summary>
 public class PayrollComponentDto
 {
-	public string ComponentName { get; set; } = string.Empty;
+	/// <summary>
+	/// Component name (e.g., Basic, PF, Tax).
+	/// </summary>
+	public string Name { get; set; } = string.Empty;
 	
-	public PayrollComponentType Type { get; set; }
+	/// <summary>
+	/// Optional explanation of the component.
+	/// </summary>
+	public string? Description { get; set; }
 	
+	/// <summary>
+	/// Final calculated amount.
+	/// </summary>
 	public decimal Amount { get; set; }
+	
+	/// <summary>
+	/// Fixed for all employees or employee-specific.
+	/// </summary>
+	public bool IsFixed { get; set; }
+	
+	/// <summary>
+	/// Temporary or one-time component.
+	/// </summary>
+	public bool IsTemp { get; set; }
+	
+	/// <summary>
+	/// Calculation strategy (Fixed or Percentage).
+	/// </summary>
+	public SalaryComponentType ComponentType { get; set; }
+	
+	/// <summary>
+	/// Required only when componentType is Percentage.
+	/// Indicates what the percentage is based on (Basic or Gross).
+	/// </summary>
+	public SalaryComponentDependency? DependOn { get; set; }
 }
 
 

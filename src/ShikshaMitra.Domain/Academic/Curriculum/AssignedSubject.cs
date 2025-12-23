@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
+using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -9,7 +9,7 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	#region Properties
 	public Guid? TenantId { get; private set; }
@@ -52,7 +52,7 @@ public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiT
 	/// <summary>
 	/// Collection of teachers assigned to the subject.
 	/// </summary>
-	public ICollection<SubjectTeacher> Teachers { get; set; } = new HashSet<SubjectTeacher>();
+	public ICollection<AssignedSubjectTeacher> Teachers { get; set; } = new HashSet<AssignedSubjectTeacher>();
 
 	/// <summary>
 	/// Learning goals or objectives for the subject.
@@ -69,10 +69,8 @@ public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiT
 	/// </summary>
 	public string? Description { get; set; }
 
-	/// <summary>
-	/// Path or reference to the uploaded document related to the subject.
-	/// </summary>
-	public string? UploadedDocument { get; set; }
+	public ICollection<AssignedSubjectDocument> Documents { get; set; } =
+		new HashSet<AssignedSubjectDocument>();
 
 	/// <summary>
 	/// Current status of the subject (e.g., Draft, Published).
@@ -80,72 +78,43 @@ public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiT
 	public SubjectStatus Status { get; set; } = SubjectStatus.Draft;
 
 	/// <summary>
-	/// Assignment group name for grouping related subjects (e.g., "Science Group A")
-	/// </summary>
-	public string? AssignmentGroupName { get; set; }
-
-	/// <summary>
-	/// Assignment group ID to link related subject assignments together
-	/// </summary>
-	public Guid? AssignmentGroupId { get; set; }
-
-	/// <summary>
 	/// Type of subject (Core or Elective)
 	/// </summary>
 	public SubjectType SubjectType { get; set; } = SubjectType.Core;
 
 	/// <summary>
-	/// Documents attached to this subject assignment (stored as JSON)
-	/// </summary>
-	public string? Documents { get; set; }
-
-	/// <summary>
-	/// Whether this subject is open for enrollment
-	/// </summary>
-	public bool IsSubjectOpen { get; set; } = true;
-
-	/// <summary>
-	/// Education Medium ID for validation and filtering
-	/// </summary>
-	public Guid EducationMediumId { get; set; }
-
-	/// <summary>
-	/// Subject color for UI display (hex format)
-	/// </summary>
-	public string? SubjectColor { get; set; }
-
-	/// <summary>
 	/// When this assignment was published (null if Draft)
 	/// </summary>
-	public DateTime? PublishedAt { get; set; }
+	public DateTimeOffset? PublishedAt { get; set; }
+
+	public ICollection<AssignedSubjectChapter> Chapters { get; set; } =
+		new HashSet<AssignedSubjectChapter>();
 	#endregion
 
 	#region Constructors
 	/// <summary>
 	/// Private constructor for ORM and deserialization purposes.
 	/// </summary>
-	private StandardSubjectAssignment()
+	private AssignedSubject()
 	{
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
 	/// <summary>
-	/// Initializes a new instance of the <see cref="StandardSubjectAssignment"/> class with specified parameters.
+	/// Initializes a new instance of the <see cref="AssignedSubject"/> class with specified parameters.
 	/// </summary>
-	public StandardSubjectAssignment(
+	public AssignedSubject(
 		Guid id,
 		Guid? tenantId,
 		Guid standardId,
 		Guid subjectId,
 		string subjectCode,
-		Guid educationMediumId,
 		SubjectStatus status = SubjectStatus.Draft,
 		SubjectType subjectType = SubjectType.Core,
+		Guid? electiveGroupId = null,
 		string? learningGoals = null,
 		string? prerequisites = null,
-		string? description = null,
-		string? uploadedDocument = null,
-		string? subjectColor = null
+		string? description = null
 	)
 		: base(id)
 	{
@@ -154,17 +123,15 @@ public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiT
 		StandardId = standardId;
 		SubjectId = subjectId;
 		SubjectCode = subjectCode;
-		EducationMediumId = educationMediumId;
 		Status = status;
 		SubjectType = subjectType;
-		SubjectColor = subjectColor;
-
 		LearningGoals = learningGoals;
 		Prerequisites = prerequisites;
 		Description = description;
-		UploadedDocument = uploadedDocument;
+		ElectiveGroupId = electiveGroupId;
 
-		Teachers = new HashSet<SubjectTeacher>();
+		Teachers = new HashSet<AssignedSubjectTeacher>();
+		Documents = new HashSet<AssignedSubjectDocument>();
 	}
 
 	#endregion
@@ -185,7 +152,7 @@ public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiT
 		{
 			Teachers.Remove(currentPrimary);
 		}
-		Teachers.Add(new SubjectTeacher(Id, SubjectId, teacherId, SubjectTeacherType.Primary));
+		Teachers.Add(new AssignedSubjectTeacher(Id, SubjectId, teacherId, SubjectTeacherType.Primary));
 	}
 
 	public void SetSecondaryTeachers(IEnumerable<Guid> teacherIds)
@@ -201,85 +168,42 @@ public class StandardSubjectAssignment : FullAuditedAggregateRoot<Guid>, IMultiT
 		foreach (var teacherId in teacherIds)
 		{
 			Teachers.Add(
-				new SubjectTeacher(Id, SubjectId, teacherId, SubjectTeacherType.Secondary)
+				new AssignedSubjectTeacher(Id, SubjectId, teacherId, SubjectTeacherType.Secondary)
 			);
 		}
 	}
 
-	/// <summary>
-	/// Sets the group information for this assignment
-	/// </summary>
-	public void SetGroupInfo(string? groupName, Guid? groupId)
+	public void AddDocument(Guid id, string blobName, Guid? chapterId = null)
 	{
-		AssignmentGroupName = groupName;
-		AssignmentGroupId = groupId;
+		Documents.Add(new AssignedSubjectDocument(id, Id, chapterId, blobName));
 	}
 
-	/// <summary>
-	/// Sets the subject type (Core or Elective)
-	/// </summary>
-	public void SetSubjectType(SubjectType subjectType)
+	public void RemoveDocument(Guid id, string blobName)
 	{
-		SubjectType = subjectType;
+		var document = Documents.FirstOrDefault(d => d.Id == id && d.BlobName == blobName);
+		if (document != null)
+		{
+			Documents.Remove(document);
+		}
 	}
 
-	/// <summary>
-	/// Sets whether the subject is open for enrollment
-	/// </summary>
-	public void SetIsSubjectOpen(bool isOpen)
+	public void AddChapter(Guid id, int chapterNumber, string chapterName, DateTimeOffset startTime, DateTimeOffset endTime, List<string> documents, string? description = null)
 	{
-		IsSubjectOpen = isOpen;
+		var chapter = new AssignedSubjectChapter(id, Id, chapterNumber, chapterName, startTime, endTime, description);
+		foreach (var document in documents)
+		{
+			chapter.AddDocument(new AssignedSubjectDocument(Guid.NewGuid(), Id, chapter.Id, document));
+		}
+		Chapters.Add(chapter);
 	}
 
-	/// <summary>
-	/// Sets the education medium ID
-	/// </summary>
-	public void SetEducationMedium(Guid educationMediumId)
+	public void RemoveChapter(Guid chapterId)
 	{
-		EducationMediumId = educationMediumId;
-	}
-
-	/// <summary>
-	/// Sets the documents (serialized as JSON)
-	/// </summary>
-	public void SetDocuments(string? documents)
-	{
-		Documents = documents;
-	}
-
-	/// <summary>
-	/// Sets the subject color
-	/// </summary>
-	public void SetSubjectColor(string? color)
-	{
-		SubjectColor = color;
-	}
-
-	/// <summary>
-	/// Publishes the assignment (changes status and sets published timestamp)
-	/// </summary>
-	public void Publish()
-	{
-		Status = SubjectStatus.Published;
-		PublishedAt = DateTime.UtcNow;
-	}
-
-	/// <summary>
-	/// Updates assignment details
-	/// </summary>
-	public void UpdateDetails(
-		string? learningGoals,
-		string? prerequisites,
-		string? description,
-		string? subjectColor,
-		bool isSubjectOpen
-	)
-	{
-		LearningGoals = learningGoals;
-		Prerequisites = prerequisites;
-		Description = description;
-		SubjectColor = subjectColor;
-		IsSubjectOpen = isSubjectOpen;
+		var chapter = Chapters.FirstOrDefault(c => c.Id == chapterId);
+		if (chapter != null)
+		{
+			Chapters.Remove(chapter);
+		}
 	}
 	#endregion
 }

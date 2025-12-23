@@ -6,7 +6,7 @@ using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Guids;
 
-namespace ShikshaMitra.Academic.Curriculum;
+namespace ShikshaMitra.Academic.Curriculum.Settings;
 
 public class SubjectManager(
 	IGuidGenerator guidGenerator,

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -21,7 +22,7 @@ namespace ShikshaMitra.Academic.ClassManagement.TeacherAssignment;
 [RemoteService(IsEnabled = false)]
 public class TeacherAssignmentAppService(
 	IRepository<TeacherSubjectAllocation, Guid> allocationRepository,
-	IRepository<StandardSubjectAssignment, Guid> subjectAssignmentRepository,
+	IRepository<AssignedSubject, Guid> subjectAssignmentRepository,
 	IRepository<Subject, Guid> subjectRepository,
 	IRepository<Division, Guid> divisionRepository,
 	IRepository<Standard, Guid> standardRepository,
@@ -115,12 +116,11 @@ public class TeacherAssignmentAppService(
 			}
 
 			// Get all subject assignments for the class
-			List<StandardSubjectAssignment> assignments;
+			List<AssignedSubject> assignments;
 			try
 			{
 				assignments = await subjectAssignmentRepository.GetListAsync(a =>
-					a.StandardId == classId &&
-					a.EducationMediumId == academicMediumId
+					a.StandardId == classId
 				);
 			}
 			catch (Exception ex)

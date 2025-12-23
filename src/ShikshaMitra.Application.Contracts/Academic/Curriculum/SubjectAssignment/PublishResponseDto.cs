@@ -15,7 +15,7 @@ public class PublishResponseDto
 	/// <summary>
 	/// New status after publish (1 = Published)
 	/// </summary>
-	public int Status { get; set; }
+	public SubjectStatus Status { get; set; }
 
 	/// <summary>
 	/// When the assignment was published

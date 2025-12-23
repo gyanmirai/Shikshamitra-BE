@@ -10,6 +10,7 @@ namespace ShikshaMitra.Academic.Curriculum;
 /// </summary>
 public class CreateChapterDto : IValidatableObject
 {
+	public Guid AssignedSubjectId { get; set; }
 	/// <summary>
 	/// Chapter number (e.g., 1, 2, 3...)
 	/// Must be unique per subject
@@ -36,19 +37,19 @@ public class CreateChapterDto : IValidatableObject
 	/// Format: YYYY-MM-DD
 	/// </summary>
 	[Required(ErrorMessage = "Start Date is required")]
-	public DateTime StartDate { get; set; }
+	public DateTimeOffset StartDate { get; set; }
 
 	/// <summary>
 	/// Chapter end date (must be >= start date and within academic year)
 	/// Format: YYYY-MM-DD
 	/// </summary>
 	[Required(ErrorMessage = "End Date is required")]
-	public DateTime EndDate { get; set; }
+	public DateTimeOffset EndDate { get; set; }
 
 	/// <summary>
 	/// Pre-uploaded document URLs (if using JSON approach)
 	/// </summary>
-	public List<ChapterDocumentDto>? Documents { get; set; }
+	public List<string>? Documents { get; set; }
 
 	/// <summary>
 	/// Validates the DTO, ensuring cross-property constraints are met

@@ -12,7 +12,7 @@ namespace ShikshaMitra.Academic.Curriculum;
 
 [RemoteService(IsEnabled = false)]
 public class StandardSubjectAssignmentAppService(
-	IRepository<StandardSubjectAssignment, Guid> assignmentRepository,
+	IRepository<AssignedSubject, Guid> assignmentRepository,
 	StandardSubjectAssignmentManager subjectAssignmentManager,
 	IObjectMapper objectMapper,
 	ILogger<StandardSubjectAssignmentAppService> logger
@@ -40,7 +40,6 @@ public class StandardSubjectAssignmentAppService(
 				standardId: createAssignmentDto.StandardId,
 				subjectId: createAssignmentDto.SubjectId,
 				subjectCode: createAssignmentDto.SubjectCode,
-				educationMediumId: createAssignmentDto.EducationMediumId,
 				status: createAssignmentDto.Status,
 				subjectType: subjectType,
 				learningGoals: createAssignmentDto.LearningGoals,
@@ -64,7 +63,7 @@ public class StandardSubjectAssignmentAppService(
 			await assignmentRepository.InsertAsync(assignment);
 
 			return objectMapper.Map<
-				StandardSubjectAssignment,
+				AssignedSubject,
 				StandardSubjectAssignmentResponseDto
 			>(assignment);
 		}
@@ -120,7 +119,7 @@ public class StandardSubjectAssignmentAppService(
 				a.StandardId == standardId
 			);
 			return objectMapper.Map<
-				List<StandardSubjectAssignment>,
+				List<AssignedSubject>,
 				List<StandardSubjectAssignmentResponseDto>
 			>(assignments);
 		}

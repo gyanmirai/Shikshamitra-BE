@@ -5,7 +5,7 @@ using Volo.Abp.Domain.Entities;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class SubjectTeacher : Entity
+public class AssignedSubjectTeacher : Entity
 {
 	#region Properties
 	public virtual Guid? TenantId { get; private set; }
@@ -13,7 +13,7 @@ public class SubjectTeacher : Entity
 	/// <summary>
 	/// The unique identifier for the subject associated with the teacher.
 	/// </summary>
-	public Guid SubjectId { get; private set; }
+	public Guid AssignedSubjectId { get; private set; }
 
 	/// <summary>
 	/// The unique identifier for the teacher assigned to the subject.
@@ -27,15 +27,15 @@ public class SubjectTeacher : Entity
 	#endregion
 
 	#region Constructors
-	private SubjectTeacher() { }
+	private AssignedSubjectTeacher() { }
 
-	public SubjectTeacher(Guid id, Guid subjectId, Guid teacherId, SubjectTeacherType teacherType)
+	public AssignedSubjectTeacher(Guid id, Guid subjectId, Guid teacherId, SubjectTeacherType teacherType)
 	{
-		SubjectId = subjectId;
+		AssignedSubjectId = subjectId;
 		TeacherId = teacherId;
 		TeacherType = teacherType;
 	}
 
-	public override object?[] GetKeys() => new object?[] { SubjectId, TeacherId };
+	public override object?[] GetKeys() => new object?[] { AssignedSubjectId, TeacherId };
 	#endregion
 }

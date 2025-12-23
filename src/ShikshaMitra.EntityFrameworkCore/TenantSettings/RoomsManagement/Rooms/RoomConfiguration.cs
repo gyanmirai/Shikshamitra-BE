@@ -29,7 +29,7 @@ public class RoomConfiguration : IEntityTypeConfiguration<Room>
 		builder.Property(x => x.BuildingId)
 			.IsRequired();
 
-		builder.Property(x => x.Floor)
+		builder.Property(x => x.FloorId)
 			.IsRequired();
 
 		builder.Property(x => x.RoomTypeId)

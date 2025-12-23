@@ -10,7 +10,8 @@ public class RoomDto : AuditedEntityDto<Guid>
 	public int Capacity { get; set; }
 	public Guid BuildingId { get; set; }
 	public string BuildingName { get; set; }
-	public int Floor { get; set; }
+	public Guid FloorId { get; set; }
+	public string FloorName { get; set; }
 	public Guid RoomTypeId { get; set; }
 	public string RoomTypeName { get; set; }
 	public int TotalBenches { get; set; }

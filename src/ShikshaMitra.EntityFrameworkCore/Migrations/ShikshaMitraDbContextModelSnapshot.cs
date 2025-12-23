@@ -3725,9 +3725,6 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("FormNo")
-                        .HasColumnType("text");
-
                     b.Property<int?>("Gender")
                         .HasColumnType("integer");
 
@@ -5436,8 +5433,8 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("Features")
                         .HasColumnType("jsonb");
 
-                    b.Property<int>("Floor")
-                        .HasColumnType("integer");
+                    b.Property<Guid>("FloorId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")

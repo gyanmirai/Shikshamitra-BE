@@ -18,8 +18,7 @@ public class CreateUpdateRoomDto
 	public Guid BuildingId { get; set; }
 
 	[Required]
-	[Range(1, int.MaxValue)]
-	public int Floor { get; set; }
+	public Guid FloorId { get; set; }
 
 	[Required]
 	public Guid RoomTypeId { get; set; }

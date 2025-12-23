@@ -11,7 +11,7 @@ public class Room : AuditedAggregateRoot<Guid>, IMultiTenant
 	public string RoomName { get; set; }
 	public int Capacity { get; set; }
 	public Guid BuildingId { get; set; }
-	public int Floor { get; set; }
+	public Guid FloorId { get; set; }
 	public Guid RoomTypeId { get; set; }
 	
 	// Benches Details

@@ -58,6 +58,11 @@ public class RoomConfiguration : IEntityTypeConfiguration<Room>
 			.HasForeignKey(r => r.BuildingId)
 			.OnDelete(DeleteBehavior.Restrict);
 
+		builder.HasOne<Floor>()
+			.WithMany()
+			.HasForeignKey(r => r.FloorId)
+			.OnDelete(DeleteBehavior.Restrict);
+
 		builder.HasOne<RoomType>()
 			.WithMany()
 			.HasForeignKey(r => r.RoomTypeId)
@@ -65,6 +70,7 @@ public class RoomConfiguration : IEntityTypeConfiguration<Room>
 
 		// Indexes for common queries
 		builder.HasIndex(x => x.BuildingId);
+		builder.HasIndex(x => x.FloorId);
 		builder.HasIndex(x => x.RoomTypeId);
 	}
 }

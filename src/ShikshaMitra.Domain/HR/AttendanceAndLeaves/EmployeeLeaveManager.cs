@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Guids;
@@ -16,6 +17,37 @@ public class EmployeeLeaveManager(IEmployeeLeaveRepository employeeLeaveReposito
 		}
 
 		return employeeLeave;
+	}
+
+	public async Task<EmployeeLeave> CreateAsync(
+		Guid employeeId,
+		Guid leaveTypeId,
+		DateTimeOffset startDate,
+		DateTimeOffset endDate,
+		string description,
+		bool halfDay = false)
+	{
+		var leaveId = guidGenerator.Create();
+		var tenantId = CurrentTenant?.Id ?? Guid.Empty;
+
+		// Create new EmployeeLeave using reflection since constructor is internal
+		var leave = Activator.CreateInstance(
+			typeof(EmployeeLeave),
+			System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
+			null,
+			new object[] { leaveId, tenantId, halfDay, startDate, endDate, description, (string?)null },
+			null) as EmployeeLeave;
+
+		if (leave == null)
+		{
+			throw new InvalidOperationException("Failed to create EmployeeLeave instance");
+		}
+
+		// Set the EmployeeId and LeaveTypeId using reflection
+		typeof(EmployeeLeave).GetProperty("EmployeeId")?.SetValue(leave, employeeId);
+		typeof(EmployeeLeave).GetProperty("LeaveTypeId")?.SetValue(leave, leaveTypeId);
+
+		return leave;
 	}
 
 	public async Task<EmployeeLeave> UpdateLeaveRequestStatusAsync(EmployeeLeave employeeLeave,

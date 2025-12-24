@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Volo.Abp;
@@ -13,92 +13,104 @@ namespace ShikshaMitra.HR.Payroll.Settings;
 public static class EarningComponentOpenApiMapper
 {
 	/// <summary>
-	/// Maps ComponentRequestDto (OpenAPI) to CreateEarningComponentDto (Domain)
+	/// Maps PayrollComponentCreateRequestDto (OpenAPI) to CreateEarningComponentDto (Domain)
 	/// </summary>
-	public static CreateEarningComponentDto ToCreateDto(ComponentRequestDto request)
+	public static CreateEarningComponentDto ToCreateDto(PayrollComponentCreateRequestDto request)
 	{
 		var componentType = ParseComponentType(request.ComponentType, request.IsFixed);
 		var dependOn = ParseDependency(request.DependOn);
-		var amount = FormatAmount(request.Amount, componentType, dependOn);
-		
+		var amount = FormatAmount(Convert.ToDecimal(request.Amount ?? 0), componentType, dependOn);
+
 		return new CreateEarningComponentDto
 		{
 			Name = request.ComponentName,
-			Description = CombineDescription(request.Description, request.CustomComponent),
+			Description = request.Description,
 			ComponentType = componentType,
 			DependOn = dependOn,
 			Amount = amount,
 			VisibleInPayslip = request.VisibleInPayslip,
-			DisplayOrder = 0 // Default display order
+			DisplayOrder = 0
 		};
 	}
 	
 	/// <summary>
-	/// Maps ComponentRequestDto (OpenAPI) to UpdateEarningComponentDto (Domain)
+	/// Maps PayrollComponentCreateRequestDto (OpenAPI) to UpdateEarningComponentDto (Domain)
 	/// </summary>
-	/// <param name="request">The OpenAPI request DTO</param>
-	/// <param name="existingDisplayOrder">The existing display order to preserve (defaults to 0 for new components)</param>
-	public static UpdateEarningComponentDto ToUpdateDto(ComponentRequestDto request, int existingDisplayOrder = 0)
+	public static UpdateEarningComponentDto ToUpdateDto(PayrollComponentCreateRequestDto request, int existingDisplayOrder = 0)
 	{
 		var componentType = ParseComponentType(request.ComponentType, request.IsFixed);
 		var dependOn = ParseDependency(request.DependOn);
-		var amount = FormatAmount(request.Amount, componentType, dependOn);
-		
+		var amount = FormatAmount(Convert.ToDecimal(request.Amount ?? 0), componentType, dependOn);
+
 		return new UpdateEarningComponentDto
 		{
 			Name = request.ComponentName,
-			Description = CombineDescription(request.Description, request.CustomComponent),
+			Description = request.Description,
 			ComponentType = componentType,
 			DependOn = dependOn,
 			Amount = amount,
 			VisibleInPayslip = request.VisibleInPayslip,
-			DisplayOrder = existingDisplayOrder // Preserve existing display order
+			DisplayOrder = existingDisplayOrder
 		};
 	}
-	
+
 	/// <summary>
-	/// Maps EarningComponentDto (Domain) to ComponentResponseDto (OpenAPI)
+	/// Maps PagedResultDto to DeductionComponentPaginatedResponseDto (OpenAPI contract)
+	/// Note: Using DeductionComponentPaginatedResponseDto as it's the same structure for both
 	/// </summary>
-	public static ComponentResponseDto ToComponentResponse(EarningComponentDto dto)
+	public static DeductionComponentPaginatedResponseDto ToPaginatedResponse(PagedResultDto<EarningComponentDto> pagedResult, int page, int pageSize)
 	{
-		return new ComponentResponseDto
+		var totalPages = (int)Math.Ceiling((double)pagedResult.TotalCount / pageSize);
+
+		return new DeductionComponentPaginatedResponseDto
+		{
+			TotalCount = (int)pagedResult.TotalCount,
+			CurrentPage = page,
+			PageSize = pageSize,
+			TotalPages = totalPages,
+			Items = pagedResult.Items.Select(ToEarningComponentResponse).ToList()
+		};
+	}
+
+	/// <summary>
+	/// Maps EarningComponentDto to DeductionComponentResponseDto (OpenAPI contract)
+	/// </summary>
+	private static DeductionComponentResponseDto ToEarningComponentResponse(EarningComponentDto dto)
+	{
+		return new DeductionComponentResponseDto
 		{
 			Id = dto.Id,
 			ComponentName = dto.Name,
 			Description = dto.Description,
-			ComponentType = dto.ComponentType.ToString(),
-			DependOn = dto.DependOn.ToString(),
-			CustomComponent = null, // Not stored in domain
-			Amount = ParseAmountToDecimal(dto.Amount),
-			VisibleInPayslip = dto.VisibleInPayslip,
 			IsFixed = dto.ComponentType == EarningComponentType.Fixed,
-			DisplayOrder = dto.DisplayOrder,
-			IsActive = dto.IsActive
+			Amount = ParseAmountToDouble(dto.Amount),
+			VisibleInPayslip = dto.VisibleInPayslip,
+			CustomComponent = null // Not stored in domain
 		};
 	}
-	
+
 	/// <summary>
-	/// Maps PagedResultDto to ComponentListResponseDto (OpenAPI)
+	/// Parses the amount string to double, removing % if present
 	/// </summary>
-	public static ComponentListResponseDto ToListResponse(PagedResultDto<EarningComponentDto> pagedResult)
+	private static double ParseAmountToDouble(string amountStr)
 	{
-		return new ComponentListResponseDto
+		if (string.IsNullOrWhiteSpace(amountStr))
 		{
-			Total = (int)pagedResult.TotalCount,
-			Data = pagedResult.Items.Select(ToComponentResponse).ToList()
-		};
-	}
-	
-	/// <summary>
-	/// Maps a list of EarningComponentDto to ComponentListResponseDto (OpenAPI)
-	/// </summary>
-	public static ComponentListResponseDto ToListResponse(IReadOnlyList<EarningComponentDto> items, int totalCount)
-	{
-		return new ComponentListResponseDto
+			return 0;
+		}
+
+		var trimmed = amountStr.Trim();
+		if (trimmed.EndsWith("%"))
 		{
-			Total = totalCount,
-			Data = items.Select(ToComponentResponse).ToList()
-		};
+			trimmed = trimmed.TrimEnd('%');
+		}
+
+		if (double.TryParse(trimmed, out var result))
+		{
+			return result;
+		}
+
+		return 0;
 	}
 	
 	#region Private Helper Methods
@@ -206,25 +218,7 @@ public static class EarningComponentOpenApiMapper
 		
 		return 0;
 	}
-	
-	/// <summary>
-	/// Combines description with custom component info if provided
-	/// </summary>
-	private static string? CombineDescription(string? description, string? customComponent)
-	{
-		if (string.IsNullOrWhiteSpace(customComponent))
-		{
-			return description;
-		}
-		
-		if (string.IsNullOrWhiteSpace(description))
-		{
-			return $"Custom: {customComponent}";
-		}
-		
-		return $"{description} (Custom: {customComponent})";
+
+		#endregion
 	}
-	
-	#endregion
-}
 

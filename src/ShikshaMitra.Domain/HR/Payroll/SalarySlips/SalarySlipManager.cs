@@ -84,16 +84,24 @@ public class SalarySlipManager : DomainService
 			_logger.LogWarning("No payroll components found for Employee: {EmployeeId}. Generating empty salary slip.", employeeId);
 		}
 
-		// Convert to salary slip line items
+		// Convert to salary slip line items with full metadata
 		var earningLineItems = earnings.Select(e => new SalarySlipLineItem(
 			e.Name, 
 			e.Amount, 
-			e.ComponentType.ToString())).ToList();
+			e.Description,
+			e.IsFixed,
+			e.IsTemp,
+			e.ComponentType,
+			e.DependOn ?? SalaryComponentDependency.None)).ToList();
 
 		var deductionLineItems = deductions.Select(d => new SalarySlipLineItem(
 			d.Name, 
 			d.Amount, 
-			d.ComponentType.ToString())).ToList();
+			d.Description,
+			d.IsFixed,
+			d.IsTemp,
+			d.ComponentType,
+			d.DependOn ?? SalaryComponentDependency.None)).ToList();
 
 		// Create or update salary slip
 		if (existingSlip == null)

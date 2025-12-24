@@ -77,6 +77,7 @@ public class SalarySlipDto
 
 /// <summary>
 /// DTO for salary slip line item (earning or deduction)
+/// Enhanced with component metadata for OpenAPI compliance
 /// </summary>
 public class SalarySlipLineItemDto
 {
@@ -94,6 +95,26 @@ public class SalarySlipLineItemDto
 	/// Optional description or calculation details
 	/// </summary>
 	public string? Description { get; set; }
+
+	/// <summary>
+	/// Whether this is a fixed component for all employees
+	/// </summary>
+	public bool IsFixed { get; set; }
+
+	/// <summary>
+	/// Whether this is a temporary or one-time component
+	/// </summary>
+	public bool IsTemp { get; set; }
+
+	/// <summary>
+	/// Calculation strategy (Fixed or Percentage)
+	/// </summary>
+	public string ComponentType { get; set; } = string.Empty;
+
+	/// <summary>
+	/// What this component depends on (None, Basic, or Gross)
+	/// </summary>
+	public string DependOn { get; set; } = string.Empty;
 }
 
 /// <summary>

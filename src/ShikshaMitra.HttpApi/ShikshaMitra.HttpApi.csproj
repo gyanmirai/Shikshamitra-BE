@@ -39,6 +39,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Controllers\HR\AttendanceAndLeaves\" />
     <Folder Include="Controllers\HR\Employees\" />
     <Folder Include="Controllers\Security\UserScope\" />
   </ItemGroup>

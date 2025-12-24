@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace ShikshaMitra.HR.Employees.WorkExperience;
+namespace ShikshaMitra.HR.Employees.WorkExperienceContracts;
 
 /// <summary>
 /// Maps between API contract DTOs and internal application DTOs

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace ShikshaMitra.HR.Employees.WorkExperience;
+namespace ShikshaMitra.HR.Employees.WorkExperienceContracts;
 
 /// <summary>
 /// Request/Response DTO for employee work experience

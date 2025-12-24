@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.HR.Employees.DocumentConfigInfo;
-using ShikshaMitra.HR.Employees.Documents;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 

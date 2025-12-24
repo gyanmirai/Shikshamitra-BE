@@ -44,10 +44,35 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Status = EmployeeLeaveStatusType.Pending;
 	}
 
-	internal EmployeeLeave UpdateLeaveStatus(EmployeeLeaveStatusType status, string? rejectionReason)
-	{
-		Status = status;
-		RejectionReason = rejectionReason;
-		return this;
+		internal EmployeeLeave UpdateLeaveStatus(EmployeeLeaveStatusType status, string? rejectionReason)
+		{
+			Status = status;
+			RejectionReason = rejectionReason;
+			return this;
+		}
+
+		/// <summary>
+		/// ✅ FIXED: Factory method to create EmployeeLeave with proper initialization
+		/// </summary>
+		public static EmployeeLeave Create(
+			Guid id,
+			Guid tenantId,
+			Guid employeeId,
+			Guid leaveTypeId,
+			DateTimeOffset startDate,
+			DateTimeOffset endDate,
+			string description,
+			bool halfDay = false)
+		{
+			var leave = new EmployeeLeave(id, tenantId, halfDay, startDate, endDate, description, null!);
+
+			// Use reflection only in controlled factory method to set private properties
+			var employeeIdProperty = typeof(EmployeeLeave).GetProperty(nameof(EmployeeId));
+			var leaveTypeIdProperty = typeof(EmployeeLeave).GetProperty(nameof(LeaveTypeId));
+
+			employeeIdProperty?.SetValue(leave, employeeId);
+			leaveTypeIdProperty?.SetValue(leave, leaveTypeId);
+
+			return leave;
+		}
 	}
-}

@@ -52,21 +52,8 @@ public class EmployeesController : AbpControllerBase
             RoleId = roleId
         };
 
-        // Call existing app service
-        var result = await _employeeAppService.GetListAsync(input);
-
-        // Calculate total pages
-        var totalPages = (int)Math.Ceiling((double)result.TotalCount / pageSize);
-
-        // Map to OpenAPI contract
-        return new EmployeeListResponse
-        {
-            TotalCount = (int)result.TotalCount,
-            CurrentPage = page,
-            PageSize = pageSize,
-            TotalPages = totalPages,
-            Items = result.Items.Select(MapToEmployeeSummary).ToList()
-        };
+        // Call the filtered list method
+        return await _employeeAppService.GetFilteredListAsync(input);
     }
 
     /// <summary>
@@ -78,23 +65,7 @@ public class EmployeesController : AbpControllerBase
     public virtual async Task<EmployeeDetails> GetEmployeeByIdAsync(Guid employeeId)
     {
         var employee = await _employeeAppService.GetAsync(employeeId);
-        var summary = MapToEmployeeSummary(employee);
-
-        return new EmployeeDetails
-        {
-            RoleName = summary.RoleName,
-            FullName = summary.FullName,
-            ThumbnailPicture = summary.ThumbnailPicture,
-            EmployeeIdentifier = summary.EmployeeIdentifier,
-            Dob = summary.Dob,
-            Gender = summary.Gender,
-            Doj = summary.Doj,
-            Email = summary.Email,
-            MobileNo = summary.MobileNo,
-            IsTeaching = summary.IsTeaching,
-            Shift = summary.Shift,
-            Status = summary.Status
-        };
+        return MapToEmployeeDetails(employee);
     }
 
     /// <summary>
@@ -111,56 +82,32 @@ public class EmployeesController : AbpControllerBase
             MaxResultCount = 50
         };
 
-        var result = await _employeeAppService.SearchAsync(input);
-
-        return new EmployeeSearchResponse
-        {
-            Items = result.Select(e => new EmployeeSearchItem
-            {
-                RoleName = e.RoleName ?? "N/A",
-                FullName = e.FullName ?? "N/A",
-                ThumbnailPicture = e.ThumbnailPicture ?? string.Empty,
-                EmployeeIdentifier = e.EmployeeCode ?? "N/A",
-                Dob = e.DateOfBirth ?? DateTime.MinValue,
-                Gender = e.Gender ?? "N/A",
-                Doj = e.DateOfJoining ?? DateTime.MinValue,
-                Email = e.Email ?? "N/A",
-                MobileNo = e.MobileNo ?? "N/A",
-                IsTeaching = e.IsTeaching,
-                Shift = e.Shift != null ? new ShiftInfo
-                {
-                    Id = e.Shift.Id,
-                    Name = e.Shift.Name,
-                    StartTime = e.Shift.StartTime,
-                    EndTime = e.Shift.EndTime
-                } : new ShiftInfo { Id = Guid.Empty, Name = "N/A", StartTime = "00:00:00+05:30", EndTime = "00:00:00+05:30" },
-                Status = e.Status
-            }).ToList()
-        };
+        // SearchAsync already returns EmployeeSearchResponse with properly mapped items
+        return await _employeeAppService.SearchAsync(input);
     }
 
-    private EmployeeSummary MapToEmployeeSummary(EmployeeDto employee)
+    private static EmployeeDetails MapToEmployeeDetails(EmployeeDto employee)
     {
-        return new EmployeeSummary
+        return new EmployeeDetails
         {
-            RoleName = employee.RoleName,
-            FullName = employee.FullName,
-            ThumbnailPicture = employee.ThumbnailPicture,
+            RoleName = employee.Role?.Name,
+            FullName = employee.EmployeeName,
+            ThumbnailPicture = employee.ProfilePictureBlobName,
             EmployeeIdentifier = employee.EmployeeCode,
-            Dob = employee.DateOfBirth,
-            Gender = employee.Gender,
-            Doj = employee.DateOfJoining,
+            Dob = employee.DateOfBirth?.ToDateTime(TimeOnly.MinValue),
+            Gender = employee.GenderType?.ToString(),
+            Doj = employee.DateOfJoining?.ToDateTime(TimeOnly.MinValue),
             Email = employee.Email,
             MobileNo = employee.MobileNo,
-            IsTeaching = employee.IsTeaching,
+            IsTeaching = employee.EmployeeGroup == Common.EmployeeGroupType.Teaching,
             Shift = employee.Shift != null ? new ShiftInfo
             {
                 Id = employee.Shift.Id,
-                Name = employee.Shift.Name,
-                StartTime = employee.Shift.StartTime,
-                EndTime = employee.Shift.EndTime
+                Name = employee.Shift.ShiftName ?? string.Empty,
+                StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"),
+                EndTime = employee.Shift.EndTime.ToString("HH:mm:ss")
             } : null,
-            Status = employee.Status
+            Status = (int)(employee.EmployeeStatusType ?? Common.EmployeeStatusType.Active)
         };
     }
 }

@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.HR.Employees.WorkExperience;
+using ShikshaMitra.HR.Employees.WorkExperienceContracts;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 

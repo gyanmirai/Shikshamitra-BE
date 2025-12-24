@@ -120,4 +120,18 @@ public interface
 	/// <param name="input">The payroll details to update.</param>
 	/// <returns>A task representing the asynchronous operation.</returns>
 	Task UpdatePayrollDetailsAsync(Guid employeeId, UpdateEmployeePayrollDetailsDto input);
+
+	/// <summary>
+	/// Gets a filtered and paginated list of employees.
+	/// </summary>
+	/// <param name="input">Filter and pagination parameters.</param>
+	/// <returns>Paginated list of employee summaries.</returns>
+	Task<EmployeeListResponse> GetFilteredListAsync(GetEmployeeListInput input);
+
+	/// <summary>
+	/// Searches employees by name, employee identifier, email, or mobile number.
+	/// </summary>
+	/// <param name="input">Search parameters.</param>
+	/// <returns>Search results with employee details.</returns>
+	Task<EmployeeSearchResponse> SearchAsync(SearchEmployeeInput input);
 }

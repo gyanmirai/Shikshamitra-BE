@@ -47,13 +47,6 @@ public class AdminPermissionValueProvider : PermissionValueProvider
 		// Check if user has admin role directly from claims (JWT token)
 		if (IsAdminUser(context.Principal))
 		{
-			return PermissionGrantResult.Undefined;
-		}
-
-		// Check if user has admin role
-		var isAdmin = await IsAdminUserAsync(userId);
-		if (isAdmin)
-		{
 			// Admin users are granted ALL permissions
 			return Task.FromResult(PermissionGrantResult.Granted);
 		}
@@ -70,35 +63,30 @@ public class AdminPermissionValueProvider : PermissionValueProvider
 	{
 		if (principal == null)
 		{
-			var user = await _userRepository.GetAsync(userId, includeDetails: true);
-			var roleIds = user.Roles.Select(r => r.RoleId).ToList();
-
-			if (!roleIds.Any())
-			{
-				return false;
-			}
+			return false;
+		}
 
 		// Get all role claims from the principal (JWT token contains role claims)
 		// Check both standard ClaimTypes.Role and ABP's role claim type
 		var userRoles = principal.FindAll(ClaimTypes.Role)
 			.Select(c => c.Value)
-				.ToList();
+			.ToList();
 
 		// Also check ABP's role claim type
 		userRoles.AddRange(principal.FindAll(AbpClaimTypes.Role).Select(c => c.Value));
 
-		if (!userRoles.Any())
-		{
-			// If we can't determine admin status, don't grant permission
-			return false;
+			if (!userRoles.Any())
+			{
+				// If we can't determine admin status, don't grant permission
+				return false;
+			}
+
+			// Check if user has any of the configured admin roles (case-insensitive)
+			return _options.AdminRoles.Any(adminRole =>
+				userRoles.Contains(adminRole, StringComparer.OrdinalIgnoreCase));
 		}
 
-		// Check if user has any of the configured admin roles (case-insensitive)
-		return _options.AdminRoles.Any(adminRole =>
-			userRoles.Contains(adminRole, StringComparer.OrdinalIgnoreCase));
-	}
-
-	/// <summary>
+		/// <summary>
 	/// Handles multiple permission checks for admin bypass.
 	/// </summary>
 	public override Task<MultiplePermissionGrantResult> CheckAsync(PermissionValuesCheckContext context)

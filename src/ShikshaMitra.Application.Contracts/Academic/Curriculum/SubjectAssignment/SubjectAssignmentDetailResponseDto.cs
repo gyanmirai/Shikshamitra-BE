@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using ShikshaMitra.Academic.Curriculum.SubjectAssignment;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -12,7 +11,7 @@ public class SubjectAssignmentDetailResponseDto
 	/// <summary>
 	/// Assignment detail ID
 	/// </summary>
-	public Guid Id { get; set; }
+	public Guid AssignedId { get; set; }
 
 	/// <summary>
 	/// Subject code (e.g., "SC101")
@@ -27,32 +26,19 @@ public class SubjectAssignmentDetailResponseDto
 	/// <summary>
 	/// Subject name (e.g., "Physics")
 	/// </summary>
-	public string SubjectName { get; set; }
+	public SubjectDto Subject { get; set; }
+
+	public Guid? ElectiveGroupId { get; set; }
 
 	/// <summary>
-	/// Subject color (hex)
+	/// Primary teacher ID (can be string "teacherId_123" from FE)
 	/// </summary>
-	public string SubjectColor { get; set; }
+	public Guid PrimaryTeacher { get; set; }
 
 	/// <summary>
-	/// Primary teacher ID (returned as string to match FE)
+	/// Secondary teacher IDs
 	/// </summary>
-	public string? PrimaryTeacher { get; set; }
-
-	/// <summary>
-	/// Primary teacher name (fetched for convenience)
-	/// </summary>
-	public string? PrimaryTeacherName { get; set; }
-
-	/// <summary>
-	/// Secondary teacher IDs (returned as strings to match FE)
-	/// </summary>
-	public List<string>? SecondaryTeacher { get; set; }
-
-	/// <summary>
-	/// Secondary teacher details (names for display)
-	/// </summary>
-	public List<TeacherInfoDto>? SecondaryTeacherInfo { get; set; }
+	public List<Guid> SecondaryTeachers { get; set; } = new List<Guid>();
 
 	/// <summary>
 	/// Learning goals (HTML)
@@ -72,10 +58,5 @@ public class SubjectAssignmentDetailResponseDto
 	/// <summary>
 	/// Document attachments
 	/// </summary>
-	public List<SubjectDocumentDto>? Documents { get; set; }
-
-	/// <summary>
-	/// Whether subject is open for enrollment
-	/// </summary>
-	public bool IsSubjectOpen { get; set; }
+	public List<string>? Documents { get; set; }
 }

@@ -129,7 +129,7 @@ public class RegistrationController : AbpControllerBase
 	/// <returns>Updated student information with Registration status</returns>
 	[HttpPut("{studentId}/general-details")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_RegistrationFormIssued.Add)]
-	public async Task<Result<UpdateGeneralInfoOutputDto>> UpdateGeneralInfoAsync(
+	public async Task<Result<StudentGeneralDetailsDto>> UpdateGeneralInfoAsync(
 		Guid studentId,
 		[FromBody] UpdateGeneralInfoDto input)
 	{
@@ -146,7 +146,7 @@ public class RegistrationController : AbpControllerBase
 	/// <returns>Newly created student in Registration status</returns>
 	[HttpPost("general-details")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_RegistrationFormIssued.Add)]
-	public async Task<Result<UpdateGeneralInfoOutputDto>> CreateDirectRegistrationAsync(
+	public async Task<Result<StudentGeneralDetailsDto>> CreateDirectRegistrationAsync(
 		[FromBody] CreateDirectRegistrationDto input)
 	{
 		var result = await registrationAppService.CreateDirectRegistrationAsync(input);

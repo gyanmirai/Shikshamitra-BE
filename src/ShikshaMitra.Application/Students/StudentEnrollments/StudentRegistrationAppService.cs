@@ -1,7 +1,8 @@
-﻿using ShikshaMitra.Students.ValueObjects;
+﻿using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.ValueObjects;
 using ShikshaMitra.TenantSettings.Divisions;
-using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,7 +11,6 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
-using ShikshaMitra.Students.Enrollments.Registrations;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
@@ -48,9 +48,9 @@ public class StudentRegistrationAppService(
 		StudentLifeCycleStatusEnum.Registation
 	];
 	public async Task<PagedResultDto<StudentEnrollmentListDto>> GetRegistrationFormsByMediumAsync(
-		Guid academicMediumId, 
-		int skipCount = 0, 
-		int maxResultCount = 10, 
+		Guid academicMediumId,
+		int skipCount = 0,
+		int maxResultCount = 10,
 		string? searchTerm = null)
 	{
 		// Validate academic medium exists using domain service
@@ -58,7 +58,7 @@ public class StudentRegistrationAppService(
 
 		// Get queryable with aggregate parts auto-included
 		var queryable = await studentRepository.GetQueryableAsync();
-		
+
 		var query = queryable
 			.Where(s => s.Status == StudentLifeCycleStatusEnum.RegistrationFormIssued
 				&& s.AcademicMediumId == academicMediumId
@@ -68,7 +68,7 @@ public class StudentRegistrationAppService(
 		query = ApplySearchFilter(query, searchTerm);
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
-		
+
 		if (totalCount == 0)
 		{
 			return new PagedResultDto<StudentEnrollmentListDto>(0, new List<StudentEnrollmentListDto>());
@@ -89,9 +89,9 @@ public class StudentRegistrationAppService(
 	}
 
 	public async Task<PagedResultDto<StudentEnrollmentListDto>> GetRegistrationsByMediumAsync(
-		Guid academicMediumId, 
-		int skipCount = 0, 
-		int maxResultCount = 10, 
+		Guid academicMediumId,
+		int skipCount = 0,
+		int maxResultCount = 10,
 		string? searchTerm = null)
 	{
 		// Validate academic medium exists using domain service
@@ -99,7 +99,7 @@ public class StudentRegistrationAppService(
 
 		// Get queryable with aggregate parts auto-included
 		var queryable = await studentRepository.GetQueryableAsync();
-		
+
 		var query = queryable
 			.Where(s => s.Status == StudentLifeCycleStatusEnum.Registation
 				&& s.AcademicMediumId == academicMediumId
@@ -109,7 +109,7 @@ public class StudentRegistrationAppService(
 		query = ApplySearchFilter(query, searchTerm);
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
-		
+
 		if (totalCount == 0)
 		{
 			return new PagedResultDto<StudentEnrollmentListDto>(0, new List<StudentEnrollmentListDto>());
@@ -143,10 +143,13 @@ public class StudentRegistrationAppService(
 		// Map to DTO
 		var result = ObjectMapper.Map<Student, StudentGeneralDetailsDto>(student);
 
+		// enrich result by getting academicBoardId, academicYearId etc
+		await dtoEnricher.EnrichGeneralDetailsDtoAsync(result);
+
 		return result;
 	}
 
-	public async Task<UpdateGeneralInfoOutputDto> UpdateGeneralInfoAsync(Guid studentId, UpdateGeneralInfoDto input)
+	public async Task<StudentGeneralDetailsDto> UpdateGeneralInfoAsync(Guid studentId, UpdateGeneralInfoDto input)
 	{
 		// Load the student aggregate with all parts
 		var student = await studentRepository.GetAsync(studentId);
@@ -165,9 +168,7 @@ public class StudentRegistrationAppService(
 		);
 
 		// Update additional details
-		if (student.AdditionalDetail != null)
-		{
-			student.AdditionalDetail.UpdateGeneralInformation(
+		student.AdditionalDetail?.UpdateGeneralInformation(
 				input.DateOfBirth,
 				input.Gender,
 				input.ProfilePictureUrl,
@@ -184,12 +185,9 @@ public class StudentRegistrationAppService(
 				input.LastClassPassed,
 				StudentRegistrationStateEnum.General
 			);
-		}
 
 		// Update contact details
-		if (student.ContactDetail != null)
-		{
-			student.ContactDetail.UpdateContactInfo(
+		student.ContactDetail?.UpdateContactInfo(
 				input.PrimaryContactNo,
 				input.SecondaryContactNo,
 				input.Email,
@@ -201,7 +199,6 @@ public class StudentRegistrationAppService(
 				input.Country,
 				input.Pincode
 			);
-		}
 
 		// Transition to Registration status (if not already there)
 		if (student.Status != StudentLifeCycleStatusEnum.Registation)
@@ -212,20 +209,15 @@ public class StudentRegistrationAppService(
 		// Save the updated aggregate
 		await studentRepository.UpdateAsync(student, autoSave: true);
 
-		// Return output DTO
-		return new UpdateGeneralInfoOutputDto
-		{
-			StudentId = student.Id,
-			Status = student.Status,
-			FirstName = student.FirstName,
-			MiddleName = student.MiddleName,
-			LastName = student.LastName,
-			DateOfBirth = student.AdditionalDetail?.DateOfBirth,
-			Gender = student.AdditionalDetail?.Gender
-		};
+		var result = ObjectMapper.Map<Student, StudentGeneralDetailsDto>(student);
+
+		// enrich result by getting academicBoardId, academicYearId etc
+		await dtoEnricher.EnrichGeneralDetailsDtoAsync(result);
+
+		return result;
 	}
 
-	public async Task<UpdateGeneralInfoOutputDto> CreateDirectRegistrationAsync(CreateDirectRegistrationDto input)
+	public async Task<StudentGeneralDetailsDto> CreateDirectRegistrationAsync(CreateDirectRegistrationDto input)
 	{
 		// Validate academic medium exists using domain service
 		await validationService.ValidateAcademicMediumExistsAsync(input.AcademicMediumId);
@@ -283,17 +275,12 @@ public class StudentRegistrationAppService(
 		// Save the new student aggregate
 		await studentRepository.InsertAsync(student, autoSave: true);
 
-		// Return output DTO
-		return new UpdateGeneralInfoOutputDto
-		{
-			StudentId = student.Id,
-			Status = student.Status,
-			FirstName = student.FirstName,
-			MiddleName = student.MiddleName,
-			LastName = student.LastName,
-			DateOfBirth = student.AdditionalDetail?.DateOfBirth,
-			Gender = student.AdditionalDetail?.Gender
-		};
+		var result = ObjectMapper.Map<Student, StudentGeneralDetailsDto>(student);
+
+		// enrich result by getting academicBoardId, academicYearId etc
+		await dtoEnricher.EnrichGeneralDetailsDtoAsync(result);
+
+		return result;
 	}
 
 	public async Task<StudentFamilyInfoDto> GetFamilyInfoAsync(Guid studentId)
@@ -324,7 +311,7 @@ public class StudentRegistrationAppService(
 		if (familyDetail?.SiblingStudentIds != null && familyDetail.SiblingStudentIds.Any())
 		{
 			var siblings = new List<SiblingStudentDto>();
-			
+
 			foreach (var siblingId in familyDetail.SiblingStudentIds)
 			{
 				var sibling = await studentRepository.FirstOrDefaultAsync(x => x.Id == siblingId);
@@ -377,7 +364,7 @@ public class StudentRegistrationAppService(
 		// Load or create family detail
 		var familyDetail = await studentFamilyDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 		var isNewFamilyDetail = familyDetail == null;
-		
+
 		if (isNewFamilyDetail)
 		{
 			// Create new family detail entity
@@ -531,7 +518,7 @@ public class StudentRegistrationAppService(
 		// Load or create communication detail
 		var communicationDetail = await studentCommunicationDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 		var isNewCommunicationDetail = communicationDetail == null;
-		
+
 		if (isNewCommunicationDetail)
 		{
 			// Create new communication detail entity
@@ -693,7 +680,7 @@ public class StudentRegistrationAppService(
 		// Load or create medical record
 		var medicalRecord = await studentMedicalRecordRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 		var isNewMedicalRecord = medicalRecord == null;
-		
+
 		if (isNewMedicalRecord)
 		{
 			// Create new medical record entity
@@ -785,7 +772,7 @@ public class StudentRegistrationAppService(
 		// Load or create previous school detail
 		var previousSchoolDetail = await studentPreviousSchoolDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 		var isNewPreviousSchoolDetail = previousSchoolDetail == null;
-		
+
 		if (isNewPreviousSchoolDetail)
 		{
 			// Create new previous school detail entity
@@ -874,7 +861,7 @@ public class StudentRegistrationAppService(
 		// Load or create bank detail
 		var bankDetail = await studentBankDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 		var isNewBankDetail = bankDetail == null;
-		
+
 		if (isNewBankDetail)
 		{
 			// Create new bank detail entity

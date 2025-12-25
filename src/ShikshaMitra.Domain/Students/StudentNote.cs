@@ -6,9 +6,28 @@ namespace ShikshaMitra.Students;
 
 public class StudentNote : FullAuditedEntity<Guid>, IMultiTenant
 {
-	public Guid? TenantId { get; private set; }
-	public Guid StudentId { get; private set; }
-	public string? Note { get; private set; }
-	public DateTimeOffset NextReminderDate { get; private set; }
-	public NoteStatusEnum Status { get; private set; }
+    public Guid? TenantId { get; private set; }
+    public Guid StudentId { get; private set; }
+    public string Note { get; private set; }
+    public DateTimeOffset NextReminderDate { get; private set; }
+    public NoteStatusEnum Status { get; private set; }
+
+    private StudentNote() { }
+
+    public StudentNote(Guid id, Guid? tenantId, Guid studentId, string note, DateTimeOffset nextReminderDate, NoteStatusEnum status)
+        : base(id)
+    {
+        TenantId = tenantId;
+        StudentId = studentId;
+        Note = note;
+        NextReminderDate = nextReminderDate;
+        Status = status;
+    }
+
+    public void Update(string note, DateTimeOffset nextReminderDate, NoteStatusEnum status)
+    {
+        Note = note;
+        NextReminderDate = nextReminderDate;
+        Status = status;
+    }
 }

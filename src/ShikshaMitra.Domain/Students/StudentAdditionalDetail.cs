@@ -9,7 +9,6 @@ namespace ShikshaMitra.Students;
 public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
-	public string? FormNo { get; private set; }
 	public DateTimeOffset? DateOfBirth { get; private set; }
 	public GenderEnum? Gender { get; private set; }
 	public string? ProfilePictureUrl { get; private set; }

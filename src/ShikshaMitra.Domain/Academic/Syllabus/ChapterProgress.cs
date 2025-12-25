@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.Academic.Curriculum;
+using System;
 using Volo.Abp.Domain.Entities.Auditing;
 
 namespace ShikshaMitra.Academic.Syllabus;
@@ -43,7 +44,7 @@ public class ChapterProgress : FullAuditedEntity<Guid>
 	/// <summary>
 	/// Navigation property to the chapter.
 	/// </summary>
-	public SubjectChapter Chapter { get; set; }
+	public AssignedSubjectChapter Chapter { get; set; }
 
 	#endregion
 

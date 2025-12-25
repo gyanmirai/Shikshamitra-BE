@@ -47,6 +47,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Academic\Syllabus\" />
     <Folder Include="Library\Setting\GeneralSetting\LoanPolicies\" />
   </ItemGroup>
 

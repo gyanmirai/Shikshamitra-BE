@@ -8,7 +8,7 @@ using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Guids;
 
-namespace ShikshaMitra.Academic.Curriculum;
+namespace ShikshaMitra.Academic.Curriculum.Settings;
 
 /// <summary>
 /// Domain service for managing elective group business logic
@@ -87,12 +87,12 @@ public class ElectiveGroupManager : DomainService
 		var ElectiveGroup = await ElectiveGroupRepository.GetAsync(id, includeDetails: true);
 
 		// Verify the group belongs to the specified education medium
-		if (ElectiveGroup.EducationMediumId != educationMediumId)
+		if (ElectiveGroup.AcademicMediumId != educationMediumId)
 		{
 			throw new BusinessException("ShikshaMitra:ElectiveGroup:CrossMediumUpdateNotAllowed")
 				.WithData("ElectiveGroupId", id)
 				.WithData("ExpectedMediumId", educationMediumId)
-				.WithData("ActualMediumId", ElectiveGroup.EducationMediumId);
+				.WithData("ActualMediumId", ElectiveGroup.AcademicMediumId);
 		}
 
 		// Validate minimum subjects requirement
@@ -124,7 +124,7 @@ public class ElectiveGroupManager : DomainService
 	)
 	{
 		var existing = await ElectiveGroupRepository.FindAsync(
-			eg => eg.Name == name && eg.EducationMediumId == educationMediumId
+			eg => eg.Name == name && eg.AcademicMediumId == educationMediumId
 		);
 
 		if (existing != null && existing.Id != expectedId)

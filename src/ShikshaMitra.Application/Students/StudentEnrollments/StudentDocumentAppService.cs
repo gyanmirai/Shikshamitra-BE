@@ -86,24 +86,26 @@ public class StudentDocumentAppService : ApplicationService, IStudentDocumentApp
 		{
 			Logger.LogDebug("Retrieving document list for student {StudentId}", studentId);
 
-			var documents = await _documentManager.GetDocumentListAsync(studentId);
+			// Get all document types and uploaded documents for the student
+			var documentsStatus = await _documentManager.GetRequiredDocumentsStatusAsync(studentId);
 
-			var result = documents.Select(d => new StudentDocumentDto
+			var result = documentsStatus.Select(d => new StudentDocumentDto
 			{
-				Id = d.document.Id,
-				StudentId = d.document.StudentId,
-				DocumentTypeId = d.document.DocumentTypeId,
+				Id = d.uploadedDocument?.Id ?? Guid.Empty,
+				StudentId = studentId,
+				DocumentTypeId = d.documentType.Id,
 				DocumentTypeName = d.documentType.Name,
-				FileName = d.document.FileName,
-				ContentType = d.document.ContentType,
-				Size = d.document.Size,
-				CreationTime = d.document.CreationTime,
-				CreatorId = d.document.CreatorId
+				FileName = d.uploadedDocument?.FileName ?? string.Empty,
+				ContentType = d.uploadedDocument?.ContentType ?? string.Empty,
+				Size = d.uploadedDocument?.Size ?? 0,
+				CreationTime = d.uploadedDocument?.CreationTime ?? default,
+				CreatorId = d.uploadedDocument?.CreatorId,
+				IsUploaded = d.uploadedDocument != null
 			}).ToList();
 
 			Logger.LogDebug(
-				"Retrieved {Count} documents for student {StudentId}",
-				result.Count, studentId);
+				"Retrieved {Count} document types for student {StudentId} (Uploaded: {Uploaded})",
+				result.Count, studentId, result.Count(r => r.IsUploaded));
 
 			return result;
 		}

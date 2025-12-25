@@ -1,0 +1,127 @@
+﻿using ShikshaMitra.TenantSettings.EducationMediums;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Volo.Abp;
+using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Entities;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Guids;
+
+namespace ShikshaMitra.Students.Records.Settings;
+
+[RemoteService(false)]
+public class HouseSettingsAppService(
+	IRepository<HouseSettings, Guid> houseSettingsRepository,
+	IRepository<EducationMedium, Guid> academicMediumRepository,
+	IGuidGenerator guidGenerator
+) : ApplicationService, IHouseSettingsAppService
+{
+	public async Task CreateHouseSettingsAsync(Guid academicMediumId, CreateUpdateHouseSettingsDto createHouseSettingsDto)
+	{
+		try
+		{
+			// validate academic medium exists
+			var academicMedium = await academicMediumRepository.GetAsync(academicMediumId) ?? throw new EntityNotFoundException("Academic medium not found.");
+
+			var houseSetting = new HouseSettings(
+				guidGenerator.Create(),
+				createHouseSettingsDto.Name,
+				createHouseSettingsDto.Color,
+				academicMediumId,
+				createHouseSettingsDto.LogoUrl,
+				createHouseSettingsDto.Description
+			);
+
+			await houseSettingsRepository.InsertAsync(houseSetting, autoSave: true);
+		}
+		catch (EntityNotFoundException ex)
+		{
+			throw;
+		}
+		catch (Exception ex)
+		{
+			throw new UserFriendlyException("An error occurred while creating house settings.");
+		}
+	}
+
+	public async Task<HouseSettingsDto> GetHouseSettingsAsync(Guid houseSettingsId)
+	{
+		try
+		{
+			var houseSetting = await houseSettingsRepository.GetAsync(houseSettingsId) ?? throw new EntityNotFoundException("House setting not found.");
+			return ObjectMapper.Map<HouseSettings, HouseSettingsDto>(houseSetting);
+		}
+		catch (EntityNotFoundException ex)
+		{
+			throw;
+		}
+		catch (Exception ex)
+		{
+			throw new UserFriendlyException("An error occurred while retrieving house settings.");
+		}
+	}
+
+	public async Task<List<HouseSettingsDto>> GetHouseSettingsByAcademicMediumAsync(Guid academicMediumId)
+	{
+		try
+		{
+			// validate academic medium exists
+			var academicMedium = await academicMediumRepository.GetAsync(academicMediumId) ?? throw new EntityNotFoundException("Academic medium not found.");
+			var houseSettings = await houseSettingsRepository.GetListAsync(h => h.AcademicMediumId == academicMediumId);
+			return ObjectMapper.Map<List<HouseSettings>, List<HouseSettingsDto>>(houseSettings);
+		}
+		catch (EntityNotFoundException ex)
+		{
+			throw;
+		}
+		catch (Exception ex)
+		{
+			throw new UserFriendlyException("An error occurred while retrieving house settings.");
+		}
+	}
+
+	public async Task<HouseSettingsDto> UpdateHouseSettingsAsync(Guid houseSettingsId, CreateUpdateHouseSettingsDto updateHouseSettingsDto)
+	{
+		try
+		{
+			var houseSetting = await houseSettingsRepository.GetAsync(houseSettingsId) ?? throw new EntityNotFoundException("House setting not found.");
+
+			houseSetting.UpdateDetails(
+				updateHouseSettingsDto.Name,
+				updateHouseSettingsDto.Color,
+				updateHouseSettingsDto.LogoUrl,
+				updateHouseSettingsDto.Description
+			);
+
+			await houseSettingsRepository.UpdateAsync(houseSetting, autoSave: true);
+			return ObjectMapper.Map<HouseSettings, HouseSettingsDto>(houseSetting);
+		}
+		catch (EntityNotFoundException ex)
+		{
+			throw;
+		}
+		catch (Exception ex)
+		{
+			throw new UserFriendlyException("An error occurred while updating house settings.");
+		}
+	}
+
+	public async Task DeleteHouseSettingsAsync(Guid houseSettingsId)
+	{
+
+		try
+		{
+			var houseSetting = await houseSettingsRepository.GetAsync(houseSettingsId) ?? throw new EntityNotFoundException("House setting not found.");
+			await houseSettingsRepository.DeleteAsync(houseSetting, autoSave: true);
+		}
+		catch (EntityNotFoundException ex)
+		{
+			throw;
+		}
+		catch (Exception ex)
+		{
+			throw new UserFriendlyException("An error occurred while deleting house settings.");
+		}
+	}
+}

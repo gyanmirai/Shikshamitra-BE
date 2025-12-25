@@ -14,7 +14,11 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
+<<<<<<<< HEAD:src/ShikshaMitra.EntityFrameworkCore/Migrations/20251225110431_v1.Designer.cs
     [Migration("20251225110431_v1")]
+========
+    [Migration("20251221160023_v1")]
+>>>>>>>> origin/main:src/ShikshaMitra.EntityFrameworkCore/Migrations/20251221160023_v1.Designer.cs
     partial class v1
     {
         /// <inheritdoc />
@@ -4697,6 +4701,66 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("StudentMedicalRecords", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Students.StudentNote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<DateTimeOffset>("NextReminderDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("StudentNotes", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Students.StudentPreviousSchoolDetail", b =>
                 {
                     b.Property<Guid>("Id")
@@ -9260,6 +9324,15 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("MotherDetails");
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Students.StudentNote", b =>
+                {
+                    b.HasOne("ShikshaMitra.Students.Student", null)
+                        .WithMany("Notes")
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ShikshaMitra.TenantSettings.Divisions.Division", b =>
                 {
                     b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
@@ -9536,6 +9609,8 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("AdditionalDetail");
 
                     b.Navigation("ContactDetail");
+
+                    b.Navigation("Notes");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.StudentDocumentSetting", b =>

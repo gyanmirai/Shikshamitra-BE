@@ -10,7 +10,7 @@ namespace ShikshaMitra.Controllers.Academic.Syllabus;
 
 [RemoteService]
 [Area("Academic")]
-[Route("api/academic/chapters")]
+[Route("api/academic/curriculum/chapters")]
 public class ChapterController(IChapterAppService chapterAppService) : AbpController
 {
 	[HttpPost]
@@ -19,10 +19,10 @@ public class ChapterController(IChapterAppService chapterAppService) : AbpContro
 		return chapterAppService.CreateAsync(input);
 	}
 
-	[HttpGet("/api/academic/standards/{standardId}/subjects/{subjectId}/chapters")]
-	public Task<List<ChapterDto>> GetByStandardSubjectIdAsync(Guid standardId, Guid subjectId)
+	[HttpGet("{assignedStandardId}")]
+	public Task<List<ChapterDto>> Get(Guid assignedStandardId)
 	{
-		return chapterAppService.GetByStandardSubjectIdAsync(standardId, subjectId);
+		return chapterAppService.GetByAssignedSubjectIdAsync(assignedStandardId);
 	}
 
 	[HttpPut("{id}")]

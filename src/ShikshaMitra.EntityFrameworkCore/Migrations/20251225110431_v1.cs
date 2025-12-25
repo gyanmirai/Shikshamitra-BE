@@ -2729,6 +2729,35 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "StudentNotes",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    StudentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Note = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false),
+                    NextReminderDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_StudentNotes", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_StudentNotes_AppStudents_StudentId",
+                        column: x => x.StudentId,
+                        principalTable: "AppStudents",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppElectiveGroupComponents",
                 columns: table => new
                 {
@@ -4285,6 +4314,11 @@ namespace ShikshaMitra.Migrations
                 column: "IFSCCode");
 
             migrationBuilder.CreateIndex(
+                name: "IX_StudentNotes_StudentId",
+                table: "StudentNotes",
+                column: "StudentId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_UserScopeAssignments_Lookup",
                 table: "UserScopeAssignments",
                 columns: new[] { "TenantId", "UserId", "IsActive", "IsDeleted" })
@@ -4520,6 +4554,9 @@ namespace ShikshaMitra.Migrations
                 name: "PaymentStatusOptions");
 
             migrationBuilder.DropTable(
+                name: "StudentNotes");
+
+            migrationBuilder.DropTable(
                 name: "UserScopeAssignments");
 
             migrationBuilder.DropTable(
@@ -4568,13 +4605,13 @@ namespace ShikshaMitra.Migrations
                 name: "AppStudentLeaveTypes");
 
             migrationBuilder.DropTable(
-                name: "AppStudents");
-
-            migrationBuilder.DropTable(
                 name: "AppStandardSubjectAssignments");
 
             migrationBuilder.DropTable(
                 name: "OpenIddictAuthorizations");
+
+            migrationBuilder.DropTable(
+                name: "AppStudents");
 
             migrationBuilder.DropTable(
                 name: "AbpAuditLogs");
@@ -4604,6 +4641,18 @@ namespace ShikshaMitra.Migrations
                 name: "AppHomeworkTypes");
 
             migrationBuilder.DropTable(
+                name: "AppElectiveGroups");
+
+            migrationBuilder.DropTable(
+                name: "AppStandards");
+
+            migrationBuilder.DropTable(
+                name: "AppSubjects");
+
+            migrationBuilder.DropTable(
+                name: "OpenIddictApplications");
+
+            migrationBuilder.DropTable(
                 name: "AppInquiryPreferences");
 
             migrationBuilder.DropTable(
@@ -4620,18 +4669,6 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "StudentPreviousSchoolDetails");
-
-            migrationBuilder.DropTable(
-                name: "AppElectiveGroups");
-
-            migrationBuilder.DropTable(
-                name: "AppStandards");
-
-            migrationBuilder.DropTable(
-                name: "AppSubjects");
-
-            migrationBuilder.DropTable(
-                name: "OpenIddictApplications");
 
             migrationBuilder.DropTable(
                 name: "AppPayElements");

@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Security.UserScope;

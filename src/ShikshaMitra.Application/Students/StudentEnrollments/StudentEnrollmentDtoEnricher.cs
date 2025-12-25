@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Students.StudentEnrollments.Settings;
+﻿using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -16,29 +17,14 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 /// Shared helper class to enrich student enrollment DTOs with related entity names
 /// (Standard, Academic Medium, Board, Year) to avoid N+1 database queries.
 /// </summary>
-public class StudentEnrollmentDtoEnricher : ITransientDependency
+public class StudentEnrollmentDtoEnricher(
+	IRepository<EducationMedium, Guid> academicMediumRepository,
+	IRepository<Standard, Guid> standardRepository,
+	IRepository<EducationBoard, Guid> educationBoardRepository,
+	IRepository<AcademicYear, Guid> academicYearRepository,
+	IRepository<Student, Guid> studentRepository,
+	IRepository<InquiryPreference, Guid> inquiryPreferenceRepository) : ITransientDependency
 {
-	private readonly IRepository<EducationMedium, Guid> _academicMediumRepository;
-	private readonly IRepository<Standard, Guid> _standardRepository;
-	private readonly IRepository<EducationBoard, Guid> _educationBoardRepository;
-	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
-	private readonly IRepository<Student, Guid> _studentRepository;
-	private readonly IRepository<InquiryPreference, Guid> _inquiryPreferenceRepository;
-
-	public StudentEnrollmentDtoEnricher(
-		IRepository<EducationMedium, Guid> academicMediumRepository,
-		IRepository<Standard, Guid> standardRepository,
-		IRepository<EducationBoard, Guid> educationBoardRepository,
-		IRepository<AcademicYear, Guid> academicYearRepository,
-		IRepository<Student, Guid> studentRepository)
-	{
-		_academicMediumRepository = academicMediumRepository;
-		_standardRepository = standardRepository;
-		_educationBoardRepository = educationBoardRepository;
-		_academicYearRepository = academicYearRepository;
-		_studentRepository = studentRepository;
-	}
-
 	/// <summary>
 	/// Enriches a single DTO with related entity names (makes 4 database calls max).
 	/// Use this for single-item operations.
@@ -48,14 +34,14 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 		// Academic Medium Name and Board Name
 		if (dto.AcademicMediumId != Guid.Empty)
 		{
-			var medium = await _academicMediumRepository.FindAsync(dto.AcademicMediumId, includeDetails: true);
+			var medium = await academicMediumRepository.FindAsync(dto.AcademicMediumId, includeDetails: true);
 			if (medium != null)
 			{
 				dto.AcademicMediumName = medium.Name;
 				
 				// Get Academic Board Name through Medium
 				dto.AcademicBoardId = medium.EducationBoardId;
-				var board = await _educationBoardRepository.FindAsync(medium.EducationBoardId);
+				var board = await educationBoardRepository.FindAsync(medium.EducationBoardId);
 				dto.AcademicBoardName = board?.Type.ToString();
 
 				if (board != null)
@@ -63,7 +49,7 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 					dto.AcademicYearId = board.AcademicYearId;
 
 					// Get Academic Year name through board
-					var year = await _academicYearRepository.FindAsync(board.AcademicYearId);
+					var year = await academicYearRepository.FindAsync(board.AcademicYearId);
 					dto.AcademicYearName = year?.Name;
 				}
 			}
@@ -73,20 +59,50 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 		if (dto.StudentId != Guid.Empty)
 		{
 			// Get the student to read StandardId (mapping didn't include name)
-			var student = await _studentRepository.FindAsync(dto.StudentId);
+			var student = await studentRepository.FindAsync(dto.StudentId, includeDetails: true);
 			if (student?.StandardId != null)
 			{
-				var std = await _standardRepository.FindAsync(student.StandardId.Value);
+				var std = await standardRepository.FindAsync(student.StandardId.Value);
 				dto.Standard = std?.Name ?? dto.Standard;
+			}
+
+			if (student?.Notes.Any() ?? false)
+			{
+				var latestNote = student?.Notes.OrderByDescending(n => n.CreationTime).FirstOrDefault();
+				if (latestNote != null)
+				{
+					dto.NextReminderDate = latestNote.NextReminderDate;
+					dto.InquiryStatus = latestNote.Status;
+				}
 			}
 		}
 
 		// Inquiry Preference
 		if (dto.InquiryPreferenceId != null && dto.InquiryPreferenceId != Guid.Empty)
 		{
-			var inquiryPreference = await _inquiryPreferenceRepository.FindAsync(dto.InquiryPreferenceId!.Value);
+			var inquiryPreference = await inquiryPreferenceRepository.FindAsync(dto.InquiryPreferenceId!.Value);
 			if (inquiryPreference != null) {
 				dto.InquiryPreference = inquiryPreference.PreferenceName;
+			}
+		}
+	}
+
+	public async Task EnrichGeneralDetailsDtoAsync(StudentGeneralDetailsDto dto)
+	{
+		// Academic Medium Name and Board Name
+		if (dto.AcademicMediumId != Guid.Empty)
+		{
+			var medium = await academicMediumRepository.FindAsync(dto.AcademicMediumId, includeDetails: true);
+			if (medium != null)
+			{
+				// Get Academic Board Name through Medium
+				dto.AcademicBoardId = medium.EducationBoardId;
+				var board = await educationBoardRepository.FindAsync(medium.EducationBoardId);
+
+				if (board != null)
+				{
+					dto.AcademicYearId = board.AcademicYearId;
+				}
 			}
 		}
 	}
@@ -105,23 +121,23 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 
 		// Batch fetch all entities sequentially to avoid DbContext concurrency issues
 		var mediums = mediumIds.Any()
-			? await _academicMediumRepository.GetListAsync(m => mediumIds.Contains(m.Id))
+			? await academicMediumRepository.GetListAsync(m => mediumIds.Contains(m.Id))
 			: new List<EducationMedium>();
 
 		var standards = standardIds.Any()
-			? await _standardRepository.GetListAsync(s => standardIds.Contains(s.Id))
+			? await standardRepository.GetListAsync(s => standardIds.Contains(s.Id))
 			: new List<Standard>();
 
 		// Get all board IDs from mediums
 		var boardIds = mediums.Select(m => m.EducationBoardId).Distinct().ToList();
 		var boards = boardIds.Any()
-			? await _educationBoardRepository.GetListAsync(b => boardIds.Contains(b.Id))
+			? await educationBoardRepository.GetListAsync(b => boardIds.Contains(b.Id))
 			: new List<EducationBoard>();
 
 		// Get all year IDs from boards
 		var yearIds = boards.Select(b => b.AcademicYearId).Distinct().ToList();
 		var years = yearIds.Any()
-			? await _academicYearRepository.GetListAsync(y => yearIds.Contains(y.Id))
+			? await academicYearRepository.GetListAsync(y => yearIds.Contains(y.Id))
 			: new List<AcademicYear>();
 
 		// Create lookup dictionaries for fast access
@@ -160,6 +176,16 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 					dto.Standard = standard.Name;
 				}
 			}
+
+			if (studentDict.TryGetValue(dto.StudentId, out var stud) && stud.Notes.Any())
+			{
+				var latestNote = stud.Notes.OrderByDescending(n => n.CreationTime).FirstOrDefault();
+				var nextReminderDate = latestNote?.NextReminderDate;
+				if (nextReminderDate != null)
+				{
+					dto.NextReminderDate = nextReminderDate;
+				}
+			}
 		}
 	}
 
@@ -176,23 +202,23 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 
 		// Batch fetch all entities
 		var mediums = mediumIds.Any()
-			? await _academicMediumRepository.GetListAsync(m => mediumIds.Contains(m.Id))
+			? await academicMediumRepository.GetListAsync(m => mediumIds.Contains(m.Id))
 			: new List<EducationMedium>();
 
 		var standards = standardIds.Any()
-			? await _standardRepository.GetListAsync(s => standardIds.Contains(s.Id))
+			? await standardRepository.GetListAsync(s => standardIds.Contains(s.Id))
 			: new List<Standard>();
 
 		// Get all board IDs from mediums
 		var boardIds = mediums.Select(m => m.EducationBoardId).Distinct().ToList();
 		var boards = boardIds.Any()
-			? await _educationBoardRepository.GetListAsync(b => boardIds.Contains(b.Id))
+			? await educationBoardRepository.GetListAsync(b => boardIds.Contains(b.Id))
 			: new List<EducationBoard>();
 
 		// Get all year IDs from boards
 		var yearIds = boards.Select(b => b.AcademicYearId).Distinct().ToList();
 		var years = yearIds.Any()
-			? await _academicYearRepository.GetListAsync(y => yearIds.Contains(y.Id))
+			? await academicYearRepository.GetListAsync(y => yearIds.Contains(y.Id))
 			: new List<AcademicYear>();
 
 		// Create lookup dictionaries
@@ -247,23 +273,23 @@ public class StudentEnrollmentDtoEnricher : ITransientDependency
 
 		// Batch fetch all entities
 		var mediums = mediumIds.Any()
-			? await _academicMediumRepository.GetListAsync(m => mediumIds.Contains(m.Id))
+			? await academicMediumRepository.GetListAsync(m => mediumIds.Contains(m.Id))
 			: new List<EducationMedium>();
 
 		var standards = standardIds.Any()
-			? await _standardRepository.GetListAsync(s => standardIds.Contains(s.Id))
+			? await standardRepository.GetListAsync(s => standardIds.Contains(s.Id))
 			: new List<Standard>();
 
 		// Get all board IDs from mediums
 		var boardIds = mediums.Select(m => m.EducationBoardId).Distinct().ToList();
 		var boards = boardIds.Any()
-			? await _educationBoardRepository.GetListAsync(b => boardIds.Contains(b.Id))
+			? await educationBoardRepository.GetListAsync(b => boardIds.Contains(b.Id))
 			: new List<EducationBoard>();
 
 		// Get all year IDs from boards
 		var yearIds = boards.Select(b => b.AcademicYearId).Distinct().ToList();
 		var years = yearIds.Any()
-			? await _academicYearRepository.GetListAsync(y => yearIds.Contains(y.Id))
+			? await academicYearRepository.GetListAsync(y => yearIds.Contains(y.Id))
 			: new List<AcademicYear>();
 
 		// Create lookup dictionaries

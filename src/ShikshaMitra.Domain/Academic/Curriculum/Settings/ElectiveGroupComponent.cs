@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.ComponentModel.DataAnnotations.Schema;
 using Volo.Abp.Domain.Entities;
 
-namespace ShikshaMitra.Academic.Curriculum;
+namespace ShikshaMitra.Academic.Curriculum.Settings;
 
 /// <summary>
 /// Represents the link between an ElectiveGroup and a constituent Subject.

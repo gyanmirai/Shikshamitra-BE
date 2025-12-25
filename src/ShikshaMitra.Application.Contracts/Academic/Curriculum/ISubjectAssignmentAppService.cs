@@ -16,9 +16,9 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// <param name="academicMediumId">Academic medium ID (from query parameter)</param>
 	/// <param name="input">Create input DTO</param>
 	/// <returns>Created assignment group</returns>
-	Task<SubjectAssignmentGroupResponseDto> CreateAsync(
+	Task<SubjectAssignmentDto> CreateAsync(
 		Guid academicMediumId,
-		CreateSubjectAssignmentGroupDto input
+		CreateUpdateSubjectAssignmentGroupDto input
 	);
 
 	/// <summary>
@@ -28,10 +28,9 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// <param name="classId">Standard/Class ID</param>
 	/// <param name="status">Optional status filter (0=Draft, 1=Published)</param>
 	/// <returns>List of assignment groups</returns>
-	Task<List<SubjectAssignmentGroupResponseDto>> GetListAsync(
+	Task<List<SubjectAssignmentDto>> GetListAsync(
 		Guid academicMediumId,
-		Guid classId,
-		int? status = null
+		Guid classId
 	);
 
 	/// <summary>
@@ -39,7 +38,7 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// </summary>
 	/// <param name="assignmentId">Assignment group ID</param>
 	/// <returns>Assignment group details</returns>
-	Task<SubjectAssignmentGroupResponseDto> GetAsync(Guid assignmentId);
+	Task<SubjectAssignmentDto> GetAsync(Guid assignmentId);
 
 	/// <summary>
 	/// Updates an existing subject assignment group
@@ -48,10 +47,10 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// <param name="academicMediumId">Academic medium ID</param>
 	/// <param name="input">Update input DTO</param>
 	/// <returns>Updated assignment group</returns>
-	Task<SubjectAssignmentGroupResponseDto> UpdateAsync(
+	Task<SubjectAssignmentDto> UpdateAsync(
 		Guid assignmentId,
 		Guid academicMediumId,
-		UpdateSubjectAssignmentGroupDto input
+		CreateUpdateSubjectAssignmentGroupDto input
 	);
 
 	/// <summary>
@@ -59,7 +58,7 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// </summary>
 	/// <param name="assignmentId">Assignment group ID</param>
 	/// <returns>Publish response with new status</returns>
-	Task<PublishResponseDto> PublishAsync(Guid assignmentId);
+	Task<PublishResponseDto> PublishAsync(List<Guid> assignmentId);
 
 	/// <summary>
 	/// Deletes an assignment group and all its subjects

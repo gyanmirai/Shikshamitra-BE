@@ -57,10 +57,14 @@ public class DocumentItem
 }
 
 /// <summary>
-/// Response for document list
+/// Response for document list with pagination
 /// </summary>
 public class DocumentListResponse
 {
+	public int TotalCount { get; set; }
+	public int CurrentPage { get; set; }
+	public int PageSize { get; set; }
+	public int TotalPages { get; set; }
 	public List<DocumentItem> Items { get; set; } = new();
 }
 

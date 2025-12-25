@@ -16,8 +16,8 @@ public class EmployeeFamilyInfoAppService(
 	/// <inheritdoc />
 	public async Task<FamilyInfoResponse> GetAsync(Guid employeeId)
 	{
-		var employee = await employeeRepository.GetAsync(employeeId)
-			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
+		// Repository.GetAsync throws EntityNotFoundException if not found
+		var employee = await employeeRepository.GetAsync(employeeId);
 
 		return new FamilyInfoResponse
 		{

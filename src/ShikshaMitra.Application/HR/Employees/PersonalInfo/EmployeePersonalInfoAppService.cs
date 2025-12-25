@@ -63,9 +63,8 @@ public class EmployeePersonalInfoAppService(
 
 	public async Task<EmployeePersonalInfoDto> GetAsync(Guid id)
 	{
-		var employee = await employeeRepository.GetAsync(id)
-			?? throw new EntityNotFoundException(typeof(Employee), id);
-
+		// Repository.GetAsync throws EntityNotFoundException if not found
+		var employee = await employeeRepository.GetAsync(id);
 		return MapToDto(employee);
 	}
 

@@ -32,9 +32,8 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 	/// <inheritdoc />
 	public async Task<SalaryStructureResponseDto> GetAsync(Guid employeeId)
 	{
-		// Validate employee exists
-		_ = await _employeeRepository.GetAsync(employeeId)
-			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
+		// Validate employee exists (Repository.GetAsync throws if not found)
+		_ = await _employeeRepository.GetAsync(employeeId);
 
 		var earnings = await _payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
 		var deductions = await _payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);
@@ -49,18 +48,20 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 	/// <inheritdoc />
 	public async Task UpdateAsync(Guid employeeId, UpdateSalaryStructureDto input)
 	{
-		// Validate employee exists
-		_ = await _employeeRepository.GetAsync(employeeId)
-			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
+		// Validate employee exists (Repository.GetAsync throws if not found)
+		_ = await _employeeRepository.GetAsync(employeeId);
 
 		// Delete existing components
 		await _payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: true);
 		await _payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: false);
 
-		// Insert new earning components
+		// Build all components for batch insert
+		var componentsToInsert = new List<EmployeePayrollComponent>();
+
+		// Build earning components
 		foreach (var earning in input.EarningComponents)
 		{
-			var component = new EmployeePayrollComponent(
+			componentsToInsert.Add(new EmployeePayrollComponent(
 				_guidGenerator.Create(),
 				employeeId,
 				earning.Name,
@@ -71,14 +72,13 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 				earning.ComponentType,
 				earning.DependOn,
 				isEarning: true
-			);
-			await _payrollComponentRepository.InsertAsync(component);
+			));
 		}
 
-		// Insert new deduction components
+		// Build deduction components
 		foreach (var deduction in input.DeductionComponents)
 		{
-			var component = new EmployeePayrollComponent(
+			componentsToInsert.Add(new EmployeePayrollComponent(
 				_guidGenerator.Create(),
 				employeeId,
 				deduction.Name,
@@ -89,8 +89,13 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 				deduction.ComponentType,
 				deduction.DependOn,
 				isEarning: false
-			);
-			await _payrollComponentRepository.InsertAsync(component);
+			));
+		}
+
+		// Batch insert all components (single DB round-trip)
+		if (componentsToInsert.Count > 0)
+		{
+			await _payrollComponentRepository.InsertManyAsync(componentsToInsert);
 		}
 	}
 

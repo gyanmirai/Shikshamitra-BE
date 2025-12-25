@@ -46,6 +46,9 @@ public class DocumentSettingAppService(
 		var queryable = await Repository.GetQueryableAsync();
 		var skipCount = (page - 1) * pageSize;
 
+		// Get total count for pagination
+		var totalCount = await AsyncExecuter.CountAsync(queryable);
+
 		var items = await AsyncExecuter.ToListAsync(
 			queryable.OrderBy(x => x.DocumentName)
 				.Skip(skipCount)
@@ -54,6 +57,10 @@ public class DocumentSettingAppService(
 
 		return new DocumentListResponse
 		{
+			TotalCount = totalCount,
+			CurrentPage = page,
+			PageSize = pageSize,
+			TotalPages = (int)Math.Ceiling((double)totalCount / pageSize),
 			Items = items.Select(doc => new DocumentItem
 			{
 				Id = doc.Id,
@@ -69,12 +76,8 @@ public class DocumentSettingAppService(
 	/// </summary>
 	public async Task<DocumentItem> GetDocumentByIdAsync(Guid documentId)
 	{
+		// Repository.GetAsync throws EntityNotFoundException if not found
 		var doc = await Repository.GetAsync(documentId);
-		
-		if (doc == null)
-		{
-			throw new EntityNotFoundException(typeof(DocumentSetting), documentId);
-		}
 
 		return new DocumentItem
 		{
@@ -123,12 +126,8 @@ public class DocumentSettingAppService(
 	/// </summary>
 	public async Task UpdateDocumentAsync(Guid documentId, DocumentRequest input)
 	{
+		// Repository.GetAsync throws EntityNotFoundException if not found
 		var doc = await Repository.GetAsync(documentId);
-		
-		if (doc == null)
-		{
-			throw new EntityNotFoundException(typeof(DocumentSetting), documentId);
-		}
 
 		// Check for duplicate name (excluding current document)
 		var duplicate = await repository.FindAsync(x => x.DocumentName == input.Title && x.Id != documentId);
@@ -150,13 +149,8 @@ public class DocumentSettingAppService(
 	/// </summary>
 	public async Task DeleteDocumentAsync(Guid documentId)
 	{
+		// Repository.GetAsync throws EntityNotFoundException if not found
 		var doc = await Repository.GetAsync(documentId);
-		
-		if (doc == null)
-		{
-			throw new EntityNotFoundException(typeof(DocumentSetting), documentId);
-		}
-
 		await Repository.DeleteAsync(doc, autoSave: true);
 	}
 }

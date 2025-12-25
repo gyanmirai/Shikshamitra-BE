@@ -409,19 +409,6 @@ public class EmployeeManager(
 		return employee;
 	}
 
-	public async Task<Employee> UpdateAdditionalDetailsByEmployeeIdAsync(
-		Guid employeeId,
-		EmployeeAdditionalDetails additionalDetails
-	)
-	{
-		// Get the employee
-		var employee = await GetEmployeeAsync(employeeId);
-
-		// Update the additional details
-		employee.UpdateAdditionalDetails(additionalDetails);
-		return employee;
-	}
-
 	public async Task AddDocumentsAsync(Guid employeeId, List<EmployeeDocumentData> documents)
 	{
 		var employee = await employeeRepository.GetAsync(employeeId);

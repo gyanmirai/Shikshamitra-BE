@@ -21,4 +21,10 @@ public class UpdateLeaveTypeDto
 	[StringLength(LeaveTypeConsts.MaxColorLength, MinimumLength = 7)]
 	[RegularExpression(@"^#[A-Fa-f0-9]{6}$", ErrorMessage = "Color must be in HEX format (#RRGGBB)")]
 	public string Color { get; set; } = string.Empty;
+	
+	/// <summary>
+	/// Optional description of the leave type
+	/// </summary>
+	[StringLength(LeaveTypeConsts.MaxDescriptionLength)]
+	public string? Description { get; set; }
 }

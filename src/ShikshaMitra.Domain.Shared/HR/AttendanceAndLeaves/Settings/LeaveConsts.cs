@@ -7,6 +7,7 @@ public static class LeaveTypeConsts
 {
 	public const int MaxTypeLength = 100;
 	public const int MaxColorLength = 7; // #RRGGBB
+	public const int MaxDescriptionLength = 500;
 }
 
 /// <summary>

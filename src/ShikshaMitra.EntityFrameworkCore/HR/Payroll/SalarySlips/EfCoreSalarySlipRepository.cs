@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -63,5 +64,37 @@ public class EfCoreSalarySlipRepository
 			            x.EmployeeId == employeeId && 
 			            x.MonthYear == monthYear)
 			.AnyAsync(cancellationToken);
+	}
+
+	/// <summary>
+	/// Checks if any finalized salary slip exists for a specific month
+	/// </summary>
+	public async Task<bool> HasFinalizedSlipsForMonthAsync(
+		string monthYear,
+		CancellationToken cancellationToken = default)
+	{
+		var dbSet = await GetDbSetAsync();
+		
+		return await dbSet
+			.AsNoTracking()
+			.Where(x => x.TenantId == _currentTenant.Id &&
+			            x.MonthYear == monthYear &&
+			            x.Status == SalarySlipStatus.Finalized)
+			.AnyAsync(cancellationToken);
+	}
+
+	/// <summary>
+	/// Gets all salary slips for a specific month
+	/// </summary>
+	public async Task<List<SalarySlip>> GetByMonthAsync(
+		string monthYear,
+		CancellationToken cancellationToken = default)
+	{
+		var dbSet = await GetDbSetAsync();
+		
+		return await dbSet
+			.Where(x => x.TenantId == _currentTenant.Id &&
+			            x.MonthYear == monthYear)
+			.ToListAsync(cancellationToken);
 	}
 }

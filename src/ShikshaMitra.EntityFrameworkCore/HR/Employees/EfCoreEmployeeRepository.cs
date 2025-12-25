@@ -2,6 +2,7 @@
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.HR.Employees;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -208,8 +209,30 @@ public class EfCoreEmployeeRepository(
 	{
 		// Get the default queryable which includes auto-included navigations
 		return (await GetQueryableAsync())
-			.Include(e => e.PayrollStructure) // Optionally include PayrollStructure for list operations
-				.ThenInclude(ps => ps.PayElement)
-			.AsNoTracking(); // Read-only optimization for list queries
+			.Include(e => e.Documents)
+			.AsNoTracking();
+	}
+
+	/// <summary>
+	/// Gets an employee with reporting manager details.
+	/// </summary>
+	public async Task<Employee?> GetWithReportingManagerAsync(Guid id, CancellationToken cancellationToken = default)
+	{
+		var dbSet = await GetDbSetAsync();
+		return await dbSet
+			.Include(e => e.ReportingManager)
+			.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+	}
+
+	/// <summary>
+	/// Gets all employees reporting to a specific manager.
+	/// </summary>
+	public async Task<List<Employee>> GetEmployeesByManagerAsync(Guid managerId, CancellationToken cancellationToken = default)
+	{
+		var dbSet = await GetDbSetAsync();
+		return await dbSet
+			.Where(e => e.ReportingManagerId == managerId)
+			.OrderBy(e => e.EmployeeCode)
+			.ToListAsync(cancellationToken);
 	}
 }

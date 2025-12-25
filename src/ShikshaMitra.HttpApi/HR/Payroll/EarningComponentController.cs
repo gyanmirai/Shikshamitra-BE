@@ -31,180 +31,64 @@ public class EarningComponentController : AbpControllerBase
 	#region OpenAPI Contract-Compliant Endpoints
 
 	/// <summary>
-	/// Get list of all earning components (OpenAPI contract: ComponentListResponse)
-	/// Returns {total, data} format as per OpenAPI specification
+	/// Get paginated list of earning components (OpenAPI contract)
 	/// </summary>
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsEarningComponents.View)]
-	[ProducesResponseType(typeof(ComponentListResponseDto), 200)]
-	public virtual async Task<ComponentListResponseDto> GetListAsync([FromQuery] PagedAndSortedResultRequestDto input)
+	[ProducesResponseType(typeof(DeductionComponentPaginatedResponseDto), 200)]
+	public virtual async Task<DeductionComponentPaginatedResponseDto> GetPaginatedAsync([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
 	{
-		try
+		var result = await _earningComponentAppService.GetListAsync(new PagedAndSortedResultRequestDto
 		{
-			var result = await _earningComponentAppService.GetListAsync(input);
-			return EarningComponentOpenApiMapper.ToListResponse(result);
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex, "Error getting list of earning components");
-			throw;
-		}
+			SkipCount = (page - 1) * pageSize,
+			MaxResultCount = pageSize
+		});
+
+		return EarningComponentOpenApiMapper.ToPaginatedResponse(result, page, pageSize);
 	}
 
 	/// <summary>
-	/// Get all active earning components with pagination support
-	/// Note: While this endpoint uses similar response format, it filters only active components.
-	/// Consider adding this to OpenAPI specification if frontend requires it.
-	/// </summary>
-	[HttpGet("active")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsEarningComponents.View)]
-	[ProducesResponseType(typeof(ComponentListResponseDto), 200)]
-	public virtual async Task<ComponentListResponseDto> GetAllActiveAsync([FromQuery] PagedResultRequestDto input)
-	{
-		try
-		{
-			var result = await _earningComponentAppService.GetAllActiveAsync(input);
-			return EarningComponentOpenApiMapper.ToListResponse(result);
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex, "Error getting list of active earning components");
-			throw;
-		}
-	}
-
-	/// <summary>
-	/// Get a specific earning component by ID (OpenAPI contract: ComponentResponse)
-	/// </summary>
-	[HttpGet("{id}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsEarningComponents.View)]
-	[ProducesResponseType(typeof(ComponentResponseDto), 200)]
-	public virtual async Task<ComponentResponseDto> GetAsync(Guid id)
-	{
-		try
-		{
-			var result = await _earningComponentAppService.GetAsync(id);
-			return EarningComponentOpenApiMapper.ToComponentResponse(result);
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex, "Error getting earning component with ID: {Id}", id);
-			throw;
-		}
-	}
-
-	/// <summary>
-	/// Create a new earning component (OpenAPI contract: accepts ComponentRequest, returns BasicSuccess with 201)
-	/// Returns the ID of the created component for reference
+	/// Create a new earning component (OpenAPI contract)
 	/// </summary>
 	[HttpPost]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsEarningComponents.Add)]
-	[ProducesResponseType(typeof(ApiSuccessWithIdResponseDto), 201)]
-	public virtual async Task<IActionResult> CreateAsync([FromBody] ComponentRequestDto input)
+	[ProducesResponseType(typeof(ComponentCreateResponseDto), 201)]
+	public virtual async Task<ActionResult<ComponentCreateResponseDto>> CreateAsync([FromBody] PayrollComponentCreateRequestDto input)
 	{
-		try
+		var createDto = EarningComponentOpenApiMapper.ToCreateDto(input);
+		var createdComponent = await _earningComponentAppService.CreateAsync(createDto);
+		return StatusCode(201, new ComponentCreateResponseDto
 		{
-			var createDto = EarningComponentOpenApiMapper.ToCreateDto(input);
-			var createdComponent = await _earningComponentAppService.CreateAsync(createDto);
-			
-			return StatusCode(201, ApiSuccessWithIdResponseDto.SuccessResultWithId(
-				"Component created successfully", 
-				createdComponent.Id));
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex, "Error creating earning component");
-			throw;
-		}
+			Id = createdComponent.Id,
+			CreatedAt = DateTime.UtcNow
+		});
 	}
 
 	/// <summary>
-	/// Update an existing earning component (OpenAPI contract: accepts ComponentRequest, returns BasicSuccess)
+	/// Update an existing earning component (OpenAPI contract)
 	/// </summary>
 	[HttpPut("{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsEarningComponents.Add)]
-	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
-	public virtual async Task<ApiSuccessResponseDto> UpdateAsync(Guid id, [FromBody] ComponentRequestDto input)
+	[ProducesResponseType(200)]
+	public virtual async Task<IActionResult> UpdateAsync(Guid id, [FromBody] PayrollComponentCreateRequestDto input)
 	{
-		try
-		{
-			// Fetch existing component to preserve display order (not in OpenAPI contract)
-			var existingComponent = await _earningComponentAppService.GetAsync(id);
-			var updateDto = EarningComponentOpenApiMapper.ToUpdateDto(input, existingComponent.DisplayOrder);
-			await _earningComponentAppService.UpdateAsync(id, updateDto);
-			
-			return ApiSuccessResponseDto.SuccessResult("Component updated successfully");
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex, "Error updating earning component with ID: {Id}", id);
-			throw;
-		}
+		var existingComponent = await _earningComponentAppService.GetAsync(id);
+		var updateDto = EarningComponentOpenApiMapper.ToUpdateDto(input, existingComponent.DisplayOrder);
+		await _earningComponentAppService.UpdateAsync(id, updateDto);
+		return Ok();
 	}
 
 	/// <summary>
-	/// Delete an earning component (OpenAPI contract: returns BasicSuccess)
+	/// Delete an earning component (OpenAPI contract)
 	/// </summary>
 	[HttpDelete("{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsEarningComponents.Delete)]
-	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
-	public virtual async Task<ApiSuccessResponseDto> DeleteAsync(Guid id)
+	[ProducesResponseType(204)]
+	public virtual async Task<IActionResult> DeleteAsync(Guid id)
 	{
-		try
-		{
-			await _earningComponentAppService.DeleteAsync(id);
-			return ApiSuccessResponseDto.SuccessResult("Component deleted successfully");
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex, "Error deleting earning component with ID: {Id}", id);
-			throw;
-		}
+		await _earningComponentAppService.DeleteAsync(id);
+		return NoContent();
 	}
 
-	#endregion
-
-	#region Additional Endpoints (Not in OpenAPI Contract)
-
-	/// <summary>
-	/// Activate an earning component
-	/// </summary>
-	[HttpPost("{id}/activate")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsEarningComponents.Add)]
-	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
-	public virtual async Task<ApiSuccessResponseDto> ActivateAsync(Guid id)
-	{
-		try
-		{
-			await _earningComponentAppService.ActivateAsync(id);
-			return ApiSuccessResponseDto.SuccessResult("Component activated successfully");
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex, "Error activating earning component with ID: {Id}", id);
-			throw;
-		}
+		#endregion
 	}
-
-	/// <summary>
-	/// Deactivate an earning component
-	/// </summary>
-	[HttpPost("{id}/deactivate")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsEarningComponents.Add)]
-	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
-	public virtual async Task<ApiSuccessResponseDto> DeactivateAsync(Guid id)
-	{
-		try
-		{
-			await _earningComponentAppService.DeactivateAsync(id);
-			return ApiSuccessResponseDto.SuccessResult("Component deactivated successfully");
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex, "Error deactivating earning component with ID: {Id}", id);
-			throw;
-		}
-	}
-
-	#endregion
-}

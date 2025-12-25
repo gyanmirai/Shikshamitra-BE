@@ -1,5 +1,7 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -10,11 +12,11 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
 /// <summary>
-/// API Controller for salary slip operations
+/// API Controller for salary slip operations (OpenAPI contract compliant)
 /// </summary>
 [Area("app")]
 [RemoteService(Name = "Default")]
-[Route("api/salary-slip")]
+[Route("api/payroll/salary-slips")]
 [Authorize]
 public class SalarySlipController : AbpControllerBase
 {
@@ -26,117 +28,103 @@ public class SalarySlipController : AbpControllerBase
 	}
 
 	/// <summary>
-	/// Get salary slip by employee and month-year
+	/// Retrieves employee salary slip for a specific month (OpenAPI contract)
 	/// </summary>
-	/// <param name="employeeId">Employee identifier (required)</param>
-	/// <param name="monthYear">Month and year in YYYY-MM format (required, e.g., "2025-01")</param>
-	/// <returns>Salary slip details with earnings and deductions breakdown</returns>
-	/// <response code="200">Salary slip details fetched successfully</response>
+	/// <param name="employeeId">Unique employee identifier (required)</param>
+	/// <param name="monthYear">Salary period in MMMM-YYYY format (required, e.g., "JANUARY-2025")</param>
+	/// <returns>Salary slip with earnings and deductions breakdown</returns>
+	/// <response code="200">Salary slip retrieved successfully</response>
 	/// <response code="400">Invalid or missing query parameters</response>
 	/// <response code="404">Employee or salary slip not found</response>
-	/// <response code="500">Server error</response>
-	[HttpGet("by-employee")]
-	[ProducesResponseType(typeof(SalarySlipDto), StatusCodes.Status200OK)]
+	[HttpGet]
+	[ProducesResponseType(typeof(SalarySlipResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
-	[ProducesResponseType(StatusCodes.Status500InternalServerError)]
-	public virtual async Task<SalarySlipDto> GetByEmployeeAsync(
+	public virtual async Task<SalarySlipResponse> GetSalarySlipAsync(
 		[FromQuery, Required] Guid employeeId,
 		[FromQuery, Required] string monthYear)
 	{
-		return await _salarySlipAppService.GetSalarySlipAsync(employeeId, monthYear);
+		// Validate monthYear format (MMMM-YYYY)
+		if (!System.Text.RegularExpressions.Regex.IsMatch(monthYear, @"^[A-Z]+-\d{4}$"))
+		{
+			throw new UserFriendlyException(
+				"Invalid monthYear format. Expected format: MMMM-YYYY (e.g., JANUARY-2025)");
+		}
+
+		// Convert from OpenAPI format (JANUARY-2025) to internal format (2025-01)
+		var internalMonthYear = ConvertToInternalFormat(monthYear);
+
+		// Fetch salary slip using internal format
+		var salarySlipDto = await _salarySlipAppService.GetSalarySlipAsync(employeeId, internalMonthYear);
+
+		// Convert to OpenAPI contract format
+		return MapToSalarySlipResponse(salarySlipDto, monthYear);
 	}
 
 	/// <summary>
-	/// Get salary slip by identifier
+	/// Converts MMMM-YYYY format to YYYY-MM format for internal use
 	/// </summary>
-	/// <param name="id">Salary slip identifier</param>
-	/// <returns>Salary slip details</returns>
-	/// <response code="200">Salary slip retrieved successfully</response>
-	/// <response code="404">Salary slip not found</response>
-	/// <response code="500">Server error</response>
-	[HttpGet("{id}")]
-	[ProducesResponseType(typeof(SalarySlipDto), StatusCodes.Status200OK)]
-	[ProducesResponseType(StatusCodes.Status404NotFound)]
-	[ProducesResponseType(StatusCodes.Status500InternalServerError)]
-	public virtual async Task<SalarySlipDto> GetAsync(Guid id)
+	private string ConvertToInternalFormat(string monthYear)
 	{
-		return await _salarySlipAppService.GetAsync(id);
+		try
+		{
+			var parts = monthYear.Split('-');
+			if (parts.Length != 2)
+			{
+				throw new UserFriendlyException("Invalid monthYear format");
+			}
+
+			var monthName = parts[0];
+			var year = parts[1];
+
+			if (DateTime.TryParseExact(monthName, "MMMM", CultureInfo.InvariantCulture, 
+				DateTimeStyles.None, out var date))
+			{
+				return $"{year}-{date.Month:D2}";
+			}
+
+			throw new UserFriendlyException("Invalid month name in monthYear");
+		}
+		catch
+		{
+			throw new UserFriendlyException(
+				"Invalid monthYear format. Expected format: MMMM-YYYY (e.g., JANUARY-2025)");
+		}
 	}
 
 	/// <summary>
-	/// Generate a new salary slip or regenerate an existing draft
+	/// Maps internal SalarySlipDto to OpenAPI contract SalarySlipResponse
 	/// </summary>
-	/// <param name="input">Generate salary slip input parameters</param>
-	/// <returns>Generated salary slip details</returns>
-	/// <response code="200">Salary slip generated successfully</response>
-	/// <response code="400">Invalid input parameters or cannot regenerate finalized slip</response>
-	/// <response code="404">Employee not found</response>
-	/// <response code="500">Server error</response>
-	[HttpPost("generate")]
-	[ProducesResponseType(typeof(SalarySlipDto), StatusCodes.Status200OK)]
-	[ProducesResponseType(StatusCodes.Status400BadRequest)]
-	[ProducesResponseType(StatusCodes.Status404NotFound)]
-	[ProducesResponseType(StatusCodes.Status500InternalServerError)]
-	public virtual async Task<SalarySlipDto> GenerateAsync([FromBody] GenerateSalarySlipInput input)
+	private SalarySlipResponse MapToSalarySlipResponse(SalarySlipDto dto, string contractMonthYear)
 	{
-		return await _salarySlipAppService.GenerateSalarySlipAsync(input);
-	}
-
-	/// <summary>
-	/// Update a draft salary slip (remarks only)
-	/// </summary>
-	/// <param name="id">Salary slip identifier</param>
-	/// <param name="input">Update input containing new remarks</param>
-	/// <returns>Updated salary slip details</returns>
-	/// <response code="200">Salary slip updated successfully</response>
-	/// <response code="400">Cannot update finalized salary slip</response>
-	/// <response code="404">Salary slip not found</response>
-	/// <response code="500">Server error</response>
-	[HttpPut("{id}")]
-	[ProducesResponseType(typeof(SalarySlipDto), StatusCodes.Status200OK)]
-	[ProducesResponseType(StatusCodes.Status400BadRequest)]
-	[ProducesResponseType(StatusCodes.Status404NotFound)]
-	[ProducesResponseType(StatusCodes.Status500InternalServerError)]
-	public virtual async Task<SalarySlipDto> UpdateAsync(Guid id, [FromBody] UpdateSalarySlipInput input)
-	{
-		return await _salarySlipAppService.UpdateAsync(id, input);
-	}
-
-	/// <summary>
-	/// Finalize a salary slip, making it immutable
-	/// </summary>
-	/// <param name="id">Salary slip identifier</param>
-	/// <returns>Finalized salary slip details</returns>
-	/// <response code="200">Salary slip finalized successfully</response>
-	/// <response code="400">Salary slip is already finalized</response>
-	/// <response code="404">Salary slip not found</response>
-	/// <response code="500">Server error</response>
-	[HttpPost("{id}/finalize")]
-	[ProducesResponseType(typeof(SalarySlipDto), StatusCodes.Status200OK)]
-	[ProducesResponseType(StatusCodes.Status400BadRequest)]
-	[ProducesResponseType(StatusCodes.Status404NotFound)]
-	[ProducesResponseType(StatusCodes.Status500InternalServerError)]
-	public virtual async Task<SalarySlipDto> FinalizeAsync(Guid id)
-	{
-		return await _salarySlipAppService.FinalizeAsync(id);
-	}
-
-	/// <summary>
-	/// Delete a draft salary slip
-	/// </summary>
-	/// <param name="id">Salary slip identifier</param>
-	/// <response code="204">Salary slip deleted successfully</response>
-	/// <response code="400">Cannot delete finalized salary slip</response>
-	/// <response code="404">Salary slip not found</response>
-	/// <response code="500">Server error</response>
-	[HttpDelete("{id}")]
-	[ProducesResponseType(StatusCodes.Status204NoContent)]
-	[ProducesResponseType(StatusCodes.Status400BadRequest)]
-	[ProducesResponseType(StatusCodes.Status404NotFound)]
-	[ProducesResponseType(StatusCodes.Status500InternalServerError)]
-	public virtual async Task DeleteAsync(Guid id)
-	{
-		await _salarySlipAppService.DeleteAsync(id);
+		return new SalarySlipResponse
+		{
+			EmployeeId = dto.EmployeeId,
+			MonthYear = contractMonthYear,
+			TotalEarning = Convert.ToDouble(dto.TotalEarning),
+			TotalDeduction = Convert.ToDouble(dto.TotalDeduction),
+			NetPay = Convert.ToDouble(dto.NetSalary),
+			Earnings = dto.Earnings.Select(e => new SalaryComponent
+			{
+				Name = e.Name,
+				Description = e.Description,
+				Amount = Convert.ToDouble(e.Amount),
+				IsFixed = e.IsFixed,
+				IsTemp = e.IsTemp,
+				ComponentType = e.ComponentType.ToString().ToUpperInvariant(),
+				DependOn = e.DependOn != "None" ? e.DependOn.ToUpperInvariant() : null
+			}).ToList(),
+			Deductions = dto.Deductions.Select(d => new SalaryComponent
+			{
+				Name = d.Name,
+				Description = d.Description,
+				Amount = Convert.ToDouble(d.Amount),
+				IsFixed = d.IsFixed,
+				IsTemp = d.IsTemp,
+				ComponentType = d.ComponentType.ToString().ToUpperInvariant(),
+				DependOn = d.DependOn != "None" ? d.DependOn.ToUpperInvariant() : null
+			}).ToList(),
+			GeneratedAt = dto.ProcessedDate
+		};
 	}
 }

@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Dynamic.Core;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.EntityFrameworkCore;
@@ -18,10 +21,12 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 	{
 	}
 
-	public async Task<bool> IsPolicyNameExistsAsync(string policyName, Guid? excludeId = null)
+	public async Task<bool> IsPolicyNameExistsAsync(Guid educationMediumStageId, string policyName, Guid? excludeId = null)
 	{
 		var dbSet = await GetDbSetAsync();
-		var query = dbSet.Where(x => x.PolicyName.ToLower() == policyName.ToLower());
+		var query = dbSet.Where(x => 
+			x.EducationMediumStageId == educationMediumStageId && 
+			x.PolicyName.ToLower() == policyName.ToLower());
 		
 		if (excludeId.HasValue)
 		{
@@ -31,11 +36,74 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 		return await query.AnyAsync();
 	}
 
-	public async Task<LeavePolicy?> FindByPolicyNameAsync(string policyName)
+	public async Task<LeavePolicy?> FindByPolicyNameAsync(Guid educationMediumStageId, string policyName)
 	{
 		var dbSet = await GetDbSetAsync();
 		return await dbSet
-			.Where(x => x.PolicyName.ToLower() == policyName.ToLower())
+			.Where(x => 
+				x.EducationMediumStageId == educationMediumStageId && 
+				x.PolicyName.ToLower() == policyName.ToLower())
+			.Include(x => x.LeaveType)
 			.FirstOrDefaultAsync();
+	}
+
+	public async Task<List<LeavePolicy>> GetListByMediumStageIdAsync(
+		Guid educationMediumStageId,
+		int skipCount = 0,
+		int maxResultCount = int.MaxValue,
+		string? sorting = null,
+		bool includeInactive = false,
+		CancellationToken cancellationToken = default)
+	{
+		var dbSet = await GetDbSetAsync();
+		
+		// Build base query with includes
+		IQueryable<LeavePolicy> query = dbSet
+			.Include(x => x.LeaveType)
+			.Where(x => x.EducationMediumStageId == educationMediumStageId);
+
+		if (!includeInactive)
+		{
+			query = query.Where(x => x.IsActive);
+		}
+
+		if (!string.IsNullOrWhiteSpace(sorting))
+		{
+			query = query.OrderBy(sorting);
+		}
+		else
+		{
+			query = query.OrderBy(x => x.PolicyName);
+		}
+
+		return await query
+			.Skip(skipCount)
+			.Take(maxResultCount)
+			.ToListAsync(cancellationToken);
+	}
+
+	public async Task<long> GetCountByMediumStageIdAsync(
+		Guid educationMediumStageId,
+		bool includeInactive = false,
+		CancellationToken cancellationToken = default)
+	{
+		var dbSet = await GetDbSetAsync();
+		var query = dbSet
+			.Where(x => x.EducationMediumStageId == educationMediumStageId);
+
+		if (!includeInactive)
+		{
+			query = query.Where(x => x.IsActive);
+		}
+
+		return await query.LongCountAsync(cancellationToken);
+	}
+
+	public async Task<LeavePolicy?> GetWithLeaveTypeAsync(Guid id, CancellationToken cancellationToken = default)
+	{
+		var dbSet = await GetDbSetAsync();
+		return await dbSet
+			.Include(x => x.LeaveType)
+			.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 	}
 }

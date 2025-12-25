@@ -31,180 +31,64 @@ public class DeductionComponentController : AbpControllerBase
 	#region OpenAPI Contract-Compliant Endpoints
 
 	/// <summary>
-	/// Get list of all deduction components (OpenAPI contract: ComponentListResponse)
-	/// Returns {total, data} format as per OpenAPI specification
+	/// Get paginated list of deduction components (OpenAPI contract)
 	/// </summary>
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.View)]
-	[ProducesResponseType(typeof(ComponentListResponseDto), 200)]
-	public virtual async Task<ComponentListResponseDto> GetListAsync([FromQuery] PagedAndSortedResultRequestDto input)
+	[ProducesResponseType(typeof(DeductionComponentPaginatedResponseDto), 200)]
+	public virtual async Task<DeductionComponentPaginatedResponseDto> GetPaginatedAsync([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
 	{
-		try
+		var result = await _deductionComponentAppService.GetListAsync(new PagedAndSortedResultRequestDto
 		{
-			var result = await _deductionComponentAppService.GetListAsync(input);
-			return DeductionComponentOpenApiMapper.ToListResponse(result);
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex, "Error getting list of deduction components");
-			throw;
-		}
+			SkipCount = (page - 1) * pageSize,
+			MaxResultCount = pageSize
+		});
+
+		return DeductionComponentOpenApiMapper.ToPaginatedResponse(result, page, pageSize);
 	}
 
 	/// <summary>
-	/// Get all active deduction components with pagination support
-	/// Note: While this endpoint uses similar response format, it filters only active components.
-	/// Consider adding this to OpenAPI specification if frontend requires it.
-	/// </summary>
-	[HttpGet("active")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.View)]
-	[ProducesResponseType(typeof(ComponentListResponseDto), 200)]
-	public virtual async Task<ComponentListResponseDto> GetAllActiveAsync([FromQuery] PagedResultRequestDto input)
-	{
-		try
-		{
-			var result = await _deductionComponentAppService.GetAllActiveAsync(input);
-			return DeductionComponentOpenApiMapper.ToListResponse(result);
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex, "Error getting list of active deduction components");
-			throw;
-		}
-	}
-
-	/// <summary>
-	/// Get a specific deduction component by ID (OpenAPI contract: ComponentResponse)
-	/// </summary>
-	[HttpGet("{id}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.View)]
-	[ProducesResponseType(typeof(ComponentResponseDto), 200)]
-	public virtual async Task<ComponentResponseDto> GetAsync(Guid id)
-	{
-		try
-		{
-			var result = await _deductionComponentAppService.GetAsync(id);
-			return DeductionComponentOpenApiMapper.ToComponentResponse(result);
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex, "Error getting deduction component with ID: {Id}", id);
-			throw;
-		}
-	}
-
-	/// <summary>
-	/// Create a new deduction component (OpenAPI contract: accepts ComponentRequest, returns BasicSuccess with 201)
-	/// Returns the ID of the created component for reference
+	/// Create a new deduction component (OpenAPI contract)
 	/// </summary>
 	[HttpPost]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Add)]
-	[ProducesResponseType(typeof(ApiSuccessWithIdResponseDto), 201)]
-	public virtual async Task<IActionResult> CreateAsync([FromBody] ComponentRequestDto input)
+	[ProducesResponseType(typeof(ComponentCreateResponseDto), 201)]
+	public virtual async Task<ActionResult<ComponentCreateResponseDto>> CreateAsync([FromBody] PayrollComponentCreateRequestDto input)
 	{
-		try
+		var createDto = DeductionComponentOpenApiMapper.ToCreateDto(input);
+		var createdComponent = await _deductionComponentAppService.CreateAsync(createDto);
+		return StatusCode(201, new ComponentCreateResponseDto
 		{
-			var createDto = DeductionComponentOpenApiMapper.ToCreateDto(input);
-			var createdComponent = await _deductionComponentAppService.CreateAsync(createDto);
-			
-			return StatusCode(201, ApiSuccessWithIdResponseDto.SuccessResultWithId(
-				"Component created successfully", 
-				createdComponent.Id));
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex, "Error creating deduction component");
-			throw;
-		}
+			Id = createdComponent.Id,
+			CreatedAt = DateTime.UtcNow
+		});
 	}
 
 	/// <summary>
-	/// Update an existing deduction component (OpenAPI contract: accepts ComponentRequest, returns BasicSuccess)
+	/// Update an existing deduction component (OpenAPI contract)
 	/// </summary>
 	[HttpPut("{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Add)]
-	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
-	public virtual async Task<ApiSuccessResponseDto> UpdateAsync(Guid id, [FromBody] ComponentRequestDto input)
+	[ProducesResponseType(200)]
+	public virtual async Task<IActionResult> UpdateAsync(Guid id, [FromBody] PayrollComponentCreateRequestDto input)
 	{
-		try
-		{
-			// Fetch existing component to preserve display order (not in OpenAPI contract)
-			var existingComponent = await _deductionComponentAppService.GetAsync(id);
-			var updateDto = DeductionComponentOpenApiMapper.ToUpdateDto(input, existingComponent.DisplayOrder);
-			await _deductionComponentAppService.UpdateAsync(id, updateDto);
-			
-			return ApiSuccessResponseDto.SuccessResult("Component updated successfully");
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex, "Error updating deduction component with ID: {Id}", id);
-			throw;
-		}
+		var existingComponent = await _deductionComponentAppService.GetAsync(id);
+		var updateDto = DeductionComponentOpenApiMapper.ToUpdateDto(input, existingComponent.DisplayOrder);
+		await _deductionComponentAppService.UpdateAsync(id, updateDto);
+		return Ok();
 	}
 
 	/// <summary>
-	/// Delete a deduction component (OpenAPI contract: returns BasicSuccess)
+	/// Delete a deduction component (OpenAPI contract)
 	/// </summary>
 	[HttpDelete("{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Delete)]
-	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
-	public virtual async Task<ApiSuccessResponseDto> DeleteAsync(Guid id)
+	[ProducesResponseType(204)]
+	public virtual async Task<IActionResult> DeleteAsync(Guid id)
 	{
-		try
-		{
-			await _deductionComponentAppService.DeleteAsync(id);
-			return ApiSuccessResponseDto.SuccessResult("Component deleted successfully");
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex, "Error deleting deduction component with ID: {Id}", id);
-			throw;
-		}
+		await _deductionComponentAppService.DeleteAsync(id);
+		return NoContent();
 	}
 
-	#endregion
-
-	#region Additional Endpoints (Not in OpenAPI Contract)
-
-	/// <summary>
-	/// Activate a deduction component
-	/// </summary>
-	[HttpPost("{id}/activate")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Add)]
-	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
-	public virtual async Task<ApiSuccessResponseDto> ActivateAsync(Guid id)
-	{
-		try
-		{
-			await _deductionComponentAppService.ActivateAsync(id);
-			return ApiSuccessResponseDto.SuccessResult("Component activated successfully");
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex, "Error activating deduction component with ID: {Id}", id);
-			throw;
-		}
+		#endregion
 	}
-
-	/// <summary>
-	/// Deactivate a deduction component
-	/// </summary>
-	[HttpPost("{id}/deactivate")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Add)]
-	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
-	public virtual async Task<ApiSuccessResponseDto> DeactivateAsync(Guid id)
-	{
-		try
-		{
-			await _deductionComponentAppService.DeactivateAsync(id);
-			return ApiSuccessResponseDto.SuccessResult("Component deactivated successfully");
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex, "Error deactivating deduction component with ID: {Id}", id);
-			throw;
-		}
-	}
-
-	#endregion
-}

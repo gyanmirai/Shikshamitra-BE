@@ -254,7 +254,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 	}
 
 	/// <summary>
-	/// Maps SalarySlip entity to DTO with employee details
+	/// Maps SalarySlip entity to DTO with employee details and component metadata
 	/// </summary>
 	private Task<SalarySlipDto> MapToSalarySlipDtoAsync(SalarySlip salarySlip, Employee employee)
 	{
@@ -275,13 +275,21 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 			{
 				Name = e.Name,
 				Amount = e.Amount,
-				Description = e.Description
+				Description = e.Description,
+				IsFixed = e.IsFixed,
+				IsTemp = e.IsTemp,
+				ComponentType = e.ComponentType.ToString(),
+				DependOn = e.DependOn.ToString()
 			}).ToList(),
 			Deductions = salarySlip.Deductions.Select(d => new SalarySlipLineItemDto
 			{
 				Name = d.Name,
 				Amount = d.Amount,
-				Description = d.Description
+				Description = d.Description,
+				IsFixed = d.IsFixed,
+				IsTemp = d.IsTemp,
+				ComponentType = d.ComponentType.ToString(),
+				DependOn = d.DependOn.ToString()
 			}).ToList()
 		};
 

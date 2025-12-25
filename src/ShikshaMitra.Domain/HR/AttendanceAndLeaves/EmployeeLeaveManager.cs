@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Guids;
@@ -16,6 +17,34 @@ public class EmployeeLeaveManager(IEmployeeLeaveRepository employeeLeaveReposito
 		}
 
 		return employeeLeave;
+	}
+
+	/// <summary>
+	/// ✅ FIXED: Removed reflection abuse, uses entity factory method
+	/// </summary>
+	public Task<EmployeeLeave> CreateAsync(
+		Guid employeeId,
+		Guid leaveTypeId,
+		DateTimeOffset startDate,
+		DateTimeOffset endDate,
+		string description,
+		bool halfDay = false)
+	{
+		var leaveId = guidGenerator.Create();
+		var tenantId = CurrentTenant?.Id ?? Guid.Empty;
+
+		// ✅ Use factory method instead of direct reflection
+		var leave = EmployeeLeave.Create(
+			leaveId, 
+			tenantId, 
+			employeeId, 
+			leaveTypeId, 
+			startDate, 
+			endDate, 
+			description, 
+			halfDay);
+
+		return Task.FromResult(leave);
 	}
 
 	public async Task<EmployeeLeave> UpdateLeaveRequestStatusAsync(EmployeeLeave employeeLeave,

@@ -56,44 +56,50 @@ public class UpdateEmployeePayrollDetailsDto : IValidatableObject
 			}
 		}
 
-		// Validate earnings have component names
+		// Validate earnings
 		for (int i = 0; i < Earnings.Count; i++)
 		{
-			if (string.IsNullOrWhiteSpace(Earnings[i].ComponentName))
+			foreach (var error in ValidateComponent(Earnings[i], nameof(Earnings), i))
 			{
-				yield return new ValidationResult(
-					$"Earning component at index {i} must have a component name.",
-					new[] { $"{nameof(Earnings)}[{i}].{nameof(PayrollComponentDto.ComponentName)}" }
-				);
-			}
-
-			if (Earnings[i].Amount < 0)
-			{
-				yield return new ValidationResult(
-					$"Earning component '{Earnings[i].ComponentName}' cannot have negative amount.",
-					new[] { $"{nameof(Earnings)}[{i}].{nameof(PayrollComponentDto.Amount)}" }
-				);
+				yield return error;
 			}
 		}
 
-		// Validate deductions have component names
+		// Validate deductions
 		for (int i = 0; i < Deductions.Count; i++)
 		{
-			if (string.IsNullOrWhiteSpace(Deductions[i].ComponentName))
+			foreach (var error in ValidateComponent(Deductions[i], nameof(Deductions), i))
 			{
-				yield return new ValidationResult(
-					$"Deduction component at index {i} must have a component name.",
-					new[] { $"{nameof(Deductions)}[{i}].{nameof(PayrollComponentDto.ComponentName)}" }
-				);
+				yield return error;
 			}
+		}
+	}
 
-			if (Deductions[i].Amount < 0)
-			{
-				yield return new ValidationResult(
-					$"Deduction component '{Deductions[i].ComponentName}' cannot have negative amount.",
-					new[] { $"{nameof(Deductions)}[{i}].{nameof(PayrollComponentDto.Amount)}" }
-				);
-			}
+	private static IEnumerable<ValidationResult> ValidateComponent(PayrollComponentDto component, string arrayName, int index)
+	{
+		if (string.IsNullOrWhiteSpace(component.Name))
+		{
+			yield return new ValidationResult(
+				$"{arrayName} component at index {index} must have a name.",
+				new[] { $"{arrayName}[{index}].{nameof(PayrollComponentDto.Name)}" }
+			);
+		}
+
+		if (component.Amount < 0)
+		{
+			yield return new ValidationResult(
+				$"{arrayName} component '{component.Name}' cannot have negative amount.",
+				new[] { $"{arrayName}[{index}].{nameof(PayrollComponentDto.Amount)}" }
+			);
+		}
+
+		// Validate DependOn is required when ComponentType is Percentage
+		if (component.ComponentType == SalaryComponentType.Percentage && component.DependOn == null)
+		{
+			yield return new ValidationResult(
+				$"{arrayName} component '{component.Name}' requires DependOn when ComponentType is Percentage.",
+				new[] { $"{arrayName}[{index}].{nameof(PayrollComponentDto.DependOn)}" }
+			);
 		}
 	}
 

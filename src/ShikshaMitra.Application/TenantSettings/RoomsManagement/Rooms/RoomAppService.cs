@@ -7,6 +7,7 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 using ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes;
+using ShikshaMitra.Constants.Permissions;
 
 namespace ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 
@@ -25,6 +26,13 @@ public class RoomAppService : CrudAppService<Room, RoomDto, Guid, GetRoomListDto
 		_buildingRepository = buildingRepository;
 		_floorRepository = floorRepository;
 		_roomTypeRepository = roomTypeRepository;
+
+		// Set permission policies for CRUD operations
+		GetPolicyName = ShikshaMitraSubmodulePermissions.InstituteSetup.RoomsManagement.View;
+		GetListPolicyName = ShikshaMitraSubmodulePermissions.InstituteSetup.RoomsManagement.View;
+		CreatePolicyName = ShikshaMitraSubmodulePermissions.InstituteSetup.RoomsManagement.Add;
+		UpdatePolicyName = ShikshaMitraSubmodulePermissions.InstituteSetup.RoomsManagement.Edit;
+		DeletePolicyName = ShikshaMitraSubmodulePermissions.InstituteSetup.RoomsManagement.Delete;
 	}
 
 	private async Task ValidateFloorBelongsToBuildingAsync(Guid floorId, Guid buildingId)

@@ -208,7 +208,7 @@ public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, I
 		// Get student and validate
 		var student = await _studentRepository.GetAsync(studentId);
 
-		if (student.Status != StudentLifeCycleStatusEnum.RegistrationFormIssued)
+		if (student.Status != StudentLifeCycleStatusEnum.Registation)
 		{
 			throw new BusinessException("SM:EntranceExam:001")
 				.WithData("currentStatus", student.Status.ToString())

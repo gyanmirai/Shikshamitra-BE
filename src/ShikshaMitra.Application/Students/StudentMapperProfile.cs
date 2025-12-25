@@ -7,6 +7,7 @@ using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace ShikshaMitra.Students;
@@ -91,8 +92,8 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.Email : null))
 			.ForMember(dest => dest.PreviousSchool, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.PreviousSchool : null))
 			.ForMember(dest => dest.InquiryPreference, opt => opt.MapFrom(src => src.InquiryPreference != null ? src.InquiryPreference.PreferenceName : null))
-			.ForMember(dest => dest.NextReminderDate, opt => opt.Ignore())
 			.ForMember(dest => dest.FormNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.RegistrationFormNo : null))
+			.ForMember(dest => dest.NextReminderDate, opt => opt.Ignore())
 			.IncludeAllDerived();
 
 		// Add converter for Age calculation

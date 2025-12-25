@@ -11,6 +11,13 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
+	
+	/// <summary>
+	/// Stable, auto-increment public ID used for API routes and display.
+	/// DB-generated identity to ensure uniqueness and scalability.
+	/// </summary>
+	public int PublicId { get; private set; }
+	
 	public Guid EmployeeId { get; private set; }
 	public Guid LeaveTypeId { get; private set; }  // Foreign key to LeavePolicy
 	public bool HalfDay { get; private set; }

@@ -12,18 +12,21 @@ public class EmployeeLeaveConfiguration : IEntityTypeConfiguration<EmployeeLeave
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "EmployeeLeaves", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 	
-		// builder.HasOne(e => e.User)
-		// 	.WithMany()
-		// 	.HasForeignKey(e => e.UserId) // Explicitly set the foreign key
-		// 	.OnDelete(DeleteBehavior.Restrict);
+		// PublicId: Stable, auto-increment ID for API routes and display
+		// Uses DB identity generation for scalability
+		builder.Property(e => e.PublicId)
+			.UseIdentityAlwaysColumn()
+			.ValueGeneratedOnAdd();
+		
+		// Unique index on PublicId per tenant for fast lookups
+		builder.HasIndex(e => new { e.TenantId, e.PublicId })
+			.IsUnique()
+			.HasDatabaseName("IX_EmployeeLeaves_Tenant_PublicId");
 	
 		builder.HasOne(e => e.Employee)
 			.WithMany()
 			.HasForeignKey(e => e.EmployeeId)
 			.OnDelete(DeleteBehavior.Restrict);
-	
-		// Auto Include 
-		// builder.Navigation(e => e.User).AutoInclude();
 	
 		// Auto Include 
 		builder.Navigation(e => e.Employee).AutoInclude();

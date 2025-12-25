@@ -103,20 +103,20 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 					.Skip(skipCount)
 					.Take(pageSize));
 
-			var items = leaveRequests.Select(leave => new LeaveManagementDto
-			{
-				Id = (int)leave.Id.GetHashCode(), // Keep for API compatibility (but will fix contract later)
-				Name = leave.Employee?.EmployeeNameWithFather ?? "Unknown",
-				EmployeeCode = leave.Employee?.EmployeeCode ?? "Unknown",
-				LeaveType = leave.LeavePolicy?.LeaveType?.Type ?? "Unknown",
-				StartDate = leave.StartDate.DateTime,
-				EndDate = leave.EndDate.DateTime,
-				TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
-				Organization = leave.Employee?.EducationMediumStage?.Name ?? "Unknown", // ✅ FIX #7: Now works!
-				Description = leave.Description ?? "",
-				Remarks = leave.RejectionReason,
-				Status = leave.Status.ToString().ToUpper()
-			}).ToList();
+		var items = leaveRequests.Select(leave => new LeaveManagementDto
+		{
+			Id = leave.PublicId, // ✅ Use stable PublicId instead of GetHashCode()
+			Name = leave.Employee?.EmployeeNameWithFather ?? "Unknown",
+			EmployeeCode = leave.Employee?.EmployeeCode ?? "Unknown",
+			LeaveType = leave.LeavePolicy?.LeaveType?.Type ?? "Unknown",
+			StartDate = leave.StartDate.DateTime,
+			EndDate = leave.EndDate.DateTime,
+			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
+			Organization = leave.Employee?.EducationMediumStage?.Name ?? "Unknown",
+			Description = leave.Description ?? "",
+			Remarks = leave.RejectionReason,
+			Status = leave.Status.ToString().ToUpper()
+		}).ToList();
 
 			return new PagedLeaveManagementResultDto
 			{
@@ -127,7 +127,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 
 		public async Task<LeaveRequestDetailsDto> GetAsync(int leaveRequestId)
 		{
-			// ✅ FIX #2: Limit query for performance
+			// ✅ FIXED: Direct DB query using PublicId (no in-memory search)
 			var query = await _employeeLeaveRepository.WithDetailsAsync(
 				x => x.Employee,
 				x => x.Employee.EducationMediumStage,
@@ -139,9 +139,9 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 				query = query.Where(x => x.TenantId == CurrentTenant.Id);
 			}
 
-			// ✅ FIX #2: Limit to reasonable number instead of loading all
-			var limitedLeaves = await AsyncExecuter.ToListAsync(query.Take(1000));
-			var leave = limitedLeaves.FirstOrDefault(x => x.Id.GetHashCode() == leaveRequestId);
+			// ✅ FIXED: Direct query by PublicId for O(1) indexed lookup
+			var leave = await AsyncExecuter.FirstOrDefaultAsync(
+				query.Where(x => x.PublicId == leaveRequestId));
 
 			if (leave == null)
 			{
@@ -150,7 +150,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 
 			return new LeaveRequestDetailsDto
 			{
-				Id = leaveRequestId,
+				Id = leave.PublicId, // ✅ Use PublicId
 				MediumStageId = leave.Employee?.EducationMediumStageId ?? Guid.Empty,
 				EmployeeId = leave.EmployeeId,
 				EmployeeName = leave.Employee?.EmployeeNameWithFather ?? "Unknown",
@@ -258,7 +258,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 
 		public async Task<LeaveRequestDetailsDto> UpdateAsync(int leaveRequestId, LeaveRequestUpdateRequest input)
 		{
-			// ✅ FIX #3: Limit query for performance
+			// ✅ FIXED: Direct DB query using PublicId
 			var query = await _employeeLeaveRepository.WithDetailsAsync(x => x.Employee);
 
 			// ✅ SECURITY: Filter by tenant
@@ -267,9 +267,9 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 				query = query.Where(x => x.TenantId == CurrentTenant.Id);
 			}
 
-			// ✅ FIX #3: Limit to reasonable number
-			var limitedLeaves = await AsyncExecuter.ToListAsync(query.Take(1000));
-			var leave = limitedLeaves.FirstOrDefault(x => x.Id.GetHashCode() == leaveRequestId);
+			// ✅ FIXED: Direct query by PublicId for O(1) indexed lookup
+			var leave = await AsyncExecuter.FirstOrDefaultAsync(
+				query.Where(x => x.PublicId == leaveRequestId));
 
 			if (leave == null)
 			{
@@ -310,7 +310,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 
 		public async Task<LeaveRequestDeleteDto> DeleteAsync(int leaveRequestId)
 		{
-			// ✅ FIX #4: Limit query for performance
+			// ✅ FIXED: Direct DB query using PublicId
 			var query = await _employeeLeaveRepository.GetQueryableAsync();
 
 			// ✅ SECURITY: Filter by tenant
@@ -319,9 +319,9 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 				query = query.Where(x => x.TenantId == CurrentTenant.Id);
 			}
 
-			// ✅ FIX #4: Limit to reasonable number
-			var limitedLeaves = await AsyncExecuter.ToListAsync(query.Take(1000));
-			var leave = limitedLeaves.FirstOrDefault(x => x.Id.GetHashCode() == leaveRequestId);
+			// ✅ FIXED: Direct query by PublicId for O(1) indexed lookup
+			var leave = await AsyncExecuter.FirstOrDefaultAsync(
+				query.Where(x => x.PublicId == leaveRequestId));
 
 			if (leave == null)
 			{
@@ -352,7 +352,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 
 			return new LeaveRequestDeleteDto
 			{
-				Id = leaveRequestId,
+				Id = leave.PublicId, // ✅ Use PublicId in response
 				Message = "Leave request cancelled successfully"
 			};
 		}

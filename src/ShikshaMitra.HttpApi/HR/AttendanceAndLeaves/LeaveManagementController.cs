@@ -45,9 +45,13 @@ public class LeaveManagementController : AbpControllerBase
 	[HttpGet("{leaveRequestId}")]
 	[ProducesResponseType(typeof(LeaveRequestDetailsResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
-	public virtual async Task<LeaveRequestDetailsResponse> GetAsync([FromRoute, Required] int leaveRequestId)
+	public virtual async Task<ActionResult<LeaveRequestDetailsResponse>> GetAsync([FromRoute, Required] string leaveRequestId)
 	{
-		var details = await _leaveManagementAppService.GetAsync(leaveRequestId);
+		if (!int.TryParse(leaveRequestId, out var publicId))
+		{
+			return BadRequest(new { message = "Invalid leave request ID format" });
+		}
+		var details = await _leaveManagementAppService.GetAsync(publicId);
 		return LeaveManagementContractMapper.ToDetailsResponse(details);
 	}
 
@@ -56,11 +60,15 @@ public class LeaveManagementController : AbpControllerBase
 	/// </summary>
 	[HttpPut("{leaveRequestId}")]
 	[ProducesResponseType(typeof(LeaveRequestDetailsResponse), StatusCodes.Status200OK)]
-	public virtual async Task<LeaveRequestDetailsResponse> UpdateAsync(
-		[FromRoute, Required] int leaveRequestId,
+	public virtual async Task<ActionResult<LeaveRequestDetailsResponse>> UpdateAsync(
+		[FromRoute, Required] string leaveRequestId,
 		[FromBody, Required] LeaveRequestUpdateRequest request)
 	{
-		var updated = await _leaveManagementAppService.UpdateAsync(leaveRequestId, request);
+		if (!int.TryParse(leaveRequestId, out var publicId))
+		{
+			return BadRequest(new { message = "Invalid leave request ID format" });
+		}
+		var updated = await _leaveManagementAppService.UpdateAsync(publicId, request);
 		return LeaveManagementContractMapper.ToDetailsResponse(updated);
 	}
 
@@ -69,9 +77,13 @@ public class LeaveManagementController : AbpControllerBase
 	/// </summary>
 	[HttpDelete("{leaveRequestId}")]
 	[ProducesResponseType(typeof(LeaveRequestDeleteResponse), StatusCodes.Status200OK)]
-	public virtual async Task<LeaveRequestDeleteResponse> DeleteAsync([FromRoute, Required] int leaveRequestId)
+	public virtual async Task<ActionResult<LeaveRequestDeleteResponse>> DeleteAsync([FromRoute, Required] string leaveRequestId)
 	{
-		var deleted = await _leaveManagementAppService.DeleteAsync(leaveRequestId);
+		if (!int.TryParse(leaveRequestId, out var publicId))
+		{
+			return BadRequest(new { message = "Invalid leave request ID format" });
+		}
+		var deleted = await _leaveManagementAppService.DeleteAsync(publicId);
 		return LeaveManagementContractMapper.ToDeleteResponse(deleted);
 	}
 }

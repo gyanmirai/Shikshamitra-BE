@@ -11,6 +11,11 @@ public class EmployeeAttendanceDto : EntityDto<Guid>
 
 	public Guid EducationMediumStageId { get; set; }
 
+	/// <summary>
+	/// The date of attendance (no time component).
+	/// </summary>
+	public DateOnly AttendanceDate { get; set; }
+
 	public DateTimeOffset? TimeIn { get; set; }
 	public DateTimeOffset? TimeOut { get; set; }
 

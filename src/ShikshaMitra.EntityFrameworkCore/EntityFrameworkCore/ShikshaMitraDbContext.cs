@@ -50,6 +50,7 @@ using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.TenantManagement;
 using Volo.Abp.TenantManagement.EntityFrameworkCore;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Students.Records.Settings;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -156,6 +157,8 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#endregion
 
 	#region Student Record
+
+	public DbSet<HouseSettings> HouseSettings { get; set; }
 
 	#endregion
 

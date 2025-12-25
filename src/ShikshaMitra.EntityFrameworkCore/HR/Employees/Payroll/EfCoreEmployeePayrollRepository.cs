@@ -27,6 +27,26 @@ public class EfCoreEmployeePayrollDetailsRepository
 		return await dbSet
 			.FirstOrDefaultAsync(x => x.EmployeeId == employeeId, cancellationToken);
 	}
+
+	/// <summary>
+	/// Batch fetch payroll details for multiple employees (single query)
+	/// </summary>
+	public async Task<Dictionary<Guid, EmployeePayrollDetails>> GetByEmployeeIdsAsync(
+		IEnumerable<Guid> employeeIds, 
+		CancellationToken cancellationToken = default)
+	{
+		var idList = employeeIds.ToList();
+		if (idList.Count == 0)
+			return new Dictionary<Guid, EmployeePayrollDetails>();
+
+		var dbSet = await GetDbSetAsync();
+		var details = await dbSet
+			.AsNoTracking()
+			.Where(x => idList.Contains(x.EmployeeId))
+			.ToListAsync(cancellationToken);
+
+		return details.ToDictionary(x => x.EmployeeId);
+	}
 }
 
 public class EfCoreEmployeePayrollComponentRepository 
@@ -82,5 +102,25 @@ public class EfCoreEmployeePayrollComponentRepository
 		{
 			await DeleteAsync(component, cancellationToken: cancellationToken);
 		}
+	}
+
+	/// <summary>
+	/// Batch fetch payroll components for multiple employees (single query)
+	/// </summary>
+	public async Task<ILookup<Guid, EmployeePayrollComponent>> GetByEmployeeIdsAsync(
+		IEnumerable<Guid> employeeIds, 
+		CancellationToken cancellationToken = default)
+	{
+		var idList = employeeIds.ToList();
+		if (idList.Count == 0)
+			return Enumerable.Empty<EmployeePayrollComponent>().ToLookup(x => x.EmployeeId);
+
+		var dbSet = await GetDbSetAsync();
+		var components = await dbSet
+			.AsNoTracking()
+			.Where(x => idList.Contains(x.EmployeeId))
+			.ToListAsync(cancellationToken);
+
+		return components.ToLookup(x => x.EmployeeId);
 	}
 }

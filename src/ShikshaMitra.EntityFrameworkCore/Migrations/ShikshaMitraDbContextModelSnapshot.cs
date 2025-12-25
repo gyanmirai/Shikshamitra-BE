@@ -9637,24 +9637,19 @@ namespace ShikshaMitra.Migrations
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkAssignmentEntity", b =>
-                    {
-                        b.Navigation("DivisionSchedules");
-                    });
+                {
+                    b.Navigation("DivisionSchedules");
+                });
 
-                modelBuilder.Entity("ShikshaMitra.Academic.Syllabus.SubjectChapter", b =>
-                    {
-                        b.Navigation("Documents");
-                    });
+            modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
+                {
+                    b.Navigation("AdditionalDetails");
+                });
 
-                modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
-                    {
-                        b.Navigation("AdditionalDetails");
-                    });
-
-                modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceDay", b =>
-                    {
-                        b.Navigation("Entries");
-                    });
+            modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceDay", b =>
+                {
+                    b.Navigation("Entries");
+                });
 
             modelBuilder.Entity("ShikshaMitra.Students.Student", b =>
                 {

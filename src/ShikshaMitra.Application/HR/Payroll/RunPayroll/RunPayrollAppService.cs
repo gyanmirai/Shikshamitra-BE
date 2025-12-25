@@ -1,5 +1,6 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.EventAndHolidays;
@@ -167,9 +168,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		var employees = await AsyncExecuter.ToListAsync(
 			employeeQuery
-				.AsNoTracking() // Read-only query
 				.Where(e => e.EmployeeStatusType == EmployeeStatusType.Active)
-				.Select(e => new { e.Id, e.EmployeeCode, e.EmployeeName }) // Project only needed fields
+				.Select(e => new { e.Id, e.EmployeeCode, e.EmployeeName })
 		);
 
 		if (employees.Count == 0)
@@ -366,7 +366,6 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		var attendanceRecords = await AsyncExecuter.ToListAsync(
 			attendanceQuery
-				.AsNoTracking() // Read-only query for performance
 				.Where(a => 
 					employeeIds.Contains(a.EmployeeId) &&
 					a.AttendanceDate >= startDate &&

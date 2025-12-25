@@ -61,9 +61,10 @@ public class LeaveTypeAppService : CrudAppService<
 	public override async Task<LeaveTypeDto> UpdateAsync(Guid id, UpdateLeaveTypeDto input)
 	{
 		var leaveType = await Repository.GetAsync(id);
-		await _leaveTypeManager.UpdateAsync(leaveType, input.Type, input.Color);
+		await _leaveTypeManager.UpdateAsync(leaveType, input.Type, input.Color, input.Description);
 		await Repository.UpdateAsync(leaveType, autoSave: true);
 		await ClearCacheAsync();
+		await ClearContractCacheAsync(leaveType.EducationMediumStageId);
 		return ObjectMapper.Map<LeaveType, LeaveTypeDto>(leaveType);
 	}
 
@@ -215,12 +216,8 @@ public class LeaveTypeAppService : CrudAppService<
 	/// </summary>
 	public async Task<LeaveTypeResponse> GetLeaveTypeByIdAsync(Guid leaveTypeId)
 	{
+		// Repository.GetAsync throws EntityNotFoundException if not found
 		var leaveType = await Repository.GetAsync(leaveTypeId);
-		
-		if (leaveType == null)
-		{
-			throw new EntityNotFoundException(typeof(LeaveType), leaveTypeId);
-		}
 
 		return new LeaveTypeResponse
 		{
@@ -236,12 +233,8 @@ public class LeaveTypeAppService : CrudAppService<
 	/// </summary>
 	public async Task<LeaveTypeResponse> UpdateLeaveTypeAsync(Guid leaveTypeId, LeaveTypeUpdateRequest input)
 	{
+		// Repository.GetAsync throws EntityNotFoundException if not found
 		var leaveType = await Repository.GetAsync(leaveTypeId);
-		
-		if (leaveType == null)
-		{
-			throw new EntityNotFoundException(typeof(LeaveType), leaveTypeId);
-		}
 
 		// Apply partial updates - only update fields that are provided
 		var newType = input.Name ?? leaveType.Type;
@@ -267,12 +260,8 @@ public class LeaveTypeAppService : CrudAppService<
 	/// </summary>
 	public async Task<LeaveTypeDeleteResponse> DeleteLeaveTypeAsync(Guid leaveTypeId)
 	{
+		// Repository.GetAsync throws EntityNotFoundException if not found
 		var leaveType = await Repository.GetAsync(leaveTypeId);
-		
-		if (leaveType == null)
-		{
-			throw new EntityNotFoundException(typeof(LeaveType), leaveTypeId);
-		}
 
 		leaveType.Deactivate();
 		await Repository.UpdateAsync(leaveType, autoSave: true);

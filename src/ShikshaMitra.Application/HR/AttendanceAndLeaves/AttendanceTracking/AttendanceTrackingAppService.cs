@@ -126,7 +126,7 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		var responseItems = items.Select(a => new AttendanceDateWiseItem
 		{
 			EmployeeId = a.EmployeeId.ToString(),
-			FullName = $"{a.Employee.FirstName} {a.Employee.MiddleName} {a.Employee.LastName}".Trim(),
+			FullName = FormatEmployeeName(a.Employee.FirstName, a.Employee.MiddleName, a.Employee.LastName),
 			EmployeeIdentifier = a.Employee.EmployeeCode ?? string.Empty,
 			ContactNo = a.Employee.MobileNo ?? string.Empty,
 			InTime = a.TimeIn?.ToString("HH:mm"),
@@ -238,7 +238,10 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 				summary.Absent++;
 			}
 
-			// Apply status filter if specified
+			// Always count total days regardless of filter
+			summary.All++;
+
+			// Apply status filter if specified (skip adding to items but keep in summary counts)
 			if (input.Status.HasValue && status != input.Status.Value)
 			{
 				continue;
@@ -254,8 +257,6 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 				Description = hasRejectedLeave ? "Leave Rejected" : null,
 				Status = status
 			});
-
-			summary.All++;
 		}
 
 		return new AttendanceEmployeeWiseResponse
@@ -325,6 +326,16 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 			EmployeeAttendanceStatusType.HalfDayLeave => AttendanceTrackingStatus.HALF_DAY,
 			_ => AttendanceTrackingStatus.ABSENT
 		};
+	}
+
+	/// <summary>
+	/// Formats employee name, handling null/empty middle names to avoid double spaces
+	/// </summary>
+	private static string FormatEmployeeName(string? firstName, string? middleName, string? lastName)
+	{
+		var parts = new[] { firstName, middleName, lastName }
+			.Where(s => !string.IsNullOrWhiteSpace(s));
+		return string.Join(" ", parts);
 	}
 
 	#endregion

@@ -9,7 +9,11 @@ public class EmployeeAttendanceDto : EntityDto<Guid>
 
 	public string EmployeeName { get; set; }
 
-	public Guid EducationMediumStageId { get; set; }
+	/// <summary>
+	/// Education Medium Stage ID for scope filtering.
+	/// Nullable to support legacy records created before scope filtering was implemented.
+	/// </summary>
+	public Guid? EducationMediumStageId { get; set; }
 
 	/// <summary>
 	/// The date of attendance (no time component).

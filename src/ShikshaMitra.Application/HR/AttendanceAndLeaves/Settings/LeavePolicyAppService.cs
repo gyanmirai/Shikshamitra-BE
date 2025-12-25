@@ -278,12 +278,8 @@ public class LeavePolicyAppService : CrudAppService<
 	/// </summary>
 	public async Task<LeavePolicyDeleteResponse> DeleteLeavePolicyAsync(Guid policyId)
 	{
+		// Repository.GetAsync throws EntityNotFoundException if not found
 		var policy = await Repository.GetAsync(policyId);
-		
-		if (policy == null)
-		{
-			throw new EntityNotFoundException(typeof(LeavePolicy), policyId);
-		}
 
 		policy.Deactivate();
 		await Repository.UpdateAsync(policy, autoSave: true);

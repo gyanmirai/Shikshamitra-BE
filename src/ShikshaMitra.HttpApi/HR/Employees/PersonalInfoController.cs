@@ -139,7 +139,7 @@ public class PersonalInfoController : AbpControllerBase
 		}
 	}
 
-	private async Task<Guid> GetDefaultEducationMediumStageIdAsync()
+	private Task<Guid> GetDefaultEducationMediumStageIdAsync()
 	{
 		throw new UserFriendlyException("Education Medium Stage ID is required. Please provide it as a query parameter.");
 	}

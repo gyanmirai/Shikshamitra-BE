@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
@@ -68,15 +68,20 @@ public class UpdateAttendanceRequest
 {
 	[Required]
 	public Guid EmployeeId { get; set; }
-	
+
 	[Required]
 	public DateTimeOffset Date { get; set; }
-	
+
+	/// <summary>
+	/// In time is required for attendance
+	/// </summary>
 	[Required]
 	public DateTimeOffset InTime { get; set; }
-	
-	[Required]
-	public DateTimeOffset OutTime { get; set; }
+
+	/// <summary>
+	/// Out time is optional - employee may still be working
+	/// </summary>
+	public DateTimeOffset? OutTime { get; set; }
 }
 
 /// <summary>

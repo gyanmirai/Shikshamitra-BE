@@ -122,6 +122,21 @@ public interface
 	Task UpdatePayrollDetailsAsync(Guid employeeId, UpdateEmployeePayrollDetailsDto input);
 
 	/// <summary>
+	/// Gets the payroll details for an employee (matches OpenAPI Payroll contract).
+	/// </summary>
+	/// <param name="employeeId">The ID of the employee.</param>
+	/// <returns>Payroll contract response.</returns>
+	Task<PayrollContract> GetPayrollContractAsync(Guid employeeId);
+
+	/// <summary>
+	/// Updates the payroll details for an employee (matches OpenAPI Payroll contract).
+	/// </summary>
+	/// <param name="employeeId">The ID of the employee.</param>
+	/// <param name="input">The payroll contract to update.</param>
+	/// <returns>A task representing the asynchronous operation.</returns>
+	Task UpdatePayrollContractAsync(Guid employeeId, PayrollContract input);
+
+	/// <summary>
 	/// Gets a filtered and paginated list of employees.
 	/// </summary>
 	/// <param name="input">Filter and pagination parameters.</param>

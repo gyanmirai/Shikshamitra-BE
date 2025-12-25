@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Caching;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -19,7 +21,9 @@ public class LeavePolicyAppService : CrudAppService<
 	UpdateLeavePolicyDto>, ILeavePolicyAppService
 {
 	private readonly LeavePolicyManager _leavePolicyManager;
+	private readonly ILeavePolicyRepository _leavePolicyRepository;
 	private readonly IDistributedCache<PagedResultDto<LeavePolicyDto>> _cache;
+	private readonly IDistributedCache<LeavePolicyListResponse> _contractCache;
 	
 	// Base cache key for all active leave policies
 	private string GetBaseCacheKey() => 
@@ -28,51 +32,36 @@ public class LeavePolicyAppService : CrudAppService<
 	// Paginated cache key
 	private string GetActiveCacheKey(int skipCount, int maxResultCount) => 
 		$"{GetBaseCacheKey()}:Skip:{skipCount}:Take:{maxResultCount}";
+	
+	// Contract-specific cache key by mediumStageId
+	private string GetContractCacheKey(Guid mediumStageId, int page, int pageSize) =>
+		$"EmployeeLeavePolicies:Contract:Tenant:{CurrentTenant?.Id ?? Guid.Empty}:Org:{mediumStageId}:Page:{page}:Size:{pageSize}";
 
 	public LeavePolicyAppService(
 		IRepository<LeavePolicy, Guid> repository,
+		ILeavePolicyRepository leavePolicyRepository,
 		LeavePolicyManager leavePolicyManager,
-		IDistributedCache<PagedResultDto<LeavePolicyDto>> cache)
+		IDistributedCache<PagedResultDto<LeavePolicyDto>> cache,
+		IDistributedCache<LeavePolicyListResponse> contractCache)
 		: base(repository)
 	{
+		_leavePolicyRepository = leavePolicyRepository;
 		_leavePolicyManager = leavePolicyManager;
 		_cache = cache;
+		_contractCache = contractCache;
 	}
 
 	public override async Task<LeavePolicyDto> CreateAsync(CreateLeavePolicyDto input)
 	{
-		var policy = await _leavePolicyManager.CreateAsync(
-			input.PolicyName,
-			input.LeaveType,
-			input.MaximumDaysPerYear,
-			input.PaidType,
-			input.CarryForward,
-			input.Encashable,
-			input.RequiresApproval,
-			input.Description
-		);
-		await Repository.InsertAsync(policy, autoSave: true);
-		await ClearCacheAsync();
-		return ObjectMapper.Map<LeavePolicy, LeavePolicyDto>(policy);
+		// Note: This method is kept for backward compatibility
+		// Use CreateLeavePolicyAsync for new contract-based operations
+		throw new UserFriendlyException("Please use the new CreateLeavePolicyAsync method with mediumStageId");
 	}
 
 	public override async Task<LeavePolicyDto> UpdateAsync(Guid id, UpdateLeavePolicyDto input)
 	{
-		var policy = await Repository.GetAsync(id);
-		await _leavePolicyManager.UpdateAsync(
-			policy,
-			input.PolicyName,
-			input.LeaveType,
-			input.MaximumDaysPerYear,
-			input.PaidType,
-			input.CarryForward,
-			input.Encashable,
-			input.RequiresApproval,
-			input.Description
-		);
-		await Repository.UpdateAsync(policy, autoSave: true);
-		await ClearCacheAsync();
-		return ObjectMapper.Map<LeavePolicy, LeavePolicyDto>(policy);
+		// Note: This method is kept for backward compatibility
+		throw new UserFriendlyException("Please use the new UpdateLeavePolicyAsync method");
 	}
 
 	public override async Task DeleteAsync(Guid id)
@@ -82,6 +71,7 @@ public class LeavePolicyAppService : CrudAppService<
 		leavePolicy.Deactivate();
 		await Repository.UpdateAsync(leavePolicy, autoSave: true);
 		await ClearCacheAsync();
+		await ClearContractCacheAsync(leavePolicy.EducationMediumStageId);
 	}
 
 	public override async Task<PagedResultDto<LeavePolicyDto>> GetListAsync(PagedAndSortedResultRequestDto input)
@@ -144,20 +134,174 @@ public class LeavePolicyAppService : CrudAppService<
 		return result;
 	}
 
+	/// <summary>
+	/// Get paginated leave policies for an organization (matches OpenAPI contract)
+	/// </summary>
+	public async Task<LeavePolicyListResponse> GetListByMediumStageIdAsync(Guid mediumStageId, int page, int pageSize)
+	{
+		var cacheKey = GetContractCacheKey(mediumStageId, page, pageSize);
+		var cached = await _contractCache.GetAsync(cacheKey);
+		if (cached != null)
+		{
+			return cached;
+		}
+
+		var skipCount = (page - 1) * pageSize;
+		
+		var items = await _leavePolicyRepository.GetListByMediumStageIdAsync(
+			mediumStageId,
+			skipCount,
+			pageSize
+		);
+
+		var totalCount = await _leavePolicyRepository.GetCountByMediumStageIdAsync(mediumStageId);
+		var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
+		var rowNumber = skipCount;
+		var response = new LeavePolicyListResponse
+		{
+			TotalCount = (int)totalCount,
+			CurrentPage = page,
+			PageSize = pageSize,
+			TotalPages = Math.Max(1, totalPages),
+			Items = items.Select(lp => new LeavePolicyItem
+			{
+				Id = ++rowNumber, // Sequential row number for display
+				PolicyId = lp.Id,
+				Title = lp.PolicyName,
+				LeaveType = lp.LeaveType?.Type ?? "Unknown",
+				MaximumPerYear = lp.MaximumDaysPerYear,
+				CarryForward = lp.CarryForward ? "Yes" : "No",
+				Encashable = lp.Encashable ? "Yes" : "No",
+				PaidType = lp.PaidType == LeavePaidType.Paid ? "Paid" : "Unpaid",
+				RequiresApproval = lp.RequiresApproval ? "Yes" : "No"
+			}).ToList()
+		};
+
+		await _contractCache.SetAsync(
+			cacheKey,
+			response,
+			new DistributedCacheEntryOptions
+			{
+				AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24)
+			}
+		);
+
+		return response;
+	}
+
+	/// <summary>
+	/// Create a leave policy (matches OpenAPI contract)
+	/// </summary>
+	public async Task<LeavePolicyResponse> CreateLeavePolicyAsync(LeavePolicyCreateRequest input)
+	{
+		var paidType = input.PaidType == "Paid" ? LeavePaidType.Paid : LeavePaidType.Unpaid;
+
+		var policy = await _leavePolicyManager.CreateAsync(
+			input.MediumStageId,
+			input.PolicyTitle,
+			input.LeaveType,
+			input.MaxLeavePerYear,
+			paidType,
+			input.CarryForward,
+			input.EncashmentAllowed,
+			input.RequiresApproval,
+			input.Description
+		);
+
+		await Repository.InsertAsync(policy, autoSave: true);
+		await ClearCacheAsync();
+		await ClearContractCacheAsync(input.MediumStageId);
+
+		return new LeavePolicyResponse
+		{
+			Id = policy.Id.ToString(),
+			PolicyTitle = policy.PolicyName,
+			LeaveType = policy.LeaveTypeId,
+			MaxLeavePerYear = policy.MaximumDaysPerYear,
+			PaidType = policy.PaidType == LeavePaidType.Paid ? "Paid" : "Unpaid",
+			CarryForward = policy.CarryForward,
+			EncashmentAllowed = policy.Encashable,
+			RequiresApproval = policy.RequiresApproval,
+			Description = policy.Description,
+			CreatedAt = policy.CreationTime
+		};
+	}
+
+	/// <summary>
+	/// Update a leave policy (matches OpenAPI contract)
+	/// </summary>
+	public async Task<LeavePolicyUpdatedResponse> UpdateLeavePolicyAsync(Guid policyId, LeavePolicyCreateRequest input)
+	{
+		var policy = await _leavePolicyRepository.GetWithLeaveTypeAsync(policyId);
+		
+		if (policy == null)
+		{
+			throw new EntityNotFoundException(typeof(LeavePolicy), policyId);
+		}
+
+		var paidType = input.PaidType == "Paid" ? LeavePaidType.Paid : LeavePaidType.Unpaid;
+
+		await _leavePolicyManager.UpdateAsync(
+			policy,
+			input.PolicyTitle,
+			input.LeaveType,
+			input.MaxLeavePerYear,
+			paidType,
+			input.CarryForward,
+			input.EncashmentAllowed,
+			input.RequiresApproval,
+			input.Description
+		);
+
+		await Repository.UpdateAsync(policy, autoSave: true);
+		await ClearCacheAsync();
+		await ClearContractCacheAsync(policy.EducationMediumStageId);
+
+		return new LeavePolicyUpdatedResponse
+		{
+			Id = policy.Id.ToString(),
+			PolicyTitle = policy.PolicyName,
+			LeaveType = policy.LeaveTypeId,
+			MaxLeavePerYear = policy.MaximumDaysPerYear,
+			PaidType = policy.PaidType == LeavePaidType.Paid ? "Paid" : "Unpaid",
+			CarryForward = policy.CarryForward,
+			EncashmentAllowed = policy.Encashable,
+			RequiresApproval = policy.RequiresApproval,
+			Description = policy.Description,
+			UpdatedAt = DateTime.UtcNow
+		};
+	}
+
+	/// <summary>
+	/// Delete (deactivate) a leave policy (matches OpenAPI contract)
+	/// </summary>
+	public async Task<LeavePolicyDeleteResponse> DeleteLeavePolicyAsync(Guid policyId)
+	{
+		var policy = await Repository.GetAsync(policyId);
+		
+		if (policy == null)
+		{
+			throw new EntityNotFoundException(typeof(LeavePolicy), policyId);
+		}
+
+		policy.Deactivate();
+		await Repository.UpdateAsync(policy, autoSave: true);
+		await ClearCacheAsync();
+		await ClearContractCacheAsync(policy.EducationMediumStageId);
+
+		return new LeavePolicyDeleteResponse
+		{
+			Id = policyId.ToString(),
+			Message = "Leave policy deleted successfully",
+			DeletedAt = DateTime.UtcNow
+		};
+	}
+
 	private async Task ClearCacheAsync()
 	{
-		// Clear cache by removing common pagination combinations
-		// Since IDistributedCache doesn't support pattern-based removal out of the box,
-		// we generate cache keys for common pagination scenarios
-		
-		var baseCacheKey = GetBaseCacheKey();
 		var cacheKeysToRemove = new List<string>();
-		
-		// Common page sizes used in the application
 		int[] commonPageSizes = { 10, 25, 50, 100 };
-		
-		// For each page size, clear first few pages (covers most access patterns)
-		// Adjust maxPages based on your typical data volume
 		int maxPages = 10;
 		
 		foreach (var pageSize in commonPageSizes)
@@ -169,8 +313,24 @@ public class LeavePolicyAppService : CrudAppService<
 			}
 		}
 		
-		// Use RemoveManyAsync for better performance (single operation vs multiple awaits)
 		await _cache.RemoveManyAsync(cacheKeysToRemove);
+	}
+
+	private async Task ClearContractCacheAsync(Guid mediumStageId)
+	{
+		var cacheKeysToRemove = new List<string>();
+		int[] commonPageSizes = { 10, 25, 50, 100 };
+		int maxPages = 10;
+		
+		foreach (var pageSize in commonPageSizes)
+		{
+			for (int page = 1; page <= maxPages; page++)
+			{
+				cacheKeysToRemove.Add(GetContractCacheKey(mediumStageId, page, pageSize));
+			}
+		}
+		
+		await _contractCache.RemoveManyAsync(cacheKeysToRemove);
 	}
 
 	private IQueryable<LeavePolicy> ApplySorting(IQueryable<LeavePolicy> queryable, string sorting)
@@ -192,15 +352,11 @@ public class LeavePolicyAppService : CrudAppService<
 
 			if (isFirstSort)
 			{
-				// First sort: use OrderBy/OrderByDescending
 				orderedQueryable = property.ToLower() switch
 				{
 					"policyname" => direction == "DESC" 
 						? queryable.OrderByDescending(x => x.PolicyName) 
 						: queryable.OrderBy(x => x.PolicyName),
-					"leavetype" => direction == "DESC"
-						? queryable.OrderByDescending(x => x.LeaveType)
-						: queryable.OrderBy(x => x.LeaveType),
 					"maximumdaysperyear" => direction == "DESC"
 						? queryable.OrderByDescending(x => x.MaximumDaysPerYear)
 						: queryable.OrderBy(x => x.MaximumDaysPerYear),
@@ -213,15 +369,11 @@ public class LeavePolicyAppService : CrudAppService<
 			}
 			else
 			{
-				// Subsequent sorts: use ThenBy/ThenByDescending
 				orderedQueryable = property.ToLower() switch
 				{
 					"policyname" => direction == "DESC" 
 						? orderedQueryable!.ThenByDescending(x => x.PolicyName) 
 						: orderedQueryable!.ThenBy(x => x.PolicyName),
-					"leavetype" => direction == "DESC"
-						? orderedQueryable!.ThenByDescending(x => x.LeaveType)
-						: orderedQueryable!.ThenBy(x => x.LeaveType),
 					"maximumdaysperyear" => direction == "DESC"
 						? orderedQueryable!.ThenByDescending(x => x.MaximumDaysPerYear)
 						: orderedQueryable!.ThenBy(x => x.MaximumDaysPerYear),
@@ -233,7 +385,6 @@ public class LeavePolicyAppService : CrudAppService<
 			}
 		}
 
-		// Apply default fallback if no valid sort was applied
 		return orderedQueryable ?? queryable.OrderBy(x => x.PolicyName);
 	}
 }

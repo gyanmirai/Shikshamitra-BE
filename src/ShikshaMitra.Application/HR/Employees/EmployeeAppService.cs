@@ -758,4 +758,101 @@ IEmployeeAppService
 			Status = (int)(employee.EmployeeStatusType ?? EmployeeStatusType.Active)
 		};
 	}
+
+	/// <summary>
+	/// Gets the payroll details for an employee (matches OpenAPI Payroll contract).
+	/// </summary>
+	public async Task<PayrollContract> GetPayrollContractAsync(Guid employeeId)
+	{
+		await employeeRepository.GetAsync(employeeId); // Validate employee exists
+		
+		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
+		var earnings = await payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
+		var deductions = await payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);
+
+		return new PayrollContract
+		{
+			BankDetails = payrollDetails != null ? new BankDetailsContract
+			{
+				BankName = payrollDetails.BankName,
+				BranchName = payrollDetails.BranchName,
+				AccountHolderName = payrollDetails.AccountHolderName,
+				AccountNumber = payrollDetails.AccountNumber,
+				IfscCode = payrollDetails.IfscCode
+			} : null,
+			SalaryDetails = payrollDetails != null ? new SalaryDetailsContract
+			{
+				PfRuleId = !string.IsNullOrEmpty(payrollDetails.PfRule) && Guid.TryParse(payrollDetails.PfRule, out var pfRuleId) ? pfRuleId : null,
+				EpfNumber = payrollDetails.EpfNumber,
+				UanNumber = payrollDetails.UanNumber,
+				BasicSalary = payrollDetails.BasicSalary,
+				PunchId = payrollDetails.PunchId,
+				TdsPercentage = payrollDetails.TdsPercentage,
+				TdsAmount = payrollDetails.TdsAmount
+			} : null,
+			EarningComponents = earnings?.Select(e => new ComponentAmountContract
+			{
+				ComponentId = e.Id, // Using component ID; ideally should be linked to master component
+				Amount = e.Amount
+			}).ToList() ?? new List<ComponentAmountContract>(),
+			DeductionComponents = deductions?.Select(d => new ComponentAmountContract
+			{
+				ComponentId = d.Id, // Using component ID; ideally should be linked to master component
+				Amount = d.Amount
+			}).ToList() ?? new List<ComponentAmountContract>()
+		};
+	}
+
+	/// <summary>
+	/// Updates the payroll details for an employee (matches OpenAPI Payroll contract).
+	/// </summary>
+	public async Task UpdatePayrollContractAsync(Guid employeeId, PayrollContract input)
+	{
+		await employeeRepository.GetAsync(employeeId); // Validate employee exists
+
+		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
+
+		if (payrollDetails == null)
+		{
+			payrollDetails = new EmployeePayrollDetails(guidGenerator.Create(), employeeId);
+			payrollDetails.UpdateDetails(
+				input.BankDetails?.BankName,
+				input.BankDetails?.BranchName,
+				input.BankDetails?.AccountHolderName,
+				input.BankDetails?.AccountNumber,
+				input.BankDetails?.IfscCode,
+				input.SalaryDetails?.PfRuleId?.ToString(),
+				input.SalaryDetails?.EpfNumber,
+				input.SalaryDetails?.UanNumber,
+				input.SalaryDetails?.PunchId,
+				input.SalaryDetails?.BasicSalary,
+				input.SalaryDetails?.TdsPercentage,
+				input.SalaryDetails?.TdsAmount
+			);
+			await payrollDetailsRepository.InsertAsync(payrollDetails);
+		}
+		else
+		{
+			payrollDetails.UpdateDetails(
+				input.BankDetails?.BankName,
+				input.BankDetails?.BranchName,
+				input.BankDetails?.AccountHolderName,
+				input.BankDetails?.AccountNumber,
+				input.BankDetails?.IfscCode,
+				input.SalaryDetails?.PfRuleId?.ToString(),
+				input.SalaryDetails?.EpfNumber,
+				input.SalaryDetails?.UanNumber,
+				input.SalaryDetails?.PunchId,
+				input.SalaryDetails?.BasicSalary,
+				input.SalaryDetails?.TdsPercentage,
+				input.SalaryDetails?.TdsAmount
+			);
+			await payrollDetailsRepository.UpdateAsync(payrollDetails);
+		}
+
+		// Note: Component updates would require linking to master component IDs
+		// For now, keeping existing component logic
+
+		await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
+	}
 }

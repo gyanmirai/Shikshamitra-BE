@@ -4,10 +4,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.HR.AttendanceAndLeaves.LeaveTypeInfo;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using Volo.Abp;
-using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
@@ -39,14 +37,7 @@ public class LeaveTypesController : AbpControllerBase
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
 		[FromQuery, Range(10, 100)] int pageSize = 10)
 	{
-		var input = new PagedAndSortedResultRequestDto
-		{
-			SkipCount = (page - 1) * pageSize,
-			MaxResultCount = pageSize
-		};
-
-		var result = await _leaveTypeAppService.GetListAsync(input);
-		return LeaveTypeContractMapper.ToListResponse(result, page, pageSize);
+		return await _leaveTypeAppService.GetListByMediumStageIdAsync(mediumStageId, page, pageSize);
 	}
 
 	/// <summary>
@@ -57,8 +48,7 @@ public class LeaveTypesController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<LeaveTypeResponse> GetAsync([FromRoute, Required] Guid leaveTypeId)
 	{
-		var leaveType = await _leaveTypeAppService.GetAsync(leaveTypeId);
-		return LeaveTypeContractMapper.ToResponse(leaveType);
+		return await _leaveTypeAppService.GetLeaveTypeByIdAsync(leaveTypeId);
 	}
 
 	/// <summary>
@@ -68,12 +58,12 @@ public class LeaveTypesController : AbpControllerBase
 	[ProducesResponseType(typeof(LeaveTypeResponse), StatusCodes.Status201Created)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	public virtual async Task<ActionResult<LeaveTypeResponse>> CreateAsync(
+		[FromQuery, Required] Guid mediumStageId,
 		[FromBody, Required] LeaveTypeCreateRequest request)
 	{
-		var createDto = LeaveTypeContractMapper.ToCreateDto(request);
-		var leaveType = await _leaveTypeAppService.CreateAsync(createDto);
-		var response = LeaveTypeContractMapper.ToResponse(leaveType);
-
+		// Set the mediumStageId from query parameter
+		request.MediumStageId = mediumStageId;
+		var response = await _leaveTypeAppService.CreateLeaveTypeAsync(request);
 		return CreatedAtAction(nameof(GetAsync), new { leaveTypeId = response.Id }, response);
 	}
 
@@ -87,9 +77,7 @@ public class LeaveTypesController : AbpControllerBase
 		[FromRoute, Required] Guid leaveTypeId,
 		[FromBody, Required] LeaveTypeUpdateRequest request)
 	{
-		var updateDto = LeaveTypeContractMapper.ToUpdateDto(request);
-		var leaveType = await _leaveTypeAppService.UpdateAsync(leaveTypeId, updateDto);
-		return LeaveTypeContractMapper.ToResponse(leaveType);
+		return await _leaveTypeAppService.UpdateLeaveTypeAsync(leaveTypeId, request);
 	}
 
 	/// <summary>
@@ -100,7 +88,6 @@ public class LeaveTypesController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<LeaveTypeDeleteResponse> DeleteAsync([FromRoute, Required] Guid leaveTypeId)
 	{
-		await _leaveTypeAppService.DeleteAsync(leaveTypeId);
-		return LeaveTypeContractMapper.ToDeleteResponse(leaveTypeId);
+		return await _leaveTypeAppService.DeleteLeaveTypeAsync(leaveTypeId);
 	}
 }

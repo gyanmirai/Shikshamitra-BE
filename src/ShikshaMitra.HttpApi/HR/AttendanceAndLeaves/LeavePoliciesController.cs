@@ -4,10 +4,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.HR.AttendanceAndLeaves.LeavePolicyInfo;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using Volo.Abp;
-using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
@@ -39,14 +37,7 @@ public class LeavePoliciesController : AbpControllerBase
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
 		[FromQuery, Range(10, 100)] int pageSize = 10)
 	{
-		var input = new PagedAndSortedResultRequestDto
-		{
-			SkipCount = (page - 1) * pageSize,
-			MaxResultCount = pageSize
-		};
-
-		var result = await _leavePolicyAppService.GetListAsync(input);
-		return LeavePolicyContractMapper.ToListResponse(result, page, pageSize);
+		return await _leavePolicyAppService.GetListByMediumStageIdAsync(mediumStageId, page, pageSize);
 	}
 
 	/// <summary>
@@ -57,12 +48,12 @@ public class LeavePoliciesController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(StatusCodes.Status500InternalServerError)]
 	public virtual async Task<ActionResult<LeavePolicyResponse>> CreateAsync(
+		[FromQuery, Required] Guid mediumStageId,
 		[FromBody, Required] LeavePolicyCreateRequest request)
 	{
-		var createDto = LeavePolicyContractMapper.ToCreateDto(request);
-		var leavePolicy = await _leavePolicyAppService.CreateAsync(createDto);
-		var response = LeavePolicyContractMapper.ToResponse(leavePolicy);
-
+		// Set the mediumStageId from query parameter
+		request.MediumStageId = mediumStageId;
+		var response = await _leavePolicyAppService.CreateLeavePolicyAsync(request);
 		return StatusCode(StatusCodes.Status201Created, response);
 	}
 
@@ -75,17 +66,10 @@ public class LeavePoliciesController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	[ProducesResponseType(StatusCodes.Status500InternalServerError)]
 	public virtual async Task<LeavePolicyUpdatedResponse> UpdateAsync(
-		[FromRoute, Required] string policyId,
+		[FromRoute, Required] Guid policyId,
 		[FromBody, Required] LeavePolicyCreateRequest request)
 	{
-		if (!Guid.TryParse(policyId, out var id))
-		{
-			throw new ArgumentException("Invalid policy ID format", nameof(policyId));
-		}
-
-		var updateDto = LeavePolicyContractMapper.ToUpdateDto(request);
-		var leavePolicy = await _leavePolicyAppService.UpdateAsync(id, updateDto);
-		return LeavePolicyContractMapper.ToUpdatedResponse(leavePolicy);
+		return await _leavePolicyAppService.UpdateLeavePolicyAsync(policyId, request);
 	}
 
 	/// <summary>
@@ -96,14 +80,8 @@ public class LeavePoliciesController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	[ProducesResponseType(StatusCodes.Status409Conflict)]
 	[ProducesResponseType(StatusCodes.Status500InternalServerError)]
-	public virtual async Task<LeavePolicyDeleteResponse> DeleteAsync([FromRoute, Required] string policyId)
+	public virtual async Task<LeavePolicyDeleteResponse> DeleteAsync([FromRoute, Required] Guid policyId)
 	{
-		if (!Guid.TryParse(policyId, out var id))
-		{
-			throw new ArgumentException("Invalid policy ID format", nameof(policyId));
-		}
-
-		await _leavePolicyAppService.DeleteAsync(id);
-		return LeavePolicyContractMapper.ToDeleteResponse(id);
+		return await _leavePolicyAppService.DeleteLeavePolicyAsync(policyId);
 	}
 }

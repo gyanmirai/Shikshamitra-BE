@@ -1,4 +1,5 @@
 ﻿using System;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -13,14 +14,19 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; protected set; }
 	
 	/// <summary>
+	/// Organization/School identifier this policy belongs to
+	/// </summary>
+	public Guid EducationMediumStageId { get; protected set; }
+	
+	/// <summary>
 	/// Name of the policy (e.g., "Sick Leave Policy")
 	/// </summary>
 	public string PolicyName { get; protected set; } = string.Empty;
 	
 	/// <summary>
-	/// Associated leave type name
+	/// Foreign key to the associated leave type
 	/// </summary>
-	public string LeaveType { get; protected set; } = string.Empty;
+	public Guid LeaveTypeId { get; protected set; }
 	
 	/// <summary>
 	/// Maximum days allowed per year
@@ -56,6 +62,16 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// Whether this policy is active
 	/// </summary>
 	public bool IsActive { get; protected set; }
+	
+	/// <summary>
+	/// Navigation property for LeaveType
+	/// </summary>
+	public virtual LeaveType? LeaveType { get; protected set; }
+	
+	/// <summary>
+	/// Navigation property for EducationMediumStage
+	/// </summary>
+	public virtual EducationMediumStage? EducationMediumStage { get; protected set; }
 
 	// For EF Core
 	protected LeavePolicy()
@@ -65,8 +81,9 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public LeavePolicy(
 		Guid id,
 		Guid? tenantId,
+		Guid educationMediumStageId,
 		string policyName,
-		string leaveType,
+		Guid leaveTypeId,
 		int maximumDaysPerYear,
 		LeavePaidType paidType,
 		bool carryForward,
@@ -75,8 +92,9 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? description = null) : base(id)
 	{
 		TenantId = tenantId;
+		EducationMediumStageId = educationMediumStageId;
 		SetPolicyName(policyName);
-		SetLeaveType(leaveType);
+		LeaveTypeId = leaveTypeId;
 		SetMaximumDaysPerYear(maximumDaysPerYear);
 		PaidType = paidType;
 		CarryForward = carryForward;
@@ -88,7 +106,7 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Update(
 		string policyName,
-		string leaveType,
+		Guid leaveTypeId,
 		int maximumDaysPerYear,
 		LeavePaidType paidType,
 		bool carryForward,
@@ -97,7 +115,7 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? description)
 	{
 		SetPolicyName(policyName);
-		SetLeaveType(leaveType);
+		LeaveTypeId = leaveTypeId;
 		SetMaximumDaysPerYear(maximumDaysPerYear);
 		PaidType = paidType;
 		CarryForward = carryForward;
@@ -121,13 +139,6 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Check.NotNullOrWhiteSpace(policyName, nameof(policyName));
 		Check.Length(policyName, nameof(policyName), LeavePolicyConsts.MaxPolicyNameLength);
 		PolicyName = policyName;
-	}
-
-	private void SetLeaveType(string leaveType)
-	{
-		Check.NotNullOrWhiteSpace(leaveType, nameof(leaveType));
-		Check.Length(leaveType, nameof(leaveType), LeavePolicyConsts.MaxLeaveTypeLength);
-		LeaveType = leaveType;
 	}
 
 	private void SetMaximumDaysPerYear(int maximumDaysPerYear)

@@ -108,7 +108,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 				Id = (int)leave.Id.GetHashCode(), // Keep for API compatibility (but will fix contract later)
 				Name = leave.Employee?.EmployeeNameWithFather ?? "Unknown",
 				EmployeeCode = leave.Employee?.EmployeeCode ?? "Unknown",
-				LeaveType = leave.LeavePolicy?.LeaveType ?? "Unknown",
+				LeaveType = leave.LeavePolicy?.LeaveType?.Type ?? "Unknown",
 				StartDate = leave.StartDate.DateTime,
 				EndDate = leave.EndDate.DateTime,
 				TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
@@ -156,7 +156,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 				EmployeeName = leave.Employee?.EmployeeNameWithFather ?? "Unknown",
 				EmployeeCode = leave.Employee?.EmployeeCode ?? "Unknown",
 				LeaveTypeId = leave.LeaveTypeId,
-				LeaveType = leave.LeavePolicy?.LeaveType ?? "Unknown",
+				LeaveType = leave.LeavePolicy?.LeaveType?.Type ?? "Unknown",
 				StartDate = leave.StartDate.DateTime,
 				EndDate = leave.EndDate.DateTime,
 				TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),

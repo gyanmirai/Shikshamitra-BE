@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.HR.Employees.PayrollInfo;
+using ShikshaMitra.HR.Employees.Payroll;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -28,19 +28,18 @@ public class PayrollController : AbpControllerBase
 	}
 
 	/// <summary>
-	/// Get employee payroll information
+	/// Get employee payroll information (matches OpenAPI Payroll contract)
 	/// </summary>
 	[HttpGet("{employeeId}/payroll")]
 	[ProducesResponseType(typeof(PayrollContract), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<PayrollContract> GetAsync([FromRoute, Required] Guid employeeId)
 	{
-		var payrollDetails = await _employeeAppService.GetPayrollDetailsAsync(employeeId);
-		return PayrollContractMapper.ToResponse(payrollDetails);
+		return await _employeeAppService.GetPayrollContractAsync(employeeId);
 	}
 
 	/// <summary>
-	/// Update employee payroll information
+	/// Update employee payroll information (matches OpenAPI Payroll contract)
 	/// </summary>
 	[HttpPut("{employeeId}/payroll")]
 	[ProducesResponseType(StatusCodes.Status200OK)]
@@ -49,9 +48,7 @@ public class PayrollController : AbpControllerBase
 		[FromRoute, Required] Guid employeeId,
 		[FromBody, Required] PayrollContract request)
 	{
-		var updateDto = PayrollContractMapper.ToUpdateDto(request);
-		await _employeeAppService.UpdatePayrollDetailsAsync(employeeId, updateDto);
-
+		await _employeeAppService.UpdatePayrollContractAsync(employeeId, request);
 		return Ok();
 	}
 }

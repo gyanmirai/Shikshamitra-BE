@@ -305,7 +305,7 @@ public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, I
 	{
 		var student = await _studentRepository.GetAsync(studentId);
 
-		if (student.Status != StudentLifeCycleStatusEnum.EntranceExam)
+		if (student.Status != StudentLifeCycleStatusEnum.Registation && student.Status != StudentLifeCycleStatusEnum.EntranceExam)
 		{
 			throw new BusinessException("SM:EntranceExam:008")
 				.WithData("currentStatus", student.Status.ToString())
@@ -313,7 +313,7 @@ public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, I
 		}
 
 		var additionalDetail = await _studentAdditionalDetailRepository.GetAsync(studentId);
-		if (additionalDetail.ExamStatus != EntranceExamStatusEnum.Pass)
+		if (student.Status == StudentLifeCycleStatusEnum.EntranceExam && additionalDetail.ExamStatus != EntranceExamStatusEnum.Pass)
 		{
 			throw new BusinessException("SM:EntranceExam:009")
 				.WithData("currentExamStatus", additionalDetail.ExamStatus?.ToString() ?? "Not Set");

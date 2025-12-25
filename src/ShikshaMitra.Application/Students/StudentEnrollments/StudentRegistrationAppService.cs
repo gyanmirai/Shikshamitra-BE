@@ -149,7 +149,7 @@ public class StudentRegistrationAppService(
 		return result;
 	}
 
-	public async Task<UpdateGeneralInfoOutputDto> UpdateGeneralInfoAsync(Guid studentId, UpdateGeneralInfoDto input)
+	public async Task<StudentGeneralDetailsDto> UpdateGeneralInfoAsync(Guid studentId, UpdateGeneralInfoDto input)
 	{
 		// Load the student aggregate with all parts
 		var student = await studentRepository.GetAsync(studentId);
@@ -209,20 +209,15 @@ public class StudentRegistrationAppService(
 		// Save the updated aggregate
 		await studentRepository.UpdateAsync(student, autoSave: true);
 
-		// Return output DTO
-		return new UpdateGeneralInfoOutputDto
-		{
-			StudentId = student.Id,
-			Status = student.Status,
-			FirstName = student.FirstName,
-			MiddleName = student.MiddleName,
-			LastName = student.LastName,
-			DateOfBirth = student.AdditionalDetail?.DateOfBirth,
-			Gender = student.AdditionalDetail?.Gender
-		};
+		var result = ObjectMapper.Map<Student, StudentGeneralDetailsDto>(student);
+
+		// enrich result by getting academicBoardId, academicYearId etc
+		await dtoEnricher.EnrichGeneralDetailsDtoAsync(result);
+
+		return result;
 	}
 
-	public async Task<UpdateGeneralInfoOutputDto> CreateDirectRegistrationAsync(CreateDirectRegistrationDto input)
+	public async Task<StudentGeneralDetailsDto> CreateDirectRegistrationAsync(CreateDirectRegistrationDto input)
 	{
 		// Validate academic medium exists using domain service
 		await validationService.ValidateAcademicMediumExistsAsync(input.AcademicMediumId);
@@ -280,17 +275,12 @@ public class StudentRegistrationAppService(
 		// Save the new student aggregate
 		await studentRepository.InsertAsync(student, autoSave: true);
 
-		// Return output DTO
-		return new UpdateGeneralInfoOutputDto
-		{
-			StudentId = student.Id,
-			Status = student.Status,
-			FirstName = student.FirstName,
-			MiddleName = student.MiddleName,
-			LastName = student.LastName,
-			DateOfBirth = student.AdditionalDetail?.DateOfBirth,
-			Gender = student.AdditionalDetail?.Gender
-		};
+		var result = ObjectMapper.Map<Student, StudentGeneralDetailsDto>(student);
+
+		// enrich result by getting academicBoardId, academicYearId etc
+		await dtoEnricher.EnrichGeneralDetailsDtoAsync(result);
+
+		return result;
 	}
 
 	public async Task<StudentFamilyInfoDto> GetFamilyInfoAsync(Guid studentId)

@@ -32,7 +32,7 @@ public interface IStudentRegistrationAppService
 	/// <param name="studentId">The student identifier</param>
 	/// <param name="input">General information data</param>
 	/// <returns>Updated student information with new status</returns>
-	Task<UpdateGeneralInfoOutputDto> UpdateGeneralInfoAsync(Guid studentId, UpdateGeneralInfoDto input);
+	Task<StudentGeneralDetailsDto> UpdateGeneralInfoAsync(Guid studentId, UpdateGeneralInfoDto input);
 
 	/// <summary>
 	/// Creates a new student directly in Registration status without going through inquiry/form issued flow.
@@ -40,7 +40,7 @@ public interface IStudentRegistrationAppService
 	/// </summary>
 	/// <param name="input">General information data including education medium</param>
 	/// <returns>Newly created student in Registration status</returns>
-	Task<UpdateGeneralInfoOutputDto> CreateDirectRegistrationAsync(CreateDirectRegistrationDto input);
+	Task<StudentGeneralDetailsDto> CreateDirectRegistrationAsync(CreateDirectRegistrationDto input);
 
 	/// <summary>
 	/// Gets family information for a student in Registration status.

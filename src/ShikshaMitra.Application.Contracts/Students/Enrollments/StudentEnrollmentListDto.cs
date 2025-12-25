@@ -45,6 +45,7 @@ public class StudentEnrollmentListDto : EntityDto
 	public string? PreviousSchool { get; set; }
 	public Guid? InquiryPreferenceId { get; set; }
 	public string? InquiryPreference { get; set; }
+	public NoteStatusEnum? InquiryStatus { get; set; }
 	public DateTimeOffset? NextReminderDate { get; set; }
 	public double Progress { get; set; } = 0;
 	public string? Remarks { get; set; }

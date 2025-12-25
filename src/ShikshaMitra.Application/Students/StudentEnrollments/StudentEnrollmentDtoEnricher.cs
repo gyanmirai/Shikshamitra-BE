@@ -59,11 +59,21 @@ public class StudentEnrollmentDtoEnricher(
 		if (dto.StudentId != Guid.Empty)
 		{
 			// Get the student to read StandardId (mapping didn't include name)
-			var student = await studentRepository.FindAsync(dto.StudentId);
+			var student = await studentRepository.FindAsync(dto.StudentId, includeDetails: true);
 			if (student?.StandardId != null)
 			{
 				var std = await standardRepository.FindAsync(student.StandardId.Value);
 				dto.Standard = std?.Name ?? dto.Standard;
+			}
+
+			if (student?.Notes.Any() ?? false)
+			{
+				var latestNote = student?.Notes.OrderByDescending(n => n.CreationTime).FirstOrDefault();
+				if (latestNote != null)
+				{
+					dto.NextReminderDate = latestNote.NextReminderDate;
+					dto.InquiryStatus = latestNote.Status;
+				}
 			}
 		}
 
@@ -164,6 +174,16 @@ public class StudentEnrollmentDtoEnricher(
 				if (standardDict.TryGetValue(student.StandardId.Value, out var standard))
 				{
 					dto.Standard = standard.Name;
+				}
+			}
+
+			if (studentDict.TryGetValue(dto.StudentId, out var stud) && stud.Notes.Any())
+			{
+				var latestNote = stud.Notes.OrderByDescending(n => n.CreationTime).FirstOrDefault();
+				var nextReminderDate = latestNote?.NextReminderDate;
+				if (nextReminderDate != null)
+				{
+					dto.NextReminderDate = nextReminderDate;
 				}
 			}
 		}

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -9,7 +8,6 @@ using ShikshaMitra.HR.Employees;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
-using Volo.Abp.Users;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves
 {
@@ -17,6 +15,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 	/// Application service for managing leave requests and approvals
 	/// ✅ ALL BUGS FIXED - Production Ready Version
 	/// </summary>
+	[RemoteService(false)]
 	public class LeaveManagementAppService : ApplicationService, ILeaveManagementAppService
 	{
 		private readonly IEmployeeLeaveRepository _employeeLeaveRepository;

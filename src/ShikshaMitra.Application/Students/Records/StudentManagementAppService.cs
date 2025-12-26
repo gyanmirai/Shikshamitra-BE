@@ -1,6 +1,7 @@
 ﻿using ShikshaMitra.Students.Records.Settings;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -10,21 +11,40 @@ namespace ShikshaMitra.Students.Records;
 
 [RemoteService(false)]
 public class StudentManagementAppService(
-	IRepository<Student, Guid> studentRepository
+	IRepository<Student, Guid> studentRepository,
+	IRepository<HouseSettings, Guid> houseSettingsRepository
 ) : ApplicationService, IStudentManagementAppService
 {
 	public async Task<List<StudentRecordDto>> GetStudentRecords(Guid divisionId)
 	{
 		try
 		{
-			var students = await studentRepository.GetListAsync(
-				s => s.DivisionId == divisionId,
-				includeDetails: true
-			);
+			// Get students with their additional details
+			var students = await studentRepository.GetListAsync(s => s.DivisionId == divisionId, includeDetails: true);
+
+			// Get all unique house IDs
+			var houseIds = students
+				.Where(s => s.AdditionalDetail?.HouseId != null)
+				.Select(s => s.AdditionalDetail!.HouseId!.Value)
+				.Distinct()
+				.ToList();
+
+			// Fetch all houses at once
+			var houses = houseIds.Any() 
+				? await houseSettingsRepository.GetListAsync(h => houseIds.Contains(h.Id))
+				: new List<HouseSettings>();
+
+			var houseDictionary = houses.ToDictionary(h => h.Id);
 
 			var result = new List<StudentRecordDto>();
 			foreach (var student in students)
 			{
+				HouseSettings? house = null;
+				if (student.AdditionalDetail?.HouseId != null)
+				{
+					houseDictionary.TryGetValue(student.AdditionalDetail.HouseId.Value, out house);
+				}
+
 				result.Add(new StudentRecordDto
 				{
 					StudentId = student.Id,
@@ -32,13 +52,13 @@ public class StudentManagementAppService(
 					GrNo = student.GrNo,
 					RollNo = student.RollNo,
 					HouseSettingId = student.AdditionalDetail?.HouseId,
-					HouseSetting = student.AdditionalDetail?.House != null
+					HouseSetting = house != null
 						? new HouseSettingsDto
 						{
-							Name = student.AdditionalDetail.House.Name,
-							Color = student.AdditionalDetail.House.Color,
-							LogoUrl = student.AdditionalDetail.House.LogoUrl,
-							Description = student.AdditionalDetail.House.Description,
+							Name = house.Name,
+							Color = house.Color,
+							LogoUrl = house.LogoUrl,
+							Description = house.Description,
 						}
 						: null,
 					IsDivisionHouseLeader = student.AdditionalDetail?.IsDivisionHouseLeader,

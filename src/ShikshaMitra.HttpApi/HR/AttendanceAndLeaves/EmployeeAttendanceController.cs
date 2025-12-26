@@ -1,10 +1,9 @@
-using System;
-using System.ComponentModel.DataAnnotations;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.HR.AttendanceAndLeaves.EmployeeAttendanceContract;
+using ShikshaMitra.Models;
+using System.ComponentModel.DataAnnotations;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -82,11 +81,10 @@ public class EmployeeAttendanceController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status401Unauthorized)]
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	public virtual async Task<ActionResult<AttendanceImportResponse>> ImportAsync(
-		[FromForm, Required] IFormFile file,
-		[FromForm, Required] DateTimeOffset date)
+		[FromForm, Required] EmployeeAttendanceImportRequest file)
 	{
-		using var stream = file.OpenReadStream();
-		var result = await _attendanceAppService.ImportAttendanceAsync(date, stream, file.FileName);
+		using var stream = file.File.OpenReadStream();
+		var result = await _attendanceAppService.ImportAttendanceAsync(file.Date, stream, file.File.FileName);
 		return Ok(result);
 	}
 }

@@ -1,10 +1,11 @@
-﻿using System;
-using System.ComponentModel.DataAnnotations;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
+using ShikshaMitra.HttpApi.Models;
+using System;
+using System.ComponentModel.DataAnnotations;
+using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -112,7 +113,7 @@ public class LeaveManagementV1Controller : AbpControllerBase
 		[FromForm, Required] DateTime startDate,
 		[FromForm, Required] DateTime endDate,
 		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
-		[FromForm] IFormFile? attachment)
+		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
 	{
 		var createDto = new LeaveRequestCreateDto
 		{
@@ -122,7 +123,7 @@ public class LeaveManagementV1Controller : AbpControllerBase
 			EndDate = endDate,
 			Reason = reason
 		};
-		var created = await _leaveManagementAppService.CreateAsync(createDto, attachment as object);
+		var created = await _leaveManagementAppService.CreateAsync(createDto, attachment.File as object);
 		return StatusCode(StatusCodes.Status201Created, LeaveManagementContractMapper.ToCreatedResponse(created));
 	}
 }

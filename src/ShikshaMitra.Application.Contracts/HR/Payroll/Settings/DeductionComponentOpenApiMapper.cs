@@ -27,6 +27,7 @@ public static class DeductionComponentOpenApiMapper
 			Description = request.Description,
 			ComponentType = componentType,
 			DependOn = dependOn,
+			CustomComponentId = request.CustomComponentId,
 			Amount = amount,
 			VisibleInPayslip = request.VisibleInPayslip,
 			DisplayOrder = 0
@@ -48,6 +49,7 @@ public static class DeductionComponentOpenApiMapper
 			Description = request.Description,
 			ComponentType = componentType,
 			DependOn = dependOn,
+			CustomComponentId = request.CustomComponentId,
 			Amount = amount,
 			VisibleInPayslip = request.VisibleInPayslip,
 			DisplayOrder = existingDisplayOrder
@@ -82,9 +84,18 @@ public static class DeductionComponentOpenApiMapper
 			ComponentName = dto.Name,
 			Description = dto.Description,
 			IsFixed = dto.ComponentType == DeductionComponentType.Fixed,
+			ComponentType = dto.ComponentType.ToString(),
 			Amount = ParseAmountToDouble(dto.Amount),
 			VisibleInPayslip = dto.VisibleInPayslip,
-			CustomComponent = null // Not stored in domain
+			CustomComponent = dto.CustomComponentId.HasValue ? new CustomComponentDto
+			{
+				Id = dto.CustomComponentId.Value,
+				ComponentName = string.Empty,
+				DependOn = dto.DependOn.ToString(),
+				Description = null,
+				IsFixed = dto.ComponentType == DeductionComponentType.Fixed,
+				VisibleInPayslip = dto.VisibleInPayslip
+			} : null
 		};
 	}
 
@@ -116,30 +127,35 @@ public static class DeductionComponentOpenApiMapper
 	
 	/// <summary>
 	/// Parses the component type from string and isFixed flag.
-	/// The isFixed flag takes precedence if componentType string parsing fails.
+	/// The isFixed flag takes precedence over componentType string.
 	/// </summary>
 	private static DeductionComponentType ParseComponentType(string? componentTypeStr, bool isFixed)
 	{
-		// Try to parse from string first
+		// Prioritize isFixed flag first for consistency
 		if (!string.IsNullOrWhiteSpace(componentTypeStr))
 		{
+			var normalizedType = componentTypeStr.Trim().ToLowerInvariant();
+
+			// If componentType explicitly specifies "fixed", respect it
+			if (normalizedType == "fixed")
+			{
+				return DeductionComponentType.Fixed;
+			}
+
+			// If componentType explicitly specifies "variable" or "percentage", respect it
+			if (normalizedType == "variable" || normalizedType == "percentage")
+			{
+				return DeductionComponentType.Variable;
+			}
+
+			// Try enum parse
 			if (Enum.TryParse<DeductionComponentType>(componentTypeStr, ignoreCase: true, out var parsed))
 			{
 				return parsed;
 			}
-			
-			// Handle common string variations
-			var normalizedType = componentTypeStr.Trim().ToLowerInvariant();
-			return normalizedType switch
-			{
-				"fixed" => DeductionComponentType.Fixed,
-				"variable" => DeductionComponentType.Variable,
-				"percentage" => DeductionComponentType.Variable,
-				_ => isFixed ? DeductionComponentType.Fixed : DeductionComponentType.Variable
-			};
 		}
-		
-		// Fall back to isFixed flag
+
+		// Fall back to isFixed flag when componentType is not provided or invalid
 		return isFixed ? DeductionComponentType.Fixed : DeductionComponentType.Variable;
 	}
 	
@@ -152,19 +168,20 @@ public static class DeductionComponentOpenApiMapper
 		{
 			return ComponentDependency.None;
 		}
-		
+
 		if (Enum.TryParse<ComponentDependency>(dependOnStr, ignoreCase: true, out var parsed))
 		{
 			return parsed;
 		}
-		
+
 		// Handle common string variations
 		var normalized = dependOnStr.Trim().ToLowerInvariant();
 		return normalized switch
 		{
 			"none" => ComponentDependency.None,
-			"basic" or "basicsalary" or "basic_salary" => ComponentDependency.Basic,
-			"gross" or "grosssalary" or "gross_salary" => ComponentDependency.Gross,
+			"basic" or "basicsalary" or "basic_salary" or "basic salary" => ComponentDependency.Basic,
+			"gross" or "grosssalary" or "gross_salary" or "gross salary" => ComponentDependency.Gross,
+			"customcomponent" or "custom_component" or "custom component" or "any custom salary component" => ComponentDependency.CustomComponent,
 			_ => ComponentDependency.None
 		};
 	}

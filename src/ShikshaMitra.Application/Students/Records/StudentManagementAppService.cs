@@ -53,4 +53,77 @@ public class StudentManagementAppService(
 			throw new UserFriendlyException("An error occurred while fetching student records.");
 		}
 	}
+	public async Task AssignHouseToStudent(Guid studentId, Guid houseId)
+	{
+		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		// assign house to student only if he is not assigned with other house
+		if (student.AdditionalDetail?.HouseId != null)
+		{
+			throw new UserFriendlyException("Student is already assigned to a house.");
+		}
+		student.AssignHouse(houseId);
+		await studentRepository.UpdateAsync(student);
+	}
+
+	public async Task AssignHouseGlobalLeaderAsync(Guid studentId)
+	{
+		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		// Global leader can be assigned to only one student in whole medium
+		var globalLeader = await studentRepository.FirstOrDefaultAsync(s => s.AcademicMediumId == student.AcademicMediumId && s.AdditionalDetail != null && s.AdditionalDetail!.IsGlobalHouseLeader == true);
+		if (globalLeader != null)
+		{
+			throw new UserFriendlyException("Global leader can be assigned to only one student in whole medium.");
+		}
+		student.AssignGlobalLeader();
+		await studentRepository.UpdateAsync(student);
+	}
+
+	public async Task AssignHouseDivisionLeaderAsync(Guid studentId)
+	{
+		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		// Division leader can be assigned to only one student in student's division
+		var divisionLeader = await studentRepository.FirstOrDefaultAsync(s => s.DivisionId == student.DivisionId && s.AdditionalDetail != null && s.AdditionalDetail!.IsDivisionHouseLeader == true);
+		if (divisionLeader != null)
+		{
+			throw new UserFriendlyException("Division leader can be assigned to only one student in student's division.");
+		}
+		student.AssignDivisionLeader();
+		await studentRepository.UpdateAsync(student);
+	}
+
+	public async Task DeassignHouseFromStudent(Guid studentId)
+	{
+		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		// If student is assigned with a house
+		if (student.AdditionalDetail?.HouseId == null)
+		{
+			throw new UserFriendlyException("Student is not assigned with a house.");
+		}
+		student.DeassignHouse();
+		await studentRepository.UpdateAsync(student);
+	}
+
+	public async Task DeassignHouseGlobalLeaderAsync(Guid studentId)
+	{
+		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		// If student is not assigned with a house or he is not global leader
+		if (student.AdditionalDetail?.HouseId == null || student.AdditionalDetail!.IsGlobalHouseLeader == false)
+		{
+			throw new UserFriendlyException("Student is not assigned with a house or student is not global leader.");
+		}
+		student.DeassignGlobalLeader();
+		await studentRepository.UpdateAsync(student);
+	}
+
+	public async Task DeassignHouseDivisionLeaderAsync(Guid studentId)
+	{
+		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		// If student is not assigned with a house or he is not division leader
+		if (student.AdditionalDetail?.HouseId == null || student.AdditionalDetail!.IsDivisionHouseLeader == false)
+		{
+			throw new UserFriendlyException("Student is not assigned with a house or student is not division leader.");
+		}
+		student.DeassignDivisionLeader();
+		await studentRepository.UpdateAsync(student);
+	}
 }

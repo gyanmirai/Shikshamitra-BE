@@ -402,4 +402,48 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Rejected;
 		AdmissionApprovalRemarks = remarks;
 	}
+
+	public void AssignHouse(Guid houseId)
+	{
+		EnsureAdditionalDetailExists();
+		AdditionalDetail!.AssignHouse(houseId);
+	}
+
+	public void DeassignHouse()
+	{
+		EnsureAdditionalDetailExists();
+		AdditionalDetail!.DeassignHouse();
+	}
+
+	public void AssignGlobalLeader()
+	{
+		EnsureAdditionalDetailExists();
+		AdditionalDetail!.SetGlobalLeader(true);
+	}
+
+	public void DeassignGlobalLeader()
+	{
+		EnsureAdditionalDetailExists();
+		AdditionalDetail!.SetGlobalLeader(false);
+	}
+
+	public void AssignDivisionLeader()
+	{
+		EnsureAdditionalDetailExists();
+		AdditionalDetail!.SetDivisionLeader(true);
+	}
+
+	public void DeassignDivisionLeader()
+	{
+		EnsureAdditionalDetailExists();
+		AdditionalDetail!.SetDivisionLeader(false);
+	}
+
+	private void EnsureAdditionalDetailExists()
+	{
+		if (AdditionalDetail == null)
+		{
+			throw new InvalidOperationException("Student additional details are missing.");
+		}
+	}
 }

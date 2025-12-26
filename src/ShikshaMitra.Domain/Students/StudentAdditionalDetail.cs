@@ -246,4 +246,36 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 			: EntranceExamStatusEnum.Fail;
 		ExamResultDate = DateTimeOffset.UtcNow;
 	}
+
+	public void AssignHouse(Guid houseId)
+	{
+		HouseId = houseId;
+		IsGlobalHouseLeader = false;
+		IsDivisionHouseLeader = false;
+	}
+
+	public void DeassignHouse()
+	{
+		HouseId = null;
+		IsGlobalHouseLeader = false;
+		IsDivisionHouseLeader = false;
+	}
+
+	public void SetGlobalLeader(bool isLeader)
+	{
+		if (HouseId == null)
+		{
+			throw new InvalidOperationException("Cannot assign leader role. Student is not assigned to any house.");
+		}
+		IsGlobalHouseLeader = isLeader;
+	}
+
+	public void SetDivisionLeader(bool isLeader)
+	{
+		if (HouseId == null)
+		{
+			throw new InvalidOperationException("Cannot assign leader role. Student is not assigned to any house.");
+		}
+		IsDivisionHouseLeader = isLeader;
+	}
 }

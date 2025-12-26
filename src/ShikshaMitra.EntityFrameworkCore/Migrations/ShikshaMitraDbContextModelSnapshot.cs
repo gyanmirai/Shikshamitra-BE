@@ -3912,6 +3912,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<bool?>("HaveDisability")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid?>("HouseId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("InquiryNo")
                         .IsRequired()
                         .HasColumnType("text");
@@ -3927,6 +3930,12 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("IsDeleted");
+
+                    b.Property<bool?>("IsDivisionHouseLeader")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool?>("IsGlobalHouseLeader")
+                        .HasColumnType("boolean");
 
                     b.Property<bool?>("IsSingleChild")
                         .HasColumnType("boolean");
@@ -3980,6 +3989,8 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("HouseId");
 
                     b.ToTable("AppStudentAdditionalDetails", (string)null);
                 });
@@ -8216,11 +8227,17 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentAdditionalDetail", b =>
                 {
+                    b.HasOne("ShikshaMitra.Students.Records.Settings.HouseSettings", "House")
+                        .WithMany()
+                        .HasForeignKey("HouseId");
+
                     b.HasOne("ShikshaMitra.Students.Student", null)
                         .WithOne("AdditionalDetail")
                         .HasForeignKey("ShikshaMitra.Students.StudentAdditionalDetail", "Id")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("House");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentCommunicationDetail", b =>

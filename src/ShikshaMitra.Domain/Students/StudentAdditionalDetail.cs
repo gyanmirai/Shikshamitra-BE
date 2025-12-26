@@ -1,4 +1,5 @@
 ﻿using System;
+using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -57,6 +58,11 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 
 	public string? PreviousSchool { get; private set; }
 	public string? LastClassPassed { get; private set; }
+
+	public Guid? HouseId { get; private set; }
+	public HouseSettings? House { get; private set; }
+	public bool? IsGlobalHouseLeader { get; private set; }
+	public bool? IsDivisionHouseLeader { get; private set; }
 
 	public StudentRegistrationStateEnum StudentRegistrationState { get; private set; }
 
@@ -239,5 +245,37 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 			? EntranceExamStatusEnum.Pass 
 			: EntranceExamStatusEnum.Fail;
 		ExamResultDate = DateTimeOffset.UtcNow;
+	}
+
+	public void AssignHouse(Guid houseId)
+	{
+		HouseId = houseId;
+		IsGlobalHouseLeader = false;
+		IsDivisionHouseLeader = false;
+	}
+
+	public void DeassignHouse()
+	{
+		HouseId = null;
+		IsGlobalHouseLeader = false;
+		IsDivisionHouseLeader = false;
+	}
+
+	public void SetGlobalLeader(bool isLeader)
+	{
+		if (HouseId == null)
+		{
+			throw new InvalidOperationException("Cannot assign leader role. Student is not assigned to any house.");
+		}
+		IsGlobalHouseLeader = isLeader;
+	}
+
+	public void SetDivisionLeader(bool isLeader)
+	{
+		if (HouseId == null)
+		{
+			throw new InvalidOperationException("Cannot assign leader role. Student is not assigned to any house.");
+		}
+		IsDivisionHouseLeader = isLeader;
 	}
 }

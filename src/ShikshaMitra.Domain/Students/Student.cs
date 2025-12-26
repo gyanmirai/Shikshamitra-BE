@@ -439,6 +439,16 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		AdditionalDetail!.SetDivisionLeader(false);
 	}
 
+	public void AssignRollNo(int? rollNo)
+	{
+		RollNo = rollNo;
+	}
+
+	public void AssignGrNo(int? grNo)
+	{
+		GrNo = grNo;
+	}
+
 	private void EnsureAdditionalDetailExists()
 	{
 		if (AdditionalDetail == null)

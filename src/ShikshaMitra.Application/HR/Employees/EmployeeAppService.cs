@@ -18,6 +18,7 @@ namespace ShikshaMitra.HR.Employees;
 
 public class EmployeeAppService(
 IEmployeeRepository employeeRepository,
+IEmployeeAdditionalDetailsRepository additionalDetailsRepository,
 EmployeeManager employeeManager,
 PayrollStructureManager payrollStructureManager,
 IBlobContainer blobContainer,
@@ -254,14 +255,28 @@ IEmployeeAppService
 
 	public async Task<EmployeeAdditionalDetailsDto> GetAdditionalDetailsAsync(Guid employeeId)
 	{
-		// Get employee using cached repository method
+		// Get employee to verify existence and get employee code
 		var employee = await employeeRepository.GetAsync(employeeId)
 			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
 
-		// Handle null AdditionalDetails for older records by initializing with defaults
-		var additionalDetails = employee.AdditionalDetails ?? EmployeeAdditionalDetails.CreateDefault();
+		// Get additional details from the new entity-based repository
+		var additionalDetails = await additionalDetailsRepository.GetByEmployeeIdAsync(employeeId);
 
-		// Map to DTO using null-safe accessors
+		// Return defaults if no record exists yet
+		if (additionalDetails == null)
+		{
+			return new EmployeeAdditionalDetailsDto
+			{
+				EmployeeCode = employee.EmployeeCode,
+				BplCardNo = null,
+				PersonWithDisability = false,
+				SecondLanguage = null,
+				LibraryMember = false,
+				TransportMember = false
+			};
+		}
+
+		// Map to DTO
 		return new EmployeeAdditionalDetailsDto
 		{
 			EmployeeCode = employee.EmployeeCode,
@@ -277,33 +292,52 @@ IEmployeeAppService
 		Guid employeeId,
 		UpdateEmployeeAdditionalDetailsDto input)
 	{
-		// Create the value object with validation
-		var additionalDetails = new EmployeeAdditionalDetails(
-			input.BplCardNo,
-			input.PersonWithDisability,
-			input.SecondLanguage,
-			input.LibraryMember,
-			input.TransportMember
-		);
+		// Verify employee exists
+		var employee = await employeeRepository.GetAsync(employeeId)
+			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
 
-		// Update employee using manager
-		var employee = await employeeManager.UpdateAdditionalDetailsByEmployeeIdAsync(
-			employeeId,
-			additionalDetails
-		);
+		// Check if additional details already exist
+		var existingDetails = await additionalDetailsRepository.GetByEmployeeIdAsync(employeeId);
 
-		// Save the employee (cache invalidation handled in repository)
-		employee = await employeeRepository.UpdateAsync(employee);
+		EmployeeAdditionalDetails additionalDetails;
+		if (existingDetails == null)
+		{
+			// Create new additional details entity
+			additionalDetails = new EmployeeAdditionalDetails(
+				id: guidGenerator.Create(),
+				tenantId: CurrentTenant.Id,
+				employeeId: employeeId,
+				bplCardNo: input.BplCardNo,
+				personWithDisability: input.PersonWithDisability,
+				secondLanguage: input.SecondLanguage,
+				libraryMember: input.LibraryMember,
+				transportMember: input.TransportMember);
+
+			await additionalDetailsRepository.InsertAsync(additionalDetails);
+		}
+		else
+		{
+			// Update existing additional details
+			existingDetails.Update(
+				bplCardNo: input.BplCardNo,
+				personWithDisability: input.PersonWithDisability,
+				secondLanguage: input.SecondLanguage,
+				libraryMember: input.LibraryMember,
+				transportMember: input.TransportMember);
+
+			await additionalDetailsRepository.UpdateAsync(existingDetails);
+			additionalDetails = existingDetails;
+		}
 
 		// Return success response
 		return new EmployeeAdditionalDetailsDto
 		{
 			EmployeeCode = employee.EmployeeCode,
-			BplCardNo = employee.AdditionalDetails.BplCardNo,
-			PersonWithDisability = employee.AdditionalDetails.PersonWithDisability,
-			SecondLanguage = employee.AdditionalDetails.SecondLanguage,
-			LibraryMember = employee.AdditionalDetails.LibraryMember,
-			TransportMember = employee.AdditionalDetails.TransportMember
+			BplCardNo = additionalDetails.BplCardNo,
+			PersonWithDisability = additionalDetails.PersonWithDisability,
+			SecondLanguage = additionalDetails.SecondLanguage,
+			LibraryMember = additionalDetails.LibraryMember,
+			TransportMember = additionalDetails.TransportMember
 		};
 	}
 
@@ -457,15 +491,23 @@ IEmployeeAppService
 			} : new PayrollDetailsDto(),
 		Earnings = (earnings ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(e => new PayrollComponentDto
 		{
-			ComponentName = e.ComponentName,
-			Type = e.Type,
-			Amount = e.Amount
+			Name = e.Name,
+			Description = e.Description,
+			Amount = e.Amount,
+			IsFixed = e.IsFixed,
+			IsTemp = e.IsTemp,
+			ComponentType = e.ComponentType,
+			DependOn = e.DependOn
 		}).ToList(),
 		Deductions = (deductions ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(d => new PayrollComponentDto
 		{
-			ComponentName = d.ComponentName,
-			Type = d.Type,
-			Amount = d.Amount
+			Name = d.Name,
+			Description = d.Description,
+			Amount = d.Amount,
+			IsFixed = d.IsFixed,
+			IsTemp = d.IsTemp,
+			ComponentType = d.ComponentType,
+			DependOn = d.DependOn
 		}).ToList()
 		};
 
@@ -531,9 +573,13 @@ IEmployeeAppService
 			var component = new EmployeePayrollComponent(
 				guidGenerator.Create(),
 				employeeId,
-				earning.ComponentName,
-				earning.Type,
+				earning.Name,
+				earning.Description,
 				earning.Amount,
+				earning.IsFixed,
+				earning.IsTemp,
+				earning.ComponentType,
+				earning.DependOn,
 				isEarning: true
 			);
 			await payrollComponentRepository.InsertAsync(component);
@@ -544,9 +590,13 @@ IEmployeeAppService
 			var component = new EmployeePayrollComponent(
 				guidGenerator.Create(),
 				employeeId,
-				deduction.ComponentName,
-				deduction.Type,
+				deduction.Name,
+				deduction.Description,
 				deduction.Amount,
+				deduction.IsFixed,
+				deduction.IsTemp,
+				deduction.ComponentType,
+				deduction.DependOn,
 				isEarning: false
 			);
 			await payrollComponentRepository.InsertAsync(component);
@@ -555,4 +605,254 @@ IEmployeeAppService
 		await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
 	}
 
+	public async Task<EmployeeListResponse> GetFilteredListAsync(GetEmployeeListInput input)
+	{
+		var queryable = await Repository.GetQueryableAsync();
+
+		// Apply filters
+		if (input.MediumStageId.HasValue)
+		{
+			queryable = queryable.Where(e => e.EducationMediumStageId == input.MediumStageId.Value);
+		}
+
+		if (!string.IsNullOrEmpty(input.Status))
+		{
+			if (Enum.TryParse<EmployeeStatusType>(input.Status, true, out var statusType))
+			{
+				queryable = queryable.Where(e => e.EmployeeStatusType == statusType);
+			}
+		}
+
+		if (input.IsTeaching.HasValue)
+		{
+			// IsTeaching is determined by EmployeeGroup in the domain model
+			// Teaching = EmployeeGroupType values that represent teaching staff
+			if (input.IsTeaching.Value)
+			{
+				queryable = queryable.Where(e => e.EmployeeGroup == EmployeeGroupType.Teaching);
+			}
+			else
+			{
+				queryable = queryable.Where(e => e.EmployeeGroup != EmployeeGroupType.Teaching);
+			}
+		}
+
+		if (input.RoleId.HasValue)
+		{
+			queryable = queryable.Where(e => e.RoleId == input.RoleId.Value);
+		}
+
+		// Get total count before pagination
+		var totalCount = await AsyncExecuter.CountAsync(queryable);
+
+		// Apply sorting
+		queryable = queryable.OrderBy(e => e.FirstName).ThenBy(e => e.LastName);
+
+		// Apply pagination
+		var employees = await AsyncExecuter.ToListAsync(
+			queryable
+				.Skip(input.SkipCount)
+				.Take(input.MaxResultCount)
+		);
+
+		// Calculate pagination info
+		var pageSize = input.MaxResultCount > 0 ? input.MaxResultCount : 10;
+		var currentPage = (input.SkipCount / pageSize) + 1;
+		var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
+		// Map to response DTOs
+		var items = employees.Select(MapToEmployeeSummary).ToList();
+
+		return new EmployeeListResponse
+		{
+			TotalCount = totalCount,
+			CurrentPage = currentPage,
+			PageSize = pageSize,
+			TotalPages = totalPages,
+			Items = items
+		};
+	}
+
+	public async Task<EmployeeSearchResponse> SearchAsync(SearchEmployeeInput input)
+	{
+		// Validate minimum search length
+		if (string.IsNullOrEmpty(input.SearchTerm) || input.SearchTerm.Length < 2)
+		{
+			return new EmployeeSearchResponse { Items = new List<EmployeeSearchItem>() };
+		}
+
+		var searchTerm = input.SearchTerm.ToLower();
+		var queryable = await Repository.GetQueryableAsync();
+
+		// Search by name, employee identifier, email, or mobile number
+		queryable = queryable.Where(e =>
+			(e.FirstName != null && e.FirstName.ToLower().Contains(searchTerm)) ||
+			(e.LastName != null && e.LastName.ToLower().Contains(searchTerm)) ||
+			(e.MiddleName != null && e.MiddleName.ToLower().Contains(searchTerm)) ||
+			(e.EmployeeCode != null && e.EmployeeCode.ToLower().Contains(searchTerm)) ||
+			(e.Email != null && e.Email.ToLower().Contains(searchTerm)) ||
+			(e.MobileNo != null && e.MobileNo.Contains(searchTerm))
+		);
+
+		// Apply result limit
+		var maxResults = input.MaxResultCount > 0 ? input.MaxResultCount : 50;
+		var employees = await AsyncExecuter.ToListAsync(
+			queryable
+				.OrderBy(e => e.FirstName)
+				.ThenBy(e => e.LastName)
+				.Take(maxResults)
+		);
+
+		// Map to response DTOs
+		var items = employees.Select(MapToEmployeeSearchItem).ToList();
+
+		return new EmployeeSearchResponse { Items = items };
+	}
+
+	private EmployeeSummary MapToEmployeeSummary(Employee employee)
+	{
+		return new EmployeeSummary
+		{
+			RoleName = employee.Role?.Name,
+			FullName = employee.EmployeeName,
+			ThumbnailPicture = employee.ProfilePictureBlobName,
+			EmployeeIdentifier = employee.EmployeeCode,
+			Dob = employee.DateOfBirth?.ToDateTime(TimeOnly.MinValue),
+			Gender = employee.GenderType?.ToString(),
+			Doj = employee.DateOfJoining?.ToDateTime(TimeOnly.MinValue),
+			Email = employee.Email,
+			MobileNo = employee.MobileNo,
+			IsTeaching = employee.EmployeeGroup == EmployeeGroupType.Teaching,
+			Shift = employee.Shift != null ? new ShiftInfo
+			{
+				Id = employee.Shift.Id,
+				Name = employee.Shift.ShiftName ?? string.Empty,
+				StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"),
+				EndTime = employee.Shift.EndTime.ToString("HH:mm:ss")
+			} : null,
+			Status = (int)(employee.EmployeeStatusType ?? EmployeeStatusType.Active)
+		};
+	}
+
+	private EmployeeSearchItem MapToEmployeeSearchItem(Employee employee)
+	{
+		return new EmployeeSearchItem
+		{
+			RoleName = employee.Role?.Name ?? string.Empty,
+			FullName = employee.EmployeeName ?? string.Empty,
+			ThumbnailPicture = employee.ProfilePictureBlobName ?? string.Empty,
+			EmployeeIdentifier = employee.EmployeeCode ?? string.Empty,
+			Dob = employee.DateOfBirth?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MinValue,
+			Gender = employee.GenderType?.ToString() ?? string.Empty,
+			Doj = employee.DateOfJoining?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MinValue,
+			Email = employee.Email ?? string.Empty,
+			MobileNo = employee.MobileNo ?? string.Empty,
+			IsTeaching = employee.EmployeeGroup == EmployeeGroupType.Teaching,
+			Shift = employee.Shift != null ? new ShiftInfo
+			{
+				Id = employee.Shift.Id,
+				Name = employee.Shift.ShiftName ?? string.Empty,
+				StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"),
+				EndTime = employee.Shift.EndTime.ToString("HH:mm:ss")
+			} : new ShiftInfo(),
+			Status = (int)(employee.EmployeeStatusType ?? EmployeeStatusType.Active)
+		};
+	}
+
+	/// <summary>
+	/// Gets the payroll details for an employee (matches OpenAPI Payroll contract).
+	/// </summary>
+	public async Task<PayrollContract> GetPayrollContractAsync(Guid employeeId)
+	{
+		await employeeRepository.GetAsync(employeeId); // Validate employee exists
+		
+		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
+		var earnings = await payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
+		var deductions = await payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);
+
+		return new PayrollContract
+		{
+			BankDetails = payrollDetails != null ? new BankDetailsContract
+			{
+				BankName = payrollDetails.BankName,
+				BranchName = payrollDetails.BranchName,
+				AccountHolderName = payrollDetails.AccountHolderName,
+				AccountNumber = payrollDetails.AccountNumber,
+				IfscCode = payrollDetails.IfscCode
+			} : null,
+			SalaryDetails = payrollDetails != null ? new SalaryDetailsContract
+			{
+				PfRuleId = !string.IsNullOrEmpty(payrollDetails.PfRule) && Guid.TryParse(payrollDetails.PfRule, out var pfRuleId) ? pfRuleId : null,
+				EpfNumber = payrollDetails.EpfNumber,
+				UanNumber = payrollDetails.UanNumber,
+				BasicSalary = payrollDetails.BasicSalary,
+				PunchId = payrollDetails.PunchId,
+				TdsPercentage = payrollDetails.TdsPercentage,
+				TdsAmount = payrollDetails.TdsAmount
+			} : null,
+			EarningComponents = earnings?.Select(e => new ComponentAmountContract
+			{
+				ComponentId = e.Id, // Using component ID; ideally should be linked to master component
+				Amount = e.Amount
+			}).ToList() ?? new List<ComponentAmountContract>(),
+			DeductionComponents = deductions?.Select(d => new ComponentAmountContract
+			{
+				ComponentId = d.Id, // Using component ID; ideally should be linked to master component
+				Amount = d.Amount
+			}).ToList() ?? new List<ComponentAmountContract>()
+		};
+	}
+
+	/// <summary>
+	/// Updates the payroll details for an employee (matches OpenAPI Payroll contract).
+	/// </summary>
+	public async Task UpdatePayrollContractAsync(Guid employeeId, PayrollContract input)
+	{
+		await employeeRepository.GetAsync(employeeId); // Validate employee exists
+
+		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
+
+		if (payrollDetails == null)
+		{
+			payrollDetails = new EmployeePayrollDetails(guidGenerator.Create(), employeeId);
+			payrollDetails.UpdateDetails(
+				input.BankDetails?.BankName,
+				input.BankDetails?.BranchName,
+				input.BankDetails?.AccountHolderName,
+				input.BankDetails?.AccountNumber,
+				input.BankDetails?.IfscCode,
+				input.SalaryDetails?.PfRuleId?.ToString(),
+				input.SalaryDetails?.EpfNumber,
+				input.SalaryDetails?.UanNumber,
+				input.SalaryDetails?.PunchId,
+				input.SalaryDetails?.BasicSalary,
+				input.SalaryDetails?.TdsPercentage,
+				input.SalaryDetails?.TdsAmount
+			);
+			await payrollDetailsRepository.InsertAsync(payrollDetails);
+		}
+		else
+		{
+			payrollDetails.UpdateDetails(
+				input.BankDetails?.BankName,
+				input.BankDetails?.BranchName,
+				input.BankDetails?.AccountHolderName,
+				input.BankDetails?.AccountNumber,
+				input.BankDetails?.IfscCode,
+				input.SalaryDetails?.PfRuleId?.ToString(),
+				input.SalaryDetails?.EpfNumber,
+				input.SalaryDetails?.UanNumber,
+				input.SalaryDetails?.PunchId,
+				input.SalaryDetails?.BasicSalary,
+				input.SalaryDetails?.TdsPercentage,
+				input.SalaryDetails?.TdsAmount
+			);
+			await payrollDetailsRepository.UpdateAsync(payrollDetails);
+		}
+
+		// Note: Component updates would require linking to master component IDs
+		// For now, keeping existing component logic
+
+		await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
+	}
 }

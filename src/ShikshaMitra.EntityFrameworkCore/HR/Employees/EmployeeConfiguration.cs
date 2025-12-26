@@ -22,7 +22,7 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 		builder.ComplexProperty(e => e.MotherDetails);
 		builder.ComplexProperty(e => e.SpouseDetails);
 		builder.ComplexProperty(e => e.BankDetails);
-		builder.ComplexProperty(e => e.AdditionalDetails);
+		// Note: AdditionalDetails is now a separate entity with its own table (see EmployeeAdditionalDetailsConfiguration)
 
 		// Configure owned collections (stored as JSON)
 		builder.OwnsMany(e => e.WorkExperiences, ew => ew.ToJson());
@@ -78,6 +78,13 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 			.OnDelete(DeleteBehavior.Restrict)
 			.IsRequired(false);
 
+		// Self-referencing relationship for reporting manager
+		builder.HasOne(e => e.ReportingManager)
+			.WithMany()
+			.HasForeignKey(e => e.ReportingManagerId)
+			.OnDelete(DeleteBehavior.Restrict)
+			.IsRequired(false);
+
 		// Configure property constraints
 		builder.Property(e => e.EmployeeCode)
 			.IsRequired()
@@ -118,6 +125,9 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 		builder.HasIndex(e => new { e.TenantId, e.EmployeeStatusType })
 			.HasDatabaseName("IX_Employees_TenantId_Status");
 
+		builder.HasIndex(e => e.ReportingManagerId)
+			.HasDatabaseName("IX_Employees_ReportingManagerId");
+
 		// Configure eager loading strategy for navigation properties
 		// AutoInclude ensures these are always loaded to prevent N+1 queries
 		builder.Navigation(e => e.Role).AutoInclude();
@@ -125,5 +135,6 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 		builder.Navigation(e => e.Shift).AutoInclude();
 		// Note: PayrollStructure is optional and might be large, so we don't auto-include it
 		// It can be included explicitly when needed using .Include() in queries
+		// Note: ReportingManager is not auto-included to avoid deep loading chains
 	}
 }

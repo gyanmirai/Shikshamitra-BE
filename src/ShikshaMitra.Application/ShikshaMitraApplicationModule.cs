@@ -1,4 +1,6 @@
-﻿using Volo.Abp.Account;
+﻿using ShikshaMitra.Security.Permissions;
+using Volo.Abp.Account;
+using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.AutoMapper;
 using Volo.Abp.FeatureManagement;
 using Volo.Abp.Identity;
@@ -26,6 +28,14 @@ public class ShikshaMitraApplicationModule : AbpModule
         Configure<AbpAutoMapperOptions>(options =>
         {
             options.AddMaps<ShikshaMitraApplicationModule>();
+        });
+
+        // Configure permission management with admin bypass
+        Configure<AbpPermissionOptions>(options =>
+        {
+            // Add AdminPermissionValueProvider as the first provider
+            // This ensures admin users bypass all permission checks
+            options.ValueProviders.Insert(0, typeof(AdminPermissionValueProvider));
         });
 
         // Register the CSV import service

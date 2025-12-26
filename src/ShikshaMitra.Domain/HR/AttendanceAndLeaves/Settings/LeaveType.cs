@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Text.RegularExpressions;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -14,9 +15,19 @@ public class LeaveType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; protected set; }
 	
 	/// <summary>
+	/// Organization/School identifier this leave type belongs to
+	/// </summary>
+	public Guid EducationMediumStageId { get; protected set; }
+	
+	/// <summary>
 	/// Type/Name of the leave (e.g., "Paid Leave", "Sick Leave")
 	/// </summary>
 	public string Type { get; protected set; } = string.Empty;
+	
+	/// <summary>
+	/// Optional description of the leave type
+	/// </summary>
+	public string? Description { get; protected set; }
 	
 	/// <summary>
 	/// Color code for UI display (HEX format: #RRGGBB)
@@ -27,6 +38,11 @@ public class LeaveType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// Whether this leave type is active
 	/// </summary>
 	public bool IsActive { get; protected set; }
+	
+	/// <summary>
+	/// Navigation property for EducationMediumStage
+	/// </summary>
+	public virtual EducationMediumStage? EducationMediumStage { get; protected set; }
 
 	// For EF Core
 	protected LeaveType()
@@ -36,19 +52,24 @@ public class LeaveType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public LeaveType(
 		Guid id,
 		Guid? tenantId,
+		Guid educationMediumStageId,
 		string type,
-		string color) : base(id)
+		string color,
+		string? description = null) : base(id)
 	{
 		TenantId = tenantId;
+		EducationMediumStageId = educationMediumStageId;
 		SetType(type);
 		SetColor(color);
+		Description = description;
 		IsActive = true;
 	}
 
-	public void Update(string type, string color)
+	public void Update(string type, string color, string? description = null)
 	{
 		SetType(type);
 		SetColor(color);
+		Description = description;
 	}
 
 	public void Activate()

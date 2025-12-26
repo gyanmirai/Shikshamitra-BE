@@ -1,96 +1,136 @@
 ﻿using System;
+using Volo.Abp.Domain.Entities.Auditing;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.HR.Employees;
 
 /// <summary>
-/// Value object for employee additional details.
+/// Entity for employee additional details.
 /// Stores supplementary information like BPL card, disability status, language preferences, and memberships.
+/// Has a 1:1 relationship with Employee.
 /// </summary>
-public class EmployeeAdditionalDetails
+public class EmployeeAdditionalDetails : FullAuditedEntity<Guid>, IMultiTenant
 {
 	/// <summary>
-	/// Below Poverty Line card number
+	/// Tenant ID for multi-tenancy support.
+	/// </summary>
+	public Guid? TenantId { get; private set; }
+
+	/// <summary>
+	/// Foreign key to the Employee entity.
+	/// </summary>
+	public Guid EmployeeId { get; private set; }
+
+	/// <summary>
+	/// Below Poverty Line card number.
 	/// </summary>
 	public string? BplCardNo { get; private set; }
 
 	/// <summary>
-	/// Indicates if person has disability
-	/// Allowed values: "Yes", "No", null
+	/// Indicates if the employee is a person with disability.
 	/// </summary>
-	public string? PersonWithDisability { get; private set; }
+	public bool PersonWithDisability { get; private set; }
 
 	/// <summary>
-	/// Second language known by employee
+	/// Second language known by employee.
 	/// </summary>
 	public string? SecondLanguage { get; private set; }
 
 	/// <summary>
-	/// Library membership status
+	/// Library membership status.
 	/// </summary>
 	public bool LibraryMember { get; private set; }
 
 	/// <summary>
-	/// Transport facility membership status
+	/// Transport facility membership status.
 	/// </summary>
 	public bool TransportMember { get; private set; }
+
+	/// <summary>
+	/// Navigation property to the Employee.
+	/// </summary>
+	public virtual Employee? Employee { get; private set; }
 
 	// For ORM
 	private EmployeeAdditionalDetails()
 	{
 	}
 
+	/// <summary>
+	/// Creates a new EmployeeAdditionalDetails entity.
+	/// </summary>
 	public EmployeeAdditionalDetails(
+		Guid id,
+		Guid? tenantId,
+		Guid employeeId,
 		string? bplCardNo,
-		string? personWithDisability,
+		bool personWithDisability,
 		string? secondLanguage,
-		bool libraryMember = false,
-		bool transportMember = false)
+		bool libraryMember,
+		bool transportMember)
+		: base(id)
 	{
-		// Validate PersonWithDisability values
-		if (personWithDisability != null &&
-			!string.Equals(personWithDisability, "Yes", StringComparison.OrdinalIgnoreCase) &&
-			!string.Equals(personWithDisability, "No", StringComparison.OrdinalIgnoreCase))
-		{
-			throw new ArgumentException(
-				"PersonWithDisability must be either 'Yes', 'No', or null",
-				nameof(personWithDisability));
-		}
-
+		TenantId = tenantId;
+		EmployeeId = employeeId;
 		BplCardNo = bplCardNo?.Trim();
-		PersonWithDisability = personWithDisability?.Trim();
+		PersonWithDisability = personWithDisability;
 		SecondLanguage = secondLanguage?.Trim();
 		LibraryMember = libraryMember;
 		TransportMember = transportMember;
 	}
 
 	/// <summary>
-	/// Creates a default/empty additional details instance
+	/// Updates the additional details.
 	/// </summary>
-	public static EmployeeAdditionalDetails CreateDefault()
-	{
-		return new EmployeeAdditionalDetails(
-			bplCardNo: null,
-			personWithDisability: null,
-			secondLanguage: null,
-			libraryMember: false,
-			transportMember: false);
-	}
-
-	/// <summary>
-	/// Updates the additional details
-	/// </summary>
-	public EmployeeAdditionalDetails Update(
+	public void Update(
 		string? bplCardNo,
-		string? personWithDisability,
+		bool personWithDisability,
 		string? secondLanguage,
 		bool libraryMember,
 		bool transportMember)
 	{
-		return new EmployeeAdditionalDetails(
-			bplCardNo,
-			personWithDisability,
-			secondLanguage,
-			libraryMember,
-			transportMember);
+		BplCardNo = bplCardNo?.Trim();
+		PersonWithDisability = personWithDisability;
+		SecondLanguage = secondLanguage?.Trim();
+		LibraryMember = libraryMember;
+		TransportMember = transportMember;
+	}
+
+	/// <summary>
+	/// Partially updates the additional details. Only non-null values are applied.
+	/// </summary>
+	public void Patch(
+		string? bplCardNo,
+		bool? personWithDisability,
+		string? secondLanguage,
+		bool? libraryMember,
+		bool? transportMember,
+		bool bplCardNoProvided = false)
+	{
+		// For nullable string fields, we need an explicit flag to know if null was intentionally passed
+		if (bplCardNoProvided)
+		{
+			BplCardNo = bplCardNo?.Trim();
+		}
+
+		if (personWithDisability.HasValue)
+		{
+			PersonWithDisability = personWithDisability.Value;
+		}
+
+		if (secondLanguage != null)
+		{
+			SecondLanguage = secondLanguage.Trim();
+		}
+
+		if (libraryMember.HasValue)
+		{
+			LibraryMember = libraryMember.Value;
+		}
+
+		if (transportMember.HasValue)
+		{
+			TransportMember = transportMember.Value;
+		}
 	}
 }

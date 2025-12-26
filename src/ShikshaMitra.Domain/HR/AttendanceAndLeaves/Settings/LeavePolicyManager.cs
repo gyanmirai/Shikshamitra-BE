@@ -22,8 +22,9 @@ public class LeavePolicyManager : DomainService
 	}
 
 	public async Task<LeavePolicy> CreateAsync(
+		Guid educationMediumStageId,
 		string policyName,
-		string leaveType,
+		Guid leaveTypeId,
 		int maximumDaysPerYear,
 		LeavePaidType paidType,
 		bool carryForward,
@@ -31,17 +32,18 @@ public class LeavePolicyManager : DomainService
 		bool requiresApproval,
 		string? description = null)
 	{
-		// Check if policy name already exists
-		await CheckPolicyNameAvailabilityAsync(policyName);
+		// Check if policy name already exists within the organization
+		await CheckPolicyNameAvailabilityAsync(educationMediumStageId, policyName);
 
-		// Validate that the referenced LeaveType exists
-		await ValidateLeaveTypeExistsAsync(leaveType);
+		// Validate that the referenced LeaveType exists and is active
+		await ValidateLeaveTypeExistsAsync(leaveTypeId);
 
 		var leavePolicy = new LeavePolicy(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
+			educationMediumStageId,
 			policyName,
-			leaveType,
+			leaveTypeId,
 			maximumDaysPerYear,
 			paidType,
 			carryForward,
@@ -56,7 +58,7 @@ public class LeavePolicyManager : DomainService
 	public async Task UpdateAsync(
 		LeavePolicy leavePolicy,
 		string policyName,
-		string leaveType,
+		Guid leaveTypeId,
 		int maximumDaysPerYear,
 		LeavePaidType paidType,
 		bool carryForward,
@@ -64,18 +66,18 @@ public class LeavePolicyManager : DomainService
 		bool requiresApproval,
 		string? description)
 	{
-		// Check if policy name already exists (excluding current policy)
+		// Check if policy name already exists (excluding current policy) within the same organization
 		if (leavePolicy.PolicyName != policyName)
 		{
-			await CheckPolicyNameAvailabilityAsync(policyName, leavePolicy.Id);
+			await CheckPolicyNameAvailabilityAsync(leavePolicy.EducationMediumStageId, policyName, leavePolicy.Id);
 		}
 
-		// Validate that the referenced LeaveType exists
-		await ValidateLeaveTypeExistsAsync(leaveType);
+		// Validate that the referenced LeaveType exists and is active
+		await ValidateLeaveTypeExistsAsync(leaveTypeId);
 
 		leavePolicy.Update(
 			policyName,
-			leaveType,
+			leaveTypeId,
 			maximumDaysPerYear,
 			paidType,
 			carryForward,
@@ -85,9 +87,9 @@ public class LeavePolicyManager : DomainService
 		);
 	}
 
-	private async Task CheckPolicyNameAvailabilityAsync(string policyName, Guid? excludeId = null)
+	private async Task CheckPolicyNameAvailabilityAsync(Guid educationMediumStageId, string policyName, Guid? excludeId = null)
 	{
-		if (await _leavePolicyRepository.IsPolicyNameExistsAsync(policyName, excludeId))
+		if (await _leavePolicyRepository.IsPolicyNameExistsAsync(educationMediumStageId, policyName, excludeId))
 		{
 			throw new BusinessException("ShikshaMitra:LeavePolicyNameAlreadyExists")
 				.WithData("policyName", policyName);
@@ -95,30 +97,27 @@ public class LeavePolicyManager : DomainService
 	}
 
 	/// <summary>
-	/// Validates that the specified LeaveType exists in the database.
-	/// Throws a clear exception if the LeaveType is not found.
+	/// Validates that the specified LeaveType exists and is active.
 	/// </summary>
-	/// <param name="leaveType">The LeaveType name to validate</param>
-	/// <exception cref="BusinessException">Thrown when the LeaveType does not exist</exception>
-	private async Task ValidateLeaveTypeExistsAsync(string leaveType)
+	/// <param name="leaveTypeId">The LeaveType ID to validate</param>
+	/// <exception cref="BusinessException">Thrown when the LeaveType does not exist or is inactive</exception>
+	private async Task ValidateLeaveTypeExistsAsync(Guid leaveTypeId)
 	{
-		Check.NotNullOrWhiteSpace(leaveType, nameof(leaveType));
-
-		var existingLeaveType = await _leaveTypeRepository.FindByTypeAsync(leaveType);
+		var existingLeaveType = await _leaveTypeRepository.GetAsync(leaveTypeId);
 		
 		if (existingLeaveType == null)
 		{
 			throw new BusinessException("ShikshaMitra:LeaveTypeNotFound")
-				.WithData("leaveType", leaveType)
-				.WithData("message", $"The leave type '{leaveType}' does not exist. Please create the leave type first before creating a policy for it.");
+				.WithData("leaveTypeId", leaveTypeId)
+				.WithData("message", $"The leave type with ID '{leaveTypeId}' does not exist. Please create the leave type first.");
 		}
 
 		// Validate that the LeaveType is active
 		if (!existingLeaveType.IsActive)
 		{
 			throw new BusinessException("ShikshaMitra:LeaveTypeInactive")
-				.WithData("leaveType", leaveType)
-				.WithData("message", $"The leave type '{leaveType}' is inactive. Please activate it before creating a policy for it.");
+				.WithData("leaveTypeId", leaveTypeId)
+				.WithData("message", $"The leave type with ID '{leaveTypeId}' is inactive. Please activate it before creating a policy for it.");
 		}
 	}
 }

@@ -16,9 +16,15 @@ public class LeaveTypeConfiguration : IEntityTypeConfiguration<LeaveType>
 		builder.ConfigureByConvention();
 
 		// Configure properties
+		builder.Property(x => x.EducationMediumStageId)
+			.IsRequired();
+
 		builder.Property(x => x.Type)
 			.IsRequired()
 			.HasMaxLength(LeaveTypeConsts.MaxTypeLength);
+
+		builder.Property(x => x.Description)
+			.HasMaxLength(LeaveTypeConsts.MaxDescriptionLength);
 
 		builder.Property(x => x.Color)
 			.IsRequired()
@@ -28,13 +34,19 @@ public class LeaveTypeConfiguration : IEntityTypeConfiguration<LeaveType>
 			.IsRequired()
 			.HasDefaultValue(true);
 
-		// Indexes for performance
-		// Unique index scoped per tenant
-		builder.HasIndex(x => new { x.TenantId, x.Type })
-			.IsUnique()
-			.HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_Type");
+		// Navigation property
+		builder.HasOne(x => x.EducationMediumStage)
+			.WithMany()
+			.HasForeignKey(x => x.EducationMediumStageId)
+			.OnDelete(DeleteBehavior.Restrict);
 
-		builder.HasIndex(x => new { x.TenantId, x.IsActive })
-			.HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_IsActive");
+		// Indexes for performance
+		// Unique index scoped per tenant and organization
+		builder.HasIndex(x => new { x.TenantId, x.EducationMediumStageId, x.Type })
+			.IsUnique()
+			.HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_MediumStageId_Type");
+
+		builder.HasIndex(x => new { x.TenantId, x.EducationMediumStageId, x.IsActive })
+			.HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_MediumStageId_IsActive");
 	}
 }

@@ -11,7 +11,13 @@ public class EmployeeAttendance : FullAuditedEntity<Guid>, IMultiTenant, IUserSc
 	public Guid? TenantId { get; set; }
 	public Guid EmployeeId { get; set; }
 
-	// Store only TimeIn and TimeOut as DateTimeOffset values
+	/// <summary>
+	/// The date of attendance (no time component).
+	/// Used for unique constraint (TenantId, EmployeeId, AttendanceDate) and date-based queries.
+	/// </summary>
+	public DateOnly AttendanceDate { get; set; }
+
+	// Store only TimeIn and TimeOut as DateTimeOffset values (nullable for ABSENT/PENDING days)
 	public DateTimeOffset? TimeIn { get; set; }
 	public DateTimeOffset? TimeOut { get; set; }
 

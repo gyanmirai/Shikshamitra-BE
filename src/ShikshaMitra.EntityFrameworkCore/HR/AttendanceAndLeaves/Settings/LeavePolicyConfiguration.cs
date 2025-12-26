@@ -16,13 +16,15 @@ public class LeavePolicyConfiguration : IEntityTypeConfiguration<LeavePolicy>
 		builder.ConfigureByConvention();
 
 		// Configure properties
+		builder.Property(x => x.EducationMediumStageId)
+			.IsRequired();
+
 		builder.Property(x => x.PolicyName)
 			.IsRequired()
 			.HasMaxLength(LeavePolicyConsts.MaxPolicyNameLength);
 
-		builder.Property(x => x.LeaveType)
-			.IsRequired()
-			.HasMaxLength(LeavePolicyConsts.MaxLeaveTypeLength);
+		builder.Property(x => x.LeaveTypeId)
+			.IsRequired();
 
 		builder.Property(x => x.MaximumDaysPerYear)
 			.IsRequired();
@@ -49,16 +51,27 @@ public class LeavePolicyConfiguration : IEntityTypeConfiguration<LeavePolicy>
 			.IsRequired()
 			.HasDefaultValue(true);
 
+		// Navigation properties
+		builder.HasOne(x => x.LeaveType)
+			.WithMany()
+			.HasForeignKey(x => x.LeaveTypeId)
+			.OnDelete(DeleteBehavior.Restrict);
+
+		builder.HasOne(x => x.EducationMediumStage)
+			.WithMany()
+			.HasForeignKey(x => x.EducationMediumStageId)
+			.OnDelete(DeleteBehavior.Restrict);
+
 		// Indexes for performance
-		// Unique index scoped per tenant
-		builder.HasIndex(x => new { x.TenantId, x.PolicyName })
+		// Unique index scoped per tenant and organization
+		builder.HasIndex(x => new { x.TenantId, x.EducationMediumStageId, x.PolicyName })
 			.IsUnique()
-			.HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_PolicyName");
+			.HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_MediumStageId_PolicyName");
 
-		builder.HasIndex(x => new { x.TenantId, x.IsActive })
-			.HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_IsActive");
+		builder.HasIndex(x => new { x.TenantId, x.EducationMediumStageId, x.IsActive })
+			.HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_MediumStageId_IsActive");
 
-		builder.HasIndex(x => x.LeaveType)
-			.HasDatabaseName("IX_EmployeeLeavePolicies_LeaveType");
+		builder.HasIndex(x => x.LeaveTypeId)
+			.HasDatabaseName("IX_EmployeeLeavePolicies_LeaveTypeId");
 	}
 }

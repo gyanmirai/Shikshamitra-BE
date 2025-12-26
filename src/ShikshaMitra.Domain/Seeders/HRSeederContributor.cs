@@ -1,6 +1,8 @@
 ﻿using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
@@ -24,6 +26,8 @@ public class HRSeederContributor : BaseSeederContributor
 	private readonly DeductionComponentManager _deductionComponentManager;
 	private readonly IRepository<LeavePolicy, Guid> _leavePolicyRepository;
 	private readonly LeavePolicyManager _leavePolicyManager;
+	private readonly ILeaveTypeRepository _leaveTypeQueryRepository;
+	private readonly IRepository<EducationMediumStage, Guid> _educationMediumStageRepository;
 
 	public HRSeederContributor(
 		ICurrentTenant currentTenant,
@@ -36,7 +40,9 @@ public class HRSeederContributor : BaseSeederContributor
 		IRepository<DeductionComponent, Guid> deductionComponentRepository,
 		DeductionComponentManager deductionComponentManager,
 		IRepository<LeavePolicy, Guid> leavePolicyRepository,
-		LeavePolicyManager leavePolicyManager)
+		LeavePolicyManager leavePolicyManager,
+		ILeaveTypeRepository leaveTypeQueryRepository,
+		IRepository<EducationMediumStage, Guid> educationMediumStageRepository)
 		: base(currentTenant, guidGenerator, unitOfWork)
 	{
 		_leaveTypeRepository = leaveTypeRepository;
@@ -47,44 +53,105 @@ public class HRSeederContributor : BaseSeederContributor
 		_deductionComponentManager = deductionComponentManager;
 		_leavePolicyRepository = leavePolicyRepository;
 		_leavePolicyManager = leavePolicyManager;
+		_leaveTypeQueryRepository = leaveTypeQueryRepository;
+		_educationMediumStageRepository = educationMediumStageRepository;
 	}
 
 	public override async Task SeedAsync(DataSeedContext context)
 	{
-		// Seed default leave types
-		await SeedLeaveTypesAsync();
-
 		// Seed default earning components
 		await SeedEarningComponentsAsync();
 
 		// Seed default deduction components
 		await SeedDeductionComponentsAsync();
 
-		// Seed default leave policies
-		await SeedLeavePoliciesAsync();
+		// Seed leave types and policies (requires EducationMediumStage)
+		await SeedLeaveTypesAndPoliciesAsync();
 	}
 
-	private async Task SeedLeaveTypesAsync()
+	private async Task SeedLeaveTypesAndPoliciesAsync()
 	{
 		// Check if already seeded
 		if (await _leaveTypeRepository.AnyAsync())
 			return;
 
+		// Get the first available EducationMediumStage
+		var educationMediumStage = (await _educationMediumStageRepository.GetQueryableAsync())
+			.FirstOrDefault();
+
+		if (educationMediumStage == null)
+		{
+			// Skip seeding if no EducationMediumStage is available
+			// This can happen if academic setup hasn't been seeded yet
+			return;
+		}
+
+		var educationMediumStageId = educationMediumStage.Id;
+
+		// Seed leave types
 		var leaveTypes = new[]
 		{
-			("Casual Leave", "#4CAF50"),
-			("Sick Leave", "#FF9800"),
-			("Earned Leave", "#2196F3"),
-			("Maternity Leave", "#E91E63"),
-			("Paternity Leave", "#9C27B0"),
-			("Compensatory Off", "#00BCD4"),
-			("Loss of Pay", "#F44336")
+			("Casual Leave", "#4CAF50", (string?)null),
+			("Sick Leave", "#FF9800", (string?)null),
+			("Earned Leave", "#2196F3", (string?)null),
+			("Maternity Leave", "#E91E63", (string?)null),
+			("Paternity Leave", "#9C27B0", (string?)null),
+			("Compensatory Off", "#00BCD4", (string?)null),
+			("Loss of Pay", "#F44336", (string?)null)
 		};
 
-		foreach (var (type, color) in leaveTypes)
+		foreach (var (type, color, description) in leaveTypes)
 		{
-			var leaveType = await _leaveTypeManager.CreateAsync(type, color);
+			var leaveType = await _leaveTypeManager.CreateAsync(educationMediumStageId, type, color, description);
 			await _leaveTypeRepository.InsertAsync(leaveType, autoSave: true);
+		}
+
+		// Seed leave policies
+		await SeedLeavePoliciesAsync(educationMediumStageId);
+	}
+
+	private async Task SeedLeavePoliciesAsync(Guid educationMediumStageId)
+	{
+		// Check if already seeded
+		if (await _leavePolicyRepository.AnyAsync())
+			return;
+
+		// Get the leave type IDs by name
+		async Task<Guid?> GetLeaveTypeIdAsync(string typeName)
+		{
+			var leaveType = await _leaveTypeQueryRepository.FindByTypeAsync(educationMediumStageId, typeName);
+			return leaveType?.Id;
+		}
+
+		var leavePolicies = new[]
+		{
+			new { PolicyName = "Standard Casual Leave Policy", LeaveTypeName = "Casual Leave", MaximumDaysPerYear = 12, PaidType = LeavePaidType.Paid, CarryForward = true, Encashable = false, RequiresApproval = true, Description = "Standard casual leave - 12 days per year, carry forward allowed" },
+			new { PolicyName = "Standard Sick Leave Policy", LeaveTypeName = "Sick Leave", MaximumDaysPerYear = 7, PaidType = LeavePaidType.Paid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Sick leave - 7 days per year, no carry forward" },
+			new { PolicyName = "Standard Earned Leave Policy", LeaveTypeName = "Earned Leave", MaximumDaysPerYear = 15, PaidType = LeavePaidType.Paid, CarryForward = true, Encashable = true, RequiresApproval = true, Description = "Earned/Privilege leave - 15 days per year, carry forward and encashable" },
+			new { PolicyName = "Maternity Leave Policy", LeaveTypeName = "Maternity Leave", MaximumDaysPerYear = 180, PaidType = LeavePaidType.Paid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Maternity leave as per statutory requirements" },
+			new { PolicyName = "Paternity Leave Policy", LeaveTypeName = "Paternity Leave", MaximumDaysPerYear = 15, PaidType = LeavePaidType.Paid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Paternity leave - 15 days" },
+			new { PolicyName = "Compensatory Off Policy", LeaveTypeName = "Compensatory Off", MaximumDaysPerYear = 24, PaidType = LeavePaidType.Paid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Comp-off for working on holidays - maximum 24 days per year" },
+			new { PolicyName = "Loss of Pay Policy", LeaveTypeName = "Loss of Pay", MaximumDaysPerYear = 365, PaidType = LeavePaidType.Unpaid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Unpaid leave when all leave quota is exhausted" }
+		};
+
+		foreach (var policy in leavePolicies)
+		{
+			var leaveTypeId = await GetLeaveTypeIdAsync(policy.LeaveTypeName);
+			if (leaveTypeId == null)
+				continue;
+
+			var leavePolicy = await _leavePolicyManager.CreateAsync(
+				educationMediumStageId,
+				policy.PolicyName,
+				leaveTypeId.Value,
+				policy.MaximumDaysPerYear,
+				policy.PaidType,
+				policy.CarryForward,
+				policy.Encashable,
+				policy.RequiresApproval,
+				policy.Description
+			);
+			await _leavePolicyRepository.InsertAsync(leavePolicy, autoSave: true);
 		}
 	}
 
@@ -150,39 +217,6 @@ public class HRSeederContributor : BaseSeederContributor
 				component.DisplayOrder
 			);
 			await _deductionComponentRepository.InsertAsync(deductionComponent, autoSave: true);
-		}
-	}
-
-	private async Task SeedLeavePoliciesAsync()
-	{
-		// Check if already seeded
-		if (await _leavePolicyRepository.AnyAsync())
-			return;
-
-		var leavePolicies = new[]
-		{
-			new { PolicyName = "Standard Casual Leave Policy", LeaveType = "Casual Leave", MaximumDaysPerYear = 12, PaidType = LeavePaidType.Paid, CarryForward = true, Encashable = false, RequiresApproval = true, Description = "Standard casual leave - 12 days per year, carry forward allowed" },
-			new { PolicyName = "Standard Sick Leave Policy", LeaveType = "Sick Leave", MaximumDaysPerYear = 7, PaidType = LeavePaidType.Paid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Sick leave - 7 days per year, no carry forward" },
-			new { PolicyName = "Standard Earned Leave Policy", LeaveType = "Earned Leave", MaximumDaysPerYear = 15, PaidType = LeavePaidType.Paid, CarryForward = true, Encashable = true, RequiresApproval = true, Description = "Earned/Privilege leave - 15 days per year, carry forward and encashable" },
-			new { PolicyName = "Maternity Leave Policy", LeaveType = "Maternity Leave", MaximumDaysPerYear = 180, PaidType = LeavePaidType.Paid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Maternity leave as per statutory requirements" },
-			new { PolicyName = "Paternity Leave Policy", LeaveType = "Paternity Leave", MaximumDaysPerYear = 15, PaidType = LeavePaidType.Paid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Paternity leave - 15 days" },
-			new { PolicyName = "Compensatory Off Policy", LeaveType = "Compensatory Off", MaximumDaysPerYear = 24, PaidType = LeavePaidType.Paid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Comp-off for working on holidays - maximum 24 days per year" },
-			new { PolicyName = "Loss of Pay Policy", LeaveType = "Loss of Pay", MaximumDaysPerYear = 365, PaidType = LeavePaidType.Unpaid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Unpaid leave when all leave quota is exhausted" }
-		};
-
-		foreach (var policy in leavePolicies)
-		{
-			var leavePolicy = await _leavePolicyManager.CreateAsync(
-				policy.PolicyName,
-				policy.LeaveType,
-				policy.MaximumDaysPerYear,
-				policy.PaidType,
-				policy.CarryForward,
-				policy.Encashable,
-				policy.RequiresApproval,
-				policy.Description
-			);
-			await _leavePolicyRepository.InsertAsync(leavePolicy, autoSave: true);
 		}
 	}
 }

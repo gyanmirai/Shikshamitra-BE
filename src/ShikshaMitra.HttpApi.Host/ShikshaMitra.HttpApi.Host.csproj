@@ -78,4 +78,8 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Controllers\HR\Employees\" />
+  </ItemGroup>
+
 </Project>

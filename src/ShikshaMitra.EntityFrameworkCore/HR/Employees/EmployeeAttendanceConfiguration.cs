@@ -25,17 +25,32 @@ public class EmployeeAttendanceConfiguration : IEntityTypeConfiguration<Employee
 		builder.Property(e => e.EducationMediumStageId)
 			.IsRequired(false);
 
-		// Modify TimeIn and TimeOut to use DateTimeOffset
-		builder.Property(e => e.TimeIn)
+		// AttendanceDate for unique constraint and date-based queries
+		builder.Property(e => e.AttendanceDate)
 			.IsRequired()
+			.HasColumnType("date");
+
+		// TimeIn and TimeOut are nullable (for ABSENT/PENDING days without actual clock-in)
+		builder.Property(e => e.TimeIn)
+			.IsRequired(false)
 			.HasColumnType("timestamptz");
 
 		builder.Property(e => e.TimeOut)
+			.IsRequired(false)
 			.HasColumnType("timestamptz");
 
 		// Indexes
 		builder.HasIndex(e => new { e.EmployeeId });
 		builder.HasIndex(e => e.EducationMediumStageId); // Index for scope filtering
+
+		// Unique constraint: one attendance record per employee per day per tenant
+		builder.HasIndex(e => new { e.TenantId, e.EmployeeId, e.AttendanceDate })
+			.IsUnique()
+			.HasDatabaseName("IX_EmployeeAttendances_Tenant_Employee_Date");
+
+		// Index for date-wise queries (e.g., get all attendance for a specific date)
+		builder.HasIndex(e => new { e.TenantId, e.AttendanceDate })
+			.HasDatabaseName("IX_EmployeeAttendances_Tenant_Date");
 
 		// Relationships
 		builder.HasOne(e => e.Employee)

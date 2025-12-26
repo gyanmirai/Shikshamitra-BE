@@ -19,4 +19,24 @@ public interface ILeavePolicyAppService : ICrudAppService<
 	/// Get all active leave policies with pagination support
 	/// </summary>
 	Task<PagedResultDto<LeavePolicyDto>> GetAllActiveAsync(PagedResultRequestDto input);
+	
+	/// <summary>
+	/// Get paginated leave policies for an organization (matches OpenAPI contract)
+	/// </summary>
+	Task<LeavePolicyListResponse> GetListByMediumStageIdAsync(Guid mediumStageId, int page, int pageSize);
+	
+	/// <summary>
+	/// Create a leave policy (matches OpenAPI contract)
+	/// </summary>
+	Task<LeavePolicyResponse> CreateLeavePolicyAsync(LeavePolicyCreateRequest input);
+	
+	/// <summary>
+	/// Update a leave policy (matches OpenAPI contract)
+	/// </summary>
+	Task<LeavePolicyUpdatedResponse> UpdateLeavePolicyAsync(Guid policyId, LeavePolicyCreateRequest input);
+	
+	/// <summary>
+	/// Delete (deactivate) a leave policy (matches OpenAPI contract)
+	/// </summary>
+	Task<LeavePolicyDeleteResponse> DeleteLeavePolicyAsync(Guid policyId);
 }

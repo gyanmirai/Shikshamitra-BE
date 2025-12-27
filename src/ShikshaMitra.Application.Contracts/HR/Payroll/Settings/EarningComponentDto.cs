@@ -27,7 +27,12 @@ public class EarningComponentDto : FullAuditedEntityDto<Guid>
 	/// What this component depends on
 	/// </summary>
 	public ComponentDependency DependOn { get; set; }
-	
+
+	/// <summary>
+	/// Custom component ID when DependOn is CustomComponent
+	/// </summary>
+	public Guid? CustomComponentId { get; set; }
+
 	/// <summary>
 	/// Amount (can be numeric like "30000" or percentage like "40%")
 	/// </summary>

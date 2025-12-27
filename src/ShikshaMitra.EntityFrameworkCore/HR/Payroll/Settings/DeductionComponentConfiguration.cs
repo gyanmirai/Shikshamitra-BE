@@ -33,6 +33,9 @@ public class DeductionComponentConfiguration : IEntityTypeConfiguration<Deductio
 		builder.Property(x => x.DependOn)
 			.IsRequired();
 
+		builder.Property(x => x.CustomComponentId)
+			.IsRequired(false);
+
 		builder.Property(x => x.VisibleInPayslip)
 			.IsRequired()
 			.HasDefaultValue(true);

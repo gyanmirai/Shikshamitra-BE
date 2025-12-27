@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "hr-module-api-collection",
 		"name": "ShikshaMitra - HR Module",
-		"description": "Comprehensive API collection for HR Module including:\n- Leave Management (Leave Types & Policies)\n- Payroll Management (Earning & Deduction Components)\n- Employee Management (Documents, Payroll Details, Additional Details)",
+		"description": "Comprehensive API collection for HR Module including:\n- Leave Management\n- Attendance Tracking\n- Payroll Management\n- Employee Management\n- Reports & Analytics",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "hr-module"
 	},
@@ -125,7 +125,7 @@
 			]
 		},
 		{
-			"name": "Leave Management",
+			"name": "Attendance & Leaves",
 			"item": [
 				{
 					"name": "Leave Types",
@@ -134,208 +134,127 @@
 							"name": "Get All Leave Types",
 							"request": {
 								"method": "GET",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
+								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/attendance/leave-types?SkipCount=0&MaxResultCount=10",
+									"raw": "{{base_url}}/api/leave-types?mediumStageId={{medium_stage_id}}&page=1&pageSize=10",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
-										"attendance",
 										"leave-types"
 									],
 									"query": [
 										{
-											"key": "SkipCount",
-											"value": "0"
+											"key": "mediumStageId",
+											"value": "{{medium_stage_id}}"
 										},
 										{
-											"key": "MaxResultCount",
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "pageSize",
 											"value": "10"
 										}
 									]
 								}
-							},
-							"response": []
-						},
-						{
-							"name": "Get Active Leave Types",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/api/attendance/leave-types/active?SkipCount=0&MaxResultCount=10",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"attendance",
-										"leave-types",
-										"active"
-									],
-									"query": [
-										{
-											"key": "SkipCount",
-											"value": "0"
-										},
-										{
-											"key": "MaxResultCount",
-											"value": "10"
-										}
-									]
-								}
-							},
-							"response": []
+							}
 						},
 						{
 							"name": "Get Leave Type by ID",
 							"request": {
 								"method": "GET",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
+								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/attendance/leave-types/{{leave_type_id}}",
+									"raw": "{{base_url}}/api/leave-types/{{leave_type_id}}",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
-										"attendance",
 										"leave-types",
 										"{{leave_type_id}}"
 									]
 								}
-							},
-							"response": []
+							}
 						},
 						{
 							"name": "Create Leave Type",
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"exec": [
-											"if (pm.response.code === 200) {",
-											"    const response = pm.response.json();",
-											"    pm.environment.set('leave_type_id', response.id);",
-											"    console.log('✅ Leave Type ID saved:', response.id);",
-											"}"
-										],
-										"type": "text/javascript"
-									}
-								}
-							],
 							"request": {
 								"method": "POST",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json",
-										"type": "text"
-									}
-								],
+								"header": [],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n  \"name\": \"Sick Leave\",\n  \"shortName\": \"SL\",\n  \"description\": \"Leave for medical reasons\",\n  \"isPaid\": true,\n  \"isActive\": true\n}"
+									"raw": "{\n    \"name\": \"Sick Leave\",\n    \"shortName\": \"SL\",\n    \"description\": \"Medical Leave\",\n    \"isPaid\": true,\n    \"isActive\": true\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/attendance/leave-types",
+									"raw": "{{base_url}}/api/leave-types?mediumStageId={{medium_stage_id}}",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
-										"attendance",
 										"leave-types"
+									],
+									"query": [
+										{
+											"key": "mediumStageId",
+											"value": "{{medium_stage_id}}"
+										}
 									]
 								}
-							},
-							"response": []
+							}
 						},
 						{
 							"name": "Update Leave Type",
 							"request": {
 								"method": "PUT",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json",
-										"type": "text"
-									}
-								],
+								"header": [],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n  \"name\": \"Sick Leave (Updated)\",\n  \"shortName\": \"SL\",\n  \"description\": \"Updated description for sick leave\",\n  \"isPaid\": true,\n  \"isActive\": true\n}"
+									"raw": "{\n    \"name\": \"Sick Leave (Updated)\",\n    \"shortName\": \"SL\",\n    \"description\": \"Updated Medical Leave\",\n    \"isPaid\": true,\n    \"isActive\": true\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/attendance/leave-types/{{leave_type_id}}",
+									"raw": "{{base_url}}/api/leave-types/{{leave_type_id}}",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
-										"attendance",
 										"leave-types",
 										"{{leave_type_id}}"
 									]
 								}
-							},
-							"response": []
+							}
 						},
 						{
 							"name": "Delete Leave Type",
 							"request": {
 								"method": "DELETE",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
+								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/attendance/leave-types/{{leave_type_id}}",
+									"raw": "{{base_url}}/api/leave-types/{{leave_type_id}}",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
-										"attendance",
 										"leave-types",
 										"{{leave_type_id}}"
 									]
 								}
-							},
-							"response": []
+							}
 						}
 					]
 				},
@@ -346,208 +265,670 @@
 							"name": "Get All Leave Policies",
 							"request": {
 								"method": "GET",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
+								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/attendance/leave-policies?SkipCount=0&MaxResultCount=10",
+									"raw": "{{base_url}}/api/leave-policies?mediumStageId={{medium_stage_id}}&page=1&pageSize=10",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
-										"attendance",
 										"leave-policies"
 									],
 									"query": [
 										{
-											"key": "SkipCount",
-											"value": "0"
+											"key": "mediumStageId",
+											"value": "{{medium_stage_id}}"
 										},
 										{
-											"key": "MaxResultCount",
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "pageSize",
 											"value": "10"
 										}
 									]
 								}
-							},
-							"response": []
-						},
-						{
-							"name": "Get Active Leave Policies",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/api/attendance/leave-policies/active?SkipCount=0&MaxResultCount=10",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"attendance",
-										"leave-policies",
-										"active"
-									],
-									"query": [
-										{
-											"key": "SkipCount",
-											"value": "0"
-										},
-										{
-											"key": "MaxResultCount",
-											"value": "10"
-										}
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "Get Leave Policy by ID",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/api/attendance/leave-policies/{{leave_policy_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"attendance",
-										"leave-policies",
-										"{{leave_policy_id}}"
-									]
-								}
-							},
-							"response": []
+							}
 						},
 						{
 							"name": "Create Leave Policy",
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"exec": [
-											"if (pm.response.code === 200) {",
-											"    const response = pm.response.json();",
-											"    pm.environment.set('leave_policy_id', response.id);",
-											"    console.log('✅ Leave Policy ID saved:', response.id);",
-											"}"
-										],
-										"type": "text/javascript"
-									}
-								}
-							],
 							"request": {
 								"method": "POST",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json",
-										"type": "text"
-									}
-								],
+								"header": [],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n  \"name\": \"Annual Leave Policy\",\n  \"description\": \"Policy for annual leave allocation\",\n  \"leaveTypeId\": \"{{leave_type_id}}\",\n  \"maxDaysPerYear\": 20,\n  \"carryForwardDays\": 5,\n  \"isActive\": true\n}"
+									"raw": "{\n  \"name\": \"Standard Policy\",\n  \"leaveTypeId\": \"{{leave_type_id}}\",\n  \"maxDaysPerYear\": 12,\n  \"carryForwardDays\": 0\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/attendance/leave-policies",
+									"raw": "{{base_url}}/api/leave-policies?mediumStageId={{medium_stage_id}}",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
-										"attendance",
 										"leave-policies"
+									],
+									"query": [
+										{
+											"key": "mediumStageId",
+											"value": "{{medium_stage_id}}"
+										}
 									]
 								}
-							},
-							"response": []
+							}
+						}
+					]
+				},
+				{
+					"name": "Attendance Tracking",
+					"item": [
+						{
+							"name": "Get Attendance (Date-wise)",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/attendance-tracking/date-wise?attendanceDate={{current_date}}&page=1&pageSize=10",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"attendance-tracking",
+										"date-wise"
+									],
+									"query": [
+										{
+											"key": "attendanceDate",
+											"value": "{{current_date}}",
+											"description": "DD-MM-YYYY or ISO"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "pageSize",
+											"value": "10"
+										}
+									]
+								}
+							}
 						},
 						{
-							"name": "Update Leave Policy",
+							"name": "Get Attendance (Employee-wise)",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/attendance-tracking/employee-wise?employeeId={{employee_id}}&startDate={{start_date}}&endDate={{end_date}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"attendance-tracking",
+										"employee-wise"
+									],
+									"query": [
+										{
+											"key": "employeeId",
+											"value": "{{employee_id}}"
+										},
+										{
+											"key": "startDate",
+											"value": "{{start_date}}",
+											"description": "DD-MM-YYYY"
+										},
+										{
+											"key": "endDate",
+											"value": "{{end_date}}",
+											"description": "DD-MM-YYYY"
+										}
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Employee Attendance",
+					"item": [
+						{
+							"name": "Get By Date",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/attendance/employees?date={{current_date_iso}}&page=0&pageSize=20",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"attendance",
+										"employees"
+									],
+									"query": [
+										{
+											"key": "date",
+											"value": "{{current_date_iso}}"
+										},
+										{
+											"key": "page",
+											"value": "0"
+										},
+										{
+											"key": "pageSize",
+											"value": "20"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Update Attendance",
 							"request": {
 								"method": "PUT",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json",
-										"type": "text"
-									}
-								],
+								"header": [],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n  \"name\": \"Annual Leave Policy (Updated)\",\n  \"description\": \"Updated policy for annual leave\",\n  \"leaveTypeId\": \"{{leave_type_id}}\",\n  \"maxDaysPerYear\": 25,\n  \"carryForwardDays\": 7,\n  \"isActive\": true\n}"
+									"raw": "{\n  \"employeeId\": \"{{employee_id}}\",\n  \"date\": \"{{current_date_iso}}\",\n  \"status\": 1, \n  \"checkInTime\": \"09:00:00\",\n  \"checkOutTime\": \"17:00:00\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/attendance/leave-policies/{{leave_policy_id}}",
+									"raw": "{{base_url}}/attendance/employees",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
-										"api",
 										"attendance",
-										"leave-policies",
-										"{{leave_policy_id}}"
+										"employees"
 									]
 								}
-							},
-							"response": []
+							}
 						},
 						{
-							"name": "Delete Leave Policy",
+							"name": "Import Attendance (Excel)",
 							"request": {
-								"method": "DELETE",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "file",
+											"type": "file",
+											"src": []
+										},
+										{
+											"key": "date",
+											"value": "{{current_date_iso}}",
+											"type": "text"
+										}
+									]
+								},
 								"url": {
-									"raw": "{{base_url}}/api/attendance/leave-policies/{{leave_policy_id}}",
+									"raw": "{{base_url}}/attendance/import",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"attendance",
+										"import"
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Leave Management",
+					"item": [
+						{
+							"name": "Get Leave Requests",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/leave-management?mediumStageId={{medium_stage_id}}&page=1&pageSize=10",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
-										"attendance",
-										"leave-policies",
-										"{{leave_policy_id}}"
+										"leave-management"
+									],
+									"query": [
+										{
+											"key": "mediumStageId",
+											"value": "{{medium_stage_id}}"
+										}
 									]
 								}
-							},
-							"response": []
+							}
+						},
+						{
+							"name": "Create Leave Request",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "mediumStageId",
+											"value": "{{medium_stage_id}}",
+											"type": "text"
+										},
+										{
+											"key": "leaveTypeId",
+											"value": "{{leave_type_id}}",
+											"type": "text"
+										},
+										{
+											"key": "startDate",
+											"value": "{{start_date_iso}}",
+											"type": "text"
+										},
+										{
+											"key": "endDate",
+											"value": "{{end_date_iso}}",
+											"type": "text"
+										},
+										{
+											"key": "reason",
+											"value": "Medical emergency",
+											"type": "text"
+										}
+									]
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/leave-management",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"leave-management"
+									]
+								}
+							}
+						},
+						{
+							"name": "Update Leave Request Status",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"status\": 1, \n  \"remarks\": \"Approved\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/leave-management/{{leave_request_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"leave-management",
+										"{{leave_request_id}}"
+									]
+								}
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Employee Management",
+			"item": [
+				{
+					"name": "Employees",
+					"item": [
+						{
+							"name": "Get All Employees",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/employees?page=1&pageSize=10",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"employees"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "pageSize",
+											"value": "10"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Search Employees",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/employees/search?search=John",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"employees",
+										"search"
+									],
+									"query": [
+										{
+											"key": "search",
+											"value": "John"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Get Employee By ID",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/employees/{{employee_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"employees",
+										"{{employee_id}}"
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Personal Info",
+					"item": [
+						{
+							"name": "Get Personal Info",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/employees/{{employee_id}}/personal-info",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"employees",
+										"{{employee_id}}",
+										"personal-info"
+									]
+								}
+							}
+						},
+						{
+							"name": "Update Personal Info",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"mobileNo\": \"9876543210\",\n  \"email\": \"john.doe@example.com\",\n  \"gender\": 1,\n  \"dob\": \"1990-01-01\",\n  \"doj\": \"2023-01-01\",\n  \"roleId\": \"{{role_id}}\",\n  \"departmentId\": \"{{department_id}}\",\n  \"shiftId\": \"{{shift_id}}\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/employees/{{employee_id}}/personal-info",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"employees",
+										"{{employee_id}}",
+										"personal-info"
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Family Info",
+					"item": [
+						{
+							"name": "Get Family Info",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/employees/{{employee_id}}/family-info",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"employees",
+										"{{employee_id}}",
+										"family-info"
+									]
+								}
+							}
+						},
+						{
+							"name": "Update Family Info",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"fatherName\": \"Robert Doe\",\n  \"motherName\": \"Mary Doe\",\n  \"spouseName\": \"Jane Doe\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/employees/{{employee_id}}/family-info",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"employees",
+										"{{employee_id}}",
+										"family-info"
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Work Experience",
+					"item": [
+						{
+							"name": "Get Work Experience",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/employees/{{employee_id}}/work-experience",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"employees",
+										"{{employee_id}}",
+										"work-experience"
+									]
+								}
+							}
+						},
+						{
+							"name": "Update Work Experience",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "[\n  {\n    \"organizationName\": \"Previous Corp\",\n    \"designation\": \"Junior Dev\",\n    \"startDate\": \"2020-01-01\",\n    \"endDate\": \"2022-12-31\",\n    \"isCurrent\": false\n  }\n]",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/employees/{{employee_id}}/work-experience",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"employees",
+										"{{employee_id}}",
+										"work-experience"
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Reporting Manager",
+					"item": [
+						{
+							"name": "Get Reporting Manager",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/employees/{{employee_id}}/reporting-manager",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"employees",
+										"{{employee_id}}",
+										"reporting-manager"
+									]
+								}
+							}
+						},
+						{
+							"name": "Assign Reporting Manager",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"reportingManagerId\": \"{{manager_id}}\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/employees/{{employee_id}}/reporting-manager",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"employees",
+										"{{employee_id}}",
+										"reporting-manager"
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Documents (Config)",
+					"item": [
+						{
+							"name": "Get Document Configs",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/employees/documents",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"employees",
+										"documents"
+									]
+								}
+							}
+						},
+						{
+							"name": "Create Document Config",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Aadhar Card\",\n  \"isRequired\": true\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/employees/documents",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"employees",
+										"documents"
+									]
+								}
+							}
 						}
 					]
 				}
@@ -560,18 +941,12 @@
 					"name": "Earning Components",
 					"item": [
 						{
-							"name": "Get All Earning Components",
+							"name": "Get All",
 							"request": {
 								"method": "GET",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
+								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/payroll/earning-components?SkipCount=0&MaxResultCount=10",
+									"raw": "{{base_url}}/api/payroll/earning-components",
 									"host": [
 										"{{base_url}}"
 									],
@@ -579,117 +954,23 @@
 										"api",
 										"payroll",
 										"earning-components"
-									],
-									"query": [
-										{
-											"key": "SkipCount",
-											"value": "0"
-										},
-										{
-											"key": "MaxResultCount",
-											"value": "10"
-										}
 									]
 								}
-							},
-							"response": []
-						},
-						{
-							"name": "Get Active Earning Components",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/api/payroll/earning-components/active?SkipCount=0&MaxResultCount=10",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"payroll",
-										"earning-components",
-										"active"
-									],
-									"query": [
-										{
-											"key": "SkipCount",
-											"value": "0"
-										},
-										{
-											"key": "MaxResultCount",
-											"value": "10"
-										}
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "Get Earning Component by ID",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/api/payroll/earning-components/{{earning_component_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"payroll",
-										"earning-components",
-										"{{earning_component_id}}"
-									]
-								}
-							},
-							"response": []
+							}
 						},
 						{
 							"name": "Create Earning Component",
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"exec": [
-											"if (pm.response.code === 200) {",
-											"    const response = pm.response.json();",
-											"    pm.environment.set('earning_component_id', response.id);",
-											"    console.log('✅ Earning Component ID saved:', response.id);",
-											"}"
-										],
-										"type": "text/javascript"
-									}
-								}
-							],
 							"request": {
 								"method": "POST",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json",
-										"type": "text"
-									}
-								],
+								"header": [],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n  \"name\": \"Basic Salary\",\n  \"description\": \"Monthly basic salary\",\n  \"componentType\": 0,\n  \"dependOn\": 0,\n  \"amount\": \"50000\",\n  \"visibleInPayslip\": true,\n  \"displayOrder\": 1\n}"
+									"raw": "{\n  \"name\": \"Basic\",\n  \"type\": 0\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
 								},
 								"url": {
 									"raw": "{{base_url}}/api/payroll/earning-components",
@@ -702,123 +983,7 @@
 										"earning-components"
 									]
 								}
-							},
-							"response": []
-						},
-						{
-							"name": "Update Earning Component",
-							"request": {
-								"method": "PUT",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json",
-										"type": "text"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"name\": \"Basic Salary (Updated)\",\n  \"description\": \"Updated monthly basic salary\",\n  \"componentType\": 0,\n  \"dependOn\": 0,\n  \"amount\": \"55000\",\n  \"visibleInPayslip\": true,\n  \"displayOrder\": 1\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/payroll/earning-components/{{earning_component_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"payroll",
-										"earning-components",
-										"{{earning_component_id}}"
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "Delete Earning Component",
-							"request": {
-								"method": "DELETE",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/api/payroll/earning-components/{{earning_component_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"payroll",
-										"earning-components",
-										"{{earning_component_id}}"
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "Activate Earning Component",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/api/payroll/earning-components/{{earning_component_id}}/activate",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"payroll",
-										"earning-components",
-										"{{earning_component_id}}",
-										"activate"
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "Deactivate Earning Component",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/api/payroll/earning-components/{{earning_component_id}}/deactivate",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"payroll",
-										"earning-components",
-										"{{earning_component_id}}",
-										"deactivate"
-									]
-								}
-							},
-							"response": []
+							}
 						}
 					]
 				},
@@ -826,137 +991,10 @@
 					"name": "Deduction Components",
 					"item": [
 						{
-							"name": "Get All Deduction Components",
+							"name": "Get All",
 							"request": {
 								"method": "GET",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/api/payroll/deduction-components?SkipCount=0&MaxResultCount=10",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"payroll",
-										"deduction-components"
-									],
-									"query": [
-										{
-											"key": "SkipCount",
-											"value": "0"
-										},
-										{
-											"key": "MaxResultCount",
-											"value": "10"
-										}
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "Get Active Deduction Components",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/api/payroll/deduction-components/active?SkipCount=0&MaxResultCount=10",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"payroll",
-										"deduction-components",
-										"active"
-									],
-									"query": [
-										{
-											"key": "SkipCount",
-											"value": "0"
-										},
-										{
-											"key": "MaxResultCount",
-											"value": "10"
-										}
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "Get Deduction Component by ID",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/api/payroll/deduction-components/{{deduction_component_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"payroll",
-										"deduction-components",
-										"{{deduction_component_id}}"
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "Create Deduction Component",
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"exec": [
-											"if (pm.response.code === 200) {",
-											"    const response = pm.response.json();",
-											"    pm.environment.set('deduction_component_id', response.id);",
-											"    console.log('✅ Deduction Component ID saved:', response.id);",
-											"}"
-										],
-										"type": "text/javascript"
-									}
-								}
-							],
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json",
-										"type": "text"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"name\": \"Provident Fund\",\n  \"description\": \"Employee PF contribution\",\n  \"componentType\": 1,\n  \"dependOn\": 0,\n  \"amount\": \"6000\",\n  \"visibleInPayslip\": true,\n  \"displayOrder\": 1\n}"
-								},
+								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/payroll/deduction-components",
 									"host": [
@@ -968,430 +1006,250 @@
 										"deduction-components"
 									]
 								}
-							},
-							"response": []
+							}
+						}
+					]
+				},
+				{
+					"name": "PF Rules",
+					"item": [
+						{
+							"name": "Get All PF Rules",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/payroll/pf-rules",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"payroll",
+										"pf-rules"
+									]
+								}
+							}
 						},
 						{
-							"name": "Update Deduction Component",
+							"name": "Create PF Rule",
 							"request": {
-								"method": "PUT",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json",
-										"type": "text"
-									}
-								],
+								"method": "POST",
+								"header": [],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n  \"name\": \"Provident Fund (Updated)\",\n  \"description\": \"Updated PF contribution\",\n  \"componentType\": 1,\n  \"dependOn\": 0,\n  \"amount\": \"7000\",\n  \"visibleInPayslip\": true,\n  \"displayOrder\": 1\n}"
+									"raw": "{\n  \"name\": \"Standard PF\",\n  \"employerContribution\": 12,\n  \"employeeContribution\": 12\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
 								},
 								"url": {
-									"raw": "{{base_url}}/api/payroll/deduction-components/{{deduction_component_id}}",
+									"raw": "{{base_url}}/api/payroll/pf-rules",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
 										"payroll",
-										"deduction-components",
-										"{{deduction_component_id}}"
+										"pf-rules"
 									]
 								}
-							},
-							"response": []
-						},
+							}
+						}
+					]
+				},
+				{
+					"name": "Salary Structure",
+					"item": [
 						{
-							"name": "Delete Deduction Component",
+							"name": "Get Employee Salary Structure",
 							"request": {
-								"method": "DELETE",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
+								"method": "GET",
+								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/payroll/deduction-components/{{deduction_component_id}}",
+									"raw": "{{base_url}}/api/payroll/employees/{{employee_id}}/salary-structure",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
 										"payroll",
-										"deduction-components",
-										"{{deduction_component_id}}"
+										"employees",
+										"{{employee_id}}",
+										"salary-structure"
 									]
 								}
-							},
-							"response": []
+							}
 						},
 						{
-							"name": "Activate Deduction Component",
+							"name": "Update Employee Salary Structure",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"components\": [\n    { \"id\": \"{{component_id}}\", \"amount\": 50000 }\n  ]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/payroll/employees/{{employee_id}}/salary-structure",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"payroll",
+										"employees",
+										"{{employee_id}}",
+										"salary-structure"
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Run Payroll",
+					"item": [
+						{
+							"name": "Get Preview",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/payroll/run?month={{month_year}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"payroll",
+										"run"
+									],
+									"query": [
+										{
+											"key": "month",
+											"value": "{{month_year}}",
+											"description": "MMMM-YYYY"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Lock Payroll",
 							"request": {
 								"method": "POST",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"month\": \"{{month_year}}\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
 									}
-								],
+								},
 								"url": {
-									"raw": "{{base_url}}/api/payroll/deduction-components/{{deduction_component_id}}/activate",
+									"raw": "{{base_url}}/api/payroll/run",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
 										"payroll",
-										"deduction-components",
-										"{{deduction_component_id}}",
-										"activate"
+										"run"
 									]
 								}
-							},
-							"response": []
-						},
+							}
+						}
+					]
+				},
+				{
+					"name": "Salary Slips",
+					"item": [
 						{
-							"name": "Deactivate Deduction Component",
+							"name": "Get Salary Slip",
 							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
+								"method": "GET",
+								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/payroll/deduction-components/{{deduction_component_id}}/deactivate",
+									"raw": "{{base_url}}/api/payroll/salary-slips?employeeId={{employee_id}}&monthYear={{month_year}}",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
 										"payroll",
-										"deduction-components",
-										"{{deduction_component_id}}",
-										"deactivate"
+										"salary-slips"
+									],
+									"query": [
+										{
+											"key": "employeeId",
+											"value": "{{employee_id}}"
+										},
+										{
+											"key": "monthYear",
+											"value": "{{month_year}}"
+										}
 									]
 								}
-							},
-							"response": []
+							}
 						}
 					]
 				}
 			]
 		},
 		{
-			"name": "Employee Management",
+			"name": "Events & Holidays",
 			"item": [
 				{
-					"name": "Employee Documents",
-					"item": [
-						{
-							"name": "Get All Documents",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/api/employee/{{employee_id}}/documents",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"employee",
-										"{{employee_id}}",
-										"documents"
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "Get Document by ID",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/api/employee/{{employee_id}}/documents/{{document_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"employee",
-										"{{employee_id}}",
-										"documents",
-										"{{document_id}}"
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "Upload Documents",
-							"request": {
-								"method": "PUT",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"body": {
-									"mode": "formdata",
-									"formdata": [
-										{
-											"key": "files",
-											"type": "file",
-											"src": []
-										}
-									]
-								},
-								"url": {
-									"raw": "{{base_url}}/api/employee/{{employee_id}}/documents",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"employee",
-										"{{employee_id}}",
-										"documents"
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "Update Document",
-							"request": {
-								"method": "PUT",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"body": {
-									"mode": "formdata",
-									"formdata": [
-										{
-											"key": "file",
-											"type": "file",
-											"src": []
-										}
-									]
-								},
-								"url": {
-									"raw": "{{base_url}}/api/employee/{{employee_id}}/documents/{{document_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"employee",
-										"{{employee_id}}",
-										"documents",
-										"{{document_id}}"
-									]
-								}
-							},
-							"response": []
+					"name": "Get All Events",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/app/event-and-holiday",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"event-and-holiday"
+							]
 						}
-					]
-				},
+					}
+				}
+			]
+		},
+		{
+			"name": "Reports",
+			"item": [
 				{
-					"name": "Employee Payroll",
-					"item": [
-						{
-							"name": "Get Payroll Details",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/api/employees/{{employee_id}}/payroll",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"employees",
-										"{{employee_id}}",
-										"payroll"
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "Update Payroll Details",
-							"request": {
-								"method": "PUT",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json",
-										"type": "text"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"payrollDetails\": {\n    \"bankName\": \"HDFC Bank\",\n    \"branchName\": \"Mumbai Main\",\n    \"accountHolderName\": \"John Doe\",\n    \"accountNumber\": \"12345678901234\",\n    \"ifscCode\": \"HDFC0001234\",\n    \"pfRule\": \"Standard\",\n    \"epfNumber\": \"MH/MUM/1234567/000/0000001\",\n    \"uanNumber\": \"123456789012\",\n    \"punchId\": \"EMP001\",\n    \"basicSalary\": 50000,\n    \"tdsPercentage\": 10,\n    \"tdsAmount\": 5000\n  },\n  \"earnings\": [\n    {\n      \"componentName\": \"Basic Salary\",\n      \"type\": 0,\n      \"amount\": 50000\n    },\n    {\n      \"componentName\": \"HRA\",\n      \"type\": 0,\n      \"amount\": 20000\n    }\n  ],\n  \"deductions\": [\n    {\n      \"componentName\": \"PF\",\n      \"type\": 1,\n      \"amount\": 6000\n    },\n    {\n      \"componentName\": \"TDS\",\n      \"type\": 1,\n      \"amount\": 5000\n    }\n  ]\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/employees/{{employee_id}}/payroll",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"employees",
-										"{{employee_id}}",
-										"payroll"
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "Update Payroll Structure (Legacy)",
-							"request": {
-								"method": "PUT",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json",
-										"type": "text"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"payrollStructures\": [\n    {\n      \"id\": \"{{payroll_structure_id}}\"\n    }\n  ]\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/employee/{{employee_id}}/payroll-structure",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"employee",
-										"{{employee_id}}",
-										"payroll-structure"
-									]
-								}
-							},
-							"response": []
+					"name": "Get Employee Report",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/app/employee-report/employee-report",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"app",
+								"employee-report",
+								"employee-report"
+							]
 						}
-					]
-				},
-				{
-					"name": "Employee Additional Details",
-					"item": [
-						{
-							"name": "Get Additional Details",
-							"request": {
-								"method": "GET",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/api/app/employee/{{employee_id}}/additional-details",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"app",
-										"employee",
-										"{{employee_id}}",
-										"additional-details"
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "Update Additional Details",
-							"request": {
-								"method": "PUT",
-								"header": [
-									{
-										"key": "__tenant",
-										"value": "{{tenant_id}}",
-										"type": "text"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json",
-										"type": "text"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"bplCardNo\": \"BPL123456\",\n  \"personWithDisability\": false,\n  \"secondLanguage\": \"Hindi\",\n  \"libraryMember\": true,\n  \"transportMember\": true\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/app/employee/{{employee_id}}/additional-details",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"app",
-										"employee",
-										"{{employee_id}}",
-										"additional-details"
-									]
-								}
-							},
-							"response": []
-						}
-					]
+					}
 				}
 			]
 		}

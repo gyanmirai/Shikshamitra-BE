@@ -180,6 +180,7 @@ public class HRSeederContributor : BaseSeederContributor
 				component.Description,
 				component.ComponentType,
 				component.DependOn,
+				null, // customComponentId
 				component.Amount,
 				component.VisibleInPayslip,
 				component.DisplayOrder
@@ -212,6 +213,7 @@ public class HRSeederContributor : BaseSeederContributor
 				component.Description,
 				component.ComponentType,
 				component.DependOn,
+				null, // customComponentId
 				component.Amount,
 				component.VisibleInPayslip,
 				component.DisplayOrder

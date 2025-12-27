@@ -32,7 +32,12 @@ public class EarningComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// What this component depends on for calculation
 	/// </summary>
 	public ComponentDependency DependOn { get; protected set; }
-	
+
+	/// <summary>
+	/// Custom component ID when DependOn is CustomComponent
+	/// </summary>
+	public Guid? CustomComponentId { get; protected set; }
+
 	/// <summary>
 	/// Amount value - can be fixed amount (e.g., "30000") or percentage (e.g., "40%")
 	/// Stored as string to support both "30000" and "40%" formats
@@ -66,6 +71,7 @@ public class EarningComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? description,
 		EarningComponentType componentType,
 		ComponentDependency dependOn,
+		Guid? customComponentId,
 		string amount,
 		bool visibleInPayslip,
 		int displayOrder = 0) : base(id)
@@ -75,6 +81,7 @@ public class EarningComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Description = description;
 		ComponentType = componentType;
 		DependOn = dependOn;
+		CustomComponentId = customComponentId;
 		SetAmount(amount, componentType, dependOn);
 		VisibleInPayslip = visibleInPayslip;
 		DisplayOrder = displayOrder;
@@ -86,6 +93,7 @@ public class EarningComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? description,
 		EarningComponentType componentType,
 		ComponentDependency dependOn,
+		Guid? customComponentId,
 		string amount,
 		bool visibleInPayslip,
 		int displayOrder)
@@ -94,6 +102,7 @@ public class EarningComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Description = description;
 		ComponentType = componentType;
 		DependOn = dependOn;
+		CustomComponentId = customComponentId;
 		SetAmount(amount, componentType, dependOn);
 		VisibleInPayslip = visibleInPayslip;
 		DisplayOrder = displayOrder;

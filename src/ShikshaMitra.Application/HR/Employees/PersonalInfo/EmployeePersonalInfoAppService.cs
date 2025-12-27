@@ -1,7 +1,4 @@
-using ShikshaMitra.Common;
-using ShikshaMitra.TenantSettings;
-using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
-using ShikshaMitra.TenantSettings.EducationBoards;
+﻿using ShikshaMitra.Common;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
@@ -151,14 +148,9 @@ public class EmployeePersonalInfoAppService(
 			City = employee.City,
 			Pincode = employee.PinCode,
 			EducationMediumStageId = employee.EducationMediumStageId,
-			EducationMediumStage = employee.EducationMediumStage != null
-				? ObjectMapper.Map<TenantSettings.EducationBoards.EducationMediumStage, TenantSettings.AcademicSetups.EducationMediums.EducationMediumStageDto>(employee.EducationMediumStage)
-				: null,
+			EducationMediumStage = null, // Navigation property not included in API contract
 			ShiftId = employee.ShiftId,
-			Shift = employee.Shift != null
-				? ObjectMapper.Map<TenantSettings.ShiftManagement, TenantSettings.ShiftManagementDto>(employee.Shift)
-				: null
+			Shift = null // Navigation property not included in API contract
 		};
 	}
 }
-

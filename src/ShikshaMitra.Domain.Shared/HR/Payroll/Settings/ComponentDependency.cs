@@ -9,14 +9,19 @@ public enum ComponentDependency
 	/// No dependency - fixed amount
 	/// </summary>
 	None = 0,
-	
+
 	/// <summary>
 	/// Depends on Basic Salary
 	/// </summary>
 	Basic = 1,
-	
+
 	/// <summary>
 	/// Depends on Gross Salary
 	/// </summary>
-	Gross = 2
+	Gross = 2,
+
+	/// <summary>
+	/// Depends on Any Custom Salary Component
+	/// </summary>
+	CustomComponent = 3
 }

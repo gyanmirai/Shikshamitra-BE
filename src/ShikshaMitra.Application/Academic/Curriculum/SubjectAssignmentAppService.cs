@@ -18,27 +18,30 @@ namespace ShikshaMitra.Academic.Curriculum;
 [RemoteService(IsEnabled = false)]
 public class SubjectAssignmentAppService(
 	IRepository<AssignedSubject, Guid> assignmentRepository,
+	IRepository<Subject, Guid> subjectRepository,
+	IRepository<ElectiveGroup, Guid> electiveGroupRepository,
 	IGuidGenerator guidGenerator,
 	ILogger<SubjectAssignmentAppService> logger
 ) : ApplicationService, ISubjectAssignmentAppService
 {
-	public async Task<SubjectAssignmentDto> CreateAsync(
+	public async Task CreateAsync(
 		Guid academicMediumId,
-		CreateUpdateSubjectAssignmentGroupDto input
+		CreateUpdateSubjectAssignmentDto createSubjectAssignmentDto
 	)
 	{
 		try
 		{
 			var assignedSubjects = new List<AssignedSubject>();
-			foreach ( var subject in input.Subjects ) {
-				var assignedSubject = 
+			foreach (var subject in createSubjectAssignmentDto.Subjects)
+			{
+				var assignedSubject =
 					new AssignedSubject(
 						guidGenerator.Create(),
 						CurrentTenant.Id,
-						input.ClassId,
-						subject.AssignedSubjectId,
+						createSubjectAssignmentDto.ClassId,
+						subject.SubjectId,
 						subject.SubjectCode,
-						input.Status,
+						createSubjectAssignmentDto.Status,
 						(subject.ElectiveGroupId == Guid.Empty || subject.ElectiveGroupId == null) ? SubjectType.Core : SubjectType.Elective,
 						subject.ElectiveGroupId,
 						subject.LearningGoal,
@@ -46,8 +49,15 @@ public class SubjectAssignmentAppService(
 						subject.Description
 					);
 
-				assignedSubject.SetPrimaryTeacher(subject.PrimaryTeacher);
-				assignedSubject.SetSecondaryTeachers(subject.SecondaryTeachers);
+				if (subject.PrimaryTeacherId != null)
+				{
+					assignedSubject.SetPrimaryTeacher(subject.PrimaryTeacherId.Value);
+				}
+
+				if (subject.SecondaryTeacherId != null)
+				{
+					assignedSubject.SetSecondaryTeachers(subject.SecondaryTeacherId);
+				}
 
 				// Set documents
 				if (subject.Documents != null && subject.Documents.Any())
@@ -59,19 +69,15 @@ public class SubjectAssignmentAppService(
 								document
 						);
 					}
-					assignedSubjects.Add(assignedSubject);
 				}
+				assignedSubjects.Add(assignedSubject);
 			}
 
 			await assignmentRepository.InsertManyAsync(assignedSubjects, autoSave: true);
-			return await MapToResponseDtoAsync(assignedSubjects);
-		}
-		catch (BusinessException)
-		{
-			throw;
 		}
 		catch (Exception ex)
 		{
+			logger.LogError(ex, "Failed to create subject assignment");
 			throw new UserFriendlyException(
 				"Failed to create subject assignment. Please try again later."
 			);
@@ -89,129 +95,267 @@ public class SubjectAssignmentAppService(
 			a.StandardId == classId
 		);
 
-		// Use ABP's AsyncExecuter for asynchronous query execution
 		var assignments = await AsyncExecuter.ToListAsync(query);
 
 		var result = new List<SubjectAssignmentDto>();
 
-		// group assignments if it has electiveGroupId and make a one response subject, for others make individual response
-		var groupedAssignments = assignments
-			.GroupBy(a => a.ElectiveGroupId.HasValue ? a.ElectiveGroupId : a.Id)
-			.ToList();
-
-		foreach (var group in groupedAssignments)
-		{
-			var subjectAssignmentDto = await MapToResponseDtoAsync(group.ToList());
-		}
+		
 
 		return result;
+	}
+
+	public async Task<SubjectAssignmentDto> GetAsync(Guid assignmentId)
+	{
+		var assignment = await assignmentRepository.GetAsync(assignmentId);
+		
+		List<AssignedSubject> groupAssignments;
+		if (assignment.ElectiveGroupId.HasValue)
+		{
+			groupAssignments = await assignmentRepository.GetListAsync(a => 
+				a.ElectiveGroupId == assignment.ElectiveGroupId && a.StandardId == assignment.StandardId
+			);
+		}
+		else
+		{
+			groupAssignments = new List<AssignedSubject> { assignment };
+		}
+
+		//return await MapToResponseDtoAsync(groupAssignments);
+		return null;
 	}
 
 	public async Task<SubjectAssignmentDto> UpdateAsync(
 		Guid assignmentId,
 		Guid academicMediumId,
-		CreateUpdateSubjectAssignmentGroupDto input
-	) => throw new NotImplementedException();
+		CreateUpdateSubjectAssignmentDto input
+	)
+	{
+		// 1. Identify the group being updated
+		var existingEntity = await assignmentRepository.GetAsync(assignmentId);
+		List<AssignedSubject> existingGroup;
 
-	public async Task<PublishResponseDto> PublishAsync(List<Guid> assignmentId)
+		if (existingEntity.ElectiveGroupId.HasValue)
+		{
+			existingGroup = await assignmentRepository.GetListAsync(x => 
+				x.ElectiveGroupId == existingEntity.ElectiveGroupId && x.StandardId == existingEntity.StandardId
+			);
+		}
+		else
+		{
+			existingGroup = new List<AssignedSubject> { existingEntity };
+		}
+
+		// 2. Process updates
+		// We match existing subjects with input subjects by SubjectId
+		var subjectsToDelete = new List<AssignedSubject>();
+		var processedSubjectIds = new HashSet<Guid>();
+
+		foreach (var inputSubject in input.Subjects)
+		{
+			processedSubjectIds.Add(inputSubject.SubjectId);
+			var existingSubject = existingGroup.FirstOrDefault(x => x.SubjectId == inputSubject.SubjectId);
+
+			if (existingSubject != null)
+			{
+				// Update existing
+				existingSubject.SubjectCode = inputSubject.SubjectCode ?? existingSubject.SubjectCode;
+				existingSubject.LearningGoals = inputSubject.LearningGoal;
+				existingSubject.Prerequisites = inputSubject.Prerequisites;
+				existingSubject.Description = inputSubject.Description;
+				existingSubject.ChangeStatus(input.Status);
+				existingSubject.StandardId = input.ClassId; // Allow moving standard?
+				
+				// Update Teachers
+				if (inputSubject.PrimaryTeacherId.HasValue)
+				{
+					existingSubject.SetPrimaryTeacher(inputSubject.PrimaryTeacherId.Value);
+				}
+				if (inputSubject.SecondaryTeacherId != null)
+				{
+					existingSubject.SetSecondaryTeachers(inputSubject.SecondaryTeacherId);
+				}
+
+				// Update specific fields like Elective Group ID if shifted? 
+				// For now assuming we keep them in the same group or the input defines the new group ID? 
+				// The input defines the structure.
+				existingSubject.ElectiveGroupId = inputSubject.ElectiveGroupId;
+				existingSubject.SubjectType = (inputSubject.ElectiveGroupId == null || inputSubject.ElectiveGroupId == Guid.Empty) 
+					? SubjectType.Core : SubjectType.Elective;
+
+				await assignmentRepository.UpdateAsync(existingSubject);
+			}
+			else
+			{
+				// Create new in this group
+				var newSubject = new AssignedSubject(
+					guidGenerator.Create(),
+					CurrentTenant.Id,
+					input.ClassId,
+					inputSubject.SubjectId,
+					inputSubject.SubjectCode,
+					input.Status,
+					(inputSubject.ElectiveGroupId == Guid.Empty || inputSubject.ElectiveGroupId == null) ? SubjectType.Core : SubjectType.Elective,
+					inputSubject.ElectiveGroupId,
+					inputSubject.LearningGoal,
+					inputSubject.Prerequisites,
+					inputSubject.Description
+				);
+
+				if (inputSubject.PrimaryTeacherId.HasValue)
+					newSubject.SetPrimaryTeacher(inputSubject.PrimaryTeacherId.Value);
+				
+				if (inputSubject.SecondaryTeacherId != null)
+					newSubject.SetSecondaryTeachers(inputSubject.SecondaryTeacherId);
+
+				if (inputSubject.Documents != null)
+				{
+					foreach (var doc in inputSubject.Documents)
+					{
+						newSubject.AddDocument(guidGenerator.Create(), doc);
+					}
+				}
+
+				await assignmentRepository.InsertAsync(newSubject);
+				existingGroup.Add(newSubject); // Add to local list for return mapping
+			}
+		}
+
+		// 3. Delete removed subjects
+		foreach (var subject in existingGroup)
+		{
+			if (!processedSubjectIds.Contains(subject.SubjectId))
+			{
+				await assignmentRepository.DeleteAsync(subject);
+			}
+		}
+
+		// Re-fetch or use modified list. 
+		// Since we modified existingGroup in memory (for updates) and adding new ones, 
+		// wait, new ones were added to repo, but we need to include them in response.
+		// Let's re-fetch to be safe and accurate, or construct response manually.
+		// Since we might have deleted the one with 'assignmentId', we return the updated group.
+		// If 'assignmentId' was deleted, what ID do we return? 
+		// The controller returns the DTO. The DTO Id is usually the first one.
+		
+		// If all deleted? 
+		if (processedSubjectIds.Count == 0) return null; // Should not happen due to validation
+
+		// Re-fetch the group based on any of the surviving IDs or the new configuration
+		// If we switched from Core to Elective or vice versa, logic holds.
+		
+		// For response, we can just use GetList logic behavior for this group.
+		// But to be fast, let's map what we have if we tracked it well.
+		// Safest is to Refetch using one of the current IDs.
+		var representativeId = existingGroup.FirstOrDefault(x => processedSubjectIds.Contains(x.SubjectId))?.Id 
+			?? existingGroup.LastOrDefault()?.Id; // Fallback
+
+		if (representativeId.HasValue)
+		{
+			return await GetAsync(representativeId.Value);
+		}
+
+		return null;
+	}
+
+	public async Task<PublishResponseDto> PublishAsync(List<Guid> assignmentIds)
 	{
 		try
 		{
 			var assignments = await assignmentRepository.GetListAsync(a =>
-				assignmentId.Contains(a.Id)
+				assignmentIds.Contains(a.Id)
 			);
+			
+			// We should probably find the GROUPS for these IDs and publish the whole groups?
+			// Assumption: User selects items in UI, if they select an elective, do they select the whole group?
+			// Usually yes. But let's be safe and publish what is requested. 
+			// If input is list of IDs, we publish those IDs.
+
 			if (assignments.Count == 0)
 			{
 				throw new BusinessException("SubjectAssignment:NotFound")
-					.WithData("AssignmentIds", JsonSerializer.Serialize(assignmentId));
+					.WithData("AssignmentIds", JsonSerializer.Serialize(assignmentIds));
 			}
+
 			foreach (var assignment in assignments)
 			{
 				assignment.Status = SubjectStatus.Published;
 				assignment.PublishedAt = DateTime.UtcNow;
 			}
+			
 			await assignmentRepository.UpdateManyAsync(assignments, autoSave: true);
-			logger.LogInformation(
-				"Successfully published {Count} assignments",
-				assignments.Count
-			);
+			
 			return new PublishResponseDto
 			{
 				Status = SubjectStatus.Published,
 				PublishedAt = DateTime.UtcNow
 			};
 		}
-		catch (BusinessException)
-		{
-			throw;
-		}
 		catch (Exception ex)
 		{
-			logger.LogError(
-				ex,
-				"Failed to publish subject assignment group {AssignmentId}",
-				JsonSerializer.Serialize(assignmentId)
-			);
-			throw new UserFriendlyException(
-				"Failed to publish subject assignment. Please try again later."
-			);
+			logger.LogError(ex, "Failed to publish assignments");
+			throw new UserFriendlyException("Failed to publish assignments.");
 		}
 	}
 
 	public async Task DeleteAsync(Guid assignmentId)
 	{
-		var assignments = await assignmentRepository.GetListAsync(a =>
-			a.Id == assignmentId
-		);
-		if (assignments.Count == 0)
+		var assignment = await assignmentRepository.GetAsync(assignmentId);
+		
+		List<AssignedSubject> groupAssignments;
+		if (assignment.ElectiveGroupId.HasValue)
 		{
-			throw new BusinessException("SubjectAssignment:NotFound")
-				.WithData("AssignmentId", assignmentId.ToString());
+			groupAssignments = await assignmentRepository.GetListAsync(a => 
+				a.ElectiveGroupId == assignment.ElectiveGroupId && a.StandardId == assignment.StandardId
+			);
 		}
-		await assignmentRepository.DeleteManyAsync(assignments, autoSave: true);
+		else
+		{
+			groupAssignments = new List<AssignedSubject> { assignment };
+		}
+
+		await assignmentRepository.DeleteManyAsync(groupAssignments, autoSave: true);
 	}
 
-	private async Task<SubjectAssignmentDto> MapToResponseDtoAsync(
-		List<AssignedSubject> groupAssignments
-	)
+	public async Task<List<CoreElectiveSubjectResponseDto>> GetCoreElectiveSubjectsAsync(Guid academicMediumId)
 	{
-		var subjectAssignmentDto = new SubjectAssignmentDto
+		try
 		{
-			Id = groupAssignments.First().Id,
-			Status = groupAssignments.First().Status,
-			SubjectType = groupAssignments.First().SubjectType,
-			Subjects = new List<SubjectAssignmentDetailResponseDto>()
-		};
+			var coreSubjects = await subjectRepository.GetListAsync(s =>
+				s.EducationMediumId == academicMediumId
+			);
+			var electiveGroups = await electiveGroupRepository.GetListAsync(eg =>
+				eg.AcademicMediumId == academicMediumId
+			);
 
-		foreach (var subject in groupAssignments)
-		{
-			var subjectDto = new SubjectAssignmentDetailResponseDto
+			var result = new List<CoreElectiveSubjectResponseDto>();
+			foreach (var coreSubject in coreSubjects)
 			{
-				AssignedId = subject.Id,
-				SubjectCode = subject.SubjectCode,
-				Subject = new SubjectDto { 
-					Name = subject.Subject.Name,
-					Color = subject.Subject.Color,
-				},
-				ElectiveGroupId = subject.ElectiveGroupId,
-				LearningGoal = subject.LearningGoals,
-				Prerequisites = subject.Prerequisites,
-				Description = subject.Description,
-				PrimaryTeacher = subject.Teachers
-					.Where(t => t.TeacherType == SubjectTeacherType.Primary)
-					.Select(t => t.TeacherId)
-					.FirstOrDefault(),
-				SecondaryTeachers = subject.Teachers
-					.Where(t => t.TeacherType == SubjectTeacherType.Secondary)
-					.Select(t => t.TeacherId)
-					.ToList(),
-				Documents = subject.Documents.Select(d => d.BlobName).ToList()
-			};
-			subjectAssignmentDto.Subjects.Add(subjectDto);
+				var subjectDto = new CoreElectiveSubjectResponseDto	
+				{
+					Id = coreSubject.Id,
+					Name = coreSubject.Name,
+					SubjectType = SubjectType.Core,
+				};
+				result.Add(subjectDto);
+
+			}
+
+			foreach (var electiveGroup in electiveGroups)
+			{
+				var subjectDto = new CoreElectiveSubjectResponseDto	
+				{
+					Id = electiveGroup.Id,
+					Name = electiveGroup.Name,
+					SubjectType = SubjectType.Elective,
+				};
+				result.Add(subjectDto);
+			}
+				return result;
 		}
-
-		return subjectAssignmentDto;
+		catch (Exception ex)
+		{
+			logger.LogError(ex, "Failed to retrieve core and elective subjects");
+			throw new UserFriendlyException("Failed to retrieve subjects. Please try again later.");
+		}
 	}
-
-	public Task<SubjectAssignmentDto> GetAsync(Guid assignmentId) => throw new NotImplementedException();
 }

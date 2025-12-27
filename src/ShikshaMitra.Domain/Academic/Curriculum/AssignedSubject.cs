@@ -108,7 +108,7 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? tenantId,
 		Guid standardId,
 		Guid subjectId,
-		string subjectCode,
+		string? subjectCode,
 		SubjectStatus status = SubjectStatus.Draft,
 		SubjectType subjectType = SubjectType.Core,
 		Guid? electiveGroupId = null,

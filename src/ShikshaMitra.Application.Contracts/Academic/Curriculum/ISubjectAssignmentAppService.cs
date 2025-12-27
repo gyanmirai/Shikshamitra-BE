@@ -14,11 +14,11 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// Creates a new subject assignment group
 	/// </summary>
 	/// <param name="academicMediumId">Academic medium ID (from query parameter)</param>
-	/// <param name="input">Create input DTO</param>
+	/// <param name="createSubjectAssignmentDto">Create input DTO</param>
 	/// <returns>Created assignment group</returns>
-	Task<SubjectAssignmentDto> CreateAsync(
+	Task CreateAsync(
 		Guid academicMediumId,
-		CreateUpdateSubjectAssignmentGroupDto input
+		CreateUpdateSubjectAssignmentDto createSubjectAssignmentDto
 	);
 
 	/// <summary>
@@ -50,7 +50,7 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	Task<SubjectAssignmentDto> UpdateAsync(
 		Guid assignmentId,
 		Guid academicMediumId,
-		CreateUpdateSubjectAssignmentGroupDto input
+		CreateUpdateSubjectAssignmentDto input
 	);
 
 	/// <summary>
@@ -65,4 +65,11 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// </summary>
 	/// <param name="assignmentId">Assignment group ID</param>
 	Task DeleteAsync(Guid assignmentId);
+
+	/// <summary>
+	/// Gets core and elective subjects for a given academic medium
+	/// </summary>
+	/// <param name="academicMediumId">Academic medium ID</param>
+	/// <returns>List of core and elective subjects</returns>
+	Task<List<CoreElectiveSubjectResponseDto>> GetCoreElectiveSubjectsAsync(Guid academicMediumId);
 }

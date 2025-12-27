@@ -9,7 +9,7 @@ namespace ShikshaMitra.Academic.Curriculum;
 /// DTO for creating a subject assignment group (Draft or Published)
 /// Aligned with FE contract: POST /api/subject-assignments?academicMediumId={id}
 /// </summary>
-public class CreateUpdateSubjectAssignmentGroupDto
+public class CreateUpdateSubjectAssignmentDto
 {
 	/// <summary>
 	/// Standard/Class ID

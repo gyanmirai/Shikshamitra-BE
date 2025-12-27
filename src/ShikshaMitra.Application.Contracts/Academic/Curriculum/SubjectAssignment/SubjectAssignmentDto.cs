@@ -31,5 +31,5 @@ public class SubjectAssignmentDto
 	/// <summary>
 	/// List of subjects in this assignment group
 	/// </summary>
-	public List<SubjectAssignmentDetailResponseDto> Subjects { get; set; } = new();
+	public List<NestedSubjectAssignmentDto> Subjects { get; set; } = new();
 }

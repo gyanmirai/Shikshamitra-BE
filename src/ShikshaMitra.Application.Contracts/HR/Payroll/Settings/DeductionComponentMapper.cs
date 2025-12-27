@@ -7,13 +7,13 @@ using Volo.Abp.Application.Dtos;
 namespace ShikshaMitra.HR.Payroll.Settings;
 
 /// <summary>
-/// Mapper for converting between OpenAPI contract DTOs and domain DTOs for deduction components.
+/// Mapper for converting between contract DTOs and domain DTOs for deduction components.
 /// Handles field name mappings, type conversions, and enum parsing.
 /// </summary>
-public static class DeductionComponentOpenApiMapper
+public static class DeductionComponentMapper
 {
 	/// <summary>
-	/// Maps PayrollComponentCreateRequestDto (OpenAPI) to CreateDeductionComponentDto (Domain)
+	/// Maps PayrollComponentCreateRequestDto to CreateDeductionComponentDto (Domain)
 	/// </summary>
 	public static CreateDeductionComponentDto ToCreateDto(PayrollComponentCreateRequestDto request)
 	{
@@ -35,7 +35,7 @@ public static class DeductionComponentOpenApiMapper
 	}
 	
 	/// <summary>
-	/// Maps PayrollComponentCreateRequestDto (OpenAPI) to UpdateDeductionComponentDto (Domain)
+	/// Maps PayrollComponentCreateRequestDto to UpdateDeductionComponentDto (Domain)
 	/// </summary>
 	public static UpdateDeductionComponentDto ToUpdateDto(PayrollComponentCreateRequestDto request, int existingDisplayOrder = 0)
 	{
@@ -57,7 +57,7 @@ public static class DeductionComponentOpenApiMapper
 	}
 
 	/// <summary>
-	/// Maps PagedResultDto to DeductionComponentPaginatedResponseDto (OpenAPI contract)
+	/// Maps PagedResultDto to DeductionComponentPaginatedResponseDto
 	/// </summary>
 	public static DeductionComponentPaginatedResponseDto ToPaginatedResponse(PagedResultDto<DeductionComponentDto> pagedResult, int page, int pageSize)
 	{
@@ -74,7 +74,7 @@ public static class DeductionComponentOpenApiMapper
 	}
 
 	/// <summary>
-	/// Maps DeductionComponentDto to DeductionComponentResponseDto (OpenAPI contract)
+	/// Maps DeductionComponentDto to DeductionComponentResponseDto
 	/// </summary>
 	private static DeductionComponentResponseDto ToDeductionComponentResponse(DeductionComponentDto dto)
 	{

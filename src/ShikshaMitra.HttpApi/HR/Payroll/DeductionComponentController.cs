@@ -13,7 +13,6 @@ namespace ShikshaMitra.HR.Payroll.Settings;
 
 /// <summary>
 /// API Controller for managing deduction components.
-/// Implements OpenAPI contract-compliant endpoints.
 /// </summary>
 [Area("app")]
 [RemoteService(Name = "Default")]
@@ -28,10 +27,10 @@ public class DeductionComponentController : AbpControllerBase
 		_deductionComponentAppService = deductionComponentAppService;
 	}
 
-	#region OpenAPI Contract-Compliant Endpoints
+	#region API Endpoints
 
 	/// <summary>
-	/// Get paginated list of deduction components (OpenAPI contract)
+	/// Get paginated list of deduction components
 	/// </summary>
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.View)]
@@ -44,18 +43,18 @@ public class DeductionComponentController : AbpControllerBase
 			MaxResultCount = pageSize
 		});
 
-		return DeductionComponentOpenApiMapper.ToPaginatedResponse(result, page, pageSize);
+		return DeductionComponentMapper.ToPaginatedResponse(result, page, pageSize);
 	}
 
 	/// <summary>
-	/// Create a new deduction component (OpenAPI contract)
+	/// Create a new deduction component
 	/// </summary>
 	[HttpPost]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Add)]
 	[ProducesResponseType(typeof(ComponentCreateResponseDto), 201)]
 	public virtual async Task<ActionResult<ComponentCreateResponseDto>> CreateAsync([FromBody] PayrollComponentCreateRequestDto input)
 	{
-		var createDto = DeductionComponentOpenApiMapper.ToCreateDto(input);
+		var createDto = DeductionComponentMapper.ToCreateDto(input);
 		var createdComponent = await _deductionComponentAppService.CreateAsync(createDto);
 		return StatusCode(201, new ComponentCreateResponseDto
 		{
@@ -65,7 +64,7 @@ public class DeductionComponentController : AbpControllerBase
 	}
 
 	/// <summary>
-	/// Update an existing deduction component (OpenAPI contract)
+	/// Update an existing deduction component
 	/// </summary>
 	[HttpPut("{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Add)]
@@ -73,13 +72,13 @@ public class DeductionComponentController : AbpControllerBase
 	public virtual async Task<IActionResult> UpdateAsync(Guid id, [FromBody] PayrollComponentCreateRequestDto input)
 	{
 		var existingComponent = await _deductionComponentAppService.GetAsync(id);
-		var updateDto = DeductionComponentOpenApiMapper.ToUpdateDto(input, existingComponent.DisplayOrder);
+		var updateDto = DeductionComponentMapper.ToUpdateDto(input, existingComponent.DisplayOrder);
 		await _deductionComponentAppService.UpdateAsync(id, updateDto);
 		return Ok();
 	}
 
 	/// <summary>
-	/// Delete a deduction component (OpenAPI contract)
+	/// Delete a deduction component
 	/// </summary>
 	[HttpDelete("{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Delete)]

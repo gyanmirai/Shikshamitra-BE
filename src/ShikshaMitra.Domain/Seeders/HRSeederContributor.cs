@@ -303,6 +303,7 @@ public class HRSeederContributor : BaseSeederContributor
 							MiddleName = "Kumar",
 							Email = "rajesh.kumar@school.edu",
 							Mobile = "9876543210",
+							SecondaryMobile = "9876543211",
 							RoleName = "Principal",
 							Designation = "Principal",
 							Department = "Administration",
@@ -310,11 +311,19 @@ public class HRSeederContributor : BaseSeederContributor
 							DateOfJoining = new DateOnly(2010, 6, 1),
 							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Married,
+							FamilyCast = "Kumar",
+							CastType = CastType.General,
+							Religion = "Hindu",
+							BloodGroup = "B+",
 							Qualification = "M.Ed, PhD in Education Management",
+							Address1 = "Flat 301, Shanti Apartments",
+							Address2 = "Near City Mall",
+							Address3 = "Andheri West",
 							City = "Mumbai",
 							State = new State("Maharashtra", "MH"),
 							Country = new Country("India", "IN"),
-							PinCode = "400001"
+							PinCode = "400001",
+							IdentificationMark = "Mole on left cheek"
 						},
 						new
 						{
@@ -322,7 +331,8 @@ public class HRSeederContributor : BaseSeederContributor
 							LastName = "Sharma",
 							MiddleName = "Devi",
 							Email = "priya.sharma@school.edu",
-							Mobile = "9876543211",
+							Mobile = "9876543212",
+							SecondaryMobile = "9876543213",
 							RoleName = "Vice Principal",
 							Designation = "Vice Principal",
 							Department = "Administration",
@@ -330,11 +340,19 @@ public class HRSeederContributor : BaseSeederContributor
 							DateOfJoining = new DateOnly(2012, 7, 15),
 							Gender = GenderType.Female,
 							MaritalStatus = MaritalStatusType.Married,
+							FamilyCast = "Sharma",
+							CastType = CastType.General,
+							Religion = "Hindu",
+							BloodGroup = "A+",
 							Qualification = "M.Sc, M.Ed",
+							Address1 = "B-204, Sunrise Heights",
+							Address2 = "SV Road",
+							Address3 = "Borivali West",
 							City = "Mumbai",
 							State = new State("Maharashtra", "MH"),
 							Country = new Country("India", "IN"),
-							PinCode = "400002"
+							PinCode = "400002",
+							IdentificationMark = "Scar on right hand"
 						},
 						new
 						{
@@ -342,7 +360,8 @@ public class HRSeederContributor : BaseSeederContributor
 							LastName = "Patel",
 							MiddleName = (string?)null,
 							Email = "amit.patel@school.edu",
-							Mobile = "9876543212",
+							Mobile = "9876543214",
+							SecondaryMobile = (string?)null,
 							RoleName = "Head of Department",
 							Designation = "Head of Science Department",
 							Department = "Science",
@@ -350,11 +369,19 @@ public class HRSeederContributor : BaseSeederContributor
 							DateOfJoining = new DateOnly(2013, 6, 1),
 							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Married,
+							FamilyCast = "Patel",
+							CastType = CastType.OBC,
+							Religion = "Hindu",
+							BloodGroup = "O+",
 							Qualification = "M.Sc Physics, B.Ed",
+							Address1 = "Plot 15, Shivaji Nagar",
+							Address2 = "Lane 3",
+							Address3 = (string?)null,
 							City = "Pune",
 							State = new State("Maharashtra", "MH"),
 							Country = new Country("India", "IN"),
-							PinCode = "411001"
+							PinCode = "411001",
+							IdentificationMark = "Birthmark on neck"
 						},
 						new
 						{
@@ -362,7 +389,8 @@ public class HRSeederContributor : BaseSeederContributor
 							LastName = "Desai",
 							MiddleName = (string?)null,
 							Email = "sunita.desai@school.edu",
-							Mobile = "9876543213",
+							Mobile = "9876543215",
+							SecondaryMobile = (string?)null,
 							RoleName = "Head of Department",
 							Designation = "Head of Mathematics Department",
 							Department = "Mathematics",
@@ -370,11 +398,19 @@ public class HRSeederContributor : BaseSeederContributor
 							DateOfJoining = new DateOnly(2014, 7, 1),
 							Gender = GenderType.Female,
 							MaritalStatus = MaritalStatusType.Unmarried,
+							FamilyCast = "Desai",
+							CastType = CastType.General,
+							Religion = "Hindu",
+							BloodGroup = "AB+",
 							Qualification = "M.Sc Mathematics, B.Ed",
+							Address1 = "C-101, Ocean View",
+							Address2 = "Carter Road",
+							Address3 = "Bandra West",
 							City = "Mumbai",
 							State = new State("Maharashtra", "MH"),
 							Country = new Country("India", "IN"),
-							PinCode = "400003"
+							PinCode = "400003",
+							IdentificationMark = "Mole on forehead"
 						},
 						new
 						{
@@ -382,7 +418,8 @@ public class HRSeederContributor : BaseSeederContributor
 							LastName = "Singh",
 							MiddleName = "Kumar",
 							Email = "vikram.singh@school.edu",
-							Mobile = "9876543214",
+							Mobile = "9876543216",
+							SecondaryMobile = "9876543217",
 							RoleName = "Teacher",
 							Designation = "Senior Teacher - English",
 							Department = "Languages",
@@ -390,11 +427,19 @@ public class HRSeederContributor : BaseSeederContributor
 							DateOfJoining = new DateOnly(2015, 6, 1),
 							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Married,
+							FamilyCast = "Rajput",
+							CastType = CastType.General,
+							Religion = "Hindu",
+							BloodGroup = "B-",
 							Qualification = "M.A English, B.Ed",
+							Address1 = "D-502, Royal Residency",
+							Address2 = "Ghodbunder Road",
+							Address3 = (string?)null,
 							City = "Thane",
 							State = new State("Maharashtra", "MH"),
 							Country = new Country("India", "IN"),
-							PinCode = "400601"
+							PinCode = "400601",
+							IdentificationMark = "Scar on left eyebrow"
 						},
 						new
 						{
@@ -402,7 +447,8 @@ public class HRSeederContributor : BaseSeederContributor
 							LastName = "Joshi",
 							MiddleName = (string?)null,
 							Email = "meera.joshi@school.edu",
-							Mobile = "9876543215",
+							Mobile = "9876543218",
+							SecondaryMobile = (string?)null,
 							RoleName = "Teacher",
 							Designation = "Teacher - Chemistry",
 							Department = "Science",
@@ -410,11 +456,19 @@ public class HRSeederContributor : BaseSeederContributor
 							DateOfJoining = new DateOnly(2016, 7, 1),
 							Gender = GenderType.Female,
 							MaritalStatus = MaritalStatusType.Married,
+							FamilyCast = "Joshi",
+							CastType = CastType.General,
+							Religion = "Hindu",
+							BloodGroup = "O-",
 							Qualification = "M.Sc Chemistry, B.Ed",
+							Address1 = "E-301, Green Park",
+							Address2 = "LBS Marg",
+							Address3 = "Mulund West",
 							City = "Mumbai",
 							State = new State("Maharashtra", "MH"),
 							Country = new Country("India", "IN"),
-							PinCode = "400004"
+							PinCode = "400004",
+							IdentificationMark = "Dimple on chin"
 						},
 						new
 						{
@@ -422,7 +476,8 @@ public class HRSeederContributor : BaseSeederContributor
 							LastName = "Reddy",
 							MiddleName = (string?)null,
 							Email = "arjun.reddy@school.edu",
-							Mobile = "9876543216",
+							Mobile = "9876543219",
+							SecondaryMobile = (string?)null,
 							RoleName = "Teacher",
 							Designation = "Teacher - Biology",
 							Department = "Science",
@@ -430,11 +485,19 @@ public class HRSeederContributor : BaseSeederContributor
 							DateOfJoining = new DateOnly(2017, 6, 1),
 							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Unmarried,
+							FamilyCast = "Reddy",
+							CastType = CastType.OBC,
+							Religion = "Hindu",
+							BloodGroup = "A-",
 							Qualification = "M.Sc Biology, B.Ed",
+							Address1 = "F-102, Palm Gardens",
+							Address2 = "Sector 15",
+							Address3 = "Vashi",
 							City = "Navi Mumbai",
 							State = new State("Maharashtra", "MH"),
 							Country = new Country("India", "IN"),
-							PinCode = "400701"
+							PinCode = "400701",
+							IdentificationMark = "Mole on right shoulder"
 						},
 						new
 						{
@@ -442,7 +505,8 @@ public class HRSeederContributor : BaseSeederContributor
 							LastName = "Nair",
 							MiddleName = (string?)null,
 							Email = "kavita.nair@school.edu",
-							Mobile = "9876543217",
+							Mobile = "9876543220",
+							SecondaryMobile = "9876543221",
 							RoleName = "Teacher",
 							Designation = "Teacher - History",
 							Department = "Social Studies",
@@ -450,11 +514,19 @@ public class HRSeederContributor : BaseSeederContributor
 							DateOfJoining = new DateOnly(2016, 6, 1),
 							Gender = GenderType.Female,
 							MaritalStatus = MaritalStatusType.Married,
+							FamilyCast = "Nair",
+							CastType = CastType.General,
+							Religion = "Hindu",
+							BloodGroup = "B+",
 							Qualification = "M.A History, B.Ed",
+							Address1 = "G-201, Heritage Complex",
+							Address2 = "Linking Road",
+							Address3 = "Santacruz West",
 							City = "Mumbai",
 							State = new State("Maharashtra", "MH"),
 							Country = new Country("India", "IN"),
-							PinCode = "400005"
+							PinCode = "400005",
+							IdentificationMark = "Beauty mark on neck"
 						},
 						new
 						{
@@ -462,7 +534,8 @@ public class HRSeederContributor : BaseSeederContributor
 							LastName = "Mehta",
 							MiddleName = (string?)null,
 							Email = "deepak.mehta@school.edu",
-							Mobile = "9876543218",
+							Mobile = "9876543222",
+							SecondaryMobile = (string?)null,
 							RoleName = "Teacher",
 							Designation = "Teacher - Computer Science",
 							Department = "Computer Science",
@@ -470,11 +543,19 @@ public class HRSeederContributor : BaseSeederContributor
 							DateOfJoining = new DateOnly(2018, 7, 1),
 							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Unmarried,
+							FamilyCast = "Mehta",
+							CastType = CastType.General,
+							Religion = "Jain",
+							BloodGroup = "AB-",
 							Qualification = "B.Tech CS, B.Ed",
+							Address1 = "H-405, Tech Plaza",
+							Address2 = "Model Colony",
+							Address3 = (string?)null,
 							City = "Pune",
 							State = new State("Maharashtra", "MH"),
 							Country = new Country("India", "IN"),
-							PinCode = "411002"
+							PinCode = "411002",
+							IdentificationMark = "Scar on left hand"
 						},
 						new
 						{
@@ -482,7 +563,8 @@ public class HRSeederContributor : BaseSeederContributor
 							LastName = "Rao",
 							MiddleName = (string?)null,
 							Email = "anjali.rao@school.edu",
-							Mobile = "9876543219",
+							Mobile = "9876543223",
+							SecondaryMobile = (string?)null,
 							RoleName = "Teacher",
 							Designation = "Teacher - Hindi",
 							Department = "Languages",
@@ -490,11 +572,19 @@ public class HRSeederContributor : BaseSeederContributor
 							DateOfJoining = new DateOnly(2019, 6, 1),
 							Gender = GenderType.Female,
 							MaritalStatus = MaritalStatusType.Unmarried,
+							FamilyCast = "Rao",
+							CastType = CastType.General,
+							Religion = "Hindu",
+							BloodGroup = "O+",
 							Qualification = "M.A Hindi, B.Ed",
+							Address1 = "I-304, Sai Darshan",
+							Address2 = "Western Express Highway",
+							Address3 = "Goregaon East",
 							City = "Mumbai",
 							State = new State("Maharashtra", "MH"),
 							Country = new Country("India", "IN"),
-							PinCode = "400006"
+							PinCode = "400006",
+							IdentificationMark = "Mole on left ear"
 						}
 					};
 
@@ -512,30 +602,36 @@ public class HRSeederContributor : BaseSeederContributor
 							shortName: $"{emp.FirstName[0]}.{emp.LastName}",
 							employeeStatusType: EmployeeStatusType.Active,
 							dateOfBirth: emp.DateOfBirth,
+							familyCast: emp.FamilyCast,
+							castType: emp.CastType,
 							genderType: emp.Gender,
+							religion: emp.Religion,
 							maritalStatus: emp.MaritalStatus,
+							bloodGroup: emp.BloodGroup,
 							mobileNo: emp.Mobile,
+							secondaryMobileNo: emp.SecondaryMobile,
 							email: emp.Email,
+							address1: emp.Address1,
+							address2: emp.Address2,
+							address3: emp.Address3,
 							designation: emp.Designation,
 							department: emp.Department,
 							dateOfJoining: emp.DateOfJoining,
 							employeeGroup: EmployeeGroupType.Teaching,
 							qualification: emp.Qualification,
+							identificationMark1: emp.IdentificationMark,
 							city: emp.City,
 							state: emp.State,
-							country: emp.Country,
-							pinCode: emp.PinCode,
-							shiftId: shiftId
-						);
+										country: emp.Country,
+										pinCode: emp.PinCode,
+										shiftId: shiftId
+									);
 
-							await _employeeRepository.InsertAsync(employee, autoSave: false);
-						}
+									await _employeeRepository.InsertAsync(employee, autoSave: true);
+								}
+							}
 
-						// Save all teaching staff at once
-						await CurrentUnitOfWork.SaveChangesAsync();
-				}
-
-				private async Task SeedNonTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId)
+							private async Task SeedNonTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId)
 				{
 					var nonTeachingEmployees = new[]
 					{
@@ -545,7 +641,8 @@ public class HRSeederContributor : BaseSeederContributor
 							LastName = "Gupta",
 							MiddleName = (string?)null,
 							Email = "ramesh.gupta@school.edu",
-							Mobile = "9876543220",
+							Mobile = "9876543224",
+							SecondaryMobile = "9876543225",
 							RoleName = "Administrative Manager",
 							Designation = "Administrative Manager",
 							Department = "Administration",
@@ -553,11 +650,19 @@ public class HRSeederContributor : BaseSeederContributor
 							DateOfJoining = new DateOnly(2011, 4, 1),
 							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Married,
+							FamilyCast = "Gupta",
+							CastType = CastType.General,
+							Religion = "Hindu",
+							BloodGroup = "A+",
 							Qualification = "MBA in Administration",
+							Address1 = "J-501, Vista Towers",
+							Address2 = "Yari Road",
+							Address3 = "Versova",
 							City = "Mumbai",
 							State = new State("Maharashtra", "MH"),
 							Country = new Country("India", "IN"),
-							PinCode = "400007"
+							PinCode = "400007",
+							IdentificationMark = "Mole on right cheek"
 						},
 						new
 						{
@@ -565,7 +670,8 @@ public class HRSeederContributor : BaseSeederContributor
 							LastName = "Kulkarni",
 							MiddleName = (string?)null,
 							Email = "neha.kulkarni@school.edu",
-							Mobile = "9876543221",
+							Mobile = "9876543226",
+							SecondaryMobile = (string?)null,
 							RoleName = "HR Manager",
 							Designation = "HR Manager",
 							Department = "Human Resources",
@@ -573,11 +679,19 @@ public class HRSeederContributor : BaseSeederContributor
 							DateOfJoining = new DateOnly(2014, 5, 1),
 							Gender = GenderType.Female,
 							MaritalStatus = MaritalStatusType.Married,
+							FamilyCast = "Maratha",
+							CastType = CastType.OBC,
+							Religion = "Hindu",
+							BloodGroup = "B+",
 							Qualification = "MBA in HR Management",
+							Address1 = "K-201, University Campus",
+							Address2 = "Karve Road",
+							Address3 = (string?)null,
 							City = "Pune",
 							State = new State("Maharashtra", "MH"),
 							Country = new Country("India", "IN"),
-							PinCode = "411003"
+							PinCode = "411003",
+							IdentificationMark = "Birthmark on left arm"
 						},
 						new
 						{
@@ -585,7 +699,8 @@ public class HRSeederContributor : BaseSeederContributor
 							LastName = "Patil",
 							MiddleName = (string?)null,
 							Email = "suresh.patil@school.edu",
-							Mobile = "9876543222",
+							Mobile = "9876543227",
+							SecondaryMobile = "9876543228",
 							RoleName = "Finance Officer",
 							Designation = "Finance Officer",
 							Department = "Finance",
@@ -593,11 +708,19 @@ public class HRSeederContributor : BaseSeederContributor
 							DateOfJoining = new DateOnly(2012, 6, 1),
 							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Married,
+							FamilyCast = "Patil",
+							CastType = CastType.OBC,
+							Religion = "Hindu",
+							BloodGroup = "O+",
 							Qualification = "M.Com, CA",
+							Address1 = "L-102, Finance Plaza",
+							Address2 = "Nariman Point",
+							Address3 = (string?)null,
 							City = "Mumbai",
 							State = new State("Maharashtra", "MH"),
 							Country = new Country("India", "IN"),
-							PinCode = "400008"
+							PinCode = "400008",
+							IdentificationMark = "Scar on chin"
 						},
 						new
 						{
@@ -605,7 +728,8 @@ public class HRSeederContributor : BaseSeederContributor
 							LastName = "Verma",
 							MiddleName = (string?)null,
 							Email = "rahul.verma@school.edu",
-							Mobile = "9876543223",
+							Mobile = "9876543229",
+							SecondaryMobile = (string?)null,
 							RoleName = "IT Administrator",
 							Designation = "IT Administrator",
 							Department = "Information Technology",
@@ -613,11 +737,19 @@ public class HRSeederContributor : BaseSeederContributor
 							DateOfJoining = new DateOnly(2019, 8, 1),
 							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Unmarried,
+							FamilyCast = "Verma",
+							CastType = CastType.General,
+							Religion = "Hindu",
+							BloodGroup = "AB+",
 							Qualification = "B.Tech IT",
+							Address1 = "M-403, Silicon Heights",
+							Address2 = "Dahisar East",
+							Address3 = (string?)null,
 							City = "Mumbai",
 							State = new State("Maharashtra", "MH"),
 							Country = new Country("India", "IN"),
-							PinCode = "400009"
+							PinCode = "400009",
+							IdentificationMark = "Mole on left wrist"
 						},
 						new
 						{
@@ -625,7 +757,8 @@ public class HRSeederContributor : BaseSeederContributor
 							LastName = "Shah",
 							MiddleName = (string?)null,
 							Email = "pooja.shah@school.edu",
-							Mobile = "9876543224",
+							Mobile = "9876543230",
+							SecondaryMobile = (string?)null,
 							RoleName = "Office Assistant",
 							Designation = "Office Assistant",
 							Department = "Administration",
@@ -633,11 +766,19 @@ public class HRSeederContributor : BaseSeederContributor
 							DateOfJoining = new DateOnly(2020, 7, 1),
 							Gender = GenderType.Female,
 							MaritalStatus = MaritalStatusType.Unmarried,
+							FamilyCast = "Shah",
+							CastType = CastType.General,
+							Religion = "Hindu",
+							BloodGroup = "A-",
 							Qualification = "B.Com",
+							Address1 = "N-502, Hiranandani Estate",
+							Address2 = "Pokhran Road",
+							Address3 = (string?)null,
 							City = "Thane",
 							State = new State("Maharashtra", "MH"),
 							Country = new Country("India", "IN"),
-							PinCode = "400602"
+							PinCode = "400602",
+							IdentificationMark = "Dimple on right cheek"
 						}
 					};
 
@@ -646,35 +787,41 @@ public class HRSeederContributor : BaseSeederContributor
 						var role = await _roleRepository.FindByNormalizedNameAsync(emp.RoleName.ToUpperInvariant());
 						if (role == null) continue;
 
-						var employee = await _employeeManager.CreateEmployeeAsync(
-							roleId: role.Id,
-							educationMediumStageId: educationMediumStageId,
-							firstName: emp.FirstName,
-							lastName: emp.LastName,
-							middleName: emp.MiddleName,
-							shortName: $"{emp.FirstName[0]}.{emp.LastName}",
-							employeeStatusType: EmployeeStatusType.Active,
-							dateOfBirth: emp.DateOfBirth,
-							genderType: emp.Gender,
-							maritalStatus: emp.MaritalStatus,
-							mobileNo: emp.Mobile,
-							email: emp.Email,
-							designation: emp.Designation,
-							department: emp.Department,
-							dateOfJoining: emp.DateOfJoining,
-							employeeGroup: EmployeeGroupType.NonTeaching,
-							qualification: emp.Qualification,
-							city: emp.City,
-							state: emp.State,
-							country: emp.Country,
-							pinCode: emp.PinCode,
-							shiftId: shiftId
-						);
+										var employee = await _employeeManager.CreateEmployeeAsync(
+											roleId: role.Id,
+											educationMediumStageId: educationMediumStageId,
+											firstName: emp.FirstName,
+											lastName: emp.LastName,
+											middleName: emp.MiddleName,
+											shortName: $"{emp.FirstName[0]}.{emp.LastName}",
+											employeeStatusType: EmployeeStatusType.Active,
+											dateOfBirth: emp.DateOfBirth,
+											familyCast: emp.FamilyCast,
+											castType: emp.CastType,
+											genderType: emp.Gender,
+											religion: emp.Religion,
+											maritalStatus: emp.MaritalStatus,
+											bloodGroup: emp.BloodGroup,
+											mobileNo: emp.Mobile,
+											secondaryMobileNo: emp.SecondaryMobile,
+											email: emp.Email,
+											address1: emp.Address1,
+											address2: emp.Address2,
+											address3: emp.Address3,
+											designation: emp.Designation,
+											department: emp.Department,
+											dateOfJoining: emp.DateOfJoining,
+											employeeGroup: EmployeeGroupType.NonTeaching,
+											qualification: emp.Qualification,
+											identificationMark1: emp.IdentificationMark,
+											city: emp.City,
+											state: emp.State,
+											country: emp.Country,
+											pinCode: emp.PinCode,
+											shiftId: shiftId
+										);
 
-							await _employeeRepository.InsertAsync(employee, autoSave: false);
+										await _employeeRepository.InsertAsync(employee, autoSave: true);
+								}
+							}
 						}
-
-						// Save all non-teaching staff at once
-						await CurrentUnitOfWork.SaveChangesAsync();
-				}
-			}

@@ -611,6 +611,7 @@ namespace ShikshaMitra.Migrations
                     Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     ComponentType = table.Column<int>(type: "integer", nullable: false),
                     DependOn = table.Column<int>(type: "integer", nullable: false),
+                    CustomComponentId = table.Column<Guid>(type: "uuid", nullable: true),
                     Amount = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     VisibleInPayslip = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
                     DisplayOrder = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
@@ -681,6 +682,7 @@ namespace ShikshaMitra.Migrations
                     Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     ComponentType = table.Column<int>(type: "integer", nullable: false),
                     DependOn = table.Column<int>(type: "integer", nullable: false),
+                    CustomComponentId = table.Column<Guid>(type: "uuid", nullable: true),
                     Amount = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     VisibleInPayslip = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
                     DisplayOrder = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
@@ -2557,6 +2559,9 @@ namespace ShikshaMitra.Migrations
                     IsSingleChild = table.Column<bool>(type: "boolean", nullable: true),
                     PreviousSchool = table.Column<string>(type: "text", nullable: true),
                     LastClassPassed = table.Column<string>(type: "text", nullable: true),
+                    HouseId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsGlobalHouseLeader = table.Column<bool>(type: "boolean", nullable: true),
+                    IsDivisionHouseLeader = table.Column<bool>(type: "boolean", nullable: true),
                     StudentRegistrationState = table.Column<int>(type: "integer", nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
@@ -2569,6 +2574,11 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AppStudentAdditionalDetails", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppStudentAdditionalDetails_AppHouseSettings_HouseId",
+                        column: x => x.HouseId,
+                        principalTable: "AppHouseSettings",
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_AppStudentAdditionalDetails_AppStudents_Id",
                         column: x => x.Id,
@@ -4084,6 +4094,11 @@ namespace ShikshaMitra.Migrations
                 column: "SubjectId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_AppStudentAdditionalDetails_HouseId",
+                table: "AppStudentAdditionalDetails",
+                column: "HouseId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AppStudentContactDetails_StudentId",
                 table: "AppStudentContactDetails",
                 column: "StudentId");
@@ -4512,9 +4527,6 @@ namespace ShikshaMitra.Migrations
                 name: "AppHomeworkDivisionSchedules");
 
             migrationBuilder.DropTable(
-                name: "AppHouseSettings");
-
-            migrationBuilder.DropTable(
                 name: "AppInstituteSetupExtraProperties");
 
             migrationBuilder.DropTable(
@@ -4606,6 +4618,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "AppRoomTypes");
+
+            migrationBuilder.DropTable(
+                name: "AppHouseSettings");
 
             migrationBuilder.DropTable(
                 name: "AppDocumentTypes");

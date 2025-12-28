@@ -27,24 +27,24 @@ public class RolesSeederContributor : BaseSeederContributor
 		var tenantId = CurrentTenant.Id;
 		var roles = new List<IdentityRole>
 		{
-			new IdentityRole(GuidGenerator.Create(), "Director/Chairperson", tenantId),
+			// Core System Roles
+			new IdentityRole(GuidGenerator.Create(), "Director", tenantId),
 			new IdentityRole(GuidGenerator.Create(), "Principal", tenantId),
-			new IdentityRole(GuidGenerator.Create(), "Vice Principal", tenantId),
-			new IdentityRole(GuidGenerator.Create(), "Academic Coordinator", tenantId),
-			new IdentityRole(GuidGenerator.Create(), "Heads of Department", tenantId),
 			new IdentityRole(GuidGenerator.Create(), "Teacher", tenantId),
-			new IdentityRole(GuidGenerator.Create(), "Assistant Teacher", tenantId),
+			new IdentityRole(GuidGenerator.Create(), "Clerk", tenantId),
+			new IdentityRole(GuidGenerator.Create(), "Student", tenantId),
+			new IdentityRole(GuidGenerator.Create(), "Parent", tenantId),
+
+			// Department Heads
+			new IdentityRole(GuidGenerator.Create(), "Head of Department", tenantId),
+
+			// Administrative Roles
+			new IdentityRole(GuidGenerator.Create(), "Vice Principal", tenantId),
 			new IdentityRole(GuidGenerator.Create(), "Administrative Manager", tenantId),
-			new IdentityRole(GuidGenerator.Create(), "Finance Officer/Accountant", tenantId),
 			new IdentityRole(GuidGenerator.Create(), "HR Manager", tenantId),
+			new IdentityRole(GuidGenerator.Create(), "Finance Officer", tenantId),
 			new IdentityRole(GuidGenerator.Create(), "IT Administrator", tenantId),
-			new IdentityRole(GuidGenerator.Create(), "Transport Coordinator", tenantId),
-			new IdentityRole(GuidGenerator.Create(), "Bus Driver", tenantId),
-			new IdentityRole(GuidGenerator.Create(), "Counselor", tenantId),
-			new IdentityRole(GuidGenerator.Create(), "Career Guidance Officer", tenantId),
-			new IdentityRole(GuidGenerator.Create(), "Learning Support Assistant", tenantId),
-			new IdentityRole(GuidGenerator.Create(), "Office Assistant", tenantId),
-			new IdentityRole(GuidGenerator.Create(), "Admin Staff", tenantId)
+			new IdentityRole(GuidGenerator.Create(), "Office Assistant", tenantId)
 		};
 
 		foreach (var role in roles)

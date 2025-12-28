@@ -528,8 +528,11 @@ public class HRSeederContributor : BaseSeederContributor
 							shiftId: shiftId
 						);
 
-						await _employeeRepository.InsertAsync(employee, autoSave: true);
-					}
+							await _employeeRepository.InsertAsync(employee, autoSave: false);
+						}
+
+						// Save all teaching staff at once
+						await CurrentUnitOfWork.SaveChangesAsync();
 				}
 
 				private async Task SeedNonTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId)
@@ -668,7 +671,10 @@ public class HRSeederContributor : BaseSeederContributor
 							shiftId: shiftId
 						);
 
-						await _employeeRepository.InsertAsync(employee, autoSave: true);
-					}
+							await _employeeRepository.InsertAsync(employee, autoSave: false);
+						}
+
+						// Save all non-teaching staff at once
+						await CurrentUnitOfWork.SaveChangesAsync();
 				}
 			}

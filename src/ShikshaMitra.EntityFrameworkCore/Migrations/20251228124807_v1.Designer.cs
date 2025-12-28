@@ -14,8 +14,8 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20251226061738_v2")]
-    partial class v2
+    [Migration("20251228124807_v1")]
+    partial class v1
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -2683,6 +2683,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
+                    b.Property<Guid?>("CustomComponentId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("DeleterId")
                         .HasColumnType("uuid")
                         .HasColumnName("DeleterId");
@@ -2783,6 +2786,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("CreatorId")
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("CustomComponentId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("DeleterId")
                         .HasColumnType("uuid")

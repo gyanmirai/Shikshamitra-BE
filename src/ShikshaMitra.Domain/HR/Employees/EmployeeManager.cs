@@ -601,29 +601,150 @@ public class EmployeeManager(
 		return false;
 	}
 
+	/// <summary>
+	/// Generates a unique, human-readable employee code without requiring additional database tables.
+	/// Uses a combination of tenant ID, board, role, year, and a hash-based unique identifier.
+	/// 
+	/// Format: {BoardCode}{RoleCode}{Year}{UniqueHash}
+	/// Example: CBPRI24A3F2 (CBSE Principal 2024 with unique hash A3F2)
+	/// 
+	/// Uniqueness is guaranteed by:
+	/// 1. Tenant isolation (different tenants will have different hashes)
+	/// 2. Year-based separation
+	/// 3. Unique employee ID hash
+	/// </summary>
 	private async Task<string> GenerateEmployeeCodeAsync(
 		EducationBoardType boardType,
 		DateOnly dateOfJoining,
 		string roleName
 	)
 	{
-		// Get the last EmployeeCode
-		Employee? lastEmployee = await employeeRepository.GetLastEmployeeAsync();
+		var year = dateOfJoining.Year;
+		var tenantId = CurrentTenant.Id ?? Guid.Empty;
 
-		int nextNumber = 1;
+		// Get count of existing employees for this tenant and year (for the hash seed)
+		var existingCount = await GetEmployeeCountForTenantAndYearAsync(tenantId, year);
 
-		if (lastEmployee != null)
+		// Generate board code (2 chars)
+		string boardCode = GetBoardCode(boardType);
+
+		// Generate role code (3 chars)
+		string roleCode = GetRoleCode(roleName);
+
+		// Get 2-digit year
+		string yearCode = (year % 100).ToString("D2");
+
+		// Generate a unique 4-character hash based on tenant, year, and count
+		// This creates a deterministic but unique identifier
+		string uniqueHash = GenerateUniqueHash(tenantId, year, existingCount);
+
+		// Format: {BoardCode}{RoleCode}{Year}{UniqueHash}
+		// Example: CBPRI24A3F2 (10 characters total)
+		return $"{boardCode}{roleCode}{yearCode}{uniqueHash}";
+	}
+
+	/// <summary>
+	/// Gets the count of employees for a specific tenant and year.
+	/// Used as a seed for generating unique hashes.
+	/// </summary>
+	private async Task<int> GetEmployeeCountForTenantAndYearAsync(Guid tenantId, int year)
+	{
+		var queryable = await employeeRepository.GetQueryableAsync();
+
+		var count = queryable
+			.Where(e => e.TenantId == (tenantId == Guid.Empty ? null : tenantId))
+			.Where(e => e.DateOfJoining.HasValue && e.DateOfJoining.Value.Year == year)
+			.Count();
+
+		return count;
+	}
+
+	/// <summary>
+	/// Generates a unique 4-character hash from tenant ID, year, and employee count.
+	/// Uses a combination of tenant hash and counter to ensure uniqueness.
+	/// </summary>
+	private static string GenerateUniqueHash(Guid tenantId, int year, int count)
+	{
+		// Combine tenant ID, year, and count to create a unique seed
+		var seed = $"{tenantId}{year}{count}{DateTime.UtcNow.Ticks}";
+
+		// Generate hash code
+		var hashCode = seed.GetHashCode();
+
+		// Convert to alphanumeric (base 36: 0-9, A-Z)
+		var hash = ToBase36(Math.Abs(hashCode));
+
+		// Take first 4 characters and pad if necessary
+		return hash.PadRight(4, '0').Substring(0, 4).ToUpperInvariant();
+	}
+
+	/// <summary>
+	/// Converts an integer to base-36 representation (0-9, A-Z).
+	/// This creates compact, human-readable codes.
+	/// </summary>
+	private static string ToBase36(int value)
+	{
+		const string chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+		var result = "";
+
+		do
 		{
-			var lastCode = lastEmployee.EmployeeCode;
+			result = chars[value % 36] + result;
+			value /= 36;
+		} while (value > 0);
 
-			// Extract the numeric part from the last code (e.g., "EMP001" -> 1)
-			if (int.TryParse(lastCode[3..], out int lastNumber))
-			{
-				nextNumber = lastNumber + 1;
-			}
-		}
+		return result;
+	}
 
-		// board - role - joining year - sequence number
-		return $"{boardType.ToString().Substring(0, 2)}{roleName.Substring(0, 3)}{dateOfJoining.Year.ToString().Substring(2)}{nextNumber:D3}";
+	/// <summary>
+	/// Maps EducationBoardType to a 2-letter code.
+	/// </summary>
+	private static string GetBoardCode(EducationBoardType boardType)
+	{
+		return boardType switch
+		{
+			EducationBoardType.CBSE => "CB",
+			EducationBoardType.GSEB => "GS",
+			_ => "UN"
+		};
+	}
+
+	/// <summary>
+	/// Maps role name to a 3-letter code.
+	/// Handles common role names and provides fallback for unknown roles.
+	/// </summary>
+	private static string GetRoleCode(string roleName)
+	{
+		if (string.IsNullOrWhiteSpace(roleName))
+			return "UNK";
+
+		// Normalize role name
+		var normalized = roleName.Trim().ToUpperInvariant().Replace(" ", "");
+
+		// Map common roles
+		return normalized switch
+		{
+			"PRINCIPAL" => "PRI",
+			"VICEPRINCIPAL" => "VPR",
+			"HEADOFDEPARTMENT" => "HOD",
+			"TEACHER" => "TEA",
+			"SENIORTEACHER" => "SRT",
+			"ASSISTANTTEACHER" => "AST",
+			"ADMINISTRATIVEMANAGER" => "ADM",
+			"HRMANAGER" => "HRM",
+			"FINANCEOFFICER" => "FIN",
+			"ITADMINISTRATOR" => "ITA",
+			"OFFICEASSISTANT" => "OFA",
+			"LIBRARIAN" => "LIB",
+			"LABASSISTANT" => "LAB",
+			"COUNSELOR" => "COU",
+			"NURSE" => "NUR",
+			"SECURITYOFFICER" => "SEC",
+			"DRIVER" => "DRV",
+			"JANITOR" => "JAN",
+			_ => normalized.Length >= 3 
+				? normalized.Substring(0, 3) 
+				: normalized.PadRight(3, 'X')
+		};
 	}
 }

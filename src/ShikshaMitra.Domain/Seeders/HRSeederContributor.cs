@@ -1,12 +1,17 @@
-﻿using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+﻿using ShikshaMitra.Common;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 
@@ -28,6 +33,10 @@ public class HRSeederContributor : BaseSeederContributor
 	private readonly LeavePolicyManager _leavePolicyManager;
 	private readonly ILeaveTypeRepository _leaveTypeQueryRepository;
 	private readonly IRepository<EducationMediumStage, Guid> _educationMediumStageRepository;
+	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+	private readonly IEmployeeRepository _employeeRepository;
+	private readonly EmployeeManager _employeeManager;
+	private readonly IIdentityRoleRepository _roleRepository;
 
 	public HRSeederContributor(
 		ICurrentTenant currentTenant,
@@ -42,7 +51,11 @@ public class HRSeederContributor : BaseSeederContributor
 		IRepository<LeavePolicy, Guid> leavePolicyRepository,
 		LeavePolicyManager leavePolicyManager,
 		ILeaveTypeRepository leaveTypeQueryRepository,
-		IRepository<EducationMediumStage, Guid> educationMediumStageRepository)
+		IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
+		IRepository<ShiftManagement, Guid> shiftRepository,
+		IEmployeeRepository employeeRepository,
+		EmployeeManager employeeManager,
+		IIdentityRoleRepository roleRepository)
 		: base(currentTenant, guidGenerator, unitOfWork)
 	{
 		_leaveTypeRepository = leaveTypeRepository;
@@ -55,18 +68,26 @@ public class HRSeederContributor : BaseSeederContributor
 		_leavePolicyManager = leavePolicyManager;
 		_leaveTypeQueryRepository = leaveTypeQueryRepository;
 		_educationMediumStageRepository = educationMediumStageRepository;
+		_shiftRepository = shiftRepository;
+		_employeeRepository = employeeRepository;
+		_employeeManager = employeeManager;
+		_roleRepository = roleRepository;
 	}
 
 	public override async Task SeedAsync(DataSeedContext context)
 	{
-		// Seed default earning components
+		// Phase 1: Seed payroll components
 		await SeedEarningComponentsAsync();
-
-		// Seed default deduction components
 		await SeedDeductionComponentsAsync();
 
-		// Seed leave types and policies (requires EducationMediumStage)
+		// Phase 2: Seed shift management (required for employees)
+		await SeedShiftManagementAsync();
+
+		// Phase 3: Seed leave types and policies
 		await SeedLeaveTypesAndPoliciesAsync();
+
+		// Phase 4: Seed employees
+		await SeedEmployeesAsync();
 	}
 
 	private async Task SeedLeaveTypesAndPoliciesAsync()
@@ -218,7 +239,436 @@ public class HRSeederContributor : BaseSeederContributor
 				component.VisibleInPayslip,
 				component.DisplayOrder
 			);
-			await _deductionComponentRepository.InsertAsync(deductionComponent, autoSave: true);
-		}
-	}
-}
+						await _deductionComponentRepository.InsertAsync(deductionComponent, autoSave: true);
+					}
+				}
+
+				private async Task SeedShiftManagementAsync()
+				{
+					// Check if already seeded
+					if (await _shiftRepository.AnyAsync())
+						return;
+
+					var shifts = new[]
+					{
+						new { Name = "Morning Shift", StartTime = new TimeOnly(7, 0), EndTime = new TimeOnly(12, 30) },
+						new { Name = "Afternoon Shift", StartTime = new TimeOnly(12, 30), EndTime = new TimeOnly(17, 30) },
+						new { Name = "Full Day Shift", StartTime = new TimeOnly(7, 0), EndTime = new TimeOnly(17, 30) }
+					};
+
+					foreach (var shift in shifts)
+					{
+						var id = GuidGenerator.Create();
+						var shiftEntity = new ShiftManagement
+						{
+							ShiftName = shift.Name,
+							StartTime = shift.StartTime,
+							EndTime = shift.EndTime
+						};
+						// Set the Id using reflection since there's no constructor
+						typeof(ShiftManagement).GetProperty("Id").SetValue(shiftEntity, id);
+						await _shiftRepository.InsertAsync(shiftEntity, autoSave: true);
+					}
+				}
+
+				private async Task SeedEmployeesAsync()
+				{
+					// Check if already seeded
+					if (await _employeeRepository.AnyAsync())
+						return;
+
+					// Get required dependencies
+					var educationMediumStage = (await _educationMediumStageRepository.GetQueryableAsync()).FirstOrDefault();
+					if (educationMediumStage == null)
+						return; // Skip if no academic setup
+
+					var fullDayShift = (await _shiftRepository.GetQueryableAsync())
+						.FirstOrDefault(s => s.ShiftName == "Full Day Shift");
+
+					// Seed teaching staff
+					await SeedTeachingStaffAsync(educationMediumStage.Id, fullDayShift?.Id);
+
+					// Seed non-teaching staff
+					await SeedNonTeachingStaffAsync(educationMediumStage.Id, fullDayShift?.Id);
+				}
+
+				private async Task SeedTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId)
+				{
+					var teachingEmployees = new[]
+					{
+						new
+						{
+							FirstName = "Rajesh",
+							LastName = "Kumar",
+							MiddleName = "Kumar",
+							Email = "rajesh.kumar@school.edu",
+							Mobile = "9876543210",
+							RoleName = "Principal",
+							Designation = "Principal",
+							Department = "Administration",
+							DateOfBirth = new DateOnly(1975, 5, 15),
+							DateOfJoining = new DateOnly(2010, 6, 1),
+							Gender = GenderType.Male,
+							MaritalStatus = MaritalStatusType.Married,
+							Qualification = "M.Ed, PhD in Education Management",
+							City = "Mumbai",
+							State = new State("Maharashtra", "MH"),
+							Country = new Country("India", "IN"),
+							PinCode = "400001"
+						},
+						new
+						{
+							FirstName = "Priya",
+							LastName = "Sharma",
+							MiddleName = "Devi",
+							Email = "priya.sharma@school.edu",
+							Mobile = "9876543211",
+							RoleName = "Vice Principal",
+							Designation = "Vice Principal",
+							Department = "Administration",
+							DateOfBirth = new DateOnly(1978, 8, 22),
+							DateOfJoining = new DateOnly(2012, 7, 15),
+							Gender = GenderType.Female,
+							MaritalStatus = MaritalStatusType.Married,
+							Qualification = "M.Sc, M.Ed",
+							City = "Mumbai",
+							State = new State("Maharashtra", "MH"),
+							Country = new Country("India", "IN"),
+							PinCode = "400002"
+						},
+						new
+						{
+							FirstName = "Amit",
+							LastName = "Patel",
+							MiddleName = (string?)null,
+							Email = "amit.patel@school.edu",
+							Mobile = "9876543212",
+							RoleName = "Head of Department",
+							Designation = "Head of Science Department",
+							Department = "Science",
+							DateOfBirth = new DateOnly(1980, 3, 10),
+							DateOfJoining = new DateOnly(2013, 6, 1),
+							Gender = GenderType.Male,
+							MaritalStatus = MaritalStatusType.Married,
+							Qualification = "M.Sc Physics, B.Ed",
+							City = "Pune",
+							State = new State("Maharashtra", "MH"),
+							Country = new Country("India", "IN"),
+							PinCode = "411001"
+						},
+						new
+						{
+							FirstName = "Sunita",
+							LastName = "Desai",
+							MiddleName = (string?)null,
+							Email = "sunita.desai@school.edu",
+							Mobile = "9876543213",
+							RoleName = "Head of Department",
+							Designation = "Head of Mathematics Department",
+							Department = "Mathematics",
+							DateOfBirth = new DateOnly(1982, 11, 5),
+							DateOfJoining = new DateOnly(2014, 7, 1),
+							Gender = GenderType.Female,
+							MaritalStatus = MaritalStatusType.Unmarried,
+							Qualification = "M.Sc Mathematics, B.Ed",
+							City = "Mumbai",
+							State = new State("Maharashtra", "MH"),
+							Country = new Country("India", "IN"),
+							PinCode = "400003"
+						},
+						new
+						{
+							FirstName = "Vikram",
+							LastName = "Singh",
+							MiddleName = "Kumar",
+							Email = "vikram.singh@school.edu",
+							Mobile = "9876543214",
+							RoleName = "Teacher",
+							Designation = "Senior Teacher - English",
+							Department = "Languages",
+							DateOfBirth = new DateOnly(1985, 1, 20),
+							DateOfJoining = new DateOnly(2015, 6, 1),
+							Gender = GenderType.Male,
+							MaritalStatus = MaritalStatusType.Married,
+							Qualification = "M.A English, B.Ed",
+							City = "Thane",
+							State = new State("Maharashtra", "MH"),
+							Country = new Country("India", "IN"),
+							PinCode = "400601"
+						},
+						new
+						{
+							FirstName = "Meera",
+							LastName = "Joshi",
+							MiddleName = (string?)null,
+							Email = "meera.joshi@school.edu",
+							Mobile = "9876543215",
+							RoleName = "Teacher",
+							Designation = "Teacher - Chemistry",
+							Department = "Science",
+							DateOfBirth = new DateOnly(1987, 6, 12),
+							DateOfJoining = new DateOnly(2016, 7, 1),
+							Gender = GenderType.Female,
+							MaritalStatus = MaritalStatusType.Married,
+							Qualification = "M.Sc Chemistry, B.Ed",
+							City = "Mumbai",
+							State = new State("Maharashtra", "MH"),
+							Country = new Country("India", "IN"),
+							PinCode = "400004"
+						},
+						new
+						{
+							FirstName = "Arjun",
+							LastName = "Reddy",
+							MiddleName = (string?)null,
+							Email = "arjun.reddy@school.edu",
+							Mobile = "9876543216",
+							RoleName = "Teacher",
+							Designation = "Teacher - Biology",
+							Department = "Science",
+							DateOfBirth = new DateOnly(1988, 9, 8),
+							DateOfJoining = new DateOnly(2017, 6, 1),
+							Gender = GenderType.Male,
+							MaritalStatus = MaritalStatusType.Unmarried,
+							Qualification = "M.Sc Biology, B.Ed",
+							City = "Navi Mumbai",
+							State = new State("Maharashtra", "MH"),
+							Country = new Country("India", "IN"),
+							PinCode = "400701"
+						},
+						new
+						{
+							FirstName = "Kavita",
+							LastName = "Nair",
+							MiddleName = (string?)null,
+							Email = "kavita.nair@school.edu",
+							Mobile = "9876543217",
+							RoleName = "Teacher",
+							Designation = "Teacher - History",
+							Department = "Social Studies",
+							DateOfBirth = new DateOnly(1986, 4, 25),
+							DateOfJoining = new DateOnly(2016, 6, 1),
+							Gender = GenderType.Female,
+							MaritalStatus = MaritalStatusType.Married,
+							Qualification = "M.A History, B.Ed",
+							City = "Mumbai",
+							State = new State("Maharashtra", "MH"),
+							Country = new Country("India", "IN"),
+							PinCode = "400005"
+						},
+						new
+						{
+							FirstName = "Deepak",
+							LastName = "Mehta",
+							MiddleName = (string?)null,
+							Email = "deepak.mehta@school.edu",
+							Mobile = "9876543218",
+							RoleName = "Teacher",
+							Designation = "Teacher - Computer Science",
+							Department = "Computer Science",
+							DateOfBirth = new DateOnly(1989, 7, 18),
+							DateOfJoining = new DateOnly(2018, 7, 1),
+							Gender = GenderType.Male,
+							MaritalStatus = MaritalStatusType.Unmarried,
+							Qualification = "B.Tech CS, B.Ed",
+							City = "Pune",
+							State = new State("Maharashtra", "MH"),
+							Country = new Country("India", "IN"),
+							PinCode = "411002"
+						},
+						new
+						{
+							FirstName = "Anjali",
+							LastName = "Rao",
+							MiddleName = (string?)null,
+							Email = "anjali.rao@school.edu",
+							Mobile = "9876543219",
+							RoleName = "Teacher",
+							Designation = "Teacher - Hindi",
+							Department = "Languages",
+							DateOfBirth = new DateOnly(1990, 2, 14),
+							DateOfJoining = new DateOnly(2019, 6, 1),
+							Gender = GenderType.Female,
+							MaritalStatus = MaritalStatusType.Unmarried,
+							Qualification = "M.A Hindi, B.Ed",
+							City = "Mumbai",
+							State = new State("Maharashtra", "MH"),
+							Country = new Country("India", "IN"),
+							PinCode = "400006"
+						}
+					};
+
+					foreach (var emp in teachingEmployees)
+					{
+						var role = await _roleRepository.FindByNormalizedNameAsync(emp.RoleName.ToUpperInvariant());
+						if (role == null) continue;
+
+						var employee = await _employeeManager.CreateEmployeeAsync(
+							roleId: role.Id,
+							educationMediumStageId: educationMediumStageId,
+							firstName: emp.FirstName,
+							lastName: emp.LastName,
+							middleName: emp.MiddleName,
+							shortName: $"{emp.FirstName[0]}.{emp.LastName}",
+							employeeStatusType: EmployeeStatusType.Active,
+							dateOfBirth: emp.DateOfBirth,
+							genderType: emp.Gender,
+							maritalStatus: emp.MaritalStatus,
+							mobileNo: emp.Mobile,
+							email: emp.Email,
+							designation: emp.Designation,
+							department: emp.Department,
+							dateOfJoining: emp.DateOfJoining,
+							employeeGroup: EmployeeGroupType.Teaching,
+							qualification: emp.Qualification,
+							city: emp.City,
+							state: emp.State,
+							country: emp.Country,
+							pinCode: emp.PinCode,
+							shiftId: shiftId
+						);
+
+						await _employeeRepository.InsertAsync(employee, autoSave: true);
+					}
+				}
+
+				private async Task SeedNonTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId)
+				{
+					var nonTeachingEmployees = new[]
+					{
+						new
+						{
+							FirstName = "Ramesh",
+							LastName = "Gupta",
+							MiddleName = (string?)null,
+							Email = "ramesh.gupta@school.edu",
+							Mobile = "9876543220",
+							RoleName = "Administrative Manager",
+							Designation = "Administrative Manager",
+							Department = "Administration",
+							DateOfBirth = new DateOnly(1977, 10, 5),
+							DateOfJoining = new DateOnly(2011, 4, 1),
+							Gender = GenderType.Male,
+							MaritalStatus = MaritalStatusType.Married,
+							Qualification = "MBA in Administration",
+							City = "Mumbai",
+							State = new State("Maharashtra", "MH"),
+							Country = new Country("India", "IN"),
+							PinCode = "400007"
+						},
+						new
+						{
+							FirstName = "Neha",
+							LastName = "Kulkarni",
+							MiddleName = (string?)null,
+							Email = "neha.kulkarni@school.edu",
+							Mobile = "9876543221",
+							RoleName = "HR Manager",
+							Designation = "HR Manager",
+							Department = "Human Resources",
+							DateOfBirth = new DateOnly(1983, 3, 18),
+							DateOfJoining = new DateOnly(2014, 5, 1),
+							Gender = GenderType.Female,
+							MaritalStatus = MaritalStatusType.Married,
+							Qualification = "MBA in HR Management",
+							City = "Pune",
+							State = new State("Maharashtra", "MH"),
+							Country = new Country("India", "IN"),
+							PinCode = "411003"
+						},
+						new
+						{
+							FirstName = "Suresh",
+							LastName = "Patil",
+							MiddleName = (string?)null,
+							Email = "suresh.patil@school.edu",
+							Mobile = "9876543222",
+							RoleName = "Finance Officer",
+							Designation = "Finance Officer",
+							Department = "Finance",
+							DateOfBirth = new DateOnly(1979, 12, 10),
+							DateOfJoining = new DateOnly(2012, 6, 1),
+							Gender = GenderType.Male,
+							MaritalStatus = MaritalStatusType.Married,
+							Qualification = "M.Com, CA",
+							City = "Mumbai",
+							State = new State("Maharashtra", "MH"),
+							Country = new Country("India", "IN"),
+							PinCode = "400008"
+						},
+						new
+						{
+							FirstName = "Rahul",
+							LastName = "Verma",
+							MiddleName = (string?)null,
+							Email = "rahul.verma@school.edu",
+							Mobile = "9876543223",
+							RoleName = "IT Administrator",
+							Designation = "IT Administrator",
+							Department = "Information Technology",
+							DateOfBirth = new DateOnly(1991, 5, 22),
+							DateOfJoining = new DateOnly(2019, 8, 1),
+							Gender = GenderType.Male,
+							MaritalStatus = MaritalStatusType.Unmarried,
+							Qualification = "B.Tech IT",
+							City = "Mumbai",
+							State = new State("Maharashtra", "MH"),
+							Country = new Country("India", "IN"),
+							PinCode = "400009"
+						},
+						new
+						{
+							FirstName = "Pooja",
+							LastName = "Shah",
+							MiddleName = (string?)null,
+							Email = "pooja.shah@school.edu",
+							Mobile = "9876543224",
+							RoleName = "Office Assistant",
+							Designation = "Office Assistant",
+							Department = "Administration",
+							DateOfBirth = new DateOnly(1992, 8, 30),
+							DateOfJoining = new DateOnly(2020, 7, 1),
+							Gender = GenderType.Female,
+							MaritalStatus = MaritalStatusType.Unmarried,
+							Qualification = "B.Com",
+							City = "Thane",
+							State = new State("Maharashtra", "MH"),
+							Country = new Country("India", "IN"),
+							PinCode = "400602"
+						}
+					};
+
+					foreach (var emp in nonTeachingEmployees)
+					{
+						var role = await _roleRepository.FindByNormalizedNameAsync(emp.RoleName.ToUpperInvariant());
+						if (role == null) continue;
+
+						var employee = await _employeeManager.CreateEmployeeAsync(
+							roleId: role.Id,
+							educationMediumStageId: educationMediumStageId,
+							firstName: emp.FirstName,
+							lastName: emp.LastName,
+							middleName: emp.MiddleName,
+							shortName: $"{emp.FirstName[0]}.{emp.LastName}",
+							employeeStatusType: EmployeeStatusType.Active,
+							dateOfBirth: emp.DateOfBirth,
+							genderType: emp.Gender,
+							maritalStatus: emp.MaritalStatus,
+							mobileNo: emp.Mobile,
+							email: emp.Email,
+							designation: emp.Designation,
+							department: emp.Department,
+							dateOfJoining: emp.DateOfJoining,
+							employeeGroup: EmployeeGroupType.NonTeaching,
+							qualification: emp.Qualification,
+							city: emp.City,
+							state: emp.State,
+							country: emp.Country,
+							pinCode: emp.PinCode,
+							shiftId: shiftId
+						);
+
+						await _employeeRepository.InsertAsync(employee, autoSave: true);
+					}
+				}
+			}

@@ -333,7 +333,10 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		app.UseDynamicClaims();
 		app.UseAuthorization();
 
-		app.UseSwagger();
+		app.UseSwagger(c =>
+		{
+			c.OpenApiVersion = Microsoft.OpenApi.OpenApiSpecVersion.OpenApi3_0;
+		});
 		app.UseAbpSwaggerUI(c =>
 		{
 			c.SwaggerEndpoint("/swagger/v1/swagger.json", "ShikshaMitra API");

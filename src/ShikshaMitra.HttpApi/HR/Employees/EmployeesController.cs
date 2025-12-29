@@ -90,6 +90,7 @@ public class EmployeesController : AbpControllerBase
     {
         return new EmployeeDetails
         {
+            Id = employee.Id,
             RoleName = employee.Role?.Name,
             FullName = employee.EmployeeName,
             ThumbnailPicture = employee.ProfilePictureBlobName,

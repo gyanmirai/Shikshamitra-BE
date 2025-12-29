@@ -13,7 +13,7 @@ namespace ShikshaMitra.HR.Payroll.Settings;
 public static class DeductionComponentMapper
 {
 	/// <summary>
-	/// Maps PayrollComponentCreateRequestDto to CreateDeductionComponentDto (Domain)
+	/// Maps PayrollComponentCreateRequestDto to CreateDeductionComponentDto
 	/// </summary>
 	public static CreateDeductionComponentDto ToCreateDto(PayrollComponentCreateRequestDto request)
 	{
@@ -35,7 +35,7 @@ public static class DeductionComponentMapper
 	}
 	
 	/// <summary>
-	/// Maps PayrollComponentCreateRequestDto to UpdateDeductionComponentDto (Domain)
+	/// Maps PayrollComponentCreateRequestDto to UpdateDeductionComponentDto
 	/// </summary>
 	public static UpdateDeductionComponentDto ToUpdateDto(PayrollComponentCreateRequestDto request, int existingDisplayOrder = 0)
 	{
@@ -131,18 +131,25 @@ public static class DeductionComponentMapper
 	/// </summary>
 	private static DeductionComponentType ParseComponentType(string? componentTypeStr, bool isFixed)
 	{
-		// Prioritize isFixed flag first for consistency
+		// PRIORITY 1: If isFixed is explicitly true, always return Fixed
+		// This ensures isFixed flag is actually prioritized as documented
+		if (isFixed)
+		{
+			return DeductionComponentType.Fixed;
+		}
+
+		// PRIORITY 2: If componentType string is provided, try to parse it
 		if (!string.IsNullOrWhiteSpace(componentTypeStr))
 		{
 			var normalizedType = componentTypeStr.Trim().ToLowerInvariant();
 
-			// If componentType explicitly specifies "fixed", respect it
+			// If componentType explicitly specifies "fixed", return Fixed
 			if (normalizedType == "fixed")
 			{
 				return DeductionComponentType.Fixed;
 			}
 
-			// If componentType explicitly specifies "variable" or "percentage", respect it
+			// If componentType explicitly specifies "variable" or "percentage", return Variable
 			if (normalizedType == "variable" || normalizedType == "percentage")
 			{
 				return DeductionComponentType.Variable;
@@ -155,8 +162,8 @@ public static class DeductionComponentMapper
 			}
 		}
 
-		// Fall back to isFixed flag when componentType is not provided or invalid
-		return isFixed ? DeductionComponentType.Fixed : DeductionComponentType.Variable;
+		// PRIORITY 3: Default to Variable when isFixed is false and componentType is not provided/invalid
+		return DeductionComponentType.Variable;
 	}
 	
 	/// <summary>

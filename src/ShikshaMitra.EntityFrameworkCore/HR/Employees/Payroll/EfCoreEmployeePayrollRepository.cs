@@ -39,13 +39,25 @@ public class EfCoreEmployeePayrollDetailsRepository
 		if (idList.Count == 0)
 			return new Dictionary<Guid, EmployeePayrollDetails>();
 
-		var dbSet = await GetDbSetAsync();
-		var details = await dbSet
-			.AsNoTracking()
-			.Where(x => idList.Contains(x.EmployeeId))
-			.ToListAsync(cancellationToken);
+		// Get DbContext to access Employee table
+		var dbContext = await GetDbContextAsync();
 
-		return details.ToDictionary(x => x.EmployeeId);
+		// Query payroll details with employee info for tenant filtering
+		var query = from payrollDetail in dbContext.EmployeePayrollDetails
+					join employee in dbContext.Set<Employee>() on payrollDetail.EmployeeId equals employee.Id
+					where idList.Contains(payrollDetail.EmployeeId)
+					select new { PayrollDetail = payrollDetail, EmployeeTenantId = employee.TenantId };
+
+		var results = await query.AsNoTracking().ToListAsync(cancellationToken);
+
+		// Filter by current tenant
+		var currentTenantId = CurrentTenant.Id;
+		if (currentTenantId.HasValue)
+		{
+			results = results.Where(x => x.EmployeeTenantId == currentTenantId).ToList();
+		}
+
+		return results.Select(x => x.PayrollDetail).ToDictionary(x => x.EmployeeId);
 	}
 }
 
@@ -115,12 +127,24 @@ public class EfCoreEmployeePayrollComponentRepository
 		if (idList.Count == 0)
 			return Enumerable.Empty<EmployeePayrollComponent>().ToLookup(x => x.EmployeeId);
 
-		var dbSet = await GetDbSetAsync();
-		var components = await dbSet
-			.AsNoTracking()
-			.Where(x => idList.Contains(x.EmployeeId))
-			.ToListAsync(cancellationToken);
+		// Get DbContext to access Employee table
+		var dbContext = await GetDbContextAsync();
 
-		return components.ToLookup(x => x.EmployeeId);
+		// Query components with employee info for tenant filtering
+		var query = from component in dbContext.EmployeePayrollComponents
+					join employee in dbContext.Set<Employee>() on component.EmployeeId equals employee.Id
+					where idList.Contains(component.EmployeeId)
+					select new { Component = component, EmployeeTenantId = employee.TenantId };
+
+		var results = await query.AsNoTracking().ToListAsync(cancellationToken);
+
+		// Filter by current tenant
+		var currentTenantId = CurrentTenant.Id;
+		if (currentTenantId.HasValue)
+		{
+			results = results.Where(x => x.EmployeeTenantId == currentTenantId).ToList();
+		}
+
+		return results.Select(x => x.Component).ToLookup(x => x.EmployeeId);
 	}
 }

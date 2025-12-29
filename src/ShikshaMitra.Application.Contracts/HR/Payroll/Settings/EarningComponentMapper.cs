@@ -7,13 +7,13 @@ using Volo.Abp.Application.Dtos;
 namespace ShikshaMitra.HR.Payroll.Settings;
 
 /// <summary>
-/// Mapper for converting between OpenAPI contract DTOs and domain DTOs for earning components.
+/// Mapper for converting between contract DTOs and domain DTOs for earning components.
 /// Handles field name mappings, type conversions, and enum parsing.
 /// </summary>
-public static class EarningComponentOpenApiMapper
+public static class EarningComponentMapper
 {
 	/// <summary>
-	/// Maps PayrollComponentCreateRequestDto (OpenAPI) to CreateEarningComponentDto (Domain)
+	/// Maps PayrollComponentCreateRequestDto to CreateEarningComponentDto
 	/// </summary>
 	public static CreateEarningComponentDto ToCreateDto(PayrollComponentCreateRequestDto request)
 	{
@@ -35,7 +35,7 @@ public static class EarningComponentOpenApiMapper
 	}
 	
 	/// <summary>
-	/// Maps PayrollComponentCreateRequestDto (OpenAPI) to UpdateEarningComponentDto (Domain)
+	/// Maps PayrollComponentCreateRequestDto to UpdateEarningComponentDto
 	/// </summary>
 	public static UpdateEarningComponentDto ToUpdateDto(PayrollComponentCreateRequestDto request, int existingDisplayOrder = 0)
 	{
@@ -57,7 +57,7 @@ public static class EarningComponentOpenApiMapper
 	}
 
 	/// <summary>
-	/// Maps PagedResultDto to DeductionComponentPaginatedResponseDto (OpenAPI contract)
+	/// Maps PagedResultDto to DeductionComponentPaginatedResponseDto
 	/// Note: Using DeductionComponentPaginatedResponseDto as it's the same structure for both
 	/// </summary>
 	public static DeductionComponentPaginatedResponseDto ToPaginatedResponse(PagedResultDto<EarningComponentDto> pagedResult, int page, int pageSize)
@@ -75,7 +75,7 @@ public static class EarningComponentOpenApiMapper
 	}
 
 	/// <summary>
-	/// Maps EarningComponentDto to DeductionComponentResponseDto (OpenAPI contract)
+	/// Maps EarningComponentDto to DeductionComponentResponseDto
 	/// </summary>
 	private static DeductionComponentResponseDto ToEarningComponentResponse(EarningComponentDto dto)
 	{
@@ -132,18 +132,25 @@ public static class EarningComponentOpenApiMapper
 	/// </summary>
 	private static EarningComponentType ParseComponentType(string? componentTypeStr, bool isFixed)
 	{
-		// Prioritize isFixed flag first for consistency
+		// PRIORITY 1: If isFixed is explicitly true, always return Fixed
+		// This ensures isFixed flag is actually prioritized as documented
+		if (isFixed)
+		{
+			return EarningComponentType.Fixed;
+		}
+
+		// PRIORITY 2: If componentType string is provided, try to parse it
 		if (!string.IsNullOrWhiteSpace(componentTypeStr))
 		{
 			var normalizedType = componentTypeStr.Trim().ToLowerInvariant();
 
-			// If componentType explicitly specifies "fixed", respect it
+			// If componentType explicitly specifies "fixed", return Fixed
 			if (normalizedType == "fixed")
 			{
 				return EarningComponentType.Fixed;
 			}
 
-			// If componentType explicitly specifies "variable" or "percentage", respect it
+			// If componentType explicitly specifies "variable" or "percentage", return Variable
 			if (normalizedType == "variable" || normalizedType == "percentage")
 			{
 				return EarningComponentType.Variable;
@@ -156,8 +163,8 @@ public static class EarningComponentOpenApiMapper
 			}
 		}
 
-		// Fall back to isFixed flag when componentType is not provided or invalid
-		return isFixed ? EarningComponentType.Fixed : EarningComponentType.Variable;
+		// PRIORITY 3: Default to Variable when isFixed is false and componentType is not provided/invalid
+		return EarningComponentType.Variable;
 	}
 	
 	/// <summary>

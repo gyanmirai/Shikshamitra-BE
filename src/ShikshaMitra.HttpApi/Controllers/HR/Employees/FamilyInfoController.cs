@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.FamilyInfo;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;

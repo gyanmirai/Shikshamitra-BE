@@ -1,6 +1,7 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR.Payroll.SalaryStructure;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp;

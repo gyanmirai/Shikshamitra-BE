@@ -1,9 +1,11 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR.Payroll;
+using ShikshaMitra.HR.Payroll.Settings;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;

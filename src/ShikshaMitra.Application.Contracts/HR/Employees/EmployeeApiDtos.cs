@@ -30,8 +30,14 @@ public class EmployeeListResponse
 /// </summary>
 public class EmployeeSummary
 {
+    /// <summary>
+    /// Unique identifier for the employee
+    /// </summary>
+    [Required]
+    public Guid Id { get; set; }
+
     public string? RoleName { get; set; }
-    
+
     public string? FullName { get; set; }
     
     public string? ThumbnailPicture { get; set; }
@@ -86,6 +92,12 @@ public class ShiftInfo
 /// </summary>
 public class EmployeeSearchItem
 {
+    /// <summary>
+    /// Unique identifier for the employee
+    /// </summary>
+    [Required]
+    public Guid Id { get; set; }
+
     [Required]
     public string RoleName { get; set; } = string.Empty;
     

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.HR.AttendanceAndLeaves;
+namespace ShikshaMitra.Controllers.HR.AttendanceAndLeaves;
 
 [Area("app")]
 [RemoteService(Name = "Default")]

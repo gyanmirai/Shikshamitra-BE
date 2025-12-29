@@ -5,11 +5,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR.Payroll;
+using ShikshaMitra.HR.Payroll.Settings;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.HR.Payroll.Settings;
+namespace ShikshaMitra.Controllers.HR.Payroll;
 
 /// <summary>
 /// API Controller for managing earning components.

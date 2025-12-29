@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -115,14 +115,39 @@ public class RunPayrollRequest
 public class PayrollLockResponse
 {
 	/// <summary>
-	/// Success message
+	/// Success or status message
 	/// </summary>
 	public string Message { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Month that was locked
 	/// </summary>
 	public string Month { get; set; } = string.Empty;
+
+	/// <summary>
+	/// Indicates if payroll was already locked (idempotent response)
+	/// </summary>
+	public bool WasAlreadyLocked { get; set; }
+
+	/// <summary>
+	/// Number of employees successfully processed
+	/// </summary>
+	public int EmployeesProcessed { get; set; }
+
+	/// <summary>
+	/// Number of employees skipped (already finalized)
+	/// </summary>
+	public int EmployeesSkipped { get; set; }
+
+	/// <summary>
+	/// Number of employees that failed processing
+	/// </summary>
+	public int EmployeesFailed { get; set; }
+
+	/// <summary>
+	/// Optional list of error messages for failed employees
+	/// </summary>
+	public List<string>? Errors { get; set; }
 }
 
 /// <summary>

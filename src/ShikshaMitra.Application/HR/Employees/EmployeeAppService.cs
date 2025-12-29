@@ -713,6 +713,7 @@ IEmployeeAppService
 	{
 		return new EmployeeSummary
 		{
+			Id = employee.Id,
 			RoleName = employee.Role?.Name,
 			FullName = employee.EmployeeName,
 			ThumbnailPicture = employee.ProfilePictureBlobName,
@@ -738,6 +739,7 @@ IEmployeeAppService
 	{
 		return new EmployeeSearchItem
 		{
+			Id = employee.Id,
 			RoleName = employee.Role?.Name ?? string.Empty,
 			FullName = employee.EmployeeName ?? string.Empty,
 			ThumbnailPicture = employee.ProfilePictureBlobName ?? string.Empty,

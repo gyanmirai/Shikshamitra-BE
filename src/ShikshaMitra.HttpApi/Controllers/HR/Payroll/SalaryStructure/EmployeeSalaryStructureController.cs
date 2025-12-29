@@ -1,12 +1,13 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR.Payroll.SalaryStructure;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.HR.Payroll.SalaryStructure;
+namespace ShikshaMitra.Controllers.HR.Payroll.SalaryStructure;
 
 /// <summary>
 /// Controller for managing employee salary structure.

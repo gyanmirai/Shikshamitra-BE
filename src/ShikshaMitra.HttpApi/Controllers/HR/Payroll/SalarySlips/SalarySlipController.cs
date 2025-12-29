@@ -6,10 +6,11 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.HR.Payroll.SalarySlips;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.HR.Payroll.SalarySlips;
+namespace ShikshaMitra.Controllers.HR.Payroll.SalarySlips;
 
 /// <summary>
 /// API Controller for salary slip operations (OpenAPI contract compliant)

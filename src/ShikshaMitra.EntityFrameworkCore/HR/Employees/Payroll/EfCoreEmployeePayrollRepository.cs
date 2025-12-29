@@ -50,15 +50,19 @@ public class EfCoreEmployeePayrollDetailsRepository
 
 		var results = await query.AsNoTracking().ToListAsync(cancellationToken);
 
-		// Filter by current tenant
-		var currentTenantId = CurrentTenant.Id;
-		if (currentTenantId.HasValue)
-		{
-			results = results.Where(x => x.EmployeeTenantId == currentTenantId).ToList();
-		}
+			// Filter by current tenant
+			var currentTenantId = CurrentTenant.Id;
+			if (currentTenantId.HasValue)
+			{
+				results = results.Where(x => x.EmployeeTenantId == currentTenantId).ToList();
+			}
 
-		return results.Select(x => x.PayrollDetail).ToDictionary(x => x.EmployeeId);
-	}
+			// Use GroupBy to handle potential duplicates and take the first payroll detail for each employee
+			return results
+				.Select(x => x.PayrollDetail)
+				.GroupBy(x => x.EmployeeId)
+				.ToDictionary(g => g.Key, g => g.First());
+		}
 }
 
 public class EfCoreEmployeePayrollComponentRepository 

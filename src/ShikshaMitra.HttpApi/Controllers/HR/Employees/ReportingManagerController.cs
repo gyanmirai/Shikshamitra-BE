@@ -4,12 +4,13 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.ReportingManager;
 using ShikshaMitra.HR.Employees.ReportingManagerInfo;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.HR.Employees;
+namespace ShikshaMitra.Controllers.HR.Employees;
 
 /// <summary>
 /// Employee reporting manager management controller

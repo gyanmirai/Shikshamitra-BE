@@ -5,11 +5,12 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.HR.Employees;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.HR.Employees;
+namespace ShikshaMitra.Controllers.HR.Employees;
 
 /// <summary>
 /// Employees Controller (OpenAPI contract compliant)
@@ -90,6 +91,7 @@ public class EmployeesController : AbpControllerBase
     {
         return new EmployeeDetails
         {
+            Id = employee.Id,
             RoleName = employee.Role?.Name,
             FullName = employee.EmployeeName,
             ThumbnailPicture = employee.ProfilePictureBlobName,

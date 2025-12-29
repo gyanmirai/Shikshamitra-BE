@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,7 +9,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.HR.Payroll.Settings;
+namespace ShikshaMitra.Controllers.HR.Payroll;
 
 /// <summary>
 /// API Controller for managing earning components.

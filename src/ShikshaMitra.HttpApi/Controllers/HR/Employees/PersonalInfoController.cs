@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -8,7 +8,7 @@ using ShikshaMitra.HR.Employees.PersonalInfo;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.HR.Employees;
+namespace ShikshaMitra.Controllers.HR.Employees;
 
 /// <summary>
 /// Employee personal information management controller

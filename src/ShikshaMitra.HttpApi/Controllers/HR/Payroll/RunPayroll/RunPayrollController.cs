@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.HR.Payroll.RunPayroll;
+namespace ShikshaMitra.Controllers.HR.Payroll.RunPayroll;
 
 /// <summary>
 /// API Controller for running payroll (OpenAPI contract compliant)

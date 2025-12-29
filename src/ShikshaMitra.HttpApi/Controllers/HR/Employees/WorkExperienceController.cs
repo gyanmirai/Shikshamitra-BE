@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
@@ -9,7 +9,7 @@ using ShikshaMitra.HR.Employees.WorkExperienceContracts;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.HR.Employees;
+namespace ShikshaMitra.Controllers.HR.Employees;
 
 /// <summary>
 /// Employee work experience management controller

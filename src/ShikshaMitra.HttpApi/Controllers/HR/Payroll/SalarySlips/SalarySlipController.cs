@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Linq;
@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.HR.Payroll.SalarySlips;
+namespace ShikshaMitra.Controllers.HR.Payroll.SalarySlips;
 
 /// <summary>
 /// API Controller for salary slip operations (OpenAPI contract compliant)

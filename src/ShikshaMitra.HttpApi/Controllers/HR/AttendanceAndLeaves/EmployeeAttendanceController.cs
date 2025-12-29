@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.HR.AttendanceAndLeaves.EmployeeAttendanceContract;
@@ -7,7 +7,7 @@ using System.ComponentModel.DataAnnotations;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.HR.AttendanceAndLeaves;
+namespace ShikshaMitra.Controllers.HR.AttendanceAndLeaves;
 
 /// <summary>
 /// API Controller for employee attendance management

@@ -8,7 +8,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.HR.AttendanceAndLeaves;
+namespace ShikshaMitra.Controllers.HR.AttendanceAndLeaves;
 
 /// <summary>
 /// API Controller for attendance tracking (date-wise and employee-wise reports)

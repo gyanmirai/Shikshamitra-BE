@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
@@ -9,7 +9,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.HR.Employees;
+namespace ShikshaMitra.Controllers.HR.Employees;
 
 /// <summary>
 /// Employees Controller (OpenAPI contract compliant)

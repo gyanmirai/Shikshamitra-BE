@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.HR.Payroll.SalaryStructure;
+namespace ShikshaMitra.Controllers.HR.Payroll.SalaryStructure;
 
 /// <summary>
 /// Controller for managing employee salary structure.

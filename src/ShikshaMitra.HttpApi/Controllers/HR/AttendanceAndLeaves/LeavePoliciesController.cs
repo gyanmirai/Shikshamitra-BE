@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -8,7 +8,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.HR.AttendanceAndLeaves;
+namespace ShikshaMitra.Controllers.HR.AttendanceAndLeaves;
 
 /// <summary>
 /// Leave policy management controller

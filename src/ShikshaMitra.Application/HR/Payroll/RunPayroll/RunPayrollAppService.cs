@@ -55,40 +55,81 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	/// </summary>
 	public async Task<RunPayrollResponse> GetPreviewAsync(GetRunPayrollInput input)
 	{
-		// Parse and validate month
-		var (year, month, internalMonthYear) = ParseMonth(input.Month);
-
-		_logger.LogInformation("Generating payroll preview for {Month} (Year: {Year}, Month: {MonthNum})",
-			input.Month, year, month);
-
-		// Check if payroll is already generated (any finalized slip exists)
-		var isGenerated = await _salarySlipRepository.HasFinalizedSlipsForMonthAsync(internalMonthYear);
-
-		// Get all active employees
-		var employeeQuery = await _employeeRepository.GetQueryableAsync();
-		
-		if (CurrentTenant.Id.HasValue)
+		try
 		{
-			employeeQuery = employeeQuery.Where(e => e.TenantId == CurrentTenant.Id);
-		}
+			// Parse and validate month
+			var (year, month, internalMonthYear) = ParseMonth(input.Month);
 
-		// Filter only active employees
-		employeeQuery = employeeQuery.Where(e => e.EmployeeStatusType == EmployeeStatusType.Active);
+			_logger.LogInformation("Generating payroll preview for {Month} (Year: {Year}, Month: {MonthNum})",
+				input.Month, year, month);
 
-		// Get total count
-		var totalCount = await AsyncExecuter.CountAsync(employeeQuery);
+			// Check if payroll is already generated (any finalized slip exists)
+			var isGenerated = await _salarySlipRepository.HasFinalizedSlipsForMonthAsync(internalMonthYear);
 
-		// Get paginated employees
-		var employees = await AsyncExecuter.ToListAsync(
-			employeeQuery
-				.OrderBy(e => e.FirstName)
-				.ThenBy(e => e.LastName)
-				.Skip(input.Page * input.PageSize)
-				.Take(input.PageSize)
-		);
+			// Get all active employees
+			var employeeQuery = await _employeeRepository.GetQueryableAsync();
 
-		if (employees.Count == 0)
-		{
+			if (CurrentTenant.Id.HasValue)
+			{
+				employeeQuery = employeeQuery.Where(e => e.TenantId == CurrentTenant.Id);
+			}
+
+			// Filter only active employees
+			employeeQuery = employeeQuery.Where(e => e.EmployeeStatusType == EmployeeStatusType.Active);
+
+			// Get total count
+			var totalCount = await AsyncExecuter.CountAsync(employeeQuery);
+
+			// Get paginated employees
+			var employees = await AsyncExecuter.ToListAsync(
+				employeeQuery
+					.OrderBy(e => e.FirstName)
+					.ThenBy(e => e.LastName)
+					.Skip(input.Page * input.PageSize)
+					.Take(input.PageSize)
+			);
+
+			if (employees.Count == 0)
+			{
+				return new RunPayrollResponse
+				{
+					IsGenerated = isGenerated,
+					TotalCount = totalCount,
+					CurrentPage = input.Page,
+					PageSize = input.PageSize,
+					TotalPages = (int)Math.Ceiling((double)totalCount / input.PageSize),
+					Items = new List<RunPayrollItem>()
+				};
+			}
+
+			// Calculate total working days in the month (business days - holidays)
+			var totalWorkingDays = await CalculateTotalWorkingDaysAsync(year, month);
+
+			// Get all employee IDs for batch operations
+			var employeeIds = employees.Select(e => e.Id).ToList();
+			var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
+			var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
+
+			// BATCH LOAD: Get all data in parallel to avoid N+1 queries
+			var attendanceTask = GetAttendanceRecordsAsync(employeeIds, startDate, endDate);
+			var payrollDetailsTask = _payrollDetailsRepository.GetByEmployeeIdsAsync(employeeIds);
+			var payrollComponentsTask = _payrollComponentRepository.GetByEmployeeIdsAsync(employeeIds);
+
+			await Task.WhenAll(attendanceTask, payrollDetailsTask, payrollComponentsTask);
+
+			var attendanceByEmployee = await attendanceTask;
+			var payrollDetailsByEmployee = await payrollDetailsTask;
+			var componentsByEmployee = await payrollComponentsTask;
+
+			// Build payroll items (no additional DB calls - all data pre-loaded)
+			var items = employees.Select(employee => BuildPayrollItem(
+				employee,
+				attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
+				payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
+				componentsByEmployee[employee.Id]?.ToList() ?? new List<EmployeePayrollComponent>(),
+				totalWorkingDays
+			)).ToList();
+
 			return new RunPayrollResponse
 			{
 				IsGenerated = isGenerated,
@@ -96,47 +137,14 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				CurrentPage = input.Page,
 				PageSize = input.PageSize,
 				TotalPages = (int)Math.Ceiling((double)totalCount / input.PageSize),
-				Items = new List<RunPayrollItem>()
+				Items = items
 			};
 		}
-
-		// Calculate total working days in the month (business days - holidays)
-		var totalWorkingDays = await CalculateTotalWorkingDaysAsync(year, month);
-
-		// Get all employee IDs for batch operations
-		var employeeIds = employees.Select(e => e.Id).ToList();
-		var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
-		var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
-
-		// BATCH LOAD: Get all data in parallel to avoid N+1 queries
-		var attendanceTask = GetAttendanceRecordsAsync(employeeIds, startDate, endDate);
-		var payrollDetailsTask = _payrollDetailsRepository.GetByEmployeeIdsAsync(employeeIds);
-		var payrollComponentsTask = _payrollComponentRepository.GetByEmployeeIdsAsync(employeeIds);
-
-		await Task.WhenAll(attendanceTask, payrollDetailsTask, payrollComponentsTask);
-
-		var attendanceByEmployee = await attendanceTask;
-		var payrollDetailsByEmployee = await payrollDetailsTask;
-		var componentsByEmployee = await payrollComponentsTask;
-
-		// Build payroll items (no additional DB calls - all data pre-loaded)
-		var items = employees.Select(employee => BuildPayrollItem(
-			employee,
-			attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
-			payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
-			componentsByEmployee[employee.Id].ToList(), // Lookup returns empty collection if key not found
-			totalWorkingDays
-		)).ToList();
-
-		return new RunPayrollResponse
+		catch (Exception ex)
 		{
-			IsGenerated = isGenerated,
-			TotalCount = totalCount,
-			CurrentPage = input.Page,
-			PageSize = input.PageSize,
-			TotalPages = (int)Math.Ceiling((double)totalCount / input.PageSize),
-			Items = items
-		};
+			_logger.LogError(ex, "Error generating payroll preview for month {Month}", input.Month);
+			throw;
+		}
 	}
 
 	/// <summary>

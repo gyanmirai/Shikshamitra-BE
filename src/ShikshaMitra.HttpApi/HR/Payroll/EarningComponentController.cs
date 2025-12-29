@@ -44,8 +44,8 @@ public class EarningComponentController : AbpControllerBase
 			MaxResultCount = pageSize
 		});
 
-		return EarningComponentOpenApiMapper.ToPaginatedResponse(result, page, pageSize);
-	}
+			return EarningComponentMapper.ToPaginatedResponse(result, page, pageSize);
+		}
 
 	/// <summary>
 	/// Create a new earning component (OpenAPI contract)
@@ -55,7 +55,7 @@ public class EarningComponentController : AbpControllerBase
 	[ProducesResponseType(typeof(ComponentCreateResponseDto), 201)]
 	public virtual async Task<ActionResult<ComponentCreateResponseDto>> CreateAsync([FromBody] PayrollComponentCreateRequestDto input)
 	{
-		var createDto = EarningComponentOpenApiMapper.ToCreateDto(input);
+		var createDto = EarningComponentMapper.ToCreateDto(input);
 		var createdComponent = await _earningComponentAppService.CreateAsync(createDto);
 		return StatusCode(201, new ComponentCreateResponseDto
 		{
@@ -73,7 +73,7 @@ public class EarningComponentController : AbpControllerBase
 	public virtual async Task<IActionResult> UpdateAsync(Guid id, [FromBody] PayrollComponentCreateRequestDto input)
 	{
 		var existingComponent = await _earningComponentAppService.GetAsync(id);
-		var updateDto = EarningComponentOpenApiMapper.ToUpdateDto(input, existingComponent.DisplayOrder);
+		var updateDto = EarningComponentMapper.ToUpdateDto(input, existingComponent.DisplayOrder);
 		await _earningComponentAppService.UpdateAsync(id, updateDto);
 		return Ok();
 	}

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -99,9 +100,20 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		ConfigureVirtualFileSystem(context);
 		ConfigureCors(context, configuration);
 
+		ConfigureFormOptions(context, configuration);
+
 		ConfigureSwaggerServices(context, configuration);
 
 		ConfigureExceptionHandling(context, hostingEnvironment);
+	}
+
+	private void ConfigureFormOptions(ServiceConfigurationContext context, IConfiguration configuration)
+	{
+		context.Services.Configure<FormOptions>(options =>
+		{
+			options.MultipartBodyLengthLimit = configuration.GetValue<long>("FormOptions:MultipartBodyLengthLimit");
+			options.MemoryBufferThreshold = configuration.GetValue<int>("FormOptions:MemoryBufferThreshold");
+		});
 	}
 
 	private void ConfigureExceptionHandling(ServiceConfigurationContext context, IHostEnvironment environment)

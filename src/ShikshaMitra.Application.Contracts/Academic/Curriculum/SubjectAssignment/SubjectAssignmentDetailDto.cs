@@ -10,32 +10,24 @@ namespace ShikshaMitra.Academic.Curriculum;
 /// </summary>
 public class SubjectAssignmentDetailDto
 {
-	public Guid AssignedSubjectId { get; set; }
+	public Guid SubjectId { get; set; }
 
 	/// <summary>
 	/// Unique subject code (e.g., "SC101")
 	/// </summary>
-	[Required(ErrorMessage = "Subject Code is required")]
-	[StringLength(
-		SubjectAssignmentConsts.MaxSubjectCodeLength,
-		MinimumLength = SubjectAssignmentConsts.MinSubjectCodeLength,
-		ErrorMessage = "Subject code must be between {2} and {1} characters"
-	)]
-	public required string SubjectCode { get; set; }
-
-	public SubjectType SubjectType { get; set; } = SubjectType.Core;
+	public string? SubjectCode { get; set; }
 
 	public Guid? ElectiveGroupId { get; set; }
 
 	/// <summary>
 	/// Primary teacher ID (can be string "teacherId_123" from FE)
 	/// </summary>
-	public Guid PrimaryTeacher { get; set; }
+	public Guid? PrimaryTeacherId { get; set; }
 
 	/// <summary>
 	/// Secondary teacher IDs
 	/// </summary>
-	public List<Guid> SecondaryTeachers { get; set; } = new List<Guid>();
+	public List<Guid>? SecondaryTeacherId { get; set; } = new List<Guid>();
 
 	/// <summary>
 	/// Learning goals/objectives (HTML content)
@@ -55,5 +47,5 @@ public class SubjectAssignmentDetailDto
 	/// <summary>
 	/// Attached documents (syllabus, resources, etc.)
 	/// </summary>
-	public List<string> Documents { get; set; } = new List<string>();
+	public List<string>? Documents { get; set; } = new List<string>();
 }

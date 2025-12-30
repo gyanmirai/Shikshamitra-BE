@@ -22,6 +22,7 @@ public class EarningComponentManager : DomainService
 		string? description,
 		EarningComponentType componentType,
 		ComponentDependency dependOn,
+		Guid? customComponentId,
 		string amount,
 		bool visibleInPayslip,
 		int displayOrder = 0)
@@ -36,6 +37,7 @@ public class EarningComponentManager : DomainService
 			description,
 			componentType,
 			dependOn,
+			customComponentId,
 			amount,
 			visibleInPayslip,
 			displayOrder
@@ -50,6 +52,7 @@ public class EarningComponentManager : DomainService
 		string? description,
 		EarningComponentType componentType,
 		ComponentDependency dependOn,
+		Guid? customComponentId,
 		string amount,
 		bool visibleInPayslip,
 		int displayOrder)
@@ -65,6 +68,7 @@ public class EarningComponentManager : DomainService
 			description,
 			componentType,
 			dependOn,
+			customComponentId,
 			amount,
 			visibleInPayslip,
 			displayOrder

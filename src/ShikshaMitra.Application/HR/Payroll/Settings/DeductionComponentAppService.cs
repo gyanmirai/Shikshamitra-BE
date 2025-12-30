@@ -49,13 +49,14 @@ public class DeductionComponentAppService : CrudAppService<
 			input.Description,
 			input.ComponentType,
 			input.DependOn,
+			input.CustomComponentId,
 			input.Amount,
 			input.VisibleInPayslip,
 			input.DisplayOrder
 		);
 
 		await Repository.InsertAsync(deductionComponent, autoSave: true);
-		
+
 		// Clear cache
 		await ClearCacheAsync();
 
@@ -72,13 +73,14 @@ public class DeductionComponentAppService : CrudAppService<
 			input.Description,
 			input.ComponentType,
 			input.DependOn,
+			input.CustomComponentId,
 			input.Amount,
 			input.VisibleInPayslip,
 			input.DisplayOrder
 		);
 
 		await Repository.UpdateAsync(deductionComponent, autoSave: true);
-		
+
 		// Clear cache
 		await ClearCacheAsync();
 

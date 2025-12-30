@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.HR.Payroll.Settings;
 
@@ -31,7 +32,12 @@ public class UpdateDeductionComponentDto
 	/// </summary>
 	[Required]
 	public ComponentDependency DependOn { get; set; }
-	
+
+	/// <summary>
+	/// Custom component ID when DependOn is CustomComponent
+	/// </summary>
+	public Guid? CustomComponentId { get; set; }
+
 	/// <summary>
 	/// Amount (numeric or percentage)
 	/// </summary>

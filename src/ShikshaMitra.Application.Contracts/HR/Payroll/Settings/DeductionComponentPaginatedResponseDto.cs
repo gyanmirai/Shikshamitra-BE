@@ -21,6 +21,7 @@ public class DeductionComponentResponseDto
     public string ComponentName { get; set; } = string.Empty;
     public string? Description { get; set; }
     public bool IsFixed { get; set; }
+    public string? ComponentType { get; set; }
     public double Amount { get; set; }
     public bool VisibleInPayslip { get; set; }
     public CustomComponentDto? CustomComponent { get; set; }

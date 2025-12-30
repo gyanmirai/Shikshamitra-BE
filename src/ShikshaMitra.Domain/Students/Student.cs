@@ -306,7 +306,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DateTimeOffset slotEndDate,
 		int slotRoomNo)
 	{
-		if (Status != StudentLifeCycleStatusEnum.RegistrationFormIssued)
+		if (Status != StudentLifeCycleStatusEnum.Registation)
 		{
 			throw new InvalidOperationException(
 				$"Cannot schedule entrance exam. Student must be in RegistrationFormIssued status. Current status: {Status}");
@@ -327,13 +327,13 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// </summary>
 	public void MoveToAdmission(Guid? academicYearId = null)
 	{
-		if (Status != StudentLifeCycleStatusEnum.EntranceExam)
+		if (Status != StudentLifeCycleStatusEnum.Registation && Status != StudentLifeCycleStatusEnum.EntranceExam)
 		{
 			throw new InvalidOperationException(
 				$"Cannot move to admission. Student must be in EntranceExam status. Current status: {Status}");
 		}
 
-		if (AdditionalDetail?.ExamStatus != StudentEnrollments.EntranceExamStatusEnum.Pass)
+		if (Status == StudentLifeCycleStatusEnum.EntranceExam && AdditionalDetail?.ExamStatus != EntranceExamStatusEnum.Pass)
 		{
 			throw new InvalidOperationException(
 				"Cannot move to admission. Student must have passed the entrance exam.");

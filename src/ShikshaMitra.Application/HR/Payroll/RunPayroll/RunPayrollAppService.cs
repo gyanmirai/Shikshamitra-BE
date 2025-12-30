@@ -9,10 +9,12 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
@@ -29,6 +31,10 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	private readonly IRepository<EventAndHoliday, Guid> _holidayRepository;
 	private readonly SalarySlipManager _salarySlipManager;
 	private readonly ILogger<RunPayrollAppService> _logger;
+
+	// Configuration: Batch size for processing employees
+	private const int DefaultBatchSize = 50;
+	private const int MaxBatchSize = 100;
 
 	public RunPayrollAppService(
 		IRepository<Employee, Guid> employeeRepository,
@@ -55,40 +61,90 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	/// </summary>
 	public async Task<RunPayrollResponse> GetPreviewAsync(GetRunPayrollInput input)
 	{
-		// Parse and validate month
-		var (year, month, internalMonthYear) = ParseMonth(input.Month);
-
-		_logger.LogInformation("Generating payroll preview for {Month} (Year: {Year}, Month: {MonthNum})",
-			input.Month, year, month);
-
-		// Check if payroll is already generated (any finalized slip exists)
-		var isGenerated = await _salarySlipRepository.HasFinalizedSlipsForMonthAsync(internalMonthYear);
-
-		// Get all active employees
-		var employeeQuery = await _employeeRepository.GetQueryableAsync();
-		
-		if (CurrentTenant.Id.HasValue)
+		// Validate input
+		if (input.PageSize <= 0 || input.PageSize > 100)
 		{
-			employeeQuery = employeeQuery.Where(e => e.TenantId == CurrentTenant.Id);
+			throw new BusinessException("HR:InvalidPageSize")
+				.WithData("pageSize", input.PageSize)
+				.WithData("maxPageSize", 100);
 		}
 
-		// Filter only active employees
-		employeeQuery = employeeQuery.Where(e => e.EmployeeStatusType == EmployeeStatusType.Active);
-
-		// Get total count
-		var totalCount = await AsyncExecuter.CountAsync(employeeQuery);
-
-		// Get paginated employees
-		var employees = await AsyncExecuter.ToListAsync(
-			employeeQuery
-				.OrderBy(e => e.FirstName)
-				.ThenBy(e => e.LastName)
-				.Skip(input.Page * input.PageSize)
-				.Take(input.PageSize)
-		);
-
-		if (employees.Count == 0)
+		try
 		{
+			// Parse and validate month
+			var (year, month, internalMonthYear) = ParseMonth(input.Month);
+
+			_logger.LogInformation(
+				"Generating payroll preview for {Month} (Year: {Year}, Month: {MonthNum}, Page: {Page}, PageSize: {PageSize})",
+				input.Month, year, month, input.Page, input.PageSize);
+
+			// Check if payroll is already generated (any finalized slip exists)
+			var isGenerated = await _salarySlipRepository.HasFinalizedSlipsForMonthAsync(internalMonthYear);
+
+			// Get all active employees
+			var employeeQuery = await _employeeRepository.GetQueryableAsync();
+
+			if (CurrentTenant.Id.HasValue)
+			{
+				employeeQuery = employeeQuery.Where(e => e.TenantId == CurrentTenant.Id);
+			}
+
+			// Filter only active employees
+			employeeQuery = employeeQuery.Where(e => e.EmployeeStatusType == EmployeeStatusType.Active);
+
+			// Get total count
+			var totalCount = await AsyncExecuter.CountAsync(employeeQuery);
+
+			// Get paginated employees
+			var employees = await AsyncExecuter.ToListAsync(
+				employeeQuery
+					.OrderBy(e => e.FirstName)
+					.ThenBy(e => e.LastName)
+					.Skip(input.Page * input.PageSize)
+					.Take(input.PageSize)
+			);
+
+			if (employees.Count == 0)
+			{
+				return new RunPayrollResponse
+				{
+					IsGenerated = isGenerated,
+					TotalCount = totalCount,
+					CurrentPage = input.Page,
+					PageSize = input.PageSize,
+					TotalPages = (int)Math.Ceiling((double)totalCount / input.PageSize),
+					Items = new List<RunPayrollItem>()
+				};
+			}
+
+			// Calculate total working days in the month (business days - holidays)
+			var totalWorkingDays = await CalculateTotalWorkingDaysAsync(year, month);
+
+			// Get all employee IDs for batch operations
+			var employeeIds = employees.Select(e => e.Id).ToList();
+			var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
+			var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
+
+			// BATCH LOAD: Get all data in parallel to avoid N+1 queries
+			var attendanceTask = GetAttendanceRecordsAsync(employeeIds, startDate, endDate);
+			var payrollDetailsTask = _payrollDetailsRepository.GetByEmployeeIdsAsync(employeeIds);
+			var payrollComponentsTask = _payrollComponentRepository.GetByEmployeeIdsAsync(employeeIds);
+
+			await Task.WhenAll(attendanceTask, payrollDetailsTask, payrollComponentsTask);
+
+			var attendanceByEmployee = await attendanceTask;
+			var payrollDetailsByEmployee = await payrollDetailsTask;
+			var componentsByEmployee = await payrollComponentsTask;
+
+			// Build payroll items (no additional DB calls - all data pre-loaded)
+			var items = employees.Select(employee => BuildPayrollItem(
+				employee,
+				attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
+				payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
+				componentsByEmployee[employee.Id]?.ToList() ?? new List<EmployeePayrollComponent>(),
+				totalWorkingDays
+			)).ToList();
+
 			return new RunPayrollResponse
 			{
 				IsGenerated = isGenerated,
@@ -96,66 +152,55 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				CurrentPage = input.Page,
 				PageSize = input.PageSize,
 				TotalPages = (int)Math.Ceiling((double)totalCount / input.PageSize),
-				Items = new List<RunPayrollItem>()
+				Items = items
 			};
 		}
-
-		// Calculate total working days in the month (business days - holidays)
-		var totalWorkingDays = await CalculateTotalWorkingDaysAsync(year, month);
-
-		// Get all employee IDs for batch operations
-		var employeeIds = employees.Select(e => e.Id).ToList();
-		var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
-		var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
-
-		// BATCH LOAD: Get all data in parallel to avoid N+1 queries
-		var attendanceTask = GetAttendanceRecordsAsync(employeeIds, startDate, endDate);
-		var payrollDetailsTask = _payrollDetailsRepository.GetByEmployeeIdsAsync(employeeIds);
-		var payrollComponentsTask = _payrollComponentRepository.GetByEmployeeIdsAsync(employeeIds);
-
-		await Task.WhenAll(attendanceTask, payrollDetailsTask, payrollComponentsTask);
-
-		var attendanceByEmployee = await attendanceTask;
-		var payrollDetailsByEmployee = await payrollDetailsTask;
-		var componentsByEmployee = await payrollComponentsTask;
-
-		// Build payroll items (no additional DB calls - all data pre-loaded)
-		var items = employees.Select(employee => BuildPayrollItem(
-			employee,
-			attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
-			payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
-			componentsByEmployee[employee.Id].ToList(), // Lookup returns empty collection if key not found
-			totalWorkingDays
-		)).ToList();
-
-		return new RunPayrollResponse
-		{
-			IsGenerated = isGenerated,
-			TotalCount = totalCount,
-			CurrentPage = input.Page,
-			PageSize = input.PageSize,
-			TotalPages = (int)Math.Ceiling((double)totalCount / input.PageSize),
-			Items = items
-		};
-	}
+			catch (BusinessException)
+			{
+				// Re-throw business exceptions as-is
+				throw;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Unexpected error generating payroll preview for month {Month}", input.Month);
+				throw new BusinessException("HR:PayrollPreviewFailed")
+					.WithData("month", input.Month);
+			}
+		}
 
 	/// <summary>
 	/// Generate and lock payroll for a month
 	/// Uses batch processing for better performance with large employee counts
 	/// </summary>
+	[UnitOfWork]
 	public async Task<PayrollLockResponse> LockPayrollAsync(RunPayrollRequest request)
 	{
 		// Parse and validate month
 		var (year, month, internalMonthYear) = ParseMonth(request.Month);
 
-		_logger.LogInformation("Locking payroll for {Month} (Year: {Year}, Month: {MonthNum})",
-			request.Month, year, month);
+		using var scope = _logger.BeginScope(new Dictionary<string, object>
+		{
+			["Month"] = request.Month,
+			["Year"] = year,
+			["MonthNum"] = month,
+			["OperationType"] = "PayrollLock"
+		});
+
+		_logger.LogInformation("Starting payroll lock operation for {Month}", request.Month);
 
 		// Check if payroll is already generated
 		var isGenerated = await _salarySlipRepository.HasFinalizedSlipsForMonthAsync(internalMonthYear);
 		if (isGenerated)
 		{
-			throw new UserFriendlyException($"Payroll for {request.Month} is already generated and locked.");
+			_logger.LogInformation("Payroll for {Month} is already locked. Returning idempotent response.", request.Month);
+
+			return new PayrollLockResponse
+			{
+				Message = $"Payroll for {request.Month} is already generated and locked.",
+				Month = request.Month,
+				WasAlreadyLocked = true,
+				EmployeesProcessed = 0
+			};
 		}
 
 		// Get all active employees
@@ -174,83 +219,139 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		if (employees.Count == 0)
 		{
-			throw new UserFriendlyException("No active employees found to generate payroll.");
+			_logger.LogWarning("No active employees found for payroll generation in {Month}", request.Month);
+			throw new BusinessException("HR:NoActiveEmployees")
+				.WithData("month", request.Month);
 		}
 
-		_logger.LogInformation("Generating salary slips for {Count} employees", employees.Count);
+		_logger.LogInformation("Generating salary slips for {Count} active employees", employees.Count);
 
 		var generatedCount = 0;
-		var errors = new List<string>();
-		const int batchSize = 50; // Process in batches for progress tracking
+		var skippedCount = 0;
+		var failedCount = 0;
+		var errors = new List<(string EmployeeCode, string EmployeeName, string Error)>();
+		var batchSize = Math.Min(DefaultBatchSize, MaxBatchSize);
 
-		// Process employees in batches
+		// Process employees in batches with transaction boundary per batch
 		for (int i = 0; i < employees.Count; i += batchSize)
 		{
 			var batch = employees.Skip(i).Take(batchSize).ToList();
-			
-			_logger.LogInformation("Processing batch {BatchNum}/{TotalBatches} ({Count} employees)", 
-				(i / batchSize) + 1, 
-				(int)Math.Ceiling((double)employees.Count / batchSize),
-				batch.Count);
+			var batchNum = (i / batchSize) + 1;
+			var totalBatches = (int)Math.Ceiling((double)employees.Count / batchSize);
+
+			_logger.LogInformation(
+				"Processing batch {BatchNum}/{TotalBatches} with {Count} employees",
+				batchNum, totalBatches, batch.Count);
 
 			// Process each employee in the batch sequentially (DbContext is not thread-safe)
 			foreach (var employee in batch)
 			{
 				try
 				{
-					// Generate or get existing salary slip (autoSave is handled by SalarySlipManager)
+					_logger.LogDebug(
+						"Processing employee {EmployeeCode} ({EmployeeName})",
+						employee.EmployeeCode, employee.EmployeeName);
+
+					// Generate or get existing salary slip
 					var salarySlip = await _salarySlipManager.GenerateOrGetSalarySlipAsync(
 						employee.Id, 
 						internalMonthYear, 
 						forceRegenerate: true);
 
-					// Finalize the salary slip
-					if (salarySlip.Status != SalarySlipStatus.Finalized)
+					// Finalize the salary slip if not already finalized
+					if (salarySlip.Status == SalarySlipStatus.Finalized)
+					{
+						_logger.LogDebug(
+							"Salary slip for employee {EmployeeCode} is already finalized, skipping",
+							employee.EmployeeCode);
+						skippedCount++;
+					}
+					else
 					{
 						salarySlip.Finalize();
 						await _salarySlipRepository.UpdateAsync(salarySlip, autoSave: false);
+						generatedCount++;
 					}
+				}
+				catch (BusinessException bex)
+				{
+					// Business rule violations - log as warning
+					_logger.LogWarning(bex,
+						"Business rule violation generating salary slip for employee {EmployeeCode} ({EmployeeName}): {ErrorCode}",
+						employee.EmployeeCode, employee.EmployeeName, bex.Code);
 
-					generatedCount++;
+					failedCount++;
+					errors.Add((employee.EmployeeCode ?? "UNKNOWN", employee.EmployeeName ?? "Unknown", bex.Message ?? bex.Code ?? "Unknown error"));
 				}
 				catch (Exception ex)
 				{
-					_logger.LogError(ex, "Error generating salary slip for employee {EmployeeId} ({EmployeeName})",
-						employee.Id, employee.EmployeeName);
-					errors.Add($"Failed for {employee.EmployeeCode}: {ex.Message}");
+					// Unexpected errors - log as error
+					_logger.LogError(ex,
+						"Unexpected error generating salary slip for employee {EmployeeCode} ({EmployeeName})",
+						employee.EmployeeCode, employee.EmployeeName);
+
+					failedCount++;
+					errors.Add((employee.EmployeeCode ?? "UNKNOWN", employee.EmployeeName ?? "Unknown", ex.Message));
 				}
 			}
 
-			// Save changes for this batch (reduces DB round-trips)
-			try
-			{
-				await UnitOfWorkManager.Current.SaveChangesAsync();
+				// Save changes for this batch (UnitOfWork attribute handles transaction)
+				try
+				{
+					await UnitOfWorkManager.Current!.SaveChangesAsync();
+					_logger.LogInformation(
+						"Batch {BatchNum}/{TotalBatches} saved successfully. Generated: {Generated}, Skipped: {Skipped}, Failed: {Failed}",
+						batchNum, totalBatches, generatedCount, skippedCount, failedCount);
+				}
+				catch (Exception ex)
+				{
+					_logger.LogError(ex, "Error saving batch {BatchNum}. Rolling back batch changes.", batchNum);
+					throw new BusinessException("HR:PayrollBatchSaveFailed")
+						.WithData("batchNumber", batchNum)
+						.WithData("totalBatches", totalBatches)
+						.WithData("month", request.Month);
+				}
 			}
-			catch (Exception ex)
+
+			// Evaluate final results
+			var totalProcessed = generatedCount + skippedCount + failedCount;
+
+			if (generatedCount == 0 && failedCount == employees.Count)
 			{
-				_logger.LogError(ex, "Error saving batch changes");
-				throw new UserFriendlyException("Failed to save payroll changes. Please try again.");
+				_logger.LogError(
+					"Payroll generation failed for all {Count} employees in {Month}",
+					employees.Count, request.Month);
+
+				var firstError = errors.FirstOrDefault();
+				throw new BusinessException("HR:PayrollGenerationCompleteFailure")
+					.WithData("month", request.Month)
+					.WithData("totalEmployees", employees.Count)
+					.WithData("firstError", firstError.Error)
+					.WithData("firstEmployeeCode", firstError.EmployeeCode);
 			}
+
+			_logger.LogInformation(
+				"Payroll lock completed for {Month}. Generated: {Generated}, Skipped: {Skipped}, Failed: {Failed}, Total: {Total}",
+				request.Month, generatedCount, skippedCount, failedCount, totalProcessed);
+
+			// Build detailed message
+			var message = failedCount > 0
+				? $"Payroll generated and locked for {generatedCount} employees. {skippedCount} already finalized. {failedCount} failed."
+				: skippedCount > 0
+					? $"Payroll generated and locked for {generatedCount} employees. {skippedCount} were already finalized."
+					: $"Payroll generated and locked successfully for {generatedCount} employees.";
+
+			return new PayrollLockResponse
+			{
+				Message = message,
+				Month = request.Month,
+				WasAlreadyLocked = false,
+				EmployeesProcessed = generatedCount,
+				EmployeesSkipped = skippedCount,
+				EmployeesFailed = failedCount,
+				Errors = failedCount > 0 ? errors.Select(e => $"{e.EmployeeCode}: {e.Error}").ToList() : null
+			};
 		}
-
-		if (errors.Count > 0 && generatedCount == 0)
-		{
-			throw new UserFriendlyException($"Payroll generation failed for all employees. First error: {errors.First()}");
-		}
-
-		_logger.LogInformation("Payroll locked for {Month}. Generated: {Generated}, Failed: {Failed}",
-			request.Month, generatedCount, errors.Count);
-
-		var message = errors.Count > 0
-			? $"Payroll generated and locked for {generatedCount} employees. {errors.Count} employees failed."
-			: "Payroll generated and locked successfully";
-
-		return new PayrollLockResponse
-		{
-			Message = message,
-			Month = request.Month
-		};
-	}
 
 	#region Private Methods
 
@@ -261,14 +362,16 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	{
 		if (string.IsNullOrWhiteSpace(monthYear))
 		{
-			throw new UserFriendlyException("Month parameter is required");
+			throw new BusinessException("HR:MonthRequired");
 		}
 
 		// Expected format: JANUARY-2025
 		var parts = monthYear.Split('-');
 		if (parts.Length != 2)
 		{
-			throw new UserFriendlyException("Invalid month format. Expected: MMMM-YYYY (e.g., JANUARY-2025)");
+			throw new BusinessException("HR:InvalidMonthFormat")
+				.WithData("providedFormat", monthYear)
+				.WithData("expectedFormat", "MMMM-YYYY");
 		}
 
 		var monthName = parts[0];
@@ -276,14 +379,19 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		if (!int.TryParse(yearStr, out var year) || year < 1900 || year > 2100)
 		{
-			throw new UserFriendlyException("Invalid year. Must be between 1900 and 2100.");
+			throw new BusinessException("HR:InvalidYear")
+				.WithData("providedYear", yearStr)
+				.WithData("minYear", 1900)
+				.WithData("maxYear", 2100);
 		}
 
 		// Parse month name
 		if (!DateTime.TryParseExact(monthName, "MMMM", CultureInfo.InvariantCulture, 
 			DateTimeStyles.None, out var date))
 		{
-			throw new UserFriendlyException($"Invalid month name: {monthName}. Expected format: JANUARY, FEBRUARY, etc.");
+			throw new BusinessException("HR:InvalidMonthName")
+				.WithData("providedMonth", monthName)
+				.WithData("expectedFormat", "JANUARY, FEBRUARY, etc.");
 		}
 
 		var month = date.Month;

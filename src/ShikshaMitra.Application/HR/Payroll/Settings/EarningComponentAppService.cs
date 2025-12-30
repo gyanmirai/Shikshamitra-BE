@@ -49,13 +49,14 @@ public class EarningComponentAppService : CrudAppService<
 			input.Description,
 			input.ComponentType,
 			input.DependOn,
+			input.CustomComponentId,
 			input.Amount,
 			input.VisibleInPayslip,
 			input.DisplayOrder
 		);
 
 		await Repository.InsertAsync(earningComponent, autoSave: true);
-		
+
 		// Clear cache
 		await ClearCacheAsync();
 
@@ -72,13 +73,14 @@ public class EarningComponentAppService : CrudAppService<
 			input.Description,
 			input.ComponentType,
 			input.DependOn,
+			input.CustomComponentId,
 			input.Amount,
 			input.VisibleInPayslip,
 			input.DisplayOrder
 		);
 
 		await Repository.UpdateAsync(earningComponent, autoSave: true);
-		
+
 		// Clear cache
 		await ClearCacheAsync();
 

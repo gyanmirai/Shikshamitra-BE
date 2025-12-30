@@ -24,13 +24,12 @@ public class SubjectAssignmentDto
 	/// </summary>
 	public SubjectType SubjectType { get; set; }
 
-	/// <summary>
-	/// Academic medium ID
-	/// </summary>
-	public Guid AcademicMediumId { get; set; }
+	public Guid? ElectiveGroupId { get; set; }
+	public string? ElectiveGroupName { get; set; }
+	public string? Color { get; set; }
 
 	/// <summary>
 	/// List of subjects in this assignment group
 	/// </summary>
-	public List<SubjectAssignmentDetailResponseDto> Subjects { get; set; } = new();
+	public List<NestedSubjectAssignmentDto> Subjects { get; set; } = new();
 }

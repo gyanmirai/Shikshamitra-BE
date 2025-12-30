@@ -79,7 +79,7 @@ public class EntranceExamController : AbpControllerBase
 	/// </summary>
 	/// <param name="studentId">The student identifier</param>
 	[HttpPost("{studentId}/move-to-admission")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_RegistrationFormIssued.Add + "," + ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.Add)]
 	public async Task MoveToAdmissionAsync(Guid studentId)
 	{
 		await entranceExamAppService.MoveToAdmissionAsync(studentId);

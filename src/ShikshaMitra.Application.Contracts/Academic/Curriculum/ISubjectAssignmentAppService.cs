@@ -29,7 +29,6 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// <param name="status">Optional status filter (0=Draft, 1=Published)</param>
 	/// <returns>List of assignment groups</returns>
 	Task<List<SubjectAssignmentDto>> GetListAsync(
-		Guid academicMediumId,
 		Guid classId
 	);
 

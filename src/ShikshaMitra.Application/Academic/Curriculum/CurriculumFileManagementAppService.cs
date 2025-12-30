@@ -1,11 +1,13 @@
 ﻿using System;
 using System.IO;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.BlobStoring;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
+[RemoteService(false)]
 public class CurriculumFileManagementAppService(
 	IBlobContainer blobContainer
 ) : ApplicationService, ICurriculumFileManagementAppService

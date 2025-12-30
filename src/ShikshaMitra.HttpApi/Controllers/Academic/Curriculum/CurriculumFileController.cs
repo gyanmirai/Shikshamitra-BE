@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Common.Responses;
 using ShikshaMitra.Models;
-using System.Threading.Tasks;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Academic.Curriculum;
@@ -18,13 +17,14 @@ public class CurriculumFileController(
 {
 	[HttpPost]
 	[Consumes("multipart/form-data")]
+	[DisableRequestSizeLimit]
+	[RequestFormLimits(MultipartBodyLengthLimit = 104857600)]
 	public async Task<Result<string>> UploadAsync([FromForm] CurriculumDocumentUploadRequest file)
 	{
-		// convert IFormFile to Stream
-		var fileStream = file.File.OpenReadStream();
+		await using var fileStream = file.File.OpenReadStream();
 
-		var result = await fileAppService.UploadAsync(file.FileName, fileStream);
+		var result = await fileAppService.UploadAsync(file.File.FileName, fileStream);
 
-		return Result<string>.Success(result);
+		return Result.Success(result);
 	}
 }

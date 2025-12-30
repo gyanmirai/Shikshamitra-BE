@@ -47,16 +47,14 @@ public class SubjectAssignmentController(
 	/// <returns>List of assignment groups</returns>
 	/// <response code="200">Returns the list of assignments</response>
 	/// <response code="400">Required parameters missing</response>
-	[HttpGet("{academicMediumId}/subjects/{classId}")]
+	[HttpGet("classes/{classId}/subject-assignments")]
 	[ProducesResponseType(typeof(List<SubjectAssignmentDto>), 200)]
 	[ProducesResponseType(400)]
 	public async Task<Result<List<SubjectAssignmentDto>>> GetListAsync(
-		Guid academicMediumId,
 		Guid classId
 	)
 	{
 		var result = await subjectAssignmentAppService.GetListAsync(
-			academicMediumId,
 			classId
 		);
 
@@ -70,7 +68,7 @@ public class SubjectAssignmentController(
 	/// <returns>Assignment group details</returns>
 	/// <response code="200">Returns the assignment group</response>
 	/// <response code="404">Assignment not found</response>
-	[HttpGet("{assignmentId}")]
+	[HttpGet("subject-assignments/{assignmentId}")]
 	[ProducesResponseType(typeof(SubjectAssignmentDto), 200)]
 	[ProducesResponseType(404)]
 	public async Task<Result<SubjectAssignmentDto>> GetAsync([FromRoute] Guid assignmentId)
@@ -89,7 +87,7 @@ public class SubjectAssignmentController(
 	/// <response code="200">Assignment updated successfully</response>
 	/// <response code="400">Validation failed</response>
 	/// <response code="404">Assignment not found</response>
-	[HttpPut("{assignmentId}")]
+	[HttpPut("subject-assignments/{assignmentId}")]
 	[ProducesResponseType(typeof(SubjectAssignmentDto), 200)]
 	[ProducesResponseType(400)]
 	[ProducesResponseType(404)]
@@ -115,7 +113,7 @@ public class SubjectAssignmentController(
 	/// <returns>Publish result with new status and timestamp</returns>
 	/// <response code="200">Assignment published successfully</response>
 	/// <response code="404">Assignment not found</response>
-	[HttpPatch("publish")]
+	[HttpPatch("subject-assignments/{assignmentId}/status")]
 	[ProducesResponseType(typeof(PublishResponseDto), 200)]
 	[ProducesResponseType(404)]
 	public async Task<Result<PublishResponseDto>> PublishAsync([FromBody] List<Guid> assignmentIds)
@@ -131,7 +129,7 @@ public class SubjectAssignmentController(
 	/// <returns>No content on success</returns>
 	/// <response code="204">Assignment deleted successfully</response>
 	/// <response code="404">Assignment not found</response>
-	[HttpDelete("{assignmentId}")]
+	[HttpDelete("subject-assignments/{assignmentId}")]
 	[ProducesResponseType(204)]
 	[ProducesResponseType(404)]
 	public async Task<Result> DeleteAsync([FromRoute] Guid assignmentId)

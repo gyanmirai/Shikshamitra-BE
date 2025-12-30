@@ -85,7 +85,6 @@ public class SubjectAssignmentAppService(
 	}
 
 	public async Task<List<SubjectAssignmentDto>> GetListAsync(
-		Guid academicMediumId,
 		Guid classId
 	)
 	{
@@ -98,8 +97,6 @@ public class SubjectAssignmentAppService(
 		var assignments = await AsyncExecuter.ToListAsync(query);
 
 		var result = new List<SubjectAssignmentDto>();
-
-		
 
 		return result;
 	}

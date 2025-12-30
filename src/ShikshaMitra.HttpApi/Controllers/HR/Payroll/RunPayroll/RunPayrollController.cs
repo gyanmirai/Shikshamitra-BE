@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
@@ -36,6 +37,7 @@ public class RunPayrollController : AbpControllerBase
 	/// <response code="200">Payroll preview retrieved successfully</response>
 	/// <response code="400">Invalid month format or other validation errors</response>
 	[HttpGet]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.View)]
 	[ProducesResponseType(typeof(RunPayrollResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	public virtual async Task<RunPayrollResponse> GetPreviewAsync(
@@ -67,6 +69,7 @@ public class RunPayrollController : AbpControllerBase
 	/// <response code="200">Payroll locked successfully</response>
 	/// <response code="400">Payroll already locked or validation errors</response>
 	[HttpPost]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.Add)]
 	[ProducesResponseType(typeof(PayrollLockResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	public virtual async Task<PayrollLockResponse> LockPayrollAsync(

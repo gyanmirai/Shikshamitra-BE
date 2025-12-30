@@ -34,14 +34,8 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <ProjectReference Include="..\ShikshaMitra.Application.Contracts\ShikshaMitra.Application.Contracts.csproj" />
-    <ProjectReference Include="..\ShikshaMitra.Domain.Shared\ShikshaMitra.Domain.Shared.csproj" />
-  </ItemGroup>
+        <ProjectReference Include="..\ShikshaMitra.Application.Contracts\ShikshaMitra.Application.Contracts.csproj" />
+        <ProjectReference Include="..\ShikshaMitra.Domain.Shared\ShikshaMitra.Domain.Shared.csproj" />
+      </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Controllers\HR\AttendanceAndLeaves\" />
-    <Folder Include="Controllers\HR\Employees\" />
-    <Folder Include="Controllers\Security\UserScope\" />
-  </ItemGroup>
-
-</Project>
+    </Project>

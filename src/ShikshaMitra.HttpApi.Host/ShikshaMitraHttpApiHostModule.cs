@@ -314,7 +314,9 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 		QuestPDF.Settings.License = LicenseType.Community;
 
-		app.UseGlobalExceptionHandling();
+		// 🔧 DEVELOPMENT TOGGLE: Comment this out to see raw ABP exception details
+		// Uncomment to use custom error formatting
+		// app.UseGlobalExceptionHandling();
 
 		if (env.IsDevelopment())
 		{

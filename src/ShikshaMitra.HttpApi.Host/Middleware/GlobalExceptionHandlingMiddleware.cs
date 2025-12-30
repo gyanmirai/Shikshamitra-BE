@@ -299,9 +299,9 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 				(int) HttpStatusCode.Forbidden,
 				Error.Create("AUTHORIZATION_ERROR", "You don't have permission to access this resource")
 			),
-			EntityNotFoundException => (
+			EntityNotFoundException entityNotFoundEx => (
 				(int) HttpStatusCode.NotFound,
-				Error.Create("NOT_FOUND", "The requested resource was not found")
+				Error.Create("NOT_FOUND", entityNotFoundEx.Message)
 			),
 			BusinessException businessEx => (
 				(int) HttpStatusCode.BadRequest,
@@ -311,13 +311,13 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 				(int) HttpStatusCode.BadRequest,
 				Error.Create("INVALID_ARGUMENT", argEx.Message)
 			),
-			InvalidOperationException => (
+			InvalidOperationException invalidOpEx => (
 				(int) HttpStatusCode.BadRequest,
-				Error.Create("INVALID_OPERATION", "The requested operation is not valid")
+				Error.Create("INVALID_OPERATION", invalidOpEx.Message)
 			),
 			_ => (
 				(int) HttpStatusCode.InternalServerError,
-				Error.Create("INTERNAL_ERROR", "An internal server error occurred")
+				Error.Create("INTERNAL_ERROR", exception.Message ?? "An internal server error occurred")
 			)
 		};
 	}

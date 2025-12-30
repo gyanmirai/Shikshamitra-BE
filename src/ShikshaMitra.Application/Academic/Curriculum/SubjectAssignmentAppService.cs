@@ -335,6 +335,7 @@ public class SubjectAssignmentAppService(
 					Id = coreSubject.Id,
 					Name = coreSubject.Name,
 					SubjectType = SubjectType.Core,
+					Color = coreSubject.Color,
 				};
 				result.Add(subjectDto);
 
@@ -347,6 +348,13 @@ public class SubjectAssignmentAppService(
 					Id = electiveGroup.Id,
 					Name = electiveGroup.Name,
 					SubjectType = SubjectType.Elective,
+					Color = electiveGroup.Color,
+					Subjects = electiveGroup.Subjects.Select(es => new CoreElectiveSubjectDetailDto
+					{
+						Id = es.SubjectId,
+						Name = es.Subject.Name,
+						Color = es.Subject.Color,
+					}).ToList()
 				};
 				result.Add(subjectDto);
 			}

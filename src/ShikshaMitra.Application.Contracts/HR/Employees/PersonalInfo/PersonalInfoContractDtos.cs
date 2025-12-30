@@ -69,8 +69,7 @@ public class PersonalInfoRequest
 	[Required]
 	public bool IsTeaching { get; set; }
 
-	[Required]
-	public Guid DepartmentId { get; set; }
+	public string? Department { get; set; }
 
 	[Required]
 	public Guid RoleId { get; set; }

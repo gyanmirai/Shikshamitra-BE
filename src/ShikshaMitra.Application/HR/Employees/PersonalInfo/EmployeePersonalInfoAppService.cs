@@ -1,6 +1,7 @@
 ﻿using ShikshaMitra.Common;
 using System;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 
@@ -9,6 +10,7 @@ namespace ShikshaMitra.HR.Employees.PersonalInfo;
 /// <summary>
 /// Application service for managing employee personal information.
 /// </summary>
+[RemoteService(false)]
 public class EmployeePersonalInfoAppService(
 	IEmployeeRepository employeeRepository,
 	EmployeeManager employeeManager)

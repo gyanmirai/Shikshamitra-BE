@@ -104,11 +104,6 @@ public class PersonalInfoController : AbpControllerBase
 			throw new UserFriendlyException("Role ID is required.");
 		}
 
-		if (request.DepartmentId == Guid.Empty)
-		{
-			throw new UserFriendlyException("Department ID is required.");
-		}
-
 		if (request.ShiftId == Guid.Empty)
 		{
 			throw new UserFriendlyException("Shift ID is required.");

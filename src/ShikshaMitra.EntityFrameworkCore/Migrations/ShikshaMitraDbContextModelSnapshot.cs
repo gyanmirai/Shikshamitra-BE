@@ -3698,6 +3698,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("AcademicMediumId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AcademicMediumStageId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("AcademicYearId")
                         .HasColumnType("uuid");
 

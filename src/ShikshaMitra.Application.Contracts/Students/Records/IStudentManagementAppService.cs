@@ -15,4 +15,10 @@ public interface IStudentManagementAppService : IApplicationService
 	Task DeassignHouseGlobalLeaderAsync(Guid studentId);
 	Task DeassignHouseDivisionLeaderAsync(Guid studentId);
 
+	Task StoreGrNumbers(List<UpdateStudentGrNumberDto> updateStudentGrNumberDto);
+	Task<List<GrProjectionDto>> GetGrProjections(Guid divisionId);
+	Task<List<RollNumberProjectionDto>> GetRollNumberProjections(Guid divisionId);
+	Task StoreRollNumbers(List<UpdateStudentRollNumberDto> updateStudentRollNumberDto);
+	Task ChangeDivision(List<ChangeStudentDivisionDto> changeStudentDivisionDto);
+
 }

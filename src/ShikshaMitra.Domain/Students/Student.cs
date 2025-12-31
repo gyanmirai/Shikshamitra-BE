@@ -4,6 +4,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -18,6 +19,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? AcademicYearId { get; private set; }
 	public Guid? AcademicBoardId { get; private set; }
 	public Guid AcademicMediumId { get; private set; }
+	public Guid? AcademicMediumStageId { get; private set; }
 	public Guid? StandardId { get; private set; }
 	public Guid? DivisionId { get; private set; }
 	public int? GrNo { get; private set; }
@@ -437,6 +439,16 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		EnsureAdditionalDetailExists();
 		AdditionalDetail!.SetDivisionLeader(false);
+	}
+
+	public void AssignRollNo(int? rollNo)
+	{
+		RollNo = rollNo;
+	}
+
+	public void AssignGrNo(int? grNo)
+	{
+		GrNo = grNo;
 	}
 
 	private void EnsureAdditionalDetailExists()

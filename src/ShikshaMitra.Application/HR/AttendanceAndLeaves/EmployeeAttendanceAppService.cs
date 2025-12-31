@@ -1,4 +1,5 @@
 ﻿using ClosedXML.Excel;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR.AttendanceAndLeaves.EmployeeAttendanceContract;
 using ShikshaMitra.HR.Employees;
@@ -7,6 +8,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
+using Volo.Abp.Auditing;
+using Volo.Abp.Uow;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -23,21 +27,27 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 	CreateUpdateEmployeeAttendanceDto>, IEmployeeAttendanceAppService, IEmployeeAttendanceContractAppService
 {
 	private readonly IEmployeeAttendanceRepository _employeeAttendanceRepository;
-	private readonly IRepository<Employee, Guid> _employeeRepository;
+	private readonly IEmployeeRepository _employeeRepository;
 	private readonly ILogger<EmployeeAttendanceAppService> _logger;
 	private readonly IGuidGenerator _guidGenerator;
+	private readonly Import.AttendanceFileParser _fileParser;
+	private readonly Import.AttendanceImportValidator _validator;
 
 	public EmployeeAttendanceAppService(
 		IEmployeeAttendanceRepository employeeAttendanceRepository,
-		IRepository<Employee, Guid> employeeRepository,
+		IEmployeeRepository employeeRepository,
 		ILogger<EmployeeAttendanceAppService> logger,
-		IGuidGenerator guidGenerator)
+		IGuidGenerator guidGenerator,
+		Import.AttendanceFileParser fileParser,
+		Import.AttendanceImportValidator validator)
 		: base(employeeAttendanceRepository)
 	{
 		_employeeAttendanceRepository = employeeAttendanceRepository;
 		_employeeRepository = employeeRepository;
 		_logger = logger;
 		_guidGenerator = guidGenerator;
+		_fileParser = fileParser;
+		_validator = validator;
 	}
 
 	public override async Task<EmployeeAttendanceDto> CreateAsync(CreateUpdateEmployeeAttendanceDto input)
@@ -295,229 +305,201 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 	}
 
 	/// <summary>
-	/// Import attendance from Excel file (POST /attendance/import)
-	/// Expected columns: EmployeeIdentifier, InTime, OutTime
-	/// ✅ FIX #8: Track and warn about duplicate employees in same file
+	/// Import attendance from Excel/CSV file (POST /attendance/import)
+	/// ✅ NEW: Comprehensive validation with user-friendly error messages
+	/// ✅ NEW: Support for both .xlsx and .csv files
+	/// ✅ NEW: Partial success - failed rows don't prevent others from importing
+	/// ✅ NEW: Detailed error tracking with suggestions
+	/// Expected columns: Employee Name, Hours Worked, Time In, Time Out, status, Employee Code, Contact No
 	/// </summary>
-	public async Task<AttendanceImportResponse> ImportAttendanceAsync(DateTimeOffset date, Stream fileStream, string fileName)
+	[UnitOfWork]
+	[Audited]
+	public async Task<AttendanceImportResponse> ImportAttendanceAsync(
+		DateTimeOffset date,
+		Stream fileStream,
+		string fileName,
+		CancellationToken cancellationToken = default)
 	{
-		if (fileStream == null || fileStream.Length == 0)
-		{
-			throw new UserFriendlyException("Please upload a valid Excel file.");
-		}
+		Check.NotNull(fileStream, nameof(fileStream));
+		Check.NotNullOrWhiteSpace(fileName, nameof(fileName));
 
-		var fileExtension = Path.GetExtension(fileName).ToLowerInvariant();
-		if (fileExtension != ".xlsx")
-		{
-			throw new UserFriendlyException("Only .xlsx files are supported.");
-		}
-
+		var startTime = Clock.Now;
 		var targetDate = DateOnly.FromDateTime(date.Date);
-		var errors = new List<ImportError>();
-		var successCount = 0;
-		var totalRecords = 0;
 
-		// Copy stream to memory stream for processing
-		using var stream = new MemoryStream();
-		await fileStream.CopyToAsync(stream);
-		stream.Position = 0;
+		Logger.LogInformation(
+			"Starting attendance import for {Date}, file: {FileName}, size: {FileSize} bytes",
+			date, fileName, fileStream.Length);
 
-		using var workbook = new XLWorkbook(stream);
-		var worksheet = workbook.Worksheets.FirstOrDefault();
-		
-		if (worksheet == null)
+		try
 		{
-			throw new UserFriendlyException("Excel file contains no worksheets.");
-		}
+				// Step 1: Parse file (Excel or CSV) - using injected service
+				var parseResult = await _fileParser.ParseFileAsync(fileStream, fileName, cancellationToken);
 
-		// Find header row and column indices
-		var headerRow = worksheet.Row(1);
-		int? identifierCol = null;
-		int? inTimeCol = null;
-		int? outTimeCol = null;
-
-		foreach (var cell in headerRow.CellsUsed())
-		{
-			var headerText = cell.Value.ToString().Trim().ToLowerInvariant();
-			switch (headerText)
-			{
-				case "employeeidentifier":
-				case "employee identifier":
-				case "employee_identifier":
-				case "emp_id":
-				case "empid":
-					identifierCol = cell.Address.ColumnNumber;
-					break;
-				case "intime":
-				case "in_time":
-				case "in time":
-				case "timein":
-				case "time_in":
-					inTimeCol = cell.Address.ColumnNumber;
-					break;
-				case "outtime":
-				case "out_time":
-				case "out time":
-				case "timeout":
-				case "time_out":
-					outTimeCol = cell.Address.ColumnNumber;
-					break;
-			}
-		}
-
-		if (!identifierCol.HasValue || !inTimeCol.HasValue || !outTimeCol.HasValue)
-		{
-			throw new UserFriendlyException(
-				"Excel file must contain columns: EmployeeIdentifier, InTime, OutTime");
-		}
-
-		// Pre-load all employees for batch lookup
-		var employeeQuery = await _employeeRepository.GetQueryableAsync();
-		var employees = await AsyncExecuter.ToListAsync(employeeQuery);
-		var employeeByCode = employees.ToDictionary(
-			e => e.EmployeeCode?.ToUpperInvariant() ?? string.Empty,
-			e => e);
-
-		// Pre-load existing attendance records for the date
-		var attendanceQuery = await _employeeAttendanceRepository.GetQueryableAsync();
-		if (CurrentTenant.Id.HasValue)
-		{
-			attendanceQuery = attendanceQuery.Where(a => a.TenantId == CurrentTenant.Id);
-		}
-		var existingAttendances = await AsyncExecuter.ToListAsync(
-			attendanceQuery.Where(a => a.AttendanceDate == targetDate)
-		);
-		var attendanceByEmployee = existingAttendances.ToDictionary(a => a.EmployeeId);
-
-		// Process data rows
-		var dataRows = worksheet.RowsUsed().Skip(1); // Skip header
-		var attendancesToInsert = new List<EmployeeAttendance>();
-		var attendancesToUpdate = new List<EmployeeAttendance>();
-		// Fix Bug #8: Track duplicate employee IDs within the Excel file
-		var processedEmployeeIds = new HashSet<Guid>();
-		var duplicateWarnings = new List<string>();
-
-		foreach (var row in dataRows)
-		{
-			totalRecords++;
-			var rowNumber = row.RowNumber();
-
-			try
-			{
-				var identifier = row.Cell(identifierCol.Value).Value.ToString().Trim().ToUpperInvariant();
-				var inTimeValue = row.Cell(inTimeCol.Value).Value;
-				var outTimeValue = row.Cell(outTimeCol.Value).Value;
-
-				// Validate employee exists
-				if (string.IsNullOrWhiteSpace(identifier) || !employeeByCode.TryGetValue(identifier, out var employee))
+				if (!parseResult.IsValid)
 				{
-					errors.Add(new ImportError
-					{
-						RowNumber = rowNumber,
-						Reason = $"Employee with identifier '{identifier}' not found"
-					});
-					continue;
+					throw new UserFriendlyException(
+						$"File parsing failed: {string.Join("; ", parseResult.Errors)}");
 				}
 
-				// Fix Bug #8: Check for duplicate employee in the same file
-				if (processedEmployeeIds.Contains(employee.Id))
+				if (!parseResult.Rows.Any())
 				{
-					duplicateWarnings.Add($"Row {rowNumber}: Duplicate entry for employee '{identifier}' - only the last entry will be used");
+					throw new UserFriendlyException(
+						"No data rows found in the file. Please ensure the file contains attendance data.");
 				}
 
-				// Parse times
-				DateTimeOffset? inTime = ParseTimeValue(inTimeValue, date);
-				DateTimeOffset? outTime = ParseTimeValue(outTimeValue, date);
+				// Step 2: Pre-load employees for bulk lookup
+				var employeeCodes = parseResult.Rows
+					.Where(r => !string.IsNullOrWhiteSpace(r.EmployeeCode))
+					.Select(r => r.EmployeeCode!)
+					.Distinct()
+					.ToList();
 
-				if (!inTime.HasValue)
+				var employeeLookup = await _employeeRepository.GetEmployeesByCodesAsync(employeeCodes, cancellationToken);
+
+				// Step 3: Pre-load existing attendance records for the date
+				var attendanceQuery = await _employeeAttendanceRepository.GetQueryableAsync();
+				if (CurrentTenant.Id.HasValue)
 				{
-					errors.Add(new ImportError
-					{
-						RowNumber = rowNumber,
-						Reason = "Invalid InTime value"
-					});
-					continue;
+					attendanceQuery = attendanceQuery.Where(a => a.TenantId == CurrentTenant.Id);
 				}
+				var existingAttendances = await AsyncExecuter.ToListAsync(
+					attendanceQuery.Where(a => a.AttendanceDate == targetDate),
+					cancellationToken
+				);
+				var attendanceByEmployee = existingAttendances.ToDictionary(a => a.EmployeeId);
 
-				// Determine status
-				var status = DetermineAttendanceStatus(inTime, outTime);
+				// Step 4: Validate each row - using injected validator
+				var validationResults = new List<Import.AttendanceRowValidationResult>();
+				var processedEmployeeCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-				// Upsert
-				if (attendanceByEmployee.TryGetValue(employee.Id, out var existing))
+				foreach (var row in parseResult.Rows)
 				{
-					// Update existing record (from DB or earlier in the file)
-					existing.TimeIn = inTime;
-					existing.TimeOut = outTime;
-					existing.StatusType = status;
-					existing.EducationMediumStageId = employee.EducationMediumStageId;
-					
-					// Only add to update list if not already there
-					if (!attendancesToUpdate.Contains(existing))
+					var validationResult = _validator.ValidateRow(row, date, employeeLookup, processedEmployeeCodes);
+					validationResults.Add(validationResult);
+
+					if (validationResult.IsSuccess && !string.IsNullOrWhiteSpace(validationResult.EmployeeCode))
 					{
-						attendancesToUpdate.Add(existing);
+						processedEmployeeCodes.Add(validationResult.EmployeeCode);
 					}
 				}
-				else
+
+				// Step 5: Process successful rows
+				var attendancesToInsert = new List<EmployeeAttendance>();
+				var attendancesToUpdate = new List<EmployeeAttendance>();
+
+				foreach (var result in validationResults.Where(r => r.IsSuccess))
 				{
-					var newAttendance = new EmployeeAttendance
+					var employee = result.Employee!;
+					var status = result.ParsedStatus ?? EmployeeAttendanceStatusType.Present;
+
+					// Upsert logic
+					if (attendanceByEmployee.TryGetValue(employee.Id, out var existing))
 					{
-						TenantId = CurrentTenant.Id,
-						EmployeeId = employee.Id,
-						AttendanceDate = targetDate,
-						TimeIn = inTime,
-						TimeOut = outTime,
-						StatusType = status,
-						EducationMediumStageId = employee.EducationMediumStageId
-					};
-					attendancesToInsert.Add(newAttendance);
-					attendanceByEmployee[employee.Id] = newAttendance; // Track for duplicates in same file
+						// Update existing record
+						existing.TimeIn = result.ParsedTimeIn;
+						existing.TimeOut = result.ParsedTimeOut;
+						existing.StatusType = status;
+						existing.EducationMediumStageId = employee.EducationMediumStageId;
+
+						if (!attendancesToUpdate.Contains(existing))
+						{
+							attendancesToUpdate.Add(existing);
+						}
+					}
+					else
+					{
+						// Create new record
+						var newAttendance = new EmployeeAttendance
+						{
+							TenantId = CurrentTenant.Id,
+							EmployeeId = employee.Id,
+							AttendanceDate = targetDate,
+							TimeIn = result.ParsedTimeIn,
+							TimeOut = result.ParsedTimeOut,
+							StatusType = status,
+							EducationMediumStageId = employee.EducationMediumStageId
+						};
+						attendancesToInsert.Add(newAttendance);
+						attendanceByEmployee[employee.Id] = newAttendance;
+					}
 				}
 
-				// Mark employee as processed
-				processedEmployeeIds.Add(employee.Id);
-				successCount++;
+				// Step 6: Batch save to database
+				if (attendancesToInsert.Any())
+				{
+					await _employeeAttendanceRepository.InsertManyAsync(attendancesToInsert, cancellationToken: cancellationToken);
+				}
+				if (attendancesToUpdate.Any())
+				{
+					await _employeeAttendanceRepository.UpdateManyAsync(attendancesToUpdate, cancellationToken: cancellationToken);
+				}
+
+				// Step 7: Build response with detailed results
+				var processingTime = (Clock.Now - startTime).TotalSeconds;
+				var successfulRows = validationResults.Count(r => r.IsSuccess);
+				var failedRows = validationResults.Count(r => !r.IsSuccess);
+				var warningCount = validationResults.Sum(r => r.Messages.Count(m => m.Severity == ValidationSeverity.Warning));
+
+				var summaryMessage = BuildSummaryMessage(parseResult.Rows.Count, successfulRows, failedRows, warningCount);
+
+				var response = new AttendanceImportResponse
+				{
+					Date = date,
+					Summary = new ImportSummary
+					{
+						TotalRows = parseResult.Rows.Count,
+						SuccessfulRows = successfulRows,
+						FailedRows = failedRows,
+						WarningCount = warningCount,
+						ProcessingTimeSeconds = Math.Round(processingTime, 2),
+						Message = summaryMessage
+					},
+					Results = validationResults.Select(r => new ImportRowResult
+					{
+						RowNumber = r.RowNumber,
+						IsSuccess = r.IsSuccess,
+						EmployeeCode = r.EmployeeCode,
+						EmployeeName = r.EmployeeName,
+						Messages = r.Messages
+					}).ToList()
+				};
+
+				Logger.LogInformation(
+					"Completed attendance import. Total: {Total}, Success: {Success}, Failed: {Failed}, Warnings: {Warnings}, Duration: {Duration}ms",
+					parseResult.Rows.Count, successfulRows, failedRows, warningCount,
+					(Clock.Now - startTime).TotalMilliseconds);
+
+				return response;
 			}
 			catch (Exception ex)
 			{
-				errors.Add(new ImportError
-				{
-					RowNumber = rowNumber,
-					Reason = ex.Message
-				});
+				Logger.LogError(ex, "Failed to import attendance for {Date}", date);
+				throw;
 			}
 		}
 
-		// Batch save
-		if (attendancesToInsert.Any())
+	/// <summary>
+	/// Builds a user-friendly summary message for the import operation
+	/// </summary>
+	private string BuildSummaryMessage(int totalRows, int successfulRows, int failedRows, int warningCount)
+	{
+		if (failedRows == 0 && warningCount == 0)
 		{
-			await _employeeAttendanceRepository.InsertManyAsync(attendancesToInsert);
-		}
-		if (attendancesToUpdate.Any())
-		{
-			await _employeeAttendanceRepository.UpdateManyAsync(attendancesToUpdate);
-		}
-
-		// Fix Bug #8 Part 3: Add duplicate warnings to errors list
-		if (duplicateWarnings.Any())
-		{
-			foreach (var warning in duplicateWarnings)
-			{
-				errors.Add(new ImportError
-				{
-					RowNumber = 0,
-					Reason = $"WARNING: {warning}"
-				});
-			}
+			return $"✅ All {totalRows} attendance records imported successfully!";
 		}
 
-		return new AttendanceImportResponse
+		if (failedRows == 0 && warningCount > 0)
 		{
-			Date = date,
-			TotalRecords = totalRecords,
-			SuccessfulRecords = successCount,
-			FailedRecords = errors.Count(e => !e.Reason.StartsWith("WARNING")),
-			Errors = errors.Any() ? errors : null
-		};
+			return $"✅ All {totalRows} records imported successfully with {warningCount} warning(s). Please review warnings.";
+		}
+
+		if (successfulRows == 0)
+		{
+			return $"❌ Import failed. All {totalRows} records have errors. Please fix the errors and try again.";
+		}
+
+		return $"⚠️ Partial success: {successfulRows} of {totalRows} records imported. " +
+			   $"{failedRows} failed. Please review errors and re-import failed records.";
 	}
 
 	#endregion

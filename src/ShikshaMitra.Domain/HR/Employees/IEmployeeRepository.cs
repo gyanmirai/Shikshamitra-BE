@@ -45,11 +45,22 @@ public interface IEmployeeRepository : IRepository<Employee, Guid>
 	/// <returns>Employee entity with reporting manager loaded</returns>
 	Task<Employee?> GetWithReportingManagerAsync(Guid id, CancellationToken cancellationToken = default);
 
-	/// <summary>
-	/// Gets all employees reporting to a specific manager.
-	/// </summary>
-	/// <param name="managerId">The manager's employee ID</param>
-	/// <param name="cancellationToken">Cancellation token</param>
-	/// <returns>List of employees reporting to the manager</returns>
-	Task<List<Employee>> GetEmployeesByManagerAsync(Guid managerId, CancellationToken cancellationToken = default);
-}
+		/// <summary>
+		/// Gets all employees reporting to a specific manager.
+		/// </summary>
+		/// <param name="managerId">The manager's employee ID</param>
+		/// <param name="cancellationToken">Cancellation token</param>
+		/// <returns>List of employees reporting to the manager</returns>
+		Task<List<Employee>> GetEmployeesByManagerAsync(Guid managerId, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Gets employees by their employee codes (bulk lookup for import operations).
+		/// Case-insensitive lookup.
+		/// </summary>
+		/// <param name="employeeCodes">List of employee codes to lookup</param>
+		/// <param name="cancellationToken">Cancellation token</param>
+		/// <returns>Dictionary mapping uppercase employee code to employee entity</returns>
+		Task<Dictionary<string, Employee>> GetEmployeesByCodesAsync(
+			IEnumerable<string> employeeCodes,
+			CancellationToken cancellationToken = default);
+	}

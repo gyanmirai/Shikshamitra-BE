@@ -1,5 +1,9 @@
 ﻿using ShikshaMitra.Students.Records.Settings;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,7 +18,11 @@ namespace ShikshaMitra.Students.Records;
 public class StudentManagementAppService(
 	IRepository<Student, Guid> studentRepository,
 	IRepository<HouseSettings, Guid> houseSettingsRepository,
+	IRepository<EducationBoard, Guid> educationBoardRepository,
 	IRepository<EducationMedium, Guid> educationMediumRepository,
+	IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
+	IRepository<Standard, Guid> standardRepository,
+	IRepository<Division, Guid> divisionRepository,
 	StudentManager studentManager
 ) : ApplicationService, IStudentManagementAppService
 {
@@ -197,13 +205,68 @@ public class StudentManagementAppService(
 		try
 		{
 			// get students in division which gr no is null
-			var students = await studentRepository.GetListAsync(s => s.DivisionId == divisionId && s.GrNo == null, includeDetails: true);
+			var students = await studentRepository.GetListAsync(s => s.DivisionId == divisionId, includeDetails: true);
 
-			// sort these students with their Enrollment date
-			students = students.OrderBy(s => s.CreationTime).ToList();
+			// Find board from divisionId
+			var division = await divisionRepository.FindAsync(s => s.Id == divisionId, includeDetails: true) ?? throw new UserFriendlyException("Division not found.");
+			var standard = await standardRepository.FindAsync(s => s.Id == division.StandardId);
+			var educationMediumStageId = standard?.EducationMediumStageId;
+			var educationMediumStage = await educationMediumStageRepository.GetAsync(s => s.Id == educationMediumStageId, includeDetails: true);
+			var educationMedium = await educationMediumRepository.GetAsync(s => s.Id == educationMediumStage.EducationMediumId, includeDetails: true);
+			var educationBoard = await educationBoardRepository.FindAsync(s => s.Id == educationMedium.EducationBoardId);
+			var board = educationBoard.Type;
+
+			if (board == EducationBoardType.CBSE)
+			{
+				// get students in medium which gr no is null
+				var studentsWithoutGrNo = students.Where(s => s.GrNo == null).OrderBy(s => s.CreationTime);
+
+				var queryable = await studentRepository.GetQueryableAsync();
+
+				var lastGrNoStudent = queryable
+					.Where(s => s.AcademicBoardId == educationBoard.Id && s.GrNo != null)
+					.OrderByDescending(s => s.GrNo)
+					.FirstOrDefault()?.GrNo ?? 0;
+
+				foreach (var student in studentsWithoutGrNo)
+				{
+					student.AssignGrNo(++lastGrNoStudent);
+				}
+			}
+			else if (board == EducationBoardType.GSEB)
+			{
+				var studentsWithoutGrNo = students.Where(s => s.GrNo == null).OrderBy(s => s.CreationTime);
+
+				var queryable = await studentRepository.GetQueryableAsync();
+				var lastGrNoStudent = queryable.
+					Where(s => s.AcademicMediumStageId == educationMediumStage.Id && s.GrNo != null)
+					.OrderByDescending(s => s.GrNo)
+					.FirstOrDefault()?.GrNo ?? 0;
+
+				foreach (var student in studentsWithoutGrNo)
+				{
+					student.AssignGrNo(++lastGrNoStudent);
+				}
+			}
+			else
+			{
+				throw new UserFriendlyException("Board not supported for GR number projection.");
+			}
+
+			var result = new List<GrProjectionDto>();
+
+			// prepare projection dto
+			foreach (var student in students)
+			{
+				result.Add(new GrProjectionDto
+				{
+					StudentId = student.Id,
+					GrNumber = student.GrNo
+				});
+			}
 
 			// Original logic was incomplete/missing. Returning empty list to fix build.
-			return new List<GrProjectionDto>();
+			return result;
 		}
 		catch
 		{

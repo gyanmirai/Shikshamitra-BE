@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.HR.AttendanceAndLeaves.EmployeeAttendanceContract;
@@ -67,25 +67,56 @@ public class EmployeeAttendanceController : AbpControllerBase
 	{
 		var result = await _attendanceAppService.UpdateAttendanceAsync(request);
 		return Ok(result);
-	}
+		}
 
-	/// <summary>
-	/// Import employee attendance via Excel
-	/// </summary>
-	/// <param name="file">Excel (.xlsx) attendance file</param>
-	/// <param name="date">Attendance date</param>
-	/// <returns>Import result with success/failure counts</returns>
-	[HttpPost("import")]
-	[ProducesResponseType(typeof(AttendanceImportResponse), StatusCodes.Status200OK)]
-	[ProducesResponseType(StatusCodes.Status400BadRequest)]
-	[ProducesResponseType(StatusCodes.Status401Unauthorized)]
-	[ProducesResponseType(StatusCodes.Status403Forbidden)]
-	public virtual async Task<ActionResult<AttendanceImportResponse>> ImportAsync(
-		[FromForm, Required] EmployeeAttendanceImportRequest file)
-	{
-		using var stream = file.File.OpenReadStream();
-		var result = await _attendanceAppService.ImportAttendanceAsync(file.Date, stream, file.File.FileName);
-		return Ok(result);
+		/// <summary>
+		/// Import employee attendance via Excel or CSV file with comprehensive validation
+		/// </summary>
+		/// <remarks>
+		/// **Expected File Format:**
+		/// 
+		/// | Employee Name | Hours Worked | Time In | Time Out | status | Employee Code | Contact No |
+		/// |--------------|--------------|---------|----------|--------|---------------|------------|
+		/// | John Doe     | 8.5         | 09:00 AM | 05:30 PM | Present | EMP001       | 9876543210 |
+		/// 
+		/// **Supported Formats:**
+		/// - Excel (.xlsx)
+		/// - CSV (.csv)
+		/// 
+		/// **Features:**
+		/// - ✅ Partial success - failed rows don't prevent others from importing
+		/// - ✅ User-friendly error messages with suggestions
+		/// - ✅ Automatic employee lookup by code
+		/// - ✅ Cross-validation of employee name and contact
+		/// - ✅ Time format validation with multiple supported formats
+		/// - ✅ Duplicate detection within file
+		/// - ✅ Hours worked consistency check
+		/// - ✅ Status auto-determination from times
+		/// 
+		/// **Time Format Examples:**
+		/// - "09:00 AM" or "09:00"
+		/// - "2024-01-15 09:00"
+		/// - "09:00:00"
+		/// 
+		/// **Status Values:**
+		/// - Present, HalfDay, Absent, Leave (case-insensitive)
+		/// </remarks>
+		/// <param name="file">Excel (.xlsx) or CSV (.csv) attendance file</param>
+		/// <param name="date">Attendance date</param>
+		/// <returns>Detailed import result with per-row success/failure information</returns>
+		[HttpPost("import")]
+		[ProducesResponseType(typeof(AttendanceImportResponse), StatusCodes.Status200OK)]
+		[ProducesResponseType(StatusCodes.Status400BadRequest)]
+		[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+		[ProducesResponseType(StatusCodes.Status403Forbidden)]
+		public virtual async Task<ActionResult<AttendanceImportResponse>> ImportAsync(
+			[FromForm, Required] EmployeeAttendanceImportRequest file,
+			CancellationToken cancellationToken)
+		{
+			using var stream = file.File.OpenReadStream();
+			var result = await _attendanceAppService.ImportAttendanceAsync(
+				file.Date, stream, file.File.FileName, cancellationToken);
+			return Ok(result);
+		}
 	}
-}
 

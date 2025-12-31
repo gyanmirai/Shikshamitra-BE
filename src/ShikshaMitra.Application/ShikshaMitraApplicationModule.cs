@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Security.Permissions;
+﻿using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Security.Permissions;
 using Volo.Abp.Account;
 using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.AutoMapper;
@@ -30,15 +31,16 @@ public class ShikshaMitraApplicationModule : AbpModule
             options.AddMaps<ShikshaMitraApplicationModule>();
         });
 
-        // Configure permission management with admin bypass
-        Configure<AbpPermissionOptions>(options =>
-        {
-            // Add AdminPermissionValueProvider as the first provider
-            // This ensures admin users bypass all permission checks
-            options.ValueProviders.Insert(0, typeof(AdminPermissionValueProvider));
-        });
+                // Configure permission management with admin bypass
+                Configure<AbpPermissionOptions>(options =>
+                {
+                    // Add AdminPermissionValueProvider as the first provider
+                    // This ensures admin users bypass all permission checks
+                    options.ValueProviders.Insert(0, typeof(AdminPermissionValueProvider));
+                });
 
-        // Register the CSV import service
-        //context.Services.AddTransient<IStudentCsvImportService, StudentCsvImportService>();
-    }
-}
+                // Register attendance import services
+                context.Services.AddTransient<HR.AttendanceAndLeaves.Import.AttendanceFileParser>();
+                context.Services.AddTransient<HR.AttendanceAndLeaves.Import.AttendanceImportValidator>();
+            }
+        }

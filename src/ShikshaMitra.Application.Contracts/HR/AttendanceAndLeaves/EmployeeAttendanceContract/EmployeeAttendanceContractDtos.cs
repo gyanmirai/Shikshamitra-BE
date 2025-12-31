@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.EmployeeAttendanceContract;
@@ -97,20 +98,70 @@ public class SuccessMessage
 #region POST /attendance/import Response DTOs
 
 /// <summary>
-/// Response for POST /attendance/import
+/// Enhanced response for POST /attendance/import with detailed error tracking
 /// </summary>
 public class AttendanceImportResponse
 {
 	public DateTimeOffset Date { get; set; }
-	public int TotalRecords { get; set; }
-	public int SuccessfulRecords { get; set; }
-	public int FailedRecords { get; set; }
-	public List<ImportError>? Errors { get; set; }
+	public ImportSummary Summary { get; set; } = new();
+	public List<ImportRowResult> Results { get; set; } = new();
 }
 
 /// <summary>
-/// Individual import error
+/// Summary statistics for the import operation
 /// </summary>
+public class ImportSummary
+{
+	public int TotalRows { get; set; }
+	public int SuccessfulRows { get; set; }
+	public int FailedRows { get; set; }
+	public int WarningCount { get; set; }
+	public double ProcessingTimeSeconds { get; set; }
+	public string Message { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Result for each row in the import file
+/// </summary>
+public class ImportRowResult
+{
+	public int RowNumber { get; set; }
+	public bool IsSuccess { get; set; }
+	public string? EmployeeCode { get; set; }
+	public string? EmployeeName { get; set; }
+	public List<ValidationMessage> Messages { get; set; } = new();
+}
+
+/// <summary>
+/// Individual validation message with context
+/// </summary>
+public class ValidationMessage
+{
+	public ValidationSeverity Severity { get; set; }
+	public string FieldName { get; set; } = string.Empty;
+	public string Message { get; set; } = string.Empty;
+	public string? Suggestion { get; set; }
+	public string? ExpectedValue { get; set; }
+	public string? ActualValue { get; set; }
+}
+
+/// <summary>
+/// Severity level for validation messages
+/// </summary>
+public enum ValidationSeverity
+{
+	/// <summary>Error - prevents row from being imported</summary>
+	Error,
+	/// <summary>Warning - row is imported but with concerns</summary>
+	Warning,
+	/// <summary>Info - informational message</summary>
+	Info
+}
+
+/// <summary>
+/// Legacy error format for backward compatibility
+/// </summary>
+[Obsolete("Use ImportRowResult with ValidationMessage instead")]
 public class ImportError
 {
 	public int RowNumber { get; set; }
@@ -158,7 +209,11 @@ public interface IEmployeeAttendanceContractAppService
 {
 	Task<PaginatedAttendanceResponse> GetPaginatedByDateAsync(GetPaginatedAttendanceInput input);
 	Task<SuccessMessage> UpdateAttendanceAsync(UpdateAttendanceRequest input);
-	Task<AttendanceImportResponse> ImportAttendanceAsync(DateTimeOffset date, Stream fileStream, string fileName);
+	Task<AttendanceImportResponse> ImportAttendanceAsync(
+		DateTimeOffset date, 
+		Stream fileStream, 
+		string fileName,
+		CancellationToken cancellationToken = default);
 }
 
 #endregion

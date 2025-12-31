@@ -224,15 +224,57 @@ public class EfCoreEmployeeRepository(
 			.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 	}
 
-	/// <summary>
-	/// Gets all employees reporting to a specific manager.
-	/// </summary>
-	public async Task<List<Employee>> GetEmployeesByManagerAsync(Guid managerId, CancellationToken cancellationToken = default)
-	{
-		var dbSet = await GetDbSetAsync();
-		return await dbSet
-			.Where(e => e.ReportingManagerId == managerId)
-			.OrderBy(e => e.EmployeeCode)
-			.ToListAsync(cancellationToken);
+		/// <summary>
+		/// Gets all employees reporting to a specific manager.
+		/// </summary>
+		public async Task<List<Employee>> GetEmployeesByManagerAsync(Guid managerId, CancellationToken cancellationToken = default)
+		{
+			var dbSet = await GetDbSetAsync();
+			return await dbSet
+				.Where(e => e.ReportingManagerId == managerId)
+				.OrderBy(e => e.EmployeeCode)
+				.ToListAsync(cancellationToken);
+		}
+
+		/// <summary>
+		/// Gets employees by their employee codes for bulk lookup (used in import operations).
+		/// Returns a dictionary mapping uppercase employee code to employee entity.
+		/// Case-insensitive lookup.
+		/// </summary>
+		public async Task<Dictionary<string, Employee>> GetEmployeesByCodesAsync(
+			IEnumerable<string> employeeCodes,
+			CancellationToken cancellationToken = default)
+		{
+			if (!employeeCodes?.Any() ?? true)
+			{
+				return new Dictionary<string, Employee>(StringComparer.OrdinalIgnoreCase);
+			}
+
+			// Normalize codes to uppercase for case-insensitive comparison
+			var normalizedCodes = employeeCodes
+				.Where(code => !string.IsNullOrWhiteSpace(code))
+				.Select(code => code.Trim().ToUpperInvariant())
+				.Distinct()
+				.ToList();
+
+			if (!normalizedCodes.Any())
+			{
+				return new Dictionary<string, Employee>(StringComparer.OrdinalIgnoreCase);
+			}
+
+			var dbSet = await GetDbSetAsync();
+
+			// Fetch employees whose codes match (case-insensitive)
+			var employees = await dbSet
+				.Where(e => normalizedCodes.Contains(e.EmployeeCode.ToUpper()))
+				.ToListAsync(cancellationToken);
+
+			// Return dictionary with uppercase keys for consistent lookup
+			return employees
+				.Where(e => !string.IsNullOrWhiteSpace(e.EmployeeCode))
+				.ToDictionary(
+					e => e.EmployeeCode.ToUpperInvariant(),
+					e => e,
+					StringComparer.OrdinalIgnoreCase);
+		}
 	}
-}

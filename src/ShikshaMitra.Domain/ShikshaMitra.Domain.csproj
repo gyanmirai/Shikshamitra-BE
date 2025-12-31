@@ -43,6 +43,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="HR\AttendanceAndLeaves\Import\" />
     <Folder Include="Students\StudentEnrollments\StudentInquiries\" />
   </ItemGroup>
 

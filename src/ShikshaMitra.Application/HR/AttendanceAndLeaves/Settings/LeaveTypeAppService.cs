@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -139,51 +141,87 @@ public class LeaveTypeAppService : CrudAppService<
 	/// <summary>
 	/// Get paginated leave types for an organization (matches OpenAPI contract)
 	/// </summary>
-	public async Task<LeaveTypeListResponse> GetListByMediumStageIdAsync(Guid mediumStageId, int page, int pageSize)
+	public async Task<LeaveTypeListResponse> GetListByMediumStageIdAsync(
+		Guid mediumStageId, 
+		int page, 
+		int pageSize,
+		CancellationToken cancellationToken = default)
 	{
+		Check.NotNull(mediumStageId, nameof(mediumStageId));
+		Check.Range(page, nameof(page), 1, int.MaxValue);
+		Check.Range(pageSize, nameof(pageSize), 1, 100);
+
 		var cacheKey = GetContractCacheKey(mediumStageId, page, pageSize);
-		var cached = await _contractCache.GetAsync(cacheKey);
+		var cached = await _contractCache.GetAsync(cacheKey, token: cancellationToken);
 		if (cached != null)
 		{
+			Logger.LogDebug("Cache hit for leave types. Key: {CacheKey}", cacheKey);
 			return cached;
 		}
 
 		var skipCount = (page - 1) * pageSize;
-		
-		var items = await _leaveTypeRepository.GetListByMediumStageIdAsync(
-			mediumStageId,
-			skipCount,
-			pageSize
-		);
 
-		var totalCount = await _leaveTypeRepository.GetCountByMediumStageIdAsync(mediumStageId);
-		var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+		Logger.LogDebug(
+			"Fetching leave types. MediumStageId: {MediumStageId}, Page: {Page}, PageSize: {PageSize}, Skip: {Skip}",
+			mediumStageId, page, pageSize, skipCount);
 
-		var response = new LeaveTypeListResponse
+		try
 		{
-			TotalCount = (int)totalCount,
-			CurrentPage = page,
-			PageSize = pageSize,
-			TotalPages = Math.Max(1, totalPages),
-			Items = items.Select(lt => new LeaveTypeItem
-			{
-				Id = lt.Id,
-				Name = lt.Type,
-				Description = lt.Description,
-				Color = lt.Color
-			}).ToList()
-		};
+			var items = await _leaveTypeRepository.GetListByMediumStageIdAsync(
+				mediumStageId,
+				skipCount,
+				pageSize,
+				sorting: "Type ASC",
+				includeInactive: false,
+				cancellationToken
+			);
 
-		await _contractCache.SetAsync(
-			cacheKey,
-			response,
-			new DistributedCacheEntryOptions
-			{
-				AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24)
-			}
-		);
+			var totalCount = await _leaveTypeRepository.GetCountByMediumStageIdAsync(
+				mediumStageId,
+				includeInactive: false,
+				cancellationToken
+			);
 
-		return response;
+			Logger.LogDebug(
+				"Found {Count} leave types out of {Total} total for MediumStageId: {MediumStageId}",
+				items.Count, totalCount, mediumStageId);
+
+			var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
+			var response = new LeaveTypeListResponse
+			{
+				TotalCount = (int)totalCount,
+				CurrentPage = page,
+				PageSize = pageSize,
+				TotalPages = Math.Max(1, totalPages),
+				Items = items.Select(lt => new LeaveTypeItem
+				{
+					Id = lt.Id,
+					Name = lt.Type,
+					Description = lt.Description,
+					Color = lt.Color
+				}).ToList()
+			};
+
+			await _contractCache.SetAsync(
+				cacheKey,
+				response,
+				new DistributedCacheEntryOptions
+				{
+					AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24)
+				},
+				token: cancellationToken
+			);
+
+			return response;
+		}
+		catch (Exception ex)
+		{
+			Logger.LogError(ex, 
+				"Failed to fetch leave types for MediumStageId: {MediumStageId}, Page: {Page}, PageSize: {PageSize}",
+				mediumStageId, page, pageSize);
+			throw;
+		}
 	}
 
 	/// <summary>

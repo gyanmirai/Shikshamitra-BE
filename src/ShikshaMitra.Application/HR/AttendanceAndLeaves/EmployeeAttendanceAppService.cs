@@ -1,6 +1,5 @@
 ﻿using ClosedXML.Excel;
 using Microsoft.Extensions.Logging;
-using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.EmployeeAttendanceContract;
 using ShikshaMitra.HR.Employees;
 using System;
@@ -14,7 +13,7 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 
-namespace ShikshaMitra.HR.Employees;
+namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 /// <summary>
 /// Employee Attendance Application Service

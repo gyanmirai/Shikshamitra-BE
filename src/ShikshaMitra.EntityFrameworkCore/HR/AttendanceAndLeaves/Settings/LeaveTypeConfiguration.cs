@@ -34,11 +34,9 @@ public class LeaveTypeConfiguration : IEntityTypeConfiguration<LeaveType>
 			.IsRequired()
 			.HasDefaultValue(true);
 
-		// Navigation property
-		builder.HasOne(x => x.EducationMediumStage)
-			.WithMany()
-			.HasForeignKey(x => x.EducationMediumStageId)
-			.OnDelete(DeleteBehavior.Restrict);
+		// Foreign key configuration (no navigation property configuration to avoid lazy loading issues)
+		// The EducationMediumStageId foreign key is maintained but navigation is not loaded by default
+		builder.Ignore(x => x.EducationMediumStage);
 
 		// Indexes for performance
 		// Unique index scoped per tenant and organization

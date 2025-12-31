@@ -56,6 +56,7 @@ public class EfCoreLeaveTypeRepository : EfCoreRepository<ShikshaMitraDbContext,
 	{
 		var dbSet = await GetDbSetAsync();
 		var query = dbSet
+			.AsNoTracking()
 			.Where(x => x.EducationMediumStageId == educationMediumStageId);
 
 		if (!includeInactive)
@@ -85,6 +86,7 @@ public class EfCoreLeaveTypeRepository : EfCoreRepository<ShikshaMitraDbContext,
 	{
 		var dbSet = await GetDbSetAsync();
 		var query = dbSet
+			.AsNoTracking()
 			.Where(x => x.EducationMediumStageId == educationMediumStageId);
 
 		if (!includeInactive)

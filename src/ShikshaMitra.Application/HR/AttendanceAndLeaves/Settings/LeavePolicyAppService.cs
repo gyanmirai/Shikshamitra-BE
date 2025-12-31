@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -137,58 +139,97 @@ public class LeavePolicyAppService : CrudAppService<
 	/// <summary>
 	/// Get paginated leave policies for an organization (matches OpenAPI contract)
 	/// </summary>
-	public async Task<LeavePolicyListResponse> GetListByMediumStageIdAsync(Guid mediumStageId, int page, int pageSize)
+	public async Task<LeavePolicyListResponse> GetListByMediumStageIdAsync(
+		Guid mediumStageId, 
+		int page, 
+		int pageSize,
+		CancellationToken cancellationToken = default)
 	{
+		Check.NotNull(mediumStageId, nameof(mediumStageId));
+		Check.Range(page, nameof(page), 1, int.MaxValue);
+		Check.Range(pageSize, nameof(pageSize), 1, 100);
+
 		var cacheKey = GetContractCacheKey(mediumStageId, page, pageSize);
-		var cached = await _contractCache.GetAsync(cacheKey);
+		var cached = await _contractCache.GetAsync(cacheKey, token: cancellationToken);
 		if (cached != null)
 		{
+			Logger.LogDebug("Cache hit for leave policies. Key: {CacheKey}", cacheKey);
 			return cached;
 		}
 
 		var skipCount = (page - 1) * pageSize;
-		
-		var items = await _leavePolicyRepository.GetListByMediumStageIdAsync(
-			mediumStageId,
-			skipCount,
-			pageSize
-		);
 
-		var totalCount = await _leavePolicyRepository.GetCountByMediumStageIdAsync(mediumStageId);
-		var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+		Logger.LogDebug(
+			"Fetching leave policies. MediumStageId: {MediumStageId}, Page: {Page}, PageSize: {PageSize}, Skip: {Skip}",
+			mediumStageId, page, pageSize, skipCount);
 
-		var rowNumber = skipCount;
-		var response = new LeavePolicyListResponse
+		try
 		{
-			TotalCount = (int)totalCount,
-			CurrentPage = page,
-			PageSize = pageSize,
-			TotalPages = Math.Max(1, totalPages),
-			Items = items.Select(lp => new LeavePolicyItem
-			{
-				Id = ++rowNumber, // Sequential row number for display
-				PolicyId = lp.Id,
-				Title = lp.PolicyName,
-				LeaveType = lp.LeaveType?.Type ?? "Unknown",
-				MaximumPerYear = lp.MaximumDaysPerYear,
-				CarryForward = lp.CarryForward ? "Yes" : "No",
-				Encashable = lp.Encashable ? "Yes" : "No",
-				PaidType = lp.PaidType == LeavePaidType.Paid ? "Paid" : "Unpaid",
-				RequiresApproval = lp.RequiresApproval ? "Yes" : "No"
-			}).ToList()
-		};
+			var items = await _leavePolicyRepository.GetListByMediumStageIdAsync(
+				mediumStageId,
+				skipCount,
+				pageSize,
+				sorting: "PolicyName ASC",
+				includeInactive: false,
+				cancellationToken
+			);
 
-		await _contractCache.SetAsync(
-			cacheKey,
-			response,
-			new DistributedCacheEntryOptions
+			var totalCount = await _leavePolicyRepository.GetCountByMediumStageIdAsync(
+				mediumStageId,
+				includeInactive: false,
+				cancellationToken
+			);
+
+			Logger.LogDebug(
+				"Found {Count} leave policies out of {Total} total for MediumStageId: {MediumStageId}",
+				items.Count, totalCount, mediumStageId);
+			Logger.LogDebug(
+				"Found {Count} leave policies out of {Total} total for MediumStageId: {MediumStageId}",
+				items.Count, totalCount, mediumStageId);
+
+			var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
+			var rowNumber = skipCount;
+			var response = new LeavePolicyListResponse
 			{
-				AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24)
+				TotalCount = (int)totalCount,
+				CurrentPage = page,
+				PageSize = pageSize,
+				TotalPages = Math.Max(1, totalPages),
+				Items = items.Select(lp => new LeavePolicyItem
+				{
+					Id = ++rowNumber, // Sequential row number for display
+					PolicyId = lp.Id,
+					Title = lp.PolicyName,
+					LeaveType = lp.LeaveType?.Type ?? "Unknown",
+					MaximumPerYear = lp.MaximumDaysPerYear,
+					CarryForward = lp.CarryForward ? "Yes" : "No",
+					Encashable = lp.Encashable ? "Yes" : "No",
+					PaidType = lp.PaidType == LeavePaidType.Paid ? "Paid" : "Unpaid",
+					RequiresApproval = lp.RequiresApproval ? "Yes" : "No"
+				}).ToList()
+			};
+
+			await _contractCache.SetAsync(
+				cacheKey,
+				response,
+				new DistributedCacheEntryOptions
+				{
+					AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24)
+				},
+				token: cancellationToken
+			);
+
+			return response;
 			}
-		);
-
-		return response;
-	}
+			catch (Exception ex)
+			{
+				Logger.LogError(ex, 
+					"Failed to fetch leave policies for MediumStageId: {MediumStageId}, Page: {Page}, PageSize: {PageSize}",
+					mediumStageId, page, pageSize);
+				throw;
+			}
+		}
 
 	/// <summary>
 	/// Create a leave policy (matches OpenAPI contract)

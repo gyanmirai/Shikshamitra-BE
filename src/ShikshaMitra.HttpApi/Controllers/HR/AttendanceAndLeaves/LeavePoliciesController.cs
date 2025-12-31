@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.ComponentModel.DataAnnotations;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -32,12 +33,15 @@ public class LeavePoliciesController : AbpControllerBase
 	/// </summary>
 	[HttpGet]
 	[ProducesResponseType(typeof(LeavePolicyListResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	public virtual async Task<LeavePolicyListResponse> GetListAsync(
 		[FromQuery, Required] Guid mediumStageId,
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
-		[FromQuery, Range(10, 100)] int pageSize = 10)
+		[FromQuery, Range(10, 100)] int pageSize = 10,
+		CancellationToken cancellationToken = default)
 	{
-		return await _leavePolicyAppService.GetListByMediumStageIdAsync(mediumStageId, page, pageSize);
+		return await _leavePolicyAppService.GetListByMediumStageIdAsync(
+			mediumStageId, page, pageSize, cancellationToken);
 	}
 
 	/// <summary>

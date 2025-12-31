@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -23,7 +24,11 @@ public interface ILeavePolicyAppService : ICrudAppService<
 	/// <summary>
 	/// Get paginated leave policies for an organization (matches OpenAPI contract)
 	/// </summary>
-	Task<LeavePolicyListResponse> GetListByMediumStageIdAsync(Guid mediumStageId, int page, int pageSize);
+	Task<LeavePolicyListResponse> GetListByMediumStageIdAsync(
+		Guid mediumStageId, 
+		int page, 
+		int pageSize,
+		CancellationToken cancellationToken = default);
 	
 	/// <summary>
 	/// Create a leave policy (matches OpenAPI contract)

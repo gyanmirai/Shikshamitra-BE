@@ -55,15 +55,19 @@ public class EfCoreLeaveTypeRepository : EfCoreRepository<ShikshaMitraDbContext,
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
+
+		// Build query with tenant filtering
 		var query = dbSet
 			.AsNoTracking()
 			.Where(x => x.EducationMediumStageId == educationMediumStageId);
 
+		// Apply active filter
 		if (!includeInactive)
 		{
 			query = query.Where(x => x.IsActive);
 		}
 
+		// Apply sorting
 		if (!string.IsNullOrWhiteSpace(sorting))
 		{
 			query = query.OrderBy(sorting);
@@ -73,6 +77,7 @@ public class EfCoreLeaveTypeRepository : EfCoreRepository<ShikshaMitraDbContext,
 			query = query.OrderBy(x => x.Type);
 		}
 
+		// Apply pagination and execute
 		return await query
 			.Skip(skipCount)
 			.Take(maxResultCount)
@@ -85,10 +90,13 @@ public class EfCoreLeaveTypeRepository : EfCoreRepository<ShikshaMitraDbContext,
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
+
+		// Build query with filtering
 		var query = dbSet
 			.AsNoTracking()
 			.Where(x => x.EducationMediumStageId == educationMediumStageId);
 
+		// Apply active filter
 		if (!includeInactive)
 		{
 			query = query.Where(x => x.IsActive);

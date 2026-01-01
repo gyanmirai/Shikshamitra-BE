@@ -211,12 +211,12 @@
     "AttendanceImport:FileSizeExceeded": "File size ({0}MB) exceeds maximum allowed size ({1}MB).",
     "AttendanceImport:UnsupportedFileFormat": "Unsupported file format: '{0}'. Please upload .xlsx or .csv files.",
     "AttendanceImport:FileReadError": "Error reading file: {0}. Please ensure the file is not corrupted.",
-    "AttendanceImport:ImportStarted": "Starting attendance import for date {0} with file {1}",
-    "AttendanceImport:ImportCompleted": "Completed attendance import. Total: {0}, Success: {1}, Failed: {2}",
-    "AttendanceImport:ImportFailed": "Failed to import attendance for {0}",
-    "AttendanceImport:AllRecordsImportedSuccessfully": "All {0} attendance records imported successfully!",
-    "AttendanceImport:AllRecordsWithWarnings": "All {0} records imported successfully with {1} warning(s). Please review warnings.",
-    "AttendanceImport:PartialSuccess": "Partial success: {0} of {1} records imported. {2} failed. Please review errors and re-import failed records.",
-    "AttendanceImport:CompleteFailure": "Import failed. All {0} records have errors. Please fix the errors and try again."
-  }
-}
+        "AttendanceImport:ImportStarted": "Starting attendance import for date {0} with file {1}",
+        "AttendanceImport:ImportCompleted": "Completed attendance import. Total: {0}, Success: {1}, Failed: {2}",
+        "AttendanceImport:ImportFailed": "Failed to import attendance for {0}",
+        "AttendanceImport:AllRecordsImportedSuccessfully": "All {0} attendance records imported successfully!",
+        "AttendanceImport:AllRecordsWithWarnings": "All {0} records imported successfully with {1} warning(s). Please review warnings.",
+        "AttendanceImport:PartialSuccess": "Partial success: {0} of {1} records imported. {2} failed. Please review errors and re-import failed records.",
+        "AttendanceImport:CompleteFailure": "Import failed. All {0} records have errors. Please fix the errors and try again."
+      }
+    }

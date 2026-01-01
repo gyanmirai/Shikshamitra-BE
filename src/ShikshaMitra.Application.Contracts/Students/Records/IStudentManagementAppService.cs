@@ -7,7 +7,7 @@ namespace ShikshaMitra.Students.Records;
 
 public interface IStudentManagementAppService : IApplicationService
 {
-	Task<List<StudentRecordDto>> GetStudentRecords(Guid divisionId);
+	Task<(List<StudentRecordDto> StudentRecords, ArrangementTypeEnum? ArrangementType, ArrangementByEnum? ArrangementBy)> GetStudentRecords(Guid divisionId);
 	Task AssignHouseToStudent(Guid studentId, Guid houseId);
 	Task AssignHouseGlobalLeaderAsync(Guid studentId);
 	Task AssignHouseDivisionLeaderAsync(Guid studentId);
@@ -17,8 +17,8 @@ public interface IStudentManagementAppService : IApplicationService
 
 	Task StoreGrNumbers(List<UpdateStudentGrNumberDto> updateStudentGrNumberDto);
 	Task<List<GrProjectionDto>> GetGrProjections(Guid divisionId);
-	Task<List<RollNumberProjectionDto>> GetRollNumberProjections(Guid divisionId);
-	Task StoreRollNumbers(List<UpdateStudentRollNumberDto> updateStudentRollNumberDto);
+	Task<List<RollNumberProjectionDto>> GetRollNumberProjections(Guid divisionId, ArrangementTypeEnum arrangementType, ArrangementByEnum arrangementBy);
+	Task StoreRollNumbers(Guid divisionId, List<UpdateStudentRollNumberDto> updateStudentRollNumberDto, ArrangementTypeEnum? arrangementType, ArrangementByEnum? arrangementBy);
 	Task ChangeDivision(List<ChangeStudentDivisionDto> changeStudentDivisionDto);
 
 }

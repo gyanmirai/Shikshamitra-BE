@@ -33,7 +33,7 @@ IEmployeeAppService
 {
 	public async Task<EmployeeDto> GetEmployeeByUserId(Guid userId)
 	{
-		// Navigation properties (Role, EducationMediumStage, Shift) are auto-loaded
+		// Navigation properties (Role, Shift) are auto-loaded
 		Employee employee = await employeeRepository.GetEmployeeByUserIdAsync(userId) 
 			?? throw new EntityNotFoundException(typeof(Employee), userId);
 
@@ -54,7 +54,6 @@ IEmployeeAppService
 		// Use EmployeeManager to create the employee with domain logic
 		Employee employee = await employeeManager.CreateEmployeeAsync(
 			roleId: input.RoleId,
-			educationMediumStageId: input.EducationMediumStageId,
 			firstName: input.FirstName,
 			lastName: input.LastName,
 			middleName: input.MiddleName,
@@ -122,7 +121,6 @@ IEmployeeAppService
 			employeeGroup: input.EmployeeGroup,
 			qualification: input.Qualification,
 			roleId: input.RoleId,
-			educationMediumStageId: input.EducationMediumStageId,
 			identificationMark1: input.IdentificationMark1,
 			city: input.City,
 			state: input.State,
@@ -610,11 +608,6 @@ IEmployeeAppService
 		var queryable = await Repository.GetQueryableAsync();
 
 		// Apply filters
-		if (input.MediumStageId.HasValue)
-		{
-			queryable = queryable.Where(e => e.EducationMediumStageId == input.MediumStageId.Value);
-		}
-
 		if (!string.IsNullOrEmpty(input.Status))
 		{
 			if (Enum.TryParse<EmployeeStatusType>(input.Status, true, out var statusType))

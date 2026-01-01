@@ -21,7 +21,6 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 /// <summary>
 /// Employee Attendance Application Service
-/// ✅ ALL 8 CRITICAL BUGS FIXED
 /// </summary>
 public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, EmployeeAttendanceDto, Guid, PagedAndSortedResultRequestDto,
 	CreateUpdateEmployeeAttendanceDto>, IEmployeeAttendanceAppService, IEmployeeAttendanceContractAppService
@@ -50,73 +49,8 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 		_validator = validator;
 	}
 
-	public override async Task<EmployeeAttendanceDto> CreateAsync(CreateUpdateEmployeeAttendanceDto input)
-	{
-		await ValidateAndNormalizeEducationMediumStageIdAsync(input);
-		return await base.CreateAsync(input);
-	}
-
-	public override async Task<EmployeeAttendanceDto> UpdateAsync(Guid id, CreateUpdateEmployeeAttendanceDto input)
-	{
-		await ValidateAndNormalizeEducationMediumStageIdAsync(input);
-		return await base.UpdateAsync(id, input);
-	}
-
-	/// <summary>
-	/// Validates and normalizes the EducationMediumStageId to ensure consistency with the Employee.
-	/// If EducationMediumStageId is not provided, it will be auto-populated from the Employee.
-	/// If provided, it must match the Employee's EducationMediumStageId.
-	/// </summary>
-	private async Task ValidateAndNormalizeEducationMediumStageIdAsync(CreateUpdateEmployeeAttendanceDto input)
-	{
-		// Get the employee to validate against
-		var employee = await _employeeRepository.FindAsync(input.EmployeeId);
-		
-		if (employee == null)
-		{
-			var correlationId = Guid.NewGuid();
-			_logger.LogWarning(
-				"Employee not found for attendance record. EmployeeId: {EmployeeId}, CorrelationId: {CorrelationId}",
-				input.EmployeeId, correlationId);
-			
-			throw new UserFriendlyException(
-				$"Employee with ID '{input.EmployeeId}' does not exist. Please verify the employee ID. (Ref: {correlationId})",
-				code: "EmployeeAttendance:EmployeeNotFound"
-			);
-		}
-
-		// Auto-populate EducationMediumStageId if not provided
-		if (!input.EducationMediumStageId.HasValue)
-		{
-			input.EducationMediumStageId = employee.EducationMediumStageId;
-			_logger.LogDebug(
-				"Auto-populated EducationMediumStageId for attendance. EmployeeId: {EmployeeId}, EducationMediumStageId: {EducationMediumStageId}",
-				input.EmployeeId, input.EducationMediumStageId);
-			return;
-		}
-
-		// Validate that the provided EducationMediumStageId matches the Employee's value
-		if (input.EducationMediumStageId.Value != employee.EducationMediumStageId)
-		{
-			var correlationId = Guid.NewGuid();
-			_logger.LogWarning(
-				"EducationMediumStageId mismatch detected. EmployeeId: {EmployeeId}, " +
-				"Expected: {ExpectedStageId}, Provided: {ProvidedStageId}, CorrelationId: {CorrelationId}",
-				input.EmployeeId, employee.EducationMediumStageId, input.EducationMediumStageId, correlationId);
-			
-			throw new BusinessException(
-				code: "EmployeeAttendance:EducationMediumStageMismatch",
-				message: $"The EducationMediumStageId provided ({input.EducationMediumStageId}) does not match " +
-				         $"the employee's EducationMediumStageId ({employee.EducationMediumStageId}). " +
-				         $"Attendance records must use the same EducationMediumStageId as the employee for proper scope filtering. " +
-				         $"(Ref: {correlationId})"
-			);
-		}
-	}
-	
 	/// <summary>
 	/// Get employees by attendance date
-	/// ✅ FIX #5: Use AttendanceDate instead of CreationTime
 	/// </summary>
 	public async Task<PagedResultDto<EmployeeAttendanceDto>> GetEmployeesByDate(DateTimeOffset date)
 	{
@@ -135,7 +69,6 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 
 	/// <summary>
 	/// Get employee attendance summary for a month
-	/// ✅ FIX #6: Use AttendanceDate instead of TimeIn
 	/// </summary>
 	public async Task<List<EmployeeAttendanceSummaryDto>> GetEmployeeAttendanceSummary(List<Guid> employeeIds,
 		DateTimeOffset month)
@@ -247,7 +180,6 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 	/// <summary>
 	/// Update employee attendance (PUT /attendance/employees)
 	/// Upserts by (EmployeeId, AttendanceDate)
-	/// ✅ FIX #2 & #3: Support optional OutTime and update EducationMediumStageId
 	/// </summary>
 	public async Task<SuccessMessage> UpdateAttendanceAsync(UpdateAttendanceRequest input)
 	{
@@ -281,8 +213,6 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 			existingAttendance.TimeIn = input.InTime;
 			existingAttendance.TimeOut = input.OutTime;
 			existingAttendance.StatusType = status;
-			// Fix Bug #2: Update EducationMediumStageId to match employee's current organization
-			existingAttendance.EducationMediumStageId = employee.EducationMediumStageId;
 			await _employeeAttendanceRepository.UpdateAsync(existingAttendance);
 		}
 		else
@@ -295,8 +225,7 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 				AttendanceDate = targetDate,
 				TimeIn = input.InTime,
 				TimeOut = input.OutTime,
-				StatusType = status,
-				EducationMediumStageId = employee.EducationMediumStageId
+				StatusType = status
 			};
 			await _employeeAttendanceRepository.InsertAsync(newAttendance);
 		}
@@ -306,10 +235,6 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 
 	/// <summary>
 	/// Import attendance from Excel/CSV file (POST /attendance/import)
-	/// ✅ NEW: Comprehensive validation with user-friendly error messages
-	/// ✅ NEW: Support for both .xlsx and .csv files
-	/// ✅ NEW: Partial success - failed rows don't prevent others from importing
-	/// ✅ NEW: Detailed error tracking with suggestions
 	/// Expected columns: Employee Name, Hours Worked, Time In, Time Out, status, Employee Code, Contact No
 	/// </summary>
 	[UnitOfWork]
@@ -399,7 +324,6 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 						existing.TimeIn = result.ParsedTimeIn;
 						existing.TimeOut = result.ParsedTimeOut;
 						existing.StatusType = status;
-						existing.EducationMediumStageId = employee.EducationMediumStageId;
 
 						if (!attendancesToUpdate.Contains(existing))
 						{
@@ -416,8 +340,7 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 							AttendanceDate = targetDate,
 							TimeIn = result.ParsedTimeIn,
 							TimeOut = result.ParsedTimeOut,
-							StatusType = status,
-							EducationMediumStageId = employee.EducationMediumStageId
+							StatusType = status
 						};
 						attendancesToInsert.Add(newAttendance);
 						attendanceByEmployee[employee.Id] = newAttendance;

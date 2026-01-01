@@ -25,8 +25,6 @@ public class EmployeeCacheItem
 	public string? MobileNo { get; set; }
 	public Guid RoleId { get; set; }
 	public string? RoleName { get; set; }
-	public Guid EducationMediumStageId { get; set; }
-	public string? EducationMediumStageName { get; set; }
 	public Guid? ShiftId { get; set; }
 	public string? ShiftName { get; set; }
 	public EmployeeStatusType? EmployeeStatusType { get; set; }
@@ -273,8 +271,6 @@ public class EmployeeCacheManager : IEmployeeCacheManager, ITransientDependency
 			MobileNo = employee.MobileNo,
 			RoleId = employee.RoleId,
 			RoleName = employee.Role?.Name,
-			EducationMediumStageId = employee.EducationMediumStageId,
-			EducationMediumStageName = employee.EducationMediumStage?.Name,
 			ShiftId = employee.ShiftId,
 			ShiftName = employee.Shift?.ShiftName,
 			EmployeeStatusType = employee.EmployeeStatusType,

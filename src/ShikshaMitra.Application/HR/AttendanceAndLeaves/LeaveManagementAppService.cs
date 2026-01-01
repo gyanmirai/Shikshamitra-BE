@@ -58,10 +58,8 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 
 			var skipCount = (page - 1) * pageSize;
 
-			// ✅ FIX #7/#10: Include EducationMediumStage navigation property
 			var query = await _employeeLeaveRepository.WithDetailsAsync(
 				x => x.Employee,
-				x => x.Employee.EducationMediumStage,
 				x => x.LeavePolicy);
 
 			// ✅ SECURITY: Always filter by tenant
@@ -69,9 +67,6 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 			{
 				query = query.Where(x => x.TenantId == CurrentTenant.Id);
 			}
-
-			// ✅ SECURITY: Filter by organization
-			query = query.Where(x => x.Employee != null && x.Employee.EducationMediumStageId == mediumStageId);
 
 			// ✅ FIX #9: Optimize date filtering
 			if (month.HasValue && year.HasValue)
@@ -111,7 +106,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 			StartDate = leave.StartDate.DateTime,
 			EndDate = leave.EndDate.DateTime,
 			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
-			Organization = leave.Employee?.EducationMediumStage?.Name ?? "Unknown",
+			Organization = "N/A", // Organization will be determined via UserScope
 			Description = leave.Description ?? "",
 			Remarks = leave.RejectionReason,
 			Status = leave.Status.ToString().ToUpper()
@@ -129,7 +124,6 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 			// ✅ FIXED: Direct DB query using PublicId (no in-memory search)
 			var query = await _employeeLeaveRepository.WithDetailsAsync(
 				x => x.Employee,
-				x => x.Employee.EducationMediumStage,
 				x => x.LeavePolicy);
 
 			// ✅ SECURITY: Filter by tenant
@@ -150,7 +144,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 			return new LeaveRequestDetailsDto
 			{
 				Id = leave.PublicId, // ✅ Use PublicId
-				MediumStageId = leave.Employee?.EducationMediumStageId ?? Guid.Empty,
+				MediumStageId = Guid.Empty, // Organization determined via UserScope
 				EmployeeId = leave.EmployeeId,
 				EmployeeName = leave.Employee?.EmployeeNameWithFather ?? "Unknown",
 				EmployeeCode = leave.Employee?.EmployeeCode ?? "Unknown",
@@ -176,12 +170,6 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 			if (employee == null)
 			{
 				throw new UserFriendlyException("Employee not found for current user");
-			}
-
-			// ✅ SECURITY: Validate employee belongs to the specified organization
-			if (employee.EducationMediumStageId != input.MediumStageId)
-			{
-				throw new UserFriendlyException("You cannot create leave requests for other organizations");
 			}
 
 			// ✅ FIX #1: USE BUSINESS VALIDATION SERVICE (CRITICAL!)

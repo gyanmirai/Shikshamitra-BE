@@ -1,5 +1,5 @@
-﻿using ShikshaMitra.Common;
-using System;
+﻿using System;
+using ShikshaMitra.Common;
 using Volo.Abp;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
@@ -12,7 +12,7 @@ public static class PersonalInfoContractMapper
 	/// <summary>
 	/// Converts API request to internal create DTO
 	/// </summary>
-	public static CreateEmployeePersonalInfoDto ToCreateDto(PersonalInfoRequest request, Guid educationMediumStageId)
+	public static CreateEmployeePersonalInfoDto ToCreateDto(PersonalInfoRequest request)
 	{
 		return new CreateEmployeePersonalInfoDto
 		{
@@ -41,7 +41,6 @@ public static class PersonalInfoContractMapper
 			State = request.State != null ? new State(request.State.Name, request.State.IsoCode) : null,
 			City = request.City,
 			Pincode = request.PinCode,
-			EducationMediumStageId = educationMediumStageId,
 			EmployeeGroup = request.IsTeaching ? EmployeeGroupType.Teaching : EmployeeGroupType.NonTeaching
 		};
 	}
@@ -49,7 +48,7 @@ public static class PersonalInfoContractMapper
 	/// <summary>
 	/// Converts API request to internal update DTO
 	/// </summary>
-	public static UpdateEmployeePersonalInfoDto ToUpdateDto(PersonalInfoRequest request, Guid educationMediumStageId)
+	public static UpdateEmployeePersonalInfoDto ToUpdateDto(PersonalInfoRequest request)
 	{
 		return new UpdateEmployeePersonalInfoDto
 		{
@@ -78,7 +77,6 @@ public static class PersonalInfoContractMapper
 			State = request.State != null ? new State(request.State.Name, request.State.IsoCode) : null,
 			City = request.City,
 			Pincode = request.PinCode,
-			EducationMediumStageId = educationMediumStageId,
 			EmployeeGroup = request.IsTeaching ? EmployeeGroupType.Teaching : EmployeeGroupType.NonTeaching
 		};
 	}

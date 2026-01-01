@@ -4,13 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using ShikshaMitra.Common;
-using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
-using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
-using ShikshaMitra.TenantSettings.EducationBoards;
-using ShikshaMitra.TenantSettings.EducationMediums;
 using Volo.Abp;
 using Volo.Abp.BlobStoring;
-using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
@@ -23,10 +18,7 @@ public class EmployeeManager(
 	IIdentityUserRepository userRepository,
 	IIdentityRoleRepository roleRepository,
 	IBlobContainer blobContainer,
-	UserManager<IdentityUser> userManager,
-	IEducationMediumStageRepository educationMediumStageRepository,
-	IRepository<EducationBoard, Guid> educationBoardRepository,
-	IRepository<EducationMedium, Guid> educationMediumRepository
+	UserManager<IdentityUser> userManager
 ) : DomainService
 {
 	// Private helper method to get an employee by ID
@@ -53,7 +45,6 @@ public class EmployeeManager(
 
 	public async Task<Employee> CreateEmployeeAsync(
 		Guid roleId,
-		Guid educationMediumStageId,
 		string firstName,
 		string lastName,
 		string? middleName,
@@ -88,30 +79,8 @@ public class EmployeeManager(
 		// Validate role existence
 		IdentityRole role = await GetRoleAsync(roleId);
 
-		// i have educationMediumStageId, it stores educationMediumId, educationMedium table stores educationBoardId, I want boardName from educationBoard table using educationMediumStageId in ef core
-		var stages = await educationMediumStageRepository.GetQueryableAsync();
-		var mediums = await educationMediumRepository.GetQueryableAsync();
-		var boards = await educationBoardRepository.GetQueryableAsync();
-
-		var query =
-			from stage in stages
-			join medium in mediums on stage.EducationMediumId equals medium.Id
-			join board in boards on medium.EducationBoardId equals board.Id
-			where stage.Id == educationMediumStageId
-			select new // Creates a new anonymous object, NOT an EducationMediumStage
-			{
-				StageId = stage.Id,
-				StageName = stage.Name,
-				MediumName = medium.Name,
-				BoardType = board.Type,
-			};
-
-		// 3. Execute the query
-		var boardType = await AsyncExecuter.FirstOrDefaultAsync(query);
-
 		// Generate employee code
 		var employeeCode = await GenerateEmployeeCodeAsync(
-			boardType!.BoardType,
 			dateOfJoining ?? DateOnly.FromDateTime(DateTime.Now),
 			role.Name
 		);
@@ -152,7 +121,6 @@ public class EmployeeManager(
 			state: state,
 			country: country,
 			pinCode: pinCode,
-			educationMediumStageId: educationMediumStageId,
 			fatherDetails: new ContactDetails(
 				name: null,
 				occupation: null,
@@ -241,7 +209,6 @@ public class EmployeeManager(
 
 	public async Task<Employee> UpdateEmployeeAsync(
 		Guid employeeId,
-		Guid educationMediumStageId,
 		string firstName,
 		string lastName,
 		string? middleName,
@@ -326,7 +293,6 @@ public class EmployeeManager(
 			state: state,
 			country: country,
 			pinCode: pinCode,
-			educationMediumStageId: educationMediumStageId,
 			shiftId: shiftId
 		);
 		// Validate the updated employee if needed
@@ -603,10 +569,10 @@ public class EmployeeManager(
 
 	/// <summary>
 	/// Generates a unique, human-readable employee code without requiring additional database tables.
-	/// Uses a combination of tenant ID, board, role, year, and a hash-based unique identifier.
+	/// Uses a combination of tenant ID, role, year, and a hash-based unique identifier.
 	/// 
-	/// Format: {BoardCode}{RoleCode}{Year}{UniqueHash}
-	/// Example: CBPRI24A3F2 (CBSE Principal 2024 with unique hash A3F2)
+	/// Format: {RoleCode}{Year}{UniqueHash}
+	/// Example: PRI24A3F2 (Principal 2024 with unique hash A3F2)
 	/// 
 	/// Uniqueness is guaranteed by:
 	/// 1. Tenant isolation (different tenants will have different hashes)
@@ -614,7 +580,6 @@ public class EmployeeManager(
 	/// 3. Unique employee ID hash
 	/// </summary>
 	private async Task<string> GenerateEmployeeCodeAsync(
-		EducationBoardType boardType,
 		DateOnly dateOfJoining,
 		string roleName
 	)
@@ -624,9 +589,6 @@ public class EmployeeManager(
 
 		// Get count of existing employees for this tenant and year (for the hash seed)
 		var existingCount = await GetEmployeeCountForTenantAndYearAsync(tenantId, year);
-
-		// Generate board code (2 chars)
-		string boardCode = GetBoardCode(boardType);
 
 		// Generate role code (3 chars)
 		string roleCode = GetRoleCode(roleName);
@@ -638,9 +600,9 @@ public class EmployeeManager(
 		// This creates a deterministic but unique identifier
 		string uniqueHash = GenerateUniqueHash(tenantId, year, existingCount);
 
-		// Format: {BoardCode}{RoleCode}{Year}{UniqueHash}
-		// Example: CBPRI24A3F2 (10 characters total)
-		return $"{boardCode}{roleCode}{yearCode}{uniqueHash}";
+		// Format: {RoleCode}{Year}{UniqueHash}
+		// Example: PRI24A3F2 (9 characters total)
+		return $"{roleCode}{yearCode}{uniqueHash}";
 	}
 
 	/// <summary>
@@ -694,19 +656,6 @@ public class EmployeeManager(
 		} while (value > 0);
 
 		return result;
-	}
-
-	/// <summary>
-	/// Maps EducationBoardType to a 2-letter code.
-	/// </summary>
-	private static string GetBoardCode(EducationBoardType boardType)
-	{
-		return boardType switch
-		{
-			EducationBoardType.CBSE => "CB",
-			EducationBoardType.GSEB => "GS",
-			_ => "UN"
-		};
 	}
 
 	/// <summary>

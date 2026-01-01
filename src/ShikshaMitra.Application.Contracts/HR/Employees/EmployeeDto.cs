@@ -1,6 +1,5 @@
 ﻿using ShikshaMitra.Common;
 using ShikshaMitra.TenantSettings;
-using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
@@ -62,9 +61,6 @@ public class EmployeeDto : EntityDto<Guid>
 	public BankDetailsDto BankDetails { get; set; }
 
 	public List<WorkExperienceDto> WorkExperiences { get; set; } = [];
-
-	public Guid EducationMediumStageId { get; set; }
-	public EducationMediumStageDto EducationMediumStage { get; set; }
 
 	// Profile Picture stored in blob storage
 	public string? ProfilePictureBlobName { get; set; }

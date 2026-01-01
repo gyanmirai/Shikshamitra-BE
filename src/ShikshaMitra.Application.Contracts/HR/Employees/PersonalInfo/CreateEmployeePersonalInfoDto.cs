@@ -1,4 +1,4 @@
-using ShikshaMitra.Common;
+﻿using ShikshaMitra.Common;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -31,9 +31,6 @@ public class CreateEmployeePersonalInfoDto : IValidatableObject
 
 	[Required(ErrorMessage = "Role is required.")]
 	public Guid RoleId { get; set; }
-
-	[Required(ErrorMessage = "Education Medium Stage is required.")]
-	public Guid EducationMediumStageId { get; set; }
 
 	#endregion
 
@@ -162,4 +159,3 @@ public class CreateEmployeePersonalInfoDto : IValidatableObject
 
 	#endregion
 }
-

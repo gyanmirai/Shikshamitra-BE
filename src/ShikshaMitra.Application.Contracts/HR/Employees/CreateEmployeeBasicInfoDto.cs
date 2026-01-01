@@ -66,9 +66,6 @@ public class CreateEmployeeBasicInfoDto : IValidatableObject
 	[Required(ErrorMessage = "Role is required.")]
 	public Guid RoleId { get; set; }
 
-	[Required(ErrorMessage = "Education Medium Stage is required.")]
-	public Guid EducationMediumStageId { get; set; }
-
 	[MaxLength(256)]
 	public string? IdentificationMark1 { get; set; }
 

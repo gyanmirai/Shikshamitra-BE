@@ -19,7 +19,18 @@ public class StudentManagementController(
 	[HttpGet("{divisionId}")]
 	public async Task<Result<List<StudentRecordDto>>> GetStudentRecords(Guid divisionId)
 	{
-		var studentRecords = await studentManagementAppService.GetStudentRecords(divisionId);
+		var (studentRecords, arrangementType, arrangementBy) = await studentManagementAppService.GetStudentRecords(divisionId);
+		
+		if (arrangementType.HasValue)
+		{
+			Response.Headers["X-Arrangement-Type"] = arrangementType.Value.ToString();
+		}
+		
+		if (arrangementBy.HasValue)
+		{
+			Response.Headers["X-Arrangement-By"] = arrangementBy.Value.ToString();
+		}
+		
 		return Result.Success(studentRecords);
 	}
 
@@ -86,17 +97,17 @@ public class StudentManagementController(
 
 	// API to get roll number projections for all students in division
 	[HttpGet("{divisionId}/roll-number-projections")]
-	public async Task<Result<List<RollNumberProjectionDto>>> GetRollNumberProjections(Guid divisionId)
+	public async Task<Result<List<RollNumberProjectionDto>>> GetRollNumberProjections(Guid divisionId, [FromQuery] ArrangementTypeEnum? arrangementType, [FromQuery] ArrangementByEnum? arrangementBy)
 	{
-		var rollNumberProjections = await studentManagementAppService.GetRollNumberProjections(divisionId);
+		var rollNumberProjections = await studentManagementAppService.GetRollNumberProjections(divisionId, arrangementType ?? ArrangementTypeEnum.Mix, arrangementBy ?? ArrangementByEnum.FirstName);
 		return Result.Success(rollNumberProjections);
 	}
 
 	// API to store roll number projections of students
-	[HttpPost("roll-numbers")]
-	public async Task<Result> StoreRollNumbers([FromBody] List<UpdateStudentRollNumberDto> updateStudentRollNumberDto)
+	[HttpPost("{divisionId}/roll-numbers")]
+	public async Task<Result> StoreRollNumbers(Guid divisionId, [FromBody] List<UpdateStudentRollNumberDto> updateStudentRollNumberDto, [FromQuery] ArrangementTypeEnum? arrangementType, [FromQuery] ArrangementByEnum? arrangementBy)
 	{
-		await studentManagementAppService.StoreRollNumbers(updateStudentRollNumberDto);
+		await studentManagementAppService.StoreRollNumbers(divisionId, updateStudentRollNumberDto, arrangementType, arrangementBy);
 		return Result.Success();
 	}
 

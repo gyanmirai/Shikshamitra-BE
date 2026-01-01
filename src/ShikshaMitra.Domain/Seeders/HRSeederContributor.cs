@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Common;
+﻿using Microsoft.AspNetCore.Identity;
+using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.Settings;
@@ -37,6 +38,9 @@ public class HRSeederContributor : BaseSeederContributor
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly EmployeeManager _employeeManager;
 	private readonly IIdentityRoleRepository _roleRepository;
+	private readonly IdentityUserManager _userManager;
+	private readonly IIdentityUserRepository _userRepository;
+	private readonly ILookupNormalizer _lookupNormalizer;
 
 	public HRSeederContributor(
 		ICurrentTenant currentTenant,
@@ -52,27 +56,33 @@ public class HRSeederContributor : BaseSeederContributor
 		LeavePolicyManager leavePolicyManager,
 		ILeaveTypeRepository leaveTypeQueryRepository,
 		IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
-		IRepository<ShiftManagement, Guid> shiftRepository,
-		IEmployeeRepository employeeRepository,
-		EmployeeManager employeeManager,
-		IIdentityRoleRepository roleRepository)
-		: base(currentTenant, guidGenerator, unitOfWork)
-	{
-		_leaveTypeRepository = leaveTypeRepository;
-		_leaveTypeManager = leaveTypeManager;
-		_earningComponentRepository = earningComponentRepository;
-		_earningComponentManager = earningComponentManager;
-		_deductionComponentRepository = deductionComponentRepository;
-		_deductionComponentManager = deductionComponentManager;
-		_leavePolicyRepository = leavePolicyRepository;
-		_leavePolicyManager = leavePolicyManager;
-		_leaveTypeQueryRepository = leaveTypeQueryRepository;
-		_educationMediumStageRepository = educationMediumStageRepository;
-		_shiftRepository = shiftRepository;
-		_employeeRepository = employeeRepository;
-		_employeeManager = employeeManager;
-		_roleRepository = roleRepository;
-	}
+			IRepository<ShiftManagement, Guid> shiftRepository,
+			IEmployeeRepository employeeRepository,
+			EmployeeManager employeeManager,
+			IIdentityRoleRepository roleRepository,
+			IdentityUserManager userManager,
+			IIdentityUserRepository userRepository,
+			ILookupNormalizer lookupNormalizer)
+			: base(currentTenant, guidGenerator, unitOfWork)
+		{
+			_leaveTypeRepository = leaveTypeRepository;
+			_leaveTypeManager = leaveTypeManager;
+			_earningComponentRepository = earningComponentRepository;
+			_earningComponentManager = earningComponentManager;
+			_deductionComponentRepository = deductionComponentRepository;
+			_deductionComponentManager = deductionComponentManager;
+			_leavePolicyRepository = leavePolicyRepository;
+			_leavePolicyManager = leavePolicyManager;
+			_leaveTypeQueryRepository = leaveTypeQueryRepository;
+			_educationMediumStageRepository = educationMediumStageRepository;
+			_shiftRepository = shiftRepository;
+			_employeeRepository = employeeRepository;
+			_employeeManager = employeeManager;
+			_roleRepository = roleRepository;
+			_userManager = userManager;
+			_userRepository = userRepository;
+			_lookupNormalizer = lookupNormalizer;
+		}
 
 	public override async Task SeedAsync(DataSeedContext context)
 	{
@@ -593,7 +603,11 @@ public class HRSeederContributor : BaseSeederContributor
 						var role = await _roleRepository.FindByNormalizedNameAsync(emp.RoleName.ToUpperInvariant());
 						if (role == null) continue;
 
+						// Create user first
+						var userId = await CreateUserForEmployeeAsync(emp.FirstName, emp.LastName, emp.Email, emp.Mobile);
+
 						var employee = await _employeeManager.CreateEmployeeAsync(
+							userId: userId,
 							roleId: role.Id,
 							firstName: emp.FirstName,
 							lastName: emp.LastName,
@@ -618,24 +632,24 @@ public class HRSeederContributor : BaseSeederContributor
 							dateOfJoining: emp.DateOfJoining,
 							employeeGroup: EmployeeGroupType.Teaching,
 							qualification: emp.Qualification,
-							identificationMark1: emp.IdentificationMark,
-							city: emp.City,
-							state: emp.State,
-							country: emp.Country,
-							pinCode: emp.PinCode,
-							shiftId: shiftId
-						);
+										identificationMark1: emp.IdentificationMark,
+										city: emp.City,
+										state: emp.State,
+										country: emp.Country,
+										pinCode: emp.PinCode,
+										shiftId: shiftId
+									);
 
 									await _employeeRepository.InsertAsync(employee, autoSave: true);
 								}
 							}
 
 							private async Task SeedNonTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId)
-				{
-					var nonTeachingEmployees = new[]
-					{
-						new
-						{
+							{
+								var nonTeachingEmployees = new[]
+								{
+									new
+									{
 							FirstName = "Ramesh",
 							LastName = "Gupta",
 							MiddleName = (string?)null,
@@ -786,7 +800,11 @@ public class HRSeederContributor : BaseSeederContributor
 						var role = await _roleRepository.FindByNormalizedNameAsync(emp.RoleName.ToUpperInvariant());
 						if (role == null) continue;
 
-							var employee = await _employeeManager.CreateEmployeeAsync(
+						// Create user first
+						var userId = await CreateUserForEmployeeAsync(emp.FirstName, emp.LastName, emp.Email, emp.Mobile);
+
+						var employee = await _employeeManager.CreateEmployeeAsync(
+							userId: userId,
 							roleId: role.Id,
 							firstName: emp.FirstName,
 							lastName: emp.LastName,
@@ -813,13 +831,124 @@ public class HRSeederContributor : BaseSeederContributor
 							qualification: emp.Qualification,
 							identificationMark1: emp.IdentificationMark,
 							city: emp.City,
-							state: emp.State,
-							country: emp.Country,
-							pinCode: emp.PinCode,
-							shiftId: shiftId
-						);
+										state: emp.State,
+										country: emp.Country,
+										pinCode: emp.PinCode,
+										shiftId: shiftId
+									);
 
-										await _employeeRepository.InsertAsync(employee, autoSave: true);
+									await _employeeRepository.InsertAsync(employee, autoSave: true);
 								}
 							}
-						}
+
+							private async Task<Guid> CreateUserForEmployeeAsync(string firstName, string lastName, string email, string mobileNo)
+							{
+								// Validate mobile number
+								if (string.IsNullOrWhiteSpace(mobileNo) || mobileNo.Length < 4)
+								{
+									throw new Exception($"Invalid mobile number for employee {firstName} {lastName}");
+								}
+
+								// Check if email already exists
+								var normalizedEmail = _lookupNormalizer.NormalizeEmail(email);
+								var existingUserByEmail = await _userRepository.FindByNormalizedEmailAsync(normalizedEmail);
+								if (existingUserByEmail != null)
+								{
+									// For seeding, we can skip if user already exists
+									return existingUserByEmail.Id;
+								}
+
+								// Generate unique username
+								var username = await GenerateUniqueUsernameAsync(firstName, lastName);
+
+								// Generate password (username@last4digitsOfMobile)
+								var last4Digits = mobileNo.Substring(mobileNo.Length - 4);
+								var password = $"{username}@{last4Digits}";
+
+								// Create user
+								var user = new IdentityUser(
+									GuidGenerator.Create(),
+									username,
+									email,
+									CurrentTenant.Id
+								);
+
+								user.Name = firstName;
+								user.Surname = lastName;
+								user.SetEmailConfirmed(true);
+								user.SetPhoneNumber(mobileNo, false);
+
+								// Create user with password
+								var userCreateResult = await _userManager.CreateAsync(user, password);
+								if (!userCreateResult.Succeeded)
+								{
+									throw new Exception(
+										"Failed to create user for seeding: " + 
+										string.Join(", ", userCreateResult.Errors.Select(e => e.Description))
+									);
+								}
+
+								// Verify user was created successfully
+								var createdUser = await _userRepository.FindAsync(user.Id);
+								if (createdUser == null)
+								{
+									throw new Exception("User was not created successfully during seeding.");
+								}
+
+								return user.Id;
+							}
+
+								private async Task<string> GenerateUniqueUsernameAsync(string firstName, string lastName)
+								{
+									// Generate base username: firstInitial + lastName (e.g., jdoe)
+									// Sanitize to remove special characters and non-ASCII characters
+									var firstInitial = !string.IsNullOrWhiteSpace(firstName) 
+										? new string(firstName.Where(char.IsLetterOrDigit).ToArray()).ToLower().FirstOrDefault().ToString() 
+										: "x";
+
+									if (string.IsNullOrWhiteSpace(firstInitial))
+									{
+										firstInitial = "x";
+									}
+
+									var lastNamePart = !string.IsNullOrWhiteSpace(lastName) 
+										? new string(lastName.Where(char.IsLetterOrDigit).ToArray()).ToLower()
+										: "user";
+
+									if (string.IsNullOrWhiteSpace(lastNamePart))
+									{
+										lastNamePart = "user";
+									}
+
+									var baseUsername = $"{firstInitial}{lastNamePart}";
+
+									// Check if username exists
+									var normalizedUsername = _lookupNormalizer.NormalizeName(baseUsername);
+									var existingUser = await _userRepository.FindByNormalizedUserNameAsync(normalizedUsername);
+
+									if (existingUser == null)
+									{
+										return baseUsername;
+									}
+
+									// Username exists, append sequence number
+									var sequence = 1;
+									while (true)
+									{
+										var sequencedUsername = $"{baseUsername}{sequence:D2}";
+										normalizedUsername = _lookupNormalizer.NormalizeName(sequencedUsername);
+										existingUser = await _userRepository.FindByNormalizedUserNameAsync(normalizedUsername);
+
+										if (existingUser == null)
+										{
+											return sequencedUsername;
+										}
+
+										sequence++;
+										if (sequence > 99)
+										{
+											throw new Exception("Unable to generate unique username for seeding.");
+										}
+									}
+								}
+							}

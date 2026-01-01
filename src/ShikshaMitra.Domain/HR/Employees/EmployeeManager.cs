@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using Volo.Abp;
 using Volo.Abp.BlobStoring;
@@ -18,7 +19,8 @@ public class EmployeeManager(
 	IIdentityUserRepository userRepository,
 	IIdentityRoleRepository roleRepository,
 	IBlobContainer blobContainer,
-	UserManager<IdentityUser> userManager
+	UserManager<IdentityUser> userManager,
+	ILogger<EmployeeManager> logger
 ) : DomainService
 {
 	// Private helper method to get an employee by ID
@@ -44,6 +46,7 @@ public class EmployeeManager(
 	}
 
 	public async Task<Employee> CreateEmployeeAsync(
+		Guid userId,
 		Guid roleId,
 		string firstName,
 		string lastName,
@@ -76,8 +79,34 @@ public class EmployeeManager(
 		Guid? shiftId = null
 	)
 	{
+		logger.LogDebug(
+			"[EmployeeManager] Creating employee: UserId={UserId}, RoleId={RoleId}, Name={FirstName} {LastName}",
+			userId,
+			roleId,
+			firstName,
+			lastName
+		);
+
+		// Validate that the user exists
+		var user = await userRepository.FindAsync(userId);
+		if (user == null)
+		{
+			logger.LogError(
+				"[EmployeeManager] User validation failed: UserId={UserId} does not exist",
+				userId
+			);
+			throw new BusinessException($"User with ID {userId} does not exist.");
+		}
+
+		logger.LogDebug("[EmployeeManager] User validated: UserId={UserId}", userId);
+
 		// Validate role existence
 		IdentityRole role = await GetRoleAsync(roleId);
+		logger.LogDebug(
+			"[EmployeeManager] Role validated: RoleId={RoleId}, RoleName={RoleName}",
+			roleId,
+			role.Name
+		);
 
 		// Generate employee code
 		var employeeCode = await GenerateEmployeeCodeAsync(
@@ -85,11 +114,17 @@ public class EmployeeManager(
 			role.Name
 		);
 
-		// Create employee entity
+		logger.LogInformation(
+			"[EmployeeManager] Generated employee code: {EmployeeCode} for UserId={UserId}",
+			employeeCode,
+			userId
+		);
+
+		// Create employee entity with the provided userId as the employee ID
 		var employee = new Employee(
-			id: guidGenerator.Create(),
+			id: userId,
 			tenantId: CurrentTenant.Id,
-			userId: null,
+			userId: userId,
 			profilePictureBlobName: null,
 			employeeCode: employeeCode,
 			lastName: lastName,
@@ -170,42 +205,20 @@ public class EmployeeManager(
 				accountNumber: null,
 				ifscCode: null
 			),
-			workExperiences: null,
-			shiftId: shiftId
-		);
+							workExperiences: null,
+							shiftId: shiftId
+						);
 
-		// 1. Create the IdentityUser
-		var user = new IdentityUser(guidGenerator.Create(), email, email, CurrentTenant.Id);
-		user.SetPhoneNumber(mobileNo, false);
-		user.Name = firstName;
-		user.Surname = lastName;
-		var password = "Temp@123"; // Implement a method to generate a random password
-		var userCreateResult = await userManager.CreateAsync(user, password);
+						logger.LogInformation(
+							"[EmployeeManager] Employee entity created: EmployeeId={EmployeeId}, EmployeeCode={EmployeeCode}, UserId={UserId}, RoleId={RoleId}",
+							employee.Id,
+							employee.EmployeeCode,
+							userId,
+							roleId
+						);
 
-		if (!userCreateResult.Succeeded)
-		{
-			// Handle user creation errors (e.g., duplicate email, weak password)
-			throw new UserFriendlyException(
-				"Failed to create user: "
-					+ string.Join(", ", userCreateResult.Errors.Select(e => e.Description))
-			);
-		}
-
-		// 2. Assign the role to the user
-		var roleAddResult = await userManager.AddToRoleAsync(user, role.Name);
-		if (!roleAddResult.Succeeded)
-		{
-			// Handle role assignment errors
-			await userManager.DeleteAsync(user); // Rollback user creation
-			throw new UserFriendlyException(
-				"Failed to add user to role: "
-					+ string.Join(", ", roleAddResult.Errors.Select(e => e.Description))
-			);
-		}
-
-		employee.UpdateUserId(user.Id);
-		return employee;
-	}
+						return employee;
+					}
 
 	public async Task<Employee> UpdateEmployeeAsync(
 		Guid employeeId,

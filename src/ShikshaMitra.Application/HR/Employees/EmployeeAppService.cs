@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
@@ -13,23 +14,28 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Guids;
+using Volo.Abp.Identity;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Employees;
 
 public class EmployeeAppService(
-IEmployeeRepository employeeRepository,
-IEmployeeAdditionalDetailsRepository additionalDetailsRepository,
-EmployeeManager employeeManager,
-PayrollStructureManager payrollStructureManager,
-IBlobContainer blobContainer,
-IEmployeeCacheManager employeeCacheManager,
-IEmployeePayrollDetailsRepository payrollDetailsRepository,
-IEmployeePayrollComponentRepository payrollComponentRepository,
-IGuidGenerator guidGenerator,
-ILogger<EmployeeAppService> logger) :
-CrudAppService<Employee, EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>(
-employeeRepository),
-IEmployeeAppService
+	IEmployeeRepository employeeRepository,
+	IEmployeeAdditionalDetailsRepository additionalDetailsRepository,
+	EmployeeManager employeeManager,
+	PayrollStructureManager payrollStructureManager,
+	IBlobContainer blobContainer,
+	IEmployeeCacheManager employeeCacheManager,
+	IEmployeePayrollDetailsRepository payrollDetailsRepository,
+	IEmployeePayrollComponentRepository payrollComponentRepository,
+	IGuidGenerator guidGenerator,
+	ILogger<EmployeeAppService> logger,
+	IdentityUserManager userManager,
+	IIdentityUserRepository userRepository,
+	ILookupNormalizer lookupNormalizer) :
+	CrudAppService<Employee, EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>(
+	employeeRepository),
+	IEmployeeAppService
 {
 	public async Task<EmployeeDto> GetEmployeeByUserId(Guid userId)
 	{
@@ -51,45 +57,271 @@ IEmployeeAppService
 
 	public async Task<EmployeeDto> CreateBasicInfoAsync(CreateEmployeeBasicInfoDto input)
 	{
-		// Use EmployeeManager to create the employee with domain logic
-		Employee employee = await employeeManager.CreateEmployeeAsync(
-			roleId: input.RoleId,
-			firstName: input.FirstName,
-			lastName: input.LastName,
-			middleName: input.MiddleName,
-			shortName: input.ShortName,
-			employeeStatusType: input.EmployeeStatusType,
-			dateOfBirth: input.DateOfBirth,
-			familyCast: input.FamilyCast,
-			castType: input.CastType,
-			genderType: input.GenderType,
-			religion: input.Religion,
-			maritalStatus: input.MaritalStatus,
-			bloodGroup: input.BloodGroup,
-			mobileNo: input.MobileNo,
-			secondaryMobileNo: input.SecondaryMobileNo,
-			email: input.Email,
-			address1: input.Address1,
-			address2: input.Address2,
-			address3: input.Address3,
-			department: input.Department,
-			designation: input.Designation,
-			dateOfJoining: input.DateOfJoining,
-			employeeGroup: input.EmployeeGroup,
-			qualification: input.Qualification,
-			identificationMark1: input.IdentificationMark1,
-			city: input.City,
-			state: input.State,
-			country: input.Country,
-			pinCode: input.PinCode,
-			shiftId: input.ShiftId
+		logger.LogInformation(
+			"Starting employee creation process for: {Email}, Name: {FirstName} {LastName}, Role: {RoleId}",
+			input.Email,
+			input.FirstName,
+			input.LastName,
+			input.RoleId
 		);
 
-		// Save the employee
-		employee = await employeeRepository.InsertAsync(employee);
+		// Validate required fields for user creation
+		if (string.IsNullOrWhiteSpace(input.Email))
+		{
+			logger.LogWarning("Employee creation failed: Email is required");
+			throw new UserFriendlyException("Email is required for employee creation.");
+		}
 
-		// Return the DTO
-		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
+		if (string.IsNullOrWhiteSpace(input.MobileNo))
+		{
+			logger.LogWarning("Employee creation failed: Mobile number is required for email: {Email}", input.Email);
+			throw new UserFriendlyException("Mobile number is required for employee creation.");
+		}
+
+		// Validate mobile number length
+		if (input.MobileNo.Length < 4)
+		{
+			logger.LogWarning(
+				"Employee creation failed: Invalid mobile number length ({Length}) for email: {Email}",
+				input.MobileNo.Length,
+				input.Email
+			);
+			throw new UserFriendlyException("Mobile number must be at least 4 digits.");
+		}
+
+		// Check if email already exists
+		var normalizedEmail = lookupNormalizer.NormalizeEmail(input.Email);
+		var existingUserByEmail = await userRepository.FindByNormalizedEmailAsync(normalizedEmail);
+		if (existingUserByEmail != null)
+		{
+			logger.LogWarning(
+				"Employee creation failed: Email '{Email}' is already in use by user {UserId}",
+				input.Email,
+				existingUserByEmail.Id
+			);
+			throw new UserFriendlyException($"Email '{input.Email}' is already in use.");
+		}
+
+		// Use explicit transaction to ensure atomicity
+		using (var uow = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true }))
+		{
+			try
+			{
+				// Step 1: Generate unique username
+				var username = await GenerateUniqueUsernameAsync(input.FirstName, input.LastName);
+				logger.LogInformation(
+					"Generated username '{Username}' for email: {Email}",
+					username,
+					input.Email
+				);
+
+				// Step 2: Generate password (username@last4digitsOfMobile)
+				var last4Digits = input.MobileNo.Substring(input.MobileNo.Length - 4);
+				var password = $"{username}@{last4Digits}";
+
+				// Step 3: Create user
+				var userId = guidGenerator.Create();
+				var user = new IdentityUser(
+					userId,
+					username,
+					input.Email,
+					CurrentTenant.Id
+				);
+
+				user.Name = input.FirstName;
+				user.Surname = input.LastName;
+				user.SetEmailConfirmed(true);
+				user.SetPhoneNumber(input.MobileNo, false);
+
+				logger.LogInformation(
+					"Attempting to create user: UserId={UserId}, Username={Username}, Email={Email}, TenantId={TenantId}",
+					userId,
+					username,
+					input.Email,
+					CurrentTenant.Id
+				);
+
+				// Create user with password
+				var userCreateResult = await userManager.CreateAsync(user, password);
+				if (!userCreateResult.Succeeded)
+				{
+					var errors = string.Join(", ", userCreateResult.Errors.Select(e => e.Description));
+					logger.LogError(
+						"User creation failed for email: {Email}, Username: {Username}. Errors: {Errors}",
+						input.Email,
+						username,
+						errors
+					);
+					throw new UserFriendlyException("Failed to create user: " + errors);
+				}
+
+				logger.LogInformation(
+					"User created successfully: UserId={UserId}, Username={Username}, Email={Email}",
+					userId,
+					username,
+					input.Email
+				);
+
+				// Verify user was created successfully
+				var createdUser = await userRepository.FindAsync(user.Id);
+				if (createdUser == null)
+				{
+					logger.LogError(
+						"User verification failed: User with ID {UserId} was not found after creation",
+						userId
+					);
+					throw new BusinessException("User was not created successfully.");
+				}
+
+				logger.LogInformation(
+					"User verified successfully: UserId={UserId}",
+					userId
+				);
+
+				// Step 4: Create employee with the user's ID
+				logger.LogInformation(
+					"Creating employee record: UserId={UserId}, RoleId={RoleId}, Department={Department}, Designation={Designation}",
+					user.Id,
+					input.RoleId,
+					input.Department,
+					input.Designation
+				);
+
+				Employee employee = await employeeManager.CreateEmployeeAsync(
+					userId: user.Id,
+					roleId: input.RoleId,
+					firstName: input.FirstName,
+					lastName: input.LastName,
+					middleName: input.MiddleName,
+					shortName: input.ShortName,
+					employeeStatusType: input.EmployeeStatusType,
+					dateOfBirth: input.DateOfBirth,
+					familyCast: input.FamilyCast,
+					castType: input.CastType,
+					genderType: input.GenderType,
+					religion: input.Religion,
+					maritalStatus: input.MaritalStatus,
+					bloodGroup: input.BloodGroup,
+					mobileNo: input.MobileNo,
+					secondaryMobileNo: input.SecondaryMobileNo,
+					email: input.Email,
+					address1: input.Address1,
+					address2: input.Address2,
+					address3: input.Address3,
+					department: input.Department,
+					designation: input.Designation,
+					dateOfJoining: input.DateOfJoining,
+					employeeGroup: input.EmployeeGroup,
+					qualification: input.Qualification,
+					identificationMark1: input.IdentificationMark1,
+					city: input.City,
+					state: input.State,
+					country: input.Country,
+					pinCode: input.PinCode,
+					shiftId: input.ShiftId
+				);
+
+				// Save the employee
+				employee = await employeeRepository.InsertAsync(employee);
+
+				logger.LogInformation(
+					"Employee record created successfully: EmployeeId={EmployeeId}, EmployeeCode={EmployeeCode}, UserId={UserId}",
+					employee.Id,
+					employee.EmployeeCode,
+					user.Id
+				);
+
+				// Commit transaction
+				await uow.CompleteAsync();
+
+				logger.LogInformation(
+					"Transaction completed successfully for employee creation: EmployeeId={EmployeeId}, EmployeeCode={EmployeeCode}, Email={Email}",
+					employee.Id,
+					employee.EmployeeCode,
+					input.Email
+				);
+
+				// Return the DTO
+				return ObjectMapper.Map<Employee, EmployeeDto>(employee);
+			}
+			catch (UserFriendlyException ex)
+			{
+				logger.LogWarning(
+					ex,
+					"Employee creation validation failed for email: {Email}. Message: {Message}",
+					input.Email,
+					ex.Message
+				);
+				// Transaction will be automatically rolled back
+				throw;
+			}
+			catch (Exception ex)
+			{
+				logger.LogError(
+					ex,
+					"Unexpected error during employee creation for email: {Email}, Name: {FirstName} {LastName}",
+					input.Email,
+					input.FirstName,
+					input.LastName
+				);
+				// Transaction will be automatically rolled back
+				throw;
+			}
+		}
+	}
+
+	private async Task<string> GenerateUniqueUsernameAsync(string firstName, string lastName)
+	{
+		// Generate base username: firstInitial + lastName (e.g., jdoe)
+		// Sanitize to remove special characters and non-ASCII characters
+		var firstInitial = !string.IsNullOrWhiteSpace(firstName) 
+			? new string(firstName.Where(char.IsLetterOrDigit).ToArray()).ToLower().FirstOrDefault().ToString() 
+			: "x";
+
+		if (string.IsNullOrWhiteSpace(firstInitial))
+		{
+			firstInitial = "x";
+		}
+
+		var lastNamePart = !string.IsNullOrWhiteSpace(lastName) 
+			? new string(lastName.Where(char.IsLetterOrDigit).ToArray()).ToLower()
+			: "user";
+
+		if (string.IsNullOrWhiteSpace(lastNamePart))
+		{
+			lastNamePart = "user";
+		}
+
+		var baseUsername = $"{firstInitial}{lastNamePart}";
+
+		// Check if username exists
+		var normalizedUsername = lookupNormalizer.NormalizeName(baseUsername);
+		var existingUser = await userRepository.FindByNormalizedUserNameAsync(normalizedUsername);
+
+		if (existingUser == null)
+		{
+			return baseUsername;
+		}
+
+		// Username exists, append sequence number
+		var sequence = 1;
+		while (true)
+		{
+			var sequencedUsername = $"{baseUsername}{sequence:D2}";
+			normalizedUsername = lookupNormalizer.NormalizeName(sequencedUsername);
+			existingUser = await userRepository.FindByNormalizedUserNameAsync(normalizedUsername);
+
+			if (existingUser == null)
+			{
+				return sequencedUsername;
+			}
+
+			sequence++;
+			if (sequence > 99)
+			{
+				throw new UserFriendlyException("Unable to generate unique username.");
+			}
+		}
 	}
 
 	public async Task<EmployeeDto> UpdateBasicInfoAsync(Guid employeeId, UpdateEmployeeBasicInfoDto input)

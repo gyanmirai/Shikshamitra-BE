@@ -1,16 +1,14 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ShikshaMitra.HR.AttendanceAndLeaves.EmployeeAttendanceContract;
-
-#region Enums
+namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 /// <summary>
-/// Attendance status for employee attendance (matches OpenAPI contract)
+/// Attendance status enumeration.
 /// </summary>
 public enum AttendanceStatus
 {
@@ -21,12 +19,8 @@ public enum AttendanceStatus
 	Pending
 }
 
-#endregion
-
-#region GET /attendance/employees Response DTOs
-
 /// <summary>
-/// Response for GET /attendance/employees
+/// Paginated response for employee attendance records.
 /// </summary>
 public class PaginatedAttendanceResponse
 {
@@ -35,11 +29,11 @@ public class PaginatedAttendanceResponse
 	public int PageSize { get; set; }
 	public int TotalRecords { get; set; }
 	public int TotalPages { get; set; }
-	public List<AttendanceItem> Items { get; set; } = new();
+	public List<AttendanceItem> Items { get; set; } = [];
 }
 
 /// <summary>
-/// Individual attendance item
+/// Individual attendance item in a paginated response.
 /// </summary>
 public class AttendanceItem
 {
@@ -51,19 +45,15 @@ public class AttendanceItem
 	public DateTimeOffset? OutTime { get; set; }
 	
 	/// <summary>
-	/// Hours worked formatted as "HHh MMm" (e.g., "08h 30m")
+	/// Hours worked formatted as "HHh MMm" (e.g., "08h 30m").
 	/// </summary>
 	public string? HoursWorked { get; set; }
 	
 	public AttendanceStatus Status { get; set; }
 }
 
-#endregion
-
-#region PUT /attendance/employees Request DTO
-
 /// <summary>
-/// Request for PUT /attendance/employees
+/// Request DTO for updating employee attendance.
 /// </summary>
 public class UpdateAttendanceRequest
 {
@@ -74,41 +64,37 @@ public class UpdateAttendanceRequest
 	public DateTimeOffset Date { get; set; }
 
 	/// <summary>
-	/// In time is required for attendance
+	/// Clock-in time (required).
 	/// </summary>
 	[Required]
 	public DateTimeOffset InTime { get; set; }
 
 	/// <summary>
-	/// Out time is optional - employee may still be working
+	/// Clock-out time (optional - employee may still be working).
 	/// </summary>
 	public DateTimeOffset? OutTime { get; set; }
 }
 
 /// <summary>
-/// Success message response
+/// Generic success message response.
 /// </summary>
-public class SuccessMessage
+public class AttendanceSuccessResponse
 {
-	public string Message { get; set; } = "Attendance updated successfully";
+	public string Message { get; set; } = "Operation completed successfully";
 }
 
-#endregion
-
-#region POST /attendance/import Response DTOs
-
 /// <summary>
-/// Enhanced response for POST /attendance/import with detailed error tracking
+/// Response for attendance import operations.
 /// </summary>
 public class AttendanceImportResponse
 {
 	public DateTimeOffset Date { get; set; }
 	public ImportSummary Summary { get; set; } = new();
-	public List<ImportRowResult> Results { get; set; } = new();
+	public List<ImportRowResult> Results { get; set; } = [];
 }
 
 /// <summary>
-/// Summary statistics for the import operation
+/// Summary statistics for an import operation.
 /// </summary>
 public class ImportSummary
 {
@@ -121,7 +107,7 @@ public class ImportSummary
 }
 
 /// <summary>
-/// Result for each row in the import file
+/// Result for each row in an import file.
 /// </summary>
 public class ImportRowResult
 {
@@ -129,11 +115,11 @@ public class ImportRowResult
 	public bool IsSuccess { get; set; }
 	public string? EmployeeCode { get; set; }
 	public string? EmployeeName { get; set; }
-	public List<ValidationMessage> Messages { get; set; } = new();
+	public List<ValidationMessage> Messages { get; set; } = [];
 }
 
 /// <summary>
-/// Individual validation message with context
+/// Validation message with context for import operations.
 /// </summary>
 public class ValidationMessage
 {
@@ -146,34 +132,20 @@ public class ValidationMessage
 }
 
 /// <summary>
-/// Severity level for validation messages
+/// Severity level for validation messages.
 /// </summary>
 public enum ValidationSeverity
 {
-	/// <summary>Error - prevents row from being imported</summary>
+	/// <summary>Error - prevents row from being imported.</summary>
 	Error,
-	/// <summary>Warning - row is imported but with concerns</summary>
+	/// <summary>Warning - row is imported but with concerns.</summary>
 	Warning,
-	/// <summary>Info - informational message</summary>
+	/// <summary>Info - informational message.</summary>
 	Info
 }
 
 /// <summary>
-/// Legacy error format for backward compatibility
-/// </summary>
-[Obsolete("Use ImportRowResult with ValidationMessage instead")]
-public class ImportError
-{
-	public int RowNumber { get; set; }
-	public string Reason { get; set; } = string.Empty;
-}
-
-#endregion
-
-#region Input DTOs
-
-/// <summary>
-/// Input for getting paginated attendance by date
+/// Input for getting paginated attendance by date.
 /// </summary>
 public class GetPaginatedAttendanceInput
 {
@@ -181,40 +153,15 @@ public class GetPaginatedAttendanceInput
 	public DateTimeOffset Date { get; set; }
 	
 	/// <summary>
-	/// 0-based page index
+	/// Page index (0-based).
 	/// </summary>
 	[Range(0, int.MaxValue)]
 	public int Page { get; set; } = 0;
 	
+	/// <summary>
+	/// Number of records per page.
+	/// </summary>
 	[Range(10, 100)]
 	public int PageSize { get; set; } = 20;
 }
-
-/// <summary>
-/// Input for importing attendance from Excel
-/// </summary>
-public class ImportAttendanceInput
-{
-	[Required]
-	public DateTimeOffset Date { get; set; }
-	
-	// Note: The IFormFile is passed separately in the controller due to ABP limitations
-}
-
-#endregion
-
-#region Extended App Service Interface
-
-public interface IEmployeeAttendanceContractAppService
-{
-	Task<PaginatedAttendanceResponse> GetPaginatedByDateAsync(GetPaginatedAttendanceInput input);
-	Task<SuccessMessage> UpdateAttendanceAsync(UpdateAttendanceRequest input);
-	Task<AttendanceImportResponse> ImportAttendanceAsync(
-		DateTimeOffset date, 
-		Stream fileStream, 
-		string fileName,
-		CancellationToken cancellationToken = default);
-}
-
-#endregion
 

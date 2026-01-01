@@ -26,21 +26,17 @@ public class ShikshaMitraApplicationModule : AbpModule
 {
     public override void ConfigureServices(ServiceConfigurationContext context)
     {
-        Configure<AbpAutoMapperOptions>(options =>
-        {
-            options.AddMaps<ShikshaMitraApplicationModule>();
-        });
+                                Configure<AbpAutoMapperOptions>(options =>
+                                {
+                                    options.AddMaps<ShikshaMitraApplicationModule>();
+                                });
 
-                // Configure permission management with admin bypass
-                Configure<AbpPermissionOptions>(options =>
-                {
-                    // Add AdminPermissionValueProvider as the first provider
-                    // This ensures admin users bypass all permission checks
-                    options.ValueProviders.Insert(0, typeof(AdminPermissionValueProvider));
-                });
-
-                // Register attendance import services
-                context.Services.AddTransient<HR.AttendanceAndLeaves.Import.AttendanceFileParser>();
-                context.Services.AddTransient<HR.AttendanceAndLeaves.Import.AttendanceImportValidator>();
-            }
-        }
+                                // Configure permission management with admin bypass
+                                Configure<AbpPermissionOptions>(options =>
+                                {
+                                    // Add AdminPermissionValueProvider as the first provider
+                                    // This ensures admin users bypass all permission checks
+                                    options.ValueProviders.Insert(0, typeof(AdminPermissionValueProvider));
+                                });
+                            }
+                        }

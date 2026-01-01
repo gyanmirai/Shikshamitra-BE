@@ -1,42 +1,53 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.HR.AttendanceAndLeaves.EmployeeAttendanceContract;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.Models;
+using System;
 using System.ComponentModel.DataAnnotations;
+using System.Threading;
+using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.HR.AttendanceAndLeaves;
 
 /// <summary>
-/// API Controller for employee attendance management
+/// API Controller for employee attendance management.
+/// Provides endpoints for viewing, updating, and importing employee attendance records.
 /// </summary>
+[RemoteService(IsEnabled = true, IsMetadataEnabled = true)]
 [Area("app")]
-[RemoteService(Name = "Default")]
-[Route("attendance")]
+[Route("api/app/attendance")]
 [Authorize]
 public class EmployeeAttendanceController : AbpControllerBase
 {
-	private readonly IEmployeeAttendanceContractAppService _attendanceAppService;
+	private readonly IEmployeeAttendanceAppService _attendanceService;
 
-	public EmployeeAttendanceController(IEmployeeAttendanceContractAppService attendanceAppService)
+	/// <summary>
+	/// Initializes a new instance of the <see cref="EmployeeAttendanceController"/> class.
+	/// </summary>
+	/// <param name="attendanceService">The attendance application service.</param>
+	public EmployeeAttendanceController(IEmployeeAttendanceAppService attendanceService)
 	{
-		_attendanceAppService = attendanceAppService;
+		_attendanceService = attendanceService;
 	}
 
 	/// <summary>
-	/// Get paginated employee attendance by date
+	/// Gets paginated employee attendance records for a specific date.
 	/// </summary>
-	/// <param name="date">Attendance date (ISO date-time)</param>
-	/// <param name="page">Page index (0-based)</param>
-	/// <param name="pageSize">Records per page (10-100)</param>
-	/// <returns>Paginated attendance list</returns>
+	/// <param name="date">The attendance date (ISO 8601 format).</param>
+	/// <param name="page">Page index (0-based). Default: 0.</param>
+	/// <param name="pageSize">Number of records per page (10-100). Default: 20.</param>
+	/// <returns>A paginated list of attendance records.</returns>
+	/// <response code="200">Returns the paginated attendance list.</response>
+	/// <response code="401">If the user is not authenticated.</response>
+	/// <response code="403">If the user lacks permission.</response>
 	[HttpGet("employees")]
 	[ProducesResponseType(typeof(PaginatedAttendanceResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status401Unauthorized)]
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]
-	public virtual async Task<ActionResult<PaginatedAttendanceResponse>> GetByDateAsync(
+	public async Task<ActionResult<PaginatedAttendanceResponse>> GetByDateAsync(
 		[FromQuery, Required] DateTimeOffset date,
 		[FromQuery, Range(0, int.MaxValue)] int page = 0,
 		[FromQuery, Range(10, 100)] int pageSize = 20)
@@ -48,75 +59,76 @@ public class EmployeeAttendanceController : AbpControllerBase
 			PageSize = pageSize
 		};
 
-		var result = await _attendanceAppService.GetPaginatedByDateAsync(input);
+		var result = await _attendanceService.GetPaginatedByDateAsync(input);
 		return Ok(result);
 	}
 
 	/// <summary>
-	/// Update employee attendance
+	/// Updates or creates an employee attendance record.
+	/// Uses upsert logic based on (EmployeeId, Date).
 	/// </summary>
-	/// <param name="request">Update attendance request</param>
-	/// <returns>Success message</returns>
+	/// <param name="request">The attendance update request.</param>
+	/// <returns>A success message.</returns>
+	/// <response code="200">If the attendance was updated successfully.</response>
+	/// <response code="400">If the request is invalid.</response>
+	/// <response code="401">If the user is not authenticated.</response>
+	/// <response code="403">If the user lacks permission.</response>
+	/// <response code="404">If the employee is not found.</response>
 	[HttpPut("employees")]
-	[ProducesResponseType(typeof(SuccessMessage), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(AttendanceSuccessResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(StatusCodes.Status401Unauthorized)]
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]
-	public virtual async Task<ActionResult<SuccessMessage>> UpdateAsync(
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<ActionResult<AttendanceSuccessResponse>> UpdateAsync(
 		[FromBody, Required] UpdateAttendanceRequest request)
 	{
-		var result = await _attendanceAppService.UpdateAttendanceAsync(request);
+		var result = await _attendanceService.UpdateAttendanceAsync(request);
 		return Ok(result);
-		}
-
-		/// <summary>
-		/// Import employee attendance via Excel or CSV file with comprehensive validation
-		/// </summary>
-		/// <remarks>
-		/// **Expected File Format:**
-		/// 
-		/// | Employee Name | Hours Worked | Time In | Time Out | status | Employee Code | Contact No |
-		/// |--------------|--------------|---------|----------|--------|---------------|------------|
-		/// | John Doe     | 8.5         | 09:00 AM | 05:30 PM | Present | EMP001       | 9876543210 |
-		/// 
-		/// **Supported Formats:**
-		/// - Excel (.xlsx)
-		/// - CSV (.csv)
-		/// 
-		/// **Features:**
-		/// - ✅ Partial success - failed rows don't prevent others from importing
-		/// - ✅ User-friendly error messages with suggestions
-		/// - ✅ Automatic employee lookup by code
-		/// - ✅ Cross-validation of employee name and contact
-		/// - ✅ Time format validation with multiple supported formats
-		/// - ✅ Duplicate detection within file
-		/// - ✅ Hours worked consistency check
-		/// - ✅ Status auto-determination from times
-		/// 
-		/// **Time Format Examples:**
-		/// - "09:00 AM" or "09:00"
-		/// - "2024-01-15 09:00"
-		/// - "09:00:00"
-		/// 
-		/// **Status Values:**
-		/// - Present, HalfDay, Absent, Leave (case-insensitive)
-		/// </remarks>
-		/// <param name="file">Excel (.xlsx) or CSV (.csv) attendance file</param>
-		/// <param name="date">Attendance date</param>
-		/// <returns>Detailed import result with per-row success/failure information</returns>
-		[HttpPost("import")]
-		[ProducesResponseType(typeof(AttendanceImportResponse), StatusCodes.Status200OK)]
-		[ProducesResponseType(StatusCodes.Status400BadRequest)]
-		[ProducesResponseType(StatusCodes.Status401Unauthorized)]
-		[ProducesResponseType(StatusCodes.Status403Forbidden)]
-		public virtual async Task<ActionResult<AttendanceImportResponse>> ImportAsync(
-			[FromForm, Required] EmployeeAttendanceImportRequest file,
-			CancellationToken cancellationToken)
-		{
-			using var stream = file.File.OpenReadStream();
-			var result = await _attendanceAppService.ImportAttendanceAsync(
-				file.Date, stream, file.File.FileName, cancellationToken);
-			return Ok(result);
-		}
 	}
 
+	/// <summary>
+	/// Imports employee attendance records from an Excel or CSV file.
+	/// </summary>
+	/// <remarks>
+	/// **Expected File Format:**
+	/// 
+	/// | Employee Name | Hours Worked | Time In | Time Out | status | Employee Code | Contact No |
+	/// |--------------|--------------|---------|----------|--------|---------------|------------|
+	/// | John Doe     | 8.5          | 09:00   | 17:30    | Present | EMP001       | 9876543210 |
+	/// 
+	/// **Supported Formats:** Excel (.xlsx), CSV (.csv)
+	/// 
+	/// **Features:**
+	/// - Partial success: failed rows don't prevent others from importing
+	/// - Automatic employee lookup by code
+	/// - Time format validation with multiple supported formats
+	/// - Duplicate detection within file
+	/// </remarks>
+	/// <param name="request">The import request containing the file and date.</param>
+	/// <param name="cancellationToken">Cancellation token.</param>
+	/// <returns>Detailed import result with per-row success/failure information.</returns>
+	/// <response code="200">Returns the import result with detailed per-row status.</response>
+	/// <response code="400">If the file format is invalid or no data rows found.</response>
+	/// <response code="401">If the user is not authenticated.</response>
+	/// <response code="403">If the user lacks permission.</response>
+	[HttpPost("import")]
+	[ProducesResponseType(typeof(AttendanceImportResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	[Consumes("multipart/form-data")]
+	public async Task<ActionResult<AttendanceImportResponse>> ImportAsync(
+		[FromForm, Required] EmployeeAttendanceImportRequest request,
+		CancellationToken cancellationToken = default)
+	{
+		using var stream = request.File.OpenReadStream();
+		var result = await _attendanceService.ImportAttendanceAsync(
+			request.Date,
+			stream,
+			request.File.FileName,
+			cancellationToken);
+
+		return Ok(result);
+	}
+}

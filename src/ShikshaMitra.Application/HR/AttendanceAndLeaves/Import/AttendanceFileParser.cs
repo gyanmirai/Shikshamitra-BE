@@ -11,13 +11,14 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp;
+using Volo.Abp.DependencyInjection;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Import;
 
 /// <summary>
 /// Service for parsing attendance import files (Excel and CSV)
 /// </summary>
-public class AttendanceFileParser
+public class AttendanceFileParser : ITransientDependency
 {
 	private readonly ILogger<AttendanceFileParser> _logger;
 	private const long MaxFileSizeBytes = 10 * 1024 * 1024; // 10 MB

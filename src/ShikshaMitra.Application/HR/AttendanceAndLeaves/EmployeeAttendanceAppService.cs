@@ -1,30 +1,26 @@
-﻿using ClosedXML.Excel;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using ShikshaMitra.HR.AttendanceAndLeaves.EmployeeAttendanceContract;
+﻿using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Threading;
-using Volo.Abp.Auditing;
-using Volo.Abp.Uow;
+using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
-using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Auditing;
 using Volo.Abp.Guids;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 /// <summary>
-/// Employee Attendance Application Service
+/// Employee Attendance Application Service.
+/// Provides operations for viewing, updating, and importing attendance records.
 /// </summary>
-public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, EmployeeAttendanceDto, Guid, PagedAndSortedResultRequestDto,
-	CreateUpdateEmployeeAttendanceDto>, IEmployeeAttendanceAppService, IEmployeeAttendanceContractAppService
+public class EmployeeAttendanceAppService : ApplicationService, IEmployeeAttendanceAppService
 {
 	private readonly IEmployeeAttendanceRepository _employeeAttendanceRepository;
 	private readonly IEmployeeRepository _employeeRepository;
@@ -42,7 +38,6 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 		IGuidGenerator guidGenerator,
 		Import.AttendanceFileParser fileParser,
 		Import.AttendanceImportValidator validator)
-		: base(employeeAttendanceRepository)
 	{
 		_employeeAttendanceRepository = employeeAttendanceRepository;
 		_employeeRepository = employeeRepository;
@@ -118,10 +113,10 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 		return summary;
 	}
 
-	#region Contract Methods (IEmployeeAttendanceContractAppService)
+	#region API Methods
 
 	/// <summary>
-	/// Get paginated employee attendance by date (GET /attendance/employees)
+	/// Gets paginated attendance records for a specific date.
 	/// </summary>
 	public async Task<PaginatedAttendanceResponse> GetPaginatedByDateAsync(GetPaginatedAttendanceInput input)
 	{
@@ -182,10 +177,10 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 	}
 
 	/// <summary>
-	/// Update employee attendance (PUT /attendance/employees)
-	/// Upserts by (EmployeeId, AttendanceDate)
+	/// Updates or creates an attendance record for an employee.
+	/// Uses upsert logic based on (EmployeeId, Date).
 	/// </summary>
-	public async Task<SuccessMessage> UpdateAttendanceAsync(UpdateAttendanceRequest input)
+	public async Task<AttendanceSuccessResponse> UpdateAttendanceAsync(UpdateAttendanceRequest input)
 	{
 		// Validate employee exists
 		var employee = await _employeeRepository.FindAsync(input.EmployeeId);
@@ -243,7 +238,7 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 			await _employeeAttendanceRepository.InsertAsync(newAttendance);
 		}
 
-		return new SuccessMessage { Message = "Attendance updated successfully" };
+		return new AttendanceSuccessResponse { Message = "Attendance updated successfully" };
 	}
 
 	/// <summary>

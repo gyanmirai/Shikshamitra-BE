@@ -1,17 +1,18 @@
-﻿using ShikshaMitra.HR.AttendanceAndLeaves.EmployeeAttendanceContract;
+﻿using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Volo.Abp.DependencyInjection;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Import;
 
 /// <summary>
 /// Validator for attendance import operations with comprehensive validation rules
 /// </summary>
-public class AttendanceImportValidator
+public class AttendanceImportValidator : ITransientDependency
 {
 	private const int MaxWorkingHoursPerDay = 24;
 	private const int MinWorkingHoursForPresent = 4;

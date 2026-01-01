@@ -2,8 +2,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.HR.Employees;
-using ShikshaMitra.HR.Payroll.PayrollStructures;
-using ShikshaMitra.TenantSettings;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 using Volo.Abp.Identity;
 
@@ -60,12 +58,6 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 			.OnDelete(DeleteBehavior.Restrict)
 			.IsRequired();
 
-		builder.HasOne(e => e.EducationMediumStage)
-			.WithMany()
-			.HasForeignKey(e => e.EducationMediumStageId)
-			.OnDelete(DeleteBehavior.Restrict)
-			.IsRequired();
-
 		builder.HasOne(e => e.PayrollStructure)
 			.WithMany()
 			.HasForeignKey(e => e.PayrollStructureId)
@@ -119,9 +111,6 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 		builder.HasIndex(e => e.RoleId)
 			.HasDatabaseName("IX_Employees_RoleId");
 
-		builder.HasIndex(e => e.EducationMediumStageId)
-			.HasDatabaseName("IX_Employees_EducationMediumStageId");
-
 		builder.HasIndex(e => new { e.TenantId, e.EmployeeStatusType })
 			.HasDatabaseName("IX_Employees_TenantId_Status");
 
@@ -131,7 +120,6 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 		// Configure eager loading strategy for navigation properties
 		// AutoInclude ensures these are always loaded to prevent N+1 queries
 		builder.Navigation(e => e.Role).AutoInclude();
-		builder.Navigation(e => e.EducationMediumStage).AutoInclude();
 		builder.Navigation(e => e.Shift).AutoInclude();
 		// Note: PayrollStructure is optional and might be large, so we don't auto-include it
 		// It can be included explicitly when needed using .Include() in queries

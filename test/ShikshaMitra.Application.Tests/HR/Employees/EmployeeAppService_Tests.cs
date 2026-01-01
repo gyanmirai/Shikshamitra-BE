@@ -41,8 +41,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             GenderType = GenderType.Male,
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
             EmployeeStatusType = EmployeeStatusType.Active,
-            RoleId = Guid.NewGuid(),
-            EducationMediumStageId = Guid.NewGuid()
+            RoleId = Guid.NewGuid()
         };
 
         // Act
@@ -84,8 +83,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             MobileNo = "9876543210",
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
-            RoleId = Guid.NewGuid(),
-            EducationMediumStageId = Guid.NewGuid()
+            RoleId = Guid.NewGuid()
         };
 
         // Act & Assert
@@ -106,8 +104,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             MobileNo = "123", // Invalid mobile number
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
-            RoleId = Guid.NewGuid(),
-            EducationMediumStageId = Guid.NewGuid()
+            RoleId = Guid.NewGuid()
         };
 
         // Act & Assert
@@ -129,8 +126,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             Email = "invalid-email", // Invalid email format
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
-            RoleId = Guid.NewGuid(),
-            EducationMediumStageId = Guid.NewGuid()
+            RoleId = Guid.NewGuid()
         };
 
         // Act & Assert
@@ -217,8 +213,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1991, 6, 20)),
             GenderType = GenderType.Female,
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 6, 1)),
-            RoleId = Guid.NewGuid(),
-            EducationMediumStageId = Guid.NewGuid()
+            RoleId = Guid.NewGuid()
         };
 
         // Act
@@ -591,8 +586,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             MobileNo = "9876543210",
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
-            RoleId = Guid.NewGuid(),
-            EducationMediumStageId = Guid.NewGuid()
+            RoleId = Guid.NewGuid()
         };
 
         // Act & Assert - Should either succeed or throw validation error
@@ -621,8 +615,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             Email = null, // Optional
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
-            RoleId = Guid.NewGuid(),
-            EducationMediumStageId = Guid.NewGuid()
+            RoleId = Guid.NewGuid()
         };
 
         // Act
@@ -646,8 +639,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             MobileNo = "9876543210",
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
-            RoleId = Guid.NewGuid(),
-            EducationMediumStageId = Guid.NewGuid()
+            RoleId = Guid.NewGuid()
         };
 
         // Act
@@ -676,8 +668,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             GenderType = GenderType.Male,
             DateOfJoining = DateOnly.FromDateTime(DateTime.Now.Date),
             EmployeeStatusType = EmployeeStatusType.Active,
-            RoleId = Guid.NewGuid(),
-            EducationMediumStageId = Guid.NewGuid()
+            RoleId = Guid.NewGuid()
         };
 
         return await _employeeAppService.CreateBasicInfoAsync(input);

@@ -595,7 +595,6 @@ public class HRSeederContributor : BaseSeederContributor
 
 						var employee = await _employeeManager.CreateEmployeeAsync(
 							roleId: role.Id,
-							educationMediumStageId: educationMediumStageId,
 							firstName: emp.FirstName,
 							lastName: emp.LastName,
 							middleName: emp.MiddleName,
@@ -622,10 +621,10 @@ public class HRSeederContributor : BaseSeederContributor
 							identificationMark1: emp.IdentificationMark,
 							city: emp.City,
 							state: emp.State,
-										country: emp.Country,
-										pinCode: emp.PinCode,
-										shiftId: shiftId
-									);
+							country: emp.Country,
+							pinCode: emp.PinCode,
+							shiftId: shiftId
+						);
 
 									await _employeeRepository.InsertAsync(employee, autoSave: true);
 								}
@@ -787,39 +786,38 @@ public class HRSeederContributor : BaseSeederContributor
 						var role = await _roleRepository.FindByNormalizedNameAsync(emp.RoleName.ToUpperInvariant());
 						if (role == null) continue;
 
-										var employee = await _employeeManager.CreateEmployeeAsync(
-											roleId: role.Id,
-											educationMediumStageId: educationMediumStageId,
-											firstName: emp.FirstName,
-											lastName: emp.LastName,
-											middleName: emp.MiddleName,
-											shortName: $"{emp.FirstName[0]}.{emp.LastName}",
-											employeeStatusType: EmployeeStatusType.Active,
-											dateOfBirth: emp.DateOfBirth,
-											familyCast: emp.FamilyCast,
-											castType: emp.CastType,
-											genderType: emp.Gender,
-											religion: emp.Religion,
-											maritalStatus: emp.MaritalStatus,
-											bloodGroup: emp.BloodGroup,
-											mobileNo: emp.Mobile,
-											secondaryMobileNo: emp.SecondaryMobile,
-											email: emp.Email,
-											address1: emp.Address1,
-											address2: emp.Address2,
-											address3: emp.Address3,
-											designation: emp.Designation,
-											department: emp.Department,
-											dateOfJoining: emp.DateOfJoining,
-											employeeGroup: EmployeeGroupType.NonTeaching,
-											qualification: emp.Qualification,
-											identificationMark1: emp.IdentificationMark,
-											city: emp.City,
-											state: emp.State,
-											country: emp.Country,
-											pinCode: emp.PinCode,
-											shiftId: shiftId
-										);
+							var employee = await _employeeManager.CreateEmployeeAsync(
+							roleId: role.Id,
+							firstName: emp.FirstName,
+							lastName: emp.LastName,
+							middleName: emp.MiddleName,
+							shortName: $"{emp.FirstName[0]}.{emp.LastName}",
+							employeeStatusType: EmployeeStatusType.Active,
+							dateOfBirth: emp.DateOfBirth,
+							familyCast: emp.FamilyCast,
+							castType: emp.CastType,
+							genderType: emp.Gender,
+							religion: emp.Religion,
+							maritalStatus: emp.MaritalStatus,
+							bloodGroup: emp.BloodGroup,
+							mobileNo: emp.Mobile,
+							secondaryMobileNo: emp.SecondaryMobile,
+							email: emp.Email,
+							address1: emp.Address1,
+							address2: emp.Address2,
+							address3: emp.Address3,
+							designation: emp.Designation,
+							department: emp.Department,
+							dateOfJoining: emp.DateOfJoining,
+							employeeGroup: EmployeeGroupType.NonTeaching,
+							qualification: emp.Qualification,
+							identificationMark1: emp.IdentificationMark,
+							city: emp.City,
+							state: emp.State,
+							country: emp.Country,
+							pinCode: emp.PinCode,
+							shiftId: shiftId
+						);
 
 										await _employeeRepository.InsertAsync(employee, autoSave: true);
 								}

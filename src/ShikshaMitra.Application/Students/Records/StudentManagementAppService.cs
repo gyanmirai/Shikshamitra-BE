@@ -233,11 +233,11 @@ public class StudentManagementAppService(
 				result.Add(new GrProjectionDto
 				{
 					StudentId = student.Id,
-					GrNumber = student.GrNo
+					GrNumber = student.GrNo,
+					StudentName = $"{student.FirstName} {student.MiddleName} {student.LastName}"
 				});
 			}
 
-			// Original logic was incomplete/missing. Returning empty list to fix build.
 			return result;
 		}
 		catch

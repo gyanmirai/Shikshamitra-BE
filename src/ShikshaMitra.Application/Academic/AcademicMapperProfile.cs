@@ -3,6 +3,7 @@ using AutoMapper;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Curriculum.SubjectAssignment;
+using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.Syllabus;
 
 namespace ShikshaMitra.Academic;
@@ -27,6 +28,11 @@ public class AcademicMapperProfile : Profile
 				dest => dest.Subjects,
 				opt => opt.MapFrom(src => src.Subjects.Select(s => s.Subject))
 			);
+
+		#region Examination
+		CreateMap<GradeRange, GradeRangeDto>();
+		CreateMap<GradingScale, GradingScaleDto>();
+		#endregion
 		#endregion
 	}
 }

@@ -47,7 +47,6 @@ public class EmployeesController : AbpControllerBase
         {
             SkipCount = (page - 1) * pageSize,
             MaxResultCount = pageSize,
-            MediumStageId = mediumStageId,
             Status = status,
             IsTeaching = isTeaching,
             RoleId = roleId

@@ -14,7 +14,7 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20251228124807_v1")]
+    [Migration("20260101102328_v1")]
     partial class v1
     {
         /// <inheritdoc />
@@ -1730,8 +1730,6 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EducationMediumStageId");
-
                     b.HasIndex("TenantId", "EducationMediumStageId", "IsActive")
                         .HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_MediumStageId_IsActive");
 
@@ -1802,9 +1800,6 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<string>("Designation")
                         .HasColumnType("text");
-
-                    b.Property<Guid>("EducationMediumStageId")
-                        .HasColumnType("uuid");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
@@ -2052,9 +2047,6 @@ namespace ShikshaMitra.Migrations
                         });
 
                     b.HasKey("Id");
-
-                    b.HasIndex("EducationMediumStageId")
-                        .HasDatabaseName("IX_Employees_EducationMediumStageId");
 
                     b.HasIndex("Email")
                         .HasDatabaseName("IX_Employees_Email");
@@ -3701,6 +3693,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("AcademicMediumId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AcademicMediumStageId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("AcademicYearId")
                         .HasColumnType("uuid");
 
@@ -4651,6 +4646,57 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("StudentFamilyDetails", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentManagementSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("ArrangementBy")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ArrangementTye")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid>("DivisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AppStudentManagementSettings", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentMedicalRecord", b =>
@@ -7862,25 +7908,8 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("LeaveType");
                 });
 
-            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeaveType", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
-                        .WithMany()
-                        .HasForeignKey("EducationMediumStageId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("EducationMediumStage");
-                });
-
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
                 {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
-                        .WithMany()
-                        .HasForeignKey("EducationMediumStageId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", "PayrollStructure")
                         .WithMany()
                         .HasForeignKey("PayrollStructureId")
@@ -8043,8 +8072,6 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Country");
 
                     b.Navigation("Documents");
-
-                    b.Navigation("EducationMediumStage");
 
                     b.Navigation("PayrollStructure");
 

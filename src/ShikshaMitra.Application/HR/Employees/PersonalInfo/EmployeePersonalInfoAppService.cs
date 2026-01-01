@@ -21,7 +21,6 @@ public class EmployeePersonalInfoAppService(
 		// Create employee using EmployeeManager (handles code generation, user creation, role assignment)
 		var employee = await employeeManager.CreateEmployeeAsync(
 			roleId: input.RoleId,
-			educationMediumStageId: input.EducationMediumStageId,
 			firstName: input.FirstName,
 			lastName: input.LastName,
 			middleName: input.MiddleName,
@@ -72,7 +71,6 @@ public class EmployeePersonalInfoAppService(
 		// Update employee using EmployeeManager
 		var employee = await employeeManager.UpdateEmployeeAsync(
 			employeeId: id,
-			educationMediumStageId: input.EducationMediumStageId,
 			firstName: input.FirstName,
 			lastName: input.LastName,
 			middleName: input.MiddleName,
@@ -149,8 +147,6 @@ public class EmployeePersonalInfoAppService(
 			State = employee.State,
 			City = employee.City,
 			Pincode = employee.PinCode,
-			EducationMediumStageId = employee.EducationMediumStageId,
-			EducationMediumStage = null, // Navigation property not included in API contract
 			ShiftId = employee.ShiftId,
 			Shift = null // Navigation property not included in API contract
 		};

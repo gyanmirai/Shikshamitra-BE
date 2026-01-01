@@ -1,7 +1,6 @@
 ﻿using ShikshaMitra.Common;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.TenantSettings;
-using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,7 +15,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 	public Guid? UserId { get; private set; }
-	public Guid EducationMediumStageId { get; private set; }
 
 	// Profile Picture stored in blob storage
 	public string? ProfilePictureBlobName { get; private set; }
@@ -77,9 +75,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	// Navigation Property for Role
 	public virtual IdentityRole? Role { get; private set; }
 
-	// Navigation Property for EducationMediumStage
-	public virtual EducationMediumStage? EducationMediumStage { get; private set; }
-
 	// Navigation property for PayrollStructure
 	public virtual PayrollStructure? PayrollStructure { get; private set; }
 	// Navigation property for Shift
@@ -118,7 +113,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid id,
 		Guid? tenantId,
 		Guid? userId,
-		Guid educationMediumStageId,
 		string? profilePictureBlobName,
 		string? employeeCode,
 		string? lastName,
@@ -160,7 +154,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		TenantId = tenantId;
 		UserId = userId;
-		EducationMediumStageId = educationMediumStageId;
 		ProfilePictureBlobName = profilePictureBlobName;
 		EmployeeCode = employeeCode;
 		LastName = lastName;
@@ -231,7 +224,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		State? state,
 		Country? country,
 		string? pinCode,
-		Guid educationMediumStageId,
 		Guid? shiftId
 		)
 	{
@@ -265,7 +257,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		State = state;
 		Country = country;
 		PinCode = pinCode;
-		EducationMediumStageId = educationMediumStageId;
 		ShiftId = shiftId;
 		return this;
 	}

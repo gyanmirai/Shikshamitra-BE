@@ -1727,8 +1727,6 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EducationMediumStageId");
-
                     b.HasIndex("TenantId", "EducationMediumStageId", "IsActive")
                         .HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_MediumStageId_IsActive");
 
@@ -1799,9 +1797,6 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<string>("Designation")
                         .HasColumnType("text");
-
-                    b.Property<Guid>("EducationMediumStageId")
-                        .HasColumnType("uuid");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
@@ -2049,9 +2044,6 @@ namespace ShikshaMitra.Migrations
                         });
 
                     b.HasKey("Id");
-
-                    b.HasIndex("EducationMediumStageId")
-                        .HasDatabaseName("IX_Employees_EducationMediumStageId");
 
                     b.HasIndex("Email")
                         .HasDatabaseName("IX_Employees_Email");
@@ -7913,25 +7905,8 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("LeaveType");
                 });
 
-            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeaveType", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
-                        .WithMany()
-                        .HasForeignKey("EducationMediumStageId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("EducationMediumStage");
-                });
-
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
                 {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
-                        .WithMany()
-                        .HasForeignKey("EducationMediumStageId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", "PayrollStructure")
                         .WithMany()
                         .HasForeignKey("PayrollStructureId")
@@ -8094,8 +8069,6 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Country");
 
                     b.Navigation("Documents");
-
-                    b.Navigation("EducationMediumStage");
 
                     b.Navigation("PayrollStructure");
 

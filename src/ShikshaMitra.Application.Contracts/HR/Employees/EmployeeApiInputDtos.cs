@@ -8,8 +8,6 @@ namespace ShikshaMitra.HR.Employees;
 /// </summary>
 public class GetEmployeeListInput : PagedAndSortedResultRequestDto
 {
-    public Guid? MediumStageId { get; set; }
-
     public string? Status { get; set; }
 
     public bool? IsTeaching { get; set; }

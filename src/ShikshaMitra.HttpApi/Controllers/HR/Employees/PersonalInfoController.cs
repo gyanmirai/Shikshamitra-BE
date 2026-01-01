@@ -35,13 +35,11 @@ public class PersonalInfoController : AbpControllerBase
 	[ProducesResponseType(typeof(PersonalInfoResponse), StatusCodes.Status201Created)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	public virtual async Task<PersonalInfoResponse> CreateAsync(
-		[FromBody, Required] PersonalInfoRequest request,
-		[FromQuery] Guid? educationMediumStageId = null)
+		[FromBody, Required] PersonalInfoRequest request)
 	{
 		ValidateRequest(request);
 
-		var mediumStageId = educationMediumStageId ?? await GetDefaultEducationMediumStageIdAsync();
-		var createDto = PersonalInfoContractMapper.ToCreateDto(request, mediumStageId);
+		var createDto = PersonalInfoContractMapper.ToCreateDto(request);
 		var result = await _personalInfoAppService.CreateAsync(createDto);
 
 		return PersonalInfoContractMapper.ToResponse(result);
@@ -68,13 +66,11 @@ public class PersonalInfoController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<PersonalInfoResponse> UpdateAsync(
 		[FromRoute, Required] Guid employeeId,
-		[FromBody, Required] PersonalInfoRequest request,
-		[FromQuery] Guid? educationMediumStageId = null)
+		[FromBody, Required] PersonalInfoRequest request)
 	{
 		ValidateRequest(request);
 
-		var mediumStageId = educationMediumStageId ?? await GetEmployeeEducationMediumStageIdAsync(employeeId);
-		var updateDto = PersonalInfoContractMapper.ToUpdateDto(request, mediumStageId);
+		var updateDto = PersonalInfoContractMapper.ToUpdateDto(request);
 		var result = await _personalInfoAppService.UpdateAsync(employeeId, updateDto);
 
 		return PersonalInfoContractMapper.ToResponse(result);
@@ -133,17 +129,6 @@ public class PersonalInfoController : AbpControllerBase
 		{
 			throw new UserFriendlyException("Date of joining cannot be before date of birth.");
 		}
-	}
-
-	private Task<Guid> GetDefaultEducationMediumStageIdAsync()
-	{
-		throw new UserFriendlyException("Education Medium Stage ID is required. Please provide it as a query parameter.");
-	}
-
-	private async Task<Guid> GetEmployeeEducationMediumStageIdAsync(Guid employeeId)
-	{
-		var employee = await _personalInfoAppService.GetAsync(employeeId);
-		return employee.EducationMediumStageId;
 	}
 
 	#endregion

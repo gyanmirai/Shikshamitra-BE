@@ -86,9 +86,6 @@ public class UpdateEmployeeBasicInfoDto : IValidatableObject
 	[MaxLength(20)]
 	public string? PinCode { get; set; }
 
-	[Required(ErrorMessage = "Education Medium Stage is required.")]
-	public Guid EducationMediumStageId { get; set; }
-
 	public Guid? ShiftId { get; set; }
 
 	public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)

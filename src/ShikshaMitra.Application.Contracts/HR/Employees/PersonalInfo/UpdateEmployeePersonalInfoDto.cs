@@ -28,9 +28,6 @@ public class UpdateEmployeePersonalInfoDto : IValidatableObject
 	[Required(ErrorMessage = "Role is required.")]
 	public Guid RoleId { get; set; }
 
-	[Required(ErrorMessage = "Education Medium Stage is required.")]
-	public Guid EducationMediumStageId { get; set; }
-
 	#endregion
 
 	#region Optional Fields

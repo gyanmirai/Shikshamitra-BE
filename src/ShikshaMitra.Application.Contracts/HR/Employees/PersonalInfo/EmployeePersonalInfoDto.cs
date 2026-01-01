@@ -1,6 +1,5 @@
-using ShikshaMitra.Common;
+﻿using ShikshaMitra.Common;
 using ShikshaMitra.TenantSettings;
-using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using System;
 using Volo.Abp.Application.Dtos;
 
@@ -103,14 +102,9 @@ public class EmployeePersonalInfoDto : EntityDto<Guid>
 
 	#region Related Entities
 
-	public Guid EducationMediumStageId { get; set; }
-
-	public EducationMediumStageDto? EducationMediumStage { get; set; }
-
 	public Guid? ShiftId { get; set; }
 
 	public ShiftManagementDto? Shift { get; set; }
 
 	#endregion
 }
-

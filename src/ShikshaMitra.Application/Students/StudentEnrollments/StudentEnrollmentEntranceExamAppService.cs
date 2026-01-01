@@ -13,6 +13,7 @@ using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
@@ -300,10 +301,21 @@ public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, I
 		};
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.Add)]
 	public async Task MoveToAdmissionAsync(Guid studentId, Guid? academicYearId = null)
 	{
-		var student = await _studentRepository.GetAsync(studentId);
+		// Check if user has either of the required permissions (OR logic)
+		var hasEntranceExamPermission = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.Add);
+		var hasRegistrationFormIssuedPermission = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_RegistrationFormIssued.Add);
+
+		if (!hasEntranceExamPermission && !hasRegistrationFormIssuedPermission)
+		{
+			throw new AbpAuthorizationException(
+				"You need either Enrollment_EntranceExam.Add or Enrollment_RegistrationFormIssued.Add permission to perform this operation.");
+		}
+
+		var student = await _studentRepository.GetAsync(studentId, includeDetails: true);
 
 		if (student.Status != StudentLifeCycleStatusEnum.Registation && student.Status != StudentLifeCycleStatusEnum.EntranceExam)
 		{
@@ -320,7 +332,7 @@ public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, I
 		}
 
 		// Move to admission using domain method
-		student.MoveToAdmission(academicYearId);
+		student.MoveToAdmission();
 
 		await _studentRepository.UpdateAsync(student, autoSave: true);
 	}

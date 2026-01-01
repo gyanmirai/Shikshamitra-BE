@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR.AttendanceAndLeaves.EmployeeAttendanceContract;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Security.UserScope;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -27,6 +28,7 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 {
 	private readonly IEmployeeAttendanceRepository _employeeAttendanceRepository;
 	private readonly IEmployeeRepository _employeeRepository;
+	private readonly IUserScopeService _userScopeService;
 	private readonly ILogger<EmployeeAttendanceAppService> _logger;
 	private readonly IGuidGenerator _guidGenerator;
 	private readonly Import.AttendanceFileParser _fileParser;
@@ -35,6 +37,7 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 	public EmployeeAttendanceAppService(
 		IEmployeeAttendanceRepository employeeAttendanceRepository,
 		IEmployeeRepository employeeRepository,
+		IUserScopeService userScopeService,
 		ILogger<EmployeeAttendanceAppService> logger,
 		IGuidGenerator guidGenerator,
 		Import.AttendanceFileParser fileParser,
@@ -43,6 +46,7 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 	{
 		_employeeAttendanceRepository = employeeAttendanceRepository;
 		_employeeRepository = employeeRepository;
+		_userScopeService = userScopeService;
 		_logger = logger;
 		_guidGenerator = guidGenerator;
 		_fileParser = fileParser;
@@ -190,6 +194,13 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 			throw new UserFriendlyException($"Employee with ID '{input.EmployeeId}' not found.");
 		}
 
+		// Get EducationMediumStageId from employee's UserScope
+		Guid? mediumStageId = null;
+		if (employee.UserId.HasValue)
+		{
+			mediumStageId = await GetEducationMediumStageIdFromUserScopeAsync(employee.UserId.Value);
+		}
+
 		var targetDate = DateOnly.FromDateTime(input.Date.Date);
 
 		// Try to find existing attendance record
@@ -213,6 +224,7 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 			existingAttendance.TimeIn = input.InTime;
 			existingAttendance.TimeOut = input.OutTime;
 			existingAttendance.StatusType = status;
+			existingAttendance.EducationMediumStageId = mediumStageId;
 			await _employeeAttendanceRepository.UpdateAsync(existingAttendance);
 		}
 		else
@@ -225,7 +237,8 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 				AttendanceDate = targetDate,
 				TimeIn = input.InTime,
 				TimeOut = input.OutTime,
-				StatusType = status
+				StatusType = status,
+				EducationMediumStageId = mediumStageId
 			};
 			await _employeeAttendanceRepository.InsertAsync(newAttendance);
 		}
@@ -317,6 +330,13 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 					var employee = result.Employee!;
 					var status = result.ParsedStatus ?? EmployeeAttendanceStatusType.Present;
 
+					// Get EducationMediumStageId from employee's UserScope
+					Guid? mediumStageId = null;
+					if (employee.UserId.HasValue)
+					{
+						mediumStageId = await GetEducationMediumStageIdFromUserScopeAsync(employee.UserId.Value);
+					}
+
 					// Upsert logic
 					if (attendanceByEmployee.TryGetValue(employee.Id, out var existing))
 					{
@@ -324,6 +344,7 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 						existing.TimeIn = result.ParsedTimeIn;
 						existing.TimeOut = result.ParsedTimeOut;
 						existing.StatusType = status;
+						existing.EducationMediumStageId = mediumStageId;
 
 						if (!attendancesToUpdate.Contains(existing))
 						{
@@ -340,7 +361,8 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 							AttendanceDate = targetDate,
 							TimeIn = result.ParsedTimeIn,
 							TimeOut = result.ParsedTimeOut,
-							StatusType = status
+							StatusType = status,
+							EducationMediumStageId = mediumStageId
 						};
 						attendancesToInsert.Add(newAttendance);
 						attendanceByEmployee[employee.Id] = newAttendance;
@@ -428,6 +450,32 @@ public class EmployeeAttendanceAppService : CrudAppService<EmployeeAttendance, E
 	#endregion
 
 	#region Private Helpers
+
+	/// <summary>
+	/// Gets the EducationMediumStageId from the employee's UserScope.
+	/// Returns the first MediumStageId from the user's scope, or null if no scope is assigned.
+	/// </summary>
+	private async Task<Guid?> GetEducationMediumStageIdFromUserScopeAsync(Guid employeeUserId)
+	{
+		try
+		{
+			var userScope = await _userScopeService.GetUserScopeAsync(employeeUserId);
+			
+			// If user is admin or has wildcard access, return null (no specific stage)
+			if (userScope.IsAdmin || userScope.HasWildcardMediumStage)
+			{
+				return null;
+			}
+			
+			// Return the first MediumStageId if available
+			return userScope.MediumStageIds.FirstOrDefault();
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "Failed to get UserScope for employee user ID {UserId}", employeeUserId);
+			return null;
+		}
+	}
 
 	/// <summary>
 	/// Formats employee name, handling null/empty middle names to avoid double spaces

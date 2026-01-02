@@ -118,6 +118,8 @@ public class EmployeeAttendanceController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status401Unauthorized)]
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	[Consumes("multipart/form-data")]
+	[RequestSizeLimit(52428800)] // 50 MB
+	[RequestFormLimits(MultipartBodyLengthLimit = 52428800)]
 	public async Task<ActionResult<AttendanceImportResponse>> ImportAsync(
 		[FromForm, Required] EmployeeAttendanceImportRequest request,
 		CancellationToken cancellationToken = default)

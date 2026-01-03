@@ -91,6 +91,33 @@ public class OpenIddictDataSeedContributor(
 			);
 		}
 
+		// Next.js Password Grant Client (For Postman / Server-side login)
+		var nextJsClientId = configurationSection["ShikshaMitra_NextJs:ClientId"];
+		var nextJsClientSecret = configurationSection["ShikshaMitra_NextJs:ClientSecret"];
+		if (!nextJsClientId.IsNullOrWhiteSpace())
+		{
+			await CreateApplicationAsync(
+				name: nextJsClientId!,
+				type: OpenIddictConstants.ClientTypes.Confidential,
+				consentType: OpenIddictConstants.ConsentTypes.Explicit,
+				displayName: "ShikshaMitra Next.js Server Client",
+				secret: nextJsClientSecret,
+				grantTypes: new List<string>
+				{
+			OpenIddictConstants.GrantTypes.Password,
+			OpenIddictConstants.GrantTypes.RefreshToken
+				},
+				scopes: new List<string>
+				{
+			"profile",
+			"email",
+			"roles",
+			"offline_access",
+			"ShikshaMitra"
+				}
+			);
+		}
+
 		// React Client
 		var reactClinetId = configurationSection["ShikshaMitra_React_App:ClientId"];
 		if (!reactClinetId.IsNullOrWhiteSpace())

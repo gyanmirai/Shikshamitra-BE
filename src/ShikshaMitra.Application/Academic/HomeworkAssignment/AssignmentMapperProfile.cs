@@ -69,7 +69,7 @@ public class AssignmentMapperProfile : Profile
 					opt.MapFrom(
 						src =>
 							src.Chapters != null && src.Chapters.Any()
-								? JsonSerializer.Serialize(src.Chapters)
+								? JsonSerializer.Serialize(src.Chapters, (JsonSerializerOptions)null)
 								: null
 					)
 			)
@@ -79,7 +79,7 @@ public class AssignmentMapperProfile : Profile
 					opt.MapFrom(
 						src =>
 							src.Attachments != null && src.Attachments.Any()
-								? JsonSerializer.Serialize(src.Attachments)
+								? JsonSerializer.Serialize(src.Attachments, (JsonSerializerOptions)null)
 								: null
 					)
 			)
@@ -103,7 +103,7 @@ public class AssignmentMapperProfile : Profile
 					opt.MapFrom(
 						src =>
 							src.Chapters != null && src.Chapters.Any()
-								? JsonSerializer.Serialize(src.Chapters)
+								? JsonSerializer.Serialize(src.Chapters, (JsonSerializerOptions) null)
 								: null
 					)
 			)
@@ -113,7 +113,7 @@ public class AssignmentMapperProfile : Profile
 					opt.MapFrom(
 						src =>
 							src.Attachments != null && src.Attachments.Any()
-								? JsonSerializer.Serialize(src.Attachments)
+								? JsonSerializer.Serialize(src.Attachments,(JsonSerializerOptions)null)
 								: null
 					)
 			)

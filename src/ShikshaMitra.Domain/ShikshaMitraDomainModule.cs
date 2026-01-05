@@ -7,6 +7,7 @@ using Volo.Abp.BackgroundJobs;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Emailing;
 using Volo.Abp.FeatureManagement;
+using Volo.Abp.MailKit;
 using Volo.Abp.Features;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
@@ -33,10 +34,11 @@ namespace ShikshaMitra;
 	typeof(AbpPermissionManagementDomainIdentityModule),
 	typeof(AbpSettingManagementDomainModule),
 	typeof(AbpTenantManagementDomainModule),
-	typeof(AbpEmailingModule)
+	typeof(AbpEmailingModule),
+	typeof(AbpMailKitModule)
 )]
 [DependsOn(typeof(BlobStoringDatabaseDomainModule))]
-    public class ShikshaMitraDomainModule : AbpModule
+public class ShikshaMitraDomainModule : AbpModule
 {
 	public override void ConfigureServices(ServiceConfigurationContext context)
 	{
@@ -73,8 +75,8 @@ namespace ShikshaMitra;
 
 		//TODO : Configure TenantResolveContributors
 
-#if DEBUG
-		context.Services.Replace(ServiceDescriptor.Singleton<IEmailSender, NullEmailSender>());
-#endif
+//#if DEBUG
+//		context.Services.Replace(ServiceDescriptor.Singleton<IEmailSender, NullEmailSender>());
+//#endif
 	}
 }

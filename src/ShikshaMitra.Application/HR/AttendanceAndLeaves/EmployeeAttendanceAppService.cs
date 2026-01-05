@@ -13,6 +13,7 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Auditing;
 using Volo.Abp.Guids;
 using Volo.Abp.Uow;
+using Volo.Abp.Validation;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
@@ -247,6 +248,7 @@ public class EmployeeAttendanceAppService : ApplicationService, IEmployeeAttenda
 	/// </summary>
 	[UnitOfWork]
 	[Audited]
+	[DisableValidation]
 	public async Task<AttendanceImportResponse> ImportAttendanceAsync(
 		DateTimeOffset date,
 		Stream fileStream,

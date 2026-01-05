@@ -1,6 +1,7 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
+using Volo.Abp.Validation;
 
 namespace ShikshaMitra.Models;
 
@@ -19,5 +20,6 @@ public class StudentDocumentUploadRequest
 	/// The document file to upload
 	/// </summary>
 	[Required]
+	[DisableValidation]
 	public IFormFile File { get; set; } = null!;
 }

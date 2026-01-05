@@ -128,7 +128,8 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 		Configure<AbpExceptionHandlingOptions>(options =>
 		{
-			// Show detailed error messages and stack traces in development
+			// SECURITY: Show detailed error messages and stack traces only in development
+			// In production, this prevents exposing internal implementation details and potential vulnerabilities
 			options.SendExceptionsDetailsToClients = environment.IsDevelopment();
 			options.SendStackTraceToClients = environment.IsDevelopment();
 		});

@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.ComponentModel.DataAnnotations;
+using Volo.Abp.Validation;
 
 namespace ShikshaMitra.Models;
 
@@ -12,6 +13,7 @@ public class EmployeeAttendanceImportRequest
 	/// </summary>
 	[Required]
 	[FromForm(Name = "file")]
+	[DisableValidation]
 	public IFormFile File { get; set; } = null!;
 
 	[Required]

@@ -32,7 +32,8 @@ public class TenantSeederContributor(
 		var tenants = new List<(Guid Id, string Name, string AdminEmail, string InstituteName, string Address, string City, string State, string Country, string PostalCode, string ContactNo)>
 			{
 				(Guid.Parse("11111111-1111-1111-1111-111111111111"), "DDVS", "ddvs@gmail.com", "DDVS", "Parvat Patiya", "Surat", "Gujarat", "India", "395010", "+91-9876543210"),
-				(Guid.Parse("22222222-2222-2222-2222-222222222222"), "SSVM", "ssvm@gmail.com", "SSVM", "Some Address", "CityName", "StateName", "CountryName", "123456", "+91-1234567890")
+				(Guid.Parse("22222222-2222-2222-2222-222222222222"), "SSVM", "ssvm@gmail.com", "SSVM", "Some Address", "CityName", "StateName", "CountryName", "123456", "+91-1234567890"),
+				(Guid.Parse("33333333-3333-3333-3333-333333333333"), "Forgot", "hirenvadher954@gmail.com", "Forgot Password", "Another Address", "Another City", "Another State", "Another Country", "654321", "+91-0987654321")
 			};
 
 		var tenantIds = new List<Guid>();

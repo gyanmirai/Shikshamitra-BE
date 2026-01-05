@@ -34,9 +34,11 @@ using Volo.Abp.AspNetCore.Mvc.UI.Theme.LeptonXLite.Bundling;
 using Volo.Abp.AspNetCore.Mvc.UI.Theme.Shared;
 using Volo.Abp.AspNetCore.Serilog;
 using Volo.Abp.Autofac;
+using Volo.Abp.Emailing;
 using Volo.Abp.Modularity;
 using Volo.Abp.OpenIddict;
 using Volo.Abp.Security.Claims;
+using Volo.Abp.SettingManagement;
 using Volo.Abp.Swashbuckle;
 using Volo.Abp.UI.Navigation.Urls;
 using Volo.Abp.VirtualFileSystem;
@@ -314,6 +316,8 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 		QuestPDF.Settings.License = LicenseType.Community;
 
+		ConfigureSmtpPassword(context.ServiceProvider);
+
 		// 🔧 DEVELOPMENT TOGGLE: Comment this out to see raw ABP exception details
 		// Uncomment to use custom error formatting
 		// app.UseGlobalExceptionHandling();
@@ -360,5 +364,16 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		app.UseAuditing();
 		app.UseAbpSerilogEnrichers();
 		app.UseConfiguredEndpoints();
+	}
+
+	private void ConfigureSmtpPassword(IServiceProvider serviceProvider)
+	{
+		var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+		var smtpPassword = configuration["Settings:Abp.Mailing.Smtp.Password"];
+		if (!string.IsNullOrEmpty(smtpPassword))
+		{
+			var settingManager = serviceProvider.GetService<SettingManager>();
+			settingManager?.SetGlobalAsync(EmailSettingNames.Smtp.Password, smtpPassword);
+		}
 	}
 }

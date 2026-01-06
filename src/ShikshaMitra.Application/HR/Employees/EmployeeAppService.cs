@@ -32,7 +32,8 @@ public class EmployeeAppService(
 	ILogger<EmployeeAppService> logger,
 	IdentityUserManager userManager,
 	IIdentityUserRepository userRepository,
-	ILookupNormalizer lookupNormalizer) :
+	ILookupNormalizer lookupNormalizer,
+	IEmployeeEmailService emailService) :
 	CrudAppService<Employee, EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>(
 	employeeRepository),
 	IEmployeeAppService
@@ -238,6 +239,16 @@ public class EmployeeAppService(
 					"Transaction completed successfully for employee creation: EmployeeId={EmployeeId}, EmployeeCode={EmployeeCode}, Email={Email}",
 					employee.Id,
 					employee.EmployeeCode,
+					input.Email
+				);
+
+				// Send welcome email with credentials (fire and forget - email service handles exceptions)
+				var fullName = $"{input.FirstName} {input.LastName}".Trim();
+
+				await emailService.SendWelcomeEmailAsync(input.Email, fullName, username, password);
+
+				logger.LogInformation(
+					"Welcome email queued for employee: {Email}",
 					input.Email
 				);
 

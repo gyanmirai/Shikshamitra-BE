@@ -35,13 +35,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="Controllers\HR\**" />
     <Compile Remove="Logs\**" />
-    <Content Remove="Controllers\HR\**" />
     <Content Remove="Logs\**" />
-    <EmbeddedResource Remove="Controllers\HR\**" />
     <EmbeddedResource Remove="Logs\**" />
-    <None Remove="Controllers\HR\**" />
     <None Remove="Logs\**" />
 
     <Content Include="encryption-certificate.pfx" Condition="Exists('encryption-certificate.pfx')">
@@ -83,7 +79,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Controllers\" />
+    <Folder Include="Controllers\HR\Employees\" />
   </ItemGroup>
 
 </Project>

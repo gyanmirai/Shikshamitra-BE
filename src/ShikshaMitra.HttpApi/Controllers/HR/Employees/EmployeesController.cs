@@ -69,17 +69,6 @@ public class EmployeesController : AbpControllerBase
     }
 
     /// <summary>
-    /// Get employee by user ID (OpenAPI contract)
-    /// </summary>
-    [HttpGet("user/{userId}")]
-    [ProducesResponseType(typeof(EmployeeDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public virtual async Task<EmployeeDto> GetEmployeeByUserIdAsync(Guid userId)
-    {
-        return await _employeeAppService.GetEmployeeByUserId(userId);
-    }
-
-    /// <summary>
     /// Search employees by name, identifier, email, or mobile (OpenAPI contract)
     /// </summary>
     [HttpGet("search")]

@@ -201,12 +201,9 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 	private void ConfigureConventionalControllers()
 	{
-		// Disabled: Using explicit controllers in HttpApi project only
-		// This prevents auto-generated routes like /api/app/employee/...
-		// All APIs are explicitly defined in HttpApi\Controllers for better control
 		Configure<AbpAspNetCoreMvcOptions>(options =>
 		{
-			// options.ConventionalControllers.Create(typeof(ShikshaMitraApplicationModule).Assembly);
+			options.ConventionalControllers.Create(typeof(ShikshaMitraApplicationModule).Assembly);
 		});
 	}
 
@@ -332,17 +329,6 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		}
 
 		app.UseAbpRequestLocalization();
-
-		// Redirect root URL to Swagger UI
-		app.Use(async (httpContext, next) =>
-		{
-			if (httpContext.Request.Path == "/")
-			{
-				httpContext.Response.Redirect("/swagger");
-				return;
-			}
-			await next();
-		});
 
 		if (!env.IsDevelopment())
 		{

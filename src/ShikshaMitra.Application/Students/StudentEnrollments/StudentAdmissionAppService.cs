@@ -15,6 +15,9 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.ObjectMapping;
+using Volo.Abp.Identity;
+using Volo.Abp.Guids;
+using Volo.Abp.Domain.Entities;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
@@ -27,13 +30,22 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 {
 	private readonly IRepository<Student, Guid> studentRepository;
 	private readonly IRepository<Division, Guid> divisionRepository;
+	private readonly IdentityUserManager userManager;
+	private readonly IGuidGenerator guidGenerator;
+	private readonly IStudentEmailService studentEmailService;
 
 	public StudentAdmissionAppService(
 		IRepository<Student, Guid> studentRepository,
-		IRepository<Division, Guid> divisionRepository)
+		IRepository<Division, Guid> divisionRepository,
+		IdentityUserManager userManager,
+		IGuidGenerator guidGenerator,
+		IStudentEmailService studentEmailService)
 	{
 		this.studentRepository = studentRepository;
 		this.divisionRepository = divisionRepository;
+		this.userManager = userManager;
+		this.guidGenerator = guidGenerator;
+		this.studentEmailService = studentEmailService;
 	}
 
 	/// <summary>
@@ -116,15 +128,25 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 
 			try
 			{
-				// Get student
-				var student = await studentRepository.GetAsync(item.StudentId);
+				// Get student with contact details for account creation and email
+				var queryable = await studentRepository.WithDetailsAsync(x => x.ContactDetail);
+				var student = await AsyncExecuter.FirstOrDefaultAsync(queryable.Where(x => x.Id == item.StudentId));
+
+				if (student == null)
+				{
+					throw new EntityNotFoundException(typeof(Student), item.StudentId);
+				}
 
 				// Apply action
 				if (item.Action == AdmissionAction.Approve)
 				{
 					student.ApproveAdmission();
+					
+					// Create user account and send welcome email ONLY on approval
+					await CreateStudentUserAndSendEmailAsync(student);
+
 					itemResult.NewStatus = StudentEnrollmentApprovalState.Approved.ToString();
-					itemResult.Message = "Admission approved successfully";
+					itemResult.Message = "Admission approved successfully. Student account created and welcome email sent.";
 				}
 				else if (item.Action == AdmissionAction.Reject)
 				{
@@ -177,5 +199,79 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 		}
 
 		return result;
+	}
+
+	private async Task CreateStudentUserAndSendEmailAsync(Student student)
+	{
+		// 1. Determine Username (GR Number is preferred for admitted students)
+		var username = student.GrNo?.ToString() ?? await GenerateUniqueUsernameAsync(student.FirstName, student.LastName);
+		
+		// 2. Get Contact Details
+		var email = student.ContactDetail?.Email;
+		var mobile = student.ContactDetail?.PrimaryContactNo ?? "0000000000";
+		
+		if (string.IsNullOrWhiteSpace(email))
+		{
+			Logger.LogWarning("Cannot create user account or send email for student {StudentId} ({FirstName} {LastName}): Email is missing.", student.Id, student.FirstName, student.LastName);
+			return;
+		}
+
+		// 3. Check if user already exists
+		var existingUser = await userManager.FindByEmailAsync(email);
+		if (existingUser != null)
+		{
+			Logger.LogInformation("User account for {Email} already exists. Skipping creation.", email);
+			return;
+		}
+
+		// 4. Generate Standard Password (username@last4mobile)
+		var last4Digits = mobile.Length >= 4 ? mobile.Substring(mobile.Length - 4) : "0000";
+		var password = $"{username}@{last4Digits}";
+
+		// 5. Create IdentityUser
+		var user = new IdentityUser(
+			guidGenerator.Create(),
+			username,
+			email,
+			CurrentTenant.Id
+		)
+		{
+			Name = student.FirstName,
+			Surname = student.LastName
+		};
+		user.SetEmailConfirmed(true);
+
+		var result = await userManager.CreateAsync(user, password);
+		if (result.Succeeded)
+		{
+			// Assign Student role
+			await userManager.AddToRoleAsync(user, "Student");
+			
+			// Send Admission Approved Email
+			var studentFullName = $"{student.FirstName} {student.LastName}".Trim();
+			await studentEmailService.SendAdmissionApprovalEmailAsync(email, studentFullName, username, password);
+			
+			Logger.LogInformation("Successfully created user account and sent admission email for student {StudentId}", student.Id);
+		}
+		else
+		{
+			var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+			Logger.LogError("Failed to create user account for student {StudentId}. Errors: {Errors}", student.Id, errors);
+			throw new BusinessException("StudentAdmission:UserAccountCreationFailed").WithData("Errors", errors);
+		}
+	}
+
+	private async Task<string> GenerateUniqueUsernameAsync(string firstName, string lastName)
+	{
+		var baseUsername = $"{firstName.ToLower()}{lastName.ToLower()}".Replace(" ", "");
+		var username = baseUsername;
+		var counter = 1;
+
+		while (await userManager.FindByNameAsync(username) != null)
+		{
+			username = $"{baseUsername}{counter++}";
+		}
+
+		return username;
 	}
 }

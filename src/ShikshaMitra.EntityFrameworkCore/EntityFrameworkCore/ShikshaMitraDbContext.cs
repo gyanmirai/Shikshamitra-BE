@@ -23,6 +23,8 @@ using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
+using ShikshaMitra.Communication.AnnouncementTypes;
+using ShikshaMitra.Communication.Announcements;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
@@ -291,6 +293,11 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<LibraryTiming> LibraryTimings { get; set; }
 	public DbSet<BookCategory> BookCategories { get; set; } //here <BookCategory> is the entity class name and BookCategory is the table name
 	#endregion
+	#endregion
+
+	#region Communication
+	public DbSet<AnnouncementType> AnnouncementTypes { get; set; }
+	public DbSet<Announcement> Announcements { get; set; }
 	#endregion
 
 	// Apply BookCategory configuration

@@ -11,6 +11,10 @@ using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Communication.AnnouncementTypes;
+using ShikshaMitra.Communication.AnnouncementTypes.Dtos;
+using ShikshaMitra.Communication.Announcements;
+using ShikshaMitra.Communication.Announcements.Dtos;
 
 namespace ShikshaMitra;
 
@@ -70,5 +74,22 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 			.ForMember(dest => dest.Pincode, opt => opt.MapFrom(src => src.PinCode))
 			.ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role != null ? src.Role.Name : null))
 			.ForMember(dest => dest.EmployeeStatusType, opt => opt.MapFrom(src => src.EmployeeStatusType ?? EmployeeStatusType.Active));
+
+		// Communication - Announcement Types
+		CreateMap<AnnouncementType, AnnouncementTypeDto>()
+			.ForMember(dest => dest.AnnouncementType, opt => opt.MapFrom(src => src.Name));
+
+		// Communication - Announcements
+		CreateMap<Announcement, AnnouncementDto>()
+			.ForMember(dest => dest.Type, opt => opt.Ignore()) // Manual mapping in AppService
+			.ForMember(dest => dest.Audience, opt => opt.Ignore()) // Manual mapping in AppService
+			.ForMember(dest => dest.AnnouncedBy, opt => opt.Ignore()) // Manual mapping in AppService
+            .ForMember(dest => dest.Duration, opt => opt.MapFrom(src => $"{src.Duration} {src.DurationUnit}s")); // Simple formatting
+
+		CreateMap<AnnouncementCreateDto, Announcement>()
+            .ForMember(dest => dest.TypeId, opt => opt.MapFrom(src => src.Type));
+
+		CreateMap<AnnouncementUpdateDto, Announcement>()
+            .ForMember(dest => dest.TypeId, opt => opt.MapFrom(src => src.Type));
 	}
 }

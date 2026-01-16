@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Communication.Announcements.Dtos;
 using ShikshaMitra.Communication.AnnouncementTypes;
+using ShikshaMitra.Groups;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -21,15 +22,18 @@ namespace ShikshaMitra.Communication.Announcements
         private readonly IAnnouncementRepository _announcementRepository;
         private readonly IRepository<AnnouncementType, Guid> _announcementTypeRepository;
         private readonly IRepository<IdentityUser, Guid> _userRepository;
+        private readonly IRepository<Group, Guid> _groupRepository;
 
         public AnnouncementAppService(
             IAnnouncementRepository announcementRepository,
             IRepository<AnnouncementType, Guid> announcementTypeRepository,
-            IRepository<IdentityUser, Guid> userRepository)
+            IRepository<IdentityUser, Guid> userRepository,
+            IRepository<Group, Guid> groupRepository)
         {
             _announcementRepository = announcementRepository;
             _announcementTypeRepository = announcementTypeRepository;
             _userRepository = userRepository;
+            _groupRepository = groupRepository;
         }
 
         public async Task<AnnouncementDto> CreateAsync(AnnouncementCreateDto input)
@@ -75,10 +79,7 @@ namespace ShikshaMitra.Communication.Announcements
                 query = query.Where(x => x.Status == input.Status);
             }
 
-            if (!input.Filter.IsNullOrWhiteSpace())
-            {
-                query = query.Where(x => x.Title.Contains(input.Filter));
-            }
+
 
             var totalCount = await AsyncExecuter.CountAsync(query);
 
@@ -163,8 +164,16 @@ namespace ShikshaMitra.Communication.Announcements
                 }
             }
 
-            // Map Audience (Mocking name resolution as we don't have source)
-            dto.Audience = announcement.Audience.Select(id => new LookupDto { Id = id, Name = "Audience Group" }).ToList();
+            // Map Audience
+            if (announcement.Audience != null && announcement.Audience.Any())
+            {
+                var groups = await _groupRepository.GetListAsync(x => announcement.Audience.Contains(x.Id));
+                dto.Audience = groups.Select(g => new LookupDto { Id = g.Id, Name = g.Name }).ToList();
+            }
+            else
+            {
+                dto.Audience = new List<LookupDto>();
+            }
 
             return dto;
         }

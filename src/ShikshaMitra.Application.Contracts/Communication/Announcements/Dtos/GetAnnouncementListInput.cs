@@ -7,7 +7,7 @@ namespace ShikshaMitra.Communication.Announcements.Dtos
     public class GetAnnouncementListInput : PagedAndSortedResultRequestDto
     {
         public global::ShikshaMitra.AnnouncementStatus Status { get; set; }
-        public string Filter { get; set; }
+
         public Guid AcademicMediumId { get; set; }
         // Status is already defined above
         public int? Page { get; set; }

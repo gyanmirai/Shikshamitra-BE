@@ -54,6 +54,7 @@ using Volo.Abp.TenantManagement.EntityFrameworkCore;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Academic.Examination.Settings;
+using ShikshaMitra.Groups;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -299,6 +300,10 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<AnnouncementType> AnnouncementTypes { get; set; }
 	public DbSet<Announcement> Announcements { get; set; }
 	#endregion
+
+    #region Groups
+    public DbSet<Group> Groups { get; set; }
+    #endregion
 
 	// Apply BookCategory configuration
 

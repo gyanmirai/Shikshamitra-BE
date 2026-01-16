@@ -29,7 +29,7 @@ namespace ShikshaMitra.Communication.Announcements.Dtos
         public int Duration { get; set; }
         public global::ShikshaMitra.DurationUnit DurationUnit { get; set; }
 
-        public List<string> Documents { get; set; }
+        public List<string>? Documents { get; set; }
 
         [Required]
         public List<global::ShikshaMitra.NotificationPreference> NotificationPreferences { get; set; }

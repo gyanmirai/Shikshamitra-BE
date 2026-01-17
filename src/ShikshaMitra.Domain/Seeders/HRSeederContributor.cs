@@ -863,7 +863,7 @@ public class HRSeederContributor : BaseSeederContributor
 
 								// Generate password (username@last4digitsOfMobile)
 								var last4Digits = mobileNo.Substring(mobileNo.Length - 4);
-								var password = $"A{username}@{last4Digits}";
+								var password = $"{username}@{last4Digits}";
 
 								// Create user
 								var user = new IdentityUser(

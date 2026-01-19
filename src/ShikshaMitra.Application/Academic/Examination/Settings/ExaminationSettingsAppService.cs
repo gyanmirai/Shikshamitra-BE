@@ -14,6 +14,7 @@ namespace ShikshaMitra.Academic.Examination.Settings;
 [RemoteService(false)]
 public class ExaminationSettingsAppService(
 	IRepository<GradingScale, Guid> gradingScaleRepository,
+    ExamTypeManager examTypeManager,
 	IGuidGenerator guidGenerator
 ) : ApplicationService, IExaminationSettingsAppService
 {
@@ -136,5 +137,10 @@ public class ExaminationSettingsAppService(
         }
 
         await gradingScaleRepository.DeleteAsync(gradingScale);
+    }
+
+    public async Task CreateExamTypeAsync(Guid academicMediumId, CreateExamTypeDto input)
+    {
+        var examType = await examTypeManager.CreateAsync(input.ExamType, input.Description, academicMediumId);
     }
 }

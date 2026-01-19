@@ -63,4 +63,13 @@ public class ExaminationSettingsController(
         await examinationSettingsAppService.DeleteGradingScaleAsync(id, academicMediumId);
         return Ok(new { message = "Grading scale deleted successfully" });
     }
+    [HttpPost("exam-type")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SettingsExamTypes.Add)]
+    public async Task CreateExamTypeAsync(
+        [FromQuery] Guid academicMediumId,
+        [FromBody] CreateExamTypeDto input
+    )
+    {
+        await examinationSettingsAppService.CreateExamTypeAsync(academicMediumId, input);
+    }
 }

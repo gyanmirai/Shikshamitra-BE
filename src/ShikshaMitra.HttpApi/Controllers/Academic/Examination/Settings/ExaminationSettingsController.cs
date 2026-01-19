@@ -63,4 +63,53 @@ public class ExaminationSettingsController(
         await examinationSettingsAppService.DeleteGradingScaleAsync(id, academicMediumId);
         return Ok(new { message = "Grading scale deleted successfully" });
     }
+    [HttpPost("exam-type")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SettingsExamTypes.Add)]
+    public async Task CreateExamTypeAsync(
+        [FromQuery] Guid academicMediumId,
+        [FromBody] CreateExamTypeDto input
+    )
+    {
+        await examinationSettingsAppService.CreateExamTypeAsync(academicMediumId, input);
+    }
+
+    [HttpGet("exam-type")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SettingsExamTypes.View)]
+    public async Task<ExamTypeListResponseDto> GetExamTypesAsync(
+        [FromQuery] GetExamTypesInput input
+    )
+    {
+        return await examinationSettingsAppService.GetExamTypesAsync(input);
+    }
+
+    [HttpGet("exam-type/{id}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SettingsExamTypes.View)]
+    public async Task<ExamTypeSingleResponseDto> GetExamTypeByIdAsync(
+        [FromRoute] Guid id,
+        [FromQuery] Guid academicMediumId
+    )
+    {
+        return await examinationSettingsAppService.GetExamTypeByIdAsync(id, academicMediumId);
+    }
+
+    [HttpPut("exam-type/{id}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SettingsExamTypes.Add)]
+    public async Task UpdateExamTypeAsync(
+        [FromRoute] Guid id,
+        [FromQuery] Guid academicMediumId,
+        [FromBody] UpdateExamTypeDto input
+    )
+    {
+        await examinationSettingsAppService.UpdateExamTypeAsync(id, academicMediumId, input);
+    }
+
+    [HttpDelete("exam-type/{id}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SettingsExamTypes.Delete)]
+    public async Task DeleteExamTypeAsync(
+        [FromRoute] Guid id,
+        [FromQuery] Guid academicMediumId
+    )
+    {
+        await examinationSettingsAppService.DeleteExamTypeAsync(id, academicMediumId);
+    }
 }

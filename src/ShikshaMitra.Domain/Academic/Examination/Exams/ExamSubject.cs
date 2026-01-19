@@ -10,11 +10,11 @@ public class ExamSubject : Entity<Guid>
 {
     public Guid ExamId { get; private set; }
     public Guid SubjectId { get; private set; }
-    public DateTime ExamDate { get; private set; }
-    public DateTime StartTime { get; private set; }
-    public DateTime EndTime { get; private set; }
-    public double TotalMarks { get; private set; }
-    public double PassingMarks { get; private set; }
+    public DateTime? ExamDate { get; private set; }
+    public DateTime? StartTime { get; private set; }
+    public DateTime? EndTime { get; private set; }
+    public double? TotalMarks { get; private set; }
+    public double? PassingMarks { get; private set; }
     public string? Notes { get; private set; }
 
     public ICollection<ExamSubjectDivision> RoomAssignments { get; private set; }
@@ -28,11 +28,11 @@ public class ExamSubject : Entity<Guid>
         Guid id,
         Guid examId,
         Guid subjectId,
-        DateTime examDate,
-        DateTime startTime,
-        DateTime endTime,
-        double totalMarks,
-        double passingMarks,
+        DateTime? examDate,
+        DateTime? startTime,
+        DateTime? endTime,
+        double? totalMarks,
+        double? passingMarks,
         string? notes = null) : base(id)
     {
         ExamId = examId;
@@ -47,12 +47,23 @@ public class ExamSubject : Entity<Guid>
         RoomAssignments = new Collection<ExamSubjectDivision>();
     }
 
+    public ExamSubject(
+        Guid id,
+        Guid examId,
+        Guid subjectId) : base(id)
+    {
+        ExamId = examId;
+        SubjectId = subjectId;
+
+        RoomAssignments = new Collection<ExamSubjectDivision>();
+    }
+
     internal void SetExamId(Guid examId)
     {
         ExamId = examId;
     }
 
-    public void UpdateSchedule(DateTime examDate, DateTime startTime, DateTime endTime, double totalMarks, double passingMarks, string? notes)
+    public void UpdateSchedule(DateTime? examDate, DateTime? startTime, DateTime? endTime, double? totalMarks, double? passingMarks, string? notes)
     {
         ExamDate = examDate;
         StartTime = startTime;

@@ -14,5 +14,15 @@ public interface IExaminationSettingsAppService : IApplicationService
 	
 	Task UpdateGradingScaleAsync(Guid id, Guid academicMediumId, UpdateGradingScaleDto input);
 	
-	Task DeleteGradingScaleAsync(Guid id, Guid academicMediumId);
+    Task DeleteGradingScaleAsync(Guid id, Guid academicMediumId);
+
+    Task CreateExamTypeAsync(Guid academicMediumId, CreateExamTypeDto input);
+
+    Task<ExamTypeListResponseDto> GetExamTypesAsync(GetExamTypesInput input);
+
+    Task<ExamTypeSingleResponseDto> GetExamTypeByIdAsync(Guid id, Guid academicMediumId);
+
+    Task UpdateExamTypeAsync(Guid id, Guid academicMediumId, UpdateExamTypeDto input);
+
+    Task DeleteExamTypeAsync(Guid id, Guid academicMediumId);
 }

@@ -32,6 +32,11 @@ public class AcademicMapperProfile : Profile
 		#region Examination
 		CreateMap<GradeRange, GradeRangeDto>();
 		CreateMap<GradingScale, GradingScaleDto>();
+
+		// Exam Type mappings
+		CreateMap<ExamType, ExamTypeDto>()
+			.ForMember(dest => dest.ExamType, opt => opt.MapFrom(src => src.Name))
+			.ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreationTime));
 		#endregion
 		#endregion
 	}

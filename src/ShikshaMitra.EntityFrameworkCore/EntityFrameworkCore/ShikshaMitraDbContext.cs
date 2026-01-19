@@ -282,6 +282,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region Examination
 	public DbSet<GradingScale> GradingScales { get; set; } 
+	public DbSet<ExamType> ExamTypes { get; set; } 
 	#endregion
 
 	#endregion

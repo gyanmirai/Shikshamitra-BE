@@ -5,6 +5,7 @@ namespace ShikshaMitra.Academic.Curriculum;
 
 public class SubjectAssignmentGroupDto
 {
+    public Guid Id { get; set; }
     public SubjectType SubjectType { get; set; }
     public Guid? ElectiveGroupId { get; set; }
     public string? ElectiveGroupName { get; set; }

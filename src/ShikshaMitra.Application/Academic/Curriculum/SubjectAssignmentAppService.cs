@@ -127,6 +127,7 @@ public class SubjectAssignmentAppService(
             
             groupedAssignments.Add(new SubjectAssignmentGroupDto
             {
+                Id = coreAssignment.Id,
                 SubjectType = coreAssignment.SubjectType,
                 Status = coreAssignment.Status,
                 Color = subject?.Color, // Use subject color for core
@@ -151,6 +152,7 @@ public class SubjectAssignmentAppService(
 
             groupedAssignments.Add(new SubjectAssignmentGroupDto
             {
+                Id = first.Id,
                 SubjectType = SubjectType.Elective,
                 Status = first.Status,
                 ElectiveGroupId = first.ElectiveGroupId,

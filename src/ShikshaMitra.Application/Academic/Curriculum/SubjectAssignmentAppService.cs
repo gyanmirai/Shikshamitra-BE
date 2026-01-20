@@ -345,6 +345,26 @@ public class SubjectAssignmentAppService(
 		return null;
 	}
 
+	public async Task ChangeStatusAsync(Guid assignmentId, ChangeStatusRequestDto input)
+	{
+		var assignment = await assignmentRepository.GetAsync(assignmentId);
+
+		if (!Enum.IsDefined(typeof(SubjectStatus), input.Status))
+		{
+			throw new UserFriendlyException("Invalid status value");
+		}
+
+		var status = (SubjectStatus)input.Status;
+		assignment.ChangeStatus(status);
+
+		if (status == SubjectStatus.Published)
+		{
+			assignment.PublishedAt = DateTimeOffset.UtcNow;
+		}
+
+		await assignmentRepository.UpdateAsync(assignment, autoSave: true);
+	}
+
 	public async Task<PublishResponseDto> PublishAsync(List<Guid> assignmentIds)
 	{
 		try

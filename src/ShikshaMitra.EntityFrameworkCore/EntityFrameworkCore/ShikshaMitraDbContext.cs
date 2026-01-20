@@ -53,6 +53,8 @@ using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.Examination.Exams;
+using ShikshaMitra.Academic.Examination.Quizzes;
+using ShikshaMitra.Academic.Examination.Submissions;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -284,7 +286,12 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Examination
 	public DbSet<GradingScale> GradingScales { get; set; } 
 	public DbSet<ExamType> ExamTypes { get; set; } 
-	public DbSet<Exam> Exams { get; set; } 
+	public DbSet<Exam> Exams { get; set; }
+
+	#region Quizzes
+	public DbSet<Quiz> Quizzes { get; set; }
+	public DbSet<QuizSubmission> QuizSubmissions { get; set; }
+	#endregion 
 	#endregion
 
 	#endregion

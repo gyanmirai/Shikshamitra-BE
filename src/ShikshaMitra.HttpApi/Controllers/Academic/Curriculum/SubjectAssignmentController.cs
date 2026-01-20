@@ -110,19 +110,20 @@ public class SubjectAssignmentController(
 	}
 
 	/// <summary>
-	/// Publishes a draft assignment (changes status from Draft to Published)
+	/// Change subject assignment status
 	/// </summary>
-	/// <param name="assignmentIds">List of Assignment group IDs</param>
-	/// <returns>Publish result with new status and timestamp</returns>
-	/// <response code="200">Assignment published successfully</response>
-	/// <response code="404">Assignment not found</response>
+	/// <param name="assignmentId">Assignment Id</param>
+	/// <param name="request">Status change request</param>
+	/// <returns>Status updated message</returns>
+	/// <response code="200">Status updated</response>
 	[HttpPatch("subject-assignments/{assignmentId}/status")]
-	[ProducesResponseType(typeof(PublishResponseDto), 200)]
-	[ProducesResponseType(404)]
-	public async Task<Result<PublishResponseDto>> PublishAsync([FromBody] List<Guid> assignmentIds)
+	public async Task<Result> ChangeStatusAsync(
+		[FromRoute] Guid assignmentId,
+		[FromBody] ChangeStatusRequestDto request
+	)
 	{
-		var result = await subjectAssignmentAppService.PublishAsync(assignmentIds);
-		return Result.Success(result);
+		await subjectAssignmentAppService.ChangeStatusAsync(assignmentId, request);
+		return Result.Success();
 	}
 
 	/// <summary>

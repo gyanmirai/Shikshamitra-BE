@@ -56,6 +56,14 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	);
 
 	/// <summary>
+	/// Changes the status of a subject assignment
+	/// </summary>
+	/// <param name="assignmentId">Assignment ID</param>
+	/// <param name="input">Status change request</param>
+	/// <returns>Message response</returns>
+	Task ChangeStatusAsync(Guid assignmentId, ChangeStatusRequestDto input);
+
+	/// <summary>
 	/// Publishes a draft assignment (changes status to Published)
 	/// </summary>
 	/// <param name="assignmentId">Assignment group ID</param>

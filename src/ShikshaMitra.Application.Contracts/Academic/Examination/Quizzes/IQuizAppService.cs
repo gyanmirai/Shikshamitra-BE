@@ -9,6 +9,7 @@ namespace ShikshaMitra.Academic.Examination.Quizzes;
 public interface IQuizAppService : IApplicationService
 {
     Task<QuizCreateResponseDto> CreateStep1Async(string academicMediumId, QuizStep1RequestDto input);
+    Task UpdateStep1Async(Guid quizId, string academicMediumId, QuizStep1RequestDto input);
     Task UpdateQuestionsAsync(Guid quizId, QuizStep2RequestDto input);
     Task<PagedResultDto<QuizListDto>> GetListAsync(string academicMediumId, QuizStatus status, int page, int pageSize);
     Task<QuizStep1ResponseDto> GetStep1Async(Guid quizId, string academicMediumId);

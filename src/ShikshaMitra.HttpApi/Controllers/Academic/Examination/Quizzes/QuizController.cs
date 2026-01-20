@@ -31,6 +31,12 @@ public class QuizController : ShikshaMitraController, IQuizAppService
         return _quizAppService.GetListAsync(academicMediumId, status, page, pageSize);
     }
 
+    [HttpPut("quizzes/{quizId}")]
+    public Task UpdateStep1Async(Guid quizId, string academicMediumId, QuizStep1RequestDto input)
+    {
+        return _quizAppService.UpdateStep1Async(quizId, academicMediumId, input);
+    }
+
     [HttpGet("quizzes/{quizId}")]
     public Task<QuizStep1ResponseDto> GetStep1Async(Guid quizId, string academicMediumId)
     {

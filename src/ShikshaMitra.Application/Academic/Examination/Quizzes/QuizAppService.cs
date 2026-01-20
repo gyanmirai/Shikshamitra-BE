@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -15,6 +15,7 @@ using Volo.Abp.Guids;
 namespace ShikshaMitra.Academic.Examination.Quizzes;
 
 [Authorize]
+[RemoteService(false)]
 public class QuizAppService : ApplicationService, IQuizAppService
 {
     private readonly IRepository<Quiz, Guid> _quizRepository;
@@ -60,6 +61,31 @@ public class QuizAppService : ApplicationService, IQuizAppService
             QuizId = quiz.Id,
             Status = quiz.Status
         };
+    }
+
+    public async Task UpdateStep1Async(Guid quizId, string academicMediumId, QuizStep1RequestDto input)
+    {
+        var quiz = await _quizRepository.GetAsync(quizId);
+        
+        quiz.UpdateDetails(
+            input.QuizTitle,
+            input.ClassId,
+            input.SubjectId,
+            input.QuizDuration,
+            input.TotalMarks,
+            input.PassingMarks,
+            input.QuizStartDateTime,
+            input.QuizEndDateTime,
+            input.QuizTakenTypeId
+        );
+
+        quiz.UpdateDivisions(input.DivisionIds);
+        if (input.ChapterIds != null)
+        {
+            quiz.UpdateChapters(input.ChapterIds);
+        }
+
+        await _quizRepository.UpdateAsync(quiz);
     }
 
     public async Task UpdateQuestionsAsync(Guid quizId, QuizStep2RequestDto input)

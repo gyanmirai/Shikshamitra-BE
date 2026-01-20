@@ -26,10 +26,13 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// </summary>
 	/// <param name="academicMediumId">Academic medium ID</param>
 	/// <param name="classId">Standard/Class ID</param>
-	/// <param name="status">Optional status filter (0=Draft, 1=Published)</param>
-	/// <returns>List of assignment groups</returns>
-	Task<List<SubjectAssignmentDto>> GetListAsync(
-		Guid classId
+	/// <param name="page">Page number (0-indexed)</param>
+	/// <param name="pageSize">Items per page</param>
+	/// <returns>Paginated list of assignment groups</returns>
+	Task<SubjectAssignmentPagedResponse> GetListAsync(
+		Guid classId,
+		int page,
+		int pageSize
 	);
 
 	/// <summary>

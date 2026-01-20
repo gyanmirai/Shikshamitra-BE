@@ -40,22 +40,25 @@ public class SubjectAssignmentController(
 	}
 
 	/// <summary>
-	/// Gets all subject assignment groups with optional filters
+	/// Gets all subject assignment groups by class (paginated)
 	/// </summary>
-	/// <param name="academicMediumId">Academic medium ID (required)</param>
-	/// <param name="classId">Standard/Class ID (required)</param>
-	/// <returns>List of assignment groups</returns>
-	/// <response code="200">Returns the list of assignments</response>
-	/// <response code="400">Required parameters missing</response>
-	[HttpGet("classes/{classId}/subject-assignments")]
-	[ProducesResponseType(typeof(List<SubjectAssignmentDto>), 200)]
-	[ProducesResponseType(400)]
-	public async Task<Result<List<SubjectAssignmentDto>>> GetListAsync(
-		Guid classId
+	/// <param name="standardId">Standard/Class ID (required)</param>
+	/// <param name="page">Page number (default 0)</param>
+	/// <param name="pageSize">Page size (default 10)</param>
+	/// <returns>Paginated list of assignment groups</returns>
+	/// <response code="200">Subject assignments fetched</response>
+	[HttpGet("{standardId}/subject-assignments")]
+	[ProducesResponseType(typeof(SubjectAssignmentPagedResponse), 200)]
+	public async Task<Result<SubjectAssignmentPagedResponse>> GetListAsync(
+		[FromRoute] Guid standardId,
+		[FromQuery] int page = 0,
+		[FromQuery] int pageSize = 10
 	)
 	{
 		var result = await subjectAssignmentAppService.GetListAsync(
-			classId
+			standardId,
+			page,
+			pageSize
 		);
 
 		return Result.Success(result);

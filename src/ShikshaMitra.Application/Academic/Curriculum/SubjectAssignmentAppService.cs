@@ -84,8 +84,10 @@ public class SubjectAssignmentAppService(
 		}
 	}
 
-	public async Task<List<SubjectAssignmentDto>> GetListAsync(
-		Guid classId
+	public async Task<SubjectAssignmentPagedResponse> GetListAsync(
+		Guid classId,
+		int page,
+		int pageSize
 	)
 	{
 		var query = await assignmentRepository.GetQueryableAsync();
@@ -96,9 +98,96 @@ public class SubjectAssignmentAppService(
 
 		var assignments = await AsyncExecuter.ToListAsync(query);
 
-		var result = new List<SubjectAssignmentDto>();
+		// Group assignments
+		var groupedAssignments = new List<SubjectAssignmentGroupDto>();
+		
+		var groupedByElective = assignments
+			.Where(a => a.SubjectType == SubjectType.Elective && a.ElectiveGroupId.HasValue)
+			.GroupBy(a => a.ElectiveGroupId)
+			.ToList();
 
-		return result;
+		var coreSubjects = assignments
+			.Where(a => a.SubjectType == SubjectType.Core || (a.SubjectType == SubjectType.Elective && !a.ElectiveGroupId.HasValue))
+			.ToList();
+
+
+        
+        // I need to fetch all subjects for these assignments to get Name and Color.
+        var subjectIds = assignments.Select(x => x.SubjectId).Distinct().ToList();
+        var subjectsDict = (await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id)))
+                           .ToDictionary(s => s.Id);
+        
+        var electiveGroupIds = assignments.Where(x => x.ElectiveGroupId.HasValue).Select(x => x.ElectiveGroupId.Value).Distinct().ToList();
+        var electiveGroupsDict = (await electiveGroupRepository.GetListAsync(g => electiveGroupIds.Contains(g.Id)))
+                                 .ToDictionary(g => g.Id);
+
+        foreach (var coreAssignment in coreSubjects)
+        {
+            subjectsDict.TryGetValue(coreAssignment.SubjectId, out var subject);
+            
+            groupedAssignments.Add(new SubjectAssignmentGroupDto
+            {
+                SubjectType = coreAssignment.SubjectType,
+                Status = coreAssignment.Status,
+                Color = subject?.Color, // Use subject color for core
+                Subjects = new List<SubjectLiteDto> 
+                {
+                    new SubjectLiteDto
+                    {
+                        SubjectType = coreAssignment.SubjectType,
+                        SubjectId = coreAssignment.SubjectId,
+                        SubjectName = subject?.Name,
+                        SubjectCode = coreAssignment.SubjectCode, // Or subject.Code? 
+                        Color = subject?.Color
+                    }
+                }
+            });
+        }
+
+        foreach (var group in groupedByElective)
+        {
+            var first = group.First();
+            electiveGroupsDict.TryGetValue(first.ElectiveGroupId.Value, out var electiveGroup);
+
+            groupedAssignments.Add(new SubjectAssignmentGroupDto
+            {
+                SubjectType = SubjectType.Elective,
+                Status = first.Status,
+                ElectiveGroupId = first.ElectiveGroupId,
+                ElectiveGroupName = electiveGroup?.Name,
+                Color = electiveGroup?.Color,
+                Subjects = group.Select(a => 
+                {
+                    subjectsDict.TryGetValue(a.SubjectId, out var subj);
+                    return new SubjectLiteDto
+                    {
+                        SubjectType = a.SubjectType,
+                        SubjectId = a.SubjectId,
+                        SubjectName = subj?.Name,
+                        SubjectCode = a.SubjectCode,
+                        Color = subj?.Color
+                    };
+                }).ToList()
+            });
+        }
+        
+        // Pagination
+        var totalCount = groupedAssignments.Count;
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+        
+        var pagedItems = groupedAssignments
+            .Skip(page * pageSize)
+            .Take(pageSize)
+            .ToList();
+
+		return new SubjectAssignmentPagedResponse
+		{
+			TotalCount = totalCount,
+			CurrentPage = page,
+			PageSize = pageSize,
+			TotalPages = totalPages,
+			Items = pagedItems
+		};
 	}
 
 	public async Task<SubjectAssignmentDto> GetAsync(Guid assignmentId)

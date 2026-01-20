@@ -19,4 +19,41 @@ public class ExamController(
     {
         await examAppService.CreateBasicDetailsAsync(input);
     }
+
+    [HttpPut("{examId}/basic-details")]
+    // [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_ScheduleExam.Edit)] // Uncomment when permission is confirmed
+    public async Task UpdateBasicDetailsAsync(Guid examId, ExamBasicDetailsRequestDto input)
+    {
+        await examAppService.UpdateBasicDetailsAsync(examId, input);
+    }
+
+    [HttpGet("{examId}/basic-details")]
+    public async Task<ExamBasicDetailsResponseDto> GetBasicDetailsAsync(Guid examId)
+    {
+        return await examAppService.GetBasicDetailsAsync(examId);
+    }
+
+    [HttpPut("{examId}/schedule")]
+    public async Task SaveScheduleAsync(Guid examId, ExamScheduleRequestDto input)
+    {
+        await examAppService.SaveScheduleAsync(examId, input);
+    }
+
+    [HttpGet("{examId}/schedule")]
+    public async Task<ExamScheduleResponseDto> GetScheduleAsync(Guid examId)
+    {
+        return await examAppService.GetScheduleAsync(examId);
+    }
+
+    [HttpPut("{examId}/rooms")]
+    public async Task AssignRoomsAsync(Guid examId, ExamRoomAssignmentRequestDto input)
+    {
+        await examAppService.AssignRoomsAsync(examId, input);
+    }
+
+    [HttpGet("{examId}/rooms")]
+    public async Task<ExamRoomAssignmentResponseDto> GetRoomAssignmentsAsync(Guid examId)
+    {
+        return await examAppService.GetRoomAssignmentsAsync(examId);
+    }
 }

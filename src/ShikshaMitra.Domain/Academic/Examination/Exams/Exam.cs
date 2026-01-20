@@ -4,7 +4,6 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
-using Volo.Abp.Guids;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Academic.Examination.Exams;
@@ -60,10 +59,44 @@ public class Exam : FullAuditedAggregateRoot<Guid>, IMultiTenant
         }
     }
 
+    public void UpdateDivisions(List<Guid> divisionIds)
+    {
+        var existingDivisionIds = ExamDivisions.Select(x => x.DivisionId).ToList();
+        var divisionsToRemove = ExamDivisions.Where(x => !divisionIds.Contains(x.DivisionId)).ToList();
+        var divisionsToAdd = divisionIds.Where(x => !existingDivisionIds.Contains(x)).ToList();
+
+        foreach (var division in divisionsToRemove)
+        {
+            ExamDivisions.Remove(division);
+        }
+
+        foreach (var divisionId in divisionsToAdd)
+        {
+            ExamDivisions.Add(new ExamDivision(Guid.NewGuid(), Id, divisionId));
+        }
+    }
+
     public void AddSubject(ExamSubject subject)
     {
         subject.SetExamId(Id);
         ExamSubjects.Add(subject);
+    }
+
+    public void UpdateSubjects(List<Guid> subjectIds)
+    {
+        var existingSubjectIds = ExamSubjects.Select(x => x.SubjectId).ToList();
+        var subjectsToRemove = ExamSubjects.Where(x => !subjectIds.Contains(x.SubjectId)).ToList();
+        var subjectsToAdd = subjectIds.Where(x => !existingSubjectIds.Contains(x)).ToList();
+
+        foreach (var subject in subjectsToRemove)
+        {
+            ExamSubjects.Remove(subject);
+        }
+
+        foreach (var subjectId in subjectsToAdd)
+        {
+            ExamSubjects.Add(new ExamSubject(Guid.NewGuid(), Id, subjectId));
+        }
     }
     
     public void UpdateExamDetails(string examName, Guid examTypeId, Guid standardId) {

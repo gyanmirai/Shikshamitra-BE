@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Examination.Exams.Dtos;
 using ShikshaMitra.Common;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Academic.Examination.Exams;
@@ -21,4 +23,10 @@ public interface IExamAppService : IApplicationService
     Task AssignRoomsAsync(Guid examId, ExamRoomAssignmentRequestDto input);
 
     Task<ExamRoomAssignmentResponseDto> GetRoomAssignmentsAsync(Guid examId);
+
+    Task<List<ExamSubjectResponseDto>> GetSubjectsAsync(Guid examId);
+
+    Task DeleteAsync(Guid examId);
+
+    Task<PagedResultDto<ExamTableItemDto>> GetListAsync(GetExamsInput input);
 }

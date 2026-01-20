@@ -14,6 +14,7 @@ public class Exam : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public Guid ExamTypeId { get; private set; }
     public string ExamName { get; private set; } = null!;
     public Guid StandardId { get; private set; }
+    public ExamStatus Status { get; private set; }
     
     public ICollection<ExamDivision> ExamDivisions { get; private set; }
     public ICollection<ExamSubject> ExamSubjects { get; private set; }
@@ -35,6 +36,7 @@ public class Exam : FullAuditedAggregateRoot<Guid>, IMultiTenant
         ExamName = Check.NotNullOrWhiteSpace(examName, nameof(examName));
         StandardId = standardId;
         TenantId = tenantId;
+        Status = ExamStatus.Pending;
 
         ExamDivisions = new Collection<ExamDivision>();
         ExamSubjects = new Collection<ExamSubject>();

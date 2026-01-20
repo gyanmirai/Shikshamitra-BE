@@ -52,6 +52,7 @@ using Volo.Abp.TenantManagement.EntityFrameworkCore;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Academic.Examination.Settings;
+using ShikshaMitra.Academic.Examination.Exams;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -283,6 +284,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Examination
 	public DbSet<GradingScale> GradingScales { get; set; } 
 	public DbSet<ExamType> ExamTypes { get; set; } 
+	public DbSet<Exam> Exams { get; set; } 
 	#endregion
 
 	#endregion

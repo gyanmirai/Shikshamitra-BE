@@ -573,6 +573,156 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppTeacherSubjectAllocations", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.Exam", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExamName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("ExamTypeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<Guid>("StandardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AppExams", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamDivision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DivisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ExamId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExamId");
+
+                    b.ToTable("AppExamDivisions", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubject", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("EndTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExamDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ExamId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<double>("PassingMarks")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SubjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("TotalMarks")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExamId");
+
+                    b.ToTable("AppExamSubjects", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubjectDivision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Capacity")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("DivisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ExamSubjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RoomIds")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExamSubjectId");
+
+                    b.ToTable("AppExamSubjectDivisions", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Academic.Examination.Settings.ExamType", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7941,6 +8091,33 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Teachers");
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamDivision", b =>
+                {
+                    b.HasOne("ShikshaMitra.Academic.Examination.Exams.Exam", null)
+                        .WithMany("ExamDivisions")
+                        .HasForeignKey("ExamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubject", b =>
+                {
+                    b.HasOne("ShikshaMitra.Academic.Examination.Exams.Exam", null)
+                        .WithMany("ExamSubjects")
+                        .HasForeignKey("ExamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubjectDivision", b =>
+                {
+                    b.HasOne("ShikshaMitra.Academic.Examination.Exams.ExamSubject", null)
+                        .WithMany("RoomAssignments")
+                        .HasForeignKey("ExamSubjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ShikshaMitra.Academic.Examination.Settings.GradeRange", b =>
                 {
                     b.HasOne("ShikshaMitra.Academic.Examination.Settings.GradingScale", null)
@@ -9852,6 +10029,18 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroup", b =>
                 {
                     b.Navigation("Subjects");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.Exam", b =>
+                {
+                    b.Navigation("ExamDivisions");
+
+                    b.Navigation("ExamSubjects");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubject", b =>
+                {
+                    b.Navigation("RoomAssignments");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Examination.Settings.GradingScale", b =>

@@ -227,9 +227,10 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 			return;
 		}
 
-		// 4. Generate Standard Password (username@last4mobile)
+		// 4. Generate Standard Password (Username@last4mobile - with uppercase first letter)
 		var last4Digits = mobile.Length >= 4 ? mobile.Substring(mobile.Length - 4) : "0000";
-		var password = $"{username}@{last4Digits}";
+		var capitalizedUsername = char.ToUpper(username[0]) + username.Substring(1);
+		var password = $"{capitalizedUsername}@{last4Digits}";
 
 		// 5. Create IdentityUser
 		var user = new IdentityUser(
@@ -336,9 +337,10 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 			var lastName = nameParts.Length > 1 ? nameParts[^1] : "user";
 			var username = await GenerateUniqueUsernameAsync(firstName, lastName);
 
-			// Generate password
+			// Generate password (with uppercase first letter)
 			var last4Digits = mobile.Length >= 4 ? mobile.Substring(mobile.Length - 4) : "0000";
-			var password = $"{username}@{last4Digits}";
+			var capitalizedUsername = char.ToUpper(username[0]) + username.Substring(1);
+			var password = $"{capitalizedUsername}@{last4Digits}";
 
 			// Create IdentityUser
 			var user = new IdentityUser(

@@ -62,9 +62,10 @@ public class EmployeePersonalInfoAppService(
 				// Step 1: Generate unique username
 				var username = await GenerateUniqueUsernameAsync(input.FirstName, input.LastName);
 
-				// Step 2: Generate password (username@last4digitsOfMobile)
+				// Step 2: Generate password (Username@last4digitsOfMobile - with uppercase first letter)
 				var last4Digits = input.MobileNo.Substring(input.MobileNo.Length - 4);
-				var password = $"{username}@{last4Digits}";
+				var capitalizedUsername = char.ToUpper(username[0]) + username.Substring(1);
+				var password = $"{capitalizedUsername}@{last4Digits}";
 
 				// Step 3: Create user
 				var user = new IdentityUser(
@@ -84,7 +85,7 @@ public class EmployeePersonalInfoAppService(
 				if (!userCreateResult.Succeeded)
 				{
 					throw new UserFriendlyException(
-						"Failed to create user: " + 
+						"Failed to create user: " +
 						string.Join(", ", userCreateResult.Errors.Select(e => e.Description))
 					);
 				}
@@ -131,46 +132,46 @@ public class EmployeePersonalInfoAppService(
 					shiftId: input.ShiftId
 				);
 
-					// Save the employee
-					employee = await employeeRepository.InsertAsync(employee);
+				// Save the employee
+				employee = await employeeRepository.InsertAsync(employee);
 
-					logger.LogInformation(
-						"[PersonalInfo] Employee created successfully: EmployeeId={EmployeeId}, EmployeeCode={EmployeeCode}",
-						employee.Id,
-						employee.EmployeeCode
-					);
+				logger.LogInformation(
+					"[PersonalInfo] Employee created successfully: EmployeeId={EmployeeId}, EmployeeCode={EmployeeCode}",
+					employee.Id,
+					employee.EmployeeCode
+				);
 
-					// Commit transaction
-					await uow.CompleteAsync();
+				// Commit transaction
+				await uow.CompleteAsync();
 
-					logger.LogInformation(
-						"[PersonalInfo] Transaction completed: EmployeeId={EmployeeId}, Email={Email}",
-						employee.Id,
-						input.Email
-					);
+				logger.LogInformation(
+					"[PersonalInfo] Transaction completed: EmployeeId={EmployeeId}, Email={Email}",
+					employee.Id,
+					input.Email
+				);
 
-					// Return the mapped DTO
-					return MapToDto(employee);
-				}
-				catch (UserFriendlyException ex)
-				{
-					logger.LogWarning(
-						ex,
-						"[PersonalInfo] Validation failed for {Email}: {Message}",
-						input.Email,
-						ex.Message
-					);
-					// Transaction will be automatically rolled back
-					throw;
-				}
-				catch (Exception ex)
-				{
-					logger.LogError(
-						ex,
-						"[PersonalInfo] Unexpected error for {Email}",
-						input.Email
-					);
-					// Transaction will be automatically rolled back
+				// Return the mapped DTO
+				return MapToDto(employee);
+			}
+			catch (UserFriendlyException ex)
+			{
+				logger.LogWarning(
+					ex,
+					"[PersonalInfo] Validation failed for {Email}: {Message}",
+					input.Email,
+					ex.Message
+				);
+				// Transaction will be automatically rolled back
+				throw;
+			}
+			catch (Exception ex)
+			{
+				logger.LogError(
+					ex,
+					"[PersonalInfo] Unexpected error for {Email}",
+					input.Email
+				);
+				// Transaction will be automatically rolled back
 				throw;
 			}
 		}
@@ -262,64 +263,64 @@ public class EmployeePersonalInfoAppService(
 			Address3 = employee.Address3,
 			Country = employee.Country,
 			State = employee.State,
-					City = employee.City,
-					Pincode = employee.PinCode,
-					ShiftId = employee.ShiftId,
-					Shift = null // Navigation property not included in API contract
-				};
-			}
+			City = employee.City,
+			Pincode = employee.PinCode,
+			ShiftId = employee.ShiftId,
+			Shift = null // Navigation property not included in API contract
+		};
+	}
 
-			private async Task<string> GenerateUniqueUsernameAsync(string firstName, string lastName)
+	private async Task<string> GenerateUniqueUsernameAsync(string firstName, string lastName)
+	{
+		// Generate base username: firstInitial + lastName (e.g., jdoe)
+		// Sanitize to remove special characters and non-ASCII characters
+		var firstInitial = !string.IsNullOrWhiteSpace(firstName)
+			? new string(firstName.Where(char.IsLetterOrDigit).ToArray()).ToLower().FirstOrDefault().ToString()
+			: "x";
+
+		if (string.IsNullOrWhiteSpace(firstInitial))
+		{
+			firstInitial = "x";
+		}
+
+		var lastNamePart = !string.IsNullOrWhiteSpace(lastName)
+			? new string(lastName.Where(char.IsLetterOrDigit).ToArray()).ToLower()
+			: "user";
+
+		if (string.IsNullOrWhiteSpace(lastNamePart))
+		{
+			lastNamePart = "user";
+		}
+
+		var baseUsername = $"{firstInitial}{lastNamePart}";
+
+		// Check if username exists
+		var normalizedUsername = lookupNormalizer.NormalizeName(baseUsername);
+		var existingUser = await userRepository.FindByNormalizedUserNameAsync(normalizedUsername);
+
+		if (existingUser == null)
+		{
+			return baseUsername;
+		}
+
+		// Username exists, append sequence number
+		var sequence = 1;
+		while (true)
+		{
+			var sequencedUsername = $"{baseUsername}{sequence:D2}";
+			normalizedUsername = lookupNormalizer.NormalizeName(sequencedUsername);
+			existingUser = await userRepository.FindByNormalizedUserNameAsync(normalizedUsername);
+
+			if (existingUser == null)
 			{
-				// Generate base username: firstInitial + lastName (e.g., jdoe)
-				// Sanitize to remove special characters and non-ASCII characters
-				var firstInitial = !string.IsNullOrWhiteSpace(firstName) 
-					? new string(firstName.Where(char.IsLetterOrDigit).ToArray()).ToLower().FirstOrDefault().ToString() 
-					: "x";
-
-				if (string.IsNullOrWhiteSpace(firstInitial))
-				{
-					firstInitial = "x";
-				}
-
-				var lastNamePart = !string.IsNullOrWhiteSpace(lastName) 
-					? new string(lastName.Where(char.IsLetterOrDigit).ToArray()).ToLower()
-					: "user";
-
-				if (string.IsNullOrWhiteSpace(lastNamePart))
-				{
-					lastNamePart = "user";
-				}
-
-				var baseUsername = $"{firstInitial}{lastNamePart}";
-
-				// Check if username exists
-				var normalizedUsername = lookupNormalizer.NormalizeName(baseUsername);
-				var existingUser = await userRepository.FindByNormalizedUserNameAsync(normalizedUsername);
-
-				if (existingUser == null)
-				{
-					return baseUsername;
-				}
-
-				// Username exists, append sequence number
-				var sequence = 1;
-				while (true)
-				{
-					var sequencedUsername = $"{baseUsername}{sequence:D2}";
-					normalizedUsername = lookupNormalizer.NormalizeName(sequencedUsername);
-					existingUser = await userRepository.FindByNormalizedUserNameAsync(normalizedUsername);
-
-					if (existingUser == null)
-					{
-						return sequencedUsername;
-					}
-
-					sequence++;
-					if (sequence > 99)
-					{
-						throw new UserFriendlyException("Unable to generate unique username.");
-					}
-				}
+				return sequencedUsername;
 			}
+
+			sequence++;
+			if (sequence > 99)
+			{
+				throw new UserFriendlyException("Unable to generate unique username.");
 			}
+		}
+	}
+}

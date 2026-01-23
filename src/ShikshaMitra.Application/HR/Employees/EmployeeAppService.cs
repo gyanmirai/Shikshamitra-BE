@@ -41,7 +41,7 @@ public class EmployeeAppService(
 	public async Task<EmployeeDto> GetEmployeeByUserId(Guid userId)
 	{
 		// Navigation properties (Role, Shift) are auto-loaded
-		Employee employee = await employeeRepository.GetEmployeeByUserIdAsync(userId) 
+		Employee employee = await employeeRepository.GetEmployeeByUserIdAsync(userId)
 			?? throw new EntityNotFoundException(typeof(Employee), userId);
 
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
@@ -116,9 +116,10 @@ public class EmployeeAppService(
 					input.Email
 				);
 
-				// Step 2: Generate password (username@last4digitsOfMobile)
+				// Step 2: Generate password (Username@last4digitsOfMobile - with uppercase first letter)
 				var last4Digits = input.MobileNo.Substring(input.MobileNo.Length - 4);
-				var password = $"{username}@{last4Digits}";
+				var capitalizedUsername = char.ToUpper(username[0]) + username.Substring(1);
+				var password = $"{capitalizedUsername}@{last4Digits}";
 
 				// Step 3: Create user
 				var userId = guidGenerator.Create();
@@ -285,8 +286,8 @@ public class EmployeeAppService(
 	{
 		// Generate base username: firstInitial + lastName (e.g., jdoe)
 		// Sanitize to remove special characters and non-ASCII characters
-		var firstInitial = !string.IsNullOrWhiteSpace(firstName) 
-			? new string(firstName.Where(char.IsLetterOrDigit).ToArray()).ToLower().FirstOrDefault().ToString() 
+		var firstInitial = !string.IsNullOrWhiteSpace(firstName)
+			? new string(firstName.Where(char.IsLetterOrDigit).ToArray()).ToLower().FirstOrDefault().ToString()
 			: "x";
 
 		if (string.IsNullOrWhiteSpace(firstInitial))
@@ -294,7 +295,7 @@ public class EmployeeAppService(
 			firstInitial = "x";
 		}
 
-		var lastNamePart = !string.IsNullOrWhiteSpace(lastName) 
+		var lastNamePart = !string.IsNullOrWhiteSpace(lastName)
 			? new string(lastName.Where(char.IsLetterOrDigit).ToArray()).ToLower()
 			: "user";
 
@@ -633,7 +634,7 @@ public class EmployeeAppService(
 	public async Task<DocumentDto?> GetProfilePictureAsync(Guid employeeId)
 	{
 		var employee = await employeeRepository.GetAsync(employeeId);
-		
+
 		if (string.IsNullOrEmpty(employee.ProfilePictureBlobName))
 		{
 			return null;
@@ -690,7 +691,7 @@ public class EmployeeAppService(
 	private static string GetContentTypeFromFileName(string fileName)
 	{
 		var extension = Path.GetExtension(fileName)?.ToLowerInvariant();
-		
+
 		return extension switch
 		{
 			".jpg" or ".jpeg" => "image/jpeg",
@@ -730,26 +731,26 @@ public class EmployeeAppService(
 				TdsPercentage = payrollDetails.TdsPercentage,
 				TdsAmount = payrollDetails.TdsAmount
 			} : new PayrollDetailsDto(),
-		Earnings = (earnings ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(e => new PayrollComponentDto
-		{
-			Name = e.Name,
-			Description = e.Description,
-			Amount = e.Amount,
-			IsFixed = e.IsFixed,
-			IsTemp = e.IsTemp,
-			ComponentType = e.ComponentType,
-			DependOn = e.DependOn
-		}).ToList(),
-		Deductions = (deductions ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(d => new PayrollComponentDto
-		{
-			Name = d.Name,
-			Description = d.Description,
-			Amount = d.Amount,
-			IsFixed = d.IsFixed,
-			IsTemp = d.IsTemp,
-			ComponentType = d.ComponentType,
-			DependOn = d.DependOn
-		}).ToList()
+			Earnings = (earnings ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(e => new PayrollComponentDto
+			{
+				Name = e.Name,
+				Description = e.Description,
+				Amount = e.Amount,
+				IsFixed = e.IsFixed,
+				IsTemp = e.IsTemp,
+				ComponentType = e.ComponentType,
+				DependOn = e.DependOn
+			}).ToList(),
+			Deductions = (deductions ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(d => new PayrollComponentDto
+			{
+				Name = d.Name,
+				Description = d.Description,
+				Amount = d.Amount,
+				IsFixed = d.IsFixed,
+				IsTemp = d.IsTemp,
+				ComponentType = d.ComponentType,
+				DependOn = d.DependOn
+			}).ToList()
 		};
 
 		return result;
@@ -765,7 +766,7 @@ public class EmployeeAppService(
 
 		// Validate employee exists (throws EntityNotFoundException if not found)
 		await employeeRepository.GetAsync(employeeId);
-		
+
 		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
 
 		if (payrollDetails == null)
@@ -894,7 +895,7 @@ public class EmployeeAppService(
 		// Calculate pagination info
 		var pageSize = input.MaxResultCount > 0 ? input.MaxResultCount : 10;
 		var currentPage = (input.SkipCount / pageSize) + 1;
-		var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+		var totalPages = (int) Math.Ceiling((double) totalCount / pageSize);
 
 		// Map to response DTOs
 		var items = employees.Select(MapToEmployeeSummary).ToList();
@@ -967,7 +968,7 @@ public class EmployeeAppService(
 				StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"),
 				EndTime = employee.Shift.EndTime.ToString("HH:mm:ss")
 			} : null,
-			Status = (int)(employee.EmployeeStatusType ?? EmployeeStatusType.Active)
+			Status = (int) (employee.EmployeeStatusType ?? EmployeeStatusType.Active)
 		};
 	}
 
@@ -993,7 +994,7 @@ public class EmployeeAppService(
 				StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"),
 				EndTime = employee.Shift.EndTime.ToString("HH:mm:ss")
 			} : new ShiftInfo(),
-			Status = (int)(employee.EmployeeStatusType ?? EmployeeStatusType.Active)
+			Status = (int) (employee.EmployeeStatusType ?? EmployeeStatusType.Active)
 		};
 	}
 
@@ -1003,7 +1004,7 @@ public class EmployeeAppService(
 	public async Task<PayrollContract> GetPayrollContractAsync(Guid employeeId)
 	{
 		await employeeRepository.GetAsync(employeeId); // Validate employee exists
-		
+
 		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
 		var earnings = await payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
 		var deductions = await payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);

@@ -64,25 +64,25 @@ public class HRSeederContributor : BaseSeederContributor
 			IIdentityUserRepository userRepository,
 			ILookupNormalizer lookupNormalizer)
 			: base(currentTenant, guidGenerator, unitOfWork)
-		{
-			_leaveTypeRepository = leaveTypeRepository;
-			_leaveTypeManager = leaveTypeManager;
-			_earningComponentRepository = earningComponentRepository;
-			_earningComponentManager = earningComponentManager;
-			_deductionComponentRepository = deductionComponentRepository;
-			_deductionComponentManager = deductionComponentManager;
-			_leavePolicyRepository = leavePolicyRepository;
-			_leavePolicyManager = leavePolicyManager;
-			_leaveTypeQueryRepository = leaveTypeQueryRepository;
-			_educationMediumStageRepository = educationMediumStageRepository;
-			_shiftRepository = shiftRepository;
-			_employeeRepository = employeeRepository;
-			_employeeManager = employeeManager;
-			_roleRepository = roleRepository;
-			_userManager = userManager;
-			_userRepository = userRepository;
-			_lookupNormalizer = lookupNormalizer;
-		}
+	{
+		_leaveTypeRepository = leaveTypeRepository;
+		_leaveTypeManager = leaveTypeManager;
+		_earningComponentRepository = earningComponentRepository;
+		_earningComponentManager = earningComponentManager;
+		_deductionComponentRepository = deductionComponentRepository;
+		_deductionComponentManager = deductionComponentManager;
+		_leavePolicyRepository = leavePolicyRepository;
+		_leavePolicyManager = leavePolicyManager;
+		_leaveTypeQueryRepository = leaveTypeQueryRepository;
+		_educationMediumStageRepository = educationMediumStageRepository;
+		_shiftRepository = shiftRepository;
+		_employeeRepository = employeeRepository;
+		_employeeManager = employeeManager;
+		_roleRepository = roleRepository;
+		_userManager = userManager;
+		_userRepository = userRepository;
+		_lookupNormalizer = lookupNormalizer;
+	}
 
 	public override async Task SeedAsync(DataSeedContext context)
 	{
@@ -249,63 +249,63 @@ public class HRSeederContributor : BaseSeederContributor
 				component.VisibleInPayslip,
 				component.DisplayOrder
 			);
-						await _deductionComponentRepository.InsertAsync(deductionComponent, autoSave: true);
-					}
-				}
+			await _deductionComponentRepository.InsertAsync(deductionComponent, autoSave: true);
+		}
+	}
 
-				private async Task SeedShiftManagementAsync()
-				{
-					// Check if already seeded
-					if (await _shiftRepository.AnyAsync())
-						return;
+	private async Task SeedShiftManagementAsync()
+	{
+		// Check if already seeded
+		if (await _shiftRepository.AnyAsync())
+			return;
 
-					var shifts = new[]
-					{
+		var shifts = new[]
+		{
 						new { Name = "Morning Shift", StartTime = new TimeOnly(7, 0), EndTime = new TimeOnly(12, 30) },
 						new { Name = "Afternoon Shift", StartTime = new TimeOnly(12, 30), EndTime = new TimeOnly(17, 30) },
 						new { Name = "Full Day Shift", StartTime = new TimeOnly(7, 0), EndTime = new TimeOnly(17, 30) }
 					};
 
-					foreach (var shift in shifts)
-					{
-						var id = GuidGenerator.Create();
-						var shiftEntity = new ShiftManagement
-						{
-							ShiftName = shift.Name,
-							StartTime = shift.StartTime,
-							EndTime = shift.EndTime
-						};
-						// Set the Id using reflection since there's no constructor
-						typeof(ShiftManagement).GetProperty("Id").SetValue(shiftEntity, id);
-						await _shiftRepository.InsertAsync(shiftEntity, autoSave: true);
-					}
-				}
+		foreach (var shift in shifts)
+		{
+			var id = GuidGenerator.Create();
+			var shiftEntity = new ShiftManagement
+			{
+				ShiftName = shift.Name,
+				StartTime = shift.StartTime,
+				EndTime = shift.EndTime
+			};
+			// Set the Id using reflection since there's no constructor
+			typeof(ShiftManagement).GetProperty("Id").SetValue(shiftEntity, id);
+			await _shiftRepository.InsertAsync(shiftEntity, autoSave: true);
+		}
+	}
 
-				private async Task SeedEmployeesAsync()
-				{
-					// Check if already seeded
-					if (await _employeeRepository.AnyAsync())
-						return;
+	private async Task SeedEmployeesAsync()
+	{
+		// Check if already seeded
+		if (await _employeeRepository.AnyAsync())
+			return;
 
-					// Get required dependencies
-					var educationMediumStage = (await _educationMediumStageRepository.GetQueryableAsync()).FirstOrDefault();
-					if (educationMediumStage == null)
-						return; // Skip if no academic setup
+		// Get required dependencies
+		var educationMediumStage = (await _educationMediumStageRepository.GetQueryableAsync()).FirstOrDefault();
+		if (educationMediumStage == null)
+			return; // Skip if no academic setup
 
-					var fullDayShift = (await _shiftRepository.GetQueryableAsync())
-						.FirstOrDefault(s => s.ShiftName == "Full Day Shift");
+		var fullDayShift = (await _shiftRepository.GetQueryableAsync())
+			.FirstOrDefault(s => s.ShiftName == "Full Day Shift");
 
-					// Seed teaching staff
-					await SeedTeachingStaffAsync(educationMediumStage.Id, fullDayShift?.Id);
+		// Seed teaching staff
+		await SeedTeachingStaffAsync(educationMediumStage.Id, fullDayShift?.Id);
 
-					// Seed non-teaching staff
-					await SeedNonTeachingStaffAsync(educationMediumStage.Id, fullDayShift?.Id);
-				}
+		// Seed non-teaching staff
+		await SeedNonTeachingStaffAsync(educationMediumStage.Id, fullDayShift?.Id);
+	}
 
-				private async Task SeedTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId)
-				{
-					var teachingEmployees = new[]
-					{
+	private async Task SeedTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId)
+	{
+		var teachingEmployees = new[]
+		{
 						new
 						{
 							FirstName = "Rajesh",
@@ -598,56 +598,56 @@ public class HRSeederContributor : BaseSeederContributor
 						}
 					};
 
-					foreach (var emp in teachingEmployees)
-					{
-						var role = await _roleRepository.FindByNormalizedNameAsync(emp.RoleName.ToUpperInvariant());
-						if (role == null) continue;
+		foreach (var emp in teachingEmployees)
+		{
+			var role = await _roleRepository.FindByNormalizedNameAsync(emp.RoleName.ToUpperInvariant());
+			if (role == null) continue;
 
-						// Create user first
-						var userId = await CreateUserForEmployeeAsync(emp.FirstName, emp.LastName, emp.Email, emp.Mobile);
+			// Create user first
+			var userId = await CreateUserForEmployeeAsync(emp.FirstName, emp.LastName, emp.Email, emp.Mobile);
 
-						var employee = await _employeeManager.CreateEmployeeAsync(
-							userId: userId,
-							roleId: role.Id,
-							firstName: emp.FirstName,
-							lastName: emp.LastName,
-							middleName: emp.MiddleName,
-							shortName: $"{emp.FirstName[0]}.{emp.LastName}",
-							employeeStatusType: EmployeeStatusType.Active,
-							dateOfBirth: emp.DateOfBirth,
-							familyCast: emp.FamilyCast,
-							castType: emp.CastType,
-							genderType: emp.Gender,
-							religion: emp.Religion,
-							maritalStatus: emp.MaritalStatus,
-							bloodGroup: emp.BloodGroup,
-							mobileNo: emp.Mobile,
-							secondaryMobileNo: emp.SecondaryMobile,
-							email: emp.Email,
-							address1: emp.Address1,
-							address2: emp.Address2,
-							address3: emp.Address3,
-							designation: emp.Designation,
-							department: emp.Department,
-							dateOfJoining: emp.DateOfJoining,
-							employeeGroup: EmployeeGroupType.Teaching,
-							qualification: emp.Qualification,
-										identificationMark1: emp.IdentificationMark,
-										city: emp.City,
-										state: emp.State,
-										country: emp.Country,
-										pinCode: emp.PinCode,
-										shiftId: shiftId
-									);
+			var employee = await _employeeManager.CreateEmployeeAsync(
+				userId: userId,
+				roleId: role.Id,
+				firstName: emp.FirstName,
+				lastName: emp.LastName,
+				middleName: emp.MiddleName,
+				shortName: $"{emp.FirstName[0]}.{emp.LastName}",
+				employeeStatusType: EmployeeStatusType.Active,
+				dateOfBirth: emp.DateOfBirth,
+				familyCast: emp.FamilyCast,
+				castType: emp.CastType,
+				genderType: emp.Gender,
+				religion: emp.Religion,
+				maritalStatus: emp.MaritalStatus,
+				bloodGroup: emp.BloodGroup,
+				mobileNo: emp.Mobile,
+				secondaryMobileNo: emp.SecondaryMobile,
+				email: emp.Email,
+				address1: emp.Address1,
+				address2: emp.Address2,
+				address3: emp.Address3,
+				designation: emp.Designation,
+				department: emp.Department,
+				dateOfJoining: emp.DateOfJoining,
+				employeeGroup: EmployeeGroupType.Teaching,
+				qualification: emp.Qualification,
+							identificationMark1: emp.IdentificationMark,
+							city: emp.City,
+							state: emp.State,
+							country: emp.Country,
+							pinCode: emp.PinCode,
+							shiftId: shiftId
+						);
 
-									await _employeeRepository.InsertAsync(employee, autoSave: true);
-								}
-							}
+			await _employeeRepository.InsertAsync(employee, autoSave: true);
+		}
+	}
 
-							private async Task SeedNonTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId)
-							{
-								var nonTeachingEmployees = new[]
-								{
+	private async Task SeedNonTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId)
+	{
+		var nonTeachingEmployees = new[]
+		{
 									new
 									{
 							FirstName = "Ramesh",
@@ -795,160 +795,161 @@ public class HRSeederContributor : BaseSeederContributor
 						}
 					};
 
-					foreach (var emp in nonTeachingEmployees)
-					{
-						var role = await _roleRepository.FindByNormalizedNameAsync(emp.RoleName.ToUpperInvariant());
-						if (role == null) continue;
+		foreach (var emp in nonTeachingEmployees)
+		{
+			var role = await _roleRepository.FindByNormalizedNameAsync(emp.RoleName.ToUpperInvariant());
+			if (role == null) continue;
 
-						// Create user first
-						var userId = await CreateUserForEmployeeAsync(emp.FirstName, emp.LastName, emp.Email, emp.Mobile);
+			// Create user first
+			var userId = await CreateUserForEmployeeAsync(emp.FirstName, emp.LastName, emp.Email, emp.Mobile);
 
-						var employee = await _employeeManager.CreateEmployeeAsync(
-							userId: userId,
-							roleId: role.Id,
-							firstName: emp.FirstName,
-							lastName: emp.LastName,
-							middleName: emp.MiddleName,
-							shortName: $"{emp.FirstName[0]}.{emp.LastName}",
-							employeeStatusType: EmployeeStatusType.Active,
-							dateOfBirth: emp.DateOfBirth,
-							familyCast: emp.FamilyCast,
-							castType: emp.CastType,
-							genderType: emp.Gender,
-							religion: emp.Religion,
-							maritalStatus: emp.MaritalStatus,
-							bloodGroup: emp.BloodGroup,
-							mobileNo: emp.Mobile,
-							secondaryMobileNo: emp.SecondaryMobile,
-							email: emp.Email,
-							address1: emp.Address1,
-							address2: emp.Address2,
-							address3: emp.Address3,
-							designation: emp.Designation,
-							department: emp.Department,
-							dateOfJoining: emp.DateOfJoining,
-							employeeGroup: EmployeeGroupType.NonTeaching,
-							qualification: emp.Qualification,
-							identificationMark1: emp.IdentificationMark,
-							city: emp.City,
-										state: emp.State,
-										country: emp.Country,
-										pinCode: emp.PinCode,
-										shiftId: shiftId
-									);
+			var employee = await _employeeManager.CreateEmployeeAsync(
+				userId: userId,
+				roleId: role.Id,
+				firstName: emp.FirstName,
+				lastName: emp.LastName,
+				middleName: emp.MiddleName,
+				shortName: $"{emp.FirstName[0]}.{emp.LastName}",
+				employeeStatusType: EmployeeStatusType.Active,
+				dateOfBirth: emp.DateOfBirth,
+				familyCast: emp.FamilyCast,
+				castType: emp.CastType,
+				genderType: emp.Gender,
+				religion: emp.Religion,
+				maritalStatus: emp.MaritalStatus,
+				bloodGroup: emp.BloodGroup,
+				mobileNo: emp.Mobile,
+				secondaryMobileNo: emp.SecondaryMobile,
+				email: emp.Email,
+				address1: emp.Address1,
+				address2: emp.Address2,
+				address3: emp.Address3,
+				designation: emp.Designation,
+				department: emp.Department,
+				dateOfJoining: emp.DateOfJoining,
+				employeeGroup: EmployeeGroupType.NonTeaching,
+				qualification: emp.Qualification,
+				identificationMark1: emp.IdentificationMark,
+				city: emp.City,
+							state: emp.State,
+							country: emp.Country,
+							pinCode: emp.PinCode,
+							shiftId: shiftId
+						);
 
-									await _employeeRepository.InsertAsync(employee, autoSave: true);
-								}
-							}
+			await _employeeRepository.InsertAsync(employee, autoSave: true);
+		}
+	}
 
-							private async Task<Guid> CreateUserForEmployeeAsync(string firstName, string lastName, string email, string mobileNo)
-							{
-								// Validate mobile number
-								if (string.IsNullOrWhiteSpace(mobileNo) || mobileNo.Length < 4)
-								{
-									throw new Exception($"Invalid mobile number for employee {firstName} {lastName}");
-								}
+	private async Task<Guid> CreateUserForEmployeeAsync(string firstName, string lastName, string email, string mobileNo)
+	{
+		// Validate mobile number
+		if (string.IsNullOrWhiteSpace(mobileNo) || mobileNo.Length < 4)
+		{
+			throw new Exception($"Invalid mobile number for employee {firstName} {lastName}");
+		}
 
-								// Check if email already exists
-								var normalizedEmail = _lookupNormalizer.NormalizeEmail(email);
-								var existingUserByEmail = await _userRepository.FindByNormalizedEmailAsync(normalizedEmail);
-								if (existingUserByEmail != null)
-								{
-									// For seeding, we can skip if user already exists
-									return existingUserByEmail.Id;
-								}
+		// Check if email already exists
+		var normalizedEmail = _lookupNormalizer.NormalizeEmail(email);
+		var existingUserByEmail = await _userRepository.FindByNormalizedEmailAsync(normalizedEmail);
+		if (existingUserByEmail != null)
+		{
+			// For seeding, we can skip if user already exists
+			return existingUserByEmail.Id;
+		}
 
-								// Generate unique username
-								var username = await GenerateUniqueUsernameAsync(firstName, lastName);
+		// Generate unique username
+		var username = await GenerateUniqueUsernameAsync(firstName, lastName);
 
-								// Generate password (username@last4digitsOfMobile)
-								var last4Digits = mobileNo.Substring(mobileNo.Length - 4);
-								var password = $"{username}@{last4Digits}";
+		// Generate password (Username@last4digitsOfMobile - with uppercase first letter)
+		var last4Digits = mobileNo.Substring(mobileNo.Length - 4);
+		var capitalizedUsername = char.ToUpper(username[0]) + username.Substring(1);
+		var password = $"{capitalizedUsername}@{last4Digits}";
 
-								// Create user
-								var user = new IdentityUser(
-									GuidGenerator.Create(),
-									username,
-									email,
-									CurrentTenant.Id
-								);
+		// Create user
+		var user = new IdentityUser(
+			GuidGenerator.Create(),
+			username,
+			email,
+			CurrentTenant.Id
+		);
 
-								user.Name = firstName;
-								user.Surname = lastName;
-								user.SetEmailConfirmed(true);
-								user.SetPhoneNumber(mobileNo, false);
+		user.Name = firstName;
+		user.Surname = lastName;
+		user.SetEmailConfirmed(true);
+		user.SetPhoneNumber(mobileNo, false);
 
-								// Create user with password
-								var userCreateResult = await _userManager.CreateAsync(user, password);
-								if (!userCreateResult.Succeeded)
-								{
-									throw new Exception(
-										"Failed to create user for seeding: " + 
-										string.Join(", ", userCreateResult.Errors.Select(e => e.Description))
-									);
-								}
+		// Create user with password
+		var userCreateResult = await _userManager.CreateAsync(user, password);
+		if (!userCreateResult.Succeeded)
+		{
+			throw new Exception(
+				"Failed to create user for seeding: " +
+				string.Join(", ", userCreateResult.Errors.Select(e => e.Description))
+			);
+		}
 
-								// Verify user was created successfully
-								var createdUser = await _userRepository.FindAsync(user.Id);
-								if (createdUser == null)
-								{
-									throw new Exception("User was not created successfully during seeding.");
-								}
+		// Verify user was created successfully
+		var createdUser = await _userRepository.FindAsync(user.Id);
+		if (createdUser == null)
+		{
+			throw new Exception("User was not created successfully during seeding.");
+		}
 
-								return user.Id;
-							}
+		return user.Id;
+	}
 
-								private async Task<string> GenerateUniqueUsernameAsync(string firstName, string lastName)
-								{
-									// Generate base username: firstInitial + lastName (e.g., jdoe)
-									// Sanitize to remove special characters and non-ASCII characters
-									var firstInitial = !string.IsNullOrWhiteSpace(firstName) 
-										? new string(firstName.Where(char.IsLetterOrDigit).ToArray()).ToLower().FirstOrDefault().ToString() 
-										: "x";
+	private async Task<string> GenerateUniqueUsernameAsync(string firstName, string lastName)
+	{
+		// Generate base username: firstInitial + lastName (e.g., jdoe)
+		// Sanitize to remove special characters and non-ASCII characters
+		var firstInitial = !string.IsNullOrWhiteSpace(firstName)
+			? new string(firstName.Where(char.IsLetterOrDigit).ToArray()).ToLower().FirstOrDefault().ToString()
+			: "x";
 
-									if (string.IsNullOrWhiteSpace(firstInitial))
-									{
-										firstInitial = "x";
-									}
+		if (string.IsNullOrWhiteSpace(firstInitial))
+		{
+			firstInitial = "x";
+		}
 
-									var lastNamePart = !string.IsNullOrWhiteSpace(lastName) 
-										? new string(lastName.Where(char.IsLetterOrDigit).ToArray()).ToLower()
-										: "user";
+		var lastNamePart = !string.IsNullOrWhiteSpace(lastName)
+			? new string(lastName.Where(char.IsLetterOrDigit).ToArray()).ToLower()
+			: "user";
 
-									if (string.IsNullOrWhiteSpace(lastNamePart))
-									{
-										lastNamePart = "user";
-									}
+		if (string.IsNullOrWhiteSpace(lastNamePart))
+		{
+			lastNamePart = "user";
+		}
 
-									var baseUsername = $"{firstInitial}{lastNamePart}";
+		var baseUsername = $"{firstInitial}{lastNamePart}";
 
-									// Check if username exists
-									var normalizedUsername = _lookupNormalizer.NormalizeName(baseUsername);
-									var existingUser = await _userRepository.FindByNormalizedUserNameAsync(normalizedUsername);
+		// Check if username exists
+		var normalizedUsername = _lookupNormalizer.NormalizeName(baseUsername);
+		var existingUser = await _userRepository.FindByNormalizedUserNameAsync(normalizedUsername);
 
-									if (existingUser == null)
-									{
-										return baseUsername;
-									}
+		if (existingUser == null)
+		{
+			return baseUsername;
+		}
 
-									// Username exists, append sequence number
-									var sequence = 1;
-									while (true)
-									{
-										var sequencedUsername = $"{baseUsername}{sequence:D2}";
-										normalizedUsername = _lookupNormalizer.NormalizeName(sequencedUsername);
-										existingUser = await _userRepository.FindByNormalizedUserNameAsync(normalizedUsername);
+		// Username exists, append sequence number
+		var sequence = 1;
+		while (true)
+		{
+			var sequencedUsername = $"{baseUsername}{sequence:D2}";
+			normalizedUsername = _lookupNormalizer.NormalizeName(sequencedUsername);
+			existingUser = await _userRepository.FindByNormalizedUserNameAsync(normalizedUsername);
 
-										if (existingUser == null)
-										{
-											return sequencedUsername;
-										}
+			if (existingUser == null)
+			{
+				return sequencedUsername;
+			}
 
-										sequence++;
-										if (sequence > 99)
-										{
-											throw new Exception("Unable to generate unique username for seeding.");
-										}
-									}
-								}
-							}
+			sequence++;
+			if (sequence > 99)
+			{
+				throw new Exception("Unable to generate unique username for seeding.");
+			}
+		}
+	}
+}

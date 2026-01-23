@@ -24,6 +24,7 @@ public class EmployeePersonalInfoAppService(
 	IIdentityUserRepository userRepository,
 	ILookupNormalizer lookupNormalizer,
 	IGuidGenerator guidGenerator,
+	IEmployeeEmailService emailService,
 	ILogger<EmployeePersonalInfoAppService> logger)
 	: ApplicationService, IEmployeePersonalInfoAppService
 {
@@ -147,6 +148,15 @@ public class EmployeePersonalInfoAppService(
 				logger.LogInformation(
 					"[PersonalInfo] Transaction completed: EmployeeId={EmployeeId}, Email={Email}",
 					employee.Id,
+					input.Email
+				);
+
+				// Send welcome email with credentials
+				var fullName = $"{input.FirstName} {input.LastName}".Trim();
+				await emailService.SendWelcomeEmailAsync(input.Email, fullName, username, password);
+
+				logger.LogInformation(
+					"[PersonalInfo] Welcome email sent to: {Email}",
 					input.Email
 				);
 

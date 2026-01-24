@@ -76,9 +76,9 @@ public class TextElement : Element, IElement
 /// </summary>
 public enum Script
 {
-	Normal,
-	Sub,
-	Super,
+	Normal = 0,
+	Sub = 1,
+	Super = 2,
 }
 
 /// <summary>
@@ -86,9 +86,9 @@ public enum Script
 /// </summary>
 public enum TextDecoration
 {
-	None,
-	Underline,
-	Strike,
+	None = 0,
+	Underline = 1,
+	Strike = 2,
 }
 
 /// <summary>
@@ -96,8 +96,8 @@ public enum TextDecoration
 /// </summary>
 public enum TextAlignment
 {
-	Start,
-	Center,
-	End,
-	Justify,
+	Start = 0,
+	Center = 1,
+	End = 2,
+	Justify = 3,
 }

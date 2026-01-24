@@ -2,7 +2,7 @@
 
 public enum NoteStatusEnum
 {
-	Pending,
-	Interested,
-	NotInterested,
+	Pending = 0,
+	Interested = 1,
+	NotInterested = 2,
 }

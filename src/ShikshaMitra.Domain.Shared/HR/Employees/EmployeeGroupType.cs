@@ -2,6 +2,6 @@
 
 public enum EmployeeGroupType
 {
-	Teaching,
-	NonTeaching
+	Teaching = 0,
+	NonTeaching = 1
 }

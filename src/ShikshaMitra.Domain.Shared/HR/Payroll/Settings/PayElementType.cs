@@ -2,6 +2,6 @@
 
 public enum PayElementType
 {
-	Credit,
-	Debit
+	Credit = 0,
+	Debit = 1
 }

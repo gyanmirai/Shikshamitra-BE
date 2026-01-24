@@ -2,6 +2,6 @@
 
 public enum Category
 {
-	General,
-	Rte,
+	General = 0,
+	Rte = 1,
 }

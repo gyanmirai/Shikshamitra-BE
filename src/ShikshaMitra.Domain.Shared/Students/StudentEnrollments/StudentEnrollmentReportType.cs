@@ -2,7 +2,7 @@
 
 public enum StudentEnrollmentReportType
 {
-	EnrollmentByGender,
-	EnrollmentByAge,
-	AgewiseSummary,
+	EnrollmentByGender = 0,
+	EnrollmentByAge = 1,
+	AgewiseSummary = 2,
 }

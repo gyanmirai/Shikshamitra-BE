@@ -2,8 +2,8 @@
 
 public enum StudentEnrollmentInquiryState
 {
-	New,
-	InProgress,
-	FollowUpRequired,
-	Closed
+	New = 0,
+	InProgress = 1,
+	FollowUpRequired = 2,
+	Closed = 3
 }

@@ -8,10 +8,10 @@ public enum SubjectType
 	/// <summary>
 	/// Core subject (mandatory for all students)
 	/// </summary>
-	Core,
+	Core = 0,
 
 	/// <summary>
 	/// Elective subject (student can choose)
 	/// </summary>
-	Elective
+	Elective = 1
 }

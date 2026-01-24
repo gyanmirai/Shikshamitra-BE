@@ -2,7 +2,7 @@
 
 public enum ParentTypeEnum
 {
-	Father,
-	Mother,
-	Guardian,
+	Father = 0,
+	Mother = 1,
+	Guardian = 2,
 }

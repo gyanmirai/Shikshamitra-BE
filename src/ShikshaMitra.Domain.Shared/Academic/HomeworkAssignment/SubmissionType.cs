@@ -2,7 +2,7 @@
 
 public enum SubmissionType
 {
-	OnlineText,
-	FileUpload,
-	InPersonSubmission,
+	OnlineText = 0,
+	FileUpload = 1,
+	InPersonSubmission = 2,
 }

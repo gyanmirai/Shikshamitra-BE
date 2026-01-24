@@ -2,7 +2,7 @@
 
 public enum ArrangementTypeEnum
 {
-	Mix,
-	BoysFirst,
-	GirlsFirst
+	Mix = 0,
+	BoysFirst = 1,
+	GirlsFirst = 2
 }

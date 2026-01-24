@@ -12,11 +12,11 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 /// </summary>
 public enum AttendanceStatus
 {
-	Present,
-	Halfday,
-	Absent,
-	Leave,
-	Pending
+	Present = 0,
+	Halfday = 1,
+	Absent = 2,
+	Leave = 3,
+	Pending = 4
 }
 
 /// <summary>
@@ -137,11 +137,11 @@ public class ValidationMessage
 public enum ValidationSeverity
 {
 	/// <summary>Error - prevents row from being imported.</summary>
-	Error,
+	Error = 0,
 	/// <summary>Warning - row is imported but with concerns.</summary>
-	Warning,
+	Warning = 1,
 	/// <summary>Info - informational message.</summary>
-	Info
+	Info = 2
 }
 
 /// <summary>

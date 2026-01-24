@@ -5,8 +5,8 @@
 /// </summary>
 public enum EmployeeStatusType
 {
-	Active,
-	Inactive,
-	Left,
-	Retired
+	Active = 0,
+	Inactive = 1,
+	Left = 2,
+	Retired = 3
 }

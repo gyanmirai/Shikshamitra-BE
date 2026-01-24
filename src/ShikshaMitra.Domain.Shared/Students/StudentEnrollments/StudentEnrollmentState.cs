@@ -2,8 +2,8 @@
 
 public enum StudentEnrollmentState
 {
-	Inquiry,
-	RegistrationForm,
-	Registration,
-	Admission,
+	Inquiry = 0,
+	RegistrationForm = 1,
+	Registration = 2,
+	Admission = 3,
 }

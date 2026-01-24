@@ -2,7 +2,7 @@
 
 public enum StudentAttendanceStatusType
 {
-	Present,
-	HalfDayLeave,
-	FullDayLeave
+	Present = 0,
+	HalfDayLeave = 1,
+	FullDayLeave = 2
 }

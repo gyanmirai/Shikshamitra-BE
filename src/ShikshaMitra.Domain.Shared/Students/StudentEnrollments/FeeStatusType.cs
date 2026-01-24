@@ -2,7 +2,7 @@
 
 public enum FeeStatusType
 {
-	Paid,
-	Unpaid,
-	Partial
+	Paid = 0,
+	Unpaid = 1,
+	Partial = 2
 }

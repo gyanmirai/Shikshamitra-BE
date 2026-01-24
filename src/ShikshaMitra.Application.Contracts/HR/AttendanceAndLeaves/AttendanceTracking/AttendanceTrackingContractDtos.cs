@@ -12,10 +12,10 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
 /// </summary>
 public enum AttendanceTrackingStatus
 {
-	PRESENT,
-	ABSENT,
-	HALF_DAY,
-	REJECTED_LEAVE
+	PRESENT = 0,
+	ABSENT = 1,
+	HALF_DAY = 2,
+	REJECTED_LEAVE = 3
 }
 
 #endregion

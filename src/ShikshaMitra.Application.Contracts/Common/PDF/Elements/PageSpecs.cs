@@ -62,12 +62,12 @@ public class PageSpecs
 		/// <summary>
 		/// Left to right.
 		/// </summary>
-		LTR,
+		LTR = 0,
 
 		/// <summary>
 		/// Right to left.
 		/// </summary>
-		RTL,
+		RTL = 1,
 	}
 
 	/// <summary>
@@ -78,12 +78,12 @@ public class PageSpecs
 		/// <summary>
 		/// Portrait.
 		/// </summary>
-		Portrait,
+		Portrait = 0,
 
 		/// <summary>
 		/// Landscape.
 		/// </summary>
-		Landscape
+		Landscape = 1
 	}
 
 	public sealed class ContinuousSizeData

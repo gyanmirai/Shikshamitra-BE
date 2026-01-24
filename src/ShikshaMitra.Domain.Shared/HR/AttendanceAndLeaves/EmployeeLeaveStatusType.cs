@@ -2,8 +2,8 @@
 
 public enum EmployeeLeaveStatusType
 {
-	Pending,
-	Approved,
-	Rejected,
-	Reviewed
+	Pending = 0,
+	Approved = 1,
+	Rejected = 2,
+	Reviewed = 3
 }

@@ -2,6 +2,6 @@
 
 public enum SubjectTeacherType
 {
-    Primary,
-    Secondary
+    Primary = 0,
+    Secondary = 1
 }

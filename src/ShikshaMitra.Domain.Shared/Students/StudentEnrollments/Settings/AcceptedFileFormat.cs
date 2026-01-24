@@ -8,30 +8,30 @@ public enum AcceptedFileFormat
 	/// <summary>
 	/// JPEG image format
 	/// </summary>
-	Jpg = 1,
+	Jpg = 0,
 
 	/// <summary>
 	/// JPEG image format (alternative extension)
 	/// </summary>
-	Jpeg = 2,
+	Jpeg = 1,
 
 	/// <summary>
 	/// PNG image format
 	/// </summary>
-	Png = 3,
+	Png = 2,
 
 	/// <summary>
 	/// Microsoft Word document
 	/// </summary>
-	Docx = 4,
+	Docx = 3,
 
 	/// <summary>
 	/// PDF document
 	/// </summary>
-	Pdf = 5,
+	Pdf = 4,
 
 	/// <summary>
 	/// Microsoft Excel spreadsheet
 	/// </summary>
-	Xlsx = 6
+	Xlsx = 5
 }

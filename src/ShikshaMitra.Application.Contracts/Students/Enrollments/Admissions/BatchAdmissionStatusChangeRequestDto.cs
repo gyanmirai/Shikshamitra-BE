@@ -33,6 +33,6 @@ public class AdmissionStatusChangeItemDto
 /// </summary>
 public enum AdmissionAction
 {
-	Approve = 1,
-	Reject = 2
+	Approve = 0,
+	Reject = 1
 }

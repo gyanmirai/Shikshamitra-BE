@@ -60,8 +60,8 @@ public class ImageElement : Element, IElement
 /// </summary>
 public enum ImageFit
 {
-	Width,
-	Height,
-	Area,
-	Unproportional,
+	Width = 0,
+	Height = 1,
+	Area = 2,
+	Unproportional = 3,
 }

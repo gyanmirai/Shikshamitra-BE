@@ -41,9 +41,9 @@ public class CreateUpdateHolidayDto : IValidatableObject
     public string? Description { get; set; }
 
     /// <summary>
-    /// Comma-separated audience IDs (users/groups) this holiday applies to
+    /// List of user/group IDs this holiday applies to
     /// </summary>
-    public string? AudienceIds { get; set; }
+    public List<Guid> AudienceIds { get; set; } = new();
 
     /// <summary>
     /// Comma-separated attachment file paths or URLs

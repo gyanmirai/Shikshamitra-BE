@@ -2,9 +2,12 @@
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Calendar;
 using ShikshaMitra.HR.Calendar.EventTypes;
 using ShikshaMitra.HR.Calendar.Holidays;
+using ShikshaMitra.HR.Calendar.Events;
 using ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
+using ShikshaMitra.Application.Contracts.HR.Calendar.Events;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Employees.ReportingManager;
@@ -35,9 +38,17 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		CreateMap<EventType, EventTypeDto>();
 		CreateMap<CreateUpdateEventTypeDto, EventType>();
 
+		// Holiday Type mapping
+		CreateMap<HolidayType, HolidayTypeDto>();
+		CreateMap<CreateUpdateHolidayTypeDto, HolidayType>();
+
 		// Holiday mapping
 		CreateMap<Holiday, HolidayDto>();
 		CreateMap<CreateUpdateHolidayDto, Holiday>();
+
+		// Event mapping
+		CreateMap<ShikshaMitra.HR.Calendar.Events.Event, EventDto>();
+		CreateMap<CreateUpdateEventDto, ShikshaMitra.HR.Calendar.Events.Event>();
 
 		// Earning Components
 		CreateMap<EarningComponent, EarningComponentDto>();

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.HR.Calendar.Holidays;
@@ -35,7 +36,10 @@ public class HolidayConfiguration : IEntityTypeConfiguration<Holiday>
             .HasMaxLength(500);
 
         builder.Property(x => x.AudienceIds)
-            .HasMaxLength(2000);
+            .HasConversion(
+                v => System.Text.Json.JsonSerializer.Serialize(v, System.Text.Json.JsonSerializerOptions.Default),
+                v => string.IsNullOrEmpty(v) ? new() : System.Text.Json.JsonSerializer.Deserialize<List<Guid>>(v, System.Text.Json.JsonSerializerOptions.Default) ?? new())
+            .HasColumnType("jsonb");
 
         builder.Property(x => x.Attachments)
             .HasMaxLength(2000);

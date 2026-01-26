@@ -10,7 +10,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.Controllers.HR.Calendar;
 
 /// <summary>
-/// EventType Management Controller
+/// Event Type Management Controller
 /// Manages event type configurations for calendar events and holidays
 /// </summary>
 [Area("app")]
@@ -29,7 +29,7 @@ public class EventTypeController : ShikshaMitraController
     /// Get paginated list of event types with filtering and sorting
     /// </summary>
     /// <param name="input">Pagination, filtering, and sorting parameters</param>
-    /// <returns>Paginated list of event types</returns>
+    /// <returns>Paginated list of holiday types</returns>
     [HttpGet]
     [ProducesResponseType(typeof(PagedResultDto<EventTypeDto>), StatusCodes.Status200OK)]
     public virtual async Task<PagedResultDto<EventTypeDto>> GetListAsync(
@@ -41,8 +41,8 @@ public class EventTypeController : ShikshaMitraController
     /// <summary>
     /// Get event type by ID
     /// </summary>
-    /// <param name="id">Event type ID</param>
-    /// <returns>Event type details</returns>
+    /// <param name="id">Holiday type ID</param>
+    /// <returns>Holiday type details</returns>
     [HttpGet("{id}")]
     [ProducesResponseType(typeof(EventTypeDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -54,8 +54,8 @@ public class EventTypeController : ShikshaMitraController
     /// <summary>
     /// Create a new event type
     /// </summary>
-    /// <param name="input">Event type creation data</param>
-    /// <returns>Created event type</returns>
+    /// <param name="input">Holiday type creation data</param>
+    /// <returns>Created holiday type</returns>
     [HttpPost]
     [ProducesResponseType(typeof(EventTypeDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -68,9 +68,9 @@ public class EventTypeController : ShikshaMitraController
     /// <summary>
     /// Update an existing event type
     /// </summary>
-    /// <param name="id">Event type ID</param>
-    /// <param name="input">Event type update data</param>
-    /// <returns>Updated event type</returns>
+    /// <param name="id">Holiday type ID</param>
+    /// <param name="input">Holiday type update data</param>
+    /// <returns>Updated holiday type</returns>
     [HttpPut("{id}")]
     [ProducesResponseType(typeof(EventTypeDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -84,7 +84,7 @@ public class EventTypeController : ShikshaMitraController
     /// <summary>
     /// Delete an event type
     /// </summary>
-    /// <param name="id">Event type ID</param>
+    /// <param name="id">Holiday type ID</param>
     [HttpDelete("{id}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

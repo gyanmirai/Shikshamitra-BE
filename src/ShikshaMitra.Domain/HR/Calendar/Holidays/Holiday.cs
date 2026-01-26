@@ -39,9 +39,9 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public string? Description { get; set; }
 
     /// <summary>
-    /// Comma-separated list of audience IDs (users/groups) this holiday applies to
+    /// List of user/group IDs this holiday applies to
     /// </summary>
-    public string? AudienceIds { get; set; }
+    public List<Guid> AudienceIds { get; set; } = new();
 
     /// <summary>
     /// Comma-separated list of attachment file paths/URLs
@@ -74,7 +74,7 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
         DateTimeOffset startDate,
         DateTimeOffset endDate,
         string? description = null,
-        string? audienceIds = null,
+        List<Guid>? audienceIds = null,
         string? attachments = null) : base(id)
     {
         TenantId = tenantId;
@@ -83,7 +83,7 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
         StartDate = startDate;
         EndDate = endDate;
         Description = description;
-        AudienceIds = audienceIds;
+        AudienceIds = audienceIds ?? new();
         Attachments = attachments;
 
         ValidateDateRange();
@@ -99,7 +99,7 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
         DateTimeOffset startDate,
         DateTimeOffset endDate,
         string? description = null,
-        string? audienceIds = null,
+        List<Guid>? audienceIds = null,
         string? attachments = null)
     {
         return new Holiday(Guid.NewGuid(), tenantId, holidayName, holidayTypeId, startDate, endDate, description, audienceIds, attachments);
@@ -113,7 +113,7 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
         DateTimeOffset? startDate = null,
         DateTimeOffset? endDate = null,
         string? description = null,
-        string? audienceIds = null,
+        List<Guid>? audienceIds = null,
         string? attachments = null)
     {
         if (!string.IsNullOrWhiteSpace(holidayName))

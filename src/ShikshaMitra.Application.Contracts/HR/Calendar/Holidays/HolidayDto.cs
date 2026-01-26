@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
@@ -14,7 +15,7 @@ public class HolidayDto : AuditedEntityDto<Guid>
     public DateTimeOffset StartDate { get; set; }
     public DateTimeOffset EndDate { get; set; }
     public string? Description { get; set; }
-    public string? AudienceIds { get; set; }
+    public List<Guid> AudienceIds { get; set; } = new();
     public string? Attachments { get; set; }
     public int Status { get; set; }
 }

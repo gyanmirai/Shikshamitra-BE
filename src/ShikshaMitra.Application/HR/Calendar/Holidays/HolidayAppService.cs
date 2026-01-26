@@ -1,9 +1,11 @@
+﻿using ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
+using ShikshaMitra.HR.Calendar.Holidays;
+using ShikshaMitra.HR.Calendar;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using ShikshaMitra.HR.Calendar.Holidays;
-using ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -13,6 +15,7 @@ namespace ShikshaMitra.Application.HR.Calendar.Holidays;
 /// <summary>
 /// Application service for Holiday CRUD operations with filtering
 /// </summary>
+[RemoteService(false)]
 public class HolidayAppService : CrudAppService<
     Holiday,
     HolidayDto,
@@ -22,11 +25,16 @@ public class HolidayAppService : CrudAppService<
     IHolidayAppService
 {
     private readonly IHolidayRepository _holidayRepository;
+    private readonly IHolidayTypeRepository _holidayTypeRepository;
 
-    public HolidayAppService(IRepository<Holiday, Guid> repository, IHolidayRepository holidayRepository)
+    public HolidayAppService(
+        IRepository<Holiday, Guid> repository,
+        IHolidayRepository holidayRepository,
+        IHolidayTypeRepository holidayTypeRepository)
         : base(repository)
     {
         _holidayRepository = holidayRepository;
+        _holidayTypeRepository = holidayTypeRepository;
         GetPolicyName = "Holiday.View";
         GetListPolicyName = "Holiday.List";
         CreatePolicyName = "Holiday.Create";
@@ -135,10 +143,17 @@ public class HolidayAppService : CrudAppService<
     }
 
     /// <summary>
-    /// Override CreateAsync to use factory pattern
+    /// Override CreateAsync to use factory pattern and validate HolidayType exists
     /// </summary>
     public override async Task<HolidayDto> CreateAsync(CreateUpdateHolidayDto input)
     {
+        // Validate that the referenced HolidayType exists
+        var holidayTypeExists = await _holidayTypeRepository.AnyAsync(x => x.Id == input.HolidayTypeId);
+        if (!holidayTypeExists)
+        {
+            throw new BusinessException($"Holiday type with ID '{input.HolidayTypeId}' does not exist.");
+        }
+
         var holiday = Holiday.Create(
             CurrentTenant.Id,
             input.HolidayName,

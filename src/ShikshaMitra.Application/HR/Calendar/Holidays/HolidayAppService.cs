@@ -119,7 +119,7 @@ public class HolidayAppService : CrudAppService<
         var allHolidays = await AsyncExecuter.ToListAsync(query);
 
         // Filter by status (computed property requires in-memory evaluation)
-        var statusValue = (HolidayStatus)input.Status.Value;
+        var statusValue = (HolidayStatus) input.Status.Value;
         var filtered = allHolidays.Where(x => x.Status == statusValue).ToList();
 
         var totalCount = filtered.Count;

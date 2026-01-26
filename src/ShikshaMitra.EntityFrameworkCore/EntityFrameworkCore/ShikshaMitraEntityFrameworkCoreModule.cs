@@ -36,7 +36,7 @@ namespace ShikshaMitra.EntityFrameworkCore;
     typeof(AbpFeatureManagementEntityFrameworkCoreModule)
     )]
 [DependsOn(typeof(BlobStoringDatabaseEntityFrameworkCoreModule))]
-    public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
+public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
 {
     public override void PreConfigureServices(ServiceConfigurationContext context)
     {
@@ -49,29 +49,29 @@ namespace ShikshaMitra.EntityFrameworkCore;
     public override void ConfigureServices(ServiceConfigurationContext context)
     {
         var configuration = context.Services.GetConfiguration();
-        
+
         context.Services.AddAbpDbContext<ShikshaMitraDbContext>(options =>
         {
-                /* Remove "includeAllEntities: true" to create
-                 * default repositories only for aggregate roots */
+            /* Remove "includeAllEntities: true" to create
+             * default repositories only for aggregate roots */
             options.AddDefaultRepositories(includeAllEntities: true);
-            
+
             // Register custom repositories
             options.AddRepository<UserScopeAssignment, EfCoreUserScopeAssignmentRepository>();
             options.AddRepository<SalarySlip, EfCoreSalarySlipRepository>();
             options.AddRepository<Holiday, EFCoreHolidayRepository>();
         });
-        
+
         // Register custom repository extensions
         context.Services.AddTransient<IIdentityUserRepositoryExtensions, EfCoreIdentityUserRepositoryExtensions>();
 
         Configure<AbpDbContextOptions>(options =>
         {
-                /* The main point to change your DBMS.
-                 * See also ShikshaMitraMigrationsDbContextFactory for EF Core tooling. */
+            /* The main point to change your DBMS.
+             * See also ShikshaMitraMigrationsDbContextFactory for EF Core tooling. */
             options.UseNpgsql();
         });
-        
+
         // Ensure connection strings are available from configuration  
         Configure<AbpDbConnectionOptions>(options =>
         {

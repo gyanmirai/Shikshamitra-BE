@@ -105,7 +105,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId")
                         .HasDatabaseName("AppHolidays_Tenant");
 
-                    b.ToTable("AppHolidays", (string)null);
+                    b.ToTable("AppHolidays", (string) null);
                 });
 
 #pragma warning restore 612, 618

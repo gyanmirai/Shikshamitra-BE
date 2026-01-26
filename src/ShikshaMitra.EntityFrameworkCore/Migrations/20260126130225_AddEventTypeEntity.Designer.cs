@@ -83,7 +83,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId")
                         .HasDatabaseName("IX_AppEventTypes_TenantId");
 
-                    b.ToTable("AppEventTypes", (string)null);
+                    b.ToTable("AppEventTypes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Calendar.Holidays.Holiday", b =>
@@ -166,7 +166,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId")
                         .HasDatabaseName("AppHolidays_Tenant");
 
-                    b.ToTable("AppHolidays", (string)null);
+                    b.ToTable("AppHolidays", (string) null);
                 });
 
 #pragma warning restore 612, 618

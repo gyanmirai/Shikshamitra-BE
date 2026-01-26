@@ -2,6 +2,9 @@
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Calendar.EventTypes;
+using ShikshaMitra.HR.Calendar.Holidays;
+using ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Employees.ReportingManager;
@@ -28,9 +31,17 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		CreateMap<LibraryTiming, LibraryTimingDto>();
 		CreateMap<LibraryTimingDto, LibraryTiming>();
 
+		// Event Types mapping
+		CreateMap<EventType, EventTypeDto>();
+		CreateMap<CreateUpdateEventTypeDto, EventType>();
+
+		// Holiday mapping
+		CreateMap<Holiday, HolidayDto>();
+		CreateMap<CreateUpdateHolidayDto, Holiday>();
+
 		// Earning Components
 		CreateMap<EarningComponent, EarningComponentDto>();
-		
+
 		// Deduction Components
 		CreateMap<DeductionComponent, DeductionComponentDto>();
 
@@ -50,7 +61,7 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 
 		// Employee Leave Management
 		CreateMap<LeaveType, LeaveTypeDto>();
-		
+
 		// Leave Policy mapping with custom PaidType conversion
 		CreateMap<LeavePolicy, LeavePolicyDto>()
 			.ForMember(dest => dest.PaidType,

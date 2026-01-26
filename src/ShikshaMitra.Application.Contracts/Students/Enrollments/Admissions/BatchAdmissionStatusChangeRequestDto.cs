@@ -21,10 +21,10 @@ public class AdmissionStatusChangeItemDto
 {
 	[Required]
 	public Guid StudentId { get; set; }
-	
+
 	[Required]
 	public AdmissionAction Action { get; set; }
-	
+
 	public string? Remarks { get; set; }
 }
 

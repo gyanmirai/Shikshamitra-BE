@@ -3,6 +3,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.EntityFrameworkCore.Security.UserScope;
 using ShikshaMitra.HR.Payroll.SalarySlips;
+using ShikshaMitra.HR.Calendar.Holidays;
+using ShikshaMitra.EntityFrameworkCore.HR.Calendar.Holidays;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp.Uow;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
@@ -57,6 +59,7 @@ namespace ShikshaMitra.EntityFrameworkCore;
             // Register custom repositories
             options.AddRepository<UserScopeAssignment, EfCoreUserScopeAssignmentRepository>();
             options.AddRepository<SalarySlip, EfCoreSalarySlipRepository>();
+            options.AddRepository<Holiday, EFCoreHolidayRepository>();
         });
         
         // Register custom repository extensions

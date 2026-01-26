@@ -1,4 +1,5 @@
 ﻿namespace ShikshaMitra.Students;
+
 public enum MotherTongueEnum
 {
 	English = 0,

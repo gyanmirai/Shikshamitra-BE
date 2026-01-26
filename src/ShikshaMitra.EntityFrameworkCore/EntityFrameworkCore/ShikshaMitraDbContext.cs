@@ -12,6 +12,8 @@ using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.EventAndHolidays;
+using ShikshaMitra.HR.Calendar.EventTypes;
+using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.SalarySlips;
@@ -175,7 +177,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<ShikshaMitra.Students.Attendance.Settings.StudentLeaveType> StudentLeaveTypes { get; set; }
 
 	#endregion
-	
+
 	public DbSet<ShikshaMitra.Students.Attendances.StudentLeave> StudentLeaves { get; set; }
 
 	#endregion
@@ -192,7 +194,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	DbSet<Employee> Employees { get; set; }
 	DbSet<EmployeeAdditionalDetails> EmployeeAdditionalDetails { get; set; }
 	DbSet<DocumentSetting> DocumentSettings { get; set; }
-	
+
 	// Employee Payroll
 	public DbSet<EmployeePayrollDetails> EmployeePayrollDetails { get; set; }
 	public DbSet<EmployeePayrollComponent> EmployeePayrollComponents { get; set; }
@@ -228,6 +230,8 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region  Events & Holidays
 
 	DbSet<EventAndHoliday> EventAndHolidays { get; set; }
+	public DbSet<EventType> EventTypes { get; set; }
+	public DbSet<Holiday> Holidays { get; set; }
 
 	#endregion
 
@@ -282,9 +286,9 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#endregion
 
 	#region Examination
-	public DbSet<GradingScale> GradingScales { get; set; } 
-	public DbSet<ExamType> ExamTypes { get; set; } 
-	public DbSet<Exam> Exams { get; set; } 
+	public DbSet<GradingScale> GradingScales { get; set; }
+	public DbSet<ExamType> ExamTypes { get; set; }
+	public DbSet<Exam> Exams { get; set; }
 	#endregion
 
 	#endregion
@@ -317,13 +321,13 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 		builder.ConfigureOpenIddict();
 		builder.ConfigureFeatureManagement();
 		builder.ConfigureTenantManagement();
-		
+
 		// Ignore owned entities BEFORE ApplyConfigurationsFromAssembly
 		// EmployeeDocument is configured as an owned entity in EmployeeConfiguration
 		builder.Ignore<EmployeeDocument>();
 		// AllocatedTeacher is configured as an owned entity in TeacherSubjectAllocationConfiguration
 		builder.Ignore<AllocatedTeacher>();
-		
+
 		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 		builder.ConfigureBlobStoring();
 	}

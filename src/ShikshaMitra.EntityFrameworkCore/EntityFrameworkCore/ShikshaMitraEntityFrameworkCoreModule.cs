@@ -3,6 +3,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.EntityFrameworkCore.Security.UserScope;
 using ShikshaMitra.HR.Payroll.SalarySlips;
+using ShikshaMitra.HR.Calendar;
+using ShikshaMitra.HR.Calendar.Holidays;
+using ShikshaMitra.EntityFrameworkCore.HR.Calendar.Holidays;
+using ShikshaMitra.HR.Calendar.Events;
+using ShikshaMitra.EntityFrameworkCore.HR.Calendar.Events;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp.Uow;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
@@ -34,7 +39,7 @@ namespace ShikshaMitra.EntityFrameworkCore;
     typeof(AbpFeatureManagementEntityFrameworkCoreModule)
     )]
 [DependsOn(typeof(BlobStoringDatabaseEntityFrameworkCoreModule))]
-    public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
+public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
 {
     public override void PreConfigureServices(ServiceConfigurationContext context)
     {
@@ -47,28 +52,31 @@ namespace ShikshaMitra.EntityFrameworkCore;
     public override void ConfigureServices(ServiceConfigurationContext context)
     {
         var configuration = context.Services.GetConfiguration();
-        
+
         context.Services.AddAbpDbContext<ShikshaMitraDbContext>(options =>
         {
-                /* Remove "includeAllEntities: true" to create
-                 * default repositories only for aggregate roots */
+            /* Remove "includeAllEntities: true" to create
+             * default repositories only for aggregate roots */
             options.AddDefaultRepositories(includeAllEntities: true);
-            
+
             // Register custom repositories
             options.AddRepository<UserScopeAssignment, EfCoreUserScopeAssignmentRepository>();
             options.AddRepository<SalarySlip, EfCoreSalarySlipRepository>();
+            options.AddRepository<HolidayType, EFCoreHolidayTypeRepository>();
+            options.AddRepository<Holiday, EFCoreHolidayRepository>();
+            options.AddRepository<Event, EFCoreEventRepository>();
         });
-        
+
         // Register custom repository extensions
         context.Services.AddTransient<IIdentityUserRepositoryExtensions, EfCoreIdentityUserRepositoryExtensions>();
 
         Configure<AbpDbContextOptions>(options =>
         {
-                /* The main point to change your DBMS.
-                 * See also ShikshaMitraMigrationsDbContextFactory for EF Core tooling. */
+            /* The main point to change your DBMS.
+             * See also ShikshaMitraMigrationsDbContextFactory for EF Core tooling. */
             options.UseNpgsql();
         });
-        
+
         // Ensure connection strings are available from configuration  
         Configure<AbpDbConnectionOptions>(options =>
         {

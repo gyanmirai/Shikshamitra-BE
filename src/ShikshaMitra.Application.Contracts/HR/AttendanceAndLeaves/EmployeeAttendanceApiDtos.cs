@@ -43,12 +43,12 @@ public class AttendanceItem
 	public string? PhoneNo { get; set; }
 	public DateTimeOffset? InTime { get; set; }
 	public DateTimeOffset? OutTime { get; set; }
-	
+
 	/// <summary>
 	/// Hours worked formatted as "HHh MMm" (e.g., "08h 30m").
 	/// </summary>
 	public string? HoursWorked { get; set; }
-	
+
 	public AttendanceStatus Status { get; set; }
 }
 
@@ -151,13 +151,13 @@ public class GetPaginatedAttendanceInput
 {
 	[Required]
 	public DateTimeOffset Date { get; set; }
-	
+
 	/// <summary>
 	/// Page index (0-based).
 	/// </summary>
 	[Range(0, int.MaxValue)]
 	public int Page { get; set; } = 0;
-	
+
 	/// <summary>
 	/// Number of records per page.
 	/// </summary>

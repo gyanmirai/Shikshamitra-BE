@@ -1,4 +1,5 @@
 ﻿namespace ShikshaMitra.Students;
+
 public enum ReligionEnum
 {
 	Hinduism = 0,

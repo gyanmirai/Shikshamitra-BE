@@ -61,14 +61,17 @@ public class HolidayController : ShikshaMitraController
     /// <summary>
     /// Create a new holiday
     /// </summary>
+    /// <param name="academicYearId">Academic Year ID from query parameter</param>
     /// <param name="input">Holiday creation data</param>
     /// <returns>Created holiday</returns>
     [HttpPost]
     [ProducesResponseType(typeof(HolidayDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public virtual async Task<HolidayDto> CreateAsync(
+        [FromQuery] Guid academicYearId,
         [FromBody] CreateUpdateHolidayDto input)
     {
+        input.AcademicYearId = academicYearId;
         return await _holidayAppService.CreateAsync(input);
     }
 

@@ -69,7 +69,7 @@ public class EventController : ShikshaMitraController
     /// <remarks>
     /// Sample request:
     /// 
-    ///     POST /api/calendar/events
+    ///     POST /api/calendar/events?academicYearId=3fa85f64-5717-4562-b3fc-2c963f66afa6
     ///     {
     ///         "title": "Team Meeting",
     ///         "eventTypeId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
@@ -81,13 +81,15 @@ public class EventController : ShikshaMitraController
     ///         "description": "Quarterly planning meeting"
     ///     }
     /// </remarks>
+    /// <param name="academicYearId">Academic Year ID from query parameter</param>
     /// <param name="input">Event creation data</param>
     /// <returns>Created event with ID</returns>
     [HttpPost]
     [ProducesResponseType(typeof(EventDto), 201)]
     [ProducesResponseType(400)]
-    public async Task<ActionResult<EventDto>> CreateAsync([FromBody] CreateUpdateEventDto input)
+    public async Task<ActionResult<EventDto>> CreateAsync([FromQuery] Guid academicYearId, [FromBody] CreateUpdateEventDto input)
     {
+        input.AcademicYearId = academicYearId;
         var result = await _eventAppService.CreateAsync(input);
         return CreatedAtAction(nameof(GetAsync), new { id = result.Id }, result);
     }

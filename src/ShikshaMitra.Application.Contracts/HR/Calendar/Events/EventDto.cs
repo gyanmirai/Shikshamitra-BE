@@ -25,9 +25,14 @@ public class EventDto : AuditedEntityDto<Guid>
     public string Title { get; set; }
 
     /// <summary>
-    /// Event type ID
+    /// Event type ID (deprecated - use EventType object instead)
     /// </summary>
     public Guid EventTypeId { get; set; }
+
+    /// <summary>
+    /// Full EventType object with name, color, and description
+    /// </summary>
+    public EventTypeDto? EventType { get; set; }
 
     /// <summary>
     /// Description

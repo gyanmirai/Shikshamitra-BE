@@ -82,9 +82,18 @@ public class HolidayAppService : CrudAppService<
                 .Take(input.MaxResultCount)
         );
 
+        var holidayDtos = ObjectMapper.Map<List<Holiday>, List<HolidayDto>>(items);
+
+        // Populate HolidayType data for each holiday
+        foreach (var holidayDto in holidayDtos)
+        {
+            var holidayType = await _holidayTypeRepository.GetAsync(holidayDto.HolidayTypeId);
+            holidayDto.HolidayType = ObjectMapper.Map<HolidayType, HolidayTypeDto>(holidayType);
+        }
+
         return new PagedResultDto<HolidayDto>(
             totalCount,
-            ObjectMapper.Map<List<Holiday>, List<HolidayDto>>(items)
+            holidayDtos
         );
     }
 
@@ -103,6 +112,21 @@ public class HolidayAppService : CrudAppService<
     {
         var holidays = await _holidayRepository.GetAllAsync();
         return ObjectMapper.Map<List<Holiday>, List<HolidayDto>>(holidays);
+    }
+
+    /// <summary>
+    /// Override GetAsync to populate HolidayType
+    /// </summary>
+    public override async Task<HolidayDto> GetAsync(Guid id)
+    {
+        var entity = await _holidayRepository.GetAsync(id);
+        var holidayDto = ObjectMapper.Map<Holiday, HolidayDto>(entity);
+
+        // Populate HolidayType data
+        var holidayType = await _holidayTypeRepository.GetAsync(holidayDto.HolidayTypeId);
+        holidayDto.HolidayType = ObjectMapper.Map<HolidayType, HolidayTypeDto>(holidayType);
+
+        return holidayDto;
     }
 
     /// <summary>
@@ -170,7 +194,13 @@ public class HolidayAppService : CrudAppService<
         );
 
         await _holidayRepository.InsertAsync(holiday);
-        return ObjectMapper.Map<Holiday, HolidayDto>(holiday);
+        var holidayDto = ObjectMapper.Map<Holiday, HolidayDto>(holiday);
+
+        // Populate HolidayType data
+        var holidayType = await _holidayTypeRepository.GetAsync(holidayDto.HolidayTypeId);
+        holidayDto.HolidayType = ObjectMapper.Map<HolidayType, HolidayTypeDto>(holidayType);
+
+        return holidayDto;
     }
 
     /// <summary>
@@ -190,6 +220,12 @@ public class HolidayAppService : CrudAppService<
         );
 
         await _holidayRepository.UpdateAsync(holiday);
-        return ObjectMapper.Map<Holiday, HolidayDto>(holiday);
+        var holidayDto = ObjectMapper.Map<Holiday, HolidayDto>(holiday);
+
+        // Populate HolidayType data
+        var holidayType = await _holidayTypeRepository.GetAsync(holidayDto.HolidayTypeId);
+        holidayDto.HolidayType = ObjectMapper.Map<HolidayType, HolidayTypeDto>(holidayType);
+
+        return holidayDto;
     }
 }

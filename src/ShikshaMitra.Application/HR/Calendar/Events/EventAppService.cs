@@ -63,9 +63,16 @@ public class EventAppService : CrudAppService<
         var items = await _asyncExecuter.ToListAsync(
             sortedQuery.Skip(input.SkipCount).Take(input.MaxResultCount));
 
-        return new PagedResultDto<EventDto>(
-            totalCount,
-            ObjectMapper.Map<List<Event>, List<EventDto>>(items));
+        var eventDtos = ObjectMapper.Map<List<Event>, List<EventDto>>(items);
+
+        // Populate EventType data for each event
+        foreach (var eventDto in eventDtos)
+        {
+            var eventType = await _eventTypeRepository.GetAsync(eventDto.EventTypeId);
+            eventDto.EventType = ObjectMapper.Map<EventType, EventTypeDto>(eventType);
+        }
+
+        return new PagedResultDto<EventDto>(totalCount, eventDtos);
     }
 
     public async Task<List<EventDto>> GetAllEventsAsync()
@@ -108,6 +115,18 @@ public class EventAppService : CrudAppService<
             ObjectMapper.Map<List<Event>, List<EventDto>>(sortedAndPaged));
     }
 
+    public override async Task<EventDto> GetAsync(Guid id)
+    {
+        var entity = await _eventRepository.GetAsync(id);
+        var eventDto = ObjectMapper.Map<Event, EventDto>(entity);
+
+        // Populate EventType data
+        var eventType = await _eventTypeRepository.GetAsync(eventDto.EventTypeId);
+        eventDto.EventType = ObjectMapper.Map<EventType, EventTypeDto>(eventType);
+
+        return eventDto;
+    }
+
     public override async Task<EventDto> CreateAsync(CreateUpdateEventDto input)
     {
         // Validate that the referenced EventType exists
@@ -134,7 +153,13 @@ public class EventAppService : CrudAppService<
             input.AudienceIds);
 
         await _eventRepository.InsertAsync(entity);
-        return ObjectMapper.Map<Event, EventDto>(entity);
+        var eventDto = ObjectMapper.Map<Event, EventDto>(entity);
+
+        // Populate EventType data
+        var eventType = await _eventTypeRepository.GetAsync(eventDto.EventTypeId);
+        eventDto.EventType = ObjectMapper.Map<EventType, EventTypeDto>(eventType);
+
+        return eventDto;
     }
 
     public override async Task<EventDto> UpdateAsync(Guid id, CreateUpdateEventDto input)
@@ -155,6 +180,12 @@ public class EventAppService : CrudAppService<
             input.AudienceIds);
 
         await _eventRepository.UpdateAsync(entity);
-        return ObjectMapper.Map<Event, EventDto>(entity);
+        var eventDto = ObjectMapper.Map<Event, EventDto>(entity);
+
+        // Populate EventType data
+        var eventType = await _eventTypeRepository.GetAsync(eventDto.EventTypeId);
+        eventDto.EventType = ObjectMapper.Map<EventType, EventTypeDto>(eventType);
+
+        return eventDto;
     }
 }

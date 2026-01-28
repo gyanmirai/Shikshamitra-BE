@@ -9,6 +9,13 @@ namespace ShikshaMitra.Application.Contracts.HR.Calendar.Events;
 public class GetEventListRequestDto : PagedAndSortedResultRequestDto
 {
     /// <summary>
+    /// Academic Year ID for filtering events by academic year
+    /// UUID string format (required for filtering)
+    /// Example: 550e8400-e29b-41d4-a716-446655440000
+    /// </summary>
+    public Guid? AcademicYearId { get; set; }
+
+    /// <summary>
     /// Search by title (case-insensitive substring match)
     /// </summary>
     public string? Search { get; set; }

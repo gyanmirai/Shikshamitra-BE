@@ -43,6 +43,7 @@ public class EventAppService : CrudAppService<
     {
         var query = (await _eventRepository.GetQueryableAsync())
             .WhereIf(!input.Search.IsNullOrWhiteSpace(), x => x.Title.Contains(input.Search))
+            .WhereIf(input.AcademicYearId.HasValue, x => x.AcademicYearId == input.AcademicYearId)
             .WhereIf(input.TypeId.HasValue, x => x.EventTypeId == input.TypeId)
             .WhereIf(input.Mode.HasValue, x => (int) x.Mode == input.Mode)
             .WhereIf(input.FromDate.HasValue, x => x.MeetingDate >= input.FromDate)
@@ -118,6 +119,7 @@ public class EventAppService : CrudAppService<
 
         var entity = Event.Create(
             CurrentTenant.Id,
+            input.AcademicYearId,
             input.Title,
             input.EventTypeId,
             input.MeetingDate,

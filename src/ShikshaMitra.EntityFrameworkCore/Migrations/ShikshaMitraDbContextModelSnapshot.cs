@@ -2134,6 +2134,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("AudienceIds")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -2235,6 +2238,9 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId")
                         .HasDatabaseName("IX_AppEvents_TenantId");
 
+                    b.HasIndex("AcademicYearId", "TenantId")
+                        .HasDatabaseName("IX_AppEvents_AcademicYearId_TenantId");
+
                     b.HasIndex("Title", "TenantId")
                         .HasDatabaseName("IX_AppEvents_Title_TenantId");
 
@@ -2321,6 +2327,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Attachments")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
@@ -2400,6 +2409,9 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId")
                         .HasDatabaseName("AppHolidays_Tenant");
+
+                    b.HasIndex("AcademicYearId", "TenantId")
+                        .HasDatabaseName("AppHolidays_AcademicYearId_Tenant");
 
                     b.HasIndex("HolidayName", "TenantId")
                         .HasDatabaseName("AppHolidays_HolidayNameTenant");

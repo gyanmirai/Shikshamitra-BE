@@ -15,6 +15,11 @@ public class EventDto : AuditedEntityDto<Guid>
     public Guid? TenantId { get; set; }
 
     /// <summary>
+    /// Academic Year ID for filtering events by academic year
+    /// </summary>
+    public Guid AcademicYearId { get; set; }
+
+    /// <summary>
     /// Title of the event
     /// </summary>
     public string Title { get; set; }

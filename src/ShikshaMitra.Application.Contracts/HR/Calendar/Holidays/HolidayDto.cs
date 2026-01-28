@@ -10,6 +10,12 @@ namespace ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
 public class HolidayDto : AuditedEntityDto<Guid>
 {
     public Guid TenantId { get; set; }
+
+    /// <summary>
+    /// Academic Year ID for filtering holidays by academic year
+    /// </summary>
+    public Guid AcademicYearId { get; set; }
+
     public string HolidayName { get; set; }
     public Guid HolidayTypeId { get; set; }
     public DateTimeOffset StartDate { get; set; }

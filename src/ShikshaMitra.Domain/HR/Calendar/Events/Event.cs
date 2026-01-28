@@ -14,6 +14,11 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public Guid? TenantId { get; private set; }
 
     /// <summary>
+    /// Academic Year ID for filtering events by academic year (required)
+    /// </summary>
+    public Guid AcademicYearId { get; private set; }
+
+    /// <summary>
     /// Title/name of the event
     /// </summary>
     public string Title { get; set; }
@@ -99,6 +104,7 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     public static Event Create(
         Guid? tenantId,
+        Guid academicYearId,
         string title,
         Guid eventTypeId,
         DateOnly meetingDate,
@@ -118,6 +124,7 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId,
+            AcademicYearId = academicYearId,
             Title = title,
             EventTypeId = eventTypeId,
             MeetingDate = meetingDate,

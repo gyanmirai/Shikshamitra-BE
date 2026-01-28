@@ -51,6 +51,9 @@ public class HolidayAppService : CrudAppService<
             !input.Search.IsNullOrWhiteSpace(),
             x => x.HolidayName.Contains(input.Search)
         ).WhereIf(
+            input.AcademicYearId.HasValue,
+            x => x.AcademicYearId == input.AcademicYearId
+        ).WhereIf(
             input.TypeId.HasValue,
             x => x.HolidayTypeId == input.TypeId
         ).WhereIf(
@@ -156,6 +159,7 @@ public class HolidayAppService : CrudAppService<
 
         var holiday = Holiday.Create(
             CurrentTenant.Id,
+            input.AcademicYearId,
             input.HolidayName,
             input.HolidayTypeId,
             input.StartDate,

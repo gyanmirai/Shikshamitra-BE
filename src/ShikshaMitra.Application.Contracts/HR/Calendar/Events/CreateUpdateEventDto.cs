@@ -10,6 +10,13 @@ namespace ShikshaMitra.Application.Contracts.HR.Calendar.Events;
 public class CreateUpdateEventDto : IValidatableObject
 {
     /// <summary>
+    /// Academic Year ID for filtering events by academic year (required)
+    /// UUID format: 550e8400-e29b-41d4-a716-446655440000
+    /// </summary>
+    [Required(ErrorMessage = "Academic year ID is required")]
+    public Guid AcademicYearId { get; set; }
+
+    /// <summary>
     /// Title of the event (1-256 characters, required)
     /// </summary>
     [Required(ErrorMessage = "Event title is required")]

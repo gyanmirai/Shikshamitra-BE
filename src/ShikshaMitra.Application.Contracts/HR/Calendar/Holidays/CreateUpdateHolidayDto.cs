@@ -10,6 +10,13 @@ namespace ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
 public class CreateUpdateHolidayDto : IValidatableObject
 {
     /// <summary>
+    /// Academic Year ID for filtering holidays by academic year (required)
+    /// UUID format: 550e8400-e29b-41d4-a716-446655440000
+    /// </summary>
+    [Required(ErrorMessage = "Academic year ID is required")]
+    public Guid AcademicYearId { get; set; }
+
+    /// <summary>
     /// Name of the holiday (1-256 characters, required)
     /// </summary>
     [Required(ErrorMessage = "Holiday name is required")]

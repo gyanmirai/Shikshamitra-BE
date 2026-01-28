@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
+using ShikshaMitra.HR.Calendar;
 
 namespace ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
 
@@ -10,8 +11,24 @@ namespace ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
 public class HolidayDto : AuditedEntityDto<Guid>
 {
     public Guid TenantId { get; set; }
+
+    /// <summary>
+    /// Academic Year ID for filtering holidays by academic year
+    /// </summary>
+    public Guid AcademicYearId { get; set; }
+
     public string HolidayName { get; set; }
+
+    /// <summary>
+    /// Holiday type ID (deprecated - use HolidayType object instead)
+    /// </summary>
     public Guid HolidayTypeId { get; set; }
+
+    /// <summary>
+    /// Full HolidayType object with name, color, and description
+    /// </summary>
+    public HolidayTypeDto? HolidayType { get; set; }
+
     public DateTimeOffset StartDate { get; set; }
     public DateTimeOffset EndDate { get; set; }
     public string? Description { get; set; }

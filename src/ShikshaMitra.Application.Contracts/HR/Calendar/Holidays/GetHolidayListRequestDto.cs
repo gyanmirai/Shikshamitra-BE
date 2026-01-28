@@ -9,6 +9,13 @@ namespace ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
 public class GetHolidayListRequestDto : PagedAndSortedResultRequestDto
 {
     /// <summary>
+    /// Academic Year ID for filtering holidays by academic year
+    /// UUID string format
+    /// Example: 550e8400-e29b-41d4-a716-446655440000
+    /// </summary>
+    public Guid? AcademicYearId { get; set; }
+
+    /// <summary>
     /// Search by holiday name (case-insensitive)
     /// </summary>
     public string? Search { get; set; }

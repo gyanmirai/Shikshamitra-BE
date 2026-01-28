@@ -19,6 +19,9 @@ public class EventConfiguration : IEntityTypeConfiguration<Event>
         builder.ConfigureByConvention();
 
         // Property configuration
+        builder.Property(x => x.AcademicYearId)
+            .IsRequired();
+
         builder.Property(x => x.Title)
             .HasMaxLength(256)
             .IsRequired();
@@ -56,7 +59,16 @@ public class EventConfiguration : IEntityTypeConfiguration<Event>
                 v => string.IsNullOrEmpty(v) ? new() : System.Text.Json.JsonSerializer.Deserialize<List<Guid>>(v, System.Text.Json.JsonSerializerOptions.Default) ?? new())
                         .HasColumnType("jsonb");
 
+        // Foreign key relationships
+        builder.HasOne<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear>()
+            .WithMany()
+            .HasForeignKey(x => x.AcademicYearId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // Indices for performance
+        builder.HasIndex(x => new { x.AcademicYearId, x.TenantId })
+            .HasDatabaseName("IX_AppEvents_AcademicYearId_TenantId");
+
         builder.HasIndex(x => new { x.Title, x.TenantId })
             .HasDatabaseName("IX_AppEvents_Title_TenantId");
 

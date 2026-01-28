@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.Calendar.EventTypes;
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
@@ -15,14 +16,24 @@ public class EventDto : AuditedEntityDto<Guid>
     public Guid? TenantId { get; set; }
 
     /// <summary>
+    /// Academic Year ID for filtering events by academic year
+    /// </summary>
+    public Guid AcademicYearId { get; set; }
+
+    /// <summary>
     /// Title of the event
     /// </summary>
     public string Title { get; set; }
 
     /// <summary>
-    /// Event type ID
+    /// Event type ID (deprecated - use EventType object instead)
     /// </summary>
     public Guid EventTypeId { get; set; }
+
+    /// <summary>
+    /// Full EventType object with name, color, and description
+    /// </summary>
+    public EventTypeDto? EventType { get; set; }
 
     /// <summary>
     /// Description

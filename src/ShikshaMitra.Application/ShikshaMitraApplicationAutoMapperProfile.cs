@@ -42,12 +42,16 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		CreateMap<HolidayType, HolidayTypeDto>();
 		CreateMap<CreateUpdateHolidayTypeDto, HolidayType>();
 
-		// Holiday mapping
-		CreateMap<Holiday, HolidayDto>();
+		// Holiday mapping with nested HolidayType
+		CreateMap<Holiday, HolidayDto>()
+			.ForMember(dest => dest.HolidayType,
+				opt => opt.Ignore()); // Will be populated separately
 		CreateMap<CreateUpdateHolidayDto, Holiday>();
 
-		// Event mapping
-		CreateMap<ShikshaMitra.HR.Calendar.Events.Event, EventDto>();
+		// Event mapping with nested EventType
+		CreateMap<ShikshaMitra.HR.Calendar.Events.Event, EventDto>()
+			.ForMember(dest => dest.EventType,
+				opt => opt.Ignore()); // Will be populated separately
 		CreateMap<CreateUpdateEventDto, ShikshaMitra.HR.Calendar.Events.Event>();
 
 		// Earning Components

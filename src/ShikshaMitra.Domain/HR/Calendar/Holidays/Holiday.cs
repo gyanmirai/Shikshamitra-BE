@@ -14,6 +14,11 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public Guid? TenantId { get; private set; }
 
     /// <summary>
+    /// Academic Year ID for filtering holidays by academic year (required)
+    /// </summary>
+    public Guid AcademicYearId { get; private set; }
+
+    /// <summary>
     /// Name of the holiday (e.g., "Diwali", "New Year")
     /// </summary>
     public string HolidayName { get; set; }
@@ -69,6 +74,7 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
     internal Holiday(
         Guid id,
         Guid? tenantId,
+        Guid academicYearId,
         string holidayName,
         Guid holidayTypeId,
         DateTimeOffset startDate,
@@ -78,6 +84,7 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
         string? attachments = null) : base(id)
     {
         TenantId = tenantId;
+        AcademicYearId = academicYearId;
         HolidayName = holidayName ?? throw new ArgumentNullException(nameof(holidayName));
         HolidayTypeId = holidayTypeId;
         StartDate = startDate;
@@ -94,6 +101,7 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     public static Holiday Create(
         Guid? tenantId,
+        Guid academicYearId,
         string holidayName,
         Guid holidayTypeId,
         DateTimeOffset startDate,
@@ -102,7 +110,7 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
         List<Guid>? audienceIds = null,
         string? attachments = null)
     {
-        return new Holiday(Guid.NewGuid(), tenantId, holidayName, holidayTypeId, startDate, endDate, description, audienceIds, attachments);
+        return new Holiday(Guid.NewGuid(), tenantId, academicYearId, holidayName, holidayTypeId, startDate, endDate, description, audienceIds, attachments);
     }
 
     /// <summary>

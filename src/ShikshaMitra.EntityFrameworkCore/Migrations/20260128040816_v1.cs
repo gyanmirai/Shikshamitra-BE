@@ -835,39 +835,6 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "AppEvents",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Title = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
-                    EventTypeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    Poster = table.Column<string>(type: "text", nullable: true),
-                    Mode = table.Column<int>(type: "integer", nullable: false),
-                    Venue = table.Column<string>(type: "text", nullable: true),
-                    MeetingDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    StartTime = table.Column<string>(type: "text", nullable: false),
-                    EndTime = table.Column<string>(type: "text", nullable: false),
-                    IsRecurring = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    RecurrenceJson = table.Column<string>(type: "text", nullable: true),
-                    AudienceIds = table.Column<string>(type: "jsonb", nullable: false),
-                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
-                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
-                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AppEvents", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "AppEventTypes",
                 columns: table => new
                 {
@@ -962,34 +929,6 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AppGradingScales", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AppHolidays",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    HolidayName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
-                    HolidayTypeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    StartDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    EndDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    AudienceIds = table.Column<string>(type: "jsonb", nullable: false),
-                    Attachments = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
-                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
-                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
-                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AppHolidays", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -2051,6 +1990,81 @@ namespace ShikshaMitra.Migrations
                         principalTable: "AppAcademicYears",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppEvents",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Title = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    EventTypeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    Poster = table.Column<string>(type: "text", nullable: true),
+                    Mode = table.Column<int>(type: "integer", nullable: false),
+                    Venue = table.Column<string>(type: "text", nullable: true),
+                    MeetingDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    StartTime = table.Column<string>(type: "text", nullable: false),
+                    EndTime = table.Column<string>(type: "text", nullable: false),
+                    IsRecurring = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    RecurrenceJson = table.Column<string>(type: "text", nullable: true),
+                    AudienceIds = table.Column<string>(type: "jsonb", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppEvents", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppEvents_AppAcademicYears_AcademicYearId",
+                        column: x => x.AcademicYearId,
+                        principalTable: "AppAcademicYears",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppHolidays",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
+                    HolidayName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    HolidayTypeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    StartDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    EndDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    AudienceIds = table.Column<string>(type: "jsonb", nullable: false),
+                    Attachments = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppHolidays", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppHolidays_AppAcademicYears_AcademicYearId",
+                        column: x => x.AcademicYearId,
+                        principalTable: "AppAcademicYears",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -4231,6 +4245,11 @@ namespace ShikshaMitra.Migrations
                 columns: new[] { "AcademicYearId", "StartDate", "TenantId" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_AppEvents_AcademicYearId_TenantId",
+                table: "AppEvents",
+                columns: new[] { "AcademicYearId", "TenantId" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AppEvents_EventTypeId",
                 table: "AppEvents",
                 column: "EventTypeId");
@@ -4290,6 +4309,11 @@ namespace ShikshaMitra.Migrations
                 name: "IX_AppGradeRanges_GradingScaleId",
                 table: "AppGradeRanges",
                 column: "GradingScaleId");
+
+            migrationBuilder.CreateIndex(
+                name: "AppHolidays_AcademicYearId_Tenant",
+                table: "AppHolidays",
+                columns: new[] { "AcademicYearId", "TenantId" });
 
             migrationBuilder.CreateIndex(
                 name: "AppHolidays_DateRange",

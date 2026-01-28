@@ -59,6 +59,12 @@ public class EventConfiguration : IEntityTypeConfiguration<Event>
                 v => string.IsNullOrEmpty(v) ? new() : System.Text.Json.JsonSerializer.Deserialize<List<Guid>>(v, System.Text.Json.JsonSerializerOptions.Default) ?? new())
                         .HasColumnType("jsonb");
 
+        // Foreign key relationships
+        builder.HasOne<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear>()
+            .WithMany()
+            .HasForeignKey(x => x.AcademicYearId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // Indices for performance
         builder.HasIndex(x => new { x.AcademicYearId, x.TenantId })
             .HasDatabaseName("IX_AppEvents_AcademicYearId_TenantId");

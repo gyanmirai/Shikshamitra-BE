@@ -49,6 +49,12 @@ public class HolidayConfiguration : IEntityTypeConfiguration<Holiday>
 
         builder.Property(x => x.TenantId);
 
+        // Foreign key relationships
+        builder.HasOne<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear>()
+            .WithMany()
+            .HasForeignKey(x => x.AcademicYearId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // Indices for performance
         builder.HasIndex(x => new { x.AcademicYearId, x.TenantId })
             .HasDatabaseName($"{ShikshaMitraConsts.DbTablePrefix}Holidays_AcademicYearId_Tenant");

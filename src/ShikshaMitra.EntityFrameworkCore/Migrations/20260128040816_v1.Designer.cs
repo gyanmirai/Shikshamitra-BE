@@ -14,7 +14,7 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20260126100249_v1")]
+    [Migration("20260128040816_v1")]
     partial class v1
     {
         /// <inheritdoc />
@@ -2137,6 +2137,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("AudienceIds")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -2238,6 +2241,9 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId")
                         .HasDatabaseName("IX_AppEvents_TenantId");
 
+                    b.HasIndex("AcademicYearId", "TenantId")
+                        .HasDatabaseName("IX_AppEvents_AcademicYearId_TenantId");
+
                     b.HasIndex("Title", "TenantId")
                         .HasDatabaseName("IX_AppEvents_Title_TenantId");
 
@@ -2324,6 +2330,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Attachments")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
@@ -2403,6 +2412,9 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId")
                         .HasDatabaseName("AppHolidays_Tenant");
+
+                    b.HasIndex("AcademicYearId", "TenantId")
+                        .HasDatabaseName("AppHolidays_AcademicYearId_Tenant");
 
                     b.HasIndex("HolidayName", "TenantId")
                         .HasDatabaseName("AppHolidays_HolidayNameTenant");
@@ -8615,6 +8627,24 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("EducationMediumStage");
 
                     b.Navigation("LeaveType");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.Calendar.Events.Event", b =>
+                {
+                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", null)
+                        .WithMany()
+                        .HasForeignKey("AcademicYearId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.Calendar.Holidays.Holiday", b =>
+                {
+                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", null)
+                        .WithMany()
+                        .HasForeignKey("AcademicYearId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>

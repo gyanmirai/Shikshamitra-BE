@@ -50,7 +50,7 @@ public class EFCoreGroupRepository : EfCoreRepository<ShikshaMitraDbContext, Gro
 
         if (!string.IsNullOrWhiteSpace(filter))
         {
-            query = query.Where(x => x.Name.Contains(filter) || 
+            query = query.Where(x => x.Name.Contains(filter) ||
                                      (x.Description != null && x.Description.Contains(filter)));
         }
 
@@ -79,7 +79,7 @@ public class EFCoreGroupRepository : EfCoreRepository<ShikshaMitraDbContext, Gro
 
         if (!string.IsNullOrWhiteSpace(filter))
         {
-            query = query.Where(x => x.Name.Contains(filter) || 
+            query = query.Where(x => x.Name.Contains(filter) ||
                                      (x.Description != null && x.Description.Contains(filter)));
         }
 

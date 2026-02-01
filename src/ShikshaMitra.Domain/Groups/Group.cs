@@ -95,13 +95,13 @@ public class Group : FullAuditedAggregateRoot<Guid>, IMultiTenant
         List<Guid>? roleIds = null)
     {
         var group = new Group(id, tenantId, academicYearId, name, description, GroupSelectionMode.RuleBased);
-        
+
         if (selectedDivisionIds != null)
             group.SelectedDivisionIds = selectedDivisionIds;
-        
+
         if (roleIds != null)
             group.RoleIds = roleIds;
-        
+
         return group;
     }
 
@@ -132,7 +132,7 @@ public class Group : FullAuditedAggregateRoot<Guid>, IMultiTenant
     {
         if (SelectionMode != GroupSelectionMode.RuleBased)
             throw new InvalidOperationException("Division selections can only be set for rule-based groups.");
-        
+
         SelectedDivisionIds = divisionIds ?? new List<Guid>();
     }
 
@@ -140,7 +140,7 @@ public class Group : FullAuditedAggregateRoot<Guid>, IMultiTenant
     {
         if (SelectionMode != GroupSelectionMode.RuleBased)
             throw new InvalidOperationException("Role IDs can only be set for rule-based groups.");
-        
+
         RoleIds = roleIds ?? new List<Guid>();
     }
 
@@ -148,7 +148,7 @@ public class Group : FullAuditedAggregateRoot<Guid>, IMultiTenant
     {
         if (SelectionMode != GroupSelectionMode.RuleBased)
             throw new InvalidOperationException("Student rules can only be added to rule-based groups.");
-        
+
         StudentRules.Add(rule);
     }
 
@@ -161,7 +161,7 @@ public class Group : FullAuditedAggregateRoot<Guid>, IMultiTenant
     {
         if (SelectionMode != GroupSelectionMode.RuleBased)
             throw new InvalidOperationException("Employee rules can only be added to rule-based groups.");
-        
+
         EmployeeRules.Add(rule);
     }
 
@@ -174,7 +174,7 @@ public class Group : FullAuditedAggregateRoot<Guid>, IMultiTenant
     {
         if (SelectionMode != GroupSelectionMode.NameBased)
             throw new InvalidOperationException("Members can only be added to name-based groups.");
-        
+
         Members.Add(member);
     }
 
@@ -196,7 +196,7 @@ public class Group : FullAuditedAggregateRoot<Guid>, IMultiTenant
         {
             if (selectedDivisionIds != null)
                 SelectedDivisionIds = selectedDivisionIds;
-            
+
             if (roleIds != null)
                 RoleIds = roleIds;
         }

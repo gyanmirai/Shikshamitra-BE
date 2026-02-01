@@ -263,7 +263,7 @@ public class GroupAppService : ApplicationService, IGroupAppService
         {
             var studentRules = input.StudentFilters.Select(f => new StudentRuleDto
             {
-                Field = (StudentRuleField)f.Field,
+                Field = (StudentRuleField) f.Field,
                 Operator = f.Operator,
                 Value = f.Value
             }).ToList();
@@ -325,7 +325,7 @@ public class GroupAppService : ApplicationService, IGroupAppService
         {
             var employeeRules = input.EmployeeFilters.Select(f => new EmployeeRuleDto
             {
-                Field = (EmployeeRuleField)f.Field,
+                Field = (EmployeeRuleField) f.Field,
                 Operator = f.Operator,
                 Value = f.Value
             }).ToList();

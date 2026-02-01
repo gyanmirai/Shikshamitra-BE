@@ -7,6 +7,7 @@ using Volo.Abp.DependencyInjection;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra;
+
 public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDependency
 {
 	private readonly IServiceProvider _serviceProvider;
@@ -44,26 +45,29 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 				using (currentTenant.Change(tenantId))
 				{
 					// Now that the tenant is set, run the remaining seeders.
+					var eventTypeSeeder = scope.ServiceProvider.GetRequiredService<Seeders.EventTypeSeederContributor>();
+					await eventTypeSeeder.SeedAsync(context);
+
 					var rolesSeeder = scope.ServiceProvider.GetRequiredService<Seeders.RolesSeederContributor>();
 					await rolesSeeder.SeedAsync(context);
 
-				// Seed users (after roles)
-				var userSeeder = scope.ServiceProvider.GetRequiredService<Seeders.UserSeederContributor>();
-				await userSeeder.SeedAsync(context);
+					// Seed users (after roles)
+					var userSeeder = scope.ServiceProvider.GetRequiredService<Seeders.UserSeederContributor>();
+					await userSeeder.SeedAsync(context);
 
-				// Seed Academic Setup data (must be seeded before HR/Employee data)
-				var academicSetupSeeder = scope.ServiceProvider.GetRequiredService<Seeders.AcademicSetupSeederContributor>();
-				await academicSetupSeeder.SeedAsync(context);
+					// Seed Academic Setup data (must be seeded before HR/Employee data)
+					var academicSetupSeeder = scope.ServiceProvider.GetRequiredService<Seeders.AcademicSetupSeederContributor>();
+					await academicSetupSeeder.SeedAsync(context);
 
-				// Seed HR module data
-				var hrSeeder = scope.ServiceProvider.GetRequiredService<Seeders.HRSeederContributor>();
-				await hrSeeder.SeedAsync(context);
+					// Seed HR module data
+					var hrSeeder = scope.ServiceProvider.GetRequiredService<Seeders.HRSeederContributor>();
+					await hrSeeder.SeedAsync(context);
 
-				// Seed Student data (after Academic Setup)
-				var studentSeeder = scope.ServiceProvider.GetRequiredService<Seeders.StudentSeederContributor>();
-				await studentSeeder.SeedAsync(context);
+					// Seed Student data (after Academic Setup)
+					var studentSeeder = scope.ServiceProvider.GetRequiredService<Seeders.StudentSeederContributor>();
+					await studentSeeder.SeedAsync(context);
+				}
 			}
 		}
 	}
-}
 }

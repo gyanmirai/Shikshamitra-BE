@@ -72,7 +72,6 @@ public class EventController : ShikshaMitraController
     ///     POST /api/calendar/events?academicYearId=3fa85f64-5717-4562-b3fc-2c963f66afa6
     ///     {
     ///         "title": "Team Meeting",
-    ///         "eventTypeId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
     ///         "meetingDate": "2025-02-15",
     ///         "startTime": "10:00",
     ///         "endTime": "11:00",

@@ -239,6 +239,14 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#endregion
 
+	#region Groups
+
+	public DbSet<ShikshaMitra.Groups.Group> Groups { get; set; }
+	public DbSet<ShikshaMitra.Groups.GroupStudentRule> GroupStudentRules { get; set; }
+	public DbSet<ShikshaMitra.Groups.GroupEmployeeRule> GroupEmployeeRules { get; set; }
+	public DbSet<ShikshaMitra.Groups.GroupMember> GroupMembers { get; set; }
+
+	#endregion
 
 	#endregion
 

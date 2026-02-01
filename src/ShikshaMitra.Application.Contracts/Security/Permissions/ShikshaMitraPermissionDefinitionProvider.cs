@@ -14,6 +14,7 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
 		var group = context.AddGroup(ShikshaMitraPermissions.GroupName, L("Permission:ShikshaMitra"));
 
 		DefineUserScopePermissions(group);
+		DefineGroupPermissions(group);
 		SetTenantPermissionMultiTenancySide(context);
 
 		// Define Module Visibility Permissions (these go in JWT)
@@ -74,6 +75,39 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
 		userScopePermission.AddChild(
 			ShikshaMitraPermissions.UserScope.Manage,
 			displayName: L("Permission:UserScope.Manage")
+		);
+	}
+
+	private void DefineGroupPermissions(PermissionGroupDefinition group)
+	{
+		var groupPermission = group.AddPermission(
+			ShikshaMitraPermissions.Group.Default,
+			displayName: L("Permission:Group")
+		);
+
+		groupPermission.AddChild(
+			ShikshaMitraPermissions.Group.List,
+			displayName: L("Permission:Group.List")
+		);
+
+		groupPermission.AddChild(
+			ShikshaMitraPermissions.Group.View,
+			displayName: L("Permission:Group.View")
+		);
+
+		groupPermission.AddChild(
+			ShikshaMitraPermissions.Group.Create,
+			displayName: L("Permission:Group.Create")
+		);
+
+		groupPermission.AddChild(
+			ShikshaMitraPermissions.Group.Edit,
+			displayName: L("Permission:Group.Edit")
+		);
+
+		groupPermission.AddChild(
+			ShikshaMitraPermissions.Group.Delete,
+			displayName: L("Permission:Group.Delete")
 		);
 	}
 

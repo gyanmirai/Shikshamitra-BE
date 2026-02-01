@@ -132,6 +132,13 @@
     "Permission:UserScope.Revoke": "Revoke User Scope",
     "Permission:UserScope.Manage": "Manage User Scopes",
 
+    "Permission:Group": "Group Management",
+    "Permission:Group.List": "List Groups",
+    "Permission:Group.View": "View Group Details",
+    "Permission:Group.Create": "Create Groups",
+    "Permission:Group.Edit": "Edit Groups",
+    "Permission:Group.Delete": "Delete Groups",
+
     "ShikshaMitra.Homework:FeedbackUpdatedSuccessfully": "Feedback updated successfully",
     "ShikshaMitra.Homework:StatusUpdatedSuccessfully": "Status updated successfully",
     "ShikshaMitra.Homework:NotFound": "Homework not found",

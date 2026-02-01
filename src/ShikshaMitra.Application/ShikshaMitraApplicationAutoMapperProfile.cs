@@ -1,6 +1,8 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Application.Contracts.Groups;
 using ShikshaMitra.Common;
+using ShikshaMitra.Groups;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Calendar;
 using ShikshaMitra.HR.Calendar.EventTypes;
@@ -96,5 +98,17 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 			.ForMember(dest => dest.Pincode, opt => opt.MapFrom(src => src.PinCode))
 			.ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role != null ? src.Role.Name : null))
 			.ForMember(dest => dest.EmployeeStatusType, opt => opt.MapFrom(src => src.EmployeeStatusType ?? EmployeeStatusType.Active));
+
+		// Group mappings
+		CreateMap<Group, GroupDto>()
+			.ForMember(dest => dest.MemberCount, opt => opt.Ignore()) // Populated separately
+			.ForMember(dest => dest.StudentRules, opt => opt.MapFrom(src => src.StudentRules))
+			.ForMember(dest => dest.EmployeeRules, opt => opt.MapFrom(src => src.EmployeeRules))
+			.ForMember(dest => dest.Members, opt => opt.MapFrom(src => src.Members));
+
+		CreateMap<GroupStudentRule, StudentRuleDto>();
+		CreateMap<GroupEmployeeRule, EmployeeRuleDto>();
+		CreateMap<GroupMember, GroupMemberDto>()
+			.ForMember(dest => dest.DisplayName, opt => opt.Ignore()); // Populated separately
 	}
 }

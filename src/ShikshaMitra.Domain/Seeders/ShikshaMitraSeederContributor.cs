@@ -44,6 +44,9 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 				using (currentTenant.Change(tenantId))
 				{
 					// Now that the tenant is set, run the remaining seeders.
+					var eventTypeSeeder = scope.ServiceProvider.GetRequiredService<Seeders.EventTypeSeederContributor>();
+					await eventTypeSeeder.SeedAsync(context);
+
 					var rolesSeeder = scope.ServiceProvider.GetRequiredService<Seeders.RolesSeederContributor>();
 					await rolesSeeder.SeedAsync(context);
 

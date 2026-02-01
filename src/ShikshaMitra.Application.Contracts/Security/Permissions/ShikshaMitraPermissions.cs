@@ -16,4 +16,17 @@ public static class ShikshaMitraPermissions
 		public const string BulkAssign = Default + ".BulkAssign";
 		public const string Manage = Default + ".Manage";
 	}
+
+	/// <summary>
+	/// Group management permissions for audience targeting in holidays/events.
+	/// </summary>
+	public static class Group
+	{
+		public const string Default = GroupName + ".Group";
+		public const string List = Default + ".List";
+		public const string View = Default + ".View";
+		public const string Create = Default + ".Create";
+		public const string Edit = Default + ".Edit";
+		public const string Delete = Default + ".Delete";
+	}
 }

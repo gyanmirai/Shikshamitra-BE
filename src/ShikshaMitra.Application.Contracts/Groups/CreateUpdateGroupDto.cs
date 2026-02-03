@@ -6,7 +6,11 @@ using ShikshaMitra.Groups;
 namespace ShikshaMitra.Application.Contracts.Groups;
 
 /// <summary>
-/// DTO for creating or updating a Group
+/// DTO for creating or updating a Group.
+/// Groups support two selection modes that can be used together:
+/// - RuleBased: Automatically includes all users matching the criteria
+/// - NameBased: Uses filters for context, includes only manually selected users
+/// At least one selection mode must be provided.
 /// </summary>
 public class CreateUpdateGroupDto : IValidatableObject
 {
@@ -24,134 +28,165 @@ public class CreateUpdateGroupDto : IValidatableObject
     public string? Description { get; set; }
 
     /// <summary>
-    /// Selection mode: RuleBased or NameBased
+    /// Rule-based selection configuration.
+    /// All users matching the criteria are automatically included.
     /// </summary>
-    [Required]
-    public GroupSelectionMode SelectionMode { get; set; }
+    public RuleBasedSelectionDto? RuleBased { get; set; }
 
     /// <summary>
-    /// Selected Division IDs for targeting students by division
-    /// Required for RuleBased groups (frontend resolves higher hierarchy to division IDs)
+    /// Name-based selection configuration.
+    /// Uses filters for context, but only manually selected users are included.
     /// </summary>
-    public List<Guid> SelectedDivisionIds { get; set; } = new();
+    public NameBasedSelectionDto? NameBased { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        // Check if at least one selection mode is provided
+        var hasRuleBased = RuleBased != null && RuleBased.HasAnySelection();
+        var hasNameBased = NameBased != null && NameBased.SelectedMembers.Count > 0;
+
+        if (!hasRuleBased && !hasNameBased)
+        {
+            yield return new ValidationResult(
+                "Group must have at least one selection: RuleBased (with divisions, roles, or filters) or NameBased (with selected members).",
+                new[] { nameof(RuleBased), nameof(NameBased) });
+        }
+
+        // Validate RuleBased selection if provided
+        if (RuleBased != null)
+        {
+            foreach (var error in RuleBased.Validate("RuleBased"))
+                yield return error;
+        }
+
+        // Validate NameBased selection if provided
+        if (NameBased != null)
+        {
+            foreach (var error in NameBased.Validate("NameBased"))
+                yield return error;
+        }
+    }
+}
+
+/// <summary>
+/// Rule-based selection: All users matching the criteria are automatically included
+/// </summary>
+public class RuleBasedSelectionDto
+{
+    /// <summary>
+    /// Division IDs for targeting students by division.
+    /// All students in these divisions are automatically included.
+    /// </summary>
+    public List<Guid> DivisionIds { get; set; } = new();
 
     /// <summary>
-    /// Selected role IDs for targeting employees by role
-    /// Optional for RuleBased groups
+    /// Role IDs for targeting employees by role.
+    /// All employees with these roles are automatically included.
     /// </summary>
     public List<Guid> RoleIds { get; set; } = new();
 
     /// <summary>
     /// Student attribute filter rules
-    /// Optional for RuleBased groups
     /// </summary>
-    public List<CreateStudentRuleDto> StudentRules { get; set; } = new();
+    public List<CreateStudentRuleDto> StudentFilters { get; set; } = new();
 
     /// <summary>
     /// Employee attribute filter rules
-    /// Optional for RuleBased groups
     /// </summary>
-    public List<CreateEmployeeRuleDto> EmployeeRules { get; set; } = new();
+    public List<CreateEmployeeRuleDto> EmployeeFilters { get; set; } = new();
 
-    /// <summary>
-    /// Manually selected members
-    /// Required for NameBased groups
-    /// </summary>
-    public List<CreateGroupMemberDto> Members { get; set; } = new();
-
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    public bool HasAnySelection()
     {
-        if (SelectionMode == GroupSelectionMode.RuleBased)
-        {
-            // Rule-based groups must have at least one selection criteria
-            var hasDivisionSelection = SelectedDivisionIds.Count > 0;
-            var hasRoleSelection = RoleIds.Count > 0;
-            var hasStudentRules = StudentRules.Count > 0;
-            var hasEmployeeRules = EmployeeRules.Count > 0;
+        return DivisionIds.Count > 0 ||
+               RoleIds.Count > 0 ||
+               StudentFilters.Count > 0 ||
+               EmployeeFilters.Count > 0;
+    }
 
-            if (!hasDivisionSelection && !hasRoleSelection && !hasStudentRules && !hasEmployeeRules)
+    public IEnumerable<ValidationResult> Validate(string prefix)
+    {
+        foreach (var rule in StudentFilters)
+        {
+            if (!Enum.IsDefined(typeof(StudentRuleField), rule.Field))
             {
                 yield return new ValidationResult(
-                    "Rule-based groups must have at least one selection criteria (Division Selections, Roles, Student Rules, or Employee Rules).",
-                    new[] { nameof(SelectedDivisionIds), nameof(RoleIds), nameof(StudentRules), nameof(EmployeeRules) });
+                    $"Invalid student filter field in {prefix}: {rule.Field}",
+                    new[] { $"{prefix}.StudentFilters" });
             }
 
-            // Validate student rules
-            foreach (var rule in StudentRules)
+            if (!Enum.IsDefined(typeof(RuleOperator), rule.Operator))
             {
-                if (!Enum.IsDefined(typeof(StudentRuleField), rule.Field))
-                {
-                    yield return new ValidationResult(
-                        $"Invalid student rule field: {rule.Field}",
-                        new[] { nameof(StudentRules) });
-                }
-
-                if (!Enum.IsDefined(typeof(RuleOperator), rule.Operator))
-                {
-                    yield return new ValidationResult(
-                        $"Invalid student rule operator: {rule.Operator}",
-                        new[] { nameof(StudentRules) });
-                }
-
-                if (string.IsNullOrWhiteSpace(rule.Value))
-                {
-                    yield return new ValidationResult(
-                        "Student rule value cannot be empty.",
-                        new[] { nameof(StudentRules) });
-                }
+                yield return new ValidationResult(
+                    $"Invalid student filter operator in {prefix}: {rule.Operator}",
+                    new[] { $"{prefix}.StudentFilters" });
             }
 
-            // Validate employee rules
-            foreach (var rule in EmployeeRules)
+            if (string.IsNullOrWhiteSpace(rule.Value))
             {
-                if (!Enum.IsDefined(typeof(EmployeeRuleField), rule.Field))
-                {
-                    yield return new ValidationResult(
-                        $"Invalid employee rule field: {rule.Field}",
-                        new[] { nameof(EmployeeRules) });
-                }
-
-                if (!Enum.IsDefined(typeof(RuleOperator), rule.Operator))
-                {
-                    yield return new ValidationResult(
-                        $"Invalid employee rule operator: {rule.Operator}",
-                        new[] { nameof(EmployeeRules) });
-                }
-
-                if (string.IsNullOrWhiteSpace(rule.Value))
-                {
-                    yield return new ValidationResult(
-                        "Employee rule value cannot be empty.",
-                        new[] { nameof(EmployeeRules) });
-                }
+                yield return new ValidationResult(
+                    $"Student filter value cannot be empty in {prefix}.",
+                    new[] { $"{prefix}.StudentFilters" });
             }
         }
-        else if (SelectionMode == GroupSelectionMode.NameBased)
+
+        foreach (var rule in EmployeeFilters)
         {
-            // Name-based groups must have at least one member
-            if (Members.Count == 0)
+            if (!Enum.IsDefined(typeof(EmployeeRuleField), rule.Field))
             {
                 yield return new ValidationResult(
-                    "Name-based groups must have at least one member.",
-                    new[] { nameof(Members) });
+                    $"Invalid employee filter field in {prefix}: {rule.Field}",
+                    new[] { $"{prefix}.EmployeeFilters" });
             }
 
-            // Validate members
-            foreach (var member in Members)
+            if (!Enum.IsDefined(typeof(RuleOperator), rule.Operator))
             {
-                if (!Enum.IsDefined(typeof(GroupMemberType), member.MemberType))
-                {
-                    yield return new ValidationResult(
-                        $"Invalid member type: {member.MemberType}",
-                        new[] { nameof(Members) });
-                }
+                yield return new ValidationResult(
+                    $"Invalid employee filter operator in {prefix}: {rule.Operator}",
+                    new[] { $"{prefix}.EmployeeFilters" });
+            }
 
-                if (member.MemberId == Guid.Empty)
-                {
-                    yield return new ValidationResult(
-                        "Member ID cannot be empty.",
-                        new[] { nameof(Members) });
-                }
+            if (string.IsNullOrWhiteSpace(rule.Value))
+            {
+                yield return new ValidationResult(
+                    $"Employee filter value cannot be empty in {prefix}.",
+                    new[] { $"{prefix}.EmployeeFilters" });
+            }
+        }
+    }
+}
+
+/// <summary>
+/// Name-based selection: Uses filters for context, includes only manually selected users
+/// </summary>
+public class NameBasedSelectionDto : RuleBasedSelectionDto
+{
+    /// <summary>
+    /// Manually selected members.
+    /// Only these specific users are included in the group.
+    /// </summary>
+    public List<CreateGroupMemberDto> SelectedMembers { get; set; } = new();
+
+    public new IEnumerable<ValidationResult> Validate(string prefix)
+    {
+        // Validate base filters
+        foreach (var error in base.Validate(prefix))
+            yield return error;
+
+        // Validate selected members
+        foreach (var member in SelectedMembers)
+        {
+            if (!Enum.IsDefined(typeof(GroupMemberType), member.MemberType))
+            {
+                yield return new ValidationResult(
+                    $"Invalid member type in {prefix}: {member.MemberType}",
+                    new[] { $"{prefix}.SelectedMembers" });
+            }
+
+            if (member.MemberId == Guid.Empty)
+            {
+                yield return new ValidationResult(
+                    $"Member ID cannot be empty in {prefix}.",
+                    new[] { $"{prefix}.SelectedMembers" });
             }
         }
     }

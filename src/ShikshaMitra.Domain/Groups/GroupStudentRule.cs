@@ -4,7 +4,7 @@ using Volo.Abp.Domain.Entities;
 namespace ShikshaMitra.Groups;
 
 /// <summary>
-/// Represents a student attribute filter rule for rule-based groups
+/// Represents a student attribute filter rule for groups
 /// </summary>
 public class GroupStudentRule : Entity<Guid>
 {
@@ -12,6 +12,11 @@ public class GroupStudentRule : Entity<Guid>
     /// Parent group ID
     /// </summary>
     public Guid GroupId { get; private set; }
+
+    /// <summary>
+    /// Which selection type this rule belongs to (RuleBased or NameBased)
+    /// </summary>
+    public GroupSelectionType SelectionType { get; private set; }
 
     /// <summary>
     /// The field to filter on
@@ -33,12 +38,14 @@ public class GroupStudentRule : Entity<Guid>
     public GroupStudentRule(
         Guid id,
         Guid groupId,
+        GroupSelectionType selectionType,
         StudentRuleField field,
         RuleOperator ruleOperator,
         string value)
         : base(id)
     {
         GroupId = groupId;
+        SelectionType = selectionType;
         Field = field;
         Operator = ruleOperator;
         Value = value ?? string.Empty;

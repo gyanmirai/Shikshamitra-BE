@@ -65,13 +65,11 @@ public class GroupAppService : ApplicationService, IGroupAppService
     {
         var totalCount = await _groupRepository.GetCountAsync(
             input.AcademicYearId,
-            input.Filter,
-            input.SelectionMode);
+            input.Filter);
 
         var groups = await _groupRepository.GetListWithDetailsAsync(
             input.AcademicYearId,
             input.Filter,
-            input.SelectionMode,
             input.SkipCount,
             input.MaxResultCount);
 
@@ -92,54 +90,96 @@ public class GroupAppService : ApplicationService, IGroupAppService
         if (await _groupRepository.ExistsByNameAsync(input.Name))
             throw new UserFriendlyException($"A group with name '{input.Name}' already exists.");
 
-        var group = input.SelectionMode == GroupSelectionMode.RuleBased
-            ? Group.CreateRuleBased(
-                GuidGenerator.Create(),
-                CurrentTenant.Id,
-                academicYearId,
-                input.Name,
-                input.Description,
-                input.SelectedDivisionIds,
-                input.RoleIds)
-            : Group.CreateNameBased(
-                GuidGenerator.Create(),
-                CurrentTenant.Id,
-                academicYearId,
-                input.Name,
-                input.Description);
+        // Extract division and role IDs for each selection type
+        var ruleBasedDivisionIds = input.RuleBased?.DivisionIds ?? new List<Guid>();
+        var ruleBasedRoleIds = input.RuleBased?.RoleIds ?? new List<Guid>();
+        var nameBasedDivisionIds = input.NameBased?.DivisionIds ?? new List<Guid>();
+        var nameBasedRoleIds = input.NameBased?.RoleIds ?? new List<Guid>();
 
-        // Add student rules
-        foreach (var rule in input.StudentRules)
+        var group = Group.Create(
+            GuidGenerator.Create(),
+            CurrentTenant.Id,
+            academicYearId,
+            input.Name,
+            input.Description,
+            ruleBasedDivisionIds,
+            ruleBasedRoleIds,
+            nameBasedDivisionIds,
+            nameBasedRoleIds);
+
+        // Add rule-based student rules
+        if (input.RuleBased?.StudentFilters != null)
         {
-            group.AddStudentRule(new GroupStudentRule(
-                GuidGenerator.Create(),
-                group.Id,
-                rule.Field,
-                rule.Operator,
-                rule.Value));
+            foreach (var rule in input.RuleBased.StudentFilters)
+            {
+                group.AddStudentRule(new GroupStudentRule(
+                    GuidGenerator.Create(),
+                    group.Id,
+                    GroupSelectionType.RuleBased,
+                    rule.Field,
+                    rule.Operator,
+                    rule.Value));
+            }
         }
 
-        // Add employee rules
-        foreach (var rule in input.EmployeeRules)
+        // Add rule-based employee rules
+        if (input.RuleBased?.EmployeeFilters != null)
         {
-            group.AddEmployeeRule(new GroupEmployeeRule(
-                GuidGenerator.Create(),
-                group.Id,
-                rule.Field,
-                rule.Operator,
-                rule.Value));
+            foreach (var rule in input.RuleBased.EmployeeFilters)
+            {
+                group.AddEmployeeRule(new GroupEmployeeRule(
+                    GuidGenerator.Create(),
+                    group.Id,
+                    GroupSelectionType.RuleBased,
+                    rule.Field,
+                    rule.Operator,
+                    rule.Value));
+            }
         }
 
-        // Add members (for name-based groups)
-        foreach (var member in input.Members)
+        // Add name-based student rules (for filtering context)
+        if (input.NameBased?.StudentFilters != null)
         {
-            var userId = member.UserId ?? await ResolveUserIdAsync(member.MemberType, member.MemberId);
-            group.AddMember(new GroupMember(
-                GuidGenerator.Create(),
-                group.Id,
-                member.MemberType,
-                member.MemberId,
-                userId));
+            foreach (var rule in input.NameBased.StudentFilters)
+            {
+                group.AddStudentRule(new GroupStudentRule(
+                    GuidGenerator.Create(),
+                    group.Id,
+                    GroupSelectionType.NameBased,
+                    rule.Field,
+                    rule.Operator,
+                    rule.Value));
+            }
+        }
+
+        // Add name-based employee rules (for filtering context)
+        if (input.NameBased?.EmployeeFilters != null)
+        {
+            foreach (var rule in input.NameBased.EmployeeFilters)
+            {
+                group.AddEmployeeRule(new GroupEmployeeRule(
+                    GuidGenerator.Create(),
+                    group.Id,
+                    GroupSelectionType.NameBased,
+                    rule.Field,
+                    rule.Operator,
+                    rule.Value));
+            }
+        }
+
+        // Add manually selected members (from name-based selection)
+        if (input.NameBased?.SelectedMembers != null)
+        {
+            foreach (var member in input.NameBased.SelectedMembers)
+            {
+                var userId = member.UserId ?? await ResolveUserIdAsync(member.MemberType, member.MemberId);
+                group.AddMember(new GroupMember(
+                    GuidGenerator.Create(),
+                    group.Id,
+                    member.MemberType,
+                    member.MemberId,
+                    userId));
+            }
         }
 
         await _repository.InsertAsync(group, autoSave: true);
@@ -157,43 +197,96 @@ public class GroupAppService : ApplicationService, IGroupAppService
         if (await _groupRepository.ExistsByNameAsync(input.Name, id))
             throw new UserFriendlyException($"A group with name '{input.Name}' already exists.");
 
-        group.Update(input.Name, input.Description, input.SelectedDivisionIds, input.RoleIds);
+        // Update basic info
+        group.Update(input.Name, input.Description);
 
-        // Update student rules
-        group.ClearStudentRules();
-        foreach (var rule in input.StudentRules)
+        // Update division and role IDs
+        var ruleBasedDivisionIds = input.RuleBased?.DivisionIds ?? new List<Guid>();
+        var ruleBasedRoleIds = input.RuleBased?.RoleIds ?? new List<Guid>();
+        var nameBasedDivisionIds = input.NameBased?.DivisionIds ?? new List<Guid>();
+        var nameBasedRoleIds = input.NameBased?.RoleIds ?? new List<Guid>();
+
+        group.UpdateRuleBasedSelection(ruleBasedDivisionIds, ruleBasedRoleIds);
+        group.UpdateNameBasedSelection(nameBasedDivisionIds, nameBasedRoleIds);
+
+        // Update rule-based student rules
+        group.ClearStudentRules(GroupSelectionType.RuleBased);
+        if (input.RuleBased?.StudentFilters != null)
         {
-            group.AddStudentRule(new GroupStudentRule(
-                GuidGenerator.Create(),
-                group.Id,
-                rule.Field,
-                rule.Operator,
-                rule.Value));
+            foreach (var rule in input.RuleBased.StudentFilters)
+            {
+                group.AddStudentRule(new GroupStudentRule(
+                    GuidGenerator.Create(),
+                    group.Id,
+                    GroupSelectionType.RuleBased,
+                    rule.Field,
+                    rule.Operator,
+                    rule.Value));
+            }
         }
 
-        // Update employee rules
-        group.ClearEmployeeRules();
-        foreach (var rule in input.EmployeeRules)
+        // Update rule-based employee rules
+        group.ClearEmployeeRules(GroupSelectionType.RuleBased);
+        if (input.RuleBased?.EmployeeFilters != null)
         {
-            group.AddEmployeeRule(new GroupEmployeeRule(
-                GuidGenerator.Create(),
-                group.Id,
-                rule.Field,
-                rule.Operator,
-                rule.Value));
+            foreach (var rule in input.RuleBased.EmployeeFilters)
+            {
+                group.AddEmployeeRule(new GroupEmployeeRule(
+                    GuidGenerator.Create(),
+                    group.Id,
+                    GroupSelectionType.RuleBased,
+                    rule.Field,
+                    rule.Operator,
+                    rule.Value));
+            }
         }
 
-        // Update members (for name-based groups)
+        // Update name-based student rules
+        group.ClearStudentRules(GroupSelectionType.NameBased);
+        if (input.NameBased?.StudentFilters != null)
+        {
+            foreach (var rule in input.NameBased.StudentFilters)
+            {
+                group.AddStudentRule(new GroupStudentRule(
+                    GuidGenerator.Create(),
+                    group.Id,
+                    GroupSelectionType.NameBased,
+                    rule.Field,
+                    rule.Operator,
+                    rule.Value));
+            }
+        }
+
+        // Update name-based employee rules
+        group.ClearEmployeeRules(GroupSelectionType.NameBased);
+        if (input.NameBased?.EmployeeFilters != null)
+        {
+            foreach (var rule in input.NameBased.EmployeeFilters)
+            {
+                group.AddEmployeeRule(new GroupEmployeeRule(
+                    GuidGenerator.Create(),
+                    group.Id,
+                    GroupSelectionType.NameBased,
+                    rule.Field,
+                    rule.Operator,
+                    rule.Value));
+            }
+        }
+
+        // Update members (only from name-based selection)
         group.ClearMembers();
-        foreach (var member in input.Members)
+        if (input.NameBased?.SelectedMembers != null)
         {
-            var userId = member.UserId ?? await ResolveUserIdAsync(member.MemberType, member.MemberId);
-            group.AddMember(new GroupMember(
-                GuidGenerator.Create(),
-                group.Id,
-                member.MemberType,
-                member.MemberId,
-                userId));
+            foreach (var member in input.NameBased.SelectedMembers)
+            {
+                var userId = member.UserId ?? await ResolveUserIdAsync(member.MemberType, member.MemberId);
+                group.AddMember(new GroupMember(
+                    GuidGenerator.Create(),
+                    group.Id,
+                    member.MemberType,
+                    member.MemberId,
+                    userId));
+            }
         }
 
         await _repository.UpdateAsync(group, autoSave: true);
@@ -400,17 +493,6 @@ public class GroupAppService : ApplicationService, IGroupAppService
 
     private async Task<List<Guid>> ResolveGroupMembersAsync(Group group)
     {
-        if (group.SelectionMode == GroupSelectionMode.NameBased)
-        {
-            // For name-based groups, return stored member user IDs
-            return group.Members
-                .Where(m => m.UserId.HasValue)
-                .Select(m => m.UserId!.Value)
-                .Distinct()
-                .ToList();
-        }
-
-        // For rule-based groups, evaluate rules and return matching user IDs
         var userIds = new HashSet<Guid>();
 
         // Get students matching academic selections and student rules
@@ -423,13 +505,19 @@ public class GroupAppService : ApplicationService, IGroupAppService
         foreach (var id in employeeUserIds)
             userIds.Add(id);
 
+        // Add manually selected members
+        foreach (var member in group.Members.Where(m => m.UserId.HasValue))
+            userIds.Add(member.UserId!.Value);
+
         return userIds.ToList();
     }
 
     private async Task<List<Guid>> ResolveStudentMembersAsync(Group group)
     {
-        // If no division selections and no student rules, skip students
-        if (group.SelectedDivisionIds.Count == 0 && group.StudentRules.Count == 0)
+        var ruleBasedStudentRules = group.GetRuleBasedStudentRules().ToList();
+        
+        // If no rule-based division selections and no student rules, skip students
+        if (group.RuleBasedDivisionIds.Count == 0 && ruleBasedStudentRules.Count == 0)
             return new List<Guid>();
 
         var query = await _studentRepository.GetQueryableAsync();
@@ -437,17 +525,17 @@ public class GroupAppService : ApplicationService, IGroupAppService
         // Filter by academic year
         query = query.Where(s => s.AcademicYearId == group.AcademicYearId);
 
-        // Apply division selections
-        if (group.SelectedDivisionIds.Count > 0)
+        // Apply division selections from rule-based configuration
+        if (group.RuleBasedDivisionIds.Count > 0)
         {
             query = query.Where(s =>
-                s.DivisionId.HasValue && group.SelectedDivisionIds.Contains(s.DivisionId.Value));
+                s.DivisionId.HasValue && group.RuleBasedDivisionIds.Contains(s.DivisionId.Value));
         }
 
-        // Apply student rules
-        if (group.StudentRules.Count > 0)
+        // Apply student rules from rule-based configuration
+        if (ruleBasedStudentRules.Count > 0)
         {
-            var rules = group.StudentRules.Select(r => new StudentRuleDto
+            var rules = ruleBasedStudentRules.Select(r => new StudentRuleDto
             {
                 Field = r.Field,
                 Operator = r.Operator,
@@ -468,22 +556,24 @@ public class GroupAppService : ApplicationService, IGroupAppService
 
     private async Task<List<Guid>> ResolveEmployeeMembersAsync(Group group)
     {
-        // If no role selections and no employee rules, skip employees
-        if (group.RoleIds.Count == 0 && group.EmployeeRules.Count == 0)
+        var ruleBasedEmployeeRules = group.GetRuleBasedEmployeeRules().ToList();
+        
+        // If no rule-based role selections and no employee rules, skip employees
+        if (group.RuleBasedRoleIds.Count == 0 && ruleBasedEmployeeRules.Count == 0)
             return new List<Guid>();
 
         var query = await _employeeRepository.GetQueryableAsync();
 
-        // Apply role selections
-        if (group.RoleIds.Count > 0)
+        // Apply role selections from rule-based configuration
+        if (group.RuleBasedRoleIds.Count > 0)
         {
-            query = query.Where(e => group.RoleIds.Contains(e.RoleId));
+            query = query.Where(e => group.RuleBasedRoleIds.Contains(e.RoleId));
         }
 
-        // Apply employee rules
-        if (group.EmployeeRules.Count > 0)
+        // Apply employee rules from rule-based configuration
+        if (ruleBasedEmployeeRules.Count > 0)
         {
-            var rules = group.EmployeeRules.Select(r => new EmployeeRuleDto
+            var rules = ruleBasedEmployeeRules.Select(r => new EmployeeRuleDto
             {
                 Field = r.Field,
                 Operator = r.Operator,
@@ -508,6 +598,24 @@ public class GroupAppService : ApplicationService, IGroupAppService
 
     private GroupDto MapToDto(Group group)
     {
+        var ruleBasedStudentRules = group.GetRuleBasedStudentRules().ToList();
+        var ruleBasedEmployeeRules = group.GetRuleBasedEmployeeRules().ToList();
+        var nameBasedStudentRules = group.GetNameBasedStudentRules().ToList();
+        var nameBasedEmployeeRules = group.GetNameBasedEmployeeRules().ToList();
+
+        // Check if there's any rule-based configuration
+        var hasRuleBased = group.RuleBasedDivisionIds.Count > 0 ||
+                           group.RuleBasedRoleIds.Count > 0 ||
+                           ruleBasedStudentRules.Count > 0 ||
+                           ruleBasedEmployeeRules.Count > 0;
+
+        // Check if there's any name-based configuration
+        var hasNameBased = group.NameBasedDivisionIds.Count > 0 ||
+                           group.NameBasedRoleIds.Count > 0 ||
+                           nameBasedStudentRules.Count > 0 ||
+                           nameBasedEmployeeRules.Count > 0 ||
+                           group.Members.Count > 0;
+
         return new GroupDto
         {
             Id = group.Id,
@@ -515,30 +623,51 @@ public class GroupAppService : ApplicationService, IGroupAppService
             AcademicYearId = group.AcademicYearId,
             Name = group.Name,
             Description = group.Description,
-            SelectionMode = group.SelectionMode,
-            SelectedDivisionIds = group.SelectedDivisionIds,
-            RoleIds = group.RoleIds,
-            StudentRules = group.StudentRules.Select(r => new StudentRuleDto
+            RuleBased = hasRuleBased ? new RuleBasedSelectionResponseDto
             {
-                Id = r.Id,
-                Field = r.Field,
-                Operator = r.Operator,
-                Value = r.Value
-            }).ToList(),
-            EmployeeRules = group.EmployeeRules.Select(r => new EmployeeRuleDto
+                DivisionIds = group.RuleBasedDivisionIds,
+                RoleIds = group.RuleBasedRoleIds,
+                StudentFilters = ruleBasedStudentRules.Select(r => new StudentRuleDto
+                {
+                    Id = r.Id,
+                    Field = r.Field,
+                    Operator = r.Operator,
+                    Value = r.Value
+                }).ToList(),
+                EmployeeFilters = ruleBasedEmployeeRules.Select(r => new EmployeeRuleDto
+                {
+                    Id = r.Id,
+                    Field = r.Field,
+                    Operator = r.Operator,
+                    Value = r.Value
+                }).ToList()
+            } : null,
+            NameBased = hasNameBased ? new NameBasedSelectionResponseDto
             {
-                Id = r.Id,
-                Field = r.Field,
-                Operator = r.Operator,
-                Value = r.Value
-            }).ToList(),
-            Members = group.Members.Select(m => new GroupMemberDto
-            {
-                Id = m.Id,
-                MemberType = m.MemberType,
-                MemberId = m.MemberId,
-                UserId = m.UserId
-            }).ToList(),
+                DivisionIds = group.NameBasedDivisionIds,
+                RoleIds = group.NameBasedRoleIds,
+                StudentFilters = nameBasedStudentRules.Select(r => new StudentRuleDto
+                {
+                    Id = r.Id,
+                    Field = r.Field,
+                    Operator = r.Operator,
+                    Value = r.Value
+                }).ToList(),
+                EmployeeFilters = nameBasedEmployeeRules.Select(r => new EmployeeRuleDto
+                {
+                    Id = r.Id,
+                    Field = r.Field,
+                    Operator = r.Operator,
+                    Value = r.Value
+                }).ToList(),
+                SelectedMembers = group.Members.Select(m => new GroupMemberDto
+                {
+                    Id = m.Id,
+                    MemberType = m.MemberType,
+                    MemberId = m.MemberId,
+                    UserId = m.UserId
+                }).ToList()
+            } : null,
             CreationTime = group.CreationTime,
             CreatorId = group.CreatorId,
             LastModificationTime = group.LastModificationTime,

@@ -1,5 +1,4 @@
 using System;
-using ShikshaMitra.Groups;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Application.Contracts.Groups;
@@ -18,9 +17,4 @@ public class GetGroupListRequestDto : PagedAndSortedResultRequestDto
     /// Optional filter by name or description
     /// </summary>
     public string? Filter { get; set; }
-
-    /// <summary>
-    /// Optional filter by selection mode
-    /// </summary>
-    public GroupSelectionMode? SelectionMode { get; set; }
 }

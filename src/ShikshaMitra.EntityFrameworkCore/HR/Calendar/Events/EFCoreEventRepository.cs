@@ -36,7 +36,7 @@ public class EFCoreEventRepository : EfCoreRepository<ShikshaMitraDbContext, Eve
         return await _asyncExecuter.ToListAsync(query.AsQueryable());
     }
 
-    public async Task<List<Event>> GetByDateRangeAsync(DateOnly fromDate, DateOnly toDate, bool includeDetails = false)
+    public async Task<List<Event>> GetByDateRangeAsync(DateTimeOffset fromDate, DateTimeOffset toDate, bool includeDetails = false)
     {
         var queryable = await GetQueryableAsync();
         var query = queryable

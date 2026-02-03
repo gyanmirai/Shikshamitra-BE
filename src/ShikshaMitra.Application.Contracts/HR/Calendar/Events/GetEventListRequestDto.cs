@@ -38,10 +38,10 @@ public class GetEventListRequestDto : PagedAndSortedResultRequestDto
     /// <summary>
     /// Filter from date
     /// </summary>
-    public DateOnly? FromDate { get; set; }
+    public DateTimeOffset? FromDate { get; set; }
 
     /// <summary>
     /// Filter to date
     /// </summary>
-    public DateOnly? ToDate { get; set; }
+    public DateTimeOffset? ToDate { get; set; }
 }

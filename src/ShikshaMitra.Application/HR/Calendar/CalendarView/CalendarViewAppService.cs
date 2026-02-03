@@ -91,7 +91,7 @@ public class CalendarViewAppService : ApplicationService, ICalendarViewAppServic
         // Apply status filter for events
         if (input.Status.HasValue)
         {
-            events = events.Where(e => (int)e.Status == input.Status.Value).ToList();
+            events = events.Where(e => (int) e.Status == input.Status.Value).ToList();
         }
 
         // Apply visibility filter for events (non-admin only)
@@ -128,7 +128,7 @@ public class CalendarViewAppService : ApplicationService, ICalendarViewAppServic
         // Apply status filter for holidays
         if (input.Status.HasValue)
         {
-            holidays = holidays.Where(h => (int)h.Status == input.Status.Value).ToList();
+            holidays = holidays.Where(h => (int) h.Status == input.Status.Value).ToList();
         }
 
         // Apply visibility filter for holidays (non-admin only)
@@ -234,7 +234,7 @@ public class CalendarViewAppService : ApplicationService, ICalendarViewAppServic
         {
             Id = eventEntity.Id,
             CalendarItemType = CalendarItemType.Event,
-            Status = (int)eventEntity.Status,
+            Status = (int) eventEntity.Status,
             Title = eventEntity.Title,
             Date = eventEntity.MeetingDate,
             Time = new CalendarItemTimeDto
@@ -285,7 +285,7 @@ public class CalendarViewAppService : ApplicationService, ICalendarViewAppServic
         {
             Id = holiday.Id,
             CalendarItemType = CalendarItemType.Holiday,
-            Status = (int)holiday.Status,
+            Status = (int) holiday.Status,
             Title = holiday.HolidayName,
             Date = holiday.StartDate,
             Time = null, // Holidays don't have specific times

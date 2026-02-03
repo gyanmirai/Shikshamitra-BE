@@ -35,7 +35,6 @@ public class EFCoreGroupRepository : EfCoreRepository<ShikshaMitraDbContext, Gro
     public async Task<List<Group>> GetListWithDetailsAsync(
         Guid academicYearId,
         string? filter = null,
-        GroupSelectionMode? selectionMode = null,
         int skipCount = 0,
         int maxResultCount = int.MaxValue,
         CancellationToken cancellationToken = default)
@@ -54,11 +53,6 @@ public class EFCoreGroupRepository : EfCoreRepository<ShikshaMitraDbContext, Gro
                                      (x.Description != null && x.Description.Contains(filter)));
         }
 
-        if (selectionMode.HasValue)
-        {
-            query = query.Where(x => x.SelectionMode == selectionMode.Value);
-        }
-
         return await query
             .OrderBy(x => x.Name)
             .Skip(skipCount)
@@ -69,7 +63,6 @@ public class EFCoreGroupRepository : EfCoreRepository<ShikshaMitraDbContext, Gro
     public async Task<long> GetCountAsync(
         Guid academicYearId,
         string? filter = null,
-        GroupSelectionMode? selectionMode = null,
         CancellationToken cancellationToken = default)
     {
         var dbContext = await GetDbContextAsync();
@@ -81,11 +74,6 @@ public class EFCoreGroupRepository : EfCoreRepository<ShikshaMitraDbContext, Gro
         {
             query = query.Where(x => x.Name.Contains(filter) ||
                                      (x.Description != null && x.Description.Contains(filter)));
-        }
-
-        if (selectionMode.HasValue)
-        {
-            query = query.Where(x => x.SelectionMode == selectionMode.Value);
         }
 
         return await query.LongCountAsync(cancellationToken);

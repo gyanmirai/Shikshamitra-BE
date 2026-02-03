@@ -25,21 +25,31 @@ public class GroupConfiguration : IEntityTypeConfiguration<Group>
             .IsRequired()
             .HasMaxLength(256);
 
-        builder.Property(x => x.SelectionMode)
-            .IsRequired();
-
         // Optional properties
         builder.Property(x => x.Description)
             .HasMaxLength(500);
 
-        // JSON conversion for List<Guid> properties
-        builder.Property(x => x.SelectedDivisionIds)
+        // JSON conversion for Rule-Based selection properties
+        builder.Property(x => x.RuleBasedDivisionIds)
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonSerializerOptions.Default),
                 v => string.IsNullOrEmpty(v) ? new List<System.Guid>() : JsonSerializer.Deserialize<List<System.Guid>>(v, JsonSerializerOptions.Default) ?? new List<System.Guid>())
             .HasColumnType("jsonb");
 
-        builder.Property(x => x.RoleIds)
+        builder.Property(x => x.RuleBasedRoleIds)
+            .HasConversion(
+                v => JsonSerializer.Serialize(v, JsonSerializerOptions.Default),
+                v => string.IsNullOrEmpty(v) ? new List<System.Guid>() : JsonSerializer.Deserialize<List<System.Guid>>(v, JsonSerializerOptions.Default) ?? new List<System.Guid>())
+            .HasColumnType("jsonb");
+
+        // JSON conversion for Name-Based selection properties
+        builder.Property(x => x.NameBasedDivisionIds)
+            .HasConversion(
+                v => JsonSerializer.Serialize(v, JsonSerializerOptions.Default),
+                v => string.IsNullOrEmpty(v) ? new List<System.Guid>() : JsonSerializer.Deserialize<List<System.Guid>>(v, JsonSerializerOptions.Default) ?? new List<System.Guid>())
+            .HasColumnType("jsonb");
+
+        builder.Property(x => x.NameBasedRoleIds)
             .HasConversion(
                 v => JsonSerializer.Serialize(v, JsonSerializerOptions.Default),
                 v => string.IsNullOrEmpty(v) ? new List<System.Guid>() : JsonSerializer.Deserialize<List<System.Guid>>(v, JsonSerializerOptions.Default) ?? new List<System.Guid>())
@@ -75,9 +85,6 @@ public class GroupConfiguration : IEntityTypeConfiguration<Group>
 
         builder.HasIndex(x => new { x.Name, x.TenantId })
             .HasDatabaseName($"{ShikshaMitraConsts.DbTablePrefix}Groups_Name_Tenant");
-
-        builder.HasIndex(x => x.SelectionMode)
-            .HasDatabaseName($"{ShikshaMitraConsts.DbTablePrefix}Groups_SelectionMode");
 
         builder.HasIndex(x => x.TenantId)
             .HasDatabaseName($"{ShikshaMitraConsts.DbTablePrefix}Groups_Tenant");

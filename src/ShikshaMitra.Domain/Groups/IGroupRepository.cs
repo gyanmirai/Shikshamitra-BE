@@ -22,7 +22,6 @@ public interface IGroupRepository : IRepository<Group, Guid>
     Task<List<Group>> GetListWithDetailsAsync(
         Guid academicYearId,
         string? filter = null,
-        GroupSelectionMode? selectionMode = null,
         int skipCount = 0,
         int maxResultCount = int.MaxValue,
         CancellationToken cancellationToken = default);
@@ -33,7 +32,6 @@ public interface IGroupRepository : IRepository<Group, Guid>
     Task<long> GetCountAsync(
         Guid academicYearId,
         string? filter = null,
-        GroupSelectionMode? selectionMode = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

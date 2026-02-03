@@ -99,12 +99,12 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 			.ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role != null ? src.Role.Name : null))
 			.ForMember(dest => dest.EmployeeStatusType, opt => opt.MapFrom(src => src.EmployeeStatusType ?? EmployeeStatusType.Active));
 
-		// Group mappings
+		// Group mappings - Note: GroupDto is manually mapped in GroupAppService.MapToDto()
+		// These mappings are kept for basic property mapping but nested objects are handled manually
 		CreateMap<Group, GroupDto>()
 			.ForMember(dest => dest.MemberCount, opt => opt.Ignore()) // Populated separately
-			.ForMember(dest => dest.StudentRules, opt => opt.MapFrom(src => src.StudentRules))
-			.ForMember(dest => dest.EmployeeRules, opt => opt.MapFrom(src => src.EmployeeRules))
-			.ForMember(dest => dest.Members, opt => opt.MapFrom(src => src.Members));
+			.ForMember(dest => dest.RuleBased, opt => opt.Ignore()) // Populated manually in MapToDto
+			.ForMember(dest => dest.NameBased, opt => opt.Ignore()); // Populated manually in MapToDto
 
 		CreateMap<GroupStudentRule, StudentRuleDto>();
 		CreateMap<GroupEmployeeRule, EmployeeRuleDto>();

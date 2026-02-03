@@ -18,6 +18,9 @@ public class GroupEmployeeRuleConfiguration : IEntityTypeConfiguration<GroupEmpl
         builder.Property(x => x.GroupId)
             .IsRequired();
 
+        builder.Property(x => x.SelectionType)
+            .IsRequired();
+
         builder.Property(x => x.Field)
             .IsRequired();
 
@@ -29,7 +32,7 @@ public class GroupEmployeeRuleConfiguration : IEntityTypeConfiguration<GroupEmpl
             .HasMaxLength(500);
 
         // Index for faster lookups
-        builder.HasIndex(x => x.GroupId)
-            .HasDatabaseName($"{ShikshaMitraConsts.DbTablePrefix}GroupEmployeeRules_GroupId");
+        builder.HasIndex(x => new { x.GroupId, x.SelectionType })
+            .HasDatabaseName($"{ShikshaMitraConsts.DbTablePrefix}GroupEmployeeRules_GroupId_SelectionType");
     }
 }

@@ -1695,25 +1695,27 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<string>("RoleIds")
+                    b.Property<string>("NameBasedDivisionIds")
                         .IsRequired()
                         .HasColumnType("jsonb");
 
-                    b.Property<string>("SelectedDivisionIds")
+                    b.Property<string>("NameBasedRoleIds")
                         .IsRequired()
                         .HasColumnType("jsonb");
 
-                    b.Property<int>("SelectionMode")
-                        .HasColumnType("integer");
+                    b.Property<string>("RuleBasedDivisionIds")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("RuleBasedRoleIds")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("SelectionMode")
-                        .HasDatabaseName("AppGroups_SelectionMode");
 
                     b.HasIndex("TenantId")
                         .HasDatabaseName("AppGroups_Tenant");
@@ -1741,6 +1743,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("Operator")
                         .HasColumnType("integer");
 
+                    b.Property<int>("SelectionType")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Value")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -1748,8 +1753,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("GroupId")
-                        .HasDatabaseName("AppGroupEmployeeRules_GroupId");
+                    b.HasIndex("GroupId", "SelectionType")
+                        .HasDatabaseName("AppGroupEmployeeRules_GroupId_SelectionType");
 
                     b.ToTable("AppGroupEmployeeRules", (string)null);
                 });
@@ -1800,6 +1805,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("Operator")
                         .HasColumnType("integer");
 
+                    b.Property<int>("SelectionType")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Value")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -1807,8 +1815,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("GroupId")
-                        .HasDatabaseName("AppGroupStudentRules_GroupId");
+                    b.HasIndex("GroupId", "SelectionType")
+                        .HasDatabaseName("AppGroupStudentRules_GroupId_SelectionType");
 
                     b.ToTable("AppGroupStudentRules", (string)null);
                 });

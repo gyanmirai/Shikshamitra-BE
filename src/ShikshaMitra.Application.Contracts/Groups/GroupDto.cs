@@ -6,7 +6,10 @@ using Volo.Abp.Application.Dtos;
 namespace ShikshaMitra.Application.Contracts.Groups;
 
 /// <summary>
-/// Data Transfer Object for reading Group data
+/// Data Transfer Object for reading Group data.
+/// Groups support two selection modes that can be used together:
+/// - RuleBased: Automatically includes all users matching the criteria
+/// - NameBased: Uses filters for context, includes only manually selected users
 /// </summary>
 public class GroupDto : AuditedEntityDto<Guid>
 {
@@ -28,44 +31,66 @@ public class GroupDto : AuditedEntityDto<Guid>
     public string? Description { get; set; }
 
     /// <summary>
-    /// Selection mode: RuleBased or NameBased
+    /// Rule-based selection configuration.
+    /// All users matching the criteria are automatically included.
     /// </summary>
-    public GroupSelectionMode SelectionMode { get; set; }
+    public RuleBasedSelectionResponseDto? RuleBased { get; set; }
 
     /// <summary>
-    /// Selected Division IDs for targeting students by division
-    /// Used when SelectionMode is RuleBased
+    /// Name-based selection configuration.
+    /// Uses filters for context, but only manually selected users are included.
     /// </summary>
-    public List<Guid> SelectedDivisionIds { get; set; } = new();
+    public NameBasedSelectionResponseDto? NameBased { get; set; }
 
     /// <summary>
-    /// Selected role IDs for targeting employees by role
-    /// Used when SelectionMode is RuleBased
+    /// Computed member count (resolved from rules and/or stored members)
+    /// </summary>
+    public int MemberCount { get; set; }
+}
+
+/// <summary>
+/// Rule-based selection response DTO
+/// </summary>
+public class RuleBasedSelectionResponseDto
+{
+    /// <summary>
+    /// Division IDs for targeting students by division
+    /// </summary>
+    public List<Guid> DivisionIds { get; set; } = new();
+
+    /// <summary>
+    /// Role IDs for targeting employees by role
     /// </summary>
     public List<Guid> RoleIds { get; set; } = new();
 
     /// <summary>
     /// Student attribute filter rules
-    /// Used when SelectionMode is RuleBased
     /// </summary>
-    public List<StudentRuleDto> StudentRules { get; set; } = new();
+    public List<StudentRuleDto> StudentFilters { get; set; } = new();
 
     /// <summary>
     /// Employee attribute filter rules
-    /// Used when SelectionMode is RuleBased
     /// </summary>
-    public List<EmployeeRuleDto> EmployeeRules { get; set; } = new();
+    public List<EmployeeRuleDto> EmployeeFilters { get; set; } = new();
 
+    public bool HasAnySelection()
+    {
+        return DivisionIds.Count > 0 ||
+               RoleIds.Count > 0 ||
+               StudentFilters.Count > 0 ||
+               EmployeeFilters.Count > 0;
+    }
+}
+
+/// <summary>
+/// Name-based selection response DTO
+/// </summary>
+public class NameBasedSelectionResponseDto : RuleBasedSelectionResponseDto
+{
     /// <summary>
     /// Manually selected members
-    /// Used when SelectionMode is NameBased
     /// </summary>
-    public List<GroupMemberDto> Members { get; set; } = new();
-
-    /// <summary>
-    /// Computed member count (resolved from rules or stored members)
-    /// </summary>
-    public int MemberCount { get; set; }
+    public List<GroupMemberDto> SelectedMembers { get; set; } = new();
 }
 
 /// <summary>

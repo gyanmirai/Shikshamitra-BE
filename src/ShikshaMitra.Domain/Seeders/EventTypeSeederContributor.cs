@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.Calendar.Events;
 using ShikshaMitra.HR.Calendar.EventTypes;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
@@ -12,7 +13,7 @@ namespace ShikshaMitra.Seeders;
 /// </summary>
 public class EventTypeSeederContributor : IDataSeedContributor, ITransientDependency
 {
-    private static readonly Guid MeetingDateEventTypeId = Guid.Parse("3fa85f64-5717-4562-b3fc-2c963f66afa6");
+    private static readonly Guid MeetingEventTypeId = Guid.Parse("3fa85f64-5717-4562-b3fc-2c963f66afa6");
 
     private readonly ICurrentTenant _currentTenant;
     private readonly IEventTypeRepository _eventTypeRepository;
@@ -33,7 +34,7 @@ public class EventTypeSeederContributor : IDataSeedContributor, ITransientDepend
         // Disable tenant filter to check if record exists globally (PK is unique across all tenants)
         using (_dataFilter.Disable<IMultiTenant>())
         {
-            var existingType = await _eventTypeRepository.FindAsync(MeetingDateEventTypeId);
+            var existingType = await _eventTypeRepository.FindAsync(MeetingEventTypeId);
             if (existingType != null)
             {
                 return;
@@ -41,11 +42,11 @@ public class EventTypeSeederContributor : IDataSeedContributor, ITransientDepend
         }
 
         var meetingEventType = new EventType(
-            MeetingDateEventTypeId,
+            MeetingEventTypeId,
             _currentTenant.Id,
-            "Meeting Date",
+            EventTypeNames.MeetingEvent,
             "#1E88E5",
-            "Default meeting-date event type");
+            "Default meeting event type - uses Meeting Date field");
 
         await _eventTypeRepository.InsertAsync(meetingEventType, autoSave: true);
     }

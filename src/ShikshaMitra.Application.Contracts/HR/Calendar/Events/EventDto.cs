@@ -56,9 +56,9 @@ public class EventDto : AuditedEntityDto<Guid>
     public string? Venue { get; set; }
 
     /// <summary>
-    /// Meeting date
+    /// Meeting date - only for "Meeting Event" type events, null for other event types
     /// </summary>
-    public DateOnly MeetingDate { get; set; }
+    public DateOnly? MeetingDate { get; set; }
 
     /// <summary>
     /// Start time (HH:mm)

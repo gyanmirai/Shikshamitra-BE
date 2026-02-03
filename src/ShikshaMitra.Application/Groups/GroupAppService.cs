@@ -515,7 +515,7 @@ public class GroupAppService : ApplicationService, IGroupAppService
     private async Task<List<Guid>> ResolveStudentMembersAsync(Group group)
     {
         var ruleBasedStudentRules = group.GetRuleBasedStudentRules().ToList();
-        
+
         // If no rule-based division selections and no student rules, skip students
         if (group.RuleBasedDivisionIds.Count == 0 && ruleBasedStudentRules.Count == 0)
             return new List<Guid>();
@@ -557,7 +557,7 @@ public class GroupAppService : ApplicationService, IGroupAppService
     private async Task<List<Guid>> ResolveEmployeeMembersAsync(Group group)
     {
         var ruleBasedEmployeeRules = group.GetRuleBasedEmployeeRules().ToList();
-        
+
         // If no rule-based role selections and no employee rules, skip employees
         if (group.RuleBasedRoleIds.Count == 0 && ruleBasedEmployeeRules.Count == 0)
             return new List<Guid>();

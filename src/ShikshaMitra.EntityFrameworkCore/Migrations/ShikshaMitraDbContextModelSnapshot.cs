@@ -2376,7 +2376,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<DateOnly>("MeetingDate")
+                    b.Property<DateOnly?>("MeetingDate")
                         .HasColumnType("date");
 
                     b.Property<int>("Mode")

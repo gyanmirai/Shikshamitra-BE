@@ -19,6 +19,7 @@ namespace ShikshaMitra.Application.Groups;
 /// <summary>
 /// Application service for Group management including CRUD and member resolution
 /// </summary>
+[RemoteService(false)]
 public class GroupAppService : ApplicationService, IGroupAppService
 {
     private readonly IRepository<Group, Guid> _repository;

@@ -129,34 +129,68 @@ public class EventAppService : CrudAppService<
 
     public override async Task<EventDto> CreateAsync(CreateUpdateEventDto input)
     {
-        // Validate that the referenced EventType exists
-        var eventTypeExists = await _eventTypeRepository.AnyAsync(x => x.Id == input.EventTypeId);
-        if (!eventTypeExists)
+        // Validate that the referenced EventType exists and get its name
+        var eventType = await _eventTypeRepository.FindAsync(x => x.Id == input.EventTypeId);
+        if (eventType == null)
         {
             throw new BusinessException($"Event type with ID '{input.EventTypeId}' does not exist.");
         }
 
-        var entity = Event.Create(
-            CurrentTenant.Id,
-            input.AcademicYearId,
-            input.Title,
-            input.EventTypeId,
-            input.MeetingDate,
-            input.StartTime,
-            input.EndTime,
-            input.Description,
-            input.Poster,
-            (EventMode) input.Mode,
-            input.Venue,
-            input.IsRecurring,
-            input.RecurrenceJson,
-            input.AudienceIds);
+        Event entity;
+        var isMeetingEvent = eventType.Name.Equals(EventTypeNames.MeetingEvent, StringComparison.OrdinalIgnoreCase);
+
+        if (isMeetingEvent)
+        {
+            // For "Meeting Event" type: MeetingDate is required
+            if (!input.MeetingDate.HasValue)
+            {
+                throw new BusinessException("Meeting date is required for Meeting Event type.");
+            }
+
+            entity = Event.CreateMeetingEvent(
+                CurrentTenant.Id,
+                input.AcademicYearId,
+                input.Title,
+                input.EventTypeId,
+                input.MeetingDate.Value,
+                input.StartTime,
+                input.EndTime,
+                input.Description,
+                input.Poster,
+                (EventMode)input.Mode,
+                input.Venue,
+                input.IsRecurring,
+                input.RecurrenceJson,
+                input.AudienceIds);
+        }
+        else
+        {
+            // For other event types: MeetingDate should not be provided
+            if (input.MeetingDate.HasValue)
+            {
+                throw new BusinessException("Meeting date should not be provided for non-meeting event types.");
+            }
+
+            entity = Event.CreateEvent(
+                CurrentTenant.Id,
+                input.AcademicYearId,
+                input.Title,
+                input.EventTypeId,
+                input.StartTime,
+                input.EndTime,
+                input.Description,
+                input.Poster,
+                (EventMode)input.Mode,
+                input.Venue,
+                input.IsRecurring,
+                input.RecurrenceJson,
+                input.AudienceIds);
+        }
 
         await _eventRepository.InsertAsync(entity);
         var eventDto = ObjectMapper.Map<Event, EventDto>(entity);
 
         // Populate EventType data
-        var eventType = await _eventTypeRepository.GetAsync(eventDto.EventTypeId);
         eventDto.EventType = ObjectMapper.Map<EventType, EventTypeDto>(eventType);
 
         return eventDto;
@@ -166,24 +200,64 @@ public class EventAppService : CrudAppService<
     {
         var entity = await _eventRepository.GetAsync(id);
 
-        entity.Update(
-            input.Title,
-            input.MeetingDate,
-            input.StartTime,
-            input.EndTime,
-            input.Description,
-            input.Poster,
-            (EventMode) input.Mode,
-            input.Venue,
-            input.IsRecurring,
-            input.RecurrenceJson,
-            input.AudienceIds);
+        // Validate that the referenced EventType exists and get its name
+        var eventType = await _eventTypeRepository.FindAsync(x => x.Id == input.EventTypeId);
+        if (eventType == null)
+        {
+            throw new BusinessException($"Event type with ID '{input.EventTypeId}' does not exist.");
+        }
+
+        var isMeetingEvent = eventType.Name.Equals(EventTypeNames.MeetingEvent, StringComparison.OrdinalIgnoreCase);
+
+        if (isMeetingEvent)
+        {
+            // For "Meeting Event" type: MeetingDate is required
+            if (!input.MeetingDate.HasValue)
+            {
+                throw new BusinessException("Meeting date is required for Meeting Event type.");
+            }
+
+            entity.UpdateMeetingEvent(
+                input.Title,
+                input.MeetingDate.Value,
+                input.StartTime,
+                input.EndTime,
+                input.Description,
+                input.Poster,
+                (EventMode)input.Mode,
+                input.Venue,
+                input.IsRecurring,
+                input.RecurrenceJson,
+                input.AudienceIds);
+        }
+        else
+        {
+            // For other event types: MeetingDate should not be provided
+            if (input.MeetingDate.HasValue)
+            {
+                throw new BusinessException("Meeting date should not be provided for non-meeting event types.");
+            }
+
+            entity.UpdateEvent(
+                input.Title,
+                input.StartTime,
+                input.EndTime,
+                input.Description,
+                input.Poster,
+                (EventMode)input.Mode,
+                input.Venue,
+                input.IsRecurring,
+                input.RecurrenceJson,
+                input.AudienceIds);
+        }
+
+        // Update EventTypeId if changed
+        entity.EventTypeId = input.EventTypeId;
 
         await _eventRepository.UpdateAsync(entity);
         var eventDto = ObjectMapper.Map<Event, EventDto>(entity);
 
         // Populate EventType data
-        var eventType = await _eventTypeRepository.GetAsync(eventDto.EventTypeId);
         eventDto.EventType = ObjectMapper.Map<EventType, EventTypeDto>(eventType);
 
         return eventDto;

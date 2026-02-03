@@ -40,7 +40,7 @@ public class EventConfiguration : IEntityTypeConfiguration<Event>
         builder.Property(x => x.Venue);
 
         builder.Property(x => x.MeetingDate)
-            .IsRequired();
+            .IsRequired(false);
 
         builder.Property(x => x.StartTime)
             .IsRequired();

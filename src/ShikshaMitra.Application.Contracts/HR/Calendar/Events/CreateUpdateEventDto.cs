@@ -51,10 +51,10 @@ public class CreateUpdateEventDto : IValidatableObject
     public string? Venue { get; set; }
 
     /// <summary>
-    /// Meeting date, required
+    /// Meeting date - only required for "Meeting Event" type events.
+    /// For other event types, this should not be provided.
     /// </summary>
-    [Required(ErrorMessage = "Meeting date is required")]
-    public DateOnly MeetingDate { get; set; }
+    public DateOnly? MeetingDate { get; set; }
 
     /// <summary>
     /// Start time in HH:mm format, required
@@ -86,11 +86,12 @@ public class CreateUpdateEventDto : IValidatableObject
     public List<Guid> AudienceIds { get; set; } = new();
 
     /// <summary>
-    /// Validate times and cross-field constraints
+    /// Validate times and cross-field constraints.
+    /// Note: MeetingDate validation based on EventType is done in the AppService
+    /// as it requires looking up the EventType from the database.
     /// </summary>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        // Time format validation is done via RegularExpression attributes
         // Additional custom validations can be added here
         yield break;
     }

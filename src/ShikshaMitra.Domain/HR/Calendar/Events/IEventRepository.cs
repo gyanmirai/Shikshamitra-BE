@@ -23,7 +23,7 @@ public interface IEventRepository : IRepository<Event, Guid>
     /// <summary>
     /// Get events by date range
     /// </summary>
-    Task<List<Event>> GetByDateRangeAsync(DateOnly fromDate, DateOnly toDate, bool includeDetails = false);
+    Task<List<Event>> GetByDateRangeAsync(DateTimeOffset fromDate, DateTimeOffset toDate, bool includeDetails = false);
 
     /// <summary>
     /// Check if event with title exists

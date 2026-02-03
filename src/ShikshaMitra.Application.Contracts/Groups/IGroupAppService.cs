@@ -60,4 +60,11 @@ public interface IGroupAppService : IApplicationService
     /// Gets the member count for a group
     /// </summary>
     Task<int> GetGroupMemberCountAsync(Guid groupId);
+
+    /// <summary>
+    /// Gets all group IDs that a user belongs to
+    /// </summary>
+    /// <param name="userId">The user ID to check</param>
+    /// <returns>List of group IDs the user is a member of</returns>
+    Task<List<Guid>> GetUserGroupIdsAsync(Guid userId);
 }

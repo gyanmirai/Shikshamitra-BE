@@ -485,6 +485,27 @@ public class GroupAppService : ApplicationService, IGroupAppService
         return await GetGroupMemberCountInternalAsync(group);
     }
 
+    public async Task<List<Guid>> GetUserGroupIdsAsync(Guid userId)
+    {
+        var groups = await AsyncExecuter.ToListAsync(await _repository.GetQueryableAsync());
+        var userGroupIds = new List<Guid>();
+
+        foreach (var group in groups)
+        {
+            var groupWithDetails = await _groupRepository.GetWithDetailsAsync(group.Id);
+            if (groupWithDetails == null)
+                continue;
+
+            var members = await ResolveGroupMembersAsync(groupWithDetails);
+            if (members.Contains(userId))
+            {
+                userGroupIds.Add(group.Id);
+            }
+        }
+
+        return userGroupIds;
+    }
+
     private async Task<int> GetGroupMemberCountInternalAsync(Group group)
     {
         var members = await ResolveGroupMembersAsync(group);

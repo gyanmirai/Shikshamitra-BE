@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using ShikshaMitra.HR.Calendar.Events;
 
 namespace ShikshaMitra.Application.Contracts.HR.Calendar.Events;
 
@@ -41,9 +42,9 @@ public class CreateUpdateEventDto : IValidatableObject
     public string? Poster { get; set; }
 
     /// <summary>
-    /// Event mode: 0=Online, 1=Offline
+    /// Event mode: Online or Offline
     /// </summary>
-    public int Mode { get; set; } = 1; // Default to Offline
+    public EventMode Mode { get; set; } = EventMode.Offline;
 
     /// <summary>
     /// Venue location (required for offline events)
@@ -54,7 +55,7 @@ public class CreateUpdateEventDto : IValidatableObject
     /// Meeting date - only required for "Meeting Event" type events.
     /// For other event types, this should not be provided.
     /// </summary>
-    public DateOnly? MeetingDate { get; set; }
+    public DateTimeOffset? MeetingDate { get; set; }
 
     /// <summary>
     /// Start time in HH:mm format, required

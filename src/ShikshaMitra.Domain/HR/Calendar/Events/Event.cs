@@ -51,7 +51,7 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// <summary>
     /// Meeting/event date - only for "Meeting Event" type events, null for other event types
     /// </summary>
-    public DateOnly? MeetingDate { get; set; }
+    public DateTimeOffset? MeetingDate { get; set; }
 
     /// <summary>
     /// Start time (HH:mm format)
@@ -85,15 +85,15 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
     {
         get
         {
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var now = DateTimeOffset.UtcNow;
 
             // For meeting events, use MeetingDate for status
             if (MeetingDate.HasValue)
             {
-                if (MeetingDate.Value < today)
+                if (MeetingDate.Value.Date < now.Date)
                     return EventStatus.Completed;
 
-                if (MeetingDate.Value == today)
+                if (MeetingDate.Value.Date == now.Date)
                     return EventStatus.Active;
 
                 return EventStatus.Upcoming;
@@ -114,7 +114,7 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
         Guid academicYearId,
         string title,
         Guid eventTypeId,
-        DateOnly meetingDate,
+        DateTimeOffset meetingDate,
         string startTime,
         string endTime,
         string? description = null,
@@ -196,7 +196,7 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
         Guid academicYearId,
         string title,
         Guid eventTypeId,
-        DateOnly meetingDate,
+        DateTimeOffset meetingDate,
         string startTime,
         string endTime,
         string? description = null,
@@ -234,7 +234,7 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     public void Update(
         string title,
-        DateOnly meetingDate,
+        DateTimeOffset meetingDate,
         string startTime,
         string endTime,
         string? description = null,
@@ -279,7 +279,7 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     public void UpdateMeetingEvent(
         string title,
-        DateOnly meetingDate,
+        DateTimeOffset meetingDate,
         string startTime,
         string endTime,
         string? description = null,
@@ -373,7 +373,7 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
             throw new ArgumentException($"Invalid end time format: {endTime}. Expected HH:mm");
     }
 
-    private static void ValidateDateAndTime(DateOnly meetingDate, string startTime, string endTime)
+    private static void ValidateDateAndTime(DateTimeOffset meetingDate, string startTime, string endTime)
     {
         // Validate time format HH:mm
         if (!IsValidTimeFormat(startTime))

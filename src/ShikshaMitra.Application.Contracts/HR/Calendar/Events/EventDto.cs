@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.HR.Calendar.EventTypes;
+﻿using ShikshaMitra.HR.Calendar.Events;
+using ShikshaMitra.HR.Calendar.EventTypes;
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
@@ -46,9 +47,9 @@ public class EventDto : AuditedEntityDto<Guid>
     public string? Poster { get; set; }
 
     /// <summary>
-    /// Event mode (0=Online, 1=Offline)
+    /// Event mode (Online/Offline)
     /// </summary>
-    public int Mode { get; set; }
+    public EventMode Mode { get; set; }
 
     /// <summary>
     /// Venue location
@@ -58,7 +59,7 @@ public class EventDto : AuditedEntityDto<Guid>
     /// <summary>
     /// Meeting date - only for "Meeting Event" type events, null for other event types
     /// </summary>
-    public DateOnly? MeetingDate { get; set; }
+    public DateTimeOffset? MeetingDate { get; set; }
 
     /// <summary>
     /// Start time (HH:mm)

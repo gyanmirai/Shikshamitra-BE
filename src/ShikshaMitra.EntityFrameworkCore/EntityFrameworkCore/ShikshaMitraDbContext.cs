@@ -16,6 +16,7 @@ using ShikshaMitra.HR.Calendar;
 using ShikshaMitra.HR.Calendar.EventTypes;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.Events;
+using ShikshaMitra.Communication.AnnouncementTypes;
 using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.SalarySlips;
@@ -236,6 +237,12 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<EventType> EventTypes { get; set; }
 	public DbSet<Holiday> Holidays { get; set; }
 	public DbSet<Event> Events { get; set; }
+
+	#endregion
+
+	#region Communication
+
+	public DbSet<AnnouncementType> AnnouncementTypes { get; set; }
 
 	#endregion
 

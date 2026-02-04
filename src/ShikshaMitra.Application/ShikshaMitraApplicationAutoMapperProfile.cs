@@ -1,6 +1,8 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Application.Contracts.Groups;
+using ShikshaMitra.Application.Contracts.Communication.AnnouncementTypes;
+using ShikshaMitra.Communication.AnnouncementTypes;
 using ShikshaMitra.Common;
 using ShikshaMitra.Groups;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -110,5 +112,11 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		CreateMap<GroupEmployeeRule, EmployeeRuleDto>();
 		CreateMap<GroupMember, GroupMemberDto>()
 			.ForMember(dest => dest.DisplayName, opt => opt.Ignore()); // Populated separately
+
+		// AnnouncementType mappings
+		CreateMap<AnnouncementType, AnnouncementTypeDto>()
+			.ForMember(dest => dest.AnnouncementType, opt => opt.MapFrom(src => src.AnnouncementTypeName));
+		CreateMap<CreateUpdateAnnouncementTypeDto, AnnouncementType>()
+			.ForMember(dest => dest.AnnouncementTypeName, opt => opt.MapFrom(src => src.AnnouncementType));
 	}
 }

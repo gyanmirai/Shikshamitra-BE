@@ -49,14 +49,45 @@ public class GroupDto : AuditedEntityDto<Guid>
 }
 
 /// <summary>
+/// Academic selection containing unique IDs at each hierarchy level
+/// </summary>
+public class AcademicSelectionDto
+{
+    /// <summary>
+    /// Unique Board IDs derived from selected divisions
+    /// </summary>
+    public List<Guid> Boards { get; set; } = new();
+
+    /// <summary>
+    /// Unique Medium IDs derived from selected divisions
+    /// </summary>
+    public List<Guid> Mediums { get; set; } = new();
+
+    /// <summary>
+    /// Unique Stage IDs derived from selected divisions
+    /// </summary>
+    public List<Guid> Stages { get; set; } = new();
+
+    /// <summary>
+    /// Unique Class/Standard IDs derived from selected divisions
+    /// </summary>
+    public List<Guid> Classes { get; set; } = new();
+
+    /// <summary>
+    /// Selected Division IDs
+    /// </summary>
+    public List<Guid> Divisions { get; set; } = new();
+}
+
+/// <summary>
 /// Rule-based selection response DTO
 /// </summary>
 public class RuleBasedSelectionResponseDto
 {
     /// <summary>
-    /// Division IDs for targeting students by division
+    /// Academic selection with full hierarchy IDs (Boards, Mediums, Stages, Classes, Divisions)
     /// </summary>
-    public List<Guid> DivisionIds { get; set; } = new();
+    public AcademicSelectionDto? AcademicSelection { get; set; }
 
     /// <summary>
     /// Role IDs for targeting employees by role
@@ -75,7 +106,7 @@ public class RuleBasedSelectionResponseDto
 
     public bool HasAnySelection()
     {
-        return DivisionIds.Count > 0 ||
+        return (AcademicSelection != null && AcademicSelection.Divisions.Count > 0) ||
                RoleIds.Count > 0 ||
                StudentFilters.Count > 0 ||
                EmployeeFilters.Count > 0;

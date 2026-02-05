@@ -7,6 +7,8 @@ using ShikshaMitra.Groups;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -29,6 +31,9 @@ public class GroupAppService : ApplicationService, IGroupAppService
     private readonly IRepository<IdentityRole, Guid> _roleRepository;
     private readonly IRepository<Standard, Guid> _standardRepository;
     private readonly IRepository<Division, Guid> _divisionRepository;
+    private readonly IRepository<EducationMediumStage, Guid> _stageRepository;
+    private readonly IRepository<EducationMedium, Guid> _mediumRepository;
+    private readonly IRepository<EducationBoard, Guid> _boardRepository;
 
     public GroupAppService(
         IRepository<Group, Guid> repository,
@@ -37,7 +42,10 @@ public class GroupAppService : ApplicationService, IGroupAppService
         IRepository<Employee, Guid> employeeRepository,
         IRepository<IdentityRole, Guid> roleRepository,
         IRepository<Standard, Guid> standardRepository,
-        IRepository<Division, Guid> divisionRepository)
+        IRepository<Division, Guid> divisionRepository,
+        IRepository<EducationMediumStage, Guid> stageRepository,
+        IRepository<EducationMedium, Guid> mediumRepository,
+        IRepository<EducationBoard, Guid> boardRepository)
     {
         _repository = repository;
         _groupRepository = groupRepository;
@@ -46,6 +54,9 @@ public class GroupAppService : ApplicationService, IGroupAppService
         _roleRepository = roleRepository;
         _standardRepository = standardRepository;
         _divisionRepository = divisionRepository;
+        _stageRepository = stageRepository;
+        _mediumRepository = mediumRepository;
+        _boardRepository = boardRepository;
     }
 
     #region CRUD Operations
@@ -56,7 +67,7 @@ public class GroupAppService : ApplicationService, IGroupAppService
         if (group == null)
             throw new UserFriendlyException($"Group with ID {id} not found.");
 
-        var dto = MapToDto(group);
+        var dto = await MapToDtoAsync(group);
         dto.MemberCount = await GetGroupMemberCountAsync(id);
         return dto;
     }
@@ -76,7 +87,7 @@ public class GroupAppService : ApplicationService, IGroupAppService
         var dtos = new List<GroupDto>();
         foreach (var group in groups)
         {
-            var dto = MapToDto(group);
+            var dto = await MapToDtoAsync(group);
             dto.MemberCount = await GetGroupMemberCountInternalAsync(group);
             dtos.Add(dto);
         }
@@ -617,7 +628,7 @@ public class GroupAppService : ApplicationService, IGroupAppService
 
     #region Helper Methods
 
-    private GroupDto MapToDto(Group group)
+    private async Task<GroupDto> MapToDtoAsync(Group group)
     {
         var ruleBasedStudentRules = group.GetRuleBasedStudentRules().ToList();
         var ruleBasedEmployeeRules = group.GetRuleBasedEmployeeRules().ToList();
@@ -637,6 +648,14 @@ public class GroupAppService : ApplicationService, IGroupAppService
                            nameBasedEmployeeRules.Count > 0 ||
                            group.Members.Count > 0;
 
+        // Build academic selections for both rule-based and name-based
+        var ruleBasedAcademicSelection = hasRuleBased && group.RuleBasedDivisionIds.Count > 0 
+            ? await BuildAcademicSelectionAsync(group.RuleBasedDivisionIds)
+            : null;
+        var nameBasedAcademicSelection = hasNameBased && group.NameBasedDivisionIds.Count > 0 
+            ? await BuildAcademicSelectionAsync(group.NameBasedDivisionIds)
+            : null;
+
         return new GroupDto
         {
             Id = group.Id,
@@ -646,7 +665,7 @@ public class GroupAppService : ApplicationService, IGroupAppService
             Description = group.Description,
             RuleBased = hasRuleBased ? new RuleBasedSelectionResponseDto
             {
-                DivisionIds = group.RuleBasedDivisionIds,
+                AcademicSelection = ruleBasedAcademicSelection,
                 RoleIds = group.RuleBasedRoleIds,
                 StudentFilters = ruleBasedStudentRules.Select(r => new StudentRuleDto
                 {
@@ -665,7 +684,7 @@ public class GroupAppService : ApplicationService, IGroupAppService
             } : null,
             NameBased = hasNameBased ? new NameBasedSelectionResponseDto
             {
-                DivisionIds = group.NameBasedDivisionIds,
+                AcademicSelection = nameBasedAcademicSelection,
                 RoleIds = group.NameBasedRoleIds,
                 StudentFilters = nameBasedStudentRules.Select(r => new StudentRuleDto
                 {
@@ -693,6 +712,57 @@ public class GroupAppService : ApplicationService, IGroupAppService
             CreatorId = group.CreatorId,
             LastModificationTime = group.LastModificationTime,
             LastModifierId = group.LastModifierId
+        };
+    }
+
+    /// <summary>
+    /// Builds AcademicSelectionDto from division IDs by traversing the hierarchy
+    /// Division → Standard (Class) → Stage → Medium → Board
+    /// </summary>
+    private async Task<AcademicSelectionDto> BuildAcademicSelectionAsync(List<Guid> divisionIds)
+    {
+        if (divisionIds.Count == 0)
+            return new AcademicSelectionDto();
+
+        // Get divisions with their Standards
+        var divisionQuery = await _divisionRepository.GetQueryableAsync();
+        var divisions = await AsyncExecuter.ToListAsync(
+            divisionQuery.Where(d => divisionIds.Contains(d.Id)));
+
+        // Get unique Standard IDs
+        var standardIds = divisions.Select(d => d.StandardId).Distinct().ToList();
+
+        // Get Standards with their Stages
+        var standardQuery = await _standardRepository.GetQueryableAsync();
+        var standards = await AsyncExecuter.ToListAsync(
+            standardQuery.Where(s => standardIds.Contains(s.Id)));
+
+        // Get unique Stage IDs
+        var stageIds = standards.Select(s => s.EducationMediumStageId).Distinct().ToList();
+
+        // Get Stages with their Mediums
+        var stageQuery = await _stageRepository.GetQueryableAsync();
+        var stages = await AsyncExecuter.ToListAsync(
+            stageQuery.Where(s => stageIds.Contains(s.Id)));
+
+        // Get unique Medium IDs
+        var mediumIds = stages.Select(s => s.EducationMediumId).Distinct().ToList();
+
+        // Get Mediums with their Boards
+        var mediumQuery = await _mediumRepository.GetQueryableAsync();
+        var mediums = await AsyncExecuter.ToListAsync(
+            mediumQuery.Where(m => mediumIds.Contains(m.Id)));
+
+        // Get unique Board IDs
+        var boardIds = mediums.Select(m => m.EducationBoardId).Distinct().ToList();
+
+        return new AcademicSelectionDto
+        {
+            Boards = boardIds,
+            Mediums = mediumIds,
+            Stages = stageIds,
+            Classes = standardIds,
+            Divisions = divisionIds
         };
     }
 

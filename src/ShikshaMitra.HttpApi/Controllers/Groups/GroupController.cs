@@ -16,8 +16,32 @@ namespace ShikshaMitra.Controllers.Groups;
 /// </summary>
 [Authorize]
 [Route("api/groups")]
-public class GroupController(IGroupAppService groupAppService) : AbpController
+public class GroupController(IGroupAppService groupAppService, IRuleFieldsAppService ruleFieldsAppService) : AbpController
 {
+    #region Rule Field Metadata
+
+    /// <summary>
+    /// Get available rule fields for student filtering with applicable operators and options
+    /// </summary>
+    [HttpGet("rules/student-fields")]
+    [ProducesResponseType(typeof(List<RuleFieldDto>), StatusCodes.Status200OK)]
+    public async Task<List<RuleFieldDto>> GetStudentRuleFieldsAsync()
+    {
+        return await ruleFieldsAppService.GetStudentRuleFieldsAsync();
+    }
+
+    /// <summary>
+    /// Get available rule fields for employee filtering with applicable operators and options
+    /// </summary>
+    [HttpGet("rules/employee-fields")]
+    [ProducesResponseType(typeof(List<RuleFieldDto>), StatusCodes.Status200OK)]
+    public async Task<List<RuleFieldDto>> GetEmployeeRuleFieldsAsync()
+    {
+        return await ruleFieldsAppService.GetEmployeeRuleFieldsAsync();
+    }
+
+    #endregion
+
     #region CRUD Operations
 
     /// <summary>

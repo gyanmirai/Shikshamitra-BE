@@ -799,6 +799,7 @@ public class GroupAppService : ApplicationService, IGroupAppService
             EmployeeRuleField.Role => "RoleId",
             EmployeeRuleField.EmploymentType => "EmployeeGroup",
             EmployeeRuleField.Name => "FirstName", // Will also need to handle LastName
+            EmployeeRuleField.Gender => "GenderType",
             _ => string.Empty
         };
     }

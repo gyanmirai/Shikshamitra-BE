@@ -23,5 +23,10 @@ public enum EmployeeRuleField
     /// <summary>
     /// Filter by employee name
     /// </summary>
-    Name = 3
+    Name = 3,
+
+    /// <summary>
+    /// Filter by gender
+    /// </summary>
+    Gender = 4
 }

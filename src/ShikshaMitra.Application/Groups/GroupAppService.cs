@@ -22,6 +22,7 @@ namespace ShikshaMitra.Application.Groups;
 /// Application service for Group management including CRUD and member resolution
 /// </summary>
 [RemoteService(false)]
+
 public class GroupAppService : ApplicationService, IGroupAppService
 {
     private readonly IRepository<Group, Guid> _repository;
@@ -649,10 +650,10 @@ public class GroupAppService : ApplicationService, IGroupAppService
                            group.Members.Count > 0;
 
         // Build academic selections for both rule-based and name-based
-        var ruleBasedAcademicSelection = hasRuleBased && group.RuleBasedDivisionIds.Count > 0 
+        var ruleBasedAcademicSelection = hasRuleBased && group.RuleBasedDivisionIds.Count > 0
             ? await BuildAcademicSelectionAsync(group.RuleBasedDivisionIds)
             : null;
-        var nameBasedAcademicSelection = hasNameBased && group.NameBasedDivisionIds.Count > 0 
+        var nameBasedAcademicSelection = hasNameBased && group.NameBasedDivisionIds.Count > 0
             ? await BuildAcademicSelectionAsync(group.NameBasedDivisionIds)
             : null;
 

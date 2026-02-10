@@ -276,6 +276,12 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
     public DbSet<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureDetail> FeeStructureDetails { get; set; }
     #endregion
 
+    #region ConcessionType
+    public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionType> ConcessionTypes { get; set; }
+    public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeFeeHead> ConcessionTypeFeeHeads { get; set; }
+    public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeDocument> ConcessionTypeDocuments { get; set; }
+    #endregion
+
     public DbSet<FeeCategory> FeeCategories { get; set; }
 
 

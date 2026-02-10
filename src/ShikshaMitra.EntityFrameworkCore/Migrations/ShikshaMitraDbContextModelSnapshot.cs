@@ -1655,12 +1655,15 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("FeeCategories");
+                    b.ToTable("FeeCategories", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead.FeeHead", b =>
+            modelBuilder.Entity("ShikshaMitra.Finance.Setting.FeeHead.FeeHead", b =>
                 {
                     b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -1686,14 +1689,20 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
-                    b.Property<string>("FeeHeadName")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<Guid>("FeeCategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -1709,13 +1718,17 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
 
-                    b.ToTable("FeeHeads");
+                    b.ToTable("FeeHeads", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption.PaymentStatusOption", b =>
@@ -1775,7 +1788,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PaymentStatusOptions");
+                    b.ToTable("PaymentStatusOptions", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Groups.Group", b =>
@@ -5606,7 +5619,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("StudentDocumentSettings");
+                    b.ToTable("StudentDocumentSettings", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentFamilyDetail", b =>
@@ -9054,32 +9067,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("EmployeeId");
 
-                            b1.ToTable("AppEmployees");
-
-                            b1.WithOwner()
-                                .HasForeignKey("EmployeeId");
-                        });
-
-                    b.OwnsOne("ShikshaMitra.Common.State", "State", b1 =>
-                        {
-                            b1.Property<Guid>("EmployeeId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<string>("IsoCode")
-                                .IsRequired()
-                                .HasMaxLength(3)
-                                .HasColumnType("character varying(3)")
-                                .HasColumnName("StateIsoCode");
-
-                            b1.Property<string>("Name")
-                                .IsRequired()
-                                .HasMaxLength(128)
-                                .HasColumnType("character varying(128)")
-                                .HasColumnName("StateName");
-
-                            b1.HasKey("EmployeeId");
-
-                            b1.ToTable("AppEmployees");
+                            b1.ToTable("AppEmployees", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("EmployeeId");
@@ -9125,6 +9113,31 @@ namespace ShikshaMitra.Migrations
                                 .HasForeignKey("EmployeeId");
                         });
 
+                    b.OwnsOne("ShikshaMitra.Common.State", "State", b1 =>
+                        {
+                            b1.Property<Guid>("EmployeeId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("IsoCode")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("StateIsoCode");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(128)
+                                .HasColumnType("character varying(128)")
+                                .HasColumnName("StateName");
+
+                            b1.HasKey("EmployeeId");
+
+                            b1.ToTable("AppEmployees", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("EmployeeId");
+                        });
+
                     b.OwnsMany("ShikshaMitra.HR.Employees.WorkExperience", "WorkExperiences", b1 =>
                         {
                             b1.Property<Guid>("EmployeeId")
@@ -9160,7 +9173,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("EmployeeId", "__synthesizedOrdinal");
 
-                            b1.ToTable("AppEmployees");
+                            b1.ToTable("AppEmployees", (string)null);
 
                             b1.ToJson("WorkExperiences");
 
@@ -9266,7 +9279,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("PayElementId");
 
-                            b1.ToTable("AppPayElements");
+                            b1.ToTable("AppPayElements", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("PayElementId");
@@ -9410,7 +9423,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("StudentCommunicationDetailId");
 
-                            b1.ToTable("StudentCommunicationDetails");
+                            b1.ToTable("StudentCommunicationDetails", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("StudentCommunicationDetailId");
@@ -9434,7 +9447,7 @@ namespace ShikshaMitra.Migrations
 
                                     b2.HasKey("AddressDetailsStudentCommunicationDetailId");
 
-                                    b2.ToTable("StudentCommunicationDetails");
+                                    b2.ToTable("StudentCommunicationDetails", (string)null);
 
                                     b2.WithOwner()
                                         .HasForeignKey("AddressDetailsStudentCommunicationDetailId");
@@ -9459,7 +9472,7 @@ namespace ShikshaMitra.Migrations
 
                                     b2.HasKey("AddressDetailsStudentCommunicationDetailId");
 
-                                    b2.ToTable("StudentCommunicationDetails");
+                                    b2.ToTable("StudentCommunicationDetails", (string)null);
 
                                     b2.WithOwner()
                                         .HasForeignKey("AddressDetailsStudentCommunicationDetailId");
@@ -9504,7 +9517,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("StudentCommunicationDetailId");
 
-                            b1.ToTable("StudentCommunicationDetails");
+                            b1.ToTable("StudentCommunicationDetails", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("StudentCommunicationDetailId");
@@ -9528,7 +9541,7 @@ namespace ShikshaMitra.Migrations
 
                                     b2.HasKey("AddressDetailsStudentCommunicationDetailId");
 
-                                    b2.ToTable("StudentCommunicationDetails");
+                                    b2.ToTable("StudentCommunicationDetails", (string)null);
 
                                     b2.WithOwner()
                                         .HasForeignKey("AddressDetailsStudentCommunicationDetailId");
@@ -9553,7 +9566,7 @@ namespace ShikshaMitra.Migrations
 
                                     b2.HasKey("AddressDetailsStudentCommunicationDetailId");
 
-                                    b2.ToTable("StudentCommunicationDetails");
+                                    b2.ToTable("StudentCommunicationDetails", (string)null);
 
                                     b2.WithOwner()
                                         .HasForeignKey("AddressDetailsStudentCommunicationDetailId");
@@ -9598,7 +9611,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("StudentCommunicationDetailId");
 
-                            b1.ToTable("StudentCommunicationDetails");
+                            b1.ToTable("StudentCommunicationDetails", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("StudentCommunicationDetailId");
@@ -9622,7 +9635,7 @@ namespace ShikshaMitra.Migrations
 
                                     b2.HasKey("AddressDetailsStudentCommunicationDetailId");
 
-                                    b2.ToTable("StudentCommunicationDetails");
+                                    b2.ToTable("StudentCommunicationDetails", (string)null);
 
                                     b2.WithOwner()
                                         .HasForeignKey("AddressDetailsStudentCommunicationDetailId");
@@ -9647,7 +9660,7 @@ namespace ShikshaMitra.Migrations
 
                                     b2.HasKey("AddressDetailsStudentCommunicationDetailId");
 
-                                    b2.ToTable("StudentCommunicationDetails");
+                                    b2.ToTable("StudentCommunicationDetails", (string)null);
 
                                     b2.WithOwner()
                                         .HasForeignKey("AddressDetailsStudentCommunicationDetailId");
@@ -9697,7 +9710,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("StudentContactDetailId");
 
-                            b1.ToTable("AppStudentContactDetails");
+                            b1.ToTable("AppStudentContactDetails", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("StudentContactDetailId");
@@ -9722,7 +9735,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("StudentContactDetailId");
 
-                            b1.ToTable("AppStudentContactDetails");
+                            b1.ToTable("AppStudentContactDetails", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("StudentContactDetailId");
@@ -9810,7 +9823,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("StudentFamilyDetailId");
 
-                            b1.ToTable("StudentFamilyDetails");
+                            b1.ToTable("StudentFamilyDetails", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("StudentFamilyDetailId");
@@ -9848,7 +9861,7 @@ namespace ShikshaMitra.Migrations
 
                                     b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-                                    b2.ToTable("StudentFamilyDetails");
+                                    b2.ToTable("StudentFamilyDetails", (string)null);
 
                                     b2.WithOwner()
                                         .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
@@ -9872,7 +9885,7 @@ namespace ShikshaMitra.Migrations
 
                                             b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                                            b3.ToTable("StudentFamilyDetails");
+                                            b3.ToTable("StudentFamilyDetails", (string)null);
 
                                             b3.WithOwner()
                                                 .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
@@ -9897,7 +9910,7 @@ namespace ShikshaMitra.Migrations
 
                                             b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                                            b3.ToTable("StudentFamilyDetails");
+                                            b3.ToTable("StudentFamilyDetails", (string)null);
 
                                             b3.WithOwner()
                                                 .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
@@ -9942,7 +9955,7 @@ namespace ShikshaMitra.Migrations
 
                                     b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-                                    b2.ToTable("StudentFamilyDetails");
+                                    b2.ToTable("StudentFamilyDetails", (string)null);
 
                                     b2.WithOwner()
                                         .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
@@ -9966,7 +9979,7 @@ namespace ShikshaMitra.Migrations
 
                                             b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                                            b3.ToTable("StudentFamilyDetails");
+                                            b3.ToTable("StudentFamilyDetails", (string)null);
 
                                             b3.WithOwner()
                                                 .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
@@ -9991,7 +10004,7 @@ namespace ShikshaMitra.Migrations
 
                                             b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                                            b3.ToTable("StudentFamilyDetails");
+                                            b3.ToTable("StudentFamilyDetails", (string)null);
 
                                             b3.WithOwner()
                                                 .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
@@ -10059,7 +10072,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("StudentFamilyDetailId");
 
-                            b1.ToTable("StudentFamilyDetails");
+                            b1.ToTable("StudentFamilyDetails", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("StudentFamilyDetailId");
@@ -10097,7 +10110,7 @@ namespace ShikshaMitra.Migrations
 
                                     b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-                                    b2.ToTable("StudentFamilyDetails");
+                                    b2.ToTable("StudentFamilyDetails", (string)null);
 
                                     b2.WithOwner()
                                         .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
@@ -10121,7 +10134,7 @@ namespace ShikshaMitra.Migrations
 
                                             b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                                            b3.ToTable("StudentFamilyDetails");
+                                            b3.ToTable("StudentFamilyDetails", (string)null);
 
                                             b3.WithOwner()
                                                 .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
@@ -10146,7 +10159,7 @@ namespace ShikshaMitra.Migrations
 
                                             b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                                            b3.ToTable("StudentFamilyDetails");
+                                            b3.ToTable("StudentFamilyDetails", (string)null);
 
                                             b3.WithOwner()
                                                 .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
@@ -10191,7 +10204,7 @@ namespace ShikshaMitra.Migrations
 
                                     b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-                                    b2.ToTable("StudentFamilyDetails");
+                                    b2.ToTable("StudentFamilyDetails", (string)null);
 
                                     b2.WithOwner()
                                         .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
@@ -10215,7 +10228,7 @@ namespace ShikshaMitra.Migrations
 
                                             b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                                            b3.ToTable("StudentFamilyDetails");
+                                            b3.ToTable("StudentFamilyDetails", (string)null);
 
                                             b3.WithOwner()
                                                 .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
@@ -10240,7 +10253,7 @@ namespace ShikshaMitra.Migrations
 
                                             b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                                            b3.ToTable("StudentFamilyDetails");
+                                            b3.ToTable("StudentFamilyDetails", (string)null);
 
                                             b3.WithOwner()
                                                 .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
@@ -10308,7 +10321,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("StudentFamilyDetailId");
 
-                            b1.ToTable("StudentFamilyDetails");
+                            b1.ToTable("StudentFamilyDetails", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("StudentFamilyDetailId");
@@ -10346,7 +10359,7 @@ namespace ShikshaMitra.Migrations
 
                                     b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-                                    b2.ToTable("StudentFamilyDetails");
+                                    b2.ToTable("StudentFamilyDetails", (string)null);
 
                                     b2.WithOwner()
                                         .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
@@ -10370,7 +10383,7 @@ namespace ShikshaMitra.Migrations
 
                                             b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                                            b3.ToTable("StudentFamilyDetails");
+                                            b3.ToTable("StudentFamilyDetails", (string)null);
 
                                             b3.WithOwner()
                                                 .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
@@ -10395,7 +10408,7 @@ namespace ShikshaMitra.Migrations
 
                                             b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                                            b3.ToTable("StudentFamilyDetails");
+                                            b3.ToTable("StudentFamilyDetails", (string)null);
 
                                             b3.WithOwner()
                                                 .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
@@ -10440,7 +10453,7 @@ namespace ShikshaMitra.Migrations
 
                                     b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-                                    b2.ToTable("StudentFamilyDetails");
+                                    b2.ToTable("StudentFamilyDetails", (string)null);
 
                                     b2.WithOwner()
                                         .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
@@ -10464,7 +10477,7 @@ namespace ShikshaMitra.Migrations
 
                                             b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                                            b3.ToTable("StudentFamilyDetails");
+                                            b3.ToTable("StudentFamilyDetails", (string)null);
 
                                             b3.WithOwner()
                                                 .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
@@ -10489,7 +10502,7 @@ namespace ShikshaMitra.Migrations
 
                                             b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                                            b3.ToTable("StudentFamilyDetails");
+                                            b3.ToTable("StudentFamilyDetails", (string)null);
 
                                             b3.WithOwner()
                                                 .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");

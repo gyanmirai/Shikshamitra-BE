@@ -264,7 +264,8 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region GeneralSetting
 	#region FeeHead
-	DbSet<FeeHead> FeeHeads { get; set; }
+	// DbSet<FeeHead> FeeHeads { get; set; } // Removing old reference if it existed or was commented
+    public DbSet<ShikshaMitra.Finance.Setting.FeeHead.FeeHead> FeeHeads { get; set; }
 	#endregion
 
     public DbSet<FeeCategory> FeeCategories { get; set; }

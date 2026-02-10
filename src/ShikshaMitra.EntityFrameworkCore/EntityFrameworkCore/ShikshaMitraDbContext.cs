@@ -5,6 +5,7 @@ using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
 using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
+using ShikshaMitra.Finance.Setting.FeeCategory;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -265,6 +266,8 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region FeeHead
 	DbSet<FeeHead> FeeHeads { get; set; }
 	#endregion
+
+    public DbSet<FeeCategory> FeeCategories { get; set; }
 
 
 	#region PaymentStatusOption

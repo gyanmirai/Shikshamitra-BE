@@ -270,6 +270,12 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
     public DbSet<ShikshaMitra.Finance.Setting.ReceiptBook.ReceiptBook> ReceiptBooks { get; set; }
 	#endregion
 
+    #region FeeStructure
+    public DbSet<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructure> FeeStructures { get; set; }
+    public DbSet<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureStandard> FeeStructureStandards { get; set; }
+    public DbSet<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureDetail> FeeStructureDetails { get; set; }
+    #endregion
+
     public DbSet<FeeCategory> FeeCategories { get; set; }
 
 

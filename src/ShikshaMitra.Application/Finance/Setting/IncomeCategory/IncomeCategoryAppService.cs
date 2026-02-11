@@ -26,6 +26,7 @@ public class IncomeCategoryAppService : ApplicationService, IIncomeCategoryAppSe
 
         var incomeCategory = new ShikshaMitra.Finance.Setting.IncomeCategory.IncomeCategory(
             GuidGenerator.Create(),
+            CurrentTenant.Id,
             academicYearId,
             input.Name,
             input.Description,

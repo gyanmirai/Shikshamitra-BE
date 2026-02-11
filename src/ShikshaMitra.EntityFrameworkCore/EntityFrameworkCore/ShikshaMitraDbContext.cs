@@ -5,6 +5,7 @@ using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
 using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
+using ShikshaMitra.Finance.Setting.FeeCategory;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -263,8 +264,29 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region GeneralSetting
 	#region FeeHead
-	DbSet<FeeHead> FeeHeads { get; set; }
+	// DbSet<FeeHead> FeeHeads { get; set; } // Removing old reference if it existed or was commented
+    public DbSet<ShikshaMitra.Finance.Setting.FeeHead.FeeHead> FeeHeads { get; set; }
+	
+    public DbSet<ShikshaMitra.Finance.Setting.ReceiptBook.ReceiptBook> ReceiptBooks { get; set; }
 	#endregion
+
+    #region FeeStructure
+    public DbSet<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructure> FeeStructures { get; set; }
+    public DbSet<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureStandard> FeeStructureStandards { get; set; }
+    public DbSet<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureDetail> FeeStructureDetails { get; set; }
+    #endregion
+
+    #region ConcessionType
+    public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionType> ConcessionTypes { get; set; }
+    public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeFeeHead> ConcessionTypeFeeHeads { get; set; }
+    public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeDocument> ConcessionTypeDocuments { get; set; }
+    public DbSet<ShikshaMitra.Finance.Setting.ChargeCategory.ChargeCategory> ChargeCategories { get; set; }
+    public DbSet<ShikshaMitra.Finance.Setting.IncomeCategory.IncomeCategory> IncomeCategories { get; set; }
+    public DbSet<ShikshaMitra.Finance.Setting.ExpenseCategory.ExpenseCategory> ExpenseCategories { get; set; }
+    public DbSet<ShikshaMitra.Finance.Setting.BankAccount.BankAccount> BankAccounts { get; set; }
+    #endregion
+
+    public DbSet<FeeCategory> FeeCategories { get; set; }
 
 
 	#region PaymentStatusOption

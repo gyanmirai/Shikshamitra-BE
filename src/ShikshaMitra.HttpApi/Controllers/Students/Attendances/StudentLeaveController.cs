@@ -15,54 +15,49 @@ namespace ShikshaMitra.Students.Attendances;
 [RemoteService(Name = "Students")]
 [Area("students")]
 [Route("api/students/attendance/leaves")]
-public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
+public class StudentLeaveController(
+	IStudentLeaveAppService studentLeaveAppService
+) : AbpControllerBase, IStudentLeaveAppService
 {
-	private readonly IStudentLeaveAppService _studentLeaveAppService;
-	
-	public StudentLeaveController(IStudentLeaveAppService studentLeaveAppService)
-	{
-		_studentLeaveAppService = studentLeaveAppService;
-	}
-	
 	/// <summary>
 	/// Gets a paginated list of student leave requests
 	/// GET: api/students/attendance/leaves
 	/// </summary>
 	/// <param name="input">Filter and pagination parameters</param>
 	/// <returns>Paginated list of student leave requests</returns>
-    [HttpGet]
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
+	[HttpGet]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
 	public Task<PagedResultDto<StudentLeaveDto>> GetListAsync([FromQuery] GetStudentLeaveListInput input)
 	{
-		return _studentLeaveAppService.GetListAsync(input);
+		return studentLeaveAppService.GetListAsync(input);
 	}
-	
+
 	/// <summary>
 	/// Gets a student leave request by ID
 	/// GET: api/students/attendance/leaves/{id}
 	/// </summary>
 	/// <param name="id">Leave request ID</param>
 	/// <returns>Student leave details</returns>
-    [HttpGet("{id}")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
+	[HttpGet("{id}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
 	public Task<StudentLeaveDto> GetAsync(Guid id)
 	{
-		return _studentLeaveAppService.GetAsync(id);
+		return studentLeaveAppService.GetAsync(id);
 	}
-	
+
 	/// <summary>
 	/// Creates a new student leave request
 	/// POST: api/students/attendance/leaves
 	/// </summary>
 	/// <param name="input">Leave request data</param>
 	/// <returns>Created leave request</returns>
-    [HttpPost]
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
+	[HttpPost]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
 	public Task<StudentLeaveDto> CreateAsync([FromBody] CreateStudentLeaveDto input)
 	{
-		return _studentLeaveAppService.CreateAsync(input);
+		return studentLeaveAppService.CreateAsync(input);
 	}
-	
+
 	/// <summary>
 	/// Updates an existing student leave request (only if status is Pending)
 	/// PUT: api/students/attendance/leaves/{id}
@@ -70,25 +65,25 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	/// <param name="id">Leave request ID</param>
 	/// <param name="input">Updated leave request data</param>
 	/// <returns>Updated leave request</returns>
-    [HttpPut("{id}")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
+	[HttpPut("{id}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
 	public Task<StudentLeaveDto> UpdateAsync(Guid id, [FromBody] UpdateStudentLeaveDto input)
 	{
-		return _studentLeaveAppService.UpdateAsync(id, input);
+		return studentLeaveAppService.UpdateAsync(id, input);
 	}
-	
+
 	/// <summary>
 	/// Deletes a student leave request
 	/// DELETE: api/students/attendance/leaves/{id}
 	/// </summary>
 	/// <param name="id">Leave request ID</param>
-    [HttpDelete("{id}")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Delete)]
+	[HttpDelete("{id}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Delete)]
 	public Task DeleteAsync(Guid id)
 	{
-		return _studentLeaveAppService.DeleteAsync(id);
+		return studentLeaveAppService.DeleteAsync(id);
 	}
-	
+
 	/// <summary>
 	/// Approves a student leave request
 	/// POST: api/students/attendance/leaves/{id}/approve
@@ -96,13 +91,13 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	/// <param name="id">Leave request ID</param>
 	/// <param name="input">Approval data with remarks</param>
 	/// <returns>Approved leave request</returns>
-    [HttpPost("{id}/approve")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
+	[HttpPost("{id}/approve")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
 	public Task<StudentLeaveDto> ApproveAsync(Guid id, [FromBody] ApproveRejectStudentLeaveDto input)
 	{
-		return _studentLeaveAppService.ApproveAsync(id, input);
+		return studentLeaveAppService.ApproveAsync(id, input);
 	}
-	
+
 	/// <summary>
 	/// Rejects a student leave request
 	/// POST: api/students/attendance/leaves/{id}/reject
@@ -110,37 +105,37 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	/// <param name="id">Leave request ID</param>
 	/// <param name="input">Rejection data with reason and remarks</param>
 	/// <returns>Rejected leave request</returns>
-    [HttpPost("{id}/reject")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
+	[HttpPost("{id}/reject")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
 	public Task<StudentLeaveDto> RejectAsync(Guid id, [FromBody] ApproveRejectStudentLeaveDto input)
 	{
-		return _studentLeaveAppService.RejectAsync(id, input);
+		return studentLeaveAppService.RejectAsync(id, input);
 	}
-	
+
 	/// <summary>
 	/// Downloads the attachment file for a leave request
 	/// GET: api/students/attendance/leaves/{id}/attachment
 	/// </summary>
 	/// <param name="id">Leave request ID</param>
 	/// <returns>File attachment</returns>
-    [HttpGet("{id}/attachment")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
+	[HttpGet("{id}/attachment")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
 	public Task<StudentLeaveAttachmentDto> GetAttachmentAsync(Guid id)
 	{
-		return _studentLeaveAppService.GetAttachmentAsync(id);
+		return studentLeaveAppService.GetAttachmentAsync(id);
 	}
-	
+
 	/// <summary>
 	/// Downloads the attachment file as a file download
 	/// GET: api/students/attendance/leaves/{id}/attachment/download
 	/// </summary>
 	/// <param name="id">Leave request ID</param>
 	/// <returns>File download</returns>
-    [HttpGet("{id}/attachment/download")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
+	[HttpGet("{id}/attachment/download")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
 	public async Task<IActionResult> DownloadAttachmentAsync(Guid id)
 	{
-		var attachment = await _studentLeaveAppService.GetAttachmentAsync(id);
+		var attachment = await studentLeaveAppService.GetAttachmentAsync(id);
 		return File(attachment.FileContent, attachment.ContentType, attachment.FileName);
 	}
 }

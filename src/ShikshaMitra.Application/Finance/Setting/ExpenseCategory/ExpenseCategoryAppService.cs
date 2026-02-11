@@ -27,6 +27,7 @@ public class ExpenseCategoryAppService : ApplicationService, IExpenseCategoryApp
 
         var expenseCategory = new ShikshaMitra.Finance.Setting.ExpenseCategory.ExpenseCategory(
             GuidGenerator.Create(),
+            CurrentTenant.Id,
             academicYearId,
             input.Name,
             input.Description,

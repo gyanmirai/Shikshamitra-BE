@@ -282,6 +282,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
     public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeDocument> ConcessionTypeDocuments { get; set; }
     public DbSet<ShikshaMitra.Finance.Setting.ChargeCategory.ChargeCategory> ChargeCategories { get; set; }
     public DbSet<ShikshaMitra.Finance.Setting.IncomeCategory.IncomeCategory> IncomeCategories { get; set; }
+    public DbSet<ShikshaMitra.Finance.Setting.ExpenseCategory.ExpenseCategory> ExpenseCategories { get; set; }
     #endregion
 
     public DbSet<FeeCategory> FeeCategories { get; set; }

@@ -1,10 +1,12 @@
 using System;
 using Volo.Abp.Domain.Entities.Auditing;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Finance.Setting.ChargeCategory;
 
-public class ChargeCategory : FullAuditedAggregateRoot<Guid>
+public class ChargeCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+    public Guid? TenantId { get; private set; }
     public Guid AcademicYearId { get; set; }
     public string Name { get; set; }
     public bool IsApprovalRequired { get; set; }
@@ -15,6 +17,7 @@ public class ChargeCategory : FullAuditedAggregateRoot<Guid>
 
     public ChargeCategory(
         Guid id,
+        Guid? tenantId,
         Guid academicYearId,
         string name,
         bool isApprovalRequired,
@@ -22,6 +25,7 @@ public class ChargeCategory : FullAuditedAggregateRoot<Guid>
         bool isActive = true)
         : base(id)
     {
+        TenantId = tenantId;
         AcademicYearId = academicYearId;
         Name = name;
         IsApprovalRequired = isApprovalRequired;

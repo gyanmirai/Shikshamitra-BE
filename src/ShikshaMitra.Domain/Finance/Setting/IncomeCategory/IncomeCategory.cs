@@ -1,10 +1,12 @@
 using System;
 using Volo.Abp.Domain.Entities.Auditing;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Finance.Setting.IncomeCategory;
 
-public class IncomeCategory : FullAuditedAggregateRoot<Guid>
+public class IncomeCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+    public Guid? TenantId { get; private set; }
     public Guid AcademicYearId { get; set; }
     public string Name { get; set; }
     public string? Description { get; set; }
@@ -15,6 +17,7 @@ public class IncomeCategory : FullAuditedAggregateRoot<Guid>
 
     public IncomeCategory(
         Guid id,
+        Guid? tenantId,
         Guid academicYearId,
         string name,
         string? description,
@@ -22,6 +25,7 @@ public class IncomeCategory : FullAuditedAggregateRoot<Guid>
         bool isActive = true)
         : base(id)
     {
+        TenantId = tenantId;
         AcademicYearId = academicYearId;
         Name = name;
         Description = description;

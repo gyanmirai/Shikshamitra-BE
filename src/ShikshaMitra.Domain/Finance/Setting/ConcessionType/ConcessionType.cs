@@ -8,7 +8,7 @@ namespace ShikshaMitra.Finance.Setting.ConcessionType;
 
 public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
-    public Guid? TenantId { get; }
+    public Guid? TenantId { get; private set; }
     public Guid AcademicYearId { get; private set; }
     public string Name { get; private set; }
     public ConcessionBasedOn BasedOn { get; private set; }

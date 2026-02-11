@@ -1,11 +1,13 @@
-using System;
+﻿using System;
 using Volo.Abp.Domain.Entities.Auditing;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Finance.Setting.BankAccount;
 
-public class BankAccount : FullAuditedAggregateRoot<Guid>
+public class BankAccount : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
-    public Guid AcademicYearId { get; set; }
+	public Guid? TenantId { get; private set; }
+	public Guid AcademicYearId { get; set; }
     public string BankName { get; set; }
     public string BranchName { get; set; }
     public string? BranchAddress { get; set; }

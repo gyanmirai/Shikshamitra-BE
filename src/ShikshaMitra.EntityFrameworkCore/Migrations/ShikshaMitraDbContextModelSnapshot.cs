@@ -12,11682 +12,10835 @@ using Volo.Abp.EntityFrameworkCore;
 
 namespace ShikshaMitra.Migrations
 {
-    [DbContext(typeof(ShikshaMitraDbContext))]
-    partial class ShikshaMitraDbContextModelSnapshot : ModelSnapshot
-    {
-        protected override void BuildModel(ModelBuilder modelBuilder)
-        {
+	[DbContext(typeof(ShikshaMitraDbContext))]
+	partial class ShikshaMitraDbContextModelSnapshot : ModelSnapshot
+	{
+		protected override void BuildModel(ModelBuilder modelBuilder)
+		{
 #pragma warning disable 612, 618
-            modelBuilder
-                .HasAnnotation("_Abp_DatabaseProvider", EfCoreDatabaseProvider.PostgreSql)
-                .HasAnnotation("ProductVersion", "9.0.0")
-                .HasAnnotation("Relational:MaxIdentifierLength", 63);
+			modelBuilder
+				.HasAnnotation("_Abp_DatabaseProvider", EfCoreDatabaseProvider.PostgreSql)
+				.HasAnnotation("ProductVersion", "9.0.0")
+				.HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("ShikshaMitra.Academic.ClassTeacher.ClassTeacher", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+			modelBuilder.Entity("ShikshaMitra.Academic.ClassTeacher.ClassTeacher", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("AcademicMediumId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("AcademicYearId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid>("AcademicMediumId")
+					.HasColumnType("uuid");
+
+				b.Property<Guid?>("AcademicYearId")
+					.HasColumnType("uuid");
+
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<Guid>("DivisionId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("DivisionId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("EducationBoardId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("EducationBoardId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("EducationMediumId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("EducationMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("EducationMediumStageId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("EducationMediumStageId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid>("StandardId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("StandardId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("TeacherId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("TeacherId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.ToTable("AppClassTeachers", (string)null);
-                });
+				b.ToTable("AppClassTeachers", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubject", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubject", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
+				b.Property<string>("Description")
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("ElectiveGroupId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("ElectiveGroupId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("LearningGoals")
-                        .HasColumnType("text");
+				b.Property<string>("LearningGoals")
+					.HasColumnType("text");
 
-                    b.Property<string>("Prerequisites")
-                        .HasColumnType("text");
+				b.Property<string>("Prerequisites")
+					.HasColumnType("text");
 
-                    b.Property<DateTimeOffset?>("PublishedAt")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTimeOffset?>("PublishedAt")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("StandardId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("StandardId")
+					.HasColumnType("uuid");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
+				b.Property<int>("Status")
+					.HasColumnType("integer");
 
-                    b.Property<string>("SubjectCode")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+				b.Property<string>("SubjectCode")
+					.IsRequired()
+					.HasMaxLength(10)
+					.HasColumnType("character varying(10)");
 
-                    b.Property<Guid>("SubjectId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("SubjectId")
+					.HasColumnType("uuid");
 
-                    b.Property<int>("SubjectType")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
+				b.Property<int>("SubjectType")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("integer")
+					.HasDefaultValue(0);
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("ElectiveGroupId");
+				b.HasIndex("ElectiveGroupId");
 
-                    b.HasIndex("StandardId");
+				b.HasIndex("StandardId");
 
-                    b.HasIndex("SubjectId");
+				b.HasIndex("SubjectId");
 
-                    b.ToTable("AppStandardSubjectAssignments", (string)null);
-                });
+				b.ToTable("AppStandardSubjectAssignments", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectChapter", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectChapter", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("AssignedSubjectId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("AssignedSubjectId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("ChapterEndTime")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTimeOffset>("ChapterEndTime")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("ChapterName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+				b.Property<string>("ChapterName")
+					.IsRequired()
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                    b.Property<int>("ChapterNumber")
-                        .HasColumnType("integer");
+				b.Property<int>("ChapterNumber")
+					.HasColumnType("integer");
 
-                    b.Property<DateTimeOffset>("ChapterStartTime")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTimeOffset>("ChapterStartTime")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(5000)
-                        .HasColumnType("character varying(5000)");
+				b.Property<string>("Description")
+					.HasMaxLength(5000)
+					.HasColumnType("character varying(5000)");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("AssignedSubjectId");
+				b.HasIndex("AssignedSubjectId");
 
-                    b.ToTable("AppSubjectChapters", (string)null);
-                });
+				b.ToTable("AppSubjectChapters", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectDocument", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectDocument", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("AssignedSubjectChapterId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("AssignedSubjectChapterId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("AssignedSubjectId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("AssignedSubjectId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("BlobName")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("BlobName")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("ChapterId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("ChapterId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<DateTimeOffset>("UploadedAt")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTimeOffset>("UploadedAt")
+					.HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("AssignedSubjectChapterId");
+				b.HasIndex("AssignedSubjectChapterId");
 
-                    b.HasIndex("AssignedSubjectId");
+				b.HasIndex("AssignedSubjectId");
 
-                    b.ToTable("AppChapterDocuments", (string)null);
-                });
+				b.ToTable("AppChapterDocuments", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectTeacher", b =>
-                {
-                    b.Property<Guid>("AssignedSubjectId")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectTeacher", b =>
+			{
+				b.Property<Guid>("AssignedSubjectId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("TeacherId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("TeacherId")
+					.HasColumnType("uuid");
 
-                    b.Property<int>("TeacherType")
-                        .HasColumnType("integer");
+				b.Property<int>("TeacherType")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid");
 
-                    b.HasKey("AssignedSubjectId", "TeacherId");
+				b.HasKey("AssignedSubjectId", "TeacherId");
 
-                    b.ToTable("AppSubjectTeachers", (string)null);
-                });
+				b.ToTable("AppSubjectTeachers", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroup", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroup", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("AcademicMediumId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("AcademicMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Color")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("Color")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("AcademicMediumId");
+				b.HasIndex("AcademicMediumId");
 
-                    b.ToTable("AppElectiveGroups", (string)null);
-                });
+				b.ToTable("AppElectiveGroups", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroupComponent", b =>
-                {
-                    b.Property<Guid>("ElectiveGroupId")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroupComponent", b =>
+			{
+				b.Property<Guid>("ElectiveGroupId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("SubjectId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("SubjectId")
+					.HasColumnType("uuid");
 
-                    b.HasKey("ElectiveGroupId", "SubjectId");
+				b.HasKey("ElectiveGroupId", "SubjectId");
 
-                    b.HasIndex("SubjectId");
+				b.HasIndex("SubjectId");
 
-                    b.ToTable("AppElectiveGroupComponents", (string)null);
-                });
+				b.ToTable("AppElectiveGroupComponents", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.Subject", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.Subject", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Color")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("Color")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<Guid>("EducationMediumId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("EducationMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("EducationMediumId");
+				b.HasIndex("EducationMediumId");
 
-                    b.ToTable("AppSubjects", (string)null);
-                });
+				b.ToTable("AppSubjects", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.TeacherSubjectAllocation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.TeacherSubjectAllocation", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<Guid>("DivisionId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("DivisionId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid>("StandardId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("StandardId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("SubjectId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("SubjectId")
+					.HasColumnType("uuid");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("DivisionId");
+				b.HasIndex("DivisionId");
 
-                    b.HasIndex("StandardId");
+				b.HasIndex("StandardId");
 
-                    b.HasIndex("SubjectId");
+				b.HasIndex("SubjectId");
 
-                    b.HasIndex("StandardId", "DivisionId", "SubjectId");
+				b.HasIndex("StandardId", "DivisionId", "SubjectId");
 
-                    b.ToTable("AppTeacherSubjectAllocations", (string)null);
-                });
+				b.ToTable("AppTeacherSubjectAllocations", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.Exam", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.Exam", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("ExamName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Property<string>("ExamName")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<Guid>("ExamTypeId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("ExamTypeId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid>("StandardId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("StandardId")
+					.HasColumnType("uuid");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
+				b.Property<int>("Status")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.ToTable("AppExams", (string)null);
-                });
+				b.ToTable("AppExams", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamDivision", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamDivision", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("DivisionId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("DivisionId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("ExamId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("ExamId")
+					.HasColumnType("uuid");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("ExamId");
+				b.HasIndex("ExamId");
 
-                    b.ToTable("AppExamDivisions", (string)null);
-                });
+				b.ToTable("AppExamDivisions", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubject", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubject", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("EndTime")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTime>("EndTime")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime>("ExamDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTime>("ExamDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("ExamId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("ExamId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
+				b.Property<string>("Notes")
+					.HasMaxLength(1000)
+					.HasColumnType("character varying(1000)");
 
-                    b.Property<double>("PassingMarks")
-                        .HasColumnType("double precision");
+				b.Property<double>("PassingMarks")
+					.HasColumnType("double precision");
 
-                    b.Property<DateTime>("StartTime")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTime>("StartTime")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("SubjectId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("SubjectId")
+					.HasColumnType("uuid");
 
-                    b.Property<double>("TotalMarks")
-                        .HasColumnType("double precision");
+				b.Property<double>("TotalMarks")
+					.HasColumnType("double precision");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("ExamId");
+				b.HasIndex("ExamId");
 
-                    b.ToTable("AppExamSubjects", (string)null);
-                });
+				b.ToTable("AppExamSubjects", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubjectDivision", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubjectDivision", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<int>("Capacity")
-                        .HasColumnType("integer");
+				b.Property<int>("Capacity")
+					.HasColumnType("integer");
 
-                    b.Property<Guid>("DivisionId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("DivisionId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("ExamSubjectId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("ExamSubjectId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("RoomIds")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("RoomIds")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("ExamSubjectId");
+				b.HasIndex("ExamSubjectId");
 
-                    b.ToTable("AppExamSubjectDivisions", (string)null);
-                });
+				b.ToTable("AppExamSubjectDivisions", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Settings.ExamType", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Examination.Settings.ExamType", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("AcademicMediumId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("AcademicMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+				b.Property<string>("Description")
+					.HasMaxLength(512)
+					.HasColumnType("character varying(512)");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("Name", "AcademicMediumId")
-                        .IsUnique();
+				b.HasIndex("Name", "AcademicMediumId")
+					.IsUnique();
 
-                    b.ToTable("AppExamTypes", (string)null);
-                });
+				b.ToTable("AppExamTypes", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Settings.GradeRange", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Examination.Settings.GradeRange", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Grade")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+				b.Property<string>("Grade")
+					.IsRequired()
+					.HasMaxLength(10)
+					.HasColumnType("character varying(10)");
 
-                    b.Property<Guid>("GradingScaleId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("GradingScaleId")
+					.HasColumnType("uuid");
 
-                    b.Property<int>("MaxMarks")
-                        .HasColumnType("integer");
+				b.Property<int>("MaxMarks")
+					.HasColumnType("integer");
 
-                    b.Property<int>("MinMarks")
-                        .HasColumnType("integer");
+				b.Property<int>("MinMarks")
+					.HasColumnType("integer");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("GradingScaleId");
+				b.HasIndex("GradingScaleId");
 
-                    b.ToTable("AppGradeRanges", (string)null);
-                });
+				b.ToTable("AppGradeRanges", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Settings.GradingScale", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Examination.Settings.GradingScale", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("AcademicMediumId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("AcademicMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("TotalMarks")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("TotalMarks")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.ToTable("AppGradingScales", (string)null);
-                });
+				b.ToTable("AppGradingScales", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Homework.HomeworkAssignmentType", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Homework.HomeworkAssignmentType", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("AcademicMediumId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("AcademicMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<int>("Type")
-                        .HasColumnType("integer");
+				b.Property<int>("Type")
+					.HasColumnType("integer");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.ToTable("AppHomeworkAssignmentTypes", (string)null);
-                });
+				b.ToTable("AppHomeworkAssignmentTypes", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentDivisionSchedule", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentDivisionSchedule", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("AssignmentId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("AssignmentId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("DivisionId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("DivisionId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("DueDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTime>("DueDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("IsPublished")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
+				b.Property<bool>("IsPublished")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false);
 
-                    b.Property<DateTime?>("PublishDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTime?>("PublishDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime?>("PublishedAt")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTime?>("PublishedAt")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("AssignmentId")
-                        .HasDatabaseName("IX_AssignmentDivisionSchedules_AssignmentId");
+				b.HasIndex("AssignmentId")
+					.HasDatabaseName("IX_AssignmentDivisionSchedules_AssignmentId");
 
-                    b.HasIndex("DivisionId")
-                        .HasDatabaseName("IX_AssignmentDivisionSchedules_DivisionId");
+				b.HasIndex("DivisionId")
+					.HasDatabaseName("IX_AssignmentDivisionSchedules_DivisionId");
 
-                    b.HasIndex("PublishDate")
-                        .HasDatabaseName("IX_AssignmentDivisionSchedules_PublishDate")
-                        .HasFilter("\"PublishDate\" IS NOT NULL AND \"IsPublished\" = false");
+				b.HasIndex("PublishDate")
+					.HasDatabaseName("IX_AssignmentDivisionSchedules_PublishDate")
+					.HasFilter("\"PublishDate\" IS NOT NULL AND \"IsPublished\" = false");
 
-                    b.HasIndex("AssignmentId", "DivisionId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_AssignmentDivisionSchedules_AssignmentId_DivisionId");
+				b.HasIndex("AssignmentId", "DivisionId")
+					.IsUnique()
+					.HasDatabaseName("IX_AssignmentDivisionSchedules_AssignmentId_DivisionId");
 
-                    b.ToTable("AppAssignmentDivisionSchedules", (string)null);
-                });
+				b.ToTable("AppAssignmentDivisionSchedules", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentEntity", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("AcademicYearId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("AssignmentTypeId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("AssignmentTypeId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("AttachmentsJson")
-                        .HasColumnType("text");
+				b.Property<string>("AttachmentsJson")
+					.HasColumnType("text");
 
-                    b.Property<string>("ChapterIdsJson")
-                        .HasColumnType("text");
+				b.Property<string>("ChapterIdsJson")
+					.HasColumnType("text");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("Description")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<Guid>("DivisionId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("DivisionId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("EducationBoardId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("EducationBoardId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("EducationMediumId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("EducationMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("EducationMediumStageId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("EducationMediumStageId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid>("StandardId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("StandardId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("SubjectId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("SubjectId")
+					.HasColumnType("uuid");
 
-                    b.Property<int>("SubmissionType")
-                        .HasColumnType("integer");
+				b.Property<int>("SubmissionType")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+				b.Property<string>("Title")
+					.IsRequired()
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("AcademicYearId")
-                        .HasDatabaseName("IX_Assignments_AcademicYearId");
+				b.HasIndex("AcademicYearId")
+					.HasDatabaseName("IX_Assignments_AcademicYearId");
 
-                    b.HasIndex("AssignmentTypeId")
-                        .HasDatabaseName("IX_Assignments_AssignmentTypeId");
+				b.HasIndex("AssignmentTypeId")
+					.HasDatabaseName("IX_Assignments_AssignmentTypeId");
 
-                    b.HasIndex("StandardId")
-                        .HasDatabaseName("IX_Assignments_StandardId");
+				b.HasIndex("StandardId")
+					.HasDatabaseName("IX_Assignments_StandardId");
 
-                    b.HasIndex("SubjectId")
-                        .HasDatabaseName("IX_Assignments_SubjectId");
+				b.HasIndex("SubjectId")
+					.HasDatabaseName("IX_Assignments_SubjectId");
 
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("IX_Assignments_TenantId");
+				b.HasIndex("TenantId")
+					.HasDatabaseName("IX_Assignments_TenantId");
 
-                    b.HasIndex("TenantId", "StandardId", "SubjectId")
-                        .HasDatabaseName("IX_Assignments_Tenant_Standard_Subject");
+				b.HasIndex("TenantId", "StandardId", "SubjectId")
+					.HasDatabaseName("IX_Assignments_Tenant_Standard_Subject");
 
-                    b.ToTable("AppAssignments", (string)null);
-                });
+				b.ToTable("AppAssignments", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentType", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentType", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("AcademicMediumId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("AcademicMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("AcademicMediumId", "Name")
-                        .IsUnique()
-                        .HasDatabaseName("IX_AssignmentTypes_AcademicMediumId_Name");
+				b.HasIndex("AcademicMediumId", "Name")
+					.IsUnique()
+					.HasDatabaseName("IX_AssignmentTypes_AcademicMediumId_Name");
 
-                    b.ToTable("AppAssignmentTypes", (string)null);
-                });
+				b.ToTable("AppAssignmentTypes", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkAssignmentEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkAssignmentEntity", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("AcademicYearId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("AttachmentsJson")
-                        .HasColumnType("text");
+				b.Property<string>("AttachmentsJson")
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("ChapterId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("ChapterId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ChapterIdsJson")
-                        .HasColumnType("text");
+				b.Property<string>("ChapterIdsJson")
+					.HasColumnType("text");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("Description")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("DivisionId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("DivisionId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("DocumentUrl")
-                        .HasColumnType("text");
+				b.Property<string>("DocumentUrl")
+					.HasColumnType("text");
 
-                    b.Property<DateTime?>("DueDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTime?>("DueDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("EducationBoardId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("EducationBoardId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("EducationMediumId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("EducationMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("EducationMediumStageId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("EducationMediumStageId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid?>("HomeworkAssignmentTypeId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("HomeworkAssignmentTypeId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("HomeworkTypeId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("HomeworkTypeId")
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<bool>("IsPublished")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
+				b.Property<bool>("IsPublished")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false);
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid>("StandardId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("StandardId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("SubjectId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("SubjectId")
+					.HasColumnType("uuid");
 
-                    b.Property<int>("SubmissionType")
-                        .HasColumnType("integer");
+				b.Property<int>("SubmissionType")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<string>("Title")
+					.IsRequired()
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("AcademicYearId")
-                        .HasDatabaseName("IX_HomeworkAssignments_AcademicYearId");
+				b.HasIndex("AcademicYearId")
+					.HasDatabaseName("IX_HomeworkAssignments_AcademicYearId");
 
-                    b.HasIndex("HomeworkAssignmentTypeId")
-                        .HasDatabaseName("IX_HomeworkAssignments_HomeworkAssignmentTypeId");
+				b.HasIndex("HomeworkAssignmentTypeId")
+					.HasDatabaseName("IX_HomeworkAssignments_HomeworkAssignmentTypeId");
 
-                    b.HasIndex("HomeworkTypeId")
-                        .HasDatabaseName("IX_HomeworkAssignments_HomeworkTypeId");
+				b.HasIndex("HomeworkTypeId")
+					.HasDatabaseName("IX_HomeworkAssignments_HomeworkTypeId");
 
-                    b.HasIndex("StandardId")
-                        .HasDatabaseName("IX_HomeworkAssignments_StandardId");
+				b.HasIndex("StandardId")
+					.HasDatabaseName("IX_HomeworkAssignments_StandardId");
 
-                    b.HasIndex("SubjectId")
-                        .HasDatabaseName("IX_HomeworkAssignments_SubjectId");
+				b.HasIndex("SubjectId")
+					.HasDatabaseName("IX_HomeworkAssignments_SubjectId");
 
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("IX_HomeworkAssignments_TenantId");
+				b.HasIndex("TenantId")
+					.HasDatabaseName("IX_HomeworkAssignments_TenantId");
 
-                    b.ToTable("AppHomeworkAssignments", (string)null);
-                });
+				b.ToTable("AppHomeworkAssignments", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkDivisionSchedule", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkDivisionSchedule", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("DivisionId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("DivisionId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("DueDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTime>("DueDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("HomeworkId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("HomeworkId")
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsPublished")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
+				b.Property<bool>("IsPublished")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false);
 
-                    b.Property<DateTime?>("PublishDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTime?>("PublishDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime?>("PublishedAt")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTime?>("PublishedAt")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("DivisionId")
-                        .HasDatabaseName("IX_HomeworkDivisionSchedules_DivisionId");
+				b.HasIndex("DivisionId")
+					.HasDatabaseName("IX_HomeworkDivisionSchedules_DivisionId");
 
-                    b.HasIndex("HomeworkId")
-                        .HasDatabaseName("IX_HomeworkDivisionSchedules_HomeworkId");
+				b.HasIndex("HomeworkId")
+					.HasDatabaseName("IX_HomeworkDivisionSchedules_HomeworkId");
 
-                    b.HasIndex("PublishDate")
-                        .HasDatabaseName("IX_HomeworkDivisionSchedules_PublishDate")
-                        .HasFilter("\"PublishDate\" IS NOT NULL AND \"IsPublished\" = false");
+				b.HasIndex("PublishDate")
+					.HasDatabaseName("IX_HomeworkDivisionSchedules_PublishDate")
+					.HasFilter("\"PublishDate\" IS NOT NULL AND \"IsPublished\" = false");
 
-                    b.HasIndex("HomeworkId", "DivisionId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_HomeworkDivisionSchedules_HomeworkId_DivisionId");
+				b.HasIndex("HomeworkId", "DivisionId")
+					.IsUnique()
+					.HasDatabaseName("IX_HomeworkDivisionSchedules_HomeworkId_DivisionId");
 
-                    b.ToTable("AppHomeworkDivisionSchedules", (string)null);
-                });
+				b.ToTable("AppHomeworkDivisionSchedules", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkType", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkType", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("AcademicMediumId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("AcademicMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("AcademicMediumId", "Name")
-                        .IsUnique()
-                        .HasDatabaseName("IX_HomeworkTypes_AcademicMediumId_Name");
+				b.HasIndex("AcademicMediumId", "Name")
+					.IsUnique()
+					.HasDatabaseName("IX_HomeworkTypes_AcademicMediumId_Name");
 
-                    b.ToTable("AppHomeworkTypes", (string)null);
-                });
+				b.ToTable("AppHomeworkTypes", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.StudentSubmissionEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.StudentSubmissionEntity", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("AssignmentId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("AssignmentId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<Guid>("DivisionId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("DivisionId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("DueDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTime>("DueDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Feedback")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
+				b.Property<string>("Feedback")
+					.HasMaxLength(2000)
+					.HasColumnType("character varying(2000)");
 
-                    b.Property<Guid?>("GradedBy")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("GradedBy")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("GradedDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTimeOffset?>("GradedDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("HomeworkAssignmentId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("HomeworkAssignmentId")
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<decimal?>("Marks")
-                        .HasColumnType("decimal(18,2)");
+				b.Property<decimal?>("Marks")
+					.HasColumnType("decimal(18,2)");
 
-                    b.Property<string>("Remarks")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
+				b.Property<string>("Remarks")
+					.HasMaxLength(1000)
+					.HasColumnType("character varying(1000)");
 
-                    b.Property<DateTimeOffset?>("ReviewedAt")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTimeOffset?>("ReviewedAt")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("ReviewedBy")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("ReviewedBy")
+					.HasColumnType("uuid");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
+				b.Property<int>("Status")
+					.HasColumnType("integer");
 
-                    b.Property<Guid>("StudentId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("StudentId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("SubmissionDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTimeOffset?>("SubmissionDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("SubmittedContent")
-                        .HasMaxLength(2147483647)
-                        .HasColumnType("text");
+				b.Property<string>("SubmittedContent")
+					.HasMaxLength(2147483647)
+					.HasColumnType("text");
 
-                    b.Property<string>("SubmittedDocumentUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<string>("SubmittedDocumentUrl")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<decimal?>("TotalMarks")
-                        .HasColumnType("decimal(18,2)");
+				b.Property<decimal?>("TotalMarks")
+					.HasColumnType("decimal(18,2)");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("AssignmentId")
-                        .HasDatabaseName("IX_StudentSubmissions_AssignmentId");
+				b.HasIndex("AssignmentId")
+					.HasDatabaseName("IX_StudentSubmissions_AssignmentId");
 
-                    b.HasIndex("DivisionId")
-                        .HasDatabaseName("IX_StudentSubmissions_DivisionId");
+				b.HasIndex("DivisionId")
+					.HasDatabaseName("IX_StudentSubmissions_DivisionId");
 
-                    b.HasIndex("HomeworkAssignmentId")
-                        .HasDatabaseName("IX_StudentSubmissions_HomeworkAssignmentId");
+				b.HasIndex("HomeworkAssignmentId")
+					.HasDatabaseName("IX_StudentSubmissions_HomeworkAssignmentId");
 
-                    b.HasIndex("Status")
-                        .HasDatabaseName("IX_StudentSubmissions_Status");
+				b.HasIndex("Status")
+					.HasDatabaseName("IX_StudentSubmissions_Status");
 
-                    b.HasIndex("StudentId")
-                        .HasDatabaseName("IX_StudentSubmissions_StudentId");
+				b.HasIndex("StudentId")
+					.HasDatabaseName("IX_StudentSubmissions_StudentId");
 
-                    b.HasIndex("StudentId", "AssignmentId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_StudentSubmissions_Student_Assignment")
-                        .HasFilter("\"AssignmentId\" IS NOT NULL");
+				b.HasIndex("StudentId", "AssignmentId")
+					.IsUnique()
+					.HasDatabaseName("IX_StudentSubmissions_Student_Assignment")
+					.HasFilter("\"AssignmentId\" IS NOT NULL");
 
-                    b.HasIndex("StudentId", "HomeworkAssignmentId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_StudentSubmissions_Student_Homework")
-                        .HasFilter("\"AssignmentId\" IS NULL");
+				b.HasIndex("StudentId", "HomeworkAssignmentId")
+					.IsUnique()
+					.HasDatabaseName("IX_StudentSubmissions_Student_Homework")
+					.HasFilter("\"AssignmentId\" IS NULL");
 
-                    b.ToTable("AppStudentHomeworkAssignmentSubmissions", (string)null);
-                });
+				b.ToTable("AppStudentHomeworkAssignmentSubmissions", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Communication.AnnouncementTypes.AnnouncementType", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Communication.AnnouncementTypes.AnnouncementType", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("AcademicMediumId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("AcademicMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("AnnouncementTypeName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Property<string>("AnnouncementTypeName")
+					.IsRequired()
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<string>("Color")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+				b.Property<string>("Color")
+					.HasMaxLength(20)
+					.HasColumnType("character varying(20)");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<string>("Description")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "AcademicMediumId", "AnnouncementTypeName")
-                        .HasDatabaseName("IX_AnnouncementTypes_Tenant_Medium_Name");
+				b.HasIndex("TenantId", "AcademicMediumId", "AnnouncementTypeName")
+					.HasDatabaseName("IX_AnnouncementTypes_Tenant_Medium_Name");
 
-                    b.ToTable("AnnouncementTypes", (string)null);
-                });
+				b.ToTable("AnnouncementTypes", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.BankAccount.BankAccount", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead.FeeHead", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<string>("AccountHolderName")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<string>("AccountNumber")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<int>("AccountType")
-                        .HasColumnType("integer");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("BankName")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("BranchAddress")
-                        .HasColumnType("text");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<string>("BranchName")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("FeeHeadName")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.HasKey("Id");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.ToTable("FeeHeads");
+			});
 
-                    b.Property<string>("IfscCode")
-                        .IsRequired()
-                        .HasColumnType("text");
+			modelBuilder.Entity("ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption.PaymentStatusOption", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("Purpose")
-                        .HasColumnType("text");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("UpiId")
-                        .HasColumnType("text");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.HasKey("Id");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.ToTable("BankAccounts");
-                });
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.ChargeCategory.ChargeCategory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.Property<string>("PaymentStatusOptionName")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.ToTable("PaymentStatusOptions");
+			});
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+			modelBuilder.Entity("ShikshaMitra.Groups.Group", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<Guid>("AcademicYearId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<bool>("IsApprovalRequired")
-                        .HasColumnType("boolean");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<string>("Description")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.HasKey("Id");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.ToTable("ChargeCategories");
-                });
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.ConcessionType.ConcessionType", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.Property<string>("NameBasedDivisionIds")
+					.IsRequired()
+					.HasColumnType("jsonb");
 
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("numeric");
+				b.Property<string>("NameBasedRoleIds")
+					.IsRequired()
+					.HasColumnType("jsonb");
 
-                    b.Property<int>("BasedOn")
-                        .HasColumnType("integer");
+				b.Property<string>("RuleBasedDivisionIds")
+					.IsRequired()
+					.HasColumnType("jsonb");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("RuleBasedRoleIds")
+					.IsRequired()
+					.HasColumnType("jsonb");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.HasIndex("TenantId")
+					.HasDatabaseName("AppGroups_Tenant");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.HasIndex("AcademicYearId", "TenantId")
+					.HasDatabaseName("AppGroups_AcademicYearId_Tenant");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
+				b.HasIndex("Name", "TenantId")
+					.HasDatabaseName("AppGroups_Name_Tenant");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.ToTable("AppGroups", (string) null);
+			});
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+			modelBuilder.Entity("ShikshaMitra.Groups.GroupEmployeeRule", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<int>("Field")
+					.HasColumnType("integer");
 
-                    b.Property<bool>("IsDocumentRequired")
-                        .HasColumnType("boolean");
+				b.Property<Guid>("GroupId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<int>("Operator")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<int>("SelectionType")
+					.HasColumnType("integer");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("Value")
+					.IsRequired()
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.HasKey("Id");
 
-                    b.HasKey("Id");
+				b.HasIndex("GroupId", "SelectionType")
+					.HasDatabaseName("AppGroupEmployeeRules_GroupId_SelectionType");
 
-                    b.HasIndex("AcademicYearId");
+				b.ToTable("AppGroupEmployeeRules", (string) null);
+			});
 
-                    b.ToTable("ConcessionTypes");
-                });
+			modelBuilder.Entity("ShikshaMitra.Groups.GroupMember", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeDocument", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("GroupId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("AcceptedFormats")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<Guid>("MemberId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("ConcessionTypeId")
-                        .HasColumnType("uuid");
+				b.Property<int>("MemberType")
+					.HasColumnType("integer");
 
-                    b.Property<string>("DocumentName")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<Guid?>("UserId")
+					.HasColumnType("uuid");
 
-                    b.Property<long>("DocumentSize")
-                        .HasColumnType("bigint");
+				b.HasKey("Id");
 
-                    b.HasKey("Id");
+				b.HasIndex("GroupId")
+					.HasDatabaseName("AppGroupMembers_GroupId");
 
-                    b.HasIndex("ConcessionTypeId");
+				b.HasIndex("UserId")
+					.HasDatabaseName("AppGroupMembers_UserId");
 
-                    b.ToTable("ConcessionTypeDocuments");
-                });
+				b.HasIndex("GroupId", "MemberType", "MemberId")
+					.IsUnique()
+					.HasDatabaseName("AppGroupMembers_Unique");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeFeeHead", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.ToTable("AppGroupMembers", (string) null);
+			});
 
-                    b.Property<Guid>("ConcessionTypeId")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Groups.GroupStudentRule", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("FeeHeadId")
-                        .HasColumnType("uuid");
+				b.Property<int>("Field")
+					.HasColumnType("integer");
 
-                    b.HasKey("Id");
+				b.Property<Guid>("GroupId")
+					.HasColumnType("uuid");
 
-                    b.HasIndex("ConcessionTypeId");
+				b.Property<int>("Operator")
+					.HasColumnType("integer");
 
-                    b.ToTable("ConcessionTypeFeeHeads");
-                });
+				b.Property<int>("SelectionType")
+					.HasColumnType("integer");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.ExpenseCategory.ExpenseCategory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("Value")
+					.IsRequired()
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.HasKey("Id");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.HasIndex("GroupId", "SelectionType")
+					.HasDatabaseName("AppGroupStudentRules_GroupId_SelectionType");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.ToTable("AppGroupStudentRules", (string) null);
+			});
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+			modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.EmployeeLeave", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<byte[]>("Attachment")
+					.HasColumnType("bytea");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<string>("Description")
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid>("EmployeeId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<DateTimeOffset>("EndDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Tags")
-                        .HasColumnType("text");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.HasKey("Id");
+				b.Property<bool>("HalfDay")
+					.HasColumnType("boolean");
 
-                    b.ToTable("ExpenseCategories");
-                });
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.FeeCategory.FeeCategory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid>("LeaveTypeId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<int>("PublicId")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<int>("PublicId"));
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<string>("RejectionReason")
+					.HasColumnType("text");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTimeOffset>("StartDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<int>("Status")
+					.HasColumnType("integer");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.HasKey("Id");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.HasIndex("EmployeeId");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.HasIndex("LeaveTypeId");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.HasIndex("TenantId", "PublicId")
+					.IsUnique()
+					.HasDatabaseName("IX_EmployeeLeaves_Tenant_PublicId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.ToTable("AppEmployeeLeaves", (string) null);
+			});
 
-                    b.HasKey("Id");
+			modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories.AutomatedNotificationsSettings", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.ToTable("FeeCategories");
-                });
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.FeeHead.FeeHead", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<int>("EmployeeAttendanceStatusType")
+					.HasColumnType("integer");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.PrimitiveCollection<int[]>("NotificationMethods")
+					.IsRequired()
+					.HasColumnType("integer[]");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.ToTable("AppAutomatedNotificationsSettings", (string) null);
+			});
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+			modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories.CustomAttendanceRule", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<bool>("EnableNotificationForUpperAuthority")
+					.HasColumnType("boolean");
 
-                    b.Property<Guid>("FeeCategoryId")
-                        .HasColumnType("uuid");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+				b.Property<int>("HalfDayThreshold")
+					.HasColumnType("integer");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<int>("HalfDayThresholdUnit")
+					.HasColumnType("integer");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<int>("LateThreshold")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<int>("LateThresholdUnit")
+					.HasColumnType("integer");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasKey("Id");
+				b.Property<int>("Type")
+					.HasColumnType("integer");
 
-                    b.ToTable("FeeHeads");
-                });
+				b.HasKey("Id");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.FeeStructure.FeeStructure", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.ToTable("AppCustomAttendanceRules", (string) null);
+			});
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories.NotificationInfo", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("BoardId")
-                        .HasColumnType("uuid");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<bool>("IsDelivered")
+					.HasColumnType("boolean");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<DateTimeOffset>("NotificationTime")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<int>("NotificationType")
+					.HasColumnType("integer");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<string>("ReceiverName")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ReceiverRole")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.ToTable("AppNotificationInfos", (string) null);
+			});
 
-                    b.Property<Guid>("MediumId")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicy", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<bool>("CarryForward")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false);
 
-                    b.Property<Guid>("ReceiptBookId")
-                        .HasColumnType("uuid");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.HasKey("Id");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.ToTable("FeeStructures");
-                });
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureDetail", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("Description")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("numeric");
+				b.Property<Guid>("EducationMediumStageId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<bool>("Encashable")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false);
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<bool>("IsActive")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(true);
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<Guid>("FeeHeadId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid>("FeeStructureStandardId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<Guid>("LeaveTypeId")
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsOneTime")
-                        .HasColumnType("boolean");
+				b.Property<int>("MaximumDaysPerYear")
+					.HasColumnType("integer");
 
-                    b.Property<bool>("IsOptional")
-                        .HasColumnType("boolean");
+				b.Property<int>("PaidType")
+					.HasColumnType("integer");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<string>("PolicyName")
+					.IsRequired()
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<bool>("RequiresApproval")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(true);
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasKey("Id");
+				b.HasKey("Id");
 
-                    b.HasIndex("FeeStructureStandardId");
+				b.HasIndex("EducationMediumStageId");
 
-                    b.ToTable("FeeStructureDetails");
-                });
+				b.HasIndex("LeaveTypeId")
+					.HasDatabaseName("IX_EmployeeLeavePolicies_LeaveTypeId");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureStandard", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.HasIndex("TenantId", "EducationMediumStageId", "IsActive")
+					.HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_MediumStageId_IsActive");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.HasIndex("TenantId", "EducationMediumStageId", "PolicyName")
+					.IsUnique()
+					.HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_MediumStageId_PolicyName");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.ToTable("AppEmployeeLeavePolicies", (string) null);
+			});
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+			modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeaveType", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<string>("Color")
+					.IsRequired()
+					.HasMaxLength(7)
+					.HasColumnType("character varying(7)");
 
-                    b.Property<Guid>("FeeStructureId")
-                        .HasColumnType("uuid");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<Guid>("StandardId")
-                        .HasColumnType("uuid");
+				b.Property<string>("Description")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid>("EducationMediumStageId")
+					.HasColumnType("uuid");
 
-                    b.HasKey("Id");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.HasIndex("FeeStructureId");
+				b.Property<bool>("IsActive")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(true);
 
-                    b.ToTable("FeeStructureStandards");
-                });
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption.PaymentStatusOption", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<string>("Type")
+					.IsRequired()
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.HasKey("Id");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.HasIndex("TenantId", "EducationMediumStageId", "IsActive")
+					.HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_MediumStageId_IsActive");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.HasIndex("TenantId", "EducationMediumStageId", "Type")
+					.IsUnique()
+					.HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_MediumStageId_Type");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.ToTable("AppEmployeeLeaveTypes", (string) null);
+			});
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+			modelBuilder.Entity("ShikshaMitra.HR.Calendar.EventTypes.EventType", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<string>("Color")
+					.IsRequired()
+					.HasMaxLength(7)
+					.HasColumnType("character varying(7)")
+					.HasComment("Hex color code for UI representation");
 
-                    b.Property<string>("PaymentStatusOptionName")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.HasKey("Id");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.ToTable("PaymentStatusOptions");
-                });
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.IncomeCategory.IncomeCategory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.Property<string>("Description")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)")
+					.HasComment("Optional description of the event type");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)")
+					.HasComment("Name of the event type");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId")
+					.HasComment("Tenant ID for multi-tenancy");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.HasKey("Id");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+				b.HasIndex("TenantId");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.HasIndex("Name", "TenantId");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.ToTable("AppEventTypes", (string) null);
+			});
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+			modelBuilder.Entity("ShikshaMitra.HR.Calendar.Events.Event", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<Guid>("AcademicYearId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Tags")
-                        .HasColumnType("text");
+				b.Property<string>("AudienceIds")
+					.IsRequired()
+					.HasColumnType("jsonb");
 
-                    b.HasKey("Id");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.ToTable("IncomeCategories");
-                });
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.ReceiptBook.ReceiptBook", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<Guid>("BoardId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("Description")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("EndTime")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid>("EventTypeId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<bool>("IsRecurring")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false);
 
-                    b.Property<long>("EndingNumber")
-                        .HasColumnType("bigint");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+				b.Property<DateTimeOffset?>("MeetingDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<int>("Mode")
+					.HasColumnType("integer");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<string>("Poster")
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<string>("RecurrenceJson")
+					.HasColumnType("text");
 
-                    b.Property<Guid>("MediumId")
-                        .HasColumnType("uuid");
+				b.Property<string>("StartTime")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<Guid>("MediumStageId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("Title")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<string>("Prefix")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("Venue")
+					.HasColumnType("text");
 
-                    b.Property<long>("StartingNumber")
-                        .HasColumnType("bigint");
+				b.HasKey("Id");
 
-                    b.Property<string>("Suffix")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.HasIndex("EventTypeId")
+					.HasDatabaseName("IX_AppEvents_EventTypeId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.HasIndex("MeetingDate")
+					.HasDatabaseName("IX_AppEvents_MeetingDate");
 
-                    b.HasKey("Id");
+				b.HasIndex("TenantId")
+					.HasDatabaseName("IX_AppEvents_TenantId");
 
-                    b.ToTable("ReceiptBooks");
-                });
+				b.HasIndex("AcademicYearId", "TenantId")
+					.HasDatabaseName("IX_AppEvents_AcademicYearId_TenantId");
 
-            modelBuilder.Entity("ShikshaMitra.Groups.Group", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.HasIndex("Title", "TenantId")
+					.HasDatabaseName("IX_AppEvents_Title_TenantId");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.ToTable("AppEvents", (string) null);
+			});
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+			modelBuilder.Entity("ShikshaMitra.HR.Calendar.HolidayType", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("Color")
+					.IsRequired()
+					.HasMaxLength(7)
+					.HasColumnType("character varying(7)");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<string>("Description")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<string>("NameBasedDivisionIds")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("NameBasedRoleIds")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<string>("RuleBasedDivisionIds")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("RuleBasedRoleIds")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.HasIndex("TenantId");
 
-                    b.HasKey("Id");
+				b.HasIndex("Name", "TenantId")
+					.IsUnique();
 
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("AppGroups_Tenant");
+				b.ToTable("AppHolidayTypes", (string) null);
+			});
 
-                    b.HasIndex("AcademicYearId", "TenantId")
-                        .HasDatabaseName("AppGroups_AcademicYearId_Tenant");
+			modelBuilder.Entity("ShikshaMitra.HR.Calendar.Holidays.Holiday", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.HasIndex("Name", "TenantId")
-                        .HasDatabaseName("AppGroups_Name_Tenant");
+				b.Property<Guid>("AcademicYearId")
+					.HasColumnType("uuid");
 
-                    b.ToTable("AppGroups", (string)null);
-                });
+				b.Property<string>("Attachments")
+					.HasMaxLength(2000)
+					.HasColumnType("character varying(2000)");
 
-            modelBuilder.Entity("ShikshaMitra.Groups.GroupEmployeeRule", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("AudienceIds")
+					.IsRequired()
+					.HasColumnType("jsonb");
 
-                    b.Property<int>("Field")
-                        .HasColumnType("integer");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid>("GroupId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<int>("Operator")
-                        .HasColumnType("integer");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<int>("SelectionType")
-                        .HasColumnType("integer");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.HasKey("Id");
+				b.Property<string>("Description")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.HasIndex("GroupId", "SelectionType")
-                        .HasDatabaseName("AppGroupEmployeeRules_GroupId_SelectionType");
+				b.Property<DateTimeOffset>("EndDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.ToTable("AppGroupEmployeeRules", (string)null);
-                });
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-            modelBuilder.Entity("ShikshaMitra.Groups.GroupMember", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("HolidayName")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<Guid>("GroupId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("HolidayTypeId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("MemberId")
-                        .HasColumnType("uuid");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<int>("MemberType")
-                        .HasColumnType("integer");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.HasKey("Id");
+				b.Property<DateTimeOffset>("StartDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.HasIndex("GroupId")
-                        .HasDatabaseName("AppGroupMembers_GroupId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("AppGroupMembers_UserId");
+				b.HasKey("Id");
 
-                    b.HasIndex("GroupId", "MemberType", "MemberId")
-                        .IsUnique()
-                        .HasDatabaseName("AppGroupMembers_Unique");
+				b.HasIndex("HolidayTypeId")
+					.HasDatabaseName("AppHolidays_TypeId");
 
-                    b.ToTable("AppGroupMembers", (string)null);
-                });
+				b.HasIndex("TenantId")
+					.HasDatabaseName("AppHolidays_Tenant");
 
-            modelBuilder.Entity("ShikshaMitra.Groups.GroupStudentRule", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.HasIndex("AcademicYearId", "TenantId")
+					.HasDatabaseName("AppHolidays_AcademicYearId_Tenant");
 
-                    b.Property<int>("Field")
-                        .HasColumnType("integer");
+				b.HasIndex("HolidayName", "TenantId")
+					.HasDatabaseName("AppHolidays_HolidayNameTenant");
 
-                    b.Property<Guid>("GroupId")
-                        .HasColumnType("uuid");
+				b.HasIndex("StartDate", "EndDate")
+					.HasDatabaseName("AppHolidays_DateRange");
 
-                    b.Property<int>("Operator")
-                        .HasColumnType("integer");
+				b.ToTable("AppHolidays", (string) null);
+			});
 
-                    b.Property<int>("SelectionType")
-                        .HasColumnType("integer");
+			modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<string>("Address1")
+					.HasColumnType("text");
 
-                    b.HasKey("Id");
+				b.Property<string>("Address2")
+					.HasColumnType("text");
 
-                    b.HasIndex("GroupId", "SelectionType")
-                        .HasDatabaseName("AppGroupStudentRules_GroupId_SelectionType");
+				b.Property<string>("Address3")
+					.HasColumnType("text");
 
-                    b.ToTable("AppGroupStudentRules", (string)null);
-                });
+				b.Property<string>("BloodGroup")
+					.HasColumnType("text");
 
-            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.EmployeeLeave", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<int?>("CastType")
+					.HasColumnType("integer");
 
-                    b.Property<byte[]>("Attachment")
-                        .HasColumnType("bytea");
+				b.Property<string>("ChangeReason")
+					.HasColumnType("text");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("City")
+					.HasColumnType("text");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateOnly?>("DateOfBirth")
+					.HasColumnType("date");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
+				b.Property<DateOnly?>("DateOfJoining")
+					.HasColumnType("date");
 
-                    b.Property<Guid>("EmployeeId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTimeOffset>("EndDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("Department")
+					.HasColumnType("text");
 
-                    b.Property<bool>("HalfDay")
-                        .HasColumnType("boolean");
+				b.Property<string>("Designation")
+					.HasColumnType("text");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<string>("Email")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<string>("EmployeeCode")
+					.IsRequired()
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<int?>("EmployeeGroup")
+					.HasColumnType("integer");
 
-                    b.Property<Guid>("LeaveTypeId")
-                        .HasColumnType("uuid");
+				b.Property<int?>("EmployeeStatusType")
+					.HasColumnType("integer");
 
-                    b.Property<int>("PublicId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<int>("PublicId"));
+				b.Property<string>("FamilyCast")
+					.HasColumnType("text");
 
-                    b.Property<string>("RejectionReason")
-                        .HasColumnType("text");
+				b.Property<string>("FirstName")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<DateTimeOffset>("StartDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<int?>("GenderType")
+					.HasColumnType("integer");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
+				b.Property<string>("IdentificationMark1")
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.HasKey("Id");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.HasIndex("EmployeeId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.HasIndex("LeaveTypeId");
+				b.Property<string>("LastName")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.HasIndex("TenantId", "PublicId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_EmployeeLeaves_Tenant_PublicId");
+				b.Property<int?>("MaritalStatus")
+					.HasColumnType("integer");
 
-                    b.ToTable("AppEmployeeLeaves", (string)null);
-                });
+				b.Property<string>("MiddleName")
+					.HasColumnType("text");
 
-            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories.AutomatedNotificationsSettings", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("MobileNo")
+					.HasMaxLength(20)
+					.HasColumnType("character varying(20)");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid?>("PayrollStructureId")
+					.HasColumnType("uuid");
 
-                    b.Property<int>("EmployeeAttendanceStatusType")
-                        .HasColumnType("integer");
+				b.Property<string>("PinCode")
+					.HasColumnType("text");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ProfilePictureBlobName")
+					.HasMaxLength(512)
+					.HasColumnType("character varying(512)");
 
-                    b.PrimitiveCollection<int[]>("NotificationMethods")
-                        .IsRequired()
-                        .HasColumnType("integer[]");
+				b.Property<string>("Qualification")
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("Religion")
+					.HasColumnType("text");
 
-                    b.HasKey("Id");
+				b.Property<Guid?>("ReportingManagerId")
+					.HasColumnType("uuid");
 
-                    b.ToTable("AppAutomatedNotificationsSettings", (string)null);
-                });
+				b.Property<Guid>("RoleId")
+					.HasColumnType("uuid");
 
-            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories.CustomAttendanceRule", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("SecondaryMobileNo")
+					.HasColumnType("text");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid?>("ShiftId")
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("EnableNotificationForUpperAuthority")
-                        .HasColumnType("boolean");
+				b.Property<string>("ShortName")
+					.HasColumnType("text");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<DateTimeOffset?>("StatusLastChangedAt")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("HalfDayThreshold")
-                        .HasColumnType("integer");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<int>("HalfDayThresholdUnit")
-                        .HasColumnType("integer");
+				b.Property<Guid?>("UserId")
+					.HasColumnType("uuid");
 
-                    b.Property<int>("LateThreshold")
-                        .HasColumnType("integer");
+				b.ComplexProperty<Dictionary<string, object>>("BankDetails", "ShikshaMitra.HR.Employees.Employee.BankDetails#BankDetails", b1 =>
+				{
+					b1.IsRequired();
 
-                    b.Property<int>("LateThresholdUnit")
-                        .HasColumnType("integer");
+					b1.Property<string>("AccountHolderName")
+						.HasColumnType("text");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+					b1.Property<string>("AccountNumber")
+						.HasColumnType("text");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+					b1.Property<string>("BankName")
+						.HasColumnType("text");
 
-                    b.Property<int>("Type")
-                        .HasColumnType("integer");
+					b1.Property<string>("BranchName")
+						.HasColumnType("text");
 
-                    b.HasKey("Id");
+					b1.Property<string>("IfscCode")
+						.HasColumnType("text");
+				});
 
-                    b.ToTable("AppCustomAttendanceRules", (string)null);
-                });
+				b.ComplexProperty<Dictionary<string, object>>("FatherDetails", "ShikshaMitra.HR.Employees.Employee.FatherDetails#ContactDetails", b1 =>
+				{
+					b1.IsRequired();
 
-            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories.NotificationInfo", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+					b1.Property<string>("Address1")
+						.HasColumnType("text");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+					b1.Property<string>("Address2")
+						.HasColumnType("text");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+					b1.Property<string>("Address3")
+						.HasColumnType("text");
 
-                    b.Property<bool>("IsDelivered")
-                        .HasColumnType("boolean");
+					b1.Property<string>("City")
+						.HasColumnType("text");
 
-                    b.Property<DateTimeOffset>("NotificationTime")
-                        .HasColumnType("timestamp with time zone");
+					b1.Property<string>("ContactNo")
+						.HasColumnType("text");
 
-                    b.Property<int>("NotificationType")
-                        .HasColumnType("integer");
+					b1.Property<string>("CountryIsoCode")
+						.HasColumnType("text");
 
-                    b.Property<string>("ReceiverName")
-                        .IsRequired()
-                        .HasColumnType("text");
+					b1.Property<string>("CountryName")
+						.HasColumnType("text");
 
-                    b.Property<string>("ReceiverRole")
-                        .IsRequired()
-                        .HasColumnType("text");
+					b1.Property<string>("Name")
+						.HasColumnType("text");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+					b1.Property<string>("Occupation")
+						.HasColumnType("text");
 
-                    b.HasKey("Id");
+					b1.Property<string>("PinCode")
+						.HasColumnType("text");
 
-                    b.ToTable("AppNotificationInfos", (string)null);
-                });
+					b1.Property<string>("StateIsoCode")
+						.HasColumnType("text");
 
-            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicy", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+					b1.Property<string>("StateName")
+						.HasColumnType("text");
+				});
 
-                    b.Property<bool>("CarryForward")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
+				b.ComplexProperty<Dictionary<string, object>>("MotherDetails", "ShikshaMitra.HR.Employees.Employee.MotherDetails#ContactDetails", b1 =>
+				{
+					b1.IsRequired();
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+					b1.Property<string>("Address1")
+						.HasColumnType("text");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+					b1.Property<string>("Address2")
+						.HasColumnType("text");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+					b1.Property<string>("Address3")
+						.HasColumnType("text");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+					b1.Property<string>("City")
+						.HasColumnType("text");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+					b1.Property<string>("ContactNo")
+						.HasColumnType("text");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+					b1.Property<string>("CountryIsoCode")
+						.HasColumnType("text");
 
-                    b.Property<Guid>("EducationMediumStageId")
-                        .HasColumnType("uuid");
+					b1.Property<string>("CountryName")
+						.HasColumnType("text");
 
-                    b.Property<bool>("Encashable")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
+					b1.Property<string>("Name")
+						.HasColumnType("text");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+					b1.Property<string>("Occupation")
+						.HasColumnType("text");
 
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
+					b1.Property<string>("PinCode")
+						.HasColumnType("text");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+					b1.Property<string>("StateIsoCode")
+						.HasColumnType("text");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+					b1.Property<string>("StateName")
+						.HasColumnType("text");
+				});
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.ComplexProperty<Dictionary<string, object>>("SpouseDetails", "ShikshaMitra.HR.Employees.Employee.SpouseDetails#ContactDetails", b1 =>
+				{
+					b1.IsRequired();
 
-                    b.Property<Guid>("LeaveTypeId")
-                        .HasColumnType("uuid");
+					b1.Property<string>("Address1")
+						.HasColumnType("text");
 
-                    b.Property<int>("MaximumDaysPerYear")
-                        .HasColumnType("integer");
+					b1.Property<string>("Address2")
+						.HasColumnType("text");
 
-                    b.Property<int>("PaidType")
-                        .HasColumnType("integer");
+					b1.Property<string>("Address3")
+						.HasColumnType("text");
 
-                    b.Property<string>("PolicyName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+					b1.Property<string>("City")
+						.HasColumnType("text");
 
-                    b.Property<bool>("RequiresApproval")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
+					b1.Property<string>("ContactNo")
+						.HasColumnType("text");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+					b1.Property<string>("CountryIsoCode")
+						.HasColumnType("text");
 
-                    b.HasKey("Id");
+					b1.Property<string>("CountryName")
+						.HasColumnType("text");
 
-                    b.HasIndex("EducationMediumStageId");
+					b1.Property<string>("Name")
+						.HasColumnType("text");
 
-                    b.HasIndex("LeaveTypeId")
-                        .HasDatabaseName("IX_EmployeeLeavePolicies_LeaveTypeId");
+					b1.Property<string>("Occupation")
+						.HasColumnType("text");
 
-                    b.HasIndex("TenantId", "EducationMediumStageId", "IsActive")
-                        .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_MediumStageId_IsActive");
+					b1.Property<string>("PinCode")
+						.HasColumnType("text");
 
-                    b.HasIndex("TenantId", "EducationMediumStageId", "PolicyName")
-                        .IsUnique()
-                        .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_MediumStageId_PolicyName");
+					b1.Property<string>("StateIsoCode")
+						.HasColumnType("text");
 
-                    b.ToTable("AppEmployeeLeavePolicies", (string)null);
-                });
+					b1.Property<string>("StateName")
+						.HasColumnType("text");
+				});
 
-            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeaveType", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.HasKey("Id");
 
-                    b.Property<string>("Color")
-                        .IsRequired()
-                        .HasMaxLength(7)
-                        .HasColumnType("character varying(7)");
+				b.HasIndex("Email")
+					.HasDatabaseName("IX_Employees_Email");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.HasIndex("EmployeeCode")
+					.IsUnique()
+					.HasDatabaseName("IX_Employees_EmployeeCode_Unique");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.HasIndex("PayrollStructureId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.HasIndex("ReportingManagerId")
+					.HasDatabaseName("IX_Employees_ReportingManagerId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.HasIndex("RoleId")
+					.HasDatabaseName("IX_Employees_RoleId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.HasIndex("ShiftId");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.HasIndex("UserId")
+					.HasDatabaseName("IX_Employees_UserId");
 
-                    b.Property<Guid>("EducationMediumStageId")
-                        .HasColumnType("uuid");
+				b.HasIndex("TenantId", "EmployeeStatusType")
+					.HasDatabaseName("IX_Employees_TenantId_Status");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.ToTable("AppEmployees", (string) null);
+			});
 
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
+			modelBuilder.Entity("ShikshaMitra.HR.Employees.EmployeeAdditionalDetails", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<string>("BplCardNo")
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.HasKey("Id");
+				b.Property<Guid>("EmployeeId")
+					.HasColumnType("uuid");
 
-                    b.HasIndex("TenantId", "EducationMediumStageId", "IsActive")
-                        .HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_MediumStageId_IsActive");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.HasIndex("TenantId", "EducationMediumStageId", "Type")
-                        .IsUnique()
-                        .HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_MediumStageId_Type");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.ToTable("AppEmployeeLeaveTypes", (string)null);
-                });
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Calendar.EventTypes.EventType", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<bool>("LibraryMember")
+					.HasColumnType("boolean");
 
-                    b.Property<string>("Color")
-                        .IsRequired()
-                        .HasMaxLength(7)
-                        .HasColumnType("character varying(7)")
-                        .HasComment("Hex color code for UI representation");
+				b.Property<bool>("PersonWithDisability")
+					.HasColumnType("boolean");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("SecondLanguage")
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<bool>("TransportMember")
+					.HasColumnType("boolean");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.HasKey("Id");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.HasIndex("EmployeeId")
+					.IsUnique()
+					.HasDatabaseName("IX_EmployeeAdditionalDetails_EmployeeId_Unique");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasComment("Optional description of the event type");
+				b.HasIndex("TenantId")
+					.HasDatabaseName("IX_EmployeeAdditionalDetails_TenantId");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.ToTable("AppEmployeeAdditionalDetails", (string) null);
+			});
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+			modelBuilder.Entity("ShikshaMitra.HR.Employees.EmployeeAttendance", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateOnly>("AttendanceDate")
+					.HasColumnType("date");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasComment("Name of the event type");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId")
-                        .HasComment("Tenant ID for multi-tenancy");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.HasKey("Id");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.HasIndex("TenantId");
+				b.Property<Guid?>("EducationMediumStageId")
+					.HasColumnType("uuid");
 
-                    b.HasIndex("Name", "TenantId");
+				b.Property<Guid>("EmployeeId")
+					.HasColumnType("uuid");
 
-                    b.ToTable("AppEventTypes", (string)null);
-                });
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Calendar.Events.Event", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("AudienceIds")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
+				b.Property<string>("StatusType")
+					.IsRequired()
+					.HasMaxLength(20)
+					.HasColumnType("character varying(20)");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<DateTimeOffset?>("TimeIn")
+					.HasColumnType("timestamptz");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<DateTimeOffset?>("TimeOut")
+					.HasColumnType("timestamptz");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.HasKey("Id");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.HasIndex("EducationMediumStageId");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.HasIndex("EmployeeId");
 
-                    b.Property<string>("EndTime")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.HasIndex("TenantId", "AttendanceDate")
+					.HasDatabaseName("IX_EmployeeAttendances_Tenant_Date");
 
-                    b.Property<Guid>("EventTypeId")
-                        .HasColumnType("uuid");
+				b.HasIndex("TenantId", "EmployeeId", "AttendanceDate")
+					.IsUnique()
+					.HasDatabaseName("IX_EmployeeAttendances_Tenant_Employee_Date");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.ToTable("AppEmployeeAttendances", (string) null);
+			});
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+			modelBuilder.Entity("ShikshaMitra.HR.Employees.Payroll.EmployeePayrollComponent", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsRecurring")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
+				b.Property<decimal>("Amount")
+					.HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<int>("ComponentType")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<int?>("DependOn")
+					.HasColumnType("integer");
 
-                    b.Property<DateTimeOffset?>("MeetingDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<string>("Description")
+					.HasMaxLength(255)
+					.HasColumnType("character varying(255)");
 
-                    b.Property<int>("Mode")
-                        .HasColumnType("integer");
+				b.Property<Guid>("EmployeeId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Poster")
-                        .HasColumnType("text");
+				b.Property<bool>("IsEarning")
+					.HasColumnType("boolean");
 
-                    b.Property<string>("RecurrenceJson")
-                        .HasColumnType("text");
+				b.Property<bool>("IsFixed")
+					.HasColumnType("boolean");
 
-                    b.Property<string>("StartTime")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<bool>("IsTemp")
+					.HasColumnType("boolean");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.HasKey("Id");
 
-                    b.Property<string>("Venue")
-                        .HasColumnType("text");
+				b.HasIndex("EmployeeId");
 
-                    b.HasKey("Id");
+				b.HasIndex("EmployeeId", "IsEarning");
 
-                    b.HasIndex("EventTypeId")
-                        .HasDatabaseName("IX_AppEvents_EventTypeId");
+				b.ToTable("AppEmployeePayrollComponents", (string) null);
+			});
 
-                    b.HasIndex("MeetingDate")
-                        .HasDatabaseName("IX_AppEvents_MeetingDate");
+			modelBuilder.Entity("ShikshaMitra.HR.Employees.Payroll.EmployeePayrollDetails", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("IX_AppEvents_TenantId");
+				b.Property<string>("AccountHolderName")
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                    b.HasIndex("AcademicYearId", "TenantId")
-                        .HasDatabaseName("IX_AppEvents_AcademicYearId_TenantId");
+				b.Property<string>("AccountNumber")
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.HasIndex("Title", "TenantId")
-                        .HasDatabaseName("IX_AppEvents_Title_TenantId");
+				b.Property<string>("BankName")
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                    b.ToTable("AppEvents", (string)null);
-                });
+				b.Property<decimal?>("BasicSalary")
+					.HasColumnType("decimal(18,2)");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Calendar.HolidayType", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("BranchName")
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                    b.Property<string>("Color")
-                        .IsRequired()
-                        .HasMaxLength(7)
-                        .HasColumnType("character varying(7)");
+				b.Property<Guid>("EmployeeId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("EpfNumber")
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("IfscCode")
+					.HasMaxLength(11)
+					.HasColumnType("character varying(11)");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<string>("PfRule")
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<string>("PunchId")
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<decimal?>("TdsAmount")
+					.HasColumnType("decimal(18,2)");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<decimal?>("TdsPercentage")
+					.HasColumnType("decimal(5,2)");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("UanNumber")
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.HasKey("Id");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.HasIndex("EmployeeId")
+					.IsUnique();
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.ToTable("AppEmployeePayrollDetails", (string) null);
+			});
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+			modelBuilder.Entity("ShikshaMitra.HR.Employees.Settings.DocumentSetting", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.HasKey("Id");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.HasIndex("TenantId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.HasIndex("Name", "TenantId")
-                        .IsUnique();
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.ToTable("AppHolidayTypes", (string)null);
-                });
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Calendar.Holidays.Holiday", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("DocumentName")
+					.IsRequired()
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.Property<float>("DocumentSize")
+					.HasColumnType("real");
 
-                    b.Property<string>("Attachments")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
+				b.PrimitiveCollection<int[]>("DocumentTypes")
+					.IsRequired()
+					.HasColumnType("integer[]");
 
-                    b.Property<string>("AudienceIds")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<bool>("IsRequired")
+					.HasColumnType("boolean");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.HasKey("Id");
 
-                    b.Property<DateTimeOffset>("EndDate")
-                        .HasColumnType("timestamp with time zone");
+				b.ToTable("AppDocumentSettings", (string) null);
+			});
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+			modelBuilder.Entity("ShikshaMitra.HR.EventAndHolidays.EventAndHoliday", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("HolidayName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid>("HolidayTypeId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<DateTimeOffset>("StartDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTimeOffset>("EndDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.HasKey("Id");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.HasIndex("HolidayTypeId")
-                        .HasDatabaseName("AppHolidays_TypeId");
+				b.Property<bool>("IsHoliday")
+					.HasColumnType("boolean");
 
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("AppHolidays_Tenant");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.HasIndex("AcademicYearId", "TenantId")
-                        .HasDatabaseName("AppHolidays_AcademicYearId_Tenant");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.HasIndex("HolidayName", "TenantId")
-                        .HasDatabaseName("AppHolidays_HolidayNameTenant");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.HasIndex("StartDate", "EndDate")
-                        .HasDatabaseName("AppHolidays_DateRange");
+				b.Property<string>("Reason")
+					.HasColumnType("text");
 
-                    b.ToTable("AppHolidays", (string)null);
-                });
+				b.Property<DateTimeOffset>("StartDate")
+					.HasColumnType("timestamp with time zone");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("Address1")
-                        .HasColumnType("text");
+				b.HasKey("Id");
 
-                    b.Property<string>("Address2")
-                        .HasColumnType("text");
+				b.ToTable("AppEventAndHolidays", (string) null);
+			});
 
-                    b.Property<string>("Address3")
-                        .HasColumnType("text");
+			modelBuilder.Entity("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("BloodGroup")
-                        .HasColumnType("text");
+				b.Property<double>("Amount")
+					.HasColumnType("double precision");
 
-                    b.Property<int?>("CastType")
-                        .HasColumnType("integer");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<string>("ChangeReason")
-                        .HasColumnType("text");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<string>("City")
-                        .HasColumnType("text");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<Guid?>("EducationMediumStageId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("EmployeeId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateOnly?>("DateOfBirth")
-                        .HasColumnType("date");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateOnly?>("DateOfJoining")
-                        .HasColumnType("date");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<Guid>("PayElementId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Department")
-                        .HasColumnType("text");
+				b.Property<int>("PayElementType")
+					.HasColumnType("integer");
 
-                    b.Property<string>("Designation")
-                        .HasColumnType("text");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("Email")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.HasKey("Id");
 
-                    b.Property<string>("EmployeeCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+				b.HasIndex("EducationMediumStageId");
 
-                    b.Property<int?>("EmployeeGroup")
-                        .HasColumnType("integer");
+				b.HasIndex("PayElementId");
 
-                    b.Property<int?>("EmployeeStatusType")
-                        .HasColumnType("integer");
+				b.ToTable("AppPayrollStructures", (string) null);
+			});
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+			modelBuilder.Entity("ShikshaMitra.HR.Payroll.SalarySlips.SalarySlip", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("FamilyCast")
-                        .HasColumnType("text");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<string>("FirstName")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<int?>("GenderType")
-                        .HasColumnType("integer");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<string>("IdentificationMark1")
-                        .HasColumnType("text");
+				b.Property<string>("Deductions")
+					.IsRequired()
+					.HasColumnType("jsonb");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<string>("Earnings")
+					.IsRequired()
+					.HasColumnType("jsonb");
 
-                    b.Property<string>("LastName")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Property<Guid>("EmployeeId")
+					.HasColumnType("uuid");
 
-                    b.Property<int?>("MaritalStatus")
-                        .HasColumnType("integer");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<string>("MiddleName")
-                        .HasColumnType("text");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<string>("MobileNo")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("PayrollStructureId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("PinCode")
-                        .HasColumnType("text");
+				b.Property<int>("Month")
+					.HasColumnType("integer");
 
-                    b.Property<string>("ProfilePictureBlobName")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+				b.Property<string>("MonthYear")
+					.IsRequired()
+					.HasMaxLength(7)
+					.HasColumnType("character varying(7)");
 
-                    b.Property<string>("Qualification")
-                        .HasColumnType("text");
+				b.Property<decimal>("NetSalary")
+					.HasPrecision(18, 2)
+					.HasColumnType("numeric(18,2)");
 
-                    b.Property<string>("Religion")
-                        .HasColumnType("text");
+				b.Property<DateTime>("ProcessedDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("ReportingManagerId")
-                        .HasColumnType("uuid");
+				b.Property<string>("Remarks")
+					.HasMaxLength(1000)
+					.HasColumnType("character varying(1000)");
 
-                    b.Property<Guid>("RoleId")
-                        .HasColumnType("uuid");
+				b.Property<int>("Status")
+					.HasColumnType("integer");
 
-                    b.Property<string>("SecondaryMobileNo")
-                        .HasColumnType("text");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("ShiftId")
-                        .HasColumnType("uuid");
+				b.Property<decimal>("TotalDeduction")
+					.HasPrecision(18, 2)
+					.HasColumnType("numeric(18,2)");
 
-                    b.Property<string>("ShortName")
-                        .HasColumnType("text");
+				b.Property<decimal>("TotalEarning")
+					.HasPrecision(18, 2)
+					.HasColumnType("numeric(18,2)");
 
-                    b.Property<DateTimeOffset?>("StatusLastChangedAt")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<int>("Year")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
+				b.HasIndex("EmployeeId")
+					.HasDatabaseName("IX_HR_SalarySlips_EmployeeId");
 
-                    b.ComplexProperty<Dictionary<string, object>>("BankDetails", "ShikshaMitra.HR.Employees.Employee.BankDetails#BankDetails", b1 =>
-                        {
-                            b1.IsRequired();
+				b.HasIndex("Status")
+					.HasDatabaseName("IX_HR_SalarySlips_Status");
 
-                            b1.Property<string>("AccountHolderName")
-                                .HasColumnType("text");
+				b.HasIndex("TenantId")
+					.HasDatabaseName("IX_HR_SalarySlips_TenantId");
 
-                            b1.Property<string>("AccountNumber")
-                                .HasColumnType("text");
+				b.HasIndex("EmployeeId", "MonthYear")
+					.IsUnique()
+					.HasDatabaseName("IX_HR_SalarySlips_EmployeeId_MonthYear");
 
-                            b1.Property<string>("BankName")
-                                .HasColumnType("text");
+				b.HasIndex("Year", "Month")
+					.HasDatabaseName("IX_HR_SalarySlips_Year_Month");
 
-                            b1.Property<string>("BranchName")
-                                .HasColumnType("text");
+				b.ToTable("HR_SalarySlips", (string) null);
+			});
 
-                            b1.Property<string>("IfscCode")
-                                .HasColumnType("text");
-                        });
+			modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.DeductionComponent", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.ComplexProperty<Dictionary<string, object>>("FatherDetails", "ShikshaMitra.HR.Employees.Employee.FatherDetails#ContactDetails", b1 =>
-                        {
-                            b1.IsRequired();
+				b.Property<string>("Amount")
+					.IsRequired()
+					.HasMaxLength(20)
+					.HasColumnType("character varying(20)");
 
-                            b1.Property<string>("Address1")
-                                .HasColumnType("text");
+				b.Property<int>("ComponentType")
+					.HasColumnType("integer");
 
-                            b1.Property<string>("Address2")
-                                .HasColumnType("text");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                            b1.Property<string>("Address3")
-                                .HasColumnType("text");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                            b1.Property<string>("City")
-                                .HasColumnType("text");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                            b1.Property<string>("ContactNo")
-                                .HasColumnType("text");
+				b.Property<Guid?>("CustomComponentId")
+					.HasColumnType("uuid");
 
-                            b1.Property<string>("CountryIsoCode")
-                                .HasColumnType("text");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                            b1.Property<string>("CountryName")
-                                .HasColumnType("text");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                            b1.Property<string>("Name")
-                                .HasColumnType("text");
+				b.Property<int>("DependOn")
+					.HasColumnType("integer");
 
-                            b1.Property<string>("Occupation")
-                                .HasColumnType("text");
+				b.Property<string>("Description")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                            b1.Property<string>("PinCode")
-                                .HasColumnType("text");
+				b.Property<int>("DisplayOrder")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("integer")
+					.HasDefaultValue(0);
 
-                            b1.Property<string>("StateIsoCode")
-                                .HasColumnType("text");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                            b1.Property<string>("StateName")
-                                .HasColumnType("text");
-                        });
+				b.Property<bool>("IsActive")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(true);
 
-                    b.ComplexProperty<Dictionary<string, object>>("MotherDetails", "ShikshaMitra.HR.Employees.Employee.MotherDetails#ContactDetails", b1 =>
-                        {
-                            b1.IsRequired();
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                            b1.Property<string>("Address1")
-                                .HasColumnType("text");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                            b1.Property<string>("Address2")
-                                .HasColumnType("text");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                            b1.Property<string>("Address3")
-                                .HasColumnType("text");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                            b1.Property<string>("City")
-                                .HasColumnType("text");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                            b1.Property<string>("ContactNo")
-                                .HasColumnType("text");
+				b.Property<bool>("VisibleInPayslip")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(true);
 
-                            b1.Property<string>("CountryIsoCode")
-                                .HasColumnType("text");
+				b.HasKey("Id");
 
-                            b1.Property<string>("CountryName")
-                                .HasColumnType("text");
+				b.HasIndex("DisplayOrder")
+					.HasDatabaseName("IX_DeductionComponents_DisplayOrder");
 
-                            b1.Property<string>("Name")
-                                .HasColumnType("text");
+				b.HasIndex("TenantId", "IsActive")
+					.HasDatabaseName("IX_DeductionComponents_TenantId_IsActive");
 
-                            b1.Property<string>("Occupation")
-                                .HasColumnType("text");
+				b.HasIndex("TenantId", "Name")
+					.IsUnique()
+					.HasDatabaseName("IX_DeductionComponents_TenantId_Name");
 
-                            b1.Property<string>("PinCode")
-                                .HasColumnType("text");
+				b.ToTable("AppDeductionComponents", (string) null);
+			});
 
-                            b1.Property<string>("StateIsoCode")
-                                .HasColumnType("text");
+			modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.EarningComponent", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                            b1.Property<string>("StateName")
-                                .HasColumnType("text");
-                        });
+				b.Property<string>("Amount")
+					.IsRequired()
+					.HasMaxLength(20)
+					.HasColumnType("character varying(20)");
 
-                    b.ComplexProperty<Dictionary<string, object>>("SpouseDetails", "ShikshaMitra.HR.Employees.Employee.SpouseDetails#ContactDetails", b1 =>
-                        {
-                            b1.IsRequired();
+				b.Property<int>("ComponentType")
+					.HasColumnType("integer");
 
-                            b1.Property<string>("Address1")
-                                .HasColumnType("text");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                            b1.Property<string>("Address2")
-                                .HasColumnType("text");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                            b1.Property<string>("Address3")
-                                .HasColumnType("text");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                            b1.Property<string>("City")
-                                .HasColumnType("text");
+				b.Property<Guid?>("CustomComponentId")
+					.HasColumnType("uuid");
 
-                            b1.Property<string>("ContactNo")
-                                .HasColumnType("text");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                            b1.Property<string>("CountryIsoCode")
-                                .HasColumnType("text");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                            b1.Property<string>("CountryName")
-                                .HasColumnType("text");
+				b.Property<int>("DependOn")
+					.HasColumnType("integer");
 
-                            b1.Property<string>("Name")
-                                .HasColumnType("text");
+				b.Property<string>("Description")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                            b1.Property<string>("Occupation")
-                                .HasColumnType("text");
+				b.Property<int>("DisplayOrder")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("integer")
+					.HasDefaultValue(0);
 
-                            b1.Property<string>("PinCode")
-                                .HasColumnType("text");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                            b1.Property<string>("StateIsoCode")
-                                .HasColumnType("text");
+				b.Property<bool>("IsActive")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(true);
 
-                            b1.Property<string>("StateName")
-                                .HasColumnType("text");
-                        });
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.HasKey("Id");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.HasIndex("Email")
-                        .HasDatabaseName("IX_Employees_Email");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.HasIndex("EmployeeCode")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Employees_EmployeeCode_Unique");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                    b.HasIndex("PayrollStructureId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasIndex("ReportingManagerId")
-                        .HasDatabaseName("IX_Employees_ReportingManagerId");
+				b.Property<bool>("VisibleInPayslip")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(true);
 
-                    b.HasIndex("RoleId")
-                        .HasDatabaseName("IX_Employees_RoleId");
+				b.HasKey("Id");
 
-                    b.HasIndex("ShiftId");
+				b.HasIndex("DisplayOrder")
+					.HasDatabaseName("IX_EarningComponents_DisplayOrder");
 
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("IX_Employees_UserId");
+				b.HasIndex("TenantId", "IsActive")
+					.HasDatabaseName("IX_EarningComponents_TenantId_IsActive");
 
-                    b.HasIndex("TenantId", "EmployeeStatusType")
-                        .HasDatabaseName("IX_Employees_TenantId_Status");
+				b.HasIndex("TenantId", "Name")
+					.IsUnique()
+					.HasDatabaseName("IX_EarningComponents_TenantId_Name");
 
-                    b.ToTable("AppEmployees", (string)null);
-                });
+				b.ToTable("AppEarningComponents", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.HR.Employees.EmployeeAdditionalDetails", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.PayElement", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("BplCardNo")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+				b.Property<string>("Code")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid>("EmployeeId")
-                        .HasColumnType("uuid");
+				b.Property<bool>("IsDependent")
+					.HasColumnType("boolean");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool>("IsEmployeeSpecific")
+					.HasColumnType("boolean");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<bool>("IsVisibleInPaySlip")
+					.HasColumnType("boolean");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<bool>("LibraryMember")
-                        .HasColumnType("boolean");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<bool>("PersonWithDisability")
-                        .HasColumnType("boolean");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<string>("SecondLanguage")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.HasKey("Id");
 
-                    b.Property<bool>("TransportMember")
-                        .HasColumnType("boolean");
+				b.ToTable("AppPayElements", (string) null);
+			});
 
-                    b.HasKey("Id");
+			modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.ProfessionalTax", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.HasIndex("EmployeeId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_EmployeeAdditionalDetails_EmployeeId_Unique");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("IX_EmployeeAdditionalDetails_TenantId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.ToTable("AppEmployeeAdditionalDetails", (string)null);
-                });
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Employees.EmployeeAttendance", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateOnly>("AttendanceDate")
-                        .HasColumnType("date");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<double>("FromSalary")
+					.HasColumnType("double precision");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<int>("GenderType")
+					.HasColumnType("integer");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<Guid?>("EducationMediumStageId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid>("EmployeeId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<double>("TaxAmount")
+					.HasColumnType("double precision");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<double>("ToSalary")
+					.HasColumnType("double precision");
 
-                    b.Property<string>("StatusType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.ToTable("AppProfessionalTaxes", (string) null);
+			});
 
-                    b.Property<DateTimeOffset?>("TimeIn")
-                        .HasColumnType("timestamptz");
+			modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.ProvidentFund", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("TimeOut")
-                        .HasColumnType("timestamptz");
+				b.Property<string>("Code")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.HasKey("Id");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.HasIndex("EducationMediumStageId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.HasIndex("EmployeeId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.HasIndex("TenantId", "AttendanceDate")
-                        .HasDatabaseName("IX_EmployeeAttendances_Tenant_Date");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.HasIndex("TenantId", "EmployeeId", "AttendanceDate")
-                        .IsUnique()
-                        .HasDatabaseName("IX_EmployeeAttendances_Tenant_Employee_Date");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.ToTable("AppEmployeeAttendances", (string)null);
-                });
+				b.Property<float>("EmployeePercentage")
+					.HasColumnType("real");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Employees.Payroll.EmployeePayrollComponent", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<float>("EmployerPercentage")
+					.HasColumnType("real");
 
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<int>("ComponentType")
-                        .HasColumnType("integer");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<int?>("DependOn")
-                        .HasColumnType("integer");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid>("EmployeeId")
-                        .HasColumnType("uuid");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<bool>("IsEarning")
-                        .HasColumnType("boolean");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<bool>("IsFixed")
-                        .HasColumnType("boolean");
+				b.HasKey("Id");
 
-                    b.Property<bool>("IsTemp")
-                        .HasColumnType("boolean");
+				b.ToTable("AppProvidentFunds", (string) null);
+			});
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+			modelBuilder.Entity("ShikshaMitra.Library.Setting.GeneralSetting.BookCategory.BookCategory", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.HasKey("Id");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.HasIndex("EmployeeId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.HasIndex("EmployeeId", "IsEarning");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.ToTable("AppEmployeePayrollComponents", (string)null);
-                });
+				b.Property<string>("Description")
+					.IsRequired()
+					.HasColumnType("text");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Employees.Payroll.EmployeePayrollDetails", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<string>("AccountHolderName")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<string>("AccountNumber")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("BankName")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<decimal?>("BasicSalary")
-                        .HasColumnType("decimal(18,2)");
+				b.HasKey("Id");
 
-                    b.Property<string>("BranchName")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+				b.ToTable("AppBookCategories", (string) null);
+			});
 
-                    b.Property<Guid>("EmployeeId")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings.LibraryTiming", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("EpfNumber")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+				b.Property<TimeSpan>("ClosingTime")
+					.HasColumnType("interval");
 
-                    b.Property<string>("IfscCode")
-                        .HasMaxLength(11)
-                        .HasColumnType("character varying(11)");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<string>("PfRule")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<string>("PunchId")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<decimal?>("TdsAmount")
-                        .HasColumnType("decimal(18,2)");
+				b.Property<int>("Day")
+					.HasColumnType("integer");
 
-                    b.Property<decimal?>("TdsPercentage")
-                        .HasColumnType("decimal(5,2)");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<string>("UanNumber")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.HasKey("Id");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.HasIndex("EmployeeId")
-                        .IsUnique();
+				b.Property<TimeSpan>("OpeningTime")
+					.HasColumnType("interval");
 
-                    b.ToTable("AppEmployeePayrollDetails", (string)null);
-                });
+				b.HasKey("Id");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Employees.Settings.DocumentSetting", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.HasIndex("Day")
+					.IsUnique();
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.ToTable("AppLibraryTimings", (string) null);
+			});
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+			modelBuilder.Entity("ShikshaMitra.Security.UserScope.UserScopeAssignment", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("AcademicYearId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<string>("DocumentName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<float>("DocumentSize")
-                        .HasColumnType("real");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.PrimitiveCollection<int[]>("DocumentTypes")
-                        .IsRequired()
-                        .HasColumnType("integer[]");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("Description")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<Guid?>("DivisionId")
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsRequired")
-                        .HasColumnType("boolean");
+				b.Property<Guid?>("EducationBoardId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<Guid?>("EducationMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("EducationMediumStageId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.HasKey("Id");
+				b.Property<bool>("IsActive")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(true);
 
-                    b.ToTable("AppDocumentSettings", (string)null);
-                });
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-            modelBuilder.Entity("ShikshaMitra.HR.EventAndHolidays.EventAndHoliday", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("RoleName")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("StandardId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<Guid?>("UserId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("EndDate")
-                        .HasColumnType("timestamp with time zone");
+				b.HasKey("Id");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.HasIndex("TenantId", "RoleName", "IsActive", "IsDeleted")
+					.HasDatabaseName("IX_UserScopeAssignments_Role");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.HasIndex("TenantId", "UserId", "IsActive", "IsDeleted")
+					.HasDatabaseName("IX_UserScopeAssignments_Lookup");
 
-                    b.Property<bool>("IsHoliday")
-                        .HasColumnType("boolean");
+				NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex("TenantId", "UserId", "IsActive", "IsDeleted"), new[] { "EducationBoardId", "EducationMediumId", "EducationMediumStageId", "StandardId", "DivisionId" });
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.HasIndex("TenantId", "UserId", "RoleName", "AcademicYearId", "EducationBoardId", "EducationMediumId", "EducationMediumStageId", "StandardId", "DivisionId")
+					.IsUnique()
+					.HasDatabaseName("UQ_UserScopeAssignment")
+					.HasFilter("\"IsDeleted\" = false");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.ToTable("UserScopeAssignments", (string) null);
+			});
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+			modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceDay", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Reason")
-                        .HasColumnType("text");
+				b.Property<Guid>("AcademicYearId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("StartDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.HasKey("Id");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.ToTable("AppEventAndHolidays", (string)null);
-                });
+				b.Property<DateTime>("Date")
+					.HasColumnType("date");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<double>("Amount")
-                        .HasColumnType("double precision");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<Guid>("DivisionId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<bool>("IsLocked")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false);
 
-                    b.Property<Guid?>("EducationMediumStageId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("EmployeeId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<Guid>("MarkedByUserId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<Guid>("StandardId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid>("PayElementId")
-                        .HasColumnType("uuid");
+				b.HasKey("Id");
 
-                    b.Property<int>("PayElementType")
-                        .HasColumnType("integer");
+				b.HasIndex("AcademicYearId", "StandardId", "DivisionId", "Date")
+					.IsUnique()
+					.HasDatabaseName("UX_AttendanceDay_Unique");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.ToTable("AppAttendanceDays", (string) null);
+			});
 
-                    b.HasKey("Id");
+			modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceEntry", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.HasIndex("EducationMediumStageId");
+				b.Property<Guid>("AttendanceDayId")
+					.HasColumnType("uuid");
 
-                    b.HasIndex("PayElementId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.ToTable("AppPayrollStructures", (string)null);
-                });
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Payroll.SalarySlips.SalarySlip", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<string>("Deductions")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid>("MarkedByUserId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<string>("Remarks")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<string>("Earnings")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
+				b.Property<string>("Status")
+					.IsRequired()
+					.HasMaxLength(20)
+					.HasColumnType("character varying(20)");
 
-                    b.Property<Guid>("EmployeeId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("StudentId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.HasKey("Id");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.HasIndex("AttendanceDayId");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.HasIndex("StudentId")
+					.HasDatabaseName("IX_AttendanceEntry_Student");
 
-                    b.Property<int>("Month")
-                        .HasColumnType("integer");
+				b.HasIndex("AttendanceDayId", "StudentId")
+					.IsUnique()
+					.HasDatabaseName("UX_AttendanceEntry_Unique");
 
-                    b.Property<string>("MonthYear")
-                        .IsRequired()
-                        .HasMaxLength(7)
-                        .HasColumnType("character varying(7)");
+				b.ToTable("AppAttendanceEntries", (string) null);
+			});
 
-                    b.Property<decimal>("NetSalary")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+			modelBuilder.Entity("ShikshaMitra.Students.Attendance.Settings.StudentLeaveType", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("ProcessedDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<string>("Color")
+					.IsRequired()
+					.HasMaxLength(7)
+					.HasColumnType("character varying(7)")
+					.HasColumnName("Color");
 
-                    b.Property<string>("Remarks")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<decimal>("TotalDeduction")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<decimal>("TotalEarning")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<int>("Year")
-                        .HasColumnType("integer");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.HasKey("Id");
+				b.Property<bool>("IsActive")
+					.HasColumnType("boolean")
+					.HasColumnName("IsActive");
 
-                    b.HasIndex("EmployeeId")
-                        .HasDatabaseName("IX_HR_SalarySlips_EmployeeId");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.HasIndex("Status")
-                        .HasDatabaseName("IX_HR_SalarySlips_Status");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("IX_HR_SalarySlips_TenantId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.HasIndex("EmployeeId", "MonthYear")
-                        .IsUnique()
-                        .HasDatabaseName("IX_HR_SalarySlips_EmployeeId_MonthYear");
+				b.Property<string>("LeaveTypeName")
+					.IsRequired()
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)")
+					.HasColumnName("LeaveTypeName");
 
-                    b.HasIndex("Year", "Month")
-                        .HasDatabaseName("IX_HR_SalarySlips_Year_Month");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.ToTable("HR_SalarySlips", (string)null);
-                });
+				b.HasKey("Id");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.DeductionComponent", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.HasIndex("IsActive");
 
-                    b.Property<string>("Amount")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+				b.HasIndex("LeaveTypeName");
 
-                    b.Property<int>("ComponentType")
-                        .HasColumnType("integer");
+				b.HasIndex("TenantId", "LeaveTypeName");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.ToTable("AppStudentLeaveTypes", (string) null);
+			});
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+			modelBuilder.Entity("ShikshaMitra.Students.Attendances.StudentLeave", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<byte[]>("Attachment")
+					.HasColumnType("bytea");
 
-                    b.Property<Guid?>("CustomComponentId")
-                        .HasColumnType("uuid");
+				b.Property<string>("AttachmentContentType")
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<string>("AttachmentFileName")
+					.HasMaxLength(255)
+					.HasColumnType("character varying(255)");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<int>("DependOn")
-                        .HasColumnType("integer");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<int>("DisplayOrder")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
+				b.Property<string>("Description")
+					.HasMaxLength(5000)
+					.HasColumnType("character varying(5000)");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<Guid?>("DivisionId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<Guid?>("EducationMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<DateTimeOffset?>("EndDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<bool>("VisibleInPayslip")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
+				b.Property<bool>("IsHalfDay")
+					.HasColumnType("boolean");
 
-                    b.HasKey("Id");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.HasIndex("DisplayOrder")
-                        .HasDatabaseName("IX_DeductionComponents_DisplayOrder");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.HasIndex("TenantId", "IsActive")
-                        .HasDatabaseName("IX_DeductionComponents_TenantId_IsActive");
+				b.Property<DateTimeOffset>("LeaveDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.HasIndex("TenantId", "Name")
-                        .IsUnique()
-                        .HasDatabaseName("IX_DeductionComponents_TenantId_Name");
+				b.Property<string>("RejectionReason")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.ToTable("AppDeductionComponents", (string)null);
-                });
+				b.Property<string>("Remarks")
+					.HasMaxLength(1000)
+					.HasColumnType("character varying(1000)");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.EarningComponent", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("StandardId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Amount")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+				b.Property<int>("Status")
+					.HasColumnType("integer");
 
-                    b.Property<int>("ComponentType")
-                        .HasColumnType("integer");
+				b.Property<Guid>("StudentId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid>("StudentLeaveTypeId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<decimal>("TotalDays")
+					.HasPrecision(5, 2)
+					.HasColumnType("numeric(5,2)");
 
-                    b.Property<Guid?>("CustomComponentId")
-                        .HasColumnType("uuid");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.HasIndex("IsDeleted");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.HasIndex("LeaveDate");
 
-                    b.Property<int>("DependOn")
-                        .HasColumnType("integer");
+				b.HasIndex("Status");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.HasIndex("StudentId");
 
-                    b.Property<int>("DisplayOrder")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
+				b.HasIndex("StudentLeaveTypeId");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.HasIndex("TenantId");
 
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
+				b.ToTable("AppStudentLeaves", (string) null);
+			});
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+			modelBuilder.Entity("ShikshaMitra.Students.Records.Settings.HouseSettings", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<Guid>("AcademicMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<string>("Color")
+					.IsRequired()
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<bool>("VisibleInPayslip")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.HasKey("Id");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.HasIndex("DisplayOrder")
-                        .HasDatabaseName("IX_EarningComponents_DisplayOrder");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.HasIndex("TenantId", "IsActive")
-                        .HasDatabaseName("IX_EarningComponents_TenantId_IsActive");
+				b.Property<string>("Description")
+					.HasMaxLength(1000)
+					.HasColumnType("character varying(1000)");
 
-                    b.HasIndex("TenantId", "Name")
-                        .IsUnique()
-                        .HasDatabaseName("IX_EarningComponents_TenantId_Name");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.ToTable("AppEarningComponents", (string)null);
-                });
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.PayElement", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("LogoUrl")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.HasKey("Id");
 
-                    b.Property<bool>("IsDependent")
-                        .HasColumnType("boolean");
+				b.HasIndex("AcademicMediumId");
 
-                    b.Property<bool>("IsEmployeeSpecific")
-                        .HasColumnType("boolean");
+				b.ToTable("AppHouseSettings", (string) null);
+			});
 
-                    b.Property<bool>("IsVisibleInPaySlip")
-                        .HasColumnType("boolean");
+			modelBuilder.Entity("ShikshaMitra.Students.Student", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<Guid?>("AcademicBoardId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid>("AcademicMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<Guid?>("AcademicMediumStageId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("AcademicYearId")
+					.HasColumnType("uuid");
 
-                    b.HasKey("Id");
+				b.Property<string>("AdmissionApprovalRemarks")
+					.HasMaxLength(1000)
+					.HasColumnType("character varying(1000)");
 
-                    b.ToTable("AppPayElements", (string)null);
-                });
+				b.Property<int>("AdmissionApprovalStatus")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("integer")
+					.HasDefaultValue(0);
 
-            modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.ProfessionalTax", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("BankDetailId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid?>("CommunicationDetailId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<double>("FromSalary")
-                        .HasColumnType("double precision");
+				b.Property<Guid?>("DivisionId")
+					.HasColumnType("uuid");
 
-                    b.Property<int>("GenderType")
-                        .HasColumnType("integer");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<Guid?>("FamilyDetailId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<string>("FirstName")
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<int?>("GrNo")
+					.HasColumnType("integer");
 
-                    b.Property<double>("TaxAmount")
-                        .HasColumnType("double precision");
+				b.Property<Guid?>("InquiryPreferenceId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<double>("ToSalary")
-                        .HasColumnType("double precision");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.HasKey("Id");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.ToTable("AppProfessionalTaxes", (string)null);
-                });
+				b.Property<string>("LastName")
+					.HasColumnType("text");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.ProvidentFund", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("MedicalRecordId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("MiddleName")
+					.HasColumnType("text");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid?>("PreviousSchoolDetailId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<int?>("RollNo")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("StandardId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<int>("Status")
+					.HasColumnType("integer");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<float>("EmployeePercentage")
-                        .HasColumnType("real");
+				b.HasKey("Id");
 
-                    b.Property<float>("EmployerPercentage")
-                        .HasColumnType("real");
+				b.HasIndex("AcademicMediumId");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.HasIndex("BankDetailId");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.HasIndex("CommunicationDetailId");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.HasIndex("FamilyDetailId");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.HasIndex("InquiryPreferenceId");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.HasIndex("MedicalRecordId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.HasIndex("PreviousSchoolDetailId");
 
-                    b.HasKey("Id");
+				b.HasIndex("AcademicYearId", "Status");
 
-                    b.ToTable("AppProvidentFunds", (string)null);
-                });
+				b.HasIndex("AdmissionApprovalStatus", "DivisionId");
 
-            modelBuilder.Entity("ShikshaMitra.Library.Setting.GeneralSetting.BookCategory.BookCategory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.ToTable("AppStudents", (string) null);
+			});
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentAdditionalDetail", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("AdharNo")
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<string>("ApparId")
+					.HasColumnType("text");
 
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("BPLCardNo")
+					.HasColumnType("text");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("BirthPlace")
+					.HasColumnType("text");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<int?>("CastCategory")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<int>("Category")
+					.HasColumnType("integer");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.HasKey("Id");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.ToTable("AppBookCategories", (string)null);
-                });
+				b.Property<DateTimeOffset?>("DateOfBirth")
+					.HasColumnType("timestamp with time zone");
 
-            modelBuilder.Entity("ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings.LibraryTiming", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<DateTimeOffset?>("DateOfInquiry")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<TimeSpan>("ClosingTime")
-                        .HasColumnType("interval");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("EmergencyContactNo")
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<string>("EmergencyRelationName")
+					.HasColumnType("text");
 
-                    b.Property<int>("Day")
-                        .HasColumnType("integer");
+				b.Property<string>("EmergencyRelationType")
+					.HasColumnType("text");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<Guid?>("EntranceExamSlotId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTimeOffset?>("ExamDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<TimeSpan?>("ExamEndTime")
+					.HasColumnType("interval");
 
-                    b.Property<TimeSpan>("OpeningTime")
-                        .HasColumnType("interval");
+				b.Property<decimal?>("ExamObtainedMarks")
+					.HasColumnType("numeric");
 
-                    b.HasKey("Id");
+				b.Property<decimal?>("ExamPassingMarks")
+					.HasColumnType("numeric");
 
-                    b.HasIndex("Day")
-                        .IsUnique();
+				b.Property<decimal?>("ExamPercentage")
+					.HasColumnType("numeric");
 
-                    b.ToTable("AppLibraryTimings", (string)null);
-                });
+				b.Property<DateTimeOffset?>("ExamResultDate")
+					.HasColumnType("timestamp with time zone");
 
-            modelBuilder.Entity("ShikshaMitra.Security.UserScope.UserScopeAssignment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<int?>("ExamRoomNo")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.Property<TimeSpan?>("ExamStartTime")
+					.HasColumnType("interval");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<int?>("ExamStatus")
+					.HasColumnType("integer");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<decimal?>("ExamTotalMarks")
+					.HasColumnType("numeric");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<string>("FamilyCast")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<int?>("Gender")
+					.HasColumnType("integer");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<bool?>("HaveDisability")
+					.HasColumnType("boolean");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<Guid?>("HouseId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("DivisionId")
-                        .HasColumnType("uuid");
+				b.Property<string>("InquiryNo")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("EducationBoardId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("InquiryPreferenceId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("EducationMediumId")
-                        .HasColumnType("uuid");
+				b.Property<bool?>("IsBPLStudent")
+					.HasColumnType("boolean");
 
-                    b.Property<Guid?>("EducationMediumStageId")
-                        .HasColumnType("uuid");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<bool?>("IsDivisionHouseLeader")
+					.HasColumnType("boolean");
 
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
+				b.Property<bool?>("IsGlobalHouseLeader")
+					.HasColumnType("boolean");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<bool?>("IsSingleChild")
+					.HasColumnType("boolean");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<bool?>("IsSingleParentChild")
+					.HasColumnType("boolean");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<string>("LastClassPassed")
+					.HasColumnType("text");
 
-                    b.Property<string>("RoleName")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("StandardId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<int?>("MotherTongue")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
+				b.Property<string>("Nationality")
+					.HasColumnType("text");
 
-                    b.HasKey("Id");
+				b.Property<string>("PanNo")
+					.HasColumnType("text");
 
-                    b.HasIndex("TenantId", "RoleName", "IsActive", "IsDeleted")
-                        .HasDatabaseName("IX_UserScopeAssignments_Role");
+				b.Property<string>("PreviousSchool")
+					.HasColumnType("text");
 
-                    b.HasIndex("TenantId", "UserId", "IsActive", "IsDeleted")
-                        .HasDatabaseName("IX_UserScopeAssignments_Lookup");
+				b.Property<string>("ProfilePictureUrl")
+					.HasColumnType("text");
 
-                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex("TenantId", "UserId", "IsActive", "IsDeleted"), new[] { "EducationBoardId", "EducationMediumId", "EducationMediumStageId", "StandardId", "DivisionId" });
+				b.Property<double?>("RegistrationAmount")
+					.HasColumnType("double precision");
 
-                    b.HasIndex("TenantId", "UserId", "RoleName", "AcademicYearId", "EducationBoardId", "EducationMediumId", "EducationMediumStageId", "StandardId", "DivisionId")
-                        .IsUnique()
-                        .HasDatabaseName("UQ_UserScopeAssignment")
-                        .HasFilter("\"IsDeleted\" = false");
+				b.Property<string>("RegistrationFormNo")
+					.HasColumnType("text");
 
-                    b.ToTable("UserScopeAssignments", (string)null);
-                });
+				b.Property<int?>("Religion")
+					.HasColumnType("integer");
 
-            modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceDay", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("SecondLanguage")
+					.HasColumnType("text");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.Property<int>("StudentRegistrationState")
+					.HasColumnType("integer");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.HasIndex("HouseId");
 
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("date");
+				b.ToTable("AppStudentAdditionalDetails", (string) null);
+			});
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentBankDetail", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<string>("AccountHolderName")
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                    b.Property<Guid>("DivisionId")
-                        .HasColumnType("uuid");
+				b.Property<string>("AccountNo")
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("AccountType")
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<string>("BankAddress")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<bool>("IsLocked")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
+				b.Property<string>("BankName")
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<string>("BranchName")
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid>("MarkedByUserId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid>("StandardId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.HasKey("Id");
+				b.Property<string>("IFSCCode")
+					.HasMaxLength(20)
+					.HasColumnType("character varying(20)");
 
-                    b.HasIndex("AcademicYearId", "StandardId", "DivisionId", "Date")
-                        .IsUnique()
-                        .HasDatabaseName("UX_AttendanceDay_Unique");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.ToTable("AppAttendanceDays", (string)null);
-                });
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-            modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceEntry", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid>("AttendanceDayId")
-                        .HasColumnType("uuid");
+				b.Property<string>("MICRCode")
+					.HasMaxLength(20)
+					.HasColumnType("character varying(20)");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("SwiftCode")
+					.HasMaxLength(20)
+					.HasColumnType("character varying(20)");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.HasKey("Id");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.HasIndex("AccountNo");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.HasIndex("IFSCCode");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.ToTable("StudentBankDetails", (string) null);
+			});
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentCommunicationDetail", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("MarkedByUserId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<string>("Remarks")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<Guid>("StudentId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("EmergencyContactName")
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                    b.HasKey("Id");
+				b.Property<string>("EmergencyContactPhone")
+					.HasMaxLength(20)
+					.HasColumnType("character varying(20)");
 
-                    b.HasIndex("AttendanceDayId");
+				b.Property<string>("EmergencyContactRelation")
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.HasIndex("StudentId")
-                        .HasDatabaseName("IX_AttendanceEntry_Student");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.HasIndex("AttendanceDayId", "StudentId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_AttendanceEntry_Unique");
+				b.Property<bool>("IsEmergencySameAsLocal")
+					.HasColumnType("boolean");
 
-                    b.ToTable("AppAttendanceEntries", (string)null);
-                });
+				b.Property<bool>("IsPermanentSameAsLocal")
+					.HasColumnType("boolean");
 
-            modelBuilder.Entity("ShikshaMitra.Students.Attendance.Settings.StudentLeaveType", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<string>("Color")
-                        .IsRequired()
-                        .HasMaxLength(7)
-                        .HasColumnType("character varying(7)")
-                        .HasColumnName("Color");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.ToTable("StudentCommunicationDetails", (string) null);
+			});
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentContactDetail", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<string>("Address1")
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("Address2")
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
-                        .HasColumnName("IsActive");
+				b.Property<string>("Address3")
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<string>("City")
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<string>("LeaveTypeName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("LeaveTypeName");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.HasKey("Id");
+				b.Property<string>("Email")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.HasIndex("IsActive");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.HasIndex("LeaveTypeName");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.HasIndex("TenantId", "LeaveTypeName");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.ToTable("AppStudentLeaveTypes", (string)null);
-                });
+				b.Property<string>("Pincode")
+					.HasMaxLength(10)
+					.HasColumnType("character varying(10)");
 
-            modelBuilder.Entity("ShikshaMitra.Students.Attendances.StudentLeave", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("PrimaryContactNo")
+					.IsRequired()
+					.HasMaxLength(20)
+					.HasColumnType("character varying(20)");
 
-                    b.Property<byte[]>("Attachment")
-                        .HasColumnType("bytea");
+				b.Property<string>("SecondaryContactNo")
+					.HasMaxLength(20)
+					.HasColumnType("character varying(20)");
 
-                    b.Property<string>("AttachmentContentType")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Property<Guid?>("StudentId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("AttachmentFileName")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.HasKey("Id");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.HasIndex("StudentId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.ToTable("AppStudentContactDetails", (string) null);
+			});
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentDocument", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<string>("BlobName")
+					.IsRequired()
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(5000)
-                        .HasColumnType("character varying(5000)");
+				b.Property<string>("ContentType")
+					.IsRequired()
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<Guid?>("DivisionId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("EducationMediumId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<DateTimeOffset?>("EndDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<Guid>("DocumentTypeId")
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsHalfDay")
-                        .HasColumnType("boolean");
+				b.Property<string>("FileName")
+					.IsRequired()
+					.HasMaxLength(255)
+					.HasColumnType("character varying(255)");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<DateTimeOffset>("LeaveDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("RejectionReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<long>("Size")
+					.HasColumnType("bigint");
 
-                    b.Property<string>("Remarks")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
+				b.Property<Guid>("StudentId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("StandardId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
+				b.HasKey("Id");
 
-                    b.Property<Guid>("StudentId")
-                        .HasColumnType("uuid");
+				b.HasIndex("DocumentTypeId");
 
-                    b.Property<Guid>("StudentLeaveTypeId")
-                        .HasColumnType("uuid");
+				b.HasIndex("StudentId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.HasIndex("StudentId", "DocumentTypeId");
 
-                    b.Property<decimal>("TotalDays")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
+				b.ToTable("AppStudentDocuments", (string) null);
+			});
 
-                    b.HasKey("Id");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.DocumentType", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.HasIndex("IsDeleted");
+				b.Property<string>("AcceptedFormatsData")
+					.IsRequired()
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)")
+					.HasColumnName("AcceptedFormats");
 
-                    b.HasIndex("LeaveDate");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.HasIndex("Status");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.HasIndex("StudentId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.HasIndex("StudentLeaveTypeId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.HasIndex("TenantId");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.ToTable("AppStudentLeaves", (string)null);
-                });
+				b.Property<int>("DisplayOrder")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("integer")
+					.HasDefaultValue(0);
 
-            modelBuilder.Entity("ShikshaMitra.Students.Records.Settings.HouseSettings", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid>("AcademicMediumId")
-                        .HasColumnType("uuid");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<string>("Color")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+				b.Property<bool>("IsRequired")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false);
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<double>("MaxSizeMB")
+					.HasColumnType("decimal(10,2)");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<Guid?>("StudentDocumentSettingId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.HasKey("Id");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.HasIndex("StudentDocumentSettingId");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.HasIndex("TenantId", "DisplayOrder")
+					.HasDatabaseName("IX_DocumentTypes_TenantId_DisplayOrder");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.HasIndex("TenantId", "Name")
+					.IsUnique()
+					.HasDatabaseName("IX_DocumentTypes_TenantId_Name");
 
-                    b.Property<string>("LogoUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.ToTable("AppDocumentTypes", (string) null);
+			});
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.EntranceExamSlot", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid>("AcademicYearId")
+					.HasColumnType("uuid");
 
-                    b.HasKey("Id");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.HasIndex("AcademicMediumId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.ToTable("AppHouseSettings", (string)null);
-                });
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-            modelBuilder.Entity("ShikshaMitra.Students.Student", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<Guid?>("AcademicBoardId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<Guid>("AcademicMediumId")
-                        .HasColumnType("uuid");
+				b.Property<DateTimeOffset>("EndDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("AcademicMediumStageId")
-                        .HasColumnType("uuid");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid?>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<string>("AdmissionApprovalRemarks")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<int>("AdmissionApprovalStatus")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid?>("BankDetailId")
-                        .HasColumnType("uuid");
+				b.Property<int>("RoomNo")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("CommunicationDetailId")
-                        .HasColumnType("uuid");
+				b.Property<string>("SlotName")
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<DateTimeOffset>("StartDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<int>("StudentLimit")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.HasKey("Id");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.HasIndex("AcademicYearId", "StartDate", "TenantId");
 
-                    b.Property<Guid?>("DivisionId")
-                        .HasColumnType("uuid");
+				b.ToTable("AppEntranceExamSlots", (string) null);
+			});
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.InquiryPreference", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("FamilyDetailId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("AcademicYearId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("FirstName")
-                        .HasColumnType("text");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<int?>("GrNo")
-                        .HasColumnType("integer");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("InquiryPreferenceId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<string>("LastName")
-                        .HasColumnType("text");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<Guid?>("MedicalRecordId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<string>("MiddleName")
-                        .HasColumnType("text");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid?>("PreviousSchoolDetailId")
-                        .HasColumnType("uuid");
+				b.Property<string>("PreferenceName")
+					.IsRequired()
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<int?>("RollNo")
-                        .HasColumnType("integer");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("StandardId")
-                        .HasColumnType("uuid");
+				b.HasKey("Id");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
+				b.HasIndex("TenantId", "AcademicYearId", "PreferenceName")
+					.IsUnique();
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.ToTable("AppInquiryPreferences", (string) null);
+			});
 
-                    b.HasKey("Id");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.StudentDocumentSetting", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.HasIndex("AcademicMediumId");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.HasIndex("BankDetailId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.HasIndex("CommunicationDetailId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.HasIndex("FamilyDetailId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.HasIndex("InquiryPreferenceId");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.HasIndex("MedicalRecordId");
+				b.Property<string>("DocumentName")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.HasIndex("PreviousSchoolDetailId");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.HasIndex("AcademicYearId", "Status");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.HasIndex("AdmissionApprovalStatus", "DivisionId");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.ToTable("AppStudents", (string)null);
-                });
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentAdditionalDetail", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("AdharNo")
-                        .HasColumnType("text");
+				b.Property<bool>("isRequired")
+					.HasColumnType("boolean");
 
-                    b.Property<string>("ApparId")
-                        .HasColumnType("text");
+				b.HasKey("Id");
 
-                    b.Property<string>("BPLCardNo")
-                        .HasColumnType("text");
+				b.ToTable("StudentDocumentSettings");
+			});
 
-                    b.Property<string>("BirthPlace")
-                        .HasColumnType("text");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentFamilyDetail", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<int?>("CastCategory")
-                        .HasColumnType("integer");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<int>("Category")
-                        .HasColumnType("integer");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<DateTimeOffset?>("DateOfBirth")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<DateTimeOffset?>("DateOfInquiry")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<string>("SiblingStudentIds")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<string>("EmergencyContactNo")
-                        .HasColumnType("text");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("EmergencyRelationName")
-                        .HasColumnType("text");
+				b.HasKey("Id");
 
-                    b.Property<string>("EmergencyRelationType")
-                        .HasColumnType("text");
+				b.ToTable("StudentFamilyDetails", (string) null);
+			});
 
-                    b.Property<Guid?>("EntranceExamSlotId")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentManagementSettings", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("ExamDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<int?>("ArrangementBy")
+					.HasColumnType("integer");
 
-                    b.Property<TimeSpan?>("ExamEndTime")
-                        .HasColumnType("interval");
+				b.Property<int?>("ArrangementTye")
+					.HasColumnType("integer");
 
-                    b.Property<decimal?>("ExamObtainedMarks")
-                        .HasColumnType("numeric");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<decimal?>("ExamPassingMarks")
-                        .HasColumnType("numeric");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<decimal?>("ExamPercentage")
-                        .HasColumnType("numeric");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<DateTimeOffset?>("ExamResultDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<Guid>("DivisionId")
+					.HasColumnType("uuid");
 
-                    b.Property<int?>("ExamRoomNo")
-                        .HasColumnType("integer");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<TimeSpan?>("ExamStartTime")
-                        .HasColumnType("interval");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<int?>("ExamStatus")
-                        .HasColumnType("integer");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<decimal?>("ExamTotalMarks")
-                        .HasColumnType("numeric");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("FamilyCast")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.HasKey("Id");
 
-                    b.Property<int?>("Gender")
-                        .HasColumnType("integer");
+				b.ToTable("AppStudentManagementSettings", (string) null);
+			});
 
-                    b.Property<bool?>("HaveDisability")
-                        .HasColumnType("boolean");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentMedicalRecord", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("HouseId")
-                        .HasColumnType("uuid");
+				b.Property<string>("Allergies")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<string>("InquiryNo")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("BloodGroup")
+					.HasMaxLength(10)
+					.HasColumnType("character varying(10)");
 
-                    b.Property<Guid?>("InquiryPreferenceId")
-                        .HasColumnType("uuid");
+				b.Property<decimal?>("BodyMassIndex")
+					.HasPrecision(5, 2)
+					.HasColumnType("numeric(5,2)");
 
-                    b.Property<bool?>("IsBPLStudent")
-                        .HasColumnType("boolean");
+				b.Property<string>("ChildImmunization")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<string>("ChronicConditions")
+					.HasMaxLength(1000)
+					.HasColumnType("character varying(1000)");
 
-                    b.Property<bool?>("IsDivisionHouseLeader")
-                        .HasColumnType("boolean");
+				b.Property<int?>("CovidVaccinationDoses")
+					.HasColumnType("integer");
 
-                    b.Property<bool?>("IsGlobalHouseLeader")
-                        .HasColumnType("boolean");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<bool?>("IsSingleChild")
-                        .HasColumnType("boolean");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<bool?>("IsSingleParentChild")
-                        .HasColumnType("boolean");
+				b.Property<string>("CurrentMedications")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<string>("LastClassPassed")
-                        .HasColumnType("text");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<decimal?>("HeightCm")
+					.HasPrecision(5, 2)
+					.HasColumnType("numeric(5,2)");
 
-                    b.Property<int?>("MotherTongue")
-                        .HasColumnType("integer");
+				b.Property<decimal?>("Hemoglobin")
+					.HasPrecision(4, 2)
+					.HasColumnType("numeric(4,2)");
 
-                    b.Property<string>("Nationality")
-                        .HasColumnType("text");
+				b.Property<string>("ImmunizationRemarks")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<string>("PanNo")
-                        .HasColumnType("text");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<string>("PreviousSchool")
-                        .HasColumnType("text");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<string>("ProfilePictureUrl")
-                        .HasColumnType("text");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<double?>("RegistrationAmount")
-                        .HasColumnType("double precision");
+				b.Property<int?>("PulseRate")
+					.HasColumnType("integer");
 
-                    b.Property<string>("RegistrationFormNo")
-                        .HasColumnType("text");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<int?>("Religion")
-                        .HasColumnType("integer");
+				b.Property<decimal?>("WeightKg")
+					.HasPrecision(5, 2)
+					.HasColumnType("numeric(5,2)");
 
-                    b.Property<string>("SecondLanguage")
-                        .HasColumnType("text");
+				b.HasKey("Id");
 
-                    b.Property<int>("StudentRegistrationState")
-                        .HasColumnType("integer");
+				b.ToTable("StudentMedicalRecords", (string) null);
+			});
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentNote", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.HasKey("Id");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.HasIndex("HouseId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.ToTable("AppStudentAdditionalDetails", (string)null);
-                });
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentBankDetail", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("AccountHolderName")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<string>("AccountNo")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<string>("AccountType")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("BankAddress")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<DateTimeOffset>("NextReminderDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("BankName")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+				b.Property<string>("Note")
+					.IsRequired()
+					.HasMaxLength(2000)
+					.HasColumnType("character varying(2000)");
 
-                    b.Property<string>("BranchName")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+				b.Property<int>("Status")
+					.HasColumnType("integer");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<Guid>("StudentId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.HasKey("Id");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.HasIndex("StudentId");
 
-                    b.Property<string>("IFSCCode")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+				b.ToTable("StudentNotes", (string) null);
+			});
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentPreviousSchoolDetail", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<string>("AcademicYear")
+					.HasMaxLength(20)
+					.HasColumnType("character varying(20)");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<string>("Board")
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<string>("MICRCode")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<string>("SwiftCode")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<DateTimeOffset?>("DateOfLeaving")
+					.HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.HasIndex("AccountNo");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.HasIndex("IFSCCode");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.ToTable("StudentBankDetails", (string)null);
-                });
+				b.Property<string>("LastClassAttended")
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentCommunicationDetail", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<string>("Medium")
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<decimal?>("PercentageObtained")
+					.HasPrecision(5, 2)
+					.HasColumnType("numeric(5,2)");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<string>("ReasonForLeaving")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<string>("EmergencyContactName")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+				b.Property<string>("Remarks")
+					.HasMaxLength(1000)
+					.HasColumnType("character varying(1000)");
 
-                    b.Property<string>("EmergencyContactPhone")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+				b.Property<string>("SchoolAddress")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<string>("EmergencyContactRelation")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Property<string>("SchoolName")
+					.HasMaxLength(300)
+					.HasColumnType("character varying(300)");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<string>("TCNumber")
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.Property<bool>("IsEmergencySameAsLocal")
-                        .HasColumnType("boolean");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<bool>("IsPermanentSameAsLocal")
-                        .HasColumnType("boolean");
+				b.HasKey("Id");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.ToTable("StudentPreviousSchoolDetails", (string) null);
+			});
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears.AcademicYearPermission", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid>("AcademicYearId")
+					.HasColumnType("uuid");
 
-                    b.HasKey("Id");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.ToTable("StudentCommunicationDetails", (string)null);
-                });
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentContactDetail", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("Address1")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+				b.Property<Guid?>("UserId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Address2")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+				b.HasKey("Id");
 
-                    b.Property<string>("Address3")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+				b.ToTable("AppAcademicYearPermissions", (string) null);
+			});
 
-                    b.Property<string>("City")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.Divisions.DivisionPermission", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid>("DivisionId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("Email")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Property<Guid?>("UserId")
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.HasKey("Id");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.ToTable("AppDivisionPermissions", (string) null);
+			});
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards.EducationBoardPermission", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("Pincode")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<string>("PrimaryContactNo")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<string>("SecondaryContactNo")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<Guid?>("StudentId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid>("EducationBoardId")
+					.HasColumnType("uuid");
 
-                    b.HasKey("Id");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.HasIndex("StudentId");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.ToTable("AppStudentContactDetails", (string)null);
-                });
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentDocument", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("BlobName")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<Guid?>("UserId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.HasKey("Id");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.ToTable("AppEducationBoardPermissions", (string) null);
+			});
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums.EducationMediumPermission", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<Guid>("EducationMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("DocumentTypeId")
-                        .HasColumnType("uuid");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<string>("FileName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<Guid?>("UserId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.ToTable("AppEducationMediumPermissions", (string) null);
+			});
 
-                    b.Property<long>("Size")
-                        .HasColumnType("bigint");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums.EducationMediumStagePermission", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("StudentId")
-                        .HasColumnType("uuid");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid>("EducationMediumStageId")
+					.HasColumnType("uuid");
 
-                    b.HasKey("Id");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.HasIndex("DocumentTypeId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasIndex("StudentId");
+				b.Property<Guid?>("UserId")
+					.HasColumnType("uuid");
 
-                    b.HasIndex("StudentId", "DocumentTypeId");
+				b.HasKey("Id");
 
-                    b.ToTable("AppStudentDocuments", (string)null);
-                });
+				b.ToTable("AppEducationMediumStagePermissions", (string) null);
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.DocumentType", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.Standards.StandardPermission", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("AcceptedFormatsData")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("AcceptedFormats");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<Guid>("StandardId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("UserId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.HasKey("Id");
 
-                    b.Property<int>("DisplayOrder")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
+				b.ToTable("AppStandardPermissions", (string) null);
+			});
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<bool>("IsRequired")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<double>("MaxSizeMB")
-                        .HasColumnType("decimal(10,2)");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Property<DateTime>("EndDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("StudentDocumentSettingId")
-                        .HasColumnType("uuid");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.HasKey("Id");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.HasIndex("StudentDocumentSettingId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.HasIndex("TenantId", "DisplayOrder")
-                        .HasDatabaseName("IX_DocumentTypes_TenantId_DisplayOrder");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.HasIndex("TenantId", "Name")
-                        .IsUnique()
-                        .HasDatabaseName("IX_DocumentTypes_TenantId_Name");
+				b.Property<DateTime>("StartDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.ToTable("AppDocumentTypes", (string)null);
-                });
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.EntranceExamSlot", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.HasKey("Id");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.HasIndex("Name", "TenantId", "StartDate", "EndDate")
+					.IsUnique();
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.ToTable("AppAcademicYears", (string) null);
+			});
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.Divisions.Division", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<DateTimeOffset>("EndDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<int>("RoomNo")
-                        .HasColumnType("integer");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("SlotName")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<DateTimeOffset>("StartDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<string>("RoomNumber")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.Property<int>("StudentLimit")
-                        .HasColumnType("integer");
+				b.Property<Guid>("StandardId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<int>("Strength")
+					.HasColumnType("integer");
 
-                    b.HasKey("Id");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasIndex("AcademicYearId", "StartDate", "TenantId");
+				b.HasKey("Id");
 
-                    b.ToTable("AppEntranceExamSlots", (string)null);
-                });
+				b.HasIndex("StandardId");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.InquiryPreference", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.ToTable("AppDivisions", (string) null);
+			});
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid>("AcademicYearId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<string>("PreferenceName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasKey("Id");
+				b.Property<int>("Type")
+					.HasColumnType("integer");
 
-                    b.HasIndex("TenantId", "AcademicYearId", "PreferenceName")
-                        .IsUnique();
+				b.HasKey("Id");
 
-                    b.ToTable("AppInquiryPreferences", (string)null);
-                });
+				b.HasIndex("AcademicYearId");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.StudentDocumentSetting", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.ToTable("AppEducationBoards", (string) null);
+			});
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<byte[]>("BannerPicture")
+					.HasColumnType("bytea");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<string>("DocumentName")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<Guid>("EducationMediumId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<bool>("isRequired")
-                        .HasColumnType("boolean");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.HasKey("Id");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.ToTable("StudentDocumentSettings");
-                });
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentFamilyDetail", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.HasKey("Id");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.HasIndex("EducationMediumId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.ToTable("AppEducationMediumStages", (string) null);
+			});
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("SiblingStudentIds")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid>("EducationBoardId")
+					.HasColumnType("uuid");
 
-                    b.HasKey("Id");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.ToTable("StudentFamilyDetails", (string)null);
-                });
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentManagementSettings", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<int?>("ArrangementBy")
-                        .HasColumnType("integer");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<int?>("ArrangementTye")
-                        .HasColumnType("integer");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.HasIndex("EducationBoardId");
 
-                    b.Property<Guid>("DivisionId")
-                        .HasColumnType("uuid");
+				b.ToTable("AppEducationMediums", (string) null);
+			});
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.InstituteSetupExtraProperties", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<int>("State")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.HasKey("Id");
 
-                    b.HasKey("Id");
+				b.ToTable("AppInstituteSetupExtraProperties", (string) null);
+			});
 
-                    b.ToTable("AppStudentManagementSettings", (string)null);
-                });
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Building", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentMedicalRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("BuildingName")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<string>("Allergies")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<string>("BloodGroup")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<decimal?>("BodyMassIndex")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<string>("ChildImmunization")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<string>("Description")
+					.HasMaxLength(500)
+					.HasColumnType("character varying(500)");
 
-                    b.Property<string>("ChronicConditions")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<int?>("CovidVaccinationDoses")
-                        .HasColumnType("integer");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("CurrentMedications")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<int>("TotalFloors")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.HasKey("Id");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.ToTable("AppBuildings", (string) null);
+			});
 
-                    b.Property<decimal?>("HeightCm")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Floor", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<decimal?>("Hemoglobin")
-                        .HasPrecision(4, 2)
-                        .HasColumnType("numeric(4,2)");
+				b.Property<Guid>("BuildingId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ImmunizationRemarks")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.Property<string>("FloorName")
+					.IsRequired()
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<int>("FloorNo")
+					.HasColumnType("integer");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<int>("TotalRoom")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.HasKey("Id");
 
-                    b.Property<int?>("PulseRate")
-                        .HasColumnType("integer");
+				b.HasIndex("BuildingId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.ToTable("AppFloors", (string) null);
+			});
 
-                    b.Property<decimal?>("WeightKg")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes.RoomType", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.HasKey("Id");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.ToTable("StudentMedicalRecords", (string)null);
-                });
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentNote", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<string>("RoomTypeName")
+					.IsRequired()
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<string>("ShortName")
+					.IsRequired()
+					.HasMaxLength(10)
+					.HasColumnType("character varying(10)");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.HasKey("Id");
 
-                    b.Property<DateTimeOffset>("NextReminderDate")
-                        .HasColumnType("timestamp with time zone");
+				b.ToTable("AppRoomTypes", (string) null);
+			});
 
-                    b.Property<string>("Note")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Rooms.Room", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
+				b.Property<int>("BenchCapacity")
+					.HasColumnType("integer");
 
-                    b.Property<Guid>("StudentId")
-                        .HasColumnType("uuid");
+				b.Property<int>("BenchesPerColumn")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<int>("BenchesPerRow")
+					.HasColumnType("integer");
 
-                    b.HasKey("Id");
+				b.Property<Guid>("BuildingId")
+					.HasColumnType("uuid");
 
-                    b.HasIndex("StudentId");
+				b.Property<int>("Capacity")
+					.HasColumnType("integer");
 
-                    b.ToTable("StudentNotes", (string)null);
-                });
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentPreviousSchoolDetail", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<string>("AcademicYear")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<string>("Board")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("Features")
+					.HasColumnType("jsonb");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid>("FloorId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("DateOfLeaving")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<string>("RoomName")
+					.IsRequired()
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<Guid>("RoomTypeId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("LastClassAttended")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<int>("TotalBenches")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.HasKey("Id");
 
-                    b.Property<string>("Medium")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.HasIndex("BuildingId");
 
-                    b.Property<decimal?>("PercentageObtained")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
+				b.HasIndex("FloorId");
 
-                    b.Property<string>("ReasonForLeaving")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.HasIndex("RoomTypeId");
 
-                    b.Property<string>("Remarks")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
+				b.ToTable("AppRooms", (string) null);
+			});
 
-                    b.Property<string>("SchoolAddress")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.ShiftManagement", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("SchoolName")
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<string>("TCNumber")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+				b.Property<TimeOnly>("EndTime")
+					.HasColumnType("time without time zone");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.HasKey("Id");
+				b.Property<string>("ShiftName")
+					.IsRequired()
+					.HasColumnType("text");
 
-                    b.ToTable("StudentPreviousSchoolDetails", (string)null);
-                });
+				b.Property<TimeOnly>("StartTime")
+					.HasColumnType("time without time zone");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears.AcademicYearPermission", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.HasKey("Id");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.ToTable("AppShiftManagements", (string) null);
+			});
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.Standards.Standard", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<int>("AgeLowerLimit")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.HasKey("Id");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.ToTable("AppAcademicYearPermissions", (string)null);
-                });
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.Divisions.DivisionPermission", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid>("EducationMediumStageId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("DivisionId")
-                        .HasColumnType("uuid");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.HasKey("Id");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.ToTable("AppDivisionPermissions", (string)null);
-                });
+				b.Property<Guid?>("ShiftId")
+					.HasColumnType("uuid");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards.EducationBoardPermission", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.HasIndex("EducationMediumStageId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.HasIndex("ShiftId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.ToTable("AppStandards", (string) null);
+			});
 
-                    b.Property<Guid>("EducationBoardId")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("Volo.Abp.AuditLogging.AuditLog", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<string>("ApplicationName")
+					.HasMaxLength(96)
+					.HasColumnType("character varying(96)")
+					.HasColumnName("ApplicationName");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<string>("BrowserInfo")
+					.HasMaxLength(512)
+					.HasColumnType("character varying(512)")
+					.HasColumnName("BrowserInfo");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<string>("ClientId")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)")
+					.HasColumnName("ClientId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("ClientIpAddress")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)")
+					.HasColumnName("ClientIpAddress");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
+				b.Property<string>("ClientName")
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)")
+					.HasColumnName("ClientName");
 
-                    b.HasKey("Id");
+				b.Property<string>("Comments")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)")
+					.HasColumnName("Comments");
 
-                    b.ToTable("AppEducationBoardPermissions", (string)null);
-                });
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums.EducationMediumPermission", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("CorrelationId")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)")
+					.HasColumnName("CorrelationId");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("Exceptions")
+					.HasColumnType("text");
 
-                    b.Property<Guid>("EducationMediumId")
-                        .HasColumnType("uuid");
+				b.Property<int>("ExecutionDuration")
+					.HasColumnType("integer")
+					.HasColumnName("ExecutionDuration");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<DateTime>("ExecutionTime")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
+				b.Property<string>("HttpMethod")
+					.HasMaxLength(16)
+					.HasColumnType("character varying(16)")
+					.HasColumnName("HttpMethod");
 
-                    b.HasKey("Id");
+				b.Property<int?>("HttpStatusCode")
+					.HasColumnType("integer")
+					.HasColumnName("HttpStatusCode");
 
-                    b.ToTable("AppEducationMediumPermissions", (string)null);
-                });
+				b.Property<Guid?>("ImpersonatorTenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("ImpersonatorTenantId");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums.EducationMediumStagePermission", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("ImpersonatorTenantName")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)")
+					.HasColumnName("ImpersonatorTenantName");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid?>("ImpersonatorUserId")
+					.HasColumnType("uuid")
+					.HasColumnName("ImpersonatorUserId");
 
-                    b.Property<Guid>("EducationMediumStageId")
-                        .HasColumnType("uuid");
+				b.Property<string>("ImpersonatorUserName")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)")
+					.HasColumnName("ImpersonatorUserName");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("TenantName")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)")
+					.HasColumnName("TenantName");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
+				b.Property<string>("Url")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)")
+					.HasColumnName("Url");
 
-                    b.HasKey("Id");
+				b.Property<Guid?>("UserId")
+					.HasColumnType("uuid")
+					.HasColumnName("UserId");
 
-                    b.ToTable("AppEducationMediumStagePermissions", (string)null);
-                });
+				b.Property<string>("UserName")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)")
+					.HasColumnName("UserName");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.Standards.StandardPermission", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.HasKey("Id");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.HasIndex("TenantId", "ExecutionTime");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.HasIndex("TenantId", "UserId", "ExecutionTime");
 
-                    b.Property<Guid>("StandardId")
-                        .HasColumnType("uuid");
+				b.ToTable("AbpAuditLogs", (string) null);
+			});
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+			modelBuilder.Entity("Volo.Abp.AuditLogging.AuditLogAction", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("AuditLogId")
+					.HasColumnType("uuid")
+					.HasColumnName("AuditLogId");
 
-                    b.HasKey("Id");
+				b.Property<int>("ExecutionDuration")
+					.HasColumnType("integer")
+					.HasColumnName("ExecutionDuration");
 
-                    b.ToTable("AppStandardPermissions", (string)null);
-                });
+				b.Property<DateTime>("ExecutionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("ExecutionTime");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("ExtraProperties")
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("MethodName")
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)")
+					.HasColumnName("MethodName");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("Parameters")
+					.HasMaxLength(2000)
+					.HasColumnType("character varying(2000)")
+					.HasColumnName("Parameters");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<string>("ServiceName")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)")
+					.HasColumnName("ServiceName");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.HasKey("Id");
 
-                    b.Property<DateTime>("EndDate")
-                        .HasColumnType("timestamp with time zone");
+				b.HasIndex("AuditLogId");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.HasIndex("TenantId", "ServiceName", "MethodName", "ExecutionTime");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.ToTable("AbpAuditLogActions", (string) null);
+			});
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+			modelBuilder.Entity("Volo.Abp.AuditLogging.EntityChange", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<Guid>("AuditLogId")
+					.HasColumnType("uuid")
+					.HasColumnName("AuditLogId");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+				b.Property<DateTime>("ChangeTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("ChangeTime");
 
-                    b.Property<DateTime>("StartDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<byte>("ChangeType")
+					.HasColumnType("smallint")
+					.HasColumnName("ChangeType");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("EntityId")
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)")
+					.HasColumnName("EntityId");
 
-                    b.HasKey("Id");
+				b.Property<Guid?>("EntityTenantId")
+					.HasColumnType("uuid");
 
-                    b.HasIndex("Name", "TenantId", "StartDate", "EndDate")
-                        .IsUnique();
+				b.Property<string>("EntityTypeFullName")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)")
+					.HasColumnName("EntityTypeFullName");
 
-                    b.ToTable("AppAcademicYears", (string)null);
-                });
+				b.Property<string>("ExtraProperties")
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.Divisions.Division", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.HasKey("Id");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.HasIndex("AuditLogId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.HasIndex("TenantId", "EntityTypeFullName", "EntityId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.ToTable("AbpEntityChanges", (string) null);
+			});
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+			modelBuilder.Entity("Volo.Abp.AuditLogging.EntityPropertyChange", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<Guid>("EntityChangeId")
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<string>("NewValue")
+					.HasMaxLength(512)
+					.HasColumnType("character varying(512)")
+					.HasColumnName("NewValue");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<string>("OriginalValue")
+					.HasMaxLength(512)
+					.HasColumnType("character varying(512)")
+					.HasColumnName("OriginalValue");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<string>("PropertyName")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)")
+					.HasColumnName("PropertyName");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+				b.Property<string>("PropertyTypeFullName")
+					.IsRequired()
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)")
+					.HasColumnName("PropertyTypeFullName");
 
-                    b.Property<string>("RoomNumber")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid>("StandardId")
-                        .HasColumnType("uuid");
+				b.HasKey("Id");
 
-                    b.Property<int>("Strength")
-                        .HasColumnType("integer");
+				b.HasIndex("EntityChangeId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.ToTable("AbpEntityPropertyChanges", (string) null);
+			});
 
-                    b.HasKey("Id");
+			modelBuilder.Entity("Volo.Abp.BackgroundJobs.BackgroundJobRecord", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.HasIndex("StandardId");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.ToTable("AppDivisions", (string)null);
-                });
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uuid");
+				b.Property<bool>("IsAbandoned")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false);
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("JobArgs")
+					.IsRequired()
+					.HasMaxLength(1048576)
+					.HasColumnType("character varying(1048576)");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("JobName")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<DateTime?>("LastTryTime")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<DateTime>("NextTryTime")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<byte>("Priority")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("smallint")
+					.HasDefaultValue((byte) 15);
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<short>("TryCount")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("smallint")
+					.HasDefaultValue((short) 0);
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.HasKey("Id");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.HasIndex("IsAbandoned", "NextTryTime");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.ToTable("AbpBackgroundJobs", (string) null);
+			});
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+			modelBuilder.Entity("Volo.Abp.BlobStoring.Database.DatabaseBlob", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.Property<int>("Type")
-                        .HasColumnType("integer");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.HasKey("Id");
+				b.Property<Guid>("ContainerId")
+					.HasColumnType("uuid");
 
-                    b.HasIndex("AcademicYearId");
+				b.Property<byte[]>("Content")
+					.HasMaxLength(2147483647)
+					.HasColumnType("bytea");
 
-                    b.ToTable("AppEducationBoards", (string)null);
-                });
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<byte[]>("BannerPicture")
-                        .HasColumnType("bytea");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.HasKey("Id");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.HasIndex("ContainerId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.HasIndex("TenantId", "ContainerId", "Name");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.ToTable("AbpBlobs", (string) null);
+			});
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+			modelBuilder.Entity("Volo.Abp.BlobStoring.Database.DatabaseBlobContainer", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("EducationMediumId")
-                        .HasColumnType("uuid");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.HasKey("Id");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+				b.HasIndex("TenantId", "Name");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.ToTable("AbpBlobContainers", (string) null);
+			});
 
-                    b.HasKey("Id");
+			modelBuilder.Entity("Volo.Abp.FeatureManagement.FeatureDefinitionRecord", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.HasIndex("EducationMediumId");
+				b.Property<string>("AllowedProviders")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.ToTable("AppEducationMediumStages", (string)null);
-                });
+				b.Property<string>("DefaultValue")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("Description")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("DisplayName")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("ExtraProperties")
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<string>("GroupName")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Property<bool>("IsAvailableToHost")
+					.HasColumnType("boolean");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<bool>("IsVisibleToClients")
+					.HasColumnType("boolean");
 
-                    b.Property<Guid>("EducationBoardId")
-                        .HasColumnType("uuid");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ParentName")
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<string>("ValueType")
+					.HasMaxLength(2048)
+					.HasColumnType("character varying(2048)");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.HasIndex("GroupName");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+				b.HasIndex("Name")
+					.IsUnique();
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.ToTable("AbpFeatures", (string) null);
+			});
 
-                    b.HasKey("Id");
+			modelBuilder.Entity("Volo.Abp.FeatureManagement.FeatureGroupDefinitionRecord", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.HasIndex("EducationBoardId");
+				b.Property<string>("DisplayName")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.ToTable("AppEducationMediums", (string)null);
-                });
+				b.Property<string>("ExtraProperties")
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.InstituteSetupExtraProperties", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<int>("State")
-                        .HasColumnType("integer");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.HasIndex("Name")
+					.IsUnique();
 
-                    b.HasKey("Id");
+				b.ToTable("AbpFeatureGroups", (string) null);
+			});
 
-                    b.ToTable("AppInstituteSetupExtraProperties", (string)null);
-                });
+			modelBuilder.Entity("Volo.Abp.FeatureManagement.FeatureValue", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Building", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<string>("BuildingName")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+				b.Property<string>("ProviderKey")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ProviderName")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("Value")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.HasKey("Id");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+				b.HasIndex("Name", "ProviderName", "ProviderKey")
+					.IsUnique();
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.ToTable("AbpFeatureValues", (string) null);
+			});
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityClaimType", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("Description")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<int>("TotalFloors")
-                        .HasColumnType("integer");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.HasKey("Id");
+				b.Property<bool>("IsStatic")
+					.HasColumnType("boolean");
 
-                    b.ToTable("AppBuildings", (string)null);
-                });
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Floor", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("Regex")
+					.HasMaxLength(512)
+					.HasColumnType("character varying(512)");
 
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid");
+				b.Property<string>("RegexDescription")
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<string>("FloorName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Property<bool>("Required")
+					.HasColumnType("boolean");
 
-                    b.Property<int>("FloorNo")
-                        .HasColumnType("integer");
+				b.Property<int>("ValueType")
+					.HasColumnType("integer");
 
-                    b.Property<int>("TotalRoom")
-                        .HasColumnType("integer");
+				b.HasKey("Id");
 
-                    b.HasKey("Id");
+				b.ToTable("AbpClaimTypes", (string) null);
+			});
 
-                    b.HasIndex("BuildingId");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityLinkUser", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.ToTable("AppFloors", (string)null);
-                });
+				b.Property<Guid?>("SourceTenantId")
+					.HasColumnType("uuid");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes.RoomType", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<Guid>("SourceUserId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid?>("TargetTenantId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<Guid>("TargetUserId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.HasKey("Id");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.HasIndex("SourceUserId", "SourceTenantId", "TargetUserId", "TargetTenantId")
+					.IsUnique();
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.ToTable("AbpLinkUsers", (string) null);
+			});
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityRole", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("RoomTypeName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<string>("ShortName")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+				b.Property<int>("EntityVersion")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.HasKey("Id");
+				b.Property<bool>("IsDefault")
+					.HasColumnType("boolean")
+					.HasColumnName("IsDefault");
 
-                    b.ToTable("AppRoomTypes", (string)null);
-                });
+				b.Property<bool>("IsPublic")
+					.HasColumnType("boolean")
+					.HasColumnName("IsPublic");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Rooms.Room", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<bool>("IsStatic")
+					.HasColumnType("boolean")
+					.HasColumnName("IsStatic");
 
-                    b.Property<int>("BenchCapacity")
-                        .HasColumnType("integer");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<int>("BenchesPerColumn")
-                        .HasColumnType("integer");
+				b.Property<string>("NormalizedName")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<int>("BenchesPerRow")
-                        .HasColumnType("integer");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid");
+				b.HasKey("Id");
 
-                    b.Property<int>("Capacity")
-                        .HasColumnType("integer");
+				b.HasIndex("NormalizedName");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.ToTable("AbpRoles", (string) null);
+			});
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityRoleClaim", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<string>("ClaimType")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ClaimValue")
+					.HasMaxLength(1024)
+					.HasColumnType("character varying(1024)");
 
-                    b.Property<string>("Features")
-                        .HasColumnType("jsonb");
+				b.Property<Guid>("RoleId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("FloorId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.HasIndex("RoleId");
 
-                    b.Property<string>("RoomName")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+				b.ToTable("AbpRoleClaims", (string) null);
+			});
 
-                    b.Property<Guid>("RoomTypeId")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentitySecurityLog", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("Action")
+					.HasMaxLength(96)
+					.HasColumnType("character varying(96)");
 
-                    b.Property<int>("TotalBenches")
-                        .HasColumnType("integer");
+				b.Property<string>("ApplicationName")
+					.HasMaxLength(96)
+					.HasColumnType("character varying(96)");
 
-                    b.HasKey("Id");
+				b.Property<string>("BrowserInfo")
+					.HasMaxLength(512)
+					.HasColumnType("character varying(512)");
 
-                    b.HasIndex("BuildingId");
+				b.Property<string>("ClientId")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.HasIndex("FloorId");
+				b.Property<string>("ClientIpAddress")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.HasIndex("RoomTypeId");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.ToTable("AppRooms", (string)null);
-                });
+				b.Property<string>("CorrelationId")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.ShiftManagement", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<TimeOnly>("EndTime")
-                        .HasColumnType("time without time zone");
+				b.Property<string>("Identity")
+					.HasMaxLength(96)
+					.HasColumnType("character varying(96)");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("ShiftName")
-                        .IsRequired()
-                        .HasColumnType("text");
+				b.Property<string>("TenantName")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<TimeOnly>("StartTime")
-                        .HasColumnType("time without time zone");
+				b.Property<Guid?>("UserId")
+					.HasColumnType("uuid");
 
-                    b.HasKey("Id");
+				b.Property<string>("UserName")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.ToTable("AppShiftManagements", (string)null);
-                });
+				b.HasKey("Id");
 
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.Standards.Standard", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.HasIndex("TenantId", "Action");
 
-                    b.Property<int>("AgeLowerLimit")
-                        .HasColumnType("integer");
+				b.HasIndex("TenantId", "ApplicationName");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.HasIndex("TenantId", "Identity");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.HasIndex("TenantId", "UserId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.ToTable("AbpSecurityLogs", (string) null);
+			});
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentitySession", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Property<string>("ClientId")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<Guid>("EducationMediumStageId")
-                        .HasColumnType("uuid");
+				b.Property<string>("Device")
+					.IsRequired()
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("DeviceInfo")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Property<string>("ExtraProperties")
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.Property<string>("IpAddresses")
+					.HasMaxLength(2048)
+					.HasColumnType("character varying(2048)");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+				b.Property<DateTime?>("LastAccessed")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+				b.Property<string>("SessionId")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<Guid?>("ShiftId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime>("SignedIn")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.HasKey("Id");
+				b.Property<Guid>("UserId")
+					.HasColumnType("uuid");
 
-                    b.HasIndex("EducationMediumStageId");
+				b.HasKey("Id");
 
-                    b.HasIndex("ShiftId");
+				b.HasIndex("Device");
 
-                    b.ToTable("AppStandards", (string)null);
-                });
+				b.HasIndex("SessionId");
 
-            modelBuilder.Entity("Volo.Abp.AuditLogging.AuditLog", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+				b.HasIndex("TenantId", "UserId");
 
-                    b.Property<string>("ApplicationName")
-                        .HasMaxLength(96)
-                        .HasColumnType("character varying(96)")
-                        .HasColumnName("ApplicationName");
+				b.ToTable("AbpSessions", (string) null);
+			});
 
-                    b.Property<string>("BrowserInfo")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)")
-                        .HasColumnName("BrowserInfo");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityUser", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ClientId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("ClientId");
+				b.Property<int>("AccessFailedCount")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("integer")
+					.HasDefaultValue(0)
+					.HasColumnName("AccessFailedCount");
 
-                    b.Property<string>("ClientIpAddress")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("ClientIpAddress");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<string>("ClientName")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("ClientName");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<string>("Comments")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("Comments");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("CorrelationId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("CorrelationId");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("Exceptions")
-                        .HasColumnType("text");
+				b.Property<string>("Email")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)")
+					.HasColumnName("Email");
 
-                    b.Property<int>("ExecutionDuration")
-                        .HasColumnType("integer")
-                        .HasColumnName("ExecutionDuration");
+				b.Property<bool>("EmailConfirmed")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("EmailConfirmed");
 
-                    b.Property<DateTime>("ExecutionTime")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<int>("EntityVersion")
+					.HasColumnType("integer");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<string>("HttpMethod")
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)")
-                        .HasColumnName("HttpMethod");
+				b.Property<bool>("IsActive")
+					.HasColumnType("boolean")
+					.HasColumnName("IsActive");
 
-                    b.Property<int?>("HttpStatusCode")
-                        .HasColumnType("integer")
-                        .HasColumnName("HttpStatusCode");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<Guid?>("ImpersonatorTenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("ImpersonatorTenantId");
+				b.Property<bool>("IsExternal")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsExternal");
 
-                    b.Property<string>("ImpersonatorTenantName")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("ImpersonatorTenantName");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<Guid?>("ImpersonatorUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("ImpersonatorUserId");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("ImpersonatorUserName")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("ImpersonatorUserName");
+				b.Property<DateTimeOffset?>("LastPasswordChangeTime")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<bool>("LockoutEnabled")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("LockoutEnabled");
 
-                    b.Property<string>("TenantName")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("TenantName");
+				b.Property<DateTimeOffset?>("LockoutEnd")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Url")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("Url");
+				b.Property<string>("Name")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)")
+					.HasColumnName("Name");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("UserId");
+				b.Property<string>("NormalizedEmail")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)")
+					.HasColumnName("NormalizedEmail");
 
-                    b.Property<string>("UserName")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("UserName");
+				b.Property<string>("NormalizedUserName")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)")
+					.HasColumnName("NormalizedUserName");
 
-                    b.HasKey("Id");
+				b.Property<string>("PasswordHash")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)")
+					.HasColumnName("PasswordHash");
 
-                    b.HasIndex("TenantId", "ExecutionTime");
+				b.Property<string>("PhoneNumber")
+					.HasMaxLength(16)
+					.HasColumnType("character varying(16)")
+					.HasColumnName("PhoneNumber");
 
-                    b.HasIndex("TenantId", "UserId", "ExecutionTime");
+				b.Property<bool>("PhoneNumberConfirmed")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("PhoneNumberConfirmed");
 
-                    b.ToTable("AbpAuditLogs", (string)null);
-                });
+				b.Property<string>("SecurityStamp")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)")
+					.HasColumnName("SecurityStamp");
 
-            modelBuilder.Entity("Volo.Abp.AuditLogging.AuditLogAction", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+				b.Property<bool>("ShouldChangePasswordOnNextLogin")
+					.HasColumnType("boolean");
 
-                    b.Property<Guid>("AuditLogId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("AuditLogId");
+				b.Property<string>("Surname")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)")
+					.HasColumnName("Surname");
 
-                    b.Property<int>("ExecutionDuration")
-                        .HasColumnType("integer")
-                        .HasColumnName("ExecutionDuration");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<DateTime>("ExecutionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("ExecutionTime");
+				b.Property<bool>("TwoFactorEnabled")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("TwoFactorEnabled");
 
-                    b.Property<string>("ExtraProperties")
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("UserName")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)")
+					.HasColumnName("UserName");
 
-                    b.Property<string>("MethodName")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("MethodName");
+				b.HasKey("Id");
 
-                    b.Property<string>("Parameters")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)")
-                        .HasColumnName("Parameters");
+				b.HasIndex("Email");
 
-                    b.Property<string>("ServiceName")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("ServiceName");
+				b.HasIndex("NormalizedEmail");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.HasIndex("NormalizedUserName");
 
-                    b.HasKey("Id");
+				b.HasIndex("UserName");
 
-                    b.HasIndex("AuditLogId");
+				b.ToTable("AbpUsers", (string) null);
+			});
 
-                    b.HasIndex("TenantId", "ServiceName", "MethodName", "ExecutionTime");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityUserClaim", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.ToTable("AbpAuditLogActions", (string)null);
-                });
+				b.Property<string>("ClaimType")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-            modelBuilder.Entity("Volo.Abp.AuditLogging.EntityChange", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+				b.Property<string>("ClaimValue")
+					.HasMaxLength(1024)
+					.HasColumnType("character varying(1024)");
 
-                    b.Property<Guid>("AuditLogId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("AuditLogId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<DateTime>("ChangeTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("ChangeTime");
+				b.Property<Guid>("UserId")
+					.HasColumnType("uuid");
 
-                    b.Property<byte>("ChangeType")
-                        .HasColumnType("smallint")
-                        .HasColumnName("ChangeType");
+				b.HasKey("Id");
 
-                    b.Property<string>("EntityId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("EntityId");
+				b.HasIndex("UserId");
 
-                    b.Property<Guid?>("EntityTenantId")
-                        .HasColumnType("uuid");
+				b.ToTable("AbpUserClaims", (string) null);
+			});
 
-                    b.Property<string>("EntityTypeFullName")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("EntityTypeFullName");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityUserDelegation", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ExtraProperties")
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<DateTime>("EndTime")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid>("SourceUserId")
+					.HasColumnType("uuid");
 
-                    b.HasKey("Id");
+				b.Property<DateTime>("StartTime")
+					.HasColumnType("timestamp with time zone");
 
-                    b.HasIndex("AuditLogId");
+				b.Property<Guid>("TargetUserId")
+					.HasColumnType("uuid");
 
-                    b.HasIndex("TenantId", "EntityTypeFullName", "EntityId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.ToTable("AbpEntityChanges", (string)null);
-                });
+				b.HasKey("Id");
 
-            modelBuilder.Entity("Volo.Abp.AuditLogging.EntityPropertyChange", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+				b.ToTable("AbpUserDelegations", (string) null);
+			});
 
-                    b.Property<Guid>("EntityChangeId")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityUserLogin", b =>
+			{
+				b.Property<Guid>("UserId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("NewValue")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)")
-                        .HasColumnName("NewValue");
+				b.Property<string>("LoginProvider")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<string>("OriginalValue")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)")
-                        .HasColumnName("OriginalValue");
+				b.Property<string>("ProviderDisplayName")
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<string>("PropertyName")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("PropertyName");
+				b.Property<string>("ProviderKey")
+					.IsRequired()
+					.HasMaxLength(196)
+					.HasColumnType("character varying(196)");
 
-                    b.Property<string>("PropertyTypeFullName")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("PropertyTypeFullName");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.HasKey("UserId", "LoginProvider");
 
-                    b.HasKey("Id");
+				b.HasIndex("LoginProvider", "ProviderKey");
 
-                    b.HasIndex("EntityChangeId");
+				b.ToTable("AbpUserLogins", (string) null);
+			});
 
-                    b.ToTable("AbpEntityPropertyChanges", (string)null);
-                });
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityUserOrganizationUnit", b =>
+			{
+				b.Property<Guid>("OrganizationUnitId")
+					.HasColumnType("uuid");
 
-            modelBuilder.Entity("Volo.Abp.BackgroundJobs.BackgroundJobRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+				b.Property<Guid>("UserId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<bool>("IsAbandoned")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
+				b.HasKey("OrganizationUnitId", "UserId");
 
-                    b.Property<string>("JobArgs")
-                        .IsRequired()
-                        .HasMaxLength(1048576)
-                        .HasColumnType("character varying(1048576)");
+				b.HasIndex("UserId", "OrganizationUnitId");
 
-                    b.Property<string>("JobName")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+				b.ToTable("AbpUserOrganizationUnits", (string) null);
+			});
 
-                    b.Property<DateTime?>("LastTryTime")
-                        .HasColumnType("timestamp with time zone");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityUserRole", b =>
+			{
+				b.Property<Guid>("UserId")
+					.HasColumnType("uuid");
 
-                    b.Property<DateTime>("NextTryTime")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<Guid>("RoleId")
+					.HasColumnType("uuid");
 
-                    b.Property<byte>("Priority")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("smallint")
-                        .HasDefaultValue((byte)15);
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<short>("TryCount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("smallint")
-                        .HasDefaultValue((short)0);
+				b.HasKey("UserId", "RoleId");
 
-                    b.HasKey("Id");
+				b.HasIndex("RoleId", "UserId");
 
-                    b.HasIndex("IsAbandoned", "NextTryTime");
+				b.ToTable("AbpUserRoles", (string) null);
+			});
 
-                    b.ToTable("AbpBackgroundJobs", (string)null);
-                });
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityUserToken", b =>
+			{
+				b.Property<Guid>("UserId")
+					.HasColumnType("uuid");
 
-            modelBuilder.Entity("Volo.Abp.BlobStoring.Database.DatabaseBlob", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+				b.Property<string>("LoginProvider")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("Name")
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<Guid>("ContainerId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<byte[]>("Content")
-                        .HasMaxLength(2147483647)
-                        .HasColumnType("bytea");
+				b.Property<string>("Value")
+					.HasColumnType("text");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.HasKey("UserId", "LoginProvider", "Name");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.ToTable("AbpUserTokens", (string) null);
+			});
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+			modelBuilder.Entity("Volo.Abp.Identity.OrganizationUnit", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-                    b.HasKey("Id");
+				b.Property<string>("Code")
+					.IsRequired()
+					.HasMaxLength(95)
+					.HasColumnType("character varying(95)")
+					.HasColumnName("Code");
 
-                    b.HasIndex("ContainerId");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.HasIndex("TenantId", "ContainerId", "Name");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.ToTable("AbpBlobs", (string)null);
-                });
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-            modelBuilder.Entity("Volo.Abp.BlobStoring.Database.DatabaseBlobContainer", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("DisplayName")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)")
+					.HasColumnName("DisplayName");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+				b.Property<int>("EntityVersion")
+					.HasColumnType("integer");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.HasKey("Id");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.HasIndex("TenantId", "Name");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.ToTable("AbpBlobContainers", (string)null);
-                });
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-            modelBuilder.Entity("Volo.Abp.FeatureManagement.FeatureDefinitionRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("ParentId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("AllowedProviders")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("DefaultValue")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.HasKey("Id");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.HasIndex("Code");
 
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.HasIndex("ParentId");
 
-                    b.Property<string>("ExtraProperties")
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.ToTable("AbpOrganizationUnits", (string) null);
+			});
 
-                    b.Property<string>("GroupName")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+			modelBuilder.Entity("Volo.Abp.Identity.OrganizationUnitRole", b =>
+			{
+				b.Property<Guid>("OrganizationUnitId")
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsAvailableToHost")
-                        .HasColumnType("boolean");
+				b.Property<Guid>("RoleId")
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsVisibleToClients")
-                        .HasColumnType("boolean");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<string>("ParentName")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<string>("ValueType")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
+				b.HasKey("OrganizationUnitId", "RoleId");
 
-                    b.HasKey("Id");
+				b.HasIndex("RoleId", "OrganizationUnitId");
 
-                    b.HasIndex("GroupName");
+				b.ToTable("AbpOrganizationUnitRoles", (string) null);
+			});
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+			modelBuilder.Entity("Volo.Abp.OpenIddict.Applications.OpenIddictApplication", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.ToTable("AbpFeatures", (string)null);
-                });
+				b.Property<string>("ApplicationType")
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-            modelBuilder.Entity("Volo.Abp.FeatureManagement.FeatureGroupDefinitionRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+				b.Property<string>("ClientId")
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Property<string>("ClientSecret")
+					.HasColumnType("text");
 
-                    b.Property<string>("ExtraProperties")
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ClientType")
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+				b.Property<string>("ClientUri")
+					.HasColumnType("text");
 
-                    b.HasKey("Id");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+				b.Property<string>("ConsentType")
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.ToTable("AbpFeatureGroups", (string)null);
-                });
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-            modelBuilder.Entity("Volo.Abp.FeatureManagement.FeatureValue", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<string>("ProviderKey")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.Property<string>("ProviderName")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+				b.Property<string>("DisplayName")
+					.HasColumnType("text");
 
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+				b.Property<string>("DisplayNames")
+					.HasColumnType("text");
 
-                    b.HasKey("Id");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.HasIndex("Name", "ProviderName", "ProviderKey")
-                        .IsUnique();
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.ToTable("AbpFeatureValues", (string)null);
-                });
+				b.Property<string>("JsonWebKeySet")
+					.HasColumnType("text");
 
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityClaimType", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Property<string>("LogoUri")
+					.HasColumnType("text");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("Permissions")
+					.HasColumnType("text");
 
-                    b.Property<bool>("IsStatic")
-                        .HasColumnType("boolean");
+				b.Property<string>("PostLogoutRedirectUris")
+					.HasColumnType("text");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Property<string>("Properties")
+					.HasColumnType("text");
 
-                    b.Property<string>("Regex")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+				b.Property<string>("RedirectUris")
+					.HasColumnType("text");
 
-                    b.Property<string>("RegexDescription")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+				b.Property<string>("Requirements")
+					.HasColumnType("text");
 
-                    b.Property<bool>("Required")
-                        .HasColumnType("boolean");
+				b.Property<string>("Settings")
+					.HasColumnType("text");
 
-                    b.Property<int>("ValueType")
-                        .HasColumnType("integer");
+				b.HasKey("Id");
 
-                    b.HasKey("Id");
+				b.HasIndex("ClientId");
 
-                    b.ToTable("AbpClaimTypes", (string)null);
-                });
+				b.ToTable("OpenIddictApplications", (string) null);
+			});
 
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityLinkUser", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("Volo.Abp.OpenIddict.Authorizations.OpenIddictAuthorization", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.Property<Guid?>("SourceTenantId")
-                        .HasColumnType("uuid");
+				b.Property<Guid?>("ApplicationId")
+					.HasColumnType("uuid");
 
-                    b.Property<Guid>("SourceUserId")
-                        .HasColumnType("uuid");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid?>("TargetTenantId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("CreationDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("TargetUserId")
-                        .HasColumnType("uuid");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.HasKey("Id");
+				b.Property<string>("Properties")
+					.HasColumnType("text");
 
-                    b.HasIndex("SourceUserId", "SourceTenantId", "TargetUserId", "TargetTenantId")
-                        .IsUnique();
+				b.Property<string>("Scopes")
+					.HasColumnType("text");
 
-                    b.ToTable("AbpLinkUsers", (string)null);
-                });
+				b.Property<string>("Status")
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityRole", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("Subject")
+					.HasMaxLength(400)
+					.HasColumnType("character varying(400)");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("Type")
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.Property<int>("EntityVersion")
-                        .HasColumnType("integer");
+				b.HasKey("Id");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.HasIndex("ApplicationId", "Status", "Subject", "Type");
 
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("boolean")
-                        .HasColumnName("IsDefault");
+				b.ToTable("OpenIddictAuthorizations", (string) null);
+			});
 
-                    b.Property<bool>("IsPublic")
-                        .HasColumnType("boolean")
-                        .HasColumnName("IsPublic");
+			modelBuilder.Entity("Volo.Abp.OpenIddict.Scopes.OpenIddictScope", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("IsStatic")
-                        .HasColumnType("boolean")
-                        .HasColumnName("IsStatic");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<string>("NormalizedName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.HasKey("Id");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.HasIndex("NormalizedName");
+				b.Property<string>("Description")
+					.HasColumnType("text");
 
-                    b.ToTable("AbpRoles", (string)null);
-                });
+				b.Property<string>("Descriptions")
+					.HasColumnType("text");
 
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityRoleClaim", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("DisplayName")
+					.HasColumnType("text");
 
-                    b.Property<string>("ClaimType")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Property<string>("DisplayNames")
+					.HasColumnType("text");
 
-                    b.Property<string>("ClaimValue")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid>("RoleId")
-                        .HasColumnType("uuid");
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.HasKey("Id");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.HasIndex("RoleId");
+				b.Property<string>("Name")
+					.HasMaxLength(200)
+					.HasColumnType("character varying(200)");
 
-                    b.ToTable("AbpRoleClaims", (string)null);
-                });
+				b.Property<string>("Properties")
+					.HasColumnType("text");
 
-            modelBuilder.Entity("Volo.Abp.Identity.IdentitySecurityLog", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("Resources")
+					.HasColumnType("text");
 
-                    b.Property<string>("Action")
-                        .HasMaxLength(96)
-                        .HasColumnType("character varying(96)");
+				b.HasKey("Id");
 
-                    b.Property<string>("ApplicationName")
-                        .HasMaxLength(96)
-                        .HasColumnType("character varying(96)");
+				b.HasIndex("Name");
 
-                    b.Property<string>("BrowserInfo")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+				b.ToTable("OpenIddictScopes", (string) null);
+			});
 
-                    b.Property<string>("ClientId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+			modelBuilder.Entity("Volo.Abp.OpenIddict.Tokens.OpenIddictToken", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ClientIpAddress")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+				b.Property<Guid?>("ApplicationId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<Guid?>("AuthorizationId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("CorrelationId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<DateTime?>("CreationDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<DateTime?>("ExpirationDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Identity")
-                        .HasMaxLength(96)
-                        .HasColumnType("character varying(96)");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("Payload")
+					.HasColumnType("text");
 
-                    b.Property<string>("TenantName")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+				b.Property<string>("Properties")
+					.HasColumnType("text");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("RedemptionDate")
+					.HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("UserName")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Property<string>("ReferenceId")
+					.HasMaxLength(100)
+					.HasColumnType("character varying(100)");
 
-                    b.HasKey("Id");
+				b.Property<string>("Status")
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.HasIndex("TenantId", "Action");
+				b.Property<string>("Subject")
+					.HasMaxLength(400)
+					.HasColumnType("character varying(400)");
 
-                    b.HasIndex("TenantId", "ApplicationName");
+				b.Property<string>("Type")
+					.HasMaxLength(50)
+					.HasColumnType("character varying(50)");
 
-                    b.HasIndex("TenantId", "Identity");
+				b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "UserId");
+				b.HasIndex("AuthorizationId");
 
-                    b.ToTable("AbpSecurityLogs", (string)null);
-                });
+				b.HasIndex("ReferenceId");
 
-            modelBuilder.Entity("Volo.Abp.Identity.IdentitySession", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.HasIndex("ApplicationId", "Status", "Subject", "Type");
 
-                    b.Property<string>("ClientId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+				b.ToTable("OpenIddictTokens", (string) null);
+			});
 
-                    b.Property<string>("Device")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+			modelBuilder.Entity("Volo.Abp.PermissionManagement.PermissionDefinitionRecord", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.Property<string>("DeviceInfo")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+				b.Property<string>("DisplayName")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<string>("ExtraProperties")
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<string>("IpAddresses")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
+				b.Property<string>("GroupName")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<DateTime?>("LastAccessed")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<bool>("IsEnabled")
+					.HasColumnType("boolean");
 
-                    b.Property<string>("SessionId")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+				b.Property<byte>("MultiTenancySide")
+					.HasColumnType("smallint");
 
-                    b.Property<DateTime>("SignedIn")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<string>("ParentName")
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
+				b.Property<string>("Providers")
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.HasKey("Id");
+				b.Property<string>("StateCheckers")
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.HasIndex("Device");
+				b.HasKey("Id");
 
-                    b.HasIndex("SessionId");
+				b.HasIndex("GroupName");
 
-                    b.HasIndex("TenantId", "UserId");
+				b.HasIndex("Name")
+					.IsUnique();
 
-                    b.ToTable("AbpSessions", (string)null);
-                });
+				b.ToTable("AbpPermissions", (string) null);
+			});
 
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityUser", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("Volo.Abp.PermissionManagement.PermissionGrant", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.Property<int>("AccessFailedCount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0)
-                        .HasColumnName("AccessFailedCount");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Property<string>("ProviderKey")
+					.IsRequired()
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Property<string>("ProviderName")
+					.IsRequired()
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Property<Guid?>("TenantId")
+					.HasColumnType("uuid")
+					.HasColumnName("TenantId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.HasKey("Id");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.HasIndex("TenantId", "Name", "ProviderName", "ProviderKey")
+					.IsUnique();
 
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("Email");
+				b.ToTable("AbpPermissionGrants", (string) null);
+			});
 
-                    b.Property<bool>("EmailConfirmed")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("EmailConfirmed");
+			modelBuilder.Entity("Volo.Abp.PermissionManagement.PermissionGroupDefinitionRecord", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.Property<int>("EntityVersion")
-                        .HasColumnType("integer");
+				b.Property<string>("DisplayName")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Property<string>("ExtraProperties")
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
-                        .HasColumnName("IsActive");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.HasKey("Id");
 
-                    b.Property<bool>("IsExternal")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsExternal");
+				b.HasIndex("Name")
+					.IsUnique();
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+				b.ToTable("AbpPermissionGroups", (string) null);
+			});
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+			modelBuilder.Entity("Volo.Abp.SettingManagement.Setting", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("LastPasswordChangeTime")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.Property<bool>("LockoutEnabled")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("LockoutEnabled");
+				b.Property<string>("ProviderKey")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<DateTimeOffset?>("LockoutEnd")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<string>("ProviderName")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<string>("Name")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("Name");
+				b.Property<string>("Value")
+					.IsRequired()
+					.HasMaxLength(2048)
+					.HasColumnType("character varying(2048)");
 
-                    b.Property<string>("NormalizedEmail")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("NormalizedEmail");
+				b.HasKey("Id");
 
-                    b.Property<string>("NormalizedUserName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("NormalizedUserName");
+				b.HasIndex("Name", "ProviderName", "ProviderKey")
+					.IsUnique();
 
-                    b.Property<string>("PasswordHash")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("PasswordHash");
+				b.ToTable("AbpSettings", (string) null);
+			});
 
-                    b.Property<string>("PhoneNumber")
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)")
-                        .HasColumnName("PhoneNumber");
+			modelBuilder.Entity("Volo.Abp.SettingManagement.SettingDefinitionRecord", b =>
+			{
+				b.Property<Guid>("Id")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("uuid");
 
-                    b.Property<bool>("PhoneNumberConfirmed")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("PhoneNumberConfirmed");
+				b.Property<string>("DefaultValue")
+					.HasMaxLength(2048)
+					.HasColumnType("character varying(2048)");
 
-                    b.Property<string>("SecurityStamp")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("SecurityStamp");
+				b.Property<string>("Description")
+					.HasMaxLength(512)
+					.HasColumnType("character varying(512)");
 
-                    b.Property<bool>("ShouldChangePasswordOnNextLogin")
-                        .HasColumnType("boolean");
+				b.Property<string>("DisplayName")
+					.IsRequired()
+					.HasMaxLength(256)
+					.HasColumnType("character varying(256)");
 
-                    b.Property<string>("Surname")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("Surname");
+				b.Property<string>("ExtraProperties")
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<bool>("IsEncrypted")
+					.HasColumnType("boolean");
 
-                    b.Property<bool>("TwoFactorEnabled")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("TwoFactorEnabled");
+				b.Property<bool>("IsInherited")
+					.HasColumnType("boolean");
 
-                    b.Property<string>("UserName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("UserName");
+				b.Property<bool>("IsVisibleToClients")
+					.HasColumnType("boolean");
 
-                    b.HasKey("Id");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(128)
+					.HasColumnType("character varying(128)");
 
-                    b.HasIndex("Email");
+				b.Property<string>("Providers")
+					.HasMaxLength(1024)
+					.HasColumnType("character varying(1024)");
 
-                    b.HasIndex("NormalizedEmail");
+				b.HasKey("Id");
 
-                    b.HasIndex("NormalizedUserName");
+				b.HasIndex("Name")
+					.IsUnique();
 
-                    b.HasIndex("UserName");
+				b.ToTable("AbpSettingDefinitions", (string) null);
+			});
 
-                    b.ToTable("AbpUsers", (string)null);
-                });
+			modelBuilder.Entity("Volo.Abp.TenantManagement.Tenant", b =>
+			{
+				b.Property<Guid>("Id")
+					.HasColumnType("uuid");
 
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityUserClaim", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<string>("ConcurrencyStamp")
+					.IsConcurrencyToken()
+					.IsRequired()
+					.HasMaxLength(40)
+					.HasColumnType("character varying(40)")
+					.HasColumnName("ConcurrencyStamp");
 
-                    b.Property<string>("ClaimType")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Property<DateTime>("CreationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("CreationTime");
 
-                    b.Property<string>("ClaimValue")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
+				b.Property<Guid?>("CreatorId")
+					.HasColumnType("uuid")
+					.HasColumnName("CreatorId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Property<Guid?>("DeleterId")
+					.HasColumnType("uuid")
+					.HasColumnName("DeleterId");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("DeletionTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("DeletionTime");
 
-                    b.HasKey("Id");
+				b.Property<int>("EntityVersion")
+					.HasColumnType("integer");
 
-                    b.HasIndex("UserId");
+				b.Property<string>("ExtraProperties")
+					.IsRequired()
+					.HasColumnType("text")
+					.HasColumnName("ExtraProperties");
 
-                    b.ToTable("AbpUserClaims", (string)null);
-                });
+				b.Property<bool>("IsDeleted")
+					.ValueGeneratedOnAdd()
+					.HasColumnType("boolean")
+					.HasDefaultValue(false)
+					.HasColumnName("IsDeleted");
 
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityUserDelegation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+				b.Property<DateTime?>("LastModificationTime")
+					.HasColumnType("timestamp with time zone")
+					.HasColumnName("LastModificationTime");
 
-                    b.Property<DateTime>("EndTime")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<Guid?>("LastModifierId")
+					.HasColumnType("uuid")
+					.HasColumnName("LastModifierId");
 
-                    b.Property<Guid>("SourceUserId")
-                        .HasColumnType("uuid");
+				b.Property<string>("Name")
+					.IsRequired()
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<DateTime>("StartTime")
-                        .HasColumnType("timestamp with time zone");
+				b.Property<string>("NormalizedName")
+					.IsRequired()
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<Guid>("TargetUserId")
-                        .HasColumnType("uuid");
+				b.HasKey("Id");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.HasIndex("Name");
 
-                    b.HasKey("Id");
+				b.HasIndex("NormalizedName");
 
-                    b.ToTable("AbpUserDelegations", (string)null);
-                });
+				b.ToTable("AbpTenants", (string) null);
+			});
 
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityUserLogin", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("Volo.Abp.TenantManagement.TenantConnectionString", b =>
+			{
+				b.Property<Guid>("TenantId")
+					.HasColumnType("uuid");
 
-                    b.Property<string>("LoginProvider")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+				b.Property<string>("Name")
+					.HasMaxLength(64)
+					.HasColumnType("character varying(64)");
 
-                    b.Property<string>("ProviderDisplayName")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+				b.Property<string>("Value")
+					.IsRequired()
+					.HasMaxLength(1024)
+					.HasColumnType("character varying(1024)");
 
-                    b.Property<string>("ProviderKey")
-                        .IsRequired()
-                        .HasMaxLength(196)
-                        .HasColumnType("character varying(196)");
+				b.HasKey("TenantId", "Name");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.ToTable("AbpTenantConnectionStrings", (string) null);
+			});
 
-                    b.HasKey("UserId", "LoginProvider");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubject", b =>
+			{
+				b.HasOne("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroup", "ElectiveGroup")
+					.WithMany()
+					.HasForeignKey("ElectiveGroupId");
 
-                    b.HasIndex("LoginProvider", "ProviderKey");
+				b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
+					.WithMany()
+					.HasForeignKey("StandardId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                    b.ToTable("AbpUserLogins", (string)null);
-                });
+				b.HasOne("ShikshaMitra.Academic.Curriculum.Settings.Subject", "Subject")
+					.WithMany()
+					.HasForeignKey("SubjectId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityUserOrganizationUnit", b =>
-                {
-                    b.Property<Guid>("OrganizationUnitId")
-                        .HasColumnType("uuid");
+				b.Navigation("ElectiveGroup");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
+				b.Navigation("Standard");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Navigation("Subject");
+			});
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectChapter", b =>
+			{
+				b.HasOne("ShikshaMitra.Academic.Curriculum.AssignedSubject", null)
+					.WithMany("Chapters")
+					.HasForeignKey("AssignedSubjectId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectDocument", b =>
+			{
+				b.HasOne("ShikshaMitra.Academic.Curriculum.AssignedSubjectChapter", null)
+					.WithMany("Documents")
+					.HasForeignKey("AssignedSubjectChapterId");
 
-                    b.HasKey("OrganizationUnitId", "UserId");
+				b.HasOne("ShikshaMitra.Academic.Curriculum.AssignedSubject", null)
+					.WithMany("Documents")
+					.HasForeignKey("AssignedSubjectId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                    b.HasIndex("UserId", "OrganizationUnitId");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectTeacher", b =>
+			{
+				b.HasOne("ShikshaMitra.Academic.Curriculum.AssignedSubject", null)
+					.WithMany("Teachers")
+					.HasForeignKey("AssignedSubjectId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                    b.ToTable("AbpUserOrganizationUnits", (string)null);
-                });
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroup", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "AcademicMedium")
+					.WithMany()
+					.HasForeignKey("AcademicMediumId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityUserRole", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
+				b.Navigation("AcademicMedium");
+			});
 
-                    b.Property<Guid>("RoleId")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroupComponent", b =>
+			{
+				b.HasOne("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroup", "ElectiveGroup")
+					.WithMany("Subjects")
+					.HasForeignKey("ElectiveGroupId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.HasOne("ShikshaMitra.Academic.Curriculum.Settings.Subject", "Subject")
+					.WithMany()
+					.HasForeignKey("SubjectId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                    b.HasKey("UserId", "RoleId");
+				b.Navigation("ElectiveGroup");
 
-                    b.HasIndex("RoleId", "UserId");
+				b.Navigation("Subject");
+			});
 
-                    b.ToTable("AbpUserRoles", (string)null);
-                });
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.Subject", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "EducationMedium")
+					.WithMany()
+					.HasForeignKey("EducationMediumId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityUserToken", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
+				b.Navigation("EducationMedium");
+			});
 
-                    b.Property<string>("LoginProvider")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.TeacherSubjectAllocation", b =>
+			{
+				b.OwnsMany("ShikshaMitra.Academic.Curriculum.AllocatedTeacher", "Teachers", b1 =>
+				{
+					b1.Property<Guid>("TeacherSubjectAllocationId")
+						.HasColumnType("uuid");
 
-                    b.Property<string>("Name")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+					b1.Property<Guid>("TeacherId")
+						.ValueGeneratedOnAdd()
+						.HasColumnType("uuid");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+					b1.Property<DateTime>("CreationTime")
+						.HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Value")
-                        .HasColumnType("text");
+					b1.Property<Guid?>("CreatorId")
+						.HasColumnType("uuid");
 
-                    b.HasKey("UserId", "LoginProvider", "Name");
+					b1.Property<Guid?>("DeleterId")
+						.HasColumnType("uuid");
 
-                    b.ToTable("AbpUserTokens", (string)null);
-                });
+					b1.Property<DateTime?>("DeletionTime")
+						.HasColumnType("timestamp with time zone");
 
-            modelBuilder.Entity("Volo.Abp.Identity.OrganizationUnit", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+					b1.Property<bool>("IsDeleted")
+						.HasColumnType("boolean");
 
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(95)
-                        .HasColumnType("character varying(95)")
-                        .HasColumnName("Code");
+					b1.Property<DateTime?>("LastModificationTime")
+						.HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+					b1.Property<Guid?>("LastModifierId")
+						.HasColumnType("uuid");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+					b1.HasKey("TeacherSubjectAllocationId", "TeacherId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+					b1.HasIndex("TeacherId");
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+					b1.ToTable("AppAllocatedTeachers", (string) null);
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+					b1.WithOwner("Allocation")
+						.HasForeignKey("TeacherSubjectAllocationId");
 
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("DisplayName");
+					b1.Navigation("Allocation");
+				});
 
-                    b.Property<int>("EntityVersion")
-                        .HasColumnType("integer");
+				b.Navigation("Teachers");
+			});
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+			modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamDivision", b =>
+			{
+				b.HasOne("ShikshaMitra.Academic.Examination.Exams.Exam", null)
+					.WithMany("ExamDivisions")
+					.HasForeignKey("ExamId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+			modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubject", b =>
+			{
+				b.HasOne("ShikshaMitra.Academic.Examination.Exams.Exam", null)
+					.WithMany("ExamSubjects")
+					.HasForeignKey("ExamId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+			modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubjectDivision", b =>
+			{
+				b.HasOne("ShikshaMitra.Academic.Examination.Exams.ExamSubject", null)
+					.WithMany("RoomAssignments")
+					.HasForeignKey("ExamSubjectId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+			modelBuilder.Entity("ShikshaMitra.Academic.Examination.Settings.GradeRange", b =>
+			{
+				b.HasOne("ShikshaMitra.Academic.Examination.Settings.GradingScale", null)
+					.WithMany("GradeRanges")
+					.HasForeignKey("GradingScaleId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                    b.Property<Guid?>("ParentId")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentDivisionSchedule", b =>
+			{
+				b.HasOne("ShikshaMitra.Academic.HomeworkAssignment.AssignmentEntity", "Assignment")
+					.WithMany("DivisionSchedules")
+					.HasForeignKey("AssignmentId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.Navigation("Assignment");
+			});
 
-                    b.HasKey("Id");
+			modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentEntity", b =>
+			{
+				b.HasOne("ShikshaMitra.Academic.HomeworkAssignment.AssignmentType", "AssignmentType")
+					.WithMany()
+					.HasForeignKey("AssignmentTypeId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
 
-                    b.HasIndex("Code");
+				b.Navigation("AssignmentType");
+			});
 
-                    b.HasIndex("ParentId");
+			modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentType", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "AcademicMedium")
+					.WithMany()
+					.HasForeignKey("AcademicMediumId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
 
-                    b.ToTable("AbpOrganizationUnits", (string)null);
-                });
+				b.Navigation("AcademicMedium");
+			});
 
-            modelBuilder.Entity("Volo.Abp.Identity.OrganizationUnitRole", b =>
-                {
-                    b.Property<Guid>("OrganizationUnitId")
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkAssignmentEntity", b =>
+			{
+				b.HasOne("ShikshaMitra.Academic.Homework.HomeworkAssignmentType", "HomeworkAssignmentType")
+					.WithMany()
+					.HasForeignKey("HomeworkAssignmentTypeId")
+					.OnDelete(DeleteBehavior.Restrict);
 
-                    b.Property<Guid>("RoleId")
-                        .HasColumnType("uuid");
+				b.HasOne("ShikshaMitra.Academic.HomeworkAssignment.HomeworkType", "HomeworkType")
+					.WithMany()
+					.HasForeignKey("HomeworkTypeId")
+					.OnDelete(DeleteBehavior.Restrict);
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+				b.Navigation("HomeworkAssignmentType");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.Navigation("HomeworkType");
+			});
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+			modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkDivisionSchedule", b =>
+			{
+				b.HasOne("ShikshaMitra.Academic.HomeworkAssignment.HomeworkAssignmentEntity", "Homework")
+					.WithMany("DivisionSchedules")
+					.HasForeignKey("HomeworkId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                    b.HasKey("OrganizationUnitId", "RoleId");
+				b.Navigation("Homework");
+			});
 
-                    b.HasIndex("RoleId", "OrganizationUnitId");
+			modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkType", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "AcademicMedium")
+					.WithMany()
+					.HasForeignKey("AcademicMediumId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
 
-                    b.ToTable("AbpOrganizationUnitRoles", (string)null);
-                });
+				b.Navigation("AcademicMedium");
+			});
 
-            modelBuilder.Entity("Volo.Abp.OpenIddict.Applications.OpenIddictApplication", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.StudentSubmissionEntity", b =>
+			{
+				b.HasOne("ShikshaMitra.Academic.HomeworkAssignment.AssignmentEntity", "Assignment")
+					.WithMany()
+					.HasForeignKey("AssignmentId")
+					.OnDelete(DeleteBehavior.Cascade);
 
-                    b.Property<string>("ApplicationType")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+				b.HasOne("ShikshaMitra.Academic.HomeworkAssignment.HomeworkAssignmentEntity", "HomeworkAssignment")
+					.WithMany()
+					.HasForeignKey("HomeworkAssignmentId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                    b.Property<string>("ClientId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Navigation("Assignment");
 
-                    b.Property<string>("ClientSecret")
-                        .HasColumnType("text");
+				b.Navigation("HomeworkAssignment");
+			});
 
-                    b.Property<string>("ClientType")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+			modelBuilder.Entity("ShikshaMitra.Groups.Group", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", null)
+					.WithMany()
+					.HasForeignKey("AcademicYearId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
+			});
 
-                    b.Property<string>("ClientUri")
-                        .HasColumnType("text");
+			modelBuilder.Entity("ShikshaMitra.Groups.GroupEmployeeRule", b =>
+			{
+				b.HasOne("ShikshaMitra.Groups.Group", null)
+					.WithMany("EmployeeRules")
+					.HasForeignKey("GroupId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+			modelBuilder.Entity("ShikshaMitra.Groups.GroupMember", b =>
+			{
+				b.HasOne("ShikshaMitra.Groups.Group", null)
+					.WithMany("Members")
+					.HasForeignKey("GroupId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                    b.Property<string>("ConsentType")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+			modelBuilder.Entity("ShikshaMitra.Groups.GroupStudentRule", b =>
+			{
+				b.HasOne("ShikshaMitra.Groups.Group", null)
+					.WithMany("StudentRules")
+					.HasForeignKey("GroupId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+			modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.EmployeeLeave", b =>
+			{
+				b.HasOne("ShikshaMitra.HR.Employees.Employee", "Employee")
+					.WithMany()
+					.HasForeignKey("EmployeeId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+				b.HasOne("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicy", "LeavePolicy")
+					.WithMany()
+					.HasForeignKey("LeaveTypeId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+				b.Navigation("Employee");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.Navigation("LeavePolicy");
+			});
 
-                    b.Property<string>("DisplayName")
-                        .HasColumnType("text");
+			modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicy", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
+					.WithMany()
+					.HasForeignKey("EducationMediumStageId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
 
-                    b.Property<string>("DisplayNames")
-                        .HasColumnType("text");
+				b.HasOne("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeaveType", "LeaveType")
+					.WithMany()
+					.HasForeignKey("LeaveTypeId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Navigation("EducationMediumStage");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+				b.Navigation("LeaveType");
+			});
 
-                    b.Property<string>("JsonWebKeySet")
-                        .HasColumnType("text");
+			modelBuilder.Entity("ShikshaMitra.HR.Calendar.Events.Event", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", null)
+					.WithMany()
+					.HasForeignKey("AcademicYearId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
+			});
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+			modelBuilder.Entity("ShikshaMitra.HR.Calendar.Holidays.Holiday", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", null)
+					.WithMany()
+					.HasForeignKey("AcademicYearId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
+			});
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+			modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
+			{
+				b.HasOne("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", "PayrollStructure")
+					.WithMany()
+					.HasForeignKey("PayrollStructureId")
+					.OnDelete(DeleteBehavior.Restrict);
 
-                    b.Property<string>("LogoUri")
-                        .HasColumnType("text");
+				b.HasOne("ShikshaMitra.HR.Employees.Employee", "ReportingManager")
+					.WithMany()
+					.HasForeignKey("ReportingManagerId")
+					.OnDelete(DeleteBehavior.Restrict);
 
-                    b.Property<string>("Permissions")
-                        .HasColumnType("text");
+				b.HasOne("Volo.Abp.Identity.IdentityRole", "Role")
+					.WithMany()
+					.HasForeignKey("RoleId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
 
-                    b.Property<string>("PostLogoutRedirectUris")
-                        .HasColumnType("text");
+				b.HasOne("ShikshaMitra.TenantSettings.ShiftManagement", "Shift")
+					.WithMany()
+					.HasForeignKey("ShiftId")
+					.OnDelete(DeleteBehavior.Restrict);
 
-                    b.Property<string>("Properties")
-                        .HasColumnType("text");
+				b.HasOne("Volo.Abp.Identity.IdentityUser", null)
+					.WithMany()
+					.HasForeignKey("UserId")
+					.OnDelete(DeleteBehavior.Restrict);
 
-                    b.Property<string>("RedirectUris")
-                        .HasColumnType("text");
+				b.OwnsOne("ShikshaMitra.Common.Country", "Country", b1 =>
+				{
+					b1.Property<Guid>("EmployeeId")
+						.HasColumnType("uuid");
 
-                    b.Property<string>("Requirements")
-                        .HasColumnType("text");
+					b1.Property<string>("IsoCode")
+						.IsRequired()
+						.HasMaxLength(3)
+						.HasColumnType("character varying(3)")
+						.HasColumnName("CountryIsoCode");
 
-                    b.Property<string>("Settings")
-                        .HasColumnType("text");
+					b1.Property<string>("Name")
+						.IsRequired()
+						.HasMaxLength(128)
+						.HasColumnType("character varying(128)")
+						.HasColumnName("CountryName");
 
-                    b.HasKey("Id");
+					b1.HasKey("EmployeeId");
 
-                    b.HasIndex("ClientId");
+					b1.ToTable("AppEmployees");
 
-                    b.ToTable("OpenIddictApplications", (string)null);
-                });
+					b1.WithOwner()
+						.HasForeignKey("EmployeeId");
+				});
 
-            modelBuilder.Entity("Volo.Abp.OpenIddict.Authorizations.OpenIddictAuthorization", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+				b.OwnsOne("ShikshaMitra.Common.State", "State", b1 =>
+				{
+					b1.Property<Guid>("EmployeeId")
+						.HasColumnType("uuid");
 
-                    b.Property<Guid?>("ApplicationId")
-                        .HasColumnType("uuid");
+					b1.Property<string>("IsoCode")
+						.IsRequired()
+						.HasMaxLength(3)
+						.HasColumnType("character varying(3)")
+						.HasColumnName("StateIsoCode");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+					b1.Property<string>("Name")
+						.IsRequired()
+						.HasMaxLength(128)
+						.HasColumnType("character varying(128)")
+						.HasColumnName("StateName");
 
-                    b.Property<DateTime?>("CreationDate")
-                        .HasColumnType("timestamp with time zone");
+					b1.HasKey("EmployeeId");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+					b1.ToTable("AppEmployees");
 
-                    b.Property<string>("Properties")
-                        .HasColumnType("text");
+					b1.WithOwner()
+						.HasForeignKey("EmployeeId");
+				});
 
-                    b.Property<string>("Scopes")
-                        .HasColumnType("text");
+				b.OwnsMany("ShikshaMitra.HR.Employees.EmployeeDocument", "Documents", b1 =>
+				{
+					b1.Property<Guid>("Id")
+						.ValueGeneratedOnAdd()
+						.HasColumnType("uuid");
 
-                    b.Property<string>("Status")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+					b1.Property<string>("BlobName")
+						.IsRequired()
+						.HasColumnType("text");
 
-                    b.Property<string>("Subject")
-                        .HasMaxLength(400)
-                        .HasColumnType("character varying(400)");
+					b1.Property<string>("ContentType")
+						.IsRequired()
+						.HasColumnType("text");
 
-                    b.Property<string>("Type")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+					b1.Property<DateTime>("CreationTime")
+						.HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+					b1.Property<string>("DocumentName")
+						.IsRequired()
+						.HasColumnType("text");
 
-                    b.HasIndex("ApplicationId", "Status", "Subject", "Type");
+					b1.Property<Guid>("EmployeeId")
+						.HasColumnType("uuid");
 
-                    b.ToTable("OpenIddictAuthorizations", (string)null);
-                });
+					b1.Property<long>("Size")
+						.HasColumnType("bigint");
 
-            modelBuilder.Entity("Volo.Abp.OpenIddict.Scopes.OpenIddictScope", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+					b1.Property<Guid?>("TenantId")
+						.HasColumnType("uuid");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+					b1.HasKey("Id");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+					b1.HasIndex("EmployeeId");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+					b1.ToTable("AppEmployeeDocuments", (string) null);
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+					b1.WithOwner()
+						.HasForeignKey("EmployeeId");
+				});
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+				b.OwnsMany("ShikshaMitra.HR.Employees.WorkExperience", "WorkExperiences", b1 =>
+				{
+					b1.Property<Guid>("EmployeeId")
+						.HasColumnType("uuid");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
+					b1.Property<int>("__synthesizedOrdinal")
+						.ValueGeneratedOnAdd()
+						.HasColumnType("integer");
 
-                    b.Property<string>("Descriptions")
-                        .HasColumnType("text");
+					b1.Property<string>("Department")
+						.HasColumnType("text");
 
-                    b.Property<string>("DisplayName")
-                        .HasColumnType("text");
+					b1.Property<string>("Designation")
+						.HasColumnType("text");
 
-                    b.Property<string>("DisplayNames")
-                        .HasColumnType("text");
+					b1.Property<DateOnly?>("FromDate")
+						.HasColumnType("date");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+					b1.Property<string>("OrganizationAddress")
+						.HasColumnType("text");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+					b1.Property<string>("OrganizationName")
+						.HasColumnType("text");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+					b1.Property<string>("References")
+						.HasColumnType("text");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+					b1.Property<string>("Responsibilities")
+						.HasColumnType("text");
 
-                    b.Property<string>("Name")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+					b1.Property<DateOnly?>("ToDate")
+						.HasColumnType("date");
 
-                    b.Property<string>("Properties")
-                        .HasColumnType("text");
+					b1.HasKey("EmployeeId", "__synthesizedOrdinal");
 
-                    b.Property<string>("Resources")
-                        .HasColumnType("text");
+					b1.ToTable("AppEmployees");
 
-                    b.HasKey("Id");
+					b1.ToJson("WorkExperiences");
 
-                    b.HasIndex("Name");
+					b1.WithOwner()
+						.HasForeignKey("EmployeeId");
+				});
 
-                    b.ToTable("OpenIddictScopes", (string)null);
-                });
+				b.Navigation("Country");
 
-            modelBuilder.Entity("Volo.Abp.OpenIddict.Tokens.OpenIddictToken", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+				b.Navigation("Documents");
 
-                    b.Property<Guid?>("ApplicationId")
-                        .HasColumnType("uuid");
+				b.Navigation("PayrollStructure");
 
-                    b.Property<Guid?>("AuthorizationId")
-                        .HasColumnType("uuid");
+				b.Navigation("ReportingManager");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+				b.Navigation("Role");
 
-                    b.Property<DateTime?>("CreationDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Navigation("Shift");
 
-                    b.Property<DateTime?>("ExpirationDate")
-                        .HasColumnType("timestamp with time zone");
+				b.Navigation("State");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Navigation("WorkExperiences");
+			});
 
-                    b.Property<string>("Payload")
-                        .HasColumnType("text");
+			modelBuilder.Entity("ShikshaMitra.HR.Employees.EmployeeAdditionalDetails", b =>
+			{
+				b.HasOne("ShikshaMitra.HR.Employees.Employee", "Employee")
+					.WithOne("AdditionalDetails")
+					.HasForeignKey("ShikshaMitra.HR.Employees.EmployeeAdditionalDetails", "EmployeeId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                    b.Property<string>("Properties")
-                        .HasColumnType("text");
+				b.Navigation("Employee");
+			});
 
-                    b.Property<DateTime?>("RedemptionDate")
-                        .HasColumnType("timestamp with time zone");
+			modelBuilder.Entity("ShikshaMitra.HR.Employees.EmployeeAttendance", b =>
+			{
+				b.HasOne("ShikshaMitra.HR.Employees.Employee", "Employee")
+					.WithMany()
+					.HasForeignKey("EmployeeId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                    b.Property<string>("ReferenceId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+				b.Navigation("Employee");
+			});
 
-                    b.Property<string>("Status")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+			modelBuilder.Entity("ShikshaMitra.HR.Employees.Payroll.EmployeePayrollComponent", b =>
+			{
+				b.HasOne("ShikshaMitra.HR.Employees.Employee", "Employee")
+					.WithMany()
+					.HasForeignKey("EmployeeId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                    b.Property<string>("Subject")
-                        .HasMaxLength(400)
-                        .HasColumnType("character varying(400)");
+				b.Navigation("Employee");
+			});
 
-                    b.Property<string>("Type")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+			modelBuilder.Entity("ShikshaMitra.HR.Employees.Payroll.EmployeePayrollDetails", b =>
+			{
+				b.HasOne("ShikshaMitra.HR.Employees.Employee", "Employee")
+					.WithOne()
+					.HasForeignKey("ShikshaMitra.HR.Employees.Payroll.EmployeePayrollDetails", "EmployeeId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                    b.HasKey("Id");
+				b.Navigation("Employee");
+			});
 
-                    b.HasIndex("AuthorizationId");
+			modelBuilder.Entity("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
+					.WithMany()
+					.HasForeignKey("EducationMediumStageId");
 
-                    b.HasIndex("ReferenceId");
+				b.HasOne("ShikshaMitra.HR.Payroll.Settings.PayElement", "PayElement")
+					.WithMany()
+					.HasForeignKey("PayElementId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
 
-                    b.HasIndex("ApplicationId", "Status", "Subject", "Type");
+				b.Navigation("EducationMediumStage");
 
-                    b.ToTable("OpenIddictTokens", (string)null);
-                });
+				b.Navigation("PayElement");
+			});
 
-            modelBuilder.Entity("Volo.Abp.PermissionManagement.PermissionDefinitionRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.PayElement", b =>
+			{
+				b.OwnsOne("ShikshaMitra.HR.Payroll.Settings.PayElement+DependentProperties", "Dependent", b1 =>
+				{
+					b1.Property<Guid>("PayElementId")
+						.HasColumnType("uuid");
 
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+					b1.Property<float?>("Amount")
+						.HasColumnType("real");
 
-                    b.Property<string>("ExtraProperties")
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+					b1.Property<string>("ElementId")
+						.IsRequired()
+						.HasMaxLength(50)
+						.HasColumnType("character varying(50)");
 
-                    b.Property<string>("GroupName")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+					b1.Property<float?>("Percentage")
+						.HasColumnType("real");
 
-                    b.Property<bool>("IsEnabled")
-                        .HasColumnType("boolean");
+					b1.HasKey("PayElementId");
 
-                    b.Property<byte>("MultiTenancySide")
-                        .HasColumnType("smallint");
+					b1.ToTable("AppPayElements");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+					b1.WithOwner()
+						.HasForeignKey("PayElementId");
+				});
 
-                    b.Property<string>("ParentName")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+				b.Navigation("Dependent");
+			});
 
-                    b.Property<string>("Providers")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+			modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceEntry", b =>
+			{
+				b.HasOne("ShikshaMitra.Students.Attendance.AttendanceDay", "AttendanceDay")
+					.WithMany("Entries")
+					.HasForeignKey("AttendanceDayId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                    b.Property<string>("StateCheckers")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.HasOne("ShikshaMitra.Students.Student", "Student")
+					.WithMany()
+					.HasForeignKey("StudentId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
 
-                    b.HasKey("Id");
+				b.Navigation("AttendanceDay");
 
-                    b.HasIndex("GroupName");
+				b.Navigation("Student");
+			});
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+			modelBuilder.Entity("ShikshaMitra.Students.Attendances.StudentLeave", b =>
+			{
+				b.HasOne("ShikshaMitra.Students.Student", "Student")
+					.WithMany()
+					.HasForeignKey("StudentId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
 
-                    b.ToTable("AbpPermissions", (string)null);
-                });
+				b.HasOne("ShikshaMitra.Students.Attendance.Settings.StudentLeaveType", "StudentLeaveType")
+					.WithMany()
+					.HasForeignKey("StudentLeaveTypeId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
 
-            modelBuilder.Entity("Volo.Abp.PermissionManagement.PermissionGrant", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+				b.Navigation("Student");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+				b.Navigation("StudentLeaveType");
+			});
 
-                    b.Property<string>("ProviderKey")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+			modelBuilder.Entity("ShikshaMitra.Students.Student", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "AcademicMedium")
+					.WithMany()
+					.HasForeignKey("AcademicMediumId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                    b.Property<string>("ProviderName")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+				b.HasOne("ShikshaMitra.Students.StudentBankDetail", "BankDetail")
+					.WithMany()
+					.HasForeignKey("BankDetailId");
 
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
+				b.HasOne("ShikshaMitra.Students.StudentCommunicationDetail", "CommunicationDetail")
+					.WithMany()
+					.HasForeignKey("CommunicationDetailId");
 
-                    b.HasKey("Id");
+				b.HasOne("ShikshaMitra.Students.StudentFamilyDetail", "FamilyDetail")
+					.WithMany()
+					.HasForeignKey("FamilyDetailId");
 
-                    b.HasIndex("TenantId", "Name", "ProviderName", "ProviderKey")
-                        .IsUnique();
+				b.HasOne("ShikshaMitra.Students.StudentEnrollments.Settings.InquiryPreference", "InquiryPreference")
+					.WithMany()
+					.HasForeignKey("InquiryPreferenceId");
 
-                    b.ToTable("AbpPermissionGrants", (string)null);
-                });
+				b.HasOne("ShikshaMitra.Students.StudentMedicalRecord", "MedicalRecord")
+					.WithMany()
+					.HasForeignKey("MedicalRecordId");
 
-            modelBuilder.Entity("Volo.Abp.PermissionManagement.PermissionGroupDefinitionRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+				b.HasOne("ShikshaMitra.Students.StudentPreviousSchoolDetail", "PreviousSchoolDetail")
+					.WithMany()
+					.HasForeignKey("PreviousSchoolDetailId");
 
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+				b.Navigation("AcademicMedium");
 
-                    b.Property<string>("ExtraProperties")
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+				b.Navigation("BankDetail");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+				b.Navigation("CommunicationDetail");
 
-                    b.HasKey("Id");
+				b.Navigation("FamilyDetail");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+				b.Navigation("InquiryPreference");
 
-                    b.ToTable("AbpPermissionGroups", (string)null);
-                });
+				b.Navigation("MedicalRecord");
 
-            modelBuilder.Entity("Volo.Abp.SettingManagement.Setting", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+				b.Navigation("PreviousSchoolDetail");
+			});
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentAdditionalDetail", b =>
+			{
+				b.HasOne("ShikshaMitra.Students.Records.Settings.HouseSettings", "House")
+					.WithMany()
+					.HasForeignKey("HouseId");
 
-                    b.Property<string>("ProviderKey")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+				b.HasOne("ShikshaMitra.Students.Student", null)
+					.WithOne("AdditionalDetail")
+					.HasForeignKey("ShikshaMitra.Students.StudentAdditionalDetail", "Id")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                    b.Property<string>("ProviderName")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+				b.Navigation("House");
+			});
 
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentCommunicationDetail", b =>
+			{
+				b.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "EmergencyAddress", b1 =>
+				{
+					b1.Property<Guid>("StudentCommunicationDetailId")
+						.HasColumnType("uuid");
 
-                    b.HasKey("Id");
+					b1.Property<string>("Address1")
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)")
+						.HasColumnName("EmergencyAddress_BuildingNo");
 
-                    b.HasIndex("Name", "ProviderName", "ProviderKey")
-                        .IsUnique();
+					b1.Property<string>("Address2")
+						.HasMaxLength(200)
+						.HasColumnType("character varying(200)")
+						.HasColumnName("EmergencyAddress_AreaLocalityRoadName");
 
-                    b.ToTable("AbpSettings", (string)null);
-                });
+					b1.Property<string>("Address3")
+						.HasMaxLength(200)
+						.HasColumnType("character varying(200)")
+						.HasColumnName("EmergencyAddress_Landmark");
 
-            modelBuilder.Entity("Volo.Abp.SettingManagement.SettingDefinitionRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+					b1.Property<string>("City")
+						.IsRequired()
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)")
+						.HasColumnName("EmergencyAddress_City");
 
-                    b.Property<string>("DefaultValue")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
+					b1.Property<string>("Pincode")
+						.HasMaxLength(10)
+						.HasColumnType("character varying(10)")
+						.HasColumnName("EmergencyAddress_Pincode");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+					b1.HasKey("StudentCommunicationDetailId");
 
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+					b1.ToTable("StudentCommunicationDetails");
 
-                    b.Property<string>("ExtraProperties")
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+					b1.WithOwner()
+						.HasForeignKey("StudentCommunicationDetailId");
 
-                    b.Property<bool>("IsEncrypted")
-                        .HasColumnType("boolean");
+					b1.OwnsOne("ShikshaMitra.Common.Country", "Country", b2 =>
+					{
+						b2.Property<Guid>("AddressDetailsStudentCommunicationDetailId")
+							.HasColumnType("uuid");
 
-                    b.Property<bool>("IsInherited")
-                        .HasColumnType("boolean");
+						b2.Property<string>("IsoCode")
+							.IsRequired()
+							.HasMaxLength(10)
+							.HasColumnType("character varying(10)")
+							.HasColumnName("EmergencyAddress_Country_IsoCode");
 
-                    b.Property<bool>("IsVisibleToClients")
-                        .HasColumnType("boolean");
+						b2.Property<string>("Name")
+							.IsRequired()
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("EmergencyAddress_Country_Name");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+						b2.HasKey("AddressDetailsStudentCommunicationDetailId");
 
-                    b.Property<string>("Providers")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
+						b2.ToTable("StudentCommunicationDetails");
 
-                    b.HasKey("Id");
+						b2.WithOwner()
+							.HasForeignKey("AddressDetailsStudentCommunicationDetailId");
+					});
 
-                    b.HasIndex("Name")
-                        .IsUnique();
+					b1.OwnsOne("ShikshaMitra.Common.State", "State", b2 =>
+					{
+						b2.Property<Guid>("AddressDetailsStudentCommunicationDetailId")
+							.HasColumnType("uuid");
 
-                    b.ToTable("AbpSettingDefinitions", (string)null);
-                });
+						b2.Property<string>("IsoCode")
+							.IsRequired()
+							.HasMaxLength(10)
+							.HasColumnType("character varying(10)")
+							.HasColumnName("EmergencyAddress_State_IsoCode");
 
-            modelBuilder.Entity("Volo.Abp.TenantManagement.Tenant", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+						b2.Property<string>("Name")
+							.IsRequired()
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("EmergencyAddress_State_Name");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
+						b2.HasKey("AddressDetailsStudentCommunicationDetailId");
 
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
+						b2.ToTable("StudentCommunicationDetails");
 
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
+						b2.WithOwner()
+							.HasForeignKey("AddressDetailsStudentCommunicationDetailId");
+					});
 
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
+					b1.Navigation("Country");
 
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
+					b1.Navigation("State")
+						.IsRequired();
+				});
 
-                    b.Property<int>("EntityVersion")
-                        .HasColumnType("integer");
+				b.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "LocalAddress", b1 =>
+				{
+					b1.Property<Guid>("StudentCommunicationDetailId")
+						.HasColumnType("uuid");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+					b1.Property<string>("Address1")
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)")
+						.HasColumnName("LocalAddress_BuildingNo");
 
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
+					b1.Property<string>("Address2")
+						.HasMaxLength(200)
+						.HasColumnType("character varying(200)")
+						.HasColumnName("LocalAddress_AreaLocalityRoadName");
 
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
+					b1.Property<string>("Address3")
+						.HasMaxLength(200)
+						.HasColumnType("character varying(200)")
+						.HasColumnName("LocalAddress_Landmark");
 
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
+					b1.Property<string>("City")
+						.IsRequired()
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)")
+						.HasColumnName("LocalAddress_City");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+					b1.Property<string>("Pincode")
+						.HasMaxLength(10)
+						.HasColumnType("character varying(10)")
+						.HasColumnName("LocalAddress_Pincode");
 
-                    b.Property<string>("NormalizedName")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+					b1.HasKey("StudentCommunicationDetailId");
 
-                    b.HasKey("Id");
+					b1.ToTable("StudentCommunicationDetails");
 
-                    b.HasIndex("Name");
+					b1.WithOwner()
+						.HasForeignKey("StudentCommunicationDetailId");
 
-                    b.HasIndex("NormalizedName");
+					b1.OwnsOne("ShikshaMitra.Common.Country", "Country", b2 =>
+					{
+						b2.Property<Guid>("AddressDetailsStudentCommunicationDetailId")
+							.HasColumnType("uuid");
 
-                    b.ToTable("AbpTenants", (string)null);
-                });
+						b2.Property<string>("IsoCode")
+							.IsRequired()
+							.HasMaxLength(10)
+							.HasColumnType("character varying(10)")
+							.HasColumnName("LocalAddress_Country_IsoCode");
 
-            modelBuilder.Entity("Volo.Abp.TenantManagement.TenantConnectionString", b =>
-                {
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
+						b2.Property<string>("Name")
+							.IsRequired()
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("LocalAddress_Country_Name");
 
-                    b.Property<string>("Name")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+						b2.HasKey("AddressDetailsStudentCommunicationDetailId");
 
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
+						b2.ToTable("StudentCommunicationDetails");
 
-                    b.HasKey("TenantId", "Name");
+						b2.WithOwner()
+							.HasForeignKey("AddressDetailsStudentCommunicationDetailId");
+					});
 
-                    b.ToTable("AbpTenantConnectionStrings", (string)null);
-                });
+					b1.OwnsOne("ShikshaMitra.Common.State", "State", b2 =>
+					{
+						b2.Property<Guid>("AddressDetailsStudentCommunicationDetailId")
+							.HasColumnType("uuid");
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubject", b =>
-                {
-                    b.HasOne("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroup", "ElectiveGroup")
-                        .WithMany()
-                        .HasForeignKey("ElectiveGroupId");
+						b2.Property<string>("IsoCode")
+							.IsRequired()
+							.HasMaxLength(10)
+							.HasColumnType("character varying(10)")
+							.HasColumnName("LocalAddress_State_IsoCode");
 
-                    b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
-                        .WithMany()
-                        .HasForeignKey("StandardId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+						b2.Property<string>("Name")
+							.IsRequired()
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("LocalAddress_State_Name");
 
-                    b.HasOne("ShikshaMitra.Academic.Curriculum.Settings.Subject", "Subject")
-                        .WithMany()
-                        .HasForeignKey("SubjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+						b2.HasKey("AddressDetailsStudentCommunicationDetailId");
 
-                    b.Navigation("ElectiveGroup");
+						b2.ToTable("StudentCommunicationDetails");
 
-                    b.Navigation("Standard");
+						b2.WithOwner()
+							.HasForeignKey("AddressDetailsStudentCommunicationDetailId");
+					});
 
-                    b.Navigation("Subject");
-                });
+					b1.Navigation("Country");
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectChapter", b =>
-                {
-                    b.HasOne("ShikshaMitra.Academic.Curriculum.AssignedSubject", null)
-                        .WithMany("Chapters")
-                        .HasForeignKey("AssignedSubjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+					b1.Navigation("State")
+						.IsRequired();
+				});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectDocument", b =>
-                {
-                    b.HasOne("ShikshaMitra.Academic.Curriculum.AssignedSubjectChapter", null)
-                        .WithMany("Documents")
-                        .HasForeignKey("AssignedSubjectChapterId");
+				b.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "PermanentAddress", b1 =>
+				{
+					b1.Property<Guid>("StudentCommunicationDetailId")
+						.HasColumnType("uuid");
 
-                    b.HasOne("ShikshaMitra.Academic.Curriculum.AssignedSubject", null)
-                        .WithMany("Documents")
-                        .HasForeignKey("AssignedSubjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+					b1.Property<string>("Address1")
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)")
+						.HasColumnName("PermanentAddress_BuildingNo");
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectTeacher", b =>
-                {
-                    b.HasOne("ShikshaMitra.Academic.Curriculum.AssignedSubject", null)
-                        .WithMany("Teachers")
-                        .HasForeignKey("AssignedSubjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+					b1.Property<string>("Address2")
+						.HasMaxLength(200)
+						.HasColumnType("character varying(200)")
+						.HasColumnName("PermanentAddress_AreaLocalityRoadName");
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroup", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "AcademicMedium")
-                        .WithMany()
-                        .HasForeignKey("AcademicMediumId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+					b1.Property<string>("Address3")
+						.HasMaxLength(200)
+						.HasColumnType("character varying(200)")
+						.HasColumnName("PermanentAddress_Landmark");
 
-                    b.Navigation("AcademicMedium");
-                });
+					b1.Property<string>("City")
+						.IsRequired()
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)")
+						.HasColumnName("PermanentAddress_City");
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroupComponent", b =>
-                {
-                    b.HasOne("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroup", "ElectiveGroup")
-                        .WithMany("Subjects")
-                        .HasForeignKey("ElectiveGroupId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+					b1.Property<string>("Pincode")
+						.HasMaxLength(10)
+						.HasColumnType("character varying(10)")
+						.HasColumnName("PermanentAddress_Pincode");
 
-                    b.HasOne("ShikshaMitra.Academic.Curriculum.Settings.Subject", "Subject")
-                        .WithMany()
-                        .HasForeignKey("SubjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+					b1.HasKey("StudentCommunicationDetailId");
 
-                    b.Navigation("ElectiveGroup");
+					b1.ToTable("StudentCommunicationDetails");
 
-                    b.Navigation("Subject");
-                });
+					b1.WithOwner()
+						.HasForeignKey("StudentCommunicationDetailId");
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.Subject", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "EducationMedium")
-                        .WithMany()
-                        .HasForeignKey("EducationMediumId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+					b1.OwnsOne("ShikshaMitra.Common.Country", "Country", b2 =>
+					{
+						b2.Property<Guid>("AddressDetailsStudentCommunicationDetailId")
+							.HasColumnType("uuid");
 
-                    b.Navigation("EducationMedium");
-                });
+						b2.Property<string>("IsoCode")
+							.IsRequired()
+							.HasMaxLength(10)
+							.HasColumnType("character varying(10)")
+							.HasColumnName("PermanentAddress_Country_IsoCode");
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.TeacherSubjectAllocation", b =>
-                {
-                    b.OwnsMany("ShikshaMitra.Academic.Curriculum.AllocatedTeacher", "Teachers", b1 =>
-                        {
-                            b1.Property<Guid>("TeacherSubjectAllocationId")
-                                .HasColumnType("uuid");
+						b2.Property<string>("Name")
+							.IsRequired()
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("PermanentAddress_Country_Name");
 
-                            b1.Property<Guid>("TeacherId")
-                                .ValueGeneratedOnAdd()
-                                .HasColumnType("uuid");
+						b2.HasKey("AddressDetailsStudentCommunicationDetailId");
 
-                            b1.Property<DateTime>("CreationTime")
-                                .HasColumnType("timestamp with time zone");
+						b2.ToTable("StudentCommunicationDetails");
 
-                            b1.Property<Guid?>("CreatorId")
-                                .HasColumnType("uuid");
+						b2.WithOwner()
+							.HasForeignKey("AddressDetailsStudentCommunicationDetailId");
+					});
 
-                            b1.Property<Guid?>("DeleterId")
-                                .HasColumnType("uuid");
+					b1.OwnsOne("ShikshaMitra.Common.State", "State", b2 =>
+					{
+						b2.Property<Guid>("AddressDetailsStudentCommunicationDetailId")
+							.HasColumnType("uuid");
 
-                            b1.Property<DateTime?>("DeletionTime")
-                                .HasColumnType("timestamp with time zone");
+						b2.Property<string>("IsoCode")
+							.IsRequired()
+							.HasMaxLength(10)
+							.HasColumnType("character varying(10)")
+							.HasColumnName("PermanentAddress_State_IsoCode");
 
-                            b1.Property<bool>("IsDeleted")
-                                .HasColumnType("boolean");
+						b2.Property<string>("Name")
+							.IsRequired()
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("PermanentAddress_State_Name");
 
-                            b1.Property<DateTime?>("LastModificationTime")
-                                .HasColumnType("timestamp with time zone");
+						b2.HasKey("AddressDetailsStudentCommunicationDetailId");
 
-                            b1.Property<Guid?>("LastModifierId")
-                                .HasColumnType("uuid");
+						b2.ToTable("StudentCommunicationDetails");
 
-                            b1.HasKey("TeacherSubjectAllocationId", "TeacherId");
+						b2.WithOwner()
+							.HasForeignKey("AddressDetailsStudentCommunicationDetailId");
+					});
 
-                            b1.HasIndex("TeacherId");
+					b1.Navigation("Country");
 
-                            b1.ToTable("AppAllocatedTeachers", (string)null);
+					b1.Navigation("State")
+						.IsRequired();
+				});
 
-                            b1.WithOwner("Allocation")
-                                .HasForeignKey("TeacherSubjectAllocationId");
+				b.Navigation("EmergencyAddress");
 
-                            b1.Navigation("Allocation");
-                        });
+				b.Navigation("LocalAddress");
 
-                    b.Navigation("Teachers");
-                });
+				b.Navigation("PermanentAddress");
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamDivision", b =>
-                {
-                    b.HasOne("ShikshaMitra.Academic.Examination.Exams.Exam", null)
-                        .WithMany("ExamDivisions")
-                        .HasForeignKey("ExamId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+			modelBuilder.Entity("ShikshaMitra.Students.StudentContactDetail", b =>
+			{
+				b.HasOne("ShikshaMitra.Students.Student", null)
+					.WithOne("ContactDetail")
+					.HasForeignKey("ShikshaMitra.Students.StudentContactDetail", "Id")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubject", b =>
-                {
-                    b.HasOne("ShikshaMitra.Academic.Examination.Exams.Exam", null)
-                        .WithMany("ExamSubjects")
-                        .HasForeignKey("ExamId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+				b.HasOne("ShikshaMitra.Students.Student", "Student")
+					.WithMany()
+					.HasForeignKey("StudentId");
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubjectDivision", b =>
-                {
-                    b.HasOne("ShikshaMitra.Academic.Examination.Exams.ExamSubject", null)
-                        .WithMany("RoomAssignments")
-                        .HasForeignKey("ExamSubjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+				b.OwnsOne("ShikshaMitra.Common.Country", "Country", b1 =>
+				{
+					b1.Property<Guid>("StudentContactDetailId")
+						.HasColumnType("uuid");
 
-            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Settings.GradeRange", b =>
-                {
-                    b.HasOne("ShikshaMitra.Academic.Examination.Settings.GradingScale", null)
-                        .WithMany("GradeRanges")
-                        .HasForeignKey("GradingScaleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+					b1.Property<string>("IsoCode")
+						.IsRequired()
+						.HasMaxLength(10)
+						.HasColumnType("character varying(10)")
+						.HasColumnName("Country_IsoCode");
 
-            modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentDivisionSchedule", b =>
-                {
-                    b.HasOne("ShikshaMitra.Academic.HomeworkAssignment.AssignmentEntity", "Assignment")
-                        .WithMany("DivisionSchedules")
-                        .HasForeignKey("AssignmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+					b1.Property<string>("Name")
+						.IsRequired()
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)")
+						.HasColumnName("Country_Name");
 
-                    b.Navigation("Assignment");
-                });
+					b1.HasKey("StudentContactDetailId");
 
-            modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentEntity", b =>
-                {
-                    b.HasOne("ShikshaMitra.Academic.HomeworkAssignment.AssignmentType", "AssignmentType")
-                        .WithMany()
-                        .HasForeignKey("AssignmentTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+					b1.ToTable("AppStudentContactDetails");
 
-                    b.Navigation("AssignmentType");
-                });
+					b1.WithOwner()
+						.HasForeignKey("StudentContactDetailId");
+				});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentType", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "AcademicMedium")
-                        .WithMany()
-                        .HasForeignKey("AcademicMediumId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+				b.OwnsOne("ShikshaMitra.Common.State", "State", b1 =>
+				{
+					b1.Property<Guid>("StudentContactDetailId")
+						.HasColumnType("uuid");
 
-                    b.Navigation("AcademicMedium");
-                });
+					b1.Property<string>("IsoCode")
+						.IsRequired()
+						.HasMaxLength(10)
+						.HasColumnType("character varying(10)")
+						.HasColumnName("State_IsoCode");
 
-            modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkAssignmentEntity", b =>
-                {
-                    b.HasOne("ShikshaMitra.Academic.Homework.HomeworkAssignmentType", "HomeworkAssignmentType")
-                        .WithMany()
-                        .HasForeignKey("HomeworkAssignmentTypeId")
-                        .OnDelete(DeleteBehavior.Restrict);
+					b1.Property<string>("Name")
+						.IsRequired()
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)")
+						.HasColumnName("State_Name");
 
-                    b.HasOne("ShikshaMitra.Academic.HomeworkAssignment.HomeworkType", "HomeworkType")
-                        .WithMany()
-                        .HasForeignKey("HomeworkTypeId")
-                        .OnDelete(DeleteBehavior.Restrict);
+					b1.HasKey("StudentContactDetailId");
 
-                    b.Navigation("HomeworkAssignmentType");
+					b1.ToTable("AppStudentContactDetails");
 
-                    b.Navigation("HomeworkType");
-                });
+					b1.WithOwner()
+						.HasForeignKey("StudentContactDetailId");
+				});
 
-            modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkDivisionSchedule", b =>
-                {
-                    b.HasOne("ShikshaMitra.Academic.HomeworkAssignment.HomeworkAssignmentEntity", "Homework")
-                        .WithMany("DivisionSchedules")
-                        .HasForeignKey("HomeworkId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+				b.Navigation("Country");
 
-                    b.Navigation("Homework");
-                });
+				b.Navigation("State");
 
-            modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkType", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "AcademicMedium")
-                        .WithMany()
-                        .HasForeignKey("AcademicMediumId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+				b.Navigation("Student");
+			});
 
-                    b.Navigation("AcademicMedium");
-                });
+			modelBuilder.Entity("ShikshaMitra.Students.StudentDocument", b =>
+			{
+				b.HasOne("ShikshaMitra.Students.StudentEnrollments.Settings.DocumentType", null)
+					.WithMany()
+					.HasForeignKey("DocumentTypeId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
 
-            modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.StudentSubmissionEntity", b =>
-                {
-                    b.HasOne("ShikshaMitra.Academic.HomeworkAssignment.AssignmentEntity", "Assignment")
-                        .WithMany()
-                        .HasForeignKey("AssignmentId")
-                        .OnDelete(DeleteBehavior.Cascade);
+				b.HasOne("ShikshaMitra.Students.Student", null)
+					.WithMany()
+					.HasForeignKey("StudentId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                    b.HasOne("ShikshaMitra.Academic.HomeworkAssignment.HomeworkAssignmentEntity", "HomeworkAssignment")
-                        .WithMany()
-                        .HasForeignKey("HomeworkAssignmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+			modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.DocumentType", b =>
+			{
+				b.HasOne("ShikshaMitra.Students.StudentEnrollments.Settings.StudentDocumentSetting", null)
+					.WithMany("DocumentTypes")
+					.HasForeignKey("StudentDocumentSettingId");
+			});
 
-                    b.Navigation("Assignment");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentFamilyDetail", b =>
+			{
+				b.OwnsOne("ShikshaMitra.Students.ValueObjects.ParentGuardianDetails", "FatherDetails", b1 =>
+				{
+					b1.Property<Guid>("StudentFamilyDetailId")
+						.HasColumnType("uuid");
 
-                    b.Navigation("HomeworkAssignment");
-                });
+					b1.Property<string>("AadharNo")
+						.HasMaxLength(20)
+						.HasColumnType("character varying(20)");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.ConcessionType.ConcessionType", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", "AcademicYear")
-                        .WithMany()
-                        .HasForeignKey("AcademicYearId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+					b1.Property<string>("ContactNo")
+						.HasMaxLength(20)
+						.HasColumnType("character varying(20)");
 
-                    b.Navigation("AcademicYear");
-                });
+					b1.Property<DateTimeOffset?>("DateOfBirth")
+						.HasColumnType("timestamp with time zone");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeDocument", b =>
-                {
-                    b.HasOne("ShikshaMitra.Finance.Setting.ConcessionType.ConcessionType", null)
-                        .WithMany("ConcessionTypeDocuments")
-                        .HasForeignKey("ConcessionTypeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+					b1.Property<string>("Designation")
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeFeeHead", b =>
-                {
-                    b.HasOne("ShikshaMitra.Finance.Setting.ConcessionType.ConcessionType", null)
-                        .WithMany("ConcessionTypeFeeHeads")
-                        .HasForeignKey("ConcessionTypeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+					b1.Property<string>("Email")
+						.HasMaxLength(256)
+						.HasColumnType("character varying(256)");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureDetail", b =>
-                {
-                    b.HasOne("ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureStandard", null)
-                        .WithMany("FeeStructureDetails")
-                        .HasForeignKey("FeeStructureStandardId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+					b1.Property<string>("FullName")
+						.IsRequired()
+						.HasMaxLength(200)
+						.HasColumnType("character varying(200)");
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureStandard", b =>
-                {
-                    b.HasOne("ShikshaMitra.Finance.Setting.FeeStructure.FeeStructure", null)
-                        .WithMany("FeeStructureStandards")
-                        .HasForeignKey("FeeStructureId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+					b1.Property<string>("Occupation")
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)");
 
-            modelBuilder.Entity("ShikshaMitra.Groups.Group", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", null)
-                        .WithMany()
-                        .HasForeignKey("AcademicYearId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
+					b1.Property<string>("OfficeNo")
+						.HasMaxLength(20)
+						.HasColumnType("character varying(20)");
 
-            modelBuilder.Entity("ShikshaMitra.Groups.GroupEmployeeRule", b =>
-                {
-                    b.HasOne("ShikshaMitra.Groups.Group", null)
-                        .WithMany("EmployeeRules")
-                        .HasForeignKey("GroupId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+					b1.Property<string>("Organization")
+						.HasMaxLength(200)
+						.HasColumnType("character varying(200)");
 
-            modelBuilder.Entity("ShikshaMitra.Groups.GroupMember", b =>
-                {
-                    b.HasOne("ShikshaMitra.Groups.Group", null)
-                        .WithMany("Members")
-                        .HasForeignKey("GroupId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+					b1.Property<string>("Qualification")
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)");
 
-            modelBuilder.Entity("ShikshaMitra.Groups.GroupStudentRule", b =>
-                {
-                    b.HasOne("ShikshaMitra.Groups.Group", null)
-                        .WithMany("StudentRules")
-                        .HasForeignKey("GroupId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+					b1.Property<string>("YearOfPassing")
+						.HasMaxLength(10)
+						.HasColumnType("character varying(10)");
 
-            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.EmployeeLeave", b =>
-                {
-                    b.HasOne("ShikshaMitra.HR.Employees.Employee", "Employee")
-                        .WithMany()
-                        .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+					b1.HasKey("StudentFamilyDetailId");
 
-                    b.HasOne("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicy", "LeavePolicy")
-                        .WithMany()
-                        .HasForeignKey("LeaveTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+					b1.ToTable("StudentFamilyDetails");
 
-                    b.Navigation("Employee");
+					b1.WithOwner()
+						.HasForeignKey("StudentFamilyDetailId");
 
-                    b.Navigation("LeavePolicy");
-                });
+					b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "LocalAddress", b2 =>
+					{
+						b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
+							.HasColumnType("uuid");
 
-            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicy", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
-                        .WithMany()
-                        .HasForeignKey("EducationMediumStageId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+						b2.Property<string>("Address1")
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("Father_LocalAddress_BuildingNo");
 
-                    b.HasOne("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeaveType", "LeaveType")
-                        .WithMany()
-                        .HasForeignKey("LeaveTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+						b2.Property<string>("Address2")
+							.HasMaxLength(200)
+							.HasColumnType("character varying(200)")
+							.HasColumnName("Father_LocalAddress_AreaLocalityRoadName");
 
-                    b.Navigation("EducationMediumStage");
+						b2.Property<string>("Address3")
+							.HasMaxLength(200)
+							.HasColumnType("character varying(200)")
+							.HasColumnName("Father_LocalAddress_Landmark");
 
-                    b.Navigation("LeaveType");
-                });
+						b2.Property<string>("City")
+							.IsRequired()
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("Father_LocalAddress_City");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Calendar.Events.Event", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", null)
-                        .WithMany()
-                        .HasForeignKey("AcademicYearId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
+						b2.Property<string>("Pincode")
+							.HasMaxLength(10)
+							.HasColumnType("character varying(10)")
+							.HasColumnName("Father_LocalAddress_Pincode");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Calendar.Holidays.Holiday", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", null)
-                        .WithMany()
-                        .HasForeignKey("AcademicYearId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
+						b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
-                {
-                    b.HasOne("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", "PayrollStructure")
-                        .WithMany()
-                        .HasForeignKey("PayrollStructureId")
-                        .OnDelete(DeleteBehavior.Restrict);
+						b2.ToTable("StudentFamilyDetails");
 
-                    b.HasOne("ShikshaMitra.HR.Employees.Employee", "ReportingManager")
-                        .WithMany()
-                        .HasForeignKey("ReportingManagerId")
-                        .OnDelete(DeleteBehavior.Restrict);
+						b2.WithOwner()
+							.HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-                    b.HasOne("Volo.Abp.Identity.IdentityRole", "Role")
-                        .WithMany()
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+						b2.OwnsOne("ShikshaMitra.Common.Country", "Country", b3 =>
+						{
+							b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
+								.HasColumnType("uuid");
 
-                    b.HasOne("ShikshaMitra.TenantSettings.ShiftManagement", "Shift")
-                        .WithMany()
-                        .HasForeignKey("ShiftId")
-                        .OnDelete(DeleteBehavior.Restrict);
+							b3.Property<string>("IsoCode")
+								.IsRequired()
+								.HasMaxLength(10)
+								.HasColumnType("character varying(10)")
+								.HasColumnName("Father_LocalAddress_Country_IsoCode");
 
-                    b.HasOne("Volo.Abp.Identity.IdentityUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict);
+							b3.Property<string>("Name")
+								.IsRequired()
+								.HasMaxLength(100)
+								.HasColumnType("character varying(100)")
+								.HasColumnName("Father_LocalAddress_Country_Name");
 
-                    b.OwnsOne("ShikshaMitra.Common.Country", "Country", b1 =>
-                        {
-                            b1.Property<Guid>("EmployeeId")
-                                .HasColumnType("uuid");
+							b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                            b1.Property<string>("IsoCode")
-                                .IsRequired()
-                                .HasMaxLength(3)
-                                .HasColumnType("character varying(3)")
-                                .HasColumnName("CountryIsoCode");
+							b3.ToTable("StudentFamilyDetails");
 
-                            b1.Property<string>("Name")
-                                .IsRequired()
-                                .HasMaxLength(128)
-                                .HasColumnType("character varying(128)")
-                                .HasColumnName("CountryName");
+							b3.WithOwner()
+								.HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
+						});
 
-                            b1.HasKey("EmployeeId");
+						b2.OwnsOne("ShikshaMitra.Common.State", "State", b3 =>
+						{
+							b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
+								.HasColumnType("uuid");
 
-                            b1.ToTable("AppEmployees");
+							b3.Property<string>("IsoCode")
+								.IsRequired()
+								.HasMaxLength(10)
+								.HasColumnType("character varying(10)")
+								.HasColumnName("Father_LocalAddress_State_IsoCode");
 
-                            b1.WithOwner()
-                                .HasForeignKey("EmployeeId");
-                        });
+							b3.Property<string>("Name")
+								.IsRequired()
+								.HasMaxLength(100)
+								.HasColumnType("character varying(100)")
+								.HasColumnName("Father_LocalAddress_State_Name");
 
-                    b.OwnsOne("ShikshaMitra.Common.State", "State", b1 =>
-                        {
-                            b1.Property<Guid>("EmployeeId")
-                                .HasColumnType("uuid");
+							b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                            b1.Property<string>("IsoCode")
-                                .IsRequired()
-                                .HasMaxLength(3)
-                                .HasColumnType("character varying(3)")
-                                .HasColumnName("StateIsoCode");
+							b3.ToTable("StudentFamilyDetails");
 
-                            b1.Property<string>("Name")
-                                .IsRequired()
-                                .HasMaxLength(128)
-                                .HasColumnType("character varying(128)")
-                                .HasColumnName("StateName");
+							b3.WithOwner()
+								.HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
+						});
 
-                            b1.HasKey("EmployeeId");
+						b2.Navigation("Country");
 
-                            b1.ToTable("AppEmployees");
+						b2.Navigation("State")
+							.IsRequired();
+					});
 
-                            b1.WithOwner()
-                                .HasForeignKey("EmployeeId");
-                        });
+					b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "OfficeAddress", b2 =>
+					{
+						b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
+							.HasColumnType("uuid");
 
-                    b.OwnsMany("ShikshaMitra.HR.Employees.EmployeeDocument", "Documents", b1 =>
-                        {
-                            b1.Property<Guid>("Id")
-                                .ValueGeneratedOnAdd()
-                                .HasColumnType("uuid");
+						b2.Property<string>("Address1")
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("Father_OfficeAddress_BuildingNo");
 
-                            b1.Property<string>("BlobName")
-                                .IsRequired()
-                                .HasColumnType("text");
+						b2.Property<string>("Address2")
+							.HasMaxLength(200)
+							.HasColumnType("character varying(200)")
+							.HasColumnName("Father_OfficeAddress_AreaLocalityRoadName");
 
-                            b1.Property<string>("ContentType")
-                                .IsRequired()
-                                .HasColumnType("text");
+						b2.Property<string>("Address3")
+							.HasMaxLength(200)
+							.HasColumnType("character varying(200)")
+							.HasColumnName("Father_OfficeAddress_Landmark");
 
-                            b1.Property<DateTime>("CreationTime")
-                                .HasColumnType("timestamp with time zone");
+						b2.Property<string>("City")
+							.IsRequired()
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("Father_OfficeAddress_City");
 
-                            b1.Property<string>("DocumentName")
-                                .IsRequired()
-                                .HasColumnType("text");
+						b2.Property<string>("Pincode")
+							.HasMaxLength(10)
+							.HasColumnType("character varying(10)")
+							.HasColumnName("Father_OfficeAddress_Pincode");
 
-                            b1.Property<Guid>("EmployeeId")
-                                .HasColumnType("uuid");
+						b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-                            b1.Property<long>("Size")
-                                .HasColumnType("bigint");
+						b2.ToTable("StudentFamilyDetails");
 
-                            b1.Property<Guid?>("TenantId")
-                                .HasColumnType("uuid");
+						b2.WithOwner()
+							.HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-                            b1.HasKey("Id");
+						b2.OwnsOne("ShikshaMitra.Common.Country", "Country", b3 =>
+						{
+							b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
+								.HasColumnType("uuid");
 
-                            b1.HasIndex("EmployeeId");
+							b3.Property<string>("IsoCode")
+								.IsRequired()
+								.HasMaxLength(10)
+								.HasColumnType("character varying(10)")
+								.HasColumnName("Father_OfficeAddress_Country_IsoCode");
 
-                            b1.ToTable("AppEmployeeDocuments", (string)null);
+							b3.Property<string>("Name")
+								.IsRequired()
+								.HasMaxLength(100)
+								.HasColumnType("character varying(100)")
+								.HasColumnName("Father_OfficeAddress_Country_Name");
 
-                            b1.WithOwner()
-                                .HasForeignKey("EmployeeId");
-                        });
+							b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                    b.OwnsMany("ShikshaMitra.HR.Employees.WorkExperience", "WorkExperiences", b1 =>
-                        {
-                            b1.Property<Guid>("EmployeeId")
-                                .HasColumnType("uuid");
+							b3.ToTable("StudentFamilyDetails");
 
-                            b1.Property<int>("__synthesizedOrdinal")
-                                .ValueGeneratedOnAdd()
-                                .HasColumnType("integer");
+							b3.WithOwner()
+								.HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
+						});
 
-                            b1.Property<string>("Department")
-                                .HasColumnType("text");
+						b2.OwnsOne("ShikshaMitra.Common.State", "State", b3 =>
+						{
+							b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
+								.HasColumnType("uuid");
 
-                            b1.Property<string>("Designation")
-                                .HasColumnType("text");
+							b3.Property<string>("IsoCode")
+								.IsRequired()
+								.HasMaxLength(10)
+								.HasColumnType("character varying(10)")
+								.HasColumnName("Father_OfficeAddress_State_IsoCode");
 
-                            b1.Property<DateOnly?>("FromDate")
-                                .HasColumnType("date");
+							b3.Property<string>("Name")
+								.IsRequired()
+								.HasMaxLength(100)
+								.HasColumnType("character varying(100)")
+								.HasColumnName("Father_OfficeAddress_State_Name");
 
-                            b1.Property<string>("OrganizationAddress")
-                                .HasColumnType("text");
+							b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                            b1.Property<string>("OrganizationName")
-                                .HasColumnType("text");
+							b3.ToTable("StudentFamilyDetails");
 
-                            b1.Property<string>("References")
-                                .HasColumnType("text");
+							b3.WithOwner()
+								.HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
+						});
 
-                            b1.Property<string>("Responsibilities")
-                                .HasColumnType("text");
+						b2.Navigation("Country");
 
-                            b1.Property<DateOnly?>("ToDate")
-                                .HasColumnType("date");
+						b2.Navigation("State")
+							.IsRequired();
+					});
 
-                            b1.HasKey("EmployeeId", "__synthesizedOrdinal");
+					b1.Navigation("LocalAddress");
 
-                            b1.ToTable("AppEmployees");
+					b1.Navigation("OfficeAddress");
+				});
 
-                            b1.ToJson("WorkExperiences");
+				b.OwnsOne("ShikshaMitra.Students.ValueObjects.ParentGuardianDetails", "GuardianDetails", b1 =>
+				{
+					b1.Property<Guid>("StudentFamilyDetailId")
+						.HasColumnType("uuid");
 
-                            b1.WithOwner()
-                                .HasForeignKey("EmployeeId");
-                        });
+					b1.Property<string>("AadharNo")
+						.HasMaxLength(20)
+						.HasColumnType("character varying(20)");
 
-                    b.Navigation("Country");
+					b1.Property<string>("ContactNo")
+						.HasMaxLength(20)
+						.HasColumnType("character varying(20)");
 
-                    b.Navigation("Documents");
+					b1.Property<DateTimeOffset?>("DateOfBirth")
+						.HasColumnType("timestamp with time zone");
 
-                    b.Navigation("PayrollStructure");
+					b1.Property<string>("Designation")
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)");
 
-                    b.Navigation("ReportingManager");
+					b1.Property<string>("Email")
+						.HasMaxLength(256)
+						.HasColumnType("character varying(256)");
 
-                    b.Navigation("Role");
+					b1.Property<string>("FullName")
+						.IsRequired()
+						.HasMaxLength(200)
+						.HasColumnType("character varying(200)");
 
-                    b.Navigation("Shift");
+					b1.Property<string>("Occupation")
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)");
 
-                    b.Navigation("State");
+					b1.Property<string>("OfficeNo")
+						.HasMaxLength(20)
+						.HasColumnType("character varying(20)");
 
-                    b.Navigation("WorkExperiences");
-                });
+					b1.Property<string>("Organization")
+						.HasMaxLength(200)
+						.HasColumnType("character varying(200)");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Employees.EmployeeAdditionalDetails", b =>
-                {
-                    b.HasOne("ShikshaMitra.HR.Employees.Employee", "Employee")
-                        .WithOne("AdditionalDetails")
-                        .HasForeignKey("ShikshaMitra.HR.Employees.EmployeeAdditionalDetails", "EmployeeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+					b1.Property<string>("Qualification")
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)");
 
-                    b.Navigation("Employee");
-                });
+					b1.Property<string>("YearOfPassing")
+						.HasMaxLength(10)
+						.HasColumnType("character varying(10)");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Employees.EmployeeAttendance", b =>
-                {
-                    b.HasOne("ShikshaMitra.HR.Employees.Employee", "Employee")
-                        .WithMany()
-                        .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+					b1.HasKey("StudentFamilyDetailId");
 
-                    b.Navigation("Employee");
-                });
+					b1.ToTable("StudentFamilyDetails");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Employees.Payroll.EmployeePayrollComponent", b =>
-                {
-                    b.HasOne("ShikshaMitra.HR.Employees.Employee", "Employee")
-                        .WithMany()
-                        .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+					b1.WithOwner()
+						.HasForeignKey("StudentFamilyDetailId");
 
-                    b.Navigation("Employee");
-                });
+					b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "LocalAddress", b2 =>
+					{
+						b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
+							.HasColumnType("uuid");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Employees.Payroll.EmployeePayrollDetails", b =>
-                {
-                    b.HasOne("ShikshaMitra.HR.Employees.Employee", "Employee")
-                        .WithOne()
-                        .HasForeignKey("ShikshaMitra.HR.Employees.Payroll.EmployeePayrollDetails", "EmployeeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+						b2.Property<string>("Address1")
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("Guardian_LocalAddress_BuildingNo");
 
-                    b.Navigation("Employee");
-                });
+						b2.Property<string>("Address2")
+							.HasMaxLength(200)
+							.HasColumnType("character varying(200)")
+							.HasColumnName("Guardian_LocalAddress_AreaLocalityRoadName");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
-                        .WithMany()
-                        .HasForeignKey("EducationMediumStageId");
+						b2.Property<string>("Address3")
+							.HasMaxLength(200)
+							.HasColumnType("character varying(200)")
+							.HasColumnName("Guardian_LocalAddress_Landmark");
 
-                    b.HasOne("ShikshaMitra.HR.Payroll.Settings.PayElement", "PayElement")
-                        .WithMany()
-                        .HasForeignKey("PayElementId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+						b2.Property<string>("City")
+							.IsRequired()
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("Guardian_LocalAddress_City");
 
-                    b.Navigation("EducationMediumStage");
+						b2.Property<string>("Pincode")
+							.HasMaxLength(10)
+							.HasColumnType("character varying(10)")
+							.HasColumnName("Guardian_LocalAddress_Pincode");
 
-                    b.Navigation("PayElement");
-                });
+						b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-            modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.PayElement", b =>
-                {
-                    b.OwnsOne("ShikshaMitra.HR.Payroll.Settings.PayElement+DependentProperties", "Dependent", b1 =>
-                        {
-                            b1.Property<Guid>("PayElementId")
-                                .HasColumnType("uuid");
+						b2.ToTable("StudentFamilyDetails");
 
-                            b1.Property<float?>("Amount")
-                                .HasColumnType("real");
+						b2.WithOwner()
+							.HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-                            b1.Property<string>("ElementId")
-                                .IsRequired()
-                                .HasMaxLength(50)
-                                .HasColumnType("character varying(50)");
+						b2.OwnsOne("ShikshaMitra.Common.Country", "Country", b3 =>
+						{
+							b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
+								.HasColumnType("uuid");
 
-                            b1.Property<float?>("Percentage")
-                                .HasColumnType("real");
+							b3.Property<string>("IsoCode")
+								.IsRequired()
+								.HasMaxLength(10)
+								.HasColumnType("character varying(10)")
+								.HasColumnName("Guardian_LocalAddress_Country_IsoCode");
 
-                            b1.HasKey("PayElementId");
+							b3.Property<string>("Name")
+								.IsRequired()
+								.HasMaxLength(100)
+								.HasColumnType("character varying(100)")
+								.HasColumnName("Guardian_LocalAddress_Country_Name");
 
-                            b1.ToTable("AppPayElements");
+							b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                            b1.WithOwner()
-                                .HasForeignKey("PayElementId");
-                        });
+							b3.ToTable("StudentFamilyDetails");
 
-                    b.Navigation("Dependent");
-                });
+							b3.WithOwner()
+								.HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
+						});
 
-            modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceEntry", b =>
-                {
-                    b.HasOne("ShikshaMitra.Students.Attendance.AttendanceDay", "AttendanceDay")
-                        .WithMany("Entries")
-                        .HasForeignKey("AttendanceDayId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+						b2.OwnsOne("ShikshaMitra.Common.State", "State", b3 =>
+						{
+							b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
+								.HasColumnType("uuid");
 
-                    b.HasOne("ShikshaMitra.Students.Student", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+							b3.Property<string>("IsoCode")
+								.IsRequired()
+								.HasMaxLength(10)
+								.HasColumnType("character varying(10)")
+								.HasColumnName("Guardian_LocalAddress_State_IsoCode");
 
-                    b.Navigation("AttendanceDay");
+							b3.Property<string>("Name")
+								.IsRequired()
+								.HasMaxLength(100)
+								.HasColumnType("character varying(100)")
+								.HasColumnName("Guardian_LocalAddress_State_Name");
 
-                    b.Navigation("Student");
-                });
+							b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-            modelBuilder.Entity("ShikshaMitra.Students.Attendances.StudentLeave", b =>
-                {
-                    b.HasOne("ShikshaMitra.Students.Student", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+							b3.ToTable("StudentFamilyDetails");
 
-                    b.HasOne("ShikshaMitra.Students.Attendance.Settings.StudentLeaveType", "StudentLeaveType")
-                        .WithMany()
-                        .HasForeignKey("StudentLeaveTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+							b3.WithOwner()
+								.HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
+						});
 
-                    b.Navigation("Student");
+						b2.Navigation("Country");
 
-                    b.Navigation("StudentLeaveType");
-                });
+						b2.Navigation("State")
+							.IsRequired();
+					});
 
-            modelBuilder.Entity("ShikshaMitra.Students.Student", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "AcademicMedium")
-                        .WithMany()
-                        .HasForeignKey("AcademicMediumId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+					b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "OfficeAddress", b2 =>
+					{
+						b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
+							.HasColumnType("uuid");
 
-                    b.HasOne("ShikshaMitra.Students.StudentBankDetail", "BankDetail")
-                        .WithMany()
-                        .HasForeignKey("BankDetailId");
+						b2.Property<string>("Address1")
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("Guardian_OfficeAddress_BuildingNo");
 
-                    b.HasOne("ShikshaMitra.Students.StudentCommunicationDetail", "CommunicationDetail")
-                        .WithMany()
-                        .HasForeignKey("CommunicationDetailId");
+						b2.Property<string>("Address2")
+							.HasMaxLength(200)
+							.HasColumnType("character varying(200)")
+							.HasColumnName("Guardian_OfficeAddress_AreaLocalityRoadName");
 
-                    b.HasOne("ShikshaMitra.Students.StudentFamilyDetail", "FamilyDetail")
-                        .WithMany()
-                        .HasForeignKey("FamilyDetailId");
+						b2.Property<string>("Address3")
+							.HasMaxLength(200)
+							.HasColumnType("character varying(200)")
+							.HasColumnName("Guardian_OfficeAddress_Landmark");
 
-                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.Settings.InquiryPreference", "InquiryPreference")
-                        .WithMany()
-                        .HasForeignKey("InquiryPreferenceId");
+						b2.Property<string>("City")
+							.IsRequired()
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("Guardian_OfficeAddress_City");
 
-                    b.HasOne("ShikshaMitra.Students.StudentMedicalRecord", "MedicalRecord")
-                        .WithMany()
-                        .HasForeignKey("MedicalRecordId");
+						b2.Property<string>("Pincode")
+							.HasMaxLength(10)
+							.HasColumnType("character varying(10)")
+							.HasColumnName("Guardian_OfficeAddress_Pincode");
 
-                    b.HasOne("ShikshaMitra.Students.StudentPreviousSchoolDetail", "PreviousSchoolDetail")
-                        .WithMany()
-                        .HasForeignKey("PreviousSchoolDetailId");
+						b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-                    b.Navigation("AcademicMedium");
+						b2.ToTable("StudentFamilyDetails");
 
-                    b.Navigation("BankDetail");
+						b2.WithOwner()
+							.HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-                    b.Navigation("CommunicationDetail");
+						b2.OwnsOne("ShikshaMitra.Common.Country", "Country", b3 =>
+						{
+							b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
+								.HasColumnType("uuid");
 
-                    b.Navigation("FamilyDetail");
+							b3.Property<string>("IsoCode")
+								.IsRequired()
+								.HasMaxLength(10)
+								.HasColumnType("character varying(10)")
+								.HasColumnName("Guardian_OfficeAddress_Country_IsoCode");
 
-                    b.Navigation("InquiryPreference");
+							b3.Property<string>("Name")
+								.IsRequired()
+								.HasMaxLength(100)
+								.HasColumnType("character varying(100)")
+								.HasColumnName("Guardian_OfficeAddress_Country_Name");
 
-                    b.Navigation("MedicalRecord");
+							b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                    b.Navigation("PreviousSchoolDetail");
-                });
+							b3.ToTable("StudentFamilyDetails");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentAdditionalDetail", b =>
-                {
-                    b.HasOne("ShikshaMitra.Students.Records.Settings.HouseSettings", "House")
-                        .WithMany()
-                        .HasForeignKey("HouseId");
+							b3.WithOwner()
+								.HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
+						});
 
-                    b.HasOne("ShikshaMitra.Students.Student", null)
-                        .WithOne("AdditionalDetail")
-                        .HasForeignKey("ShikshaMitra.Students.StudentAdditionalDetail", "Id")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+						b2.OwnsOne("ShikshaMitra.Common.State", "State", b3 =>
+						{
+							b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
+								.HasColumnType("uuid");
 
-                    b.Navigation("House");
-                });
+							b3.Property<string>("IsoCode")
+								.IsRequired()
+								.HasMaxLength(10)
+								.HasColumnType("character varying(10)")
+								.HasColumnName("Guardian_OfficeAddress_State_IsoCode");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentCommunicationDetail", b =>
-                {
-                    b.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "EmergencyAddress", b1 =>
-                        {
-                            b1.Property<Guid>("StudentCommunicationDetailId")
-                                .HasColumnType("uuid");
+							b3.Property<string>("Name")
+								.IsRequired()
+								.HasMaxLength(100)
+								.HasColumnType("character varying(100)")
+								.HasColumnName("Guardian_OfficeAddress_State_Name");
 
-                            b1.Property<string>("Address1")
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
-                                .HasColumnName("EmergencyAddress_BuildingNo");
+							b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                            b1.Property<string>("Address2")
-                                .HasMaxLength(200)
-                                .HasColumnType("character varying(200)")
-                                .HasColumnName("EmergencyAddress_AreaLocalityRoadName");
+							b3.ToTable("StudentFamilyDetails");
 
-                            b1.Property<string>("Address3")
-                                .HasMaxLength(200)
-                                .HasColumnType("character varying(200)")
-                                .HasColumnName("EmergencyAddress_Landmark");
+							b3.WithOwner()
+								.HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
+						});
 
-                            b1.Property<string>("City")
-                                .IsRequired()
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
-                                .HasColumnName("EmergencyAddress_City");
+						b2.Navigation("Country");
 
-                            b1.Property<string>("Pincode")
-                                .HasMaxLength(10)
-                                .HasColumnType("character varying(10)")
-                                .HasColumnName("EmergencyAddress_Pincode");
+						b2.Navigation("State")
+							.IsRequired();
+					});
 
-                            b1.HasKey("StudentCommunicationDetailId");
+					b1.Navigation("LocalAddress");
 
-                            b1.ToTable("StudentCommunicationDetails");
+					b1.Navigation("OfficeAddress");
+				});
 
-                            b1.WithOwner()
-                                .HasForeignKey("StudentCommunicationDetailId");
+				b.OwnsOne("ShikshaMitra.Students.ValueObjects.ParentGuardianDetails", "MotherDetails", b1 =>
+				{
+					b1.Property<Guid>("StudentFamilyDetailId")
+						.HasColumnType("uuid");
 
-                            b1.OwnsOne("ShikshaMitra.Common.Country", "Country", b2 =>
-                                {
-                                    b2.Property<Guid>("AddressDetailsStudentCommunicationDetailId")
-                                        .HasColumnType("uuid");
+					b1.Property<string>("AadharNo")
+						.HasMaxLength(20)
+						.HasColumnType("character varying(20)");
 
-                                    b2.Property<string>("IsoCode")
-                                        .IsRequired()
-                                        .HasMaxLength(10)
-                                        .HasColumnType("character varying(10)")
-                                        .HasColumnName("EmergencyAddress_Country_IsoCode");
+					b1.Property<string>("ContactNo")
+						.HasMaxLength(20)
+						.HasColumnType("character varying(20)");
 
-                                    b2.Property<string>("Name")
-                                        .IsRequired()
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("EmergencyAddress_Country_Name");
+					b1.Property<DateTimeOffset?>("DateOfBirth")
+						.HasColumnType("timestamp with time zone");
 
-                                    b2.HasKey("AddressDetailsStudentCommunicationDetailId");
+					b1.Property<string>("Designation")
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)");
 
-                                    b2.ToTable("StudentCommunicationDetails");
+					b1.Property<string>("Email")
+						.HasMaxLength(256)
+						.HasColumnType("character varying(256)");
 
-                                    b2.WithOwner()
-                                        .HasForeignKey("AddressDetailsStudentCommunicationDetailId");
-                                });
+					b1.Property<string>("FullName")
+						.IsRequired()
+						.HasMaxLength(200)
+						.HasColumnType("character varying(200)");
 
-                            b1.OwnsOne("ShikshaMitra.Common.State", "State", b2 =>
-                                {
-                                    b2.Property<Guid>("AddressDetailsStudentCommunicationDetailId")
-                                        .HasColumnType("uuid");
+					b1.Property<string>("Occupation")
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)");
 
-                                    b2.Property<string>("IsoCode")
-                                        .IsRequired()
-                                        .HasMaxLength(10)
-                                        .HasColumnType("character varying(10)")
-                                        .HasColumnName("EmergencyAddress_State_IsoCode");
+					b1.Property<string>("OfficeNo")
+						.HasMaxLength(20)
+						.HasColumnType("character varying(20)");
 
-                                    b2.Property<string>("Name")
-                                        .IsRequired()
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("EmergencyAddress_State_Name");
+					b1.Property<string>("Organization")
+						.HasMaxLength(200)
+						.HasColumnType("character varying(200)");
 
-                                    b2.HasKey("AddressDetailsStudentCommunicationDetailId");
+					b1.Property<string>("Qualification")
+						.HasMaxLength(100)
+						.HasColumnType("character varying(100)");
 
-                                    b2.ToTable("StudentCommunicationDetails");
+					b1.Property<string>("YearOfPassing")
+						.HasMaxLength(10)
+						.HasColumnType("character varying(10)");
 
-                                    b2.WithOwner()
-                                        .HasForeignKey("AddressDetailsStudentCommunicationDetailId");
-                                });
+					b1.HasKey("StudentFamilyDetailId");
 
-                            b1.Navigation("Country");
+					b1.ToTable("StudentFamilyDetails");
 
-                            b1.Navigation("State")
-                                .IsRequired();
-                        });
+					b1.WithOwner()
+						.HasForeignKey("StudentFamilyDetailId");
 
-                    b.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "LocalAddress", b1 =>
-                        {
-                            b1.Property<Guid>("StudentCommunicationDetailId")
-                                .HasColumnType("uuid");
+					b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "LocalAddress", b2 =>
+					{
+						b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
+							.HasColumnType("uuid");
 
-                            b1.Property<string>("Address1")
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
-                                .HasColumnName("LocalAddress_BuildingNo");
+						b2.Property<string>("Address1")
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("Mother_LocalAddress_BuildingNo");
 
-                            b1.Property<string>("Address2")
-                                .HasMaxLength(200)
-                                .HasColumnType("character varying(200)")
-                                .HasColumnName("LocalAddress_AreaLocalityRoadName");
+						b2.Property<string>("Address2")
+							.HasMaxLength(200)
+							.HasColumnType("character varying(200)")
+							.HasColumnName("Mother_LocalAddress_AreaLocalityRoadName");
 
-                            b1.Property<string>("Address3")
-                                .HasMaxLength(200)
-                                .HasColumnType("character varying(200)")
-                                .HasColumnName("LocalAddress_Landmark");
+						b2.Property<string>("Address3")
+							.HasMaxLength(200)
+							.HasColumnType("character varying(200)")
+							.HasColumnName("Mother_LocalAddress_Landmark");
 
-                            b1.Property<string>("City")
-                                .IsRequired()
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
-                                .HasColumnName("LocalAddress_City");
+						b2.Property<string>("City")
+							.IsRequired()
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("Mother_LocalAddress_City");
 
-                            b1.Property<string>("Pincode")
-                                .HasMaxLength(10)
-                                .HasColumnType("character varying(10)")
-                                .HasColumnName("LocalAddress_Pincode");
+						b2.Property<string>("Pincode")
+							.HasMaxLength(10)
+							.HasColumnType("character varying(10)")
+							.HasColumnName("Mother_LocalAddress_Pincode");
 
-                            b1.HasKey("StudentCommunicationDetailId");
+						b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-                            b1.ToTable("StudentCommunicationDetails");
+						b2.ToTable("StudentFamilyDetails");
 
-                            b1.WithOwner()
-                                .HasForeignKey("StudentCommunicationDetailId");
+						b2.WithOwner()
+							.HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-                            b1.OwnsOne("ShikshaMitra.Common.Country", "Country", b2 =>
-                                {
-                                    b2.Property<Guid>("AddressDetailsStudentCommunicationDetailId")
-                                        .HasColumnType("uuid");
+						b2.OwnsOne("ShikshaMitra.Common.Country", "Country", b3 =>
+						{
+							b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
+								.HasColumnType("uuid");
 
-                                    b2.Property<string>("IsoCode")
-                                        .IsRequired()
-                                        .HasMaxLength(10)
-                                        .HasColumnType("character varying(10)")
-                                        .HasColumnName("LocalAddress_Country_IsoCode");
+							b3.Property<string>("IsoCode")
+								.IsRequired()
+								.HasMaxLength(10)
+								.HasColumnType("character varying(10)")
+								.HasColumnName("Mother_LocalAddress_Country_IsoCode");
 
-                                    b2.Property<string>("Name")
-                                        .IsRequired()
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("LocalAddress_Country_Name");
+							b3.Property<string>("Name")
+								.IsRequired()
+								.HasMaxLength(100)
+								.HasColumnType("character varying(100)")
+								.HasColumnName("Mother_LocalAddress_Country_Name");
 
-                                    b2.HasKey("AddressDetailsStudentCommunicationDetailId");
+							b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                                    b2.ToTable("StudentCommunicationDetails");
+							b3.ToTable("StudentFamilyDetails");
 
-                                    b2.WithOwner()
-                                        .HasForeignKey("AddressDetailsStudentCommunicationDetailId");
-                                });
+							b3.WithOwner()
+								.HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
+						});
 
-                            b1.OwnsOne("ShikshaMitra.Common.State", "State", b2 =>
-                                {
-                                    b2.Property<Guid>("AddressDetailsStudentCommunicationDetailId")
-                                        .HasColumnType("uuid");
+						b2.OwnsOne("ShikshaMitra.Common.State", "State", b3 =>
+						{
+							b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
+								.HasColumnType("uuid");
 
-                                    b2.Property<string>("IsoCode")
-                                        .IsRequired()
-                                        .HasMaxLength(10)
-                                        .HasColumnType("character varying(10)")
-                                        .HasColumnName("LocalAddress_State_IsoCode");
+							b3.Property<string>("IsoCode")
+								.IsRequired()
+								.HasMaxLength(10)
+								.HasColumnType("character varying(10)")
+								.HasColumnName("Mother_LocalAddress_State_IsoCode");
 
-                                    b2.Property<string>("Name")
-                                        .IsRequired()
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("LocalAddress_State_Name");
+							b3.Property<string>("Name")
+								.IsRequired()
+								.HasMaxLength(100)
+								.HasColumnType("character varying(100)")
+								.HasColumnName("Mother_LocalAddress_State_Name");
 
-                                    b2.HasKey("AddressDetailsStudentCommunicationDetailId");
+							b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                                    b2.ToTable("StudentCommunicationDetails");
+							b3.ToTable("StudentFamilyDetails");
 
-                                    b2.WithOwner()
-                                        .HasForeignKey("AddressDetailsStudentCommunicationDetailId");
-                                });
+							b3.WithOwner()
+								.HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
+						});
 
-                            b1.Navigation("Country");
+						b2.Navigation("Country");
 
-                            b1.Navigation("State")
-                                .IsRequired();
-                        });
+						b2.Navigation("State")
+							.IsRequired();
+					});
 
-                    b.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "PermanentAddress", b1 =>
-                        {
-                            b1.Property<Guid>("StudentCommunicationDetailId")
-                                .HasColumnType("uuid");
+					b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "OfficeAddress", b2 =>
+					{
+						b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
+							.HasColumnType("uuid");
 
-                            b1.Property<string>("Address1")
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
-                                .HasColumnName("PermanentAddress_BuildingNo");
+						b2.Property<string>("Address1")
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("Mother_OfficeAddress_BuildingNo");
 
-                            b1.Property<string>("Address2")
-                                .HasMaxLength(200)
-                                .HasColumnType("character varying(200)")
-                                .HasColumnName("PermanentAddress_AreaLocalityRoadName");
+						b2.Property<string>("Address2")
+							.HasMaxLength(200)
+							.HasColumnType("character varying(200)")
+							.HasColumnName("Mother_OfficeAddress_AreaLocalityRoadName");
 
-                            b1.Property<string>("Address3")
-                                .HasMaxLength(200)
-                                .HasColumnType("character varying(200)")
-                                .HasColumnName("PermanentAddress_Landmark");
+						b2.Property<string>("Address3")
+							.HasMaxLength(200)
+							.HasColumnType("character varying(200)")
+							.HasColumnName("Mother_OfficeAddress_Landmark");
 
-                            b1.Property<string>("City")
-                                .IsRequired()
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
-                                .HasColumnName("PermanentAddress_City");
+						b2.Property<string>("City")
+							.IsRequired()
+							.HasMaxLength(100)
+							.HasColumnType("character varying(100)")
+							.HasColumnName("Mother_OfficeAddress_City");
 
-                            b1.Property<string>("Pincode")
-                                .HasMaxLength(10)
-                                .HasColumnType("character varying(10)")
-                                .HasColumnName("PermanentAddress_Pincode");
+						b2.Property<string>("Pincode")
+							.HasMaxLength(10)
+							.HasColumnType("character varying(10)")
+							.HasColumnName("Mother_OfficeAddress_Pincode");
 
-                            b1.HasKey("StudentCommunicationDetailId");
+						b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-                            b1.ToTable("StudentCommunicationDetails");
+						b2.ToTable("StudentFamilyDetails");
 
-                            b1.WithOwner()
-                                .HasForeignKey("StudentCommunicationDetailId");
+						b2.WithOwner()
+							.HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
 
-                            b1.OwnsOne("ShikshaMitra.Common.Country", "Country", b2 =>
-                                {
-                                    b2.Property<Guid>("AddressDetailsStudentCommunicationDetailId")
-                                        .HasColumnType("uuid");
+						b2.OwnsOne("ShikshaMitra.Common.Country", "Country", b3 =>
+						{
+							b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
+								.HasColumnType("uuid");
 
-                                    b2.Property<string>("IsoCode")
-                                        .IsRequired()
-                                        .HasMaxLength(10)
-                                        .HasColumnType("character varying(10)")
-                                        .HasColumnName("PermanentAddress_Country_IsoCode");
+							b3.Property<string>("IsoCode")
+								.IsRequired()
+								.HasMaxLength(10)
+								.HasColumnType("character varying(10)")
+								.HasColumnName("Mother_OfficeAddress_Country_IsoCode");
 
-                                    b2.Property<string>("Name")
-                                        .IsRequired()
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("PermanentAddress_Country_Name");
+							b3.Property<string>("Name")
+								.IsRequired()
+								.HasMaxLength(100)
+								.HasColumnType("character varying(100)")
+								.HasColumnName("Mother_OfficeAddress_Country_Name");
 
-                                    b2.HasKey("AddressDetailsStudentCommunicationDetailId");
+							b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                                    b2.ToTable("StudentCommunicationDetails");
+							b3.ToTable("StudentFamilyDetails");
 
-                                    b2.WithOwner()
-                                        .HasForeignKey("AddressDetailsStudentCommunicationDetailId");
-                                });
+							b3.WithOwner()
+								.HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
+						});
 
-                            b1.OwnsOne("ShikshaMitra.Common.State", "State", b2 =>
-                                {
-                                    b2.Property<Guid>("AddressDetailsStudentCommunicationDetailId")
-                                        .HasColumnType("uuid");
+						b2.OwnsOne("ShikshaMitra.Common.State", "State", b3 =>
+						{
+							b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
+								.HasColumnType("uuid");
 
-                                    b2.Property<string>("IsoCode")
-                                        .IsRequired()
-                                        .HasMaxLength(10)
-                                        .HasColumnType("character varying(10)")
-                                        .HasColumnName("PermanentAddress_State_IsoCode");
+							b3.Property<string>("IsoCode")
+								.IsRequired()
+								.HasMaxLength(10)
+								.HasColumnType("character varying(10)")
+								.HasColumnName("Mother_OfficeAddress_State_IsoCode");
 
-                                    b2.Property<string>("Name")
-                                        .IsRequired()
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("PermanentAddress_State_Name");
+							b3.Property<string>("Name")
+								.IsRequired()
+								.HasMaxLength(100)
+								.HasColumnType("character varying(100)")
+								.HasColumnName("Mother_OfficeAddress_State_Name");
 
-                                    b2.HasKey("AddressDetailsStudentCommunicationDetailId");
+							b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
 
-                                    b2.ToTable("StudentCommunicationDetails");
+							b3.ToTable("StudentFamilyDetails");
 
-                                    b2.WithOwner()
-                                        .HasForeignKey("AddressDetailsStudentCommunicationDetailId");
-                                });
+							b3.WithOwner()
+								.HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
+						});
 
-                            b1.Navigation("Country");
+						b2.Navigation("Country");
 
-                            b1.Navigation("State")
-                                .IsRequired();
-                        });
+						b2.Navigation("State")
+							.IsRequired();
+					});
 
-                    b.Navigation("EmergencyAddress");
+					b1.Navigation("LocalAddress");
 
-                    b.Navigation("LocalAddress");
+					b1.Navigation("OfficeAddress");
+				});
 
-                    b.Navigation("PermanentAddress");
-                });
+				b.Navigation("FatherDetails");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentContactDetail", b =>
-                {
-                    b.HasOne("ShikshaMitra.Students.Student", null)
-                        .WithOne("ContactDetail")
-                        .HasForeignKey("ShikshaMitra.Students.StudentContactDetail", "Id")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+				b.Navigation("GuardianDetails");
 
-                    b.HasOne("ShikshaMitra.Students.Student", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId");
+				b.Navigation("MotherDetails");
+			});
 
-                    b.OwnsOne("ShikshaMitra.Common.Country", "Country", b1 =>
-                        {
-                            b1.Property<Guid>("StudentContactDetailId")
-                                .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.Students.StudentNote", b =>
+			{
+				b.HasOne("ShikshaMitra.Students.Student", null)
+					.WithMany("Notes")
+					.HasForeignKey("StudentId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                            b1.Property<string>("IsoCode")
-                                .IsRequired()
-                                .HasMaxLength(10)
-                                .HasColumnType("character varying(10)")
-                                .HasColumnName("Country_IsoCode");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.Divisions.Division", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
+					.WithMany("Divisions")
+					.HasForeignKey("StandardId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                            b1.Property<string>("Name")
-                                .IsRequired()
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
-                                .HasColumnName("Country_Name");
+				b.Navigation("Standard");
+			});
 
-                            b1.HasKey("StudentContactDetailId");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", "AcademicYear")
+					.WithMany()
+					.HasForeignKey("AcademicYearId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                            b1.ToTable("AppStudentContactDetails");
+				b.Navigation("AcademicYear");
+			});
 
-                            b1.WithOwner()
-                                .HasForeignKey("StudentContactDetailId");
-                        });
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "EducationMedium")
+					.WithMany("EducationMediumStages")
+					.HasForeignKey("EducationMediumId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                    b.OwnsOne("ShikshaMitra.Common.State", "State", b1 =>
-                        {
-                            b1.Property<Guid>("StudentContactDetailId")
-                                .HasColumnType("uuid");
+				b.Navigation("EducationMedium");
+			});
 
-                            b1.Property<string>("IsoCode")
-                                .IsRequired()
-                                .HasMaxLength(10)
-                                .HasColumnType("character varying(10)")
-                                .HasColumnName("State_IsoCode");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", null)
+					.WithMany("EducationMediums")
+					.HasForeignKey("EducationBoardId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                            b1.Property<string>("Name")
-                                .IsRequired()
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
-                                .HasColumnName("State_Name");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Floor", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Building", "Building")
+					.WithMany("Floors")
+					.HasForeignKey("BuildingId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                            b1.HasKey("StudentContactDetailId");
+				b.Navigation("Building");
+			});
 
-                            b1.ToTable("AppStudentContactDetails");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Rooms.Room", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Building", null)
+					.WithMany()
+					.HasForeignKey("BuildingId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
 
-                            b1.WithOwner()
-                                .HasForeignKey("StudentContactDetailId");
-                        });
+				b.HasOne("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Floor", null)
+					.WithMany()
+					.HasForeignKey("FloorId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
 
-                    b.Navigation("Country");
+				b.HasOne("ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes.RoomType", null)
+					.WithMany()
+					.HasForeignKey("RoomTypeId")
+					.OnDelete(DeleteBehavior.Restrict)
+					.IsRequired();
+			});
 
-                    b.Navigation("State");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.Standards.Standard", b =>
+			{
+				b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
+					.WithMany("Standards")
+					.HasForeignKey("EducationMediumStageId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                    b.Navigation("Student");
-                });
+				b.HasOne("ShikshaMitra.TenantSettings.ShiftManagement", "Shift")
+					.WithMany()
+					.HasForeignKey("ShiftId");
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentDocument", b =>
-                {
-                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.Settings.DocumentType", null)
-                        .WithMany()
-                        .HasForeignKey("DocumentTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+				b.Navigation("EducationMediumStage");
 
-                    b.HasOne("ShikshaMitra.Students.Student", null)
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+				b.Navigation("Shift");
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.DocumentType", b =>
-                {
-                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.Settings.StudentDocumentSetting", null)
-                        .WithMany("DocumentTypes")
-                        .HasForeignKey("StudentDocumentSettingId");
-                });
+			modelBuilder.Entity("Volo.Abp.AuditLogging.AuditLogAction", b =>
+			{
+				b.HasOne("Volo.Abp.AuditLogging.AuditLog", null)
+					.WithMany("Actions")
+					.HasForeignKey("AuditLogId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-            modelBuilder.Entity("ShikshaMitra.Students.StudentFamilyDetail", b =>
-                {
-                    b.OwnsOne("ShikshaMitra.Students.ValueObjects.ParentGuardianDetails", "FatherDetails", b1 =>
-                        {
-                            b1.Property<Guid>("StudentFamilyDetailId")
-                                .HasColumnType("uuid");
+			modelBuilder.Entity("Volo.Abp.AuditLogging.EntityChange", b =>
+			{
+				b.HasOne("Volo.Abp.AuditLogging.AuditLog", null)
+					.WithMany("EntityChanges")
+					.HasForeignKey("AuditLogId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                            b1.Property<string>("AadharNo")
-                                .HasMaxLength(20)
-                                .HasColumnType("character varying(20)");
+			modelBuilder.Entity("Volo.Abp.AuditLogging.EntityPropertyChange", b =>
+			{
+				b.HasOne("Volo.Abp.AuditLogging.EntityChange", null)
+					.WithMany("PropertyChanges")
+					.HasForeignKey("EntityChangeId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                            b1.Property<string>("ContactNo")
-                                .HasMaxLength(20)
-                                .HasColumnType("character varying(20)");
+			modelBuilder.Entity("Volo.Abp.BlobStoring.Database.DatabaseBlob", b =>
+			{
+				b.HasOne("Volo.Abp.BlobStoring.Database.DatabaseBlobContainer", null)
+					.WithMany()
+					.HasForeignKey("ContainerId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                            b1.Property<DateTimeOffset?>("DateOfBirth")
-                                .HasColumnType("timestamp with time zone");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityRoleClaim", b =>
+			{
+				b.HasOne("Volo.Abp.Identity.IdentityRole", null)
+					.WithMany("Claims")
+					.HasForeignKey("RoleId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                            b1.Property<string>("Designation")
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityUserClaim", b =>
+			{
+				b.HasOne("Volo.Abp.Identity.IdentityUser", null)
+					.WithMany("Claims")
+					.HasForeignKey("UserId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                            b1.Property<string>("Email")
-                                .HasMaxLength(256)
-                                .HasColumnType("character varying(256)");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityUserLogin", b =>
+			{
+				b.HasOne("Volo.Abp.Identity.IdentityUser", null)
+					.WithMany("Logins")
+					.HasForeignKey("UserId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                            b1.Property<string>("FullName")
-                                .IsRequired()
-                                .HasMaxLength(200)
-                                .HasColumnType("character varying(200)");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityUserOrganizationUnit", b =>
+			{
+				b.HasOne("Volo.Abp.Identity.OrganizationUnit", null)
+					.WithMany()
+					.HasForeignKey("OrganizationUnitId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                            b1.Property<string>("Occupation")
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)");
+				b.HasOne("Volo.Abp.Identity.IdentityUser", null)
+					.WithMany("OrganizationUnits")
+					.HasForeignKey("UserId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                            b1.Property<string>("OfficeNo")
-                                .HasMaxLength(20)
-                                .HasColumnType("character varying(20)");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityUserRole", b =>
+			{
+				b.HasOne("Volo.Abp.Identity.IdentityRole", null)
+					.WithMany()
+					.HasForeignKey("RoleId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                            b1.Property<string>("Organization")
-                                .HasMaxLength(200)
-                                .HasColumnType("character varying(200)");
+				b.HasOne("Volo.Abp.Identity.IdentityUser", null)
+					.WithMany("Roles")
+					.HasForeignKey("UserId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                            b1.Property<string>("Qualification")
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityUserToken", b =>
+			{
+				b.HasOne("Volo.Abp.Identity.IdentityUser", null)
+					.WithMany("Tokens")
+					.HasForeignKey("UserId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                            b1.Property<string>("YearOfPassing")
-                                .HasMaxLength(10)
-                                .HasColumnType("character varying(10)");
+			modelBuilder.Entity("Volo.Abp.Identity.OrganizationUnit", b =>
+			{
+				b.HasOne("Volo.Abp.Identity.OrganizationUnit", null)
+					.WithMany()
+					.HasForeignKey("ParentId");
+			});
 
-                            b1.HasKey("StudentFamilyDetailId");
+			modelBuilder.Entity("Volo.Abp.Identity.OrganizationUnitRole", b =>
+			{
+				b.HasOne("Volo.Abp.Identity.OrganizationUnit", null)
+					.WithMany("Roles")
+					.HasForeignKey("OrganizationUnitId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
 
-                            b1.ToTable("StudentFamilyDetails");
+				b.HasOne("Volo.Abp.Identity.IdentityRole", null)
+					.WithMany()
+					.HasForeignKey("RoleId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                            b1.WithOwner()
-                                .HasForeignKey("StudentFamilyDetailId");
+			modelBuilder.Entity("Volo.Abp.OpenIddict.Authorizations.OpenIddictAuthorization", b =>
+			{
+				b.HasOne("Volo.Abp.OpenIddict.Applications.OpenIddictApplication", null)
+					.WithMany()
+					.HasForeignKey("ApplicationId");
+			});
 
-                            b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "LocalAddress", b2 =>
-                                {
-                                    b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
-                                        .HasColumnType("uuid");
+			modelBuilder.Entity("Volo.Abp.OpenIddict.Tokens.OpenIddictToken", b =>
+			{
+				b.HasOne("Volo.Abp.OpenIddict.Applications.OpenIddictApplication", null)
+					.WithMany()
+					.HasForeignKey("ApplicationId");
 
-                                    b2.Property<string>("Address1")
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("Father_LocalAddress_BuildingNo");
+				b.HasOne("Volo.Abp.OpenIddict.Authorizations.OpenIddictAuthorization", null)
+					.WithMany()
+					.HasForeignKey("AuthorizationId");
+			});
 
-                                    b2.Property<string>("Address2")
-                                        .HasMaxLength(200)
-                                        .HasColumnType("character varying(200)")
-                                        .HasColumnName("Father_LocalAddress_AreaLocalityRoadName");
+			modelBuilder.Entity("Volo.Abp.TenantManagement.TenantConnectionString", b =>
+			{
+				b.HasOne("Volo.Abp.TenantManagement.Tenant", null)
+					.WithMany("ConnectionStrings")
+					.HasForeignKey("TenantId")
+					.OnDelete(DeleteBehavior.Cascade)
+					.IsRequired();
+			});
 
-                                    b2.Property<string>("Address3")
-                                        .HasMaxLength(200)
-                                        .HasColumnType("character varying(200)")
-                                        .HasColumnName("Father_LocalAddress_Landmark");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubject", b =>
+			{
+				b.Navigation("Chapters");
 
-                                    b2.Property<string>("City")
-                                        .IsRequired()
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("Father_LocalAddress_City");
+				b.Navigation("Documents");
 
-                                    b2.Property<string>("Pincode")
-                                        .HasMaxLength(10)
-                                        .HasColumnType("character varying(10)")
-                                        .HasColumnName("Father_LocalAddress_Pincode");
+				b.Navigation("Teachers");
+			});
 
-                                    b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectChapter", b =>
+			{
+				b.Navigation("Documents");
+			});
 
-                                    b2.ToTable("StudentFamilyDetails");
+			modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroup", b =>
+			{
+				b.Navigation("Subjects");
+			});
 
-                                    b2.WithOwner()
-                                        .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
+			modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.Exam", b =>
+			{
+				b.Navigation("ExamDivisions");
 
-                                    b2.OwnsOne("ShikshaMitra.Common.Country", "Country", b3 =>
-                                        {
-                                            b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
-                                                .HasColumnType("uuid");
+				b.Navigation("ExamSubjects");
+			});
 
-                                            b3.Property<string>("IsoCode")
-                                                .IsRequired()
-                                                .HasMaxLength(10)
-                                                .HasColumnType("character varying(10)")
-                                                .HasColumnName("Father_LocalAddress_Country_IsoCode");
+			modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubject", b =>
+			{
+				b.Navigation("RoomAssignments");
+			});
 
-                                            b3.Property<string>("Name")
-                                                .IsRequired()
-                                                .HasMaxLength(100)
-                                                .HasColumnType("character varying(100)")
-                                                .HasColumnName("Father_LocalAddress_Country_Name");
+			modelBuilder.Entity("ShikshaMitra.Academic.Examination.Settings.GradingScale", b =>
+			{
+				b.Navigation("GradeRanges");
+			});
 
-                                            b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
+			modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentEntity", b =>
+			{
+				b.Navigation("DivisionSchedules");
+			});
 
-                                            b3.ToTable("StudentFamilyDetails");
+			modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkAssignmentEntity", b =>
+			{
+				b.Navigation("DivisionSchedules");
+			});
 
-                                            b3.WithOwner()
-                                                .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-                                        });
+			modelBuilder.Entity("ShikshaMitra.Groups.Group", b =>
+			{
+				b.Navigation("EmployeeRules");
 
-                                    b2.OwnsOne("ShikshaMitra.Common.State", "State", b3 =>
-                                        {
-                                            b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
-                                                .HasColumnType("uuid");
+				b.Navigation("Members");
 
-                                            b3.Property<string>("IsoCode")
-                                                .IsRequired()
-                                                .HasMaxLength(10)
-                                                .HasColumnType("character varying(10)")
-                                                .HasColumnName("Father_LocalAddress_State_IsoCode");
+				b.Navigation("StudentRules");
+			});
 
-                                            b3.Property<string>("Name")
-                                                .IsRequired()
-                                                .HasMaxLength(100)
-                                                .HasColumnType("character varying(100)")
-                                                .HasColumnName("Father_LocalAddress_State_Name");
+			modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
+			{
+				b.Navigation("AdditionalDetails");
+			});
 
-                                            b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
+			modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceDay", b =>
+			{
+				b.Navigation("Entries");
+			});
 
-                                            b3.ToTable("StudentFamilyDetails");
+			modelBuilder.Entity("ShikshaMitra.Students.Student", b =>
+			{
+				b.Navigation("AdditionalDetail");
 
-                                            b3.WithOwner()
-                                                .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-                                        });
+				b.Navigation("ContactDetail");
 
-                                    b2.Navigation("Country");
+				b.Navigation("Notes");
+			});
 
-                                    b2.Navigation("State")
-                                        .IsRequired();
-                                });
+			modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.StudentDocumentSetting", b =>
+			{
+				b.Navigation("DocumentTypes");
+			});
 
-                            b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "OfficeAddress", b2 =>
-                                {
-                                    b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
-                                        .HasColumnType("uuid");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", b =>
+			{
+				b.Navigation("EducationMediums");
+			});
 
-                                    b2.Property<string>("Address1")
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("Father_OfficeAddress_BuildingNo");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", b =>
+			{
+				b.Navigation("Standards");
+			});
 
-                                    b2.Property<string>("Address2")
-                                        .HasMaxLength(200)
-                                        .HasColumnType("character varying(200)")
-                                        .HasColumnName("Father_OfficeAddress_AreaLocalityRoadName");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", b =>
+			{
+				b.Navigation("EducationMediumStages");
+			});
 
-                                    b2.Property<string>("Address3")
-                                        .HasMaxLength(200)
-                                        .HasColumnType("character varying(200)")
-                                        .HasColumnName("Father_OfficeAddress_Landmark");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Building", b =>
+			{
+				b.Navigation("Floors");
+			});
 
-                                    b2.Property<string>("City")
-                                        .IsRequired()
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("Father_OfficeAddress_City");
+			modelBuilder.Entity("ShikshaMitra.TenantSettings.Standards.Standard", b =>
+			{
+				b.Navigation("Divisions");
+			});
 
-                                    b2.Property<string>("Pincode")
-                                        .HasMaxLength(10)
-                                        .HasColumnType("character varying(10)")
-                                        .HasColumnName("Father_OfficeAddress_Pincode");
+			modelBuilder.Entity("Volo.Abp.AuditLogging.AuditLog", b =>
+			{
+				b.Navigation("Actions");
 
-                                    b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
+				b.Navigation("EntityChanges");
+			});
 
-                                    b2.ToTable("StudentFamilyDetails");
+			modelBuilder.Entity("Volo.Abp.AuditLogging.EntityChange", b =>
+			{
+				b.Navigation("PropertyChanges");
+			});
 
-                                    b2.WithOwner()
-                                        .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityRole", b =>
+			{
+				b.Navigation("Claims");
+			});
 
-                                    b2.OwnsOne("ShikshaMitra.Common.Country", "Country", b3 =>
-                                        {
-                                            b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
-                                                .HasColumnType("uuid");
+			modelBuilder.Entity("Volo.Abp.Identity.IdentityUser", b =>
+			{
+				b.Navigation("Claims");
 
-                                            b3.Property<string>("IsoCode")
-                                                .IsRequired()
-                                                .HasMaxLength(10)
-                                                .HasColumnType("character varying(10)")
-                                                .HasColumnName("Father_OfficeAddress_Country_IsoCode");
+				b.Navigation("Logins");
 
-                                            b3.Property<string>("Name")
-                                                .IsRequired()
-                                                .HasMaxLength(100)
-                                                .HasColumnType("character varying(100)")
-                                                .HasColumnName("Father_OfficeAddress_Country_Name");
+				b.Navigation("OrganizationUnits");
 
-                                            b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
+				b.Navigation("Roles");
 
-                                            b3.ToTable("StudentFamilyDetails");
+				b.Navigation("Tokens");
+			});
 
-                                            b3.WithOwner()
-                                                .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-                                        });
+			modelBuilder.Entity("Volo.Abp.Identity.OrganizationUnit", b =>
+			{
+				b.Navigation("Roles");
+			});
 
-                                    b2.OwnsOne("ShikshaMitra.Common.State", "State", b3 =>
-                                        {
-                                            b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
-                                                .HasColumnType("uuid");
-
-                                            b3.Property<string>("IsoCode")
-                                                .IsRequired()
-                                                .HasMaxLength(10)
-                                                .HasColumnType("character varying(10)")
-                                                .HasColumnName("Father_OfficeAddress_State_IsoCode");
-
-                                            b3.Property<string>("Name")
-                                                .IsRequired()
-                                                .HasMaxLength(100)
-                                                .HasColumnType("character varying(100)")
-                                                .HasColumnName("Father_OfficeAddress_State_Name");
-
-                                            b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-
-                                            b3.ToTable("StudentFamilyDetails");
-
-                                            b3.WithOwner()
-                                                .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-                                        });
-
-                                    b2.Navigation("Country");
-
-                                    b2.Navigation("State")
-                                        .IsRequired();
-                                });
-
-                            b1.Navigation("LocalAddress");
-
-                            b1.Navigation("OfficeAddress");
-                        });
-
-                    b.OwnsOne("ShikshaMitra.Students.ValueObjects.ParentGuardianDetails", "GuardianDetails", b1 =>
-                        {
-                            b1.Property<Guid>("StudentFamilyDetailId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<string>("AadharNo")
-                                .HasMaxLength(20)
-                                .HasColumnType("character varying(20)");
-
-                            b1.Property<string>("ContactNo")
-                                .HasMaxLength(20)
-                                .HasColumnType("character varying(20)");
-
-                            b1.Property<DateTimeOffset?>("DateOfBirth")
-                                .HasColumnType("timestamp with time zone");
-
-                            b1.Property<string>("Designation")
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)");
-
-                            b1.Property<string>("Email")
-                                .HasMaxLength(256)
-                                .HasColumnType("character varying(256)");
-
-                            b1.Property<string>("FullName")
-                                .IsRequired()
-                                .HasMaxLength(200)
-                                .HasColumnType("character varying(200)");
-
-                            b1.Property<string>("Occupation")
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)");
-
-                            b1.Property<string>("OfficeNo")
-                                .HasMaxLength(20)
-                                .HasColumnType("character varying(20)");
-
-                            b1.Property<string>("Organization")
-                                .HasMaxLength(200)
-                                .HasColumnType("character varying(200)");
-
-                            b1.Property<string>("Qualification")
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)");
-
-                            b1.Property<string>("YearOfPassing")
-                                .HasMaxLength(10)
-                                .HasColumnType("character varying(10)");
-
-                            b1.HasKey("StudentFamilyDetailId");
-
-                            b1.ToTable("StudentFamilyDetails");
-
-                            b1.WithOwner()
-                                .HasForeignKey("StudentFamilyDetailId");
-
-                            b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "LocalAddress", b2 =>
-                                {
-                                    b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
-                                        .HasColumnType("uuid");
-
-                                    b2.Property<string>("Address1")
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("Guardian_LocalAddress_BuildingNo");
-
-                                    b2.Property<string>("Address2")
-                                        .HasMaxLength(200)
-                                        .HasColumnType("character varying(200)")
-                                        .HasColumnName("Guardian_LocalAddress_AreaLocalityRoadName");
-
-                                    b2.Property<string>("Address3")
-                                        .HasMaxLength(200)
-                                        .HasColumnType("character varying(200)")
-                                        .HasColumnName("Guardian_LocalAddress_Landmark");
-
-                                    b2.Property<string>("City")
-                                        .IsRequired()
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("Guardian_LocalAddress_City");
-
-                                    b2.Property<string>("Pincode")
-                                        .HasMaxLength(10)
-                                        .HasColumnType("character varying(10)")
-                                        .HasColumnName("Guardian_LocalAddress_Pincode");
-
-                                    b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
-
-                                    b2.ToTable("StudentFamilyDetails");
-
-                                    b2.WithOwner()
-                                        .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
-
-                                    b2.OwnsOne("ShikshaMitra.Common.Country", "Country", b3 =>
-                                        {
-                                            b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
-                                                .HasColumnType("uuid");
-
-                                            b3.Property<string>("IsoCode")
-                                                .IsRequired()
-                                                .HasMaxLength(10)
-                                                .HasColumnType("character varying(10)")
-                                                .HasColumnName("Guardian_LocalAddress_Country_IsoCode");
-
-                                            b3.Property<string>("Name")
-                                                .IsRequired()
-                                                .HasMaxLength(100)
-                                                .HasColumnType("character varying(100)")
-                                                .HasColumnName("Guardian_LocalAddress_Country_Name");
-
-                                            b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-
-                                            b3.ToTable("StudentFamilyDetails");
-
-                                            b3.WithOwner()
-                                                .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-                                        });
-
-                                    b2.OwnsOne("ShikshaMitra.Common.State", "State", b3 =>
-                                        {
-                                            b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
-                                                .HasColumnType("uuid");
-
-                                            b3.Property<string>("IsoCode")
-                                                .IsRequired()
-                                                .HasMaxLength(10)
-                                                .HasColumnType("character varying(10)")
-                                                .HasColumnName("Guardian_LocalAddress_State_IsoCode");
-
-                                            b3.Property<string>("Name")
-                                                .IsRequired()
-                                                .HasMaxLength(100)
-                                                .HasColumnType("character varying(100)")
-                                                .HasColumnName("Guardian_LocalAddress_State_Name");
-
-                                            b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-
-                                            b3.ToTable("StudentFamilyDetails");
-
-                                            b3.WithOwner()
-                                                .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-                                        });
-
-                                    b2.Navigation("Country");
-
-                                    b2.Navigation("State")
-                                        .IsRequired();
-                                });
-
-                            b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "OfficeAddress", b2 =>
-                                {
-                                    b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
-                                        .HasColumnType("uuid");
-
-                                    b2.Property<string>("Address1")
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("Guardian_OfficeAddress_BuildingNo");
-
-                                    b2.Property<string>("Address2")
-                                        .HasMaxLength(200)
-                                        .HasColumnType("character varying(200)")
-                                        .HasColumnName("Guardian_OfficeAddress_AreaLocalityRoadName");
-
-                                    b2.Property<string>("Address3")
-                                        .HasMaxLength(200)
-                                        .HasColumnType("character varying(200)")
-                                        .HasColumnName("Guardian_OfficeAddress_Landmark");
-
-                                    b2.Property<string>("City")
-                                        .IsRequired()
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("Guardian_OfficeAddress_City");
-
-                                    b2.Property<string>("Pincode")
-                                        .HasMaxLength(10)
-                                        .HasColumnType("character varying(10)")
-                                        .HasColumnName("Guardian_OfficeAddress_Pincode");
-
-                                    b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
-
-                                    b2.ToTable("StudentFamilyDetails");
-
-                                    b2.WithOwner()
-                                        .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
-
-                                    b2.OwnsOne("ShikshaMitra.Common.Country", "Country", b3 =>
-                                        {
-                                            b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
-                                                .HasColumnType("uuid");
-
-                                            b3.Property<string>("IsoCode")
-                                                .IsRequired()
-                                                .HasMaxLength(10)
-                                                .HasColumnType("character varying(10)")
-                                                .HasColumnName("Guardian_OfficeAddress_Country_IsoCode");
-
-                                            b3.Property<string>("Name")
-                                                .IsRequired()
-                                                .HasMaxLength(100)
-                                                .HasColumnType("character varying(100)")
-                                                .HasColumnName("Guardian_OfficeAddress_Country_Name");
-
-                                            b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-
-                                            b3.ToTable("StudentFamilyDetails");
-
-                                            b3.WithOwner()
-                                                .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-                                        });
-
-                                    b2.OwnsOne("ShikshaMitra.Common.State", "State", b3 =>
-                                        {
-                                            b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
-                                                .HasColumnType("uuid");
-
-                                            b3.Property<string>("IsoCode")
-                                                .IsRequired()
-                                                .HasMaxLength(10)
-                                                .HasColumnType("character varying(10)")
-                                                .HasColumnName("Guardian_OfficeAddress_State_IsoCode");
-
-                                            b3.Property<string>("Name")
-                                                .IsRequired()
-                                                .HasMaxLength(100)
-                                                .HasColumnType("character varying(100)")
-                                                .HasColumnName("Guardian_OfficeAddress_State_Name");
-
-                                            b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-
-                                            b3.ToTable("StudentFamilyDetails");
-
-                                            b3.WithOwner()
-                                                .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-                                        });
-
-                                    b2.Navigation("Country");
-
-                                    b2.Navigation("State")
-                                        .IsRequired();
-                                });
-
-                            b1.Navigation("LocalAddress");
-
-                            b1.Navigation("OfficeAddress");
-                        });
-
-                    b.OwnsOne("ShikshaMitra.Students.ValueObjects.ParentGuardianDetails", "MotherDetails", b1 =>
-                        {
-                            b1.Property<Guid>("StudentFamilyDetailId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<string>("AadharNo")
-                                .HasMaxLength(20)
-                                .HasColumnType("character varying(20)");
-
-                            b1.Property<string>("ContactNo")
-                                .HasMaxLength(20)
-                                .HasColumnType("character varying(20)");
-
-                            b1.Property<DateTimeOffset?>("DateOfBirth")
-                                .HasColumnType("timestamp with time zone");
-
-                            b1.Property<string>("Designation")
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)");
-
-                            b1.Property<string>("Email")
-                                .HasMaxLength(256)
-                                .HasColumnType("character varying(256)");
-
-                            b1.Property<string>("FullName")
-                                .IsRequired()
-                                .HasMaxLength(200)
-                                .HasColumnType("character varying(200)");
-
-                            b1.Property<string>("Occupation")
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)");
-
-                            b1.Property<string>("OfficeNo")
-                                .HasMaxLength(20)
-                                .HasColumnType("character varying(20)");
-
-                            b1.Property<string>("Organization")
-                                .HasMaxLength(200)
-                                .HasColumnType("character varying(200)");
-
-                            b1.Property<string>("Qualification")
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)");
-
-                            b1.Property<string>("YearOfPassing")
-                                .HasMaxLength(10)
-                                .HasColumnType("character varying(10)");
-
-                            b1.HasKey("StudentFamilyDetailId");
-
-                            b1.ToTable("StudentFamilyDetails");
-
-                            b1.WithOwner()
-                                .HasForeignKey("StudentFamilyDetailId");
-
-                            b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "LocalAddress", b2 =>
-                                {
-                                    b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
-                                        .HasColumnType("uuid");
-
-                                    b2.Property<string>("Address1")
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("Mother_LocalAddress_BuildingNo");
-
-                                    b2.Property<string>("Address2")
-                                        .HasMaxLength(200)
-                                        .HasColumnType("character varying(200)")
-                                        .HasColumnName("Mother_LocalAddress_AreaLocalityRoadName");
-
-                                    b2.Property<string>("Address3")
-                                        .HasMaxLength(200)
-                                        .HasColumnType("character varying(200)")
-                                        .HasColumnName("Mother_LocalAddress_Landmark");
-
-                                    b2.Property<string>("City")
-                                        .IsRequired()
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("Mother_LocalAddress_City");
-
-                                    b2.Property<string>("Pincode")
-                                        .HasMaxLength(10)
-                                        .HasColumnType("character varying(10)")
-                                        .HasColumnName("Mother_LocalAddress_Pincode");
-
-                                    b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
-
-                                    b2.ToTable("StudentFamilyDetails");
-
-                                    b2.WithOwner()
-                                        .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
-
-                                    b2.OwnsOne("ShikshaMitra.Common.Country", "Country", b3 =>
-                                        {
-                                            b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
-                                                .HasColumnType("uuid");
-
-                                            b3.Property<string>("IsoCode")
-                                                .IsRequired()
-                                                .HasMaxLength(10)
-                                                .HasColumnType("character varying(10)")
-                                                .HasColumnName("Mother_LocalAddress_Country_IsoCode");
-
-                                            b3.Property<string>("Name")
-                                                .IsRequired()
-                                                .HasMaxLength(100)
-                                                .HasColumnType("character varying(100)")
-                                                .HasColumnName("Mother_LocalAddress_Country_Name");
-
-                                            b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-
-                                            b3.ToTable("StudentFamilyDetails");
-
-                                            b3.WithOwner()
-                                                .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-                                        });
-
-                                    b2.OwnsOne("ShikshaMitra.Common.State", "State", b3 =>
-                                        {
-                                            b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
-                                                .HasColumnType("uuid");
-
-                                            b3.Property<string>("IsoCode")
-                                                .IsRequired()
-                                                .HasMaxLength(10)
-                                                .HasColumnType("character varying(10)")
-                                                .HasColumnName("Mother_LocalAddress_State_IsoCode");
-
-                                            b3.Property<string>("Name")
-                                                .IsRequired()
-                                                .HasMaxLength(100)
-                                                .HasColumnType("character varying(100)")
-                                                .HasColumnName("Mother_LocalAddress_State_Name");
-
-                                            b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-
-                                            b3.ToTable("StudentFamilyDetails");
-
-                                            b3.WithOwner()
-                                                .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-                                        });
-
-                                    b2.Navigation("Country");
-
-                                    b2.Navigation("State")
-                                        .IsRequired();
-                                });
-
-                            b1.OwnsOne("ShikshaMitra.Students.ValueObjects.AddressDetails", "OfficeAddress", b2 =>
-                                {
-                                    b2.Property<Guid>("ParentGuardianDetailsStudentFamilyDetailId")
-                                        .HasColumnType("uuid");
-
-                                    b2.Property<string>("Address1")
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("Mother_OfficeAddress_BuildingNo");
-
-                                    b2.Property<string>("Address2")
-                                        .HasMaxLength(200)
-                                        .HasColumnType("character varying(200)")
-                                        .HasColumnName("Mother_OfficeAddress_AreaLocalityRoadName");
-
-                                    b2.Property<string>("Address3")
-                                        .HasMaxLength(200)
-                                        .HasColumnType("character varying(200)")
-                                        .HasColumnName("Mother_OfficeAddress_Landmark");
-
-                                    b2.Property<string>("City")
-                                        .IsRequired()
-                                        .HasMaxLength(100)
-                                        .HasColumnType("character varying(100)")
-                                        .HasColumnName("Mother_OfficeAddress_City");
-
-                                    b2.Property<string>("Pincode")
-                                        .HasMaxLength(10)
-                                        .HasColumnType("character varying(10)")
-                                        .HasColumnName("Mother_OfficeAddress_Pincode");
-
-                                    b2.HasKey("ParentGuardianDetailsStudentFamilyDetailId");
-
-                                    b2.ToTable("StudentFamilyDetails");
-
-                                    b2.WithOwner()
-                                        .HasForeignKey("ParentGuardianDetailsStudentFamilyDetailId");
-
-                                    b2.OwnsOne("ShikshaMitra.Common.Country", "Country", b3 =>
-                                        {
-                                            b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
-                                                .HasColumnType("uuid");
-
-                                            b3.Property<string>("IsoCode")
-                                                .IsRequired()
-                                                .HasMaxLength(10)
-                                                .HasColumnType("character varying(10)")
-                                                .HasColumnName("Mother_OfficeAddress_Country_IsoCode");
-
-                                            b3.Property<string>("Name")
-                                                .IsRequired()
-                                                .HasMaxLength(100)
-                                                .HasColumnType("character varying(100)")
-                                                .HasColumnName("Mother_OfficeAddress_Country_Name");
-
-                                            b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-
-                                            b3.ToTable("StudentFamilyDetails");
-
-                                            b3.WithOwner()
-                                                .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-                                        });
-
-                                    b2.OwnsOne("ShikshaMitra.Common.State", "State", b3 =>
-                                        {
-                                            b3.Property<Guid>("AddressDetailsParentGuardianDetailsStudentFamilyDetailId")
-                                                .HasColumnType("uuid");
-
-                                            b3.Property<string>("IsoCode")
-                                                .IsRequired()
-                                                .HasMaxLength(10)
-                                                .HasColumnType("character varying(10)")
-                                                .HasColumnName("Mother_OfficeAddress_State_IsoCode");
-
-                                            b3.Property<string>("Name")
-                                                .IsRequired()
-                                                .HasMaxLength(100)
-                                                .HasColumnType("character varying(100)")
-                                                .HasColumnName("Mother_OfficeAddress_State_Name");
-
-                                            b3.HasKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-
-                                            b3.ToTable("StudentFamilyDetails");
-
-                                            b3.WithOwner()
-                                                .HasForeignKey("AddressDetailsParentGuardianDetailsStudentFamilyDetailId");
-                                        });
-
-                                    b2.Navigation("Country");
-
-                                    b2.Navigation("State")
-                                        .IsRequired();
-                                });
-
-                            b1.Navigation("LocalAddress");
-
-                            b1.Navigation("OfficeAddress");
-                        });
-
-                    b.Navigation("FatherDetails");
-
-                    b.Navigation("GuardianDetails");
-
-                    b.Navigation("MotherDetails");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentNote", b =>
-                {
-                    b.HasOne("ShikshaMitra.Students.Student", null)
-                        .WithMany("Notes")
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.Divisions.Division", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
-                        .WithMany("Divisions")
-                        .HasForeignKey("StandardId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Standard");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", "AcademicYear")
-                        .WithMany()
-                        .HasForeignKey("AcademicYearId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("AcademicYear");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "EducationMedium")
-                        .WithMany("EducationMediumStages")
-                        .HasForeignKey("EducationMediumId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("EducationMedium");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", null)
-                        .WithMany("EducationMediums")
-                        .HasForeignKey("EducationBoardId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Floor", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Building", "Building")
-                        .WithMany("Floors")
-                        .HasForeignKey("BuildingId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Building");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Rooms.Room", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Building", null)
-                        .WithMany()
-                        .HasForeignKey("BuildingId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Floor", null)
-                        .WithMany()
-                        .HasForeignKey("FloorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes.RoomType", null)
-                        .WithMany()
-                        .HasForeignKey("RoomTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.Standards.Standard", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
-                        .WithMany("Standards")
-                        .HasForeignKey("EducationMediumStageId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ShikshaMitra.TenantSettings.ShiftManagement", "Shift")
-                        .WithMany()
-                        .HasForeignKey("ShiftId");
-
-                    b.Navigation("EducationMediumStage");
-
-                    b.Navigation("Shift");
-                });
-
-            modelBuilder.Entity("Volo.Abp.AuditLogging.AuditLogAction", b =>
-                {
-                    b.HasOne("Volo.Abp.AuditLogging.AuditLog", null)
-                        .WithMany("Actions")
-                        .HasForeignKey("AuditLogId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Volo.Abp.AuditLogging.EntityChange", b =>
-                {
-                    b.HasOne("Volo.Abp.AuditLogging.AuditLog", null)
-                        .WithMany("EntityChanges")
-                        .HasForeignKey("AuditLogId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Volo.Abp.AuditLogging.EntityPropertyChange", b =>
-                {
-                    b.HasOne("Volo.Abp.AuditLogging.EntityChange", null)
-                        .WithMany("PropertyChanges")
-                        .HasForeignKey("EntityChangeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Volo.Abp.BlobStoring.Database.DatabaseBlob", b =>
-                {
-                    b.HasOne("Volo.Abp.BlobStoring.Database.DatabaseBlobContainer", null)
-                        .WithMany()
-                        .HasForeignKey("ContainerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityRoleClaim", b =>
-                {
-                    b.HasOne("Volo.Abp.Identity.IdentityRole", null)
-                        .WithMany("Claims")
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityUserClaim", b =>
-                {
-                    b.HasOne("Volo.Abp.Identity.IdentityUser", null)
-                        .WithMany("Claims")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityUserLogin", b =>
-                {
-                    b.HasOne("Volo.Abp.Identity.IdentityUser", null)
-                        .WithMany("Logins")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityUserOrganizationUnit", b =>
-                {
-                    b.HasOne("Volo.Abp.Identity.OrganizationUnit", null)
-                        .WithMany()
-                        .HasForeignKey("OrganizationUnitId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Volo.Abp.Identity.IdentityUser", null)
-                        .WithMany("OrganizationUnits")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityUserRole", b =>
-                {
-                    b.HasOne("Volo.Abp.Identity.IdentityRole", null)
-                        .WithMany()
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Volo.Abp.Identity.IdentityUser", null)
-                        .WithMany("Roles")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityUserToken", b =>
-                {
-                    b.HasOne("Volo.Abp.Identity.IdentityUser", null)
-                        .WithMany("Tokens")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Volo.Abp.Identity.OrganizationUnit", b =>
-                {
-                    b.HasOne("Volo.Abp.Identity.OrganizationUnit", null)
-                        .WithMany()
-                        .HasForeignKey("ParentId");
-                });
-
-            modelBuilder.Entity("Volo.Abp.Identity.OrganizationUnitRole", b =>
-                {
-                    b.HasOne("Volo.Abp.Identity.OrganizationUnit", null)
-                        .WithMany("Roles")
-                        .HasForeignKey("OrganizationUnitId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Volo.Abp.Identity.IdentityRole", null)
-                        .WithMany()
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Volo.Abp.OpenIddict.Authorizations.OpenIddictAuthorization", b =>
-                {
-                    b.HasOne("Volo.Abp.OpenIddict.Applications.OpenIddictApplication", null)
-                        .WithMany()
-                        .HasForeignKey("ApplicationId");
-                });
-
-            modelBuilder.Entity("Volo.Abp.OpenIddict.Tokens.OpenIddictToken", b =>
-                {
-                    b.HasOne("Volo.Abp.OpenIddict.Applications.OpenIddictApplication", null)
-                        .WithMany()
-                        .HasForeignKey("ApplicationId");
-
-                    b.HasOne("Volo.Abp.OpenIddict.Authorizations.OpenIddictAuthorization", null)
-                        .WithMany()
-                        .HasForeignKey("AuthorizationId");
-                });
-
-            modelBuilder.Entity("Volo.Abp.TenantManagement.TenantConnectionString", b =>
-                {
-                    b.HasOne("Volo.Abp.TenantManagement.Tenant", null)
-                        .WithMany("ConnectionStrings")
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubject", b =>
-                {
-                    b.Navigation("Chapters");
-
-                    b.Navigation("Documents");
-
-                    b.Navigation("Teachers");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectChapter", b =>
-                {
-                    b.Navigation("Documents");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroup", b =>
-                {
-                    b.Navigation("Subjects");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.Exam", b =>
-                {
-                    b.Navigation("ExamDivisions");
-
-                    b.Navigation("ExamSubjects");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubject", b =>
-                {
-                    b.Navigation("RoomAssignments");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Academic.Examination.Settings.GradingScale", b =>
-                {
-                    b.Navigation("GradeRanges");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentEntity", b =>
-                {
-                    b.Navigation("DivisionSchedules");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkAssignmentEntity", b =>
-                {
-                    b.Navigation("DivisionSchedules");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.ConcessionType.ConcessionType", b =>
-                {
-                    b.Navigation("ConcessionTypeDocuments");
-
-                    b.Navigation("ConcessionTypeFeeHeads");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.FeeStructure.FeeStructure", b =>
-                {
-                    b.Navigation("FeeStructureStandards");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureStandard", b =>
-                {
-                    b.Navigation("FeeStructureDetails");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Groups.Group", b =>
-                {
-                    b.Navigation("EmployeeRules");
-
-                    b.Navigation("Members");
-
-                    b.Navigation("StudentRules");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
-                {
-                    b.Navigation("AdditionalDetails");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceDay", b =>
-                {
-                    b.Navigation("Entries");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.Student", b =>
-                {
-                    b.Navigation("AdditionalDetail");
-
-                    b.Navigation("ContactDetail");
-
-                    b.Navigation("Notes");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.StudentDocumentSetting", b =>
-                {
-                    b.Navigation("DocumentTypes");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", b =>
-                {
-                    b.Navigation("EducationMediums");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", b =>
-                {
-                    b.Navigation("Standards");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", b =>
-                {
-                    b.Navigation("EducationMediumStages");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Building", b =>
-                {
-                    b.Navigation("Floors");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.TenantSettings.Standards.Standard", b =>
-                {
-                    b.Navigation("Divisions");
-                });
-
-            modelBuilder.Entity("Volo.Abp.AuditLogging.AuditLog", b =>
-                {
-                    b.Navigation("Actions");
-
-                    b.Navigation("EntityChanges");
-                });
-
-            modelBuilder.Entity("Volo.Abp.AuditLogging.EntityChange", b =>
-                {
-                    b.Navigation("PropertyChanges");
-                });
-
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityRole", b =>
-                {
-                    b.Navigation("Claims");
-                });
-
-            modelBuilder.Entity("Volo.Abp.Identity.IdentityUser", b =>
-                {
-                    b.Navigation("Claims");
-
-                    b.Navigation("Logins");
-
-                    b.Navigation("OrganizationUnits");
-
-                    b.Navigation("Roles");
-
-                    b.Navigation("Tokens");
-                });
-
-            modelBuilder.Entity("Volo.Abp.Identity.OrganizationUnit", b =>
-                {
-                    b.Navigation("Roles");
-                });
-
-            modelBuilder.Entity("Volo.Abp.TenantManagement.Tenant", b =>
-                {
-                    b.Navigation("ConnectionStrings");
-                });
+			modelBuilder.Entity("Volo.Abp.TenantManagement.Tenant", b =>
+			{
+				b.Navigation("ConnectionStrings");
+			});
 #pragma warning restore 612, 618
-        }
-    }
+		}
+	}
 }

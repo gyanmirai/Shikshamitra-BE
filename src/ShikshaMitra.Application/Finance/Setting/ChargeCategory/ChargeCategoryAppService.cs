@@ -26,7 +26,8 @@ public class ChargeCategoryAppService : ApplicationService, IChargeCategoryAppSe
     {
         var chargeCategory = new ShikshaMitra.Finance.Setting.ChargeCategory.ChargeCategory(
             GuidGenerator.Create(),
-            academicYearId,
+			CurrentTenant.Id,
+			academicYearId,
             input.Name,
             input.IsApprovalRequired,
             input.Description

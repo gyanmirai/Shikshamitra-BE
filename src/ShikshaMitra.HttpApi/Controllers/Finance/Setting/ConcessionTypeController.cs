@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Application.Contracts.Finance.Setting.ConcessionType;
@@ -39,13 +39,13 @@ public class ConcessionTypeController : AbpController
         return _concessionTypeAppService.GetAsync(concessionTypeId);
     }
 
-    [HttpPut("/finance/academic-years/concession-types/{concessionTypeId}")]
+    [HttpPut("/finance/concession-types/{concessionTypeId}")]
     public Task<MutationResponse> UpdateAsync(Guid concessionTypeId, ConcessionTypeUpdateRequest input)
     {
         return _concessionTypeAppService.UpdateAsync(concessionTypeId, input);
     }
 
-    [HttpDelete("/finance/academic-years/concession-types/{concessionTypeId}")]
+    [HttpDelete("/finance/concession-types/{concessionTypeId}")]
     public Task<MutationResponse> DeleteAsync(Guid concessionTypeId)
     {
         return _concessionTypeAppService.DeleteAsync(concessionTypeId);

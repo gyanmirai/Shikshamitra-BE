@@ -14,40 +14,40 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Setting;
 [Route("api")]
 public class ConcessionTypeController : AbpController
 {
-    private readonly IConcessionTypeAppService _concessionTypeAppService;
+	private readonly IConcessionTypeAppService _concessionTypeAppService;
 
-    public ConcessionTypeController(IConcessionTypeAppService concessionTypeAppService)
-    {
-        _concessionTypeAppService = concessionTypeAppService;
-    }
+	public ConcessionTypeController(IConcessionTypeAppService concessionTypeAppService)
+	{
+		_concessionTypeAppService = concessionTypeAppService;
+	}
 
-    [HttpPost("concession-types")]
-    public Task<MutationResponse> CreateAsync(Guid academicYearId, ConcessionTypeCreateRequest input)
-    {
-        return _concessionTypeAppService.CreateAsync(academicYearId, input);
-    }
+	[HttpPost("concession-types")]
+	public Task<MutationResponse> CreateAsync(Guid academicYearId, ConcessionTypeCreateRequest input)
+	{
+		return _concessionTypeAppService.CreateAsync(academicYearId, input);
+	}
 
-    [HttpGet("all-concession-types")]
-    public Task<ConcessionTypePaginatedResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
-    {
-        return _concessionTypeAppService.GetListAsync(academicYearId, page, pageSize, search);
-    }
+	[HttpGet("all-concession-types")]
+	public Task<ConcessionTypePaginatedResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
+	{
+		return _concessionTypeAppService.GetListAsync(academicYearId, page, pageSize, search);
+	}
 
-    [HttpGet("concession-types/{concessionTypeId}")]
-    public Task<ConcessionTypeResponse> GetAsync(Guid concessionTypeId)
-    {
-        return _concessionTypeAppService.GetAsync(concessionTypeId);
-    }
+	[HttpGet("concession-types/{concessionTypeId}")]
+	public Task<ConcessionTypeResponse> GetAsync(Guid concessionTypeId)
+	{
+		return _concessionTypeAppService.GetAsync(concessionTypeId);
+	}
 
-    [HttpPut("/finance/concession-types/{concessionTypeId}")]
-    public Task<MutationResponse> UpdateAsync(Guid concessionTypeId, ConcessionTypeUpdateRequest input)
-    {
-        return _concessionTypeAppService.UpdateAsync(concessionTypeId, input);
-    }
+	[HttpPut("concession-types/{concessionTypeId}")]
+	public Task<MutationResponse> UpdateAsync(Guid concessionTypeId, ConcessionTypeUpdateRequest input)
+	{
+		return _concessionTypeAppService.UpdateAsync(concessionTypeId, input);
+	}
 
-    [HttpDelete("/finance/concession-types/{concessionTypeId}")]
-    public Task<MutationResponse> DeleteAsync(Guid concessionTypeId)
-    {
-        return _concessionTypeAppService.DeleteAsync(concessionTypeId);
-    }
+	[HttpDelete("concession-types/{concessionTypeId}")]
+	public Task<MutationResponse> DeleteAsync(Guid concessionTypeId)
+	{
+		return _concessionTypeAppService.DeleteAsync(concessionTypeId);
+	}
 }

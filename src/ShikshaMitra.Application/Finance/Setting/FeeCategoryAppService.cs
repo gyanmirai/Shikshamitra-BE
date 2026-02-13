@@ -5,27 +5,26 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Application.Contracts.Finance.Setting.FeeCategory;
 using ShikshaMitra.Application.Contracts.Finance.Setting.FeeCategory.Dtos;
-using ShikshaMitra.Finance.Setting.FeeCategory;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
-namespace ShikshaMitra.Application.Finance.Setting.FeeCategory;
+namespace ShikshaMitra.Finance.Setting;
 
 [Authorize]
 [RemoteService(false)]
 public class FeeCategoryAppService : ApplicationService, IFeeCategoryAppService
 {
-    private readonly IRepository<ShikshaMitra.Finance.Setting.FeeCategory.FeeCategory, Guid> _feeCategoryRepository;
+    private readonly IRepository<FeeCategory, Guid> _feeCategoryRepository;
 
-    public FeeCategoryAppService(IRepository<ShikshaMitra.Finance.Setting.FeeCategory.FeeCategory, Guid> feeCategoryRepository)
+    public FeeCategoryAppService(IRepository<FeeCategory, Guid> feeCategoryRepository)
     {
         _feeCategoryRepository = feeCategoryRepository;
     }
 
     public async Task<MessageResponse> CreateAsync(Guid academicYearId, FeeCategoryCreateRequest input)
     {
-        var feeCategory = new ShikshaMitra.Finance.Setting.FeeCategory.FeeCategory(
+        var feeCategory = new FeeCategory(
             GuidGenerator.Create(),
             CurrentTenant.Id,
             academicYearId,

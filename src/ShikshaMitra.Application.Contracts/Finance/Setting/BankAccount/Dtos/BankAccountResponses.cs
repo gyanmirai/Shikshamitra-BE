@@ -1,6 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-using ShikshaMitra.Finance.Setting.BankAccount;
+using ShikshaMitra.Finance.Setting;
 
 namespace ShikshaMitra.Application.Contracts.Finance.Setting.BankAccount.Dtos;
 

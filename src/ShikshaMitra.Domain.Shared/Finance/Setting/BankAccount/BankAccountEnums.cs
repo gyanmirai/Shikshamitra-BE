@@ -1,4 +1,4 @@
-namespace ShikshaMitra.Finance.Setting.BankAccount;
+﻿namespace ShikshaMitra.Finance.Setting;
 
 public enum BankAccountType
 {

@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.ComponentModel.DataAnnotations;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra.Finance.Setting.FeeHead;
+namespace ShikshaMitra.Finance.Setting;
 
 public class FeeHead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {

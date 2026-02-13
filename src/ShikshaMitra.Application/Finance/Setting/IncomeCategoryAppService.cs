@@ -4,18 +4,17 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Application.Contracts.Finance.Setting.IncomeCategory;
 using ShikshaMitra.Application.Contracts.Finance.Setting.IncomeCategory.Dtos;
-using ShikshaMitra.Finance.Setting.IncomeCategory;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
-namespace ShikshaMitra.Application.Finance.Setting.IncomeCategory;
+namespace ShikshaMitra.Finance.Setting;
 
 [RemoteService(false)]
 public class IncomeCategoryAppService : ApplicationService, IIncomeCategoryAppService
 {
-    private readonly IRepository<ShikshaMitra.Finance.Setting.IncomeCategory.IncomeCategory, Guid> _incomeCategoryRepository;
+    private readonly IRepository<IncomeCategory, Guid> _incomeCategoryRepository;
 
-    public IncomeCategoryAppService(IRepository<ShikshaMitra.Finance.Setting.IncomeCategory.IncomeCategory, Guid> incomeCategoryRepository)
+    public IncomeCategoryAppService(IRepository<IncomeCategory, Guid> incomeCategoryRepository)
     {
         _incomeCategoryRepository = incomeCategoryRepository;
     }
@@ -24,7 +23,7 @@ public class IncomeCategoryAppService : ApplicationService, IIncomeCategoryAppSe
     {
         var tags = input.Tags != null && input.Tags.Any() ? string.Join(",", input.Tags) : null;
 
-        var incomeCategory = new ShikshaMitra.Finance.Setting.IncomeCategory.IncomeCategory(
+        var incomeCategory = new IncomeCategory(
             GuidGenerator.Create(),
             CurrentTenant.Id,
             academicYearId,
@@ -94,7 +93,7 @@ public class IncomeCategoryAppService : ApplicationService, IIncomeCategoryAppSe
         await _incomeCategoryRepository.DeleteAsync(id);
     }
 
-    private IncomeCategoryResponse MapToResponse(ShikshaMitra.Finance.Setting.IncomeCategory.IncomeCategory entity)
+    private IncomeCategoryResponse MapToResponse(IncomeCategory entity)
     {
         return new IncomeCategoryResponse
         {

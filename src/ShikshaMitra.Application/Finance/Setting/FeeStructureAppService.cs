@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -7,9 +7,6 @@ using ShikshaMitra.Application.Contracts.Finance.Setting.FeeStructure;
 using ShikshaMitra.Application.Contracts.Finance.Setting.FeeStructure.Dtos;
 using ShikshaMitra.Application.Contracts.Finance.Setting.FeeCategory.Dtos; // For MessageResponse
 using ShikshaMitra.Finance.Setting.FeeStructure;
-using ShikshaMitra.Finance.Setting.FeeHead;
-using ShikshaMitra.Finance.Setting.FeeCategory;
-using ShikshaMitra.Finance.Setting.ReceiptBook;
 using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -18,33 +15,33 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp;
 
-namespace ShikshaMitra.Application.Finance.Setting.FeeStructure;
+namespace ShikshaMitra.Finance.Setting;
 
 [Authorize]
 [RemoteService(false)]
 public class FeeStructureAppService : ApplicationService, IFeeStructureAppService
 {
-	private readonly IRepository<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructure, Guid> _feeStructureRepository;
+	private readonly IRepository<FeeStructure.FeeStructure, Guid> _feeStructureRepository;
 	private readonly IRepository<FeeStructureStandard, Guid> _feeStructureStandardRepository;
 	private readonly IRepository<FeeStructureDetail, Guid> _feeStructureDetailRepository;
 	private readonly IRepository<Standard, Guid> _standardRepository;
-	private readonly IRepository<ShikshaMitra.Finance.Setting.FeeHead.FeeHead, Guid> _feeHeadRepository;
-	private readonly IRepository<ShikshaMitra.Finance.Setting.FeeCategory.FeeCategory, Guid> _feeCategoryRepository;
+	private readonly IRepository<FeeHead, Guid> _feeHeadRepository;
+	private readonly IRepository<FeeCategory, Guid> _feeCategoryRepository;
 	private readonly IRepository<EducationBoard, Guid> _educationBoardRepository;
 	private readonly IRepository<EducationMedium, Guid> _educationMediumRepository;
-	private readonly IRepository<ShikshaMitra.Finance.Setting.ReceiptBook.ReceiptBook, Guid> _receiptBookRepository;
+	private readonly IRepository<ReceiptBook, Guid> _receiptBookRepository;
 	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
 
 	public FeeStructureAppService(
-		IRepository<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructure, Guid> feeStructureRepository,
+		IRepository<FeeStructure.FeeStructure, Guid> feeStructureRepository,
 		IRepository<FeeStructureStandard, Guid> feeStructureStandardRepository,
 		IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository,
 		IRepository<Standard, Guid> standardRepository,
-		IRepository<ShikshaMitra.Finance.Setting.FeeHead.FeeHead, Guid> feeHeadRepository,
-		IRepository<ShikshaMitra.Finance.Setting.FeeCategory.FeeCategory, Guid> feeCategoryRepository,
+		IRepository<FeeHead, Guid> feeHeadRepository,
+		IRepository<FeeCategory, Guid> feeCategoryRepository,
 		IRepository<EducationBoard, Guid> educationBoardRepository,
 		IRepository<EducationMedium, Guid> educationMediumRepository,
-		IRepository<ShikshaMitra.Finance.Setting.ReceiptBook.ReceiptBook, Guid> receiptBookRepository,
+		IRepository<ReceiptBook, Guid> receiptBookRepository,
 		IRepository<AcademicYear, Guid> academicYearRepository)
 	{
 		_feeStructureRepository = feeStructureRepository;
@@ -61,7 +58,7 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 
 	public async Task<FeeStructureDetailsResponse> CreateAsync(Guid academicYearId, FeeStructureCreateRequest input)
 	{
-		var feeStructure = new ShikshaMitra.Finance.Setting.FeeStructure.FeeStructure(
+		var feeStructure = new FeeStructure.FeeStructure(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
 			academicYearId,

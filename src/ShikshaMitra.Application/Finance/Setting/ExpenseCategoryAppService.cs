@@ -1,22 +1,21 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Application.Contracts.Finance.Setting.ExpenseCategory;
 using ShikshaMitra.Application.Contracts.Finance.Setting.ExpenseCategory.Dtos;
-using ShikshaMitra.Finance.Setting.ExpenseCategory;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
-namespace ShikshaMitra.Application.Finance.Setting.ExpenseCategory;
+namespace ShikshaMitra.Finance.Setting;
 
 [RemoteService(false)]
 public class ExpenseCategoryAppService : ApplicationService, IExpenseCategoryAppService
 {
-    private readonly IRepository<ShikshaMitra.Finance.Setting.ExpenseCategory.ExpenseCategory, Guid> _expenseCategoryRepository;
+    private readonly IRepository<ExpenseCategory, Guid> _expenseCategoryRepository;
 
-    public ExpenseCategoryAppService(IRepository<ShikshaMitra.Finance.Setting.ExpenseCategory.ExpenseCategory, Guid> expenseCategoryRepository)
+    public ExpenseCategoryAppService(IRepository<ExpenseCategory, Guid> expenseCategoryRepository)
     {
         _expenseCategoryRepository = expenseCategoryRepository;
     }
@@ -25,7 +24,7 @@ public class ExpenseCategoryAppService : ApplicationService, IExpenseCategoryApp
     {
         var tags = input.Tags != null && input.Tags.Any() ? string.Join(",", input.Tags) : null;
 
-        var expenseCategory = new ShikshaMitra.Finance.Setting.ExpenseCategory.ExpenseCategory(
+        var expenseCategory = new ExpenseCategory(
             GuidGenerator.Create(),
             CurrentTenant.Id,
             academicYearId,
@@ -95,7 +94,7 @@ public class ExpenseCategoryAppService : ApplicationService, IExpenseCategoryApp
         await _expenseCategoryRepository.DeleteAsync(id);
     }
 
-    private ExpenseCategoryResponse MapToResponse(ShikshaMitra.Finance.Setting.ExpenseCategory.ExpenseCategory entity)
+    private ExpenseCategoryResponse MapToResponse(ExpenseCategory entity)
     {
         return new ExpenseCategoryResponse
         {

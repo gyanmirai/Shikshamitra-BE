@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -6,24 +6,22 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Application.Contracts.Finance.Setting.FeeHead;
 using ShikshaMitra.Application.Contracts.Finance.Setting.FeeHead.Dtos;
 using ShikshaMitra.Application.Contracts.Finance.Setting.FeeCategory.Dtos; // For MessageResponse
-using ShikshaMitra.Finance.Setting.FeeHead;
-using ShikshaMitra.Finance.Setting.FeeCategory;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp;
 
-namespace ShikshaMitra.Application.Finance.Setting.FeeHead;
+namespace ShikshaMitra.Finance.Setting;
 
 [Authorize]
 [RemoteService(false)]
 public class FeeHeadAppService : ApplicationService, IFeeHeadAppService
 {
-    private readonly IRepository<ShikshaMitra.Finance.Setting.FeeHead.FeeHead, Guid> _feeHeadRepository;
-    private readonly IRepository<ShikshaMitra.Finance.Setting.FeeCategory.FeeCategory, Guid> _feeCategoryRepository;
+    private readonly IRepository<FeeHead, Guid> _feeHeadRepository;
+    private readonly IRepository<FeeCategory, Guid> _feeCategoryRepository;
 
     public FeeHeadAppService(
-        IRepository<ShikshaMitra.Finance.Setting.FeeHead.FeeHead, Guid> feeHeadRepository,
-        IRepository<ShikshaMitra.Finance.Setting.FeeCategory.FeeCategory, Guid> feeCategoryRepository)
+        IRepository<FeeHead, Guid> feeHeadRepository,
+        IRepository<FeeCategory, Guid> feeCategoryRepository)
     {
         _feeHeadRepository = feeHeadRepository;
         _feeCategoryRepository = feeCategoryRepository;
@@ -31,7 +29,7 @@ public class FeeHeadAppService : ApplicationService, IFeeHeadAppService
 
     public async Task<MessageResponse> CreateAsync(Guid academicYearId, FeeHeadCreateRequest input)
     {
-        var feeHead = new ShikshaMitra.Finance.Setting.FeeHead.FeeHead(
+        var feeHead = new FeeHead(
             GuidGenerator.Create(),
             CurrentTenant.Id,
             academicYearId,

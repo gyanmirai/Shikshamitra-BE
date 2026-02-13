@@ -1,5 +1,5 @@
-using System.ComponentModel.DataAnnotations;
-using ShikshaMitra.Finance.Setting.BankAccount;
+﻿using System.ComponentModel.DataAnnotations;
+using ShikshaMitra.Finance.Setting;
 
 namespace ShikshaMitra.Application.Contracts.Finance.Setting.BankAccount.Dtos;
 

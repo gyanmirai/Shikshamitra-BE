@@ -3,9 +3,6 @@ using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Academic.HomeworkAssignment;
-using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
-using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
-using ShikshaMitra.Finance.Setting.FeeCategory;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -59,6 +56,7 @@ using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.Examination.Exams;
+using ShikshaMitra.Finance.Setting;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -265,9 +263,9 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region GeneralSetting
 	#region FeeHead
 	// DbSet<FeeHead> FeeHeads { get; set; } // Removing old reference if it existed or was commented
-    public DbSet<ShikshaMitra.Finance.Setting.FeeHead.FeeHead> FeeHeads { get; set; }
+    public DbSet<Finance.Setting.FeeHead> FeeHeads { get; set; }
 	
-    public DbSet<ShikshaMitra.Finance.Setting.ReceiptBook.ReceiptBook> ReceiptBooks { get; set; }
+    public DbSet<ReceiptBook> ReceiptBooks { get; set; }
 	#endregion
 
     #region FeeStructure
@@ -280,18 +278,14 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
     public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionType> ConcessionTypes { get; set; }
     public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeFeeHead> ConcessionTypeFeeHeads { get; set; }
     public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeDocument> ConcessionTypeDocuments { get; set; }
-    public DbSet<ShikshaMitra.Finance.Setting.ChargeCategory.ChargeCategory> ChargeCategories { get; set; }
-    public DbSet<ShikshaMitra.Finance.Setting.IncomeCategory.IncomeCategory> IncomeCategories { get; set; }
-    public DbSet<ShikshaMitra.Finance.Setting.ExpenseCategory.ExpenseCategory> ExpenseCategories { get; set; }
-    public DbSet<ShikshaMitra.Finance.Setting.BankAccount.BankAccount> BankAccounts { get; set; }
+    public DbSet<ChargeCategory> ChargeCategories { get; set; }
+    public DbSet<IncomeCategory> IncomeCategories { get; set; }
+    public DbSet<ExpenseCategory> ExpenseCategories { get; set; }
+    public DbSet<Finance.Setting.BankAccount> BankAccounts { get; set; }
     #endregion
 
     public DbSet<FeeCategory> FeeCategories { get; set; }
 
-
-	#region PaymentStatusOption
-	DbSet<PaymentStatusOption> PaymentStatusOptions { get; set; }
-	#endregion
 	#endregion
 	#endregion
 	#endregion

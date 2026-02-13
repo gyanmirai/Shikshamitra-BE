@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra.Finance.Setting.ExpenseCategory;
+namespace ShikshaMitra.Finance.Setting;
 
-public class ExpenseCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class IncomeCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
     public Guid? TenantId { get; private set; }
     public Guid AcademicYearId { get; set; }
@@ -13,9 +13,9 @@ public class ExpenseCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public string? Tags { get; set; } // Stored as comma-separated values
     public bool IsActive { get; set; }
 
-    protected ExpenseCategory() { }
+    protected IncomeCategory() { }
 
-    public ExpenseCategory(
+    public IncomeCategory(
         Guid id,
         Guid? tenantId,
         Guid academicYearId,

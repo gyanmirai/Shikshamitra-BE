@@ -2,29 +2,27 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-
 using ShikshaMitra.Application.Contracts.Finance.Setting.ChargeCategory;
 using ShikshaMitra.Application.Contracts.Finance.Setting.ChargeCategory.Dtos;
-using ShikshaMitra.Finance.Setting.ChargeCategory;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
-namespace ShikshaMitra.Application.Finance.Setting.ChargeCategory;
+namespace ShikshaMitra.Finance.Setting;
 [RemoteService(false)]
 public class ChargeCategoryAppService : ApplicationService, IChargeCategoryAppService
 {
-    private readonly IRepository<ShikshaMitra.Finance.Setting.ChargeCategory.ChargeCategory, Guid> _chargeCategoryRepository;
+    private readonly IRepository<ChargeCategory, Guid> _chargeCategoryRepository;
 
-    public ChargeCategoryAppService(IRepository<ShikshaMitra.Finance.Setting.ChargeCategory.ChargeCategory, Guid> chargeCategoryRepository)
+    public ChargeCategoryAppService(IRepository<ChargeCategory, Guid> chargeCategoryRepository)
     {
         _chargeCategoryRepository = chargeCategoryRepository;
     }
 
     public async Task<ChargeCategoryResponse> CreateAsync(Guid academicYearId, CreateChargeCategoryRequest input)
     {
-        var chargeCategory = new ShikshaMitra.Finance.Setting.ChargeCategory.ChargeCategory(
+        var chargeCategory = new ChargeCategory(
             GuidGenerator.Create(),
 			CurrentTenant.Id,
 			academicYearId,
@@ -35,7 +33,7 @@ public class ChargeCategoryAppService : ApplicationService, IChargeCategoryAppSe
 
         await _chargeCategoryRepository.InsertAsync(chargeCategory);
 
-        return ObjectMapper.Map<ShikshaMitra.Finance.Setting.ChargeCategory.ChargeCategory, ChargeCategoryResponse>(chargeCategory);
+        return ObjectMapper.Map<ChargeCategory, ChargeCategoryResponse>(chargeCategory);
     }
 
     public async Task<PaginatedChargeCategoryResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
@@ -66,14 +64,14 @@ public class ChargeCategoryAppService : ApplicationService, IChargeCategoryAppSe
             CurrentPage = page,
             PageSize = pageSize,
             TotalPages = totalPages,
-            Items = ObjectMapper.Map<List<ShikshaMitra.Finance.Setting.ChargeCategory.ChargeCategory>, List<ChargeCategoryResponse>>(items)
+            Items = ObjectMapper.Map<List<ChargeCategory>, List<ChargeCategoryResponse>>(items)
         };
     }
 
     public async Task<ChargeCategoryResponse> GetAsync(Guid id)
     {
         var chargeCategory = await _chargeCategoryRepository.GetAsync(id);
-        return ObjectMapper.Map<ShikshaMitra.Finance.Setting.ChargeCategory.ChargeCategory, ChargeCategoryResponse>(chargeCategory);
+        return ObjectMapper.Map<ChargeCategory, ChargeCategoryResponse>(chargeCategory);
     }
 
     public async Task<ChargeCategoryResponse> UpdateAsync(Guid id, UpdateChargeCategoryRequest input)
@@ -89,7 +87,7 @@ public class ChargeCategoryAppService : ApplicationService, IChargeCategoryAppSe
 
         await _chargeCategoryRepository.UpdateAsync(chargeCategory);
 
-        return ObjectMapper.Map<ShikshaMitra.Finance.Setting.ChargeCategory.ChargeCategory, ChargeCategoryResponse>(chargeCategory);
+        return ObjectMapper.Map<ChargeCategory, ChargeCategoryResponse>(chargeCategory);
     }
 
     public async Task DeleteAsync(Guid id)

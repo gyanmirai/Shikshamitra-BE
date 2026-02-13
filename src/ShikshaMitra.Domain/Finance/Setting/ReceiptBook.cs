@@ -1,19 +1,28 @@
+﻿using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using System;
 using System.ComponentModel.DataAnnotations;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra.Finance.Setting.ReceiptBook;
+namespace ShikshaMitra.Finance.Setting;
 
 public class ReceiptBook : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
     public Guid? TenantId { get; private set; }
 
     public Guid AcademicYearId { get; private set; }
+	public AcademicYear AcademicYear { get; }
 
-    public Guid BoardId { get; private set; }
-    public Guid MediumId { get; private set; }
-    public Guid MediumStageId { get; private set; }
+
+	public Guid BoardId { get; private set; }
+	public EducationBoard EducationBoard { get; }
+
+	public Guid MediumId { get; private set; }
+	public EducationMedium EducationMedium { get; }
+	public Guid MediumStageId { get; private set; }
+	public EducationMediumStage EducationMediumStage { get; }
 
     [Required]
     public string Name { get; private set; }
@@ -27,7 +36,7 @@ public class ReceiptBook : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     public bool IsActive { get; private set; }
 
-    protected ReceiptBook() { }
+    private ReceiptBook() { }
 
     public ReceiptBook(
         Guid id, 

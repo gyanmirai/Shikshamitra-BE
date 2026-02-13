@@ -1,29 +1,28 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Application.Contracts.Finance.Setting.BankAccount;
 using ShikshaMitra.Application.Contracts.Finance.Setting.BankAccount.Dtos;
-using ShikshaMitra.Finance.Setting.BankAccount;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
-namespace ShikshaMitra.Application.Finance.Setting.BankAccount;
+namespace ShikshaMitra.Finance.Setting;
 
 [RemoteService(false)]
 public class BankAccountAppService : ApplicationService, IBankAccountAppService
 {
-    private readonly IRepository<ShikshaMitra.Finance.Setting.BankAccount.BankAccount, Guid> _bankAccountRepository;
+    private readonly IRepository<BankAccount, Guid> _bankAccountRepository;
 
-    public BankAccountAppService(IRepository<ShikshaMitra.Finance.Setting.BankAccount.BankAccount, Guid> bankAccountRepository)
+    public BankAccountAppService(IRepository<BankAccount, Guid> bankAccountRepository)
     {
         _bankAccountRepository = bankAccountRepository;
     }
 
     public async Task<BankAccountResponse> CreateAsync(Guid academicYearId, CreateBankAccountRequest input)
     {
-        var bankAccount = new ShikshaMitra.Finance.Setting.BankAccount.BankAccount(
+        var bankAccount = new BankAccount(
             GuidGenerator.Create(),
             academicYearId,
             input.BankName,
@@ -108,7 +107,7 @@ public class BankAccountAppService : ApplicationService, IBankAccountAppService
         await _bankAccountRepository.DeleteAsync(id);
     }
 
-    private BankAccountResponse MapToResponse(ShikshaMitra.Finance.Setting.BankAccount.BankAccount entity)
+    private BankAccountResponse MapToResponse(BankAccount entity)
     {
         return new BankAccountResponse
         {

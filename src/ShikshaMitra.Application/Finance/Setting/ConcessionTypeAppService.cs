@@ -1,30 +1,29 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Application.Contracts.Finance.Setting.ConcessionType;
 using ShikshaMitra.Application.Contracts.Finance.Setting.ConcessionType.Dtos;
+using ShikshaMitra.Finance.Setting;
 using ShikshaMitra.Finance.Setting.ConcessionType;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
-namespace ShikshaMitra.Finance.Setting;
 
 [Authorize]
 [RemoteService(false)]
 public class ConcessionTypeAppService : ApplicationService, IConcessionTypeAppService
 {
-    private readonly IRepository<ConcessionType.ConcessionType, Guid> _concessionTypeRepository;
-    private readonly IRepository<ConcessionTypeFeeHead, Guid> _concessionTypeFeeHeadRepository; // May not need direct repo if using nav property, but good for specific queries
+    private readonly IRepository<ConcessionType, Guid> _concessionTypeRepository;
+    private readonly IRepository<ConcessionTypeFeeHead, Guid> _concessionTypeFeeHeadRepository;
     private readonly IRepository<ConcessionTypeDocument, Guid> _concessionTypeDocumentRepository;
     private readonly IRepository<FeeHead, Guid> _feeHeadRepository;
     private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
 
     public ConcessionTypeAppService(
-        IRepository<ConcessionType.ConcessionType, Guid> concessionTypeRepository,
+        IRepository<ConcessionType, Guid> concessionTypeRepository,
         IRepository<ConcessionTypeFeeHead, Guid> concessionTypeFeeHeadRepository,
         IRepository<ConcessionTypeDocument, Guid> concessionTypeDocumentRepository,
         IRepository<FeeHead, Guid> feeHeadRepository,
@@ -43,7 +42,7 @@ public class ConcessionTypeAppService : ApplicationService, IConcessionTypeAppSe
         var academicYear = await _academicYearRepository.GetAsync(academicYearId); // Ensure exists
 
         // Create Entity
-        var concessionType = new ConcessionType.ConcessionType(
+        var concessionType = new ConcessionType(
             GuidGenerator.Create(),
             CurrentTenant.Id,
             academicYearId,

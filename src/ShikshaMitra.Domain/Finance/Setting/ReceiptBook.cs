@@ -13,16 +13,16 @@ public class ReceiptBook : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public Guid? TenantId { get; private set; }
 
     public Guid AcademicYearId { get; private set; }
-	public AcademicYear AcademicYear { get; }
+	public AcademicYear AcademicYear { get; private set; }
 
 
 	public Guid BoardId { get; private set; }
-	public EducationBoard EducationBoard { get; }
+	public EducationBoard EducationBoard { get; private set; }
 
 	public Guid MediumId { get; private set; }
-	public EducationMedium EducationMedium { get; }
+	public EducationMedium EducationMedium { get; private set; }
 	public Guid MediumStageId { get; private set; }
-	public EducationMediumStage EducationMediumStage { get; }
+	public EducationMediumStage EducationMediumStage { get; private set; }
 
     [Required]
     public string Name { get; private set; }

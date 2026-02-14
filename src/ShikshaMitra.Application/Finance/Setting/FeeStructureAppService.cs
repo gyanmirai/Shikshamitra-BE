@@ -21,16 +21,16 @@ namespace ShikshaMitra.Finance.Setting;
 [RemoteService(false)]
 public class FeeStructureAppService : ApplicationService, IFeeStructureAppService
 {
-	private readonly IRepository<FeeStructure.FeeStructure, Guid> _feeStructureRepository;
-	private readonly IRepository<FeeStructureStandard, Guid> _feeStructureStandardRepository;
-	private readonly IRepository<FeeStructureDetail, Guid> _feeStructureDetailRepository;
-	private readonly IRepository<Standard, Guid> _standardRepository;
-	private readonly IRepository<FeeHead, Guid> _feeHeadRepository;
-	private readonly IRepository<FeeCategory, Guid> _feeCategoryRepository;
-	private readonly IRepository<EducationBoard, Guid> _educationBoardRepository;
-	private readonly IRepository<EducationMedium, Guid> _educationMediumRepository;
-	private readonly IRepository<ReceiptBook, Guid> _receiptBookRepository;
-	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
+	private readonly IRepository<FeeStructure.FeeStructure, Guid> feeStructureRepository;
+	private readonly IRepository<FeeStructureStandard, Guid> feeStructureStandardRepository;
+	private readonly IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository;
+	private readonly IRepository<Standard, Guid> standardRepository;
+	private readonly IRepository<FeeHead, Guid> feeHeadRepository;
+	private readonly IRepository<FeeCategory, Guid> feeCategoryRepository;
+	private readonly IRepository<EducationBoard, Guid> educationBoardRepository;
+	private readonly IRepository<EducationMedium, Guid> educationMediumRepository;
+	private readonly IRepository<ReceiptBook, Guid> receiptBookRepository;
+	private readonly IRepository<AcademicYear, Guid> academicYearRepository;
 
 	public FeeStructureAppService(
 		IRepository<FeeStructure.FeeStructure, Guid> feeStructureRepository,
@@ -44,16 +44,16 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 		IRepository<ReceiptBook, Guid> receiptBookRepository,
 		IRepository<AcademicYear, Guid> academicYearRepository)
 	{
-		_feeStructureRepository = feeStructureRepository;
-		_feeStructureStandardRepository = feeStructureStandardRepository;
-		_feeStructureDetailRepository = feeStructureDetailRepository;
-		_standardRepository = standardRepository;
-		_feeHeadRepository = feeHeadRepository;
-		_feeCategoryRepository = feeCategoryRepository;
-		_educationBoardRepository = educationBoardRepository;
-		_educationMediumRepository = educationMediumRepository;
-		_receiptBookRepository = receiptBookRepository;
-		_academicYearRepository = academicYearRepository;
+		this.feeStructureRepository = feeStructureRepository;
+		this.feeStructureStandardRepository = feeStructureStandardRepository;
+		this.feeStructureDetailRepository = feeStructureDetailRepository;
+		this.standardRepository = standardRepository;
+		this.feeHeadRepository = feeHeadRepository;
+		this.feeCategoryRepository = feeCategoryRepository;
+		this.educationBoardRepository = educationBoardRepository;
+		this.educationMediumRepository = educationMediumRepository;
+		this.receiptBookRepository = receiptBookRepository;
+		this.academicYearRepository = academicYearRepository;
 	}
 
 	public async Task<FeeStructureDetailsResponse> CreateAsync(Guid academicYearId, FeeStructureCreateRequest input)
@@ -68,12 +68,12 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 			input.Name
 		);
 
-		await _feeStructureRepository.InsertAsync(feeStructure);
+		await feeStructureRepository.InsertAsync(feeStructure);
 
-		var academicYear = await _academicYearRepository.GetAsync(academicYearId);
-		var board = await _educationBoardRepository.GetAsync(input.BoardId);
-		var medium = await _educationMediumRepository.GetAsync(input.MediumId);
-		var receiptBook = await _receiptBookRepository.GetAsync(input.ReceiptBookId);
+		var academicYear = await academicYearRepository.GetAsync(academicYearId);
+		var board = await educationBoardRepository.GetAsync(input.BoardId);
+		var medium = await educationMediumRepository.GetAsync(input.MediumId);
+		var receiptBook = await receiptBookRepository.GetAsync(input.ReceiptBookId);
 
 		return new FeeStructureDetailsResponse
 		{
@@ -93,7 +93,7 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 
 	public async Task<FeeStructureListResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
 	{
-		var query = await _feeStructureRepository.GetQueryableAsync();
+		var query = await feeStructureRepository.GetQueryableAsync();
 
 		query = query.Where(x => x.AcademicYearId == academicYearId);
 
@@ -102,28 +102,28 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 			query = query.Where(x => x.Name.Contains(search));
 		}
 
-		var totalCount = await _feeStructureRepository.AsyncExecuter.CountAsync(query);
+		var totalCount = await feeStructureRepository.AsyncExecuter.CountAsync(query);
 
 		query = query.OrderByDescending(x => x.CreationTime)
 					 .Skip((page - 1) * pageSize)
 					 .Take(pageSize);
 
-		var items = await _feeStructureRepository.AsyncExecuter.ToListAsync(query);
+		var items = await feeStructureRepository.AsyncExecuter.ToListAsync(query);
 
 		// Fetch related data for names
-		var academicYears = await _academicYearRepository.GetListAsync(x => x.Id == academicYearId);
+		var academicYears = await academicYearRepository.GetListAsync(x => x.Id == academicYearId);
 		var academicYearName = academicYears.FirstOrDefault()?.Name;
 
 		var boardIds = items.Select(x => x.BoardId).Distinct().ToList();
-		var boards = await _educationBoardRepository.GetListAsync(x => boardIds.Contains(x.Id));
+		var boards = await educationBoardRepository.GetListAsync(x => boardIds.Contains(x.Id));
 		var boardDict = boards.ToDictionary(x => x.Id, x => x.Type.ToString());
 
 		var mediumIds = items.Select(x => x.MediumId).Distinct().ToList();
-		var mediums = await _educationMediumRepository.GetListAsync(x => mediumIds.Contains(x.Id));
+		var mediums = await educationMediumRepository.GetListAsync(x => mediumIds.Contains(x.Id));
 		var mediumDict = mediums.ToDictionary(x => x.Id, x => x.Name);
 
 		var receiptBookIds = items.Select(x => x.ReceiptBookId).Distinct().ToList();
-		var receiptBooks = await _receiptBookRepository.GetListAsync(x => receiptBookIds.Contains(x.Id));
+		var receiptBooks = await receiptBookRepository.GetListAsync(x => receiptBookIds.Contains(x.Id));
 		var receiptBookDict = receiptBooks.ToDictionary(x => x.Id, x => x.Name);
 
 		var dtos = items.Select(x => new FeeStructureDetailsResponse
@@ -153,12 +153,12 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 
 	public async Task<FeeStructureDetailsResponse> GetAsync(Guid feeStructureId)
 	{
-		var feeStructure = await _feeStructureRepository.GetAsync(feeStructureId);
+		var feeStructure = await feeStructureRepository.GetAsync(feeStructureId);
 
-		var academicYear = await _academicYearRepository.GetAsync(feeStructure.AcademicYearId);
-		var board = await _educationBoardRepository.GetAsync(feeStructure.BoardId);
-		var medium = await _educationMediumRepository.GetAsync(feeStructure.MediumId);
-		var receiptBook = await _receiptBookRepository.GetAsync(feeStructure.ReceiptBookId);
+		var academicYear = await academicYearRepository.GetAsync(feeStructure.AcademicYearId);
+		var board = await educationBoardRepository.GetAsync(feeStructure.BoardId);
+		var medium = await educationMediumRepository.GetAsync(feeStructure.MediumId);
+		var receiptBook = await receiptBookRepository.GetAsync(feeStructure.ReceiptBookId);
 
 		return new FeeStructureDetailsResponse
 		{
@@ -178,31 +178,31 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 
 	public async Task<MessageResponse> UpdateStatusAsync(Guid feeStructureId, FeeStructureStatusUpdateRequest input)
 	{
-		var feeStructure = await _feeStructureRepository.GetAsync(feeStructureId);
+		var feeStructure = await feeStructureRepository.GetAsync(feeStructureId);
 		feeStructure.SetStatus(input.Status);
-		await _feeStructureRepository.UpdateAsync(feeStructure);
+		await feeStructureRepository.UpdateAsync(feeStructure);
 
 		return new MessageResponse { Message = "Status updated successfully" };
 	}
 
 	public async Task<MessageResponse> UpdateAsync(Guid feeStructureId, FeeStructureUpdateRequest input)
 	{
-		var feeStructure = await _feeStructureRepository.GetAsync(feeStructureId);
+		var feeStructure = await feeStructureRepository.GetAsync(feeStructureId);
 		feeStructure.Update(input.Name, input.BoardId, input.MediumId, input.ReceiptBookId);
-		await _feeStructureRepository.UpdateAsync(feeStructure);
+		await feeStructureRepository.UpdateAsync(feeStructure);
 
 		return new MessageResponse { Message = "Fee structure updated successfully" };
 	}
 
 	public async Task<MessageResponse> SaveStandardFeeStructuresAsync(Guid feeStructureId, List<StandardFeeStructureSaveRequest> input)
 	{
-		var feeStructure = await _feeStructureRepository.GetAsync(feeStructureId);
+		var feeStructure = await feeStructureRepository.GetAsync(feeStructureId);
 
 		foreach (var standardRequest in input)
 		{
 			// 1. Check if FeeStructureStandard exists for this Standard in this FeeStructure
 			// 1. Check if FeeStructureStandard exists for this Standard in this FeeStructure
-			var query = await _feeStructureStandardRepository.WithDetailsAsync(x => x.FeeStructureDetails);
+			var query = await feeStructureStandardRepository.WithDetailsAsync(x => x.FeeStructureDetails);
 			var feeStructureStandards = await AsyncExecuter.ToListAsync(
 				query.Where(x => x.FeeStructureId == feeStructureId && x.StandardId == standardRequest.StandardId)
 			);
@@ -226,7 +226,7 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 
 			// Delete those not in input
 			var toDelete = feeStructureStandards.Where(x => !inputStructureNames.Contains(x.Name)).ToList();
-			await _feeStructureStandardRepository.DeleteManyAsync(toDelete);
+			await feeStructureStandardRepository.DeleteManyAsync(toDelete);
 
 			foreach (var structReq in standardRequest.StandardFeeStructures)
 			{
@@ -241,7 +241,7 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 						standardRequest.StandardId,
 						structReq.Name
 					);
-					await _feeStructureStandardRepository.InsertAsync(existingStandardStruct);
+					await feeStructureStandardRepository.InsertAsync(existingStandardStruct);
 				}
 
 				// Handle Details (Fee Heads)
@@ -259,7 +259,7 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 
 				if (detailsToDelete.Any())
 				{
-					await _feeStructureDetailRepository.DeleteManyAsync(detailsToDelete);
+					await feeStructureDetailRepository.DeleteManyAsync(detailsToDelete);
 				}
 
 				foreach (var headReq in structReq.FeeHeads)
@@ -272,7 +272,7 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 						// but here I should probably delete and recreate if I didn't add Update method.
 						// Wait, I didn't add Update method to FeeStructureDetail.
 						// I'll delete and recreate for simplicity and correctness with immutable-style entities.
-						await _feeStructureDetailRepository.DeleteAsync(existingDetail);
+						await feeStructureDetailRepository.DeleteAsync(existingDetail);
 					}
 
 					var newDetail = new FeeStructureDetail(
@@ -284,7 +284,7 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 						headReq.IsOneTime,
 						headReq.IsOptional
 					);
-					await _feeStructureDetailRepository.InsertAsync(newDetail);
+					await feeStructureDetailRepository.InsertAsync(newDetail);
 				}
 			}
 		}
@@ -294,9 +294,9 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 
 	public async Task<StandardFeeStructureResponse> GetStandardFeeStructureAsync(Guid feeStructureId, Guid standardId)
 	{
-		var standard = await _standardRepository.GetAsync(standardId);
+		var standard = await standardRepository.GetAsync(standardId);
 
-		var query = await _feeStructureStandardRepository.WithDetailsAsync(x => x.FeeStructureDetails);
+		var query = await feeStructureStandardRepository.WithDetailsAsync(x => x.FeeStructureDetails);
 		var structures = await AsyncExecuter.ToListAsync(
 			query.Where(x => x.FeeStructureId == feeStructureId && x.StandardId == standardId)
 		);
@@ -310,17 +310,18 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 
 		// Bulk load fee head names and category names
 		var allHeadIds = structures.SelectMany(x => x.FeeStructureDetails).Select(d => d.FeeHeadId).Distinct().ToList();
-		var feeHeads = await _feeHeadRepository.GetListAsync(x => allHeadIds.Contains(x.Id));
+		var feeHeads = await feeHeadRepository.GetListAsync(x => allHeadIds.Contains(x.Id));
 		var feeHeadDict = feeHeads.ToDictionary(x => x.Id, x => x);
 
 		var allCategoryIds = feeHeads.Select(x => x.FeeCategoryId).Distinct().ToList();
-		var categories = await _feeCategoryRepository.GetListAsync(x => allCategoryIds.Contains(x.Id));
+		var categories = await feeCategoryRepository.GetListAsync(x => allCategoryIds.Contains(x.Id));
 		var categoryDict = categories.ToDictionary(x => x.Id, x => x.Name);
 
 		foreach (var structure in structures)
 		{
 			var item = new StandardFeeStructureResponseItem
 			{
+				Id = structure.Id,
 				Name = structure.Name,
 				FeeHeads = new List<FeeHeadAssignmentResponse>()
 			};

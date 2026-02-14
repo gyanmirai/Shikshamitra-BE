@@ -21,6 +21,8 @@ using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Finance.StudentFeeAssignment;
+using ShikshaMitra.Application.Contracts.Finance.StudentFeeAssignment.Dtos;
 
 namespace ShikshaMitra;
 
@@ -118,5 +120,11 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 			.ForMember(dest => dest.AnnouncementType, opt => opt.MapFrom(src => src.AnnouncementTypeName));
 		CreateMap<CreateUpdateAnnouncementTypeDto, AnnouncementType>()
 			.ForMember(dest => dest.AnnouncementTypeName, opt => opt.MapFrom(src => src.AnnouncementType));
+
+		// Student Fee Structure mappings
+		CreateMap<StudentFeeStructure, StudentFeeStructureResponseDto>()
+			.ForMember(dest => dest.StudentFeeStructureId, opt => opt.MapFrom(src => src.Id))
+			.ForMember(dest => dest.FeeHeads, opt => opt.MapFrom(src => src.StudentFeeHeads));
+		CreateMap<StudentFeeHead, StudentFeeHeadDto>();
 	}
 }

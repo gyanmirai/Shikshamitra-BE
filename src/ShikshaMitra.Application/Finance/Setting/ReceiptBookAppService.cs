@@ -58,6 +58,18 @@ public class ReceiptBookAppService(
 
 		var totalCount = await receiptBookRepository.AsyncExecuter.CountAsync(query);
 
+		if (query.Count() == 0)
+		{
+			return new ReceiptBookListResponse
+			{
+				TotalCount = 0,
+				CurrentPage = page,
+				PageSize = pageSize,
+				TotalPages = 0,
+				Items = new List<ReceiptBookResponse>()
+			};
+		}
+
 		query = query.OrderByDescending(x => x.CreationTime)
 					 .Skip((page - 1) * pageSize)
 					 .Take(pageSize);

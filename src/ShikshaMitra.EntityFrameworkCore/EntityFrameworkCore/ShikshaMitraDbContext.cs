@@ -57,6 +57,7 @@ using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Finance.Setting;
+using ShikshaMitra.Finance.StudentFeeAssignment;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -263,30 +264,36 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region GeneralSetting
 	#region FeeHead
 	// DbSet<FeeHead> FeeHeads { get; set; } // Removing old reference if it existed or was commented
-    public DbSet<Finance.Setting.FeeHead> FeeHeads { get; set; }
-	
-    public DbSet<ReceiptBook> ReceiptBooks { get; set; }
+	public DbSet<Finance.Setting.FeeHead> FeeHeads { get; set; }
+
+	public DbSet<ReceiptBook> ReceiptBooks { get; set; }
 	#endregion
 
-    #region FeeStructure
-    public DbSet<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructure> FeeStructures { get; set; }
-    public DbSet<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureStandard> FeeStructureStandards { get; set; }
-    public DbSet<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureDetail> FeeStructureDetails { get; set; }
-    #endregion
+	#region FeeStructure
+	public DbSet<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructure> FeeStructures { get; set; }
+	public DbSet<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureStandard> FeeStructureStandards { get; set; }
+	public DbSet<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureDetail> FeeStructureDetails { get; set; }
+	#endregion
 
-    #region ConcessionType
-    public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionType> ConcessionTypes { get; set; }
-    public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeFeeHead> ConcessionTypeFeeHeads { get; set; }
-    public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeDocument> ConcessionTypeDocuments { get; set; }
-    public DbSet<ChargeCategory> ChargeCategories { get; set; }
-    public DbSet<IncomeCategory> IncomeCategories { get; set; }
-    public DbSet<ExpenseCategory> ExpenseCategories { get; set; }
-    public DbSet<Finance.Setting.BankAccount> BankAccounts { get; set; }
-    #endregion
+	#region ConcessionType
+	public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionType> ConcessionTypes { get; set; }
+	public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeFeeHead> ConcessionTypeFeeHeads { get; set; }
+	public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeDocument> ConcessionTypeDocuments { get; set; }
+	public DbSet<ChargeCategory> ChargeCategories { get; set; }
+	public DbSet<IncomeCategory> IncomeCategories { get; set; }
+	public DbSet<ExpenseCategory> ExpenseCategories { get; set; }
+	public DbSet<Finance.Setting.BankAccount> BankAccounts { get; set; }
+	#endregion
 
-    public DbSet<FeeCategory> FeeCategories { get; set; }
+	public DbSet<FeeCategory> FeeCategories { get; set; }
 
 	#endregion
+
+	#region StudentFeeAssignment
+	public DbSet<StudentFeeStructure> StudentFeeStructures { get; set; }
+	public DbSet<StudentFeeHead> StudentFeeHeads { get; set; }
+	#endregion
+
 	#endregion
 	#endregion
 

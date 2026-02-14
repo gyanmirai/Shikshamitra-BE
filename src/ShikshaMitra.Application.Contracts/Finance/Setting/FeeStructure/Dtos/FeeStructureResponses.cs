@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
 
@@ -40,7 +40,7 @@ public class StandardFeeStructureResponse
     public List<StandardFeeStructureResponseItem> StandardFeeStructures { get; set; }
 }
 
-public class StandardFeeStructureResponseItem
+public class StandardFeeStructureResponseItem : EntityDto<Guid>
 {
     public string Name { get; set; }
     public List<FeeHeadAssignmentResponse> FeeHeads { get; set; }

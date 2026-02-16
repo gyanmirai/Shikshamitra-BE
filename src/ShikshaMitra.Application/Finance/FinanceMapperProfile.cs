@@ -7,15 +7,15 @@ using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
 
 namespace ShikshaMitra.Finance;
 
-    public class FinanceMapperProfile :Profile 
-    {
+public class FinanceMapperProfile : Profile
+{
 	public FinanceMapperProfile()
 	{
 		#region Setting
 		#region GeneralSetting
 		#region FeeHead
 
-		
+
 		CreateMap<FeeHead, FeeHeadDto>();
 
 		CreateMap<CreateUpdateFeeHeadDto, FeeHead>();
@@ -27,6 +27,10 @@ namespace ShikshaMitra.Finance;
 		#endregion
 		#endregion
 
+		#region Charges
+		// Note: Charge mappings are handled manually in the service layer
+		// because we need to populate related entity names via joins
+		#endregion
 
 	}
 

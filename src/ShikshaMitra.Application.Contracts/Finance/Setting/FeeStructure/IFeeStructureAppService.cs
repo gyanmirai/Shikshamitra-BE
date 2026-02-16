@@ -15,5 +15,5 @@ public interface IFeeStructureAppService : IApplicationService
 	Task<MessageResponse> UpdateAsync(Guid feeStructureId, FeeStructureUpdateRequest input);
 	Task<MessageResponse> UpdateStatusAsync(Guid feeStructureId, FeeStructureStatusUpdateRequest input);
 	Task<MessageResponse> SaveStandardFeeStructuresAsync(Guid feeStructureId, List<StandardFeeStructureSaveRequest> input);
-	Task<StandardFeeStructureResponse> GetStandardFeeStructureAsync(Guid feeStructureId, Guid standardId);
+	Task<StandardFeeStructureResponse> GetStandardFeeStructureAsync(Guid standardId);
 }

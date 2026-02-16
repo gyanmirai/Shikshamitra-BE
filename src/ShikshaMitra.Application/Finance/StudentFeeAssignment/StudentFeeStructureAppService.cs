@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -174,7 +174,7 @@ public class StudentFeeStructureAppService : ApplicationService, IStudentFeeStru
 
 		if (studentFeeStructure == null)
 		{
-			throw new BusinessException("ShikshaMitra:StudentFeeStructureNotFound")
+			throw new BusinessException("ShikshaMitra:StudentFeeStructureNotFound", "Student FeeStructure is Not Found")
 				.WithData("StudentId", studentId);
 		}
 

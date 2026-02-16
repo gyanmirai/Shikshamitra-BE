@@ -85,9 +85,9 @@ public class FeeStructureController : AbpController
 	/// <summary>
 	/// Get Fee Structure for a Particular Standard
 	/// </summary>
-	[HttpGet("{feeStructureId}/standards/{standardId}")]
-	public Task<StandardFeeStructureResponse> GetStandardFeeStructureAsync(Guid feeStructureId, Guid standardId)
+	[HttpGet("standards/{standardId}")]
+	public Task<StandardFeeStructureResponse> GetStandardFeeStructureAsync(Guid standardId)
 	{
-		return _feeStructureAppService.GetStandardFeeStructureAsync(feeStructureId, standardId);
+		return _feeStructureAppService.GetStandardFeeStructureAsync(standardId);
 	}
 }

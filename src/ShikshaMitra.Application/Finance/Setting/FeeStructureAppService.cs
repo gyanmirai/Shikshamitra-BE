@@ -292,13 +292,13 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 		return new MessageResponse { Message = "Standard fee structures saved successfully" };
 	}
 
-	public async Task<StandardFeeStructureResponse> GetStandardFeeStructureAsync(Guid feeStructureId, Guid standardId)
+	public async Task<StandardFeeStructureResponse> GetStandardFeeStructureAsync(Guid standardId)
 	{
 		var standard = await standardRepository.GetAsync(standardId);
 
 		var query = await feeStructureStandardRepository.WithDetailsAsync(x => x.FeeStructureDetails);
 		var structures = await AsyncExecuter.ToListAsync(
-			query.Where(x => x.FeeStructureId == feeStructureId && x.StandardId == standardId)
+			query.Where(x => x.StandardId == standardId)
 		);
 
 		var response = new StandardFeeStructureResponse

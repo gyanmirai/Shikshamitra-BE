@@ -147,6 +147,7 @@ public class StudentFeeStructureAppService : ApplicationService, IStudentFeeStru
 				GuidGenerator.Create(),
 				CurrentTenant.Id,
 				studentFeeStructure.Id,
+				feeStructureStandard.Id,
 				detail.FeeHeadId,
 				feeHead?.Name ?? string.Empty,
 				categoryName,
@@ -186,6 +187,7 @@ public class StudentFeeStructureAppService : ApplicationService, IStudentFeeStru
 		var response = new StudentFeeStructureResponseDto
 		{
 			StudentFeeStructureId = studentFeeStructure.Id,
+			StandardFeeStructureId = studentFeeStructure.FeeStructureStandardId,
 			StudentId = studentFeeStructure.StudentId,
 			StandardId = studentFeeStructure.StandardId,
 			StructureName = studentFeeStructure.StructureName,

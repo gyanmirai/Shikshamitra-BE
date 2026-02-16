@@ -10,6 +10,8 @@ public class StudentFeeHead : FullAuditedEntity<Guid>, IMultiTenant
 
 	public Guid StudentFeeStructureId { get; private set; }
 
+	public Guid? StandardFeeStructureId { get; private set; }
+
 	public Guid FeeHeadId { get; private set; }
 
 	public string FeeHeadName { get; private set; }
@@ -30,6 +32,7 @@ public class StudentFeeHead : FullAuditedEntity<Guid>, IMultiTenant
 		Guid id,
 		Guid? tenantId,
 		Guid studentFeeStructureId,
+		Guid? standardFeeStructureId,
 		Guid feeHeadId,
 		string feeHeadName,
 		string categoryName,
@@ -40,6 +43,7 @@ public class StudentFeeHead : FullAuditedEntity<Guid>, IMultiTenant
 	{
 		TenantId = tenantId;
 		StudentFeeStructureId = studentFeeStructureId;
+		StandardFeeStructureId = standardFeeStructureId;
 		FeeHeadId = feeHeadId;
 		FeeHeadName = feeHeadName;
 		CategoryName = categoryName;

@@ -7,6 +7,8 @@ public class StudentFeeStructureResponseDto
 {
 	public Guid StudentFeeStructureId { get; set; }
 
+	public Guid? StandardFeeStructureId { get; set; }
+
 	public Guid StudentId { get; set; }
 
 	public Guid StandardId { get; set; }

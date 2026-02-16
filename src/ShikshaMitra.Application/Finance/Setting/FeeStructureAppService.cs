@@ -14,14 +14,14 @@ using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp;
+using ShikshaMitra.Finance.Setting;
 
-namespace ShikshaMitra.Finance.Setting;
 
 [Authorize]
 [RemoteService(false)]
 public class FeeStructureAppService : ApplicationService, IFeeStructureAppService
 {
-	private readonly IRepository<FeeStructure.FeeStructure, Guid> feeStructureRepository;
+	private readonly IRepository<FeeStructure, Guid> feeStructureRepository;
 	private readonly IRepository<FeeStructureStandard, Guid> feeStructureStandardRepository;
 	private readonly IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository;
 	private readonly IRepository<Standard, Guid> standardRepository;
@@ -33,7 +33,7 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 	private readonly IRepository<AcademicYear, Guid> academicYearRepository;
 
 	public FeeStructureAppService(
-		IRepository<FeeStructure.FeeStructure, Guid> feeStructureRepository,
+		IRepository<FeeStructure, Guid> feeStructureRepository,
 		IRepository<FeeStructureStandard, Guid> feeStructureStandardRepository,
 		IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository,
 		IRepository<Standard, Guid> standardRepository,
@@ -58,7 +58,19 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 
 	public async Task<FeeStructureDetailsResponse> CreateAsync(Guid academicYearId, FeeStructureCreateRequest input)
 	{
-		var feeStructure = new FeeStructure.FeeStructure(
+
+		var existingFeeStructure = await feeStructureRepository.FirstOrDefaultAsync(
+			x => x.AcademicYearId == academicYearId &&
+				x.BoardId == input.BoardId &&
+				x.MediumId == input.MediumId
+		);
+
+		if (existingFeeStructure != null)
+		{
+			throw new BusinessException("FinanceErrorCodes.FeeStructureAlreadyExists", "Fee structure already exists for the given academic year, board, and medium");
+		}
+
+		var feeStructure = new FeeStructure(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
 			academicYearId,

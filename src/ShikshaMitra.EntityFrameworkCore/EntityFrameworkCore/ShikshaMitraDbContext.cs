@@ -264,7 +264,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region GeneralSetting
 	#region FeeHead
 	// DbSet<FeeHead> FeeHeads { get; set; } // Removing old reference if it existed or was commented
-	public DbSet<Finance.Setting.FeeHead> FeeHeads { get; set; }
+	public DbSet<ShikshaMitra.Finance.Setting.FeeHead> FeeHeads { get; set; }
 
 	public DbSet<ReceiptBook> ReceiptBooks { get; set; }
 	#endregion
@@ -282,7 +282,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<ChargeCategory> ChargeCategories { get; set; }
 	public DbSet<IncomeCategory> IncomeCategories { get; set; }
 	public DbSet<ExpenseCategory> ExpenseCategories { get; set; }
-	public DbSet<Finance.Setting.BankAccount> BankAccounts { get; set; }
+	public DbSet<ShikshaMitra.Finance.Setting.BankAccount> BankAccounts { get; set; }
 	#endregion
 
 	public DbSet<FeeCategory> FeeCategories { get; set; }
@@ -292,6 +292,10 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region StudentFeeAssignment
 	public DbSet<StudentFeeStructure> StudentFeeStructures { get; set; }
 	public DbSet<StudentFeeHead> StudentFeeHeads { get; set; }
+	#endregion
+
+	#region Charges
+	public DbSet<ShikshaMitra.Finance.Charges.Charge> Charges { get; set; }
 	#endregion
 
 	#endregion

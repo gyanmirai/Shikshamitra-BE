@@ -164,6 +164,19 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ApprovalNotes = rejectionReason;
 	}
 
+	/// <summary>
+	/// Validates if the charge can be deleted. Only allowed for PENDING charges.
+	/// </summary>
+	public void ValidateCanDelete()
+	{
+		if (Status != ChargeStatus.Pending)
+		{
+			throw new BusinessException("ShikshaMitra:ChargeCannotBeDeleted")
+				.WithData("Status", Status.ToString())
+				.WithData("Message", "Only pending charges can be deleted");
+		}
+	}
+
 	private void ValidateAmount()
 	{
 		if (Amount <= 0)

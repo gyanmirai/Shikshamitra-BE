@@ -120,4 +120,15 @@ public class ChargeController : AbpController
 	{
 		return _chargeAppService.RejectAsync(chargeId, input);
 	}
+
+	/// <summary>
+	/// Delete a charge. Only PENDING charges can be deleted.
+	/// </summary>
+	/// <param name="chargeId">Unique charge identifier</param>
+	/// <returns>No content on success</returns>
+	[HttpDelete("{chargeId}")]
+	public Task DeleteAsync(Guid chargeId)
+	{
+		return _chargeAppService.DeleteAsync(chargeId);
+	}
 }

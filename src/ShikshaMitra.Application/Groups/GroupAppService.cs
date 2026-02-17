@@ -657,6 +657,41 @@ public class GroupAppService : ApplicationService, IGroupAppService
             ? await BuildAcademicSelectionAsync(group.NameBasedDivisionIds)
             : null;
 
+        // Build name-based member details
+        NameBasedSelectionResponseDto? nameBasedDto = null;
+        if (hasNameBased)
+        {
+            nameBasedDto = new NameBasedSelectionResponseDto
+            {
+                AcademicSelection = nameBasedAcademicSelection,
+                RoleIds = group.NameBasedRoleIds,
+                StudentFilters = nameBasedStudentRules.Select(r => new StudentRuleDto
+                {
+                    Id = r.Id,
+                    Field = r.Field,
+                    Operator = r.Operator,
+                    Value = r.Value
+                }).ToList(),
+                EmployeeFilters = nameBasedEmployeeRules.Select(r => new EmployeeRuleDto
+                {
+                    Id = r.Id,
+                    Field = r.Field,
+                    Operator = r.Operator,
+                    Value = r.Value
+                }).ToList(),
+                SelectedMembers = group.Members.Select(m => new GroupMemberDto
+                {
+                    Id = m.Id,
+                    MemberType = m.MemberType,
+                    MemberId = m.MemberId,
+                    UserId = m.UserId
+                }).ToList()
+            };
+
+            // Enrich with separate student and employee details
+            await EnrichNameBasedMembersAsync(group, nameBasedDto);
+        }
+
         return new GroupDto
         {
             Id = group.Id,
@@ -683,37 +718,157 @@ public class GroupAppService : ApplicationService, IGroupAppService
                     Value = r.Value
                 }).ToList()
             } : null,
-            NameBased = hasNameBased ? new NameBasedSelectionResponseDto
-            {
-                AcademicSelection = nameBasedAcademicSelection,
-                RoleIds = group.NameBasedRoleIds,
-                StudentFilters = nameBasedStudentRules.Select(r => new StudentRuleDto
-                {
-                    Id = r.Id,
-                    Field = r.Field,
-                    Operator = r.Operator,
-                    Value = r.Value
-                }).ToList(),
-                EmployeeFilters = nameBasedEmployeeRules.Select(r => new EmployeeRuleDto
-                {
-                    Id = r.Id,
-                    Field = r.Field,
-                    Operator = r.Operator,
-                    Value = r.Value
-                }).ToList(),
-                SelectedMembers = group.Members.Select(m => new GroupMemberDto
-                {
-                    Id = m.Id,
-                    MemberType = m.MemberType,
-                    MemberId = m.MemberId,
-                    UserId = m.UserId
-                }).ToList()
-            } : null,
+            NameBased = nameBasedDto,
+            StudentCount = nameBasedDto?.StudentCount ?? 0,
+            EmployeeCount = nameBasedDto?.EmployeeCount ?? 0,
             CreationTime = group.CreationTime,
             CreatorId = group.CreatorId,
             LastModificationTime = group.LastModificationTime,
             LastModifierId = group.LastModifierId
         };
+    }
+
+    /// <summary>
+    /// Enriches the NameBasedSelectionResponseDto with separate student and employee detail lists.
+    /// Batch-fetches entities by their MemberIds to avoid N+1 queries.
+    /// </summary>
+    private async Task EnrichNameBasedMembersAsync(Group group, NameBasedSelectionResponseDto nameBasedDto)
+    {
+        var studentMemberIds = group.Members
+            .Where(m => m.MemberType == GroupMemberType.Student)
+            .Select(m => m.MemberId)
+            .ToList();
+
+        var employeeMemberIds = group.Members
+            .Where(m => m.MemberType == GroupMemberType.Employee)
+            .Select(m => m.MemberId)
+            .ToList();
+
+        // Batch-fetch students
+        if (studentMemberIds.Count > 0)
+        {
+            var studentQuery = await _studentRepository.GetQueryableAsync();
+            var students = await AsyncExecuter.ToListAsync(
+                studentQuery.Where(s => studentMemberIds.Contains(s.Id)));
+
+            // Resolve standard, division, board, medium names in batch
+            var standardIds = students.Where(s => s.StandardId.HasValue).Select(s => s.StandardId!.Value).Distinct().ToList();
+            var divisionIds = students.Where(s => s.DivisionId.HasValue).Select(s => s.DivisionId!.Value).Distinct().ToList();
+            var boardIds = students.Where(s => s.AcademicBoardId.HasValue).Select(s => s.AcademicBoardId!.Value).Distinct().ToList();
+            var mediumIds = students.Select(s => s.AcademicMediumId).Distinct().ToList();
+
+            var standardNames = new Dictionary<Guid, string>();
+            var divisionNames = new Dictionary<Guid, string>();
+            var boardNames = new Dictionary<Guid, string>();
+            var mediumNames = new Dictionary<Guid, string>();
+
+            if (standardIds.Count > 0)
+            {
+                var standardQuery = await _standardRepository.GetQueryableAsync();
+                var standards = await AsyncExecuter.ToListAsync(standardQuery.Where(s => standardIds.Contains(s.Id)));
+                standardNames = standards.ToDictionary(s => s.Id, s => s.Name);
+            }
+
+            if (divisionIds.Count > 0)
+            {
+                var divisionQuery = await _divisionRepository.GetQueryableAsync();
+                var divisions = await AsyncExecuter.ToListAsync(divisionQuery.Where(d => divisionIds.Contains(d.Id)));
+                divisionNames = divisions.ToDictionary(d => d.Id, d => d.Name);
+            }
+
+            if (boardIds.Count > 0)
+            {
+                var boardQuery = await _boardRepository.GetQueryableAsync();
+                var boards = await AsyncExecuter.ToListAsync(boardQuery.Where(b => boardIds.Contains(b.Id)));
+                boardNames = boards.ToDictionary(b => b.Id, b => b.Type.ToString());
+            }
+
+            if (mediumIds.Count > 0)
+            {
+                var mediumQuery = await _mediumRepository.GetQueryableAsync();
+                var mediums = await AsyncExecuter.ToListAsync(mediumQuery.Where(m => mediumIds.Contains(m.Id)));
+                mediumNames = mediums.ToDictionary(m => m.Id, m => m.Name);
+            }
+
+            nameBasedDto.Students = students.Select(s => new GroupMemberStudentDto
+            {
+                Id = s.Id,
+                FirstName = s.FirstName,
+                MiddleName = s.MiddleName,
+                LastName = s.LastName,
+                StudentName = string.Join(" ", new[] { s.FirstName, s.MiddleName, s.LastName }.Where(n => !string.IsNullOrWhiteSpace(n))),
+                StandardId = s.StandardId,
+                StandardName = s.StandardId.HasValue && standardNames.TryGetValue(s.StandardId.Value, out var stdName) ? stdName : null,
+                DivisionId = s.DivisionId,
+                DivisionName = s.DivisionId.HasValue && divisionNames.TryGetValue(s.DivisionId.Value, out var divName) ? divName : null,
+                AcademicBoardId = s.AcademicBoardId,
+                AcademicBoardName = s.AcademicBoardId.HasValue && boardNames.TryGetValue(s.AcademicBoardId.Value, out var boardName) ? boardName : null,
+                AcademicMediumId = s.AcademicMediumId,
+                AcademicMediumName = mediumNames.TryGetValue(s.AcademicMediumId, out var medName) ? medName : null,
+                Gender = s.AdditionalDetail?.Gender,
+                GrNo = s.GrNo,
+                RollNo = s.RollNo,
+                Status = s.Status,
+                PrimaryContactNo = s.ContactDetail?.PrimaryContactNo,
+                Email = s.ContactDetail?.Email
+            }).ToList();
+        }
+
+        // Batch-fetch employees
+        if (employeeMemberIds.Count > 0)
+        {
+            var employeeQuery = await _employeeRepository.GetQueryableAsync();
+            var employees = await AsyncExecuter.ToListAsync(
+                employeeQuery.Where(e => employeeMemberIds.Contains(e.Id)));
+
+            // Resolve role names in batch
+            var roleIds = employees.Select(e => e.RoleId).Distinct().ToList();
+            var roleNames = new Dictionary<Guid, string>();
+
+            if (roleIds.Count > 0)
+            {
+                var roleQuery = await _roleRepository.GetQueryableAsync();
+                var roles = await AsyncExecuter.ToListAsync(roleQuery.Where(r => roleIds.Contains(r.Id)));
+                roleNames = roles.ToDictionary(r => r.Id, r => r.Name);
+            }
+
+            nameBasedDto.Employees = employees.Select(e => new GroupMemberEmployeeDto
+            {
+                Id = e.Id,
+                EmployeeCode = e.EmployeeCode,
+                FirstName = e.FirstName,
+                MiddleName = e.MiddleName,
+                LastName = e.LastName,
+                EmployeeName = string.Join(" ", new[] { e.FirstName, e.MiddleName, e.LastName }.Where(n => !string.IsNullOrWhiteSpace(n))),
+                Department = e.Department,
+                Designation = e.Designation,
+                RoleId = e.RoleId,
+                RoleName = roleNames.TryGetValue(e.RoleId, out var roleName) ? roleName : null,
+                GenderType = e.GenderType,
+                MobileNo = e.MobileNo,
+                Email = e.Email,
+                EmployeeStatusType = e.EmployeeStatusType,
+                UserId = e.UserId
+            }).ToList();
+        }
+
+        // Also populate display names on SelectedMembers for backward compatibility
+        foreach (var member in nameBasedDto.SelectedMembers)
+        {
+            if (member.MemberType == GroupMemberType.Student)
+            {
+                var studentDto = nameBasedDto.Students.FirstOrDefault(s => s.Id == member.MemberId);
+                member.DisplayName = studentDto?.StudentName;
+            }
+            else if (member.MemberType == GroupMemberType.Employee)
+            {
+                var employeeDto = nameBasedDto.Employees.FirstOrDefault(e => e.Id == member.MemberId);
+                member.DisplayName = employeeDto?.EmployeeName;
+            }
+        }
+
+        nameBasedDto.StudentCount = nameBasedDto.Students.Count;
+        nameBasedDto.EmployeeCount = nameBasedDto.Employees.Count;
     }
 
     /// <summary>

@@ -82,6 +82,7 @@ public class ChargeListItem
 	public string RequestorName { get; set; }
 	public string RequestorRole { get; set; }
 	public DateTime RequestedOn { get; set; }
+	public string? AdditionalNotes { get; set; }
 }
 
 public class ChargeDetailResponse

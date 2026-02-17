@@ -88,7 +88,7 @@ public class ChargeAppService : ApplicationService, IChargeAppService
 		await ValidateReferencesExist(input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId);
 
 		// Determine initial status based on category approval requirement
-		var initialStatus = chargeCategory.IsApprovalRequired ? ChargeStatus.Pending : ChargeStatus.Approved;
+		ChargeStatus initialStatus = chargeCategory.IsApprovalRequired ? ChargeStatus.Pending : ChargeStatus.Approved;
 
 		var charge = new Charge(
 			GuidGenerator.Create(),
@@ -109,7 +109,7 @@ public class ChargeAppService : ApplicationService, IChargeAppService
 			input.AdditionalNotes
 		);
 
-		await _chargeRepository.InsertAsync(charge);
+		await _chargeRepository.InsertAsync(charge, autoSave: true);
 
 		var response = await BuildChargeResponseAsync(charge);
 		response.Message = initialStatus == ChargeStatus.Pending
@@ -121,14 +121,14 @@ public class ChargeAppService : ApplicationService, IChargeAppService
 
 	public async Task<ChargeListResponse> GetAllAsync(Guid academicYearId, GetChargesRequest input)
 	{
-		var query = await _chargeRepository.GetQueryableAsync();
-		var studentQuery = await _studentRepository.GetQueryableAsync();
-		var categoryQuery = await _chargeCategoryRepository.GetQueryableAsync();
-		var standardQuery = await _standardRepository.GetQueryableAsync();
-		var divisionQuery = await _divisionRepository.GetQueryableAsync();
-		var boardQuery = await _educationBoardRepository.GetQueryableAsync();
-		var mediumQuery = await _educationMediumRepository.GetQueryableAsync();
-		var userQuery = await _userRepository.GetQueryableAsync();
+		IQueryable<Charge>? query = await _chargeRepository.GetQueryableAsync();
+		IQueryable<Student>? studentQuery = await _studentRepository.GetQueryableAsync();
+		IQueryable<ChargeCategory>? categoryQuery = await _chargeCategoryRepository.GetQueryableAsync();
+		IQueryable<Standard>? standardQuery = await _standardRepository.GetQueryableAsync();
+		IQueryable<Division>? divisionQuery = await _divisionRepository.GetQueryableAsync();
+		IQueryable<EducationBoard>? boardQuery = await _educationBoardRepository.GetQueryableAsync();
+		IQueryable<EducationMedium>? mediumQuery = await _educationMediumRepository.GetQueryableAsync();
+		IQueryable<IdentityUser>? userQuery = await _userRepository.GetQueryableAsync();
 
 		// Join with related entities
 		var joinedQuery = from charge in query
@@ -177,7 +177,7 @@ public class ChargeAppService : ApplicationService, IChargeAppService
 
 		var totalPages = (int) Math.Ceiling(totalCount / (double) input.PageSize);
 
-		var listItems = items.Select(x => new ChargeListItem
+		List<ChargeListItem>? listItems = items.Select(x => new ChargeListItem
 		{
 			ChargeId = x.charge.Id,
 			StudentId = x.student.Id,
@@ -203,7 +203,9 @@ public class ChargeAppService : ApplicationService, IChargeAppService
 			RequestorId = x.requestor.Id,
 			RequestorName = x.requestor.Name ?? x.requestor.UserName,
 			RequestorRole = "User", // Can be enhanced with role lookup
-			RequestedOn = x.charge.AppliedOn
+			RequestedOn = x.charge.AppliedOn,
+			AdditionalNotes = x.charge.AdditionalNotes,
+
 		}).ToList();
 
 		return new ChargeListResponse
@@ -347,7 +349,7 @@ public class ChargeAppService : ApplicationService, IChargeAppService
 
 		charge.Reject(_currentUser.Id.Value, input.RejectionReason);
 
-		await _chargeRepository.UpdateAsync(charge);
+		await _chargeRepository.UpdateAsync(charge, autoSave: true);
 
 		var rejector = await _userRepository.GetAsync(_currentUser.Id.Value);
 
@@ -365,6 +367,16 @@ public class ChargeAppService : ApplicationService, IChargeAppService
 			},
 			Message = "Charge rejected successfully"
 		};
+	}
+
+	public async Task DeleteAsync(Guid chargeId)
+	{
+		var charge = await _chargeRepository.GetAsync(chargeId);
+
+		// Validate that the charge can be deleted (only pending charges)
+		charge.ValidateCanDelete();
+
+		await _chargeRepository.DeleteAsync(charge, autoSave: true);
 	}
 
 	private async Task ValidateReferencesExist(Guid boardId, Guid mediumId, Guid standardId, Guid divisionId)

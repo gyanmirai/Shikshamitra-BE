@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using ShikshaMitra.Common;
 using ShikshaMitra.Groups;
+using ShikshaMitra.Students;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Application.Contracts.Groups;
@@ -46,6 +48,16 @@ public class GroupDto : AuditedEntityDto<Guid>
     /// Computed member count (resolved from rules and/or stored members)
     /// </summary>
     public int MemberCount { get; set; }
+
+    /// <summary>
+    /// Total count of student members in this group
+    /// </summary>
+    public int StudentCount { get; set; }
+
+    /// <summary>
+    /// Total count of employee members in this group
+    /// </summary>
+    public int EmployeeCount { get; set; }
 }
 
 /// <summary>
@@ -119,9 +131,29 @@ public class RuleBasedSelectionResponseDto
 public class NameBasedSelectionResponseDto : RuleBasedSelectionResponseDto
 {
     /// <summary>
-    /// Manually selected members
+    /// Manually selected members (flat list for backward compatibility)
     /// </summary>
     public List<GroupMemberDto> SelectedMembers { get; set; } = new();
+
+    /// <summary>
+    /// Student members with detailed info
+    /// </summary>
+    public List<GroupMemberStudentDto> Students { get; set; } = new();
+
+    /// <summary>
+    /// Employee members with detailed info
+    /// </summary>
+    public List<GroupMemberEmployeeDto> Employees { get; set; } = new();
+
+    /// <summary>
+    /// Total count of student members
+    /// </summary>
+    public int StudentCount { get; set; }
+
+    /// <summary>
+    /// Total count of employee members
+    /// </summary>
+    public int EmployeeCount { get; set; }
 }
 
 /// <summary>
@@ -160,4 +192,52 @@ public class GroupMemberDto
     /// Display name of the member (populated from Student/Employee entity)
     /// </summary>
     public string? DisplayName { get; set; }
+}
+
+/// <summary>
+/// Lightweight DTO for student group members
+/// </summary>
+public class GroupMemberStudentDto
+{
+    public Guid Id { get; set; }
+    public string? FirstName { get; set; }
+    public string? MiddleName { get; set; }
+    public string? LastName { get; set; }
+    public string? StudentName { get; set; }
+    public Guid? StandardId { get; set; }
+    public string? StandardName { get; set; }
+    public Guid? DivisionId { get; set; }
+    public string? DivisionName { get; set; }
+    public Guid? AcademicBoardId { get; set; }
+    public string? AcademicBoardName { get; set; }
+    public Guid AcademicMediumId { get; set; }
+    public string? AcademicMediumName { get; set; }
+    public GenderEnum? Gender { get; set; }
+    public int? GrNo { get; set; }
+    public int? RollNo { get; set; }
+    public StudentLifeCycleStatusEnum Status { get; set; }
+    public string? PrimaryContactNo { get; set; }
+    public string? Email { get; set; }
+}
+
+/// <summary>
+/// Lightweight DTO for employee group members
+/// </summary>
+public class GroupMemberEmployeeDto
+{
+    public Guid Id { get; set; }
+    public string? EmployeeCode { get; set; }
+    public string? FirstName { get; set; }
+    public string? MiddleName { get; set; }
+    public string? LastName { get; set; }
+    public string? EmployeeName { get; set; }
+    public string? Department { get; set; }
+    public string? Designation { get; set; }
+    public Guid RoleId { get; set; }
+    public string? RoleName { get; set; }
+    public GenderType? GenderType { get; set; }
+    public string? MobileNo { get; set; }
+    public string? Email { get; set; }
+    public EmployeeStatusType? EmployeeStatusType { get; set; }
+    public Guid? UserId { get; set; }
 }

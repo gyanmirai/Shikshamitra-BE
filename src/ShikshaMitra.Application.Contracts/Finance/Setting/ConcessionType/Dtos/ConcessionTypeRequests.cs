@@ -7,25 +7,25 @@ namespace ShikshaMitra.Application.Contracts.Finance.Setting.ConcessionType.Dtos
 
 public class ConcessionTypeCreateRequest
 {
-    [Required]
-    public string Name { get; set; }
+	[Required]
+	public string Name { get; set; }
 
-    [Required]
-    public ConcessionBasedOn BasedOn { get; set; }
+	// [Required]
+	// public ConcessionBasedOn BasedOn { get; set; }
 
-    [Required]
-    public decimal Amount { get; set; }
+	// [Required]
+	// public decimal Amount { get; set; }
 
-    [Required]
-    public List<FeeHeadRef> ApplicableFeeHeads { get; set; }
+	// [Required]
+	// public List<FeeHeadRef> ApplicableFeeHeads { get; set; }
 
-    [Required]
-    public bool IsDocumentRequired { get; set; }
+	[Required]
+	public bool IsDocumentRequired { get; set; }
 
-    [Required]
-    public List<ConcessionDocumentDto> Documents { get; set; }
+	[Required]
+	public List<ConcessionDocumentDto> Documents { get; set; }
 
-    public string? Description { get; set; }
+	public string? Description { get; set; }
 }
 
 public class ConcessionTypeUpdateRequest : ConcessionTypeCreateRequest
@@ -34,20 +34,20 @@ public class ConcessionTypeUpdateRequest : ConcessionTypeCreateRequest
 
 public class FeeHeadRef
 {
-    [Required]
-    public Guid Id { get; set; }
-    
-    public string? Name { get; set; } // Optional in request, usually ignored or used for validation
+	[Required]
+	public Guid Id { get; set; }
+
+	public string? Name { get; set; } // Optional in request, usually ignored or used for validation
 }
 
 public class ConcessionDocumentDto
 {
-    [Required]
-    public string DocumentName { get; set; }
+	[Required]
+	public string DocumentName { get; set; }
 
-    [Required]
-    public long DocumentSize { get; set; }
+	[Required]
+	public long DocumentSize { get; set; }
 
-    [Required]
-    public List<ConcessionDocumentFormat> AcceptedFormat { get; set; }
+	[Required]
+	public List<ConcessionDocumentFormat> AcceptedFormat { get; set; }
 }

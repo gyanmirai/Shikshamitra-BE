@@ -34,11 +34,7 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		 * Alternatively, you can split your mapping configurations
 		 * into multiple profile classes for a better organization. */
 
-		CreateMap<BookCategory, BookCategoryDto>();
-		CreateMap<CreateUpdateBookCategoryDto, BookCategory>();
-
-		CreateMap<LibraryTiming, LibraryTimingDto>();
-		CreateMap<LibraryTimingDto, LibraryTiming>();
+		// BookCategory and LibraryTiming mappings are defined at the bottom of this profile
 
 		// Event Types mapping
 		CreateMap<EventType, EventTypeDto>();
@@ -126,5 +122,19 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 			.ForMember(dest => dest.StudentFeeStructureId, opt => opt.MapFrom(src => src.Id))
 			.ForMember(dest => dest.FeeHeads, opt => opt.MapFrom(src => src.StudentFeeHeads));
 		CreateMap<StudentFeeHead, StudentFeeHeadDto>();
+
+		// Library - BookCategory mappings
+		CreateMap<ShikshaMitra.Library.Setting.GeneralSetting.BookCategory.BookCategory,
+			ShikshaMitra.Library.Setting.GeneralSetting.BookCategory.BookCategoryDto>()
+			.ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Name));
+
+		// Library - LibraryTiming mappings
+		CreateMap<ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings.LibraryTiming,
+			ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings.LibraryTimingDto>();
+
+		// Library - LibraryChargeCategory mappings
+		CreateMap<ShikshaMitra.Library.Setting.ChargeCategory.LibraryChargeCategory,
+			ShikshaMitra.Library.Setting.ChargeCategory.Dtos.LibraryChargeCategoryDto>()
+			.ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.ChargeType));
 	}
 }

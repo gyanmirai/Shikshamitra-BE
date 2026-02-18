@@ -20,6 +20,9 @@ using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
+using ShikshaMitra.Library.Setting.ChargeCategory;
+using ShikshaMitra.Library.Setting.BorrowingRules;
+using ShikshaMitra.Library.Setting.Sections;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.Attendance;
@@ -342,7 +345,17 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Library
 	#region GeneralSetting
 	public DbSet<LibraryTiming> LibraryTimings { get; set; }
-	public DbSet<BookCategory> BookCategories { get; set; } //here <BookCategory> is the entity class name and BookCategory is the table name
+	public DbSet<BookCategory> BookCategories { get; set; }
+	#endregion
+	#region ChargeCategory
+	public DbSet<LibraryChargeCategory> LibraryChargeCategories { get; set; }
+	#endregion
+	#region BorrowingRules
+	public DbSet<BorrowingRule> BorrowingRules { get; set; }
+	#endregion
+	#region Sections
+	public DbSet<LibrarySection> LibrarySections { get; set; }
+	public DbSet<LibraryShelf> LibraryShelves { get; set; }
 	#endregion
 	#endregion
 

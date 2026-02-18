@@ -1,23 +1,37 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Volo.Abp.Domain.Entities.Auditing;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings
 {
-	public class LibraryTiming : AuditedAggregateRoot<Guid>
+	public class LibraryTiming : AuditedAggregateRoot<Guid>, IMultiTenant
 	{
-		public DayOfWeek Day { get; set; }
-		public TimeSpan OpeningTime { get; set; }
-		public TimeSpan ClosingTime { get; set; }
-		public LibraryTiming(Guid id, DayOfWeek day, TimeSpan openingTime, TimeSpan closingTime)
+		public Guid? TenantId { get; private set; }
+
+		public Guid? AcademicYearId { get; set; }
+
+		public string Day { get; set; }
+
+		public string StartTime { get; set; }
+
+		public string EndTime { get; set; }
+
+		/// <summary>
+		/// 0 = Open, 1 = Closed, 2 = Holiday
+		/// </summary>
+		public int Status { get; set; }
+
+		protected LibraryTiming() { }
+
+		public LibraryTiming(Guid id, string day, string startTime, string endTime, int status, Guid? academicYearId = null, Guid? tenantId = null)
 			: base(id)
 		{
 			Day = day;
-			OpeningTime = openingTime;
-			ClosingTime = closingTime;
+			StartTime = startTime;
+			EndTime = endTime;
+			Status = status;
+			AcademicYearId = academicYearId;
+			TenantId = tenantId;
 		}
 	}
 }

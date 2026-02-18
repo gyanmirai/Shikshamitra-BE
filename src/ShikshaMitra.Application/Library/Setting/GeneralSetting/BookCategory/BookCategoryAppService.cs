@@ -2,88 +2,91 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Volo.Abp.Application.Dtos;
+using ShikshaMitra.Library.Shared;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
+
+[RemoteService(false)]
 public class BookCategoryAppService(IRepository<BookCategory, Guid> _bookCategoryRepository)
 	: ApplicationService, IBookCategoryAppService
 {
-	public async Task<BookCategoryDto> CreateAsync(CreateUpdateBookCategoryDto input)
+	public async Task<PaginatedResponse<BookCategoryDto>> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10)
 	{
-		try
+		var query = await _bookCategoryRepository.GetQueryableAsync();
+		query = query.Where(x => x.AcademicYearId == academicYearId);
+
+		var totalCount = await AsyncExecuter.CountAsync(query);
+		var totalPages = (int) Math.Ceiling(totalCount / (double) pageSize);
+
+		var items = await AsyncExecuter.ToListAsync(
+			query
+				.OrderByDescending(x => x.CreationTime)
+				.Skip((page - 1) * pageSize)
+				.Take(pageSize)
+		);
+
+		return new PaginatedResponse<BookCategoryDto>
 		{
-			var entity = ObjectMapper.Map<CreateUpdateBookCategoryDto, BookCategory>(input);
-			await _bookCategoryRepository.InsertAsync(entity, autoSave: true);
-			return ObjectMapper.Map<BookCategory, BookCategoryDto>(entity);
-		}
-		catch (Exception ex)
-		{
-			throw new ApplicationException("An error occurred while creating the book category.", ex);
-		}
+			TotalCount = totalCount,
+			CurrentPage = page,
+			PageSize = pageSize,
+			TotalPages = totalPages,
+			Items = ObjectMapper.Map<List<BookCategory>, List<BookCategoryDto>>(items)
+		};
 	}
 
-	public async Task<BookCategoryDto> UpdateAsync(Guid id, CreateUpdateBookCategoryDto input)
+	public async Task<BookCategoryDto> GetAsync(Guid categoryId)
 	{
-		try
-		{
-			var entity = await _bookCategoryRepository.GetAsync(id);
-			ObjectMapper.Map(input, entity);
-			await _bookCategoryRepository.UpdateAsync(entity, autoSave: true);
-			return ObjectMapper.Map<BookCategory, BookCategoryDto>(entity);
-		}
-		catch (Exception ex)
-		{
-			throw new ApplicationException("An error occurred while updating the book category.", ex);
-		}
+		var entity = await _bookCategoryRepository.GetAsync(categoryId);
+		return ObjectMapper.Map<BookCategory, BookCategoryDto>(entity);
 	}
 
-	public async Task DeleteAsync(Guid id)
+	public async Task<GenericCreatedResponse> CreateAsync(Guid? academicYearId, BookCategoryCreateRequest input)
 	{
-		try
+		var query = await _bookCategoryRepository.GetQueryableAsync();
+		var exists = query.Any(x => x.Name == input.CategoryName && x.AcademicYearId == academicYearId);
+		if (exists)
 		{
-			await _bookCategoryRepository.DeleteAsync(id);
+			throw new UserFriendlyException("Category name already exists.", code: "409");
 		}
-		catch (Exception ex)
+
+		var entity = new BookCategory(
+			input.CategoryName,
+			input.Description,
+			academicYearId,
+			CurrentTenant.Id
+		);
+
+		await _bookCategoryRepository.InsertAsync(entity, autoSave: true);
+
+		return new GenericCreatedResponse
 		{
-			throw new ApplicationException("An error occurred while deleting the book category.", ex);
-		}
+			Id = entity.Id.ToString(),
+			Message = "Book category created successfully."
+		};
 	}
 
-	public async Task<BookCategoryDto> GetAsync(Guid id)
+	public async Task<GenericUpdatedResponse> UpdateAsync(Guid categoryId, BookCategoryUpdateRequest input)
 	{
-		try
+		var entity = await _bookCategoryRepository.GetAsync(categoryId);
+
+		entity.Name = input.CategoryName;
+		entity.Description = input.Description;
+
+		await _bookCategoryRepository.UpdateAsync(entity, autoSave: true);
+
+		return new GenericUpdatedResponse
 		{
-			var entity = await _bookCategoryRepository.GetAsync(id);
-			return ObjectMapper.Map<BookCategory, BookCategoryDto>(entity);
-		}
-		catch (Exception ex)
-		{
-			throw new ApplicationException("An error occurred while retrieving the book category.", ex);
-		}
+			Id = entity.Id.ToString(),
+			Message = "Book category updated successfully."
+		};
 	}
 
-	public async Task<PagedResultDto<BookCategoryDto>> GetListAsync(PagedAndSortedResultRequestDto input)
+	public async Task DeleteAsync(Guid categoryId)
 	{
-		try
-		{
-			var queryable = await _bookCategoryRepository.GetQueryableAsync();
-
-			var totalCount = await AsyncExecuter.CountAsync(queryable);
-
-			var items = await AsyncExecuter.ToListAsync(
-				queryable
-					.Skip(input.SkipCount)
-					.Take(input.MaxResultCount)
-			);
-
-			var dtoList = ObjectMapper.Map<List<BookCategory>, List<BookCategoryDto>>(items);
-			return new PagedResultDto<BookCategoryDto>(totalCount, dtoList);
-		}
-		catch (Exception ex)
-		{
-			throw new ApplicationException("An error occurred while retrieving book categories.", ex);
-		}
+		await _bookCategoryRepository.DeleteAsync(categoryId, autoSave: true);
 	}
 }

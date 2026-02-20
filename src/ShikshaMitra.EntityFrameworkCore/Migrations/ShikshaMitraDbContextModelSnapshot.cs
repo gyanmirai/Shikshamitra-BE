@@ -1843,6 +1843,55 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("ConcessionRequestConcessionTypes", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequestDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ConcessionRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ConcessionTypeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<DateTime?>("UploadedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ConcessionRequestDocuments", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequestFeeHeadMapping", b =>
                 {
                     b.Property<Guid>("Id")

@@ -20,7 +20,6 @@ using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Users;
-using ShikshaMitra.Finance.StudentFeeAssignment;
 
 namespace ShikshaMitra.Application.Finance.ConcessionRequests;
 
@@ -32,11 +31,11 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 	private readonly IRepository<ConcessionRequestConcessionType, Guid> _concessionRequestConcessionTypeRepository;
 	private readonly IRepository<ConcessionRequestFeeHeadMapping, Guid> _feeHeadMappingRepository;
 	private readonly IRepository<ConcessionRequestFeeHeadValue, Guid> _feeHeadValueRepository;
+	private readonly IRepository<ConcessionRequestDocument, Guid> _concessionRequestDocumentRepository;
 	private readonly IRepository<ConcessionType, Guid> _concessionTypeRepository;
+	private readonly IRepository<ConcessionTypeDocument, Guid> _concessionTypeDocumentRepository;
 	private readonly IRepository<FeeHead, Guid> _feeHeadRepository;
 	private readonly IRepository<FeeStructure, Guid> _feeStructureRepository;
-	private readonly IRepository<FeeStructureStandard, Guid> _feeStructureStandardRepository;
-	private readonly IRepository<FeeStructureDetail, Guid> _feeStructureDetailRepository;
 	private readonly IRepository<Student, Guid> _studentRepository;
 	private readonly IRepository<Standard, Guid> _standardRepository;
 	private readonly IRepository<Division, Guid> _divisionRepository;
@@ -51,11 +50,11 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 		IRepository<ConcessionRequestConcessionType, Guid> concessionRequestConcessionTypeRepository,
 		IRepository<ConcessionRequestFeeHeadMapping, Guid> feeHeadMappingRepository,
 		IRepository<ConcessionRequestFeeHeadValue, Guid> feeHeadValueRepository,
+		IRepository<ConcessionRequestDocument, Guid> concessionRequestDocumentRepository,
 		IRepository<ConcessionType, Guid> concessionTypeRepository,
+		IRepository<ConcessionTypeDocument, Guid> concessionTypeDocumentRepository,
 		IRepository<FeeHead, Guid> feeHeadRepository,
 		IRepository<FeeStructure, Guid> feeStructureRepository,
-		IRepository<FeeStructureStandard, Guid> feeStructureStandardRepository,
-		IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository,
 		IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 		IRepository<Student, Guid> studentRepository,
 		IRepository<StudentFeeHead, Guid> studentFeeHeadRepository,
@@ -69,11 +68,11 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 		_concessionRequestConcessionTypeRepository = concessionRequestConcessionTypeRepository;
 		_feeHeadMappingRepository = feeHeadMappingRepository;
 		_feeHeadValueRepository = feeHeadValueRepository;
+		_concessionRequestDocumentRepository = concessionRequestDocumentRepository;
 		_concessionTypeRepository = concessionTypeRepository;
+		_concessionTypeDocumentRepository = concessionTypeDocumentRepository;
 		_feeHeadRepository = feeHeadRepository;
 		_feeStructureRepository = feeStructureRepository;
-		_feeStructureStandardRepository = feeStructureStandardRepository;
-		_feeStructureDetailRepository = feeStructureDetailRepository;
 		_studentRepository = studentRepository;
 		_studentFeeStructureRepository = studentFeeStructureRepository;
 		_studentFeeHeadRepository = studentFeeHeadRepository;
@@ -84,61 +83,158 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 		_currentUser = currentUser;
 	}
 
-	// ─── Step 1 POST ─────────────────────────────────────────────────────────
+	// ─── Step 1+2 POST (merged) ───────────────────────────────────────────────
 
-	public async Task<CreateBasicDetailsResponse> CreateBasicDetailsAsync(CreateBasicDetailsRequest input)
+	public async Task<CreateConcessionRequestResponse> CreateConcessionRequestAsync(CreateConcessionRequestInput input)
 	{
 		// Validate student exists
 		var student = await _studentRepository.GetAsync(input.StudentId);
 
-		// Resolve fee structure by board + medium + standard
-		var feeStructures = await _studentFeeStructureRepository.FirstOrDefaultAsync(
+		// Resolve fee structure (student snapshot)
+		var studentFeeStructure = await _studentFeeStructureRepository.FirstOrDefaultAsync(
 			x => x.StudentId == input.StudentId);
 
-		if (feeStructures == null)
-		{
-			throw new BusinessException("Fee structure not found").WithData("Fee structure not found", input.StudentId);
+		Guid? feeStructureId = studentFeeStructure?.Id;
 
-		}
-
-		Guid? feeStructureId = feeStructures.Id;
-
-
-		// Determine academic year from current year
+		// Determine academic year
 		var now = DateTime.UtcNow;
 		var academicYear = now.Month >= 6
 			? $"{now.Year % 100:D2}-{(now.Year + 1) % 100:D2}"
 			: $"{(now.Year - 1) % 100:D2}-{now.Year % 100:D2}";
 
-		var concessionRequest = new ConcessionRequest(
-			GuidGenerator.Create(),
-			CurrentTenant.Id,
-			input.BoardId,
-			input.EducationMediumId,
-			input.StandardId,
-			input.DivisionId,
-			input.StudentId,
-			feeStructureId,
-			academicYear);
 
-		await _concessionRequestRepository.InsertAsync(concessionRequest);
+		// Validate and attach concession types (Step 2)
+		var concessionTypes = await _concessionTypeRepository.GetListAsync(
+			x => input.ConcessionTypeIds.Contains(x.Id));
 
-		return new CreateBasicDetailsResponse
+		var invalidIds = input.ConcessionTypeIds.Except(concessionTypes.Select(c => c.Id)).ToList();
+		// 1. CreateConcessionRequestAsync - Concession Types Not Found
+		if (invalidIds.Any())
+			throw new BusinessException("ShikshaMitra:ConcessionTypesNotFound")
+				.WithData("InvalidIds", string.Join(", ", invalidIds))
+				.WithData("Message", $"Concession type(s) not found: {string.Join(", ", invalidIds)}");
+
+		// Check for existing pending request for merging
+		var pendingRequest = await _concessionRequestRepository.FirstOrDefaultAsync(x =>
+			x.StudentId == input.StudentId &&
+			x.AcademicYear == academicYear &&
+			x.Status == ConcessionRequestStatus.PENDING);
+
+		ConcessionRequest requestToUse;
+		List<SelectedConcessionTypeDto> respondSelectedTypes;
+
+		if (pendingRequest != null)
+		{
+			// Merge into existing
+			requestToUse = pendingRequest;
+
+			var existingLinks = await _concessionRequestConcessionTypeRepository.GetListAsync(
+				x => x.ConcessionRequestId == pendingRequest.Id);
+			var existingTypeIds = existingLinks.Select(x => x.ConcessionTypeId).ToHashSet();
+
+			// Validate duplicate types
+			var duplicateTypeIds = input.ConcessionTypeIds.Where(id => existingTypeIds.Contains(id)).ToList();
+			if (duplicateTypeIds.Any())
+			{
+				var duplicateNames = concessionTypes
+					.Where(ct => duplicateTypeIds.Contains(ct.Id))
+					.Select(ct => ct.Name)
+					.ToList();
+
+				var namesString = string.Join(", ", duplicateNames);
+				throw new BusinessException("ShikshaMitra:DuplicateConcessionRequest")
+					.WithData("ConcessionTypes", namesString)
+					.WithData("Message", $"You have already applied for the following concession(s) in this academic year: {namesString}. Duplicate requests are not allowed.");
+			}
+
+			// Add new links
+			var newLinks = input.ConcessionTypeIds.Select(ctId =>
+				new ConcessionRequestConcessionType(GuidGenerator.Create(), pendingRequest.Id, ctId)).ToList();
+			await _concessionRequestConcessionTypeRepository.InsertManyAsync(newLinks, autoSave: true);
+
+			// Prepare response types (existing + new)
+			var allTypeIds = existingTypeIds.Concat(input.ConcessionTypeIds).Distinct().ToList();
+			var allTypes = await _concessionTypeRepository.GetListAsync(x => allTypeIds.Contains(x.Id));
+
+			respondSelectedTypes = allTypes.Select(ct => new SelectedConcessionTypeDto
+			{
+				ConcessionTypeId = ct.Id,
+				Name = ct.Name
+			}).ToList();
+		}
+		else
+		{
+			// Create New
+			var concessionRequest = new ConcessionRequest(
+				GuidGenerator.Create(),
+				CurrentTenant.Id,
+				input.BoardId,
+				input.EducationMediumId,
+				input.StandardId,
+				input.DivisionId,
+				input.StudentId,
+				feeStructureId,
+				academicYear);
+
+			await _concessionRequestRepository.InsertAsync(concessionRequest);
+			requestToUse = concessionRequest;
+
+			// Validation: Prevent duplicate requests for the same concession type in the same academic year
+			var existingRequests = await _concessionRequestRepository.GetListAsync(x =>
+				x.StudentId == input.StudentId &&
+				x.AcademicYear == academicYear &&
+				x.Status != ConcessionRequestStatus.REJECTED &&
+				x.Id != concessionRequest.Id);
+
+			var existingRequestIds = existingRequests.Select(x => x.Id).ToList();
+
+			if (existingRequestIds.Any())
+			{
+				var existingLinks = await _concessionRequestConcessionTypeRepository.GetListAsync(
+					x => existingRequestIds.Contains(x.ConcessionRequestId));
+
+				var existingConcessionTypeIds = existingLinks.Select(x => x.ConcessionTypeId).ToHashSet();
+				var duplicateTypeIds = input.ConcessionTypeIds.Where(id => existingConcessionTypeIds.Contains(id)).ToList();
+
+				if (duplicateTypeIds.Any())
+				{
+					var duplicateNames = concessionTypes
+						.Where(ct => duplicateTypeIds.Contains(ct.Id))
+						.Select(ct => ct.Name)
+						.ToList();
+
+					var namesString = string.Join(", ", duplicateNames);
+					throw new BusinessException("ShikshaMitra:DuplicateConcessionRequest")
+						.WithData("ConcessionTypes", namesString)
+						.WithData("Message", $"You have already applied for the following concession(s) in this academic year: {namesString}. Duplicate requests are not allowed.");
+				}
+			}
+
+			var links = input.ConcessionTypeIds.Select(ctId =>
+				new ConcessionRequestConcessionType(GuidGenerator.Create(), concessionRequest.Id, ctId)).ToList();
+			await _concessionRequestConcessionTypeRepository.InsertManyAsync(links, autoSave: true);
+
+			respondSelectedTypes = concessionTypes.Select(ct => new SelectedConcessionTypeDto
+			{
+				ConcessionTypeId = ct.Id,
+				Name = ct.Name
+			}).ToList();
+		}
+
+		return new CreateConcessionRequestResponse
 		{
 			Success = true,
-			Data = new CreateBasicDetailsData
+			Data = new CreateConcessionRequestData
 			{
-				ConcessionRequestId = concessionRequest.Id,
-				BoardId = concessionRequest.BoardId,
-				EducationMediumId = concessionRequest.EducationMediumId,
-				StandardId = concessionRequest.StandardId,
-				DivisionId = concessionRequest.DivisionId,
-				StudentId = concessionRequest.StudentId,
-				AcademicYear = concessionRequest.AcademicYear,
-				Status = (int) concessionRequest.Status,
-				CurrentStep = concessionRequest.CurrentStep,
-				CompletedSteps = concessionRequest.GetCompletedSteps(),
-				CreatedAt = concessionRequest.CreationTime
+				ConcessionRequestId = requestToUse.Id,
+				BoardId = requestToUse.BoardId,
+				EducationMediumId = requestToUse.EducationMediumId,
+				StandardId = requestToUse.StandardId,
+				DivisionId = requestToUse.DivisionId,
+				StudentId = requestToUse.StudentId,
+				Status = (int) requestToUse.Status,
+				SelectedConcessionTypes = respondSelectedTypes,
+				CreatedAt = requestToUse.CreationTime
 			}
 		};
 	}
@@ -147,63 +243,20 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 
 	public async Task<GetBasicDetailsResponse> GetBasicDetailsAsync(Guid concessionRequestId)
 	{
-		ConcessionRequest? cr = await _concessionRequestRepository.GetAsync(concessionRequestId);
+		var cr = await _concessionRequestRepository.GetAsync(concessionRequestId);
 
-		// Load related entities
-		var board = await _educationBoardRepository.FindAsync(cr.BoardId);
-		var medium = await _educationMediumRepository.FindAsync(cr.EducationMediumId);
-		var standard = await _standardRepository.FindAsync(cr.StandardId);
-		var division = await _divisionRepository.FindAsync(cr.DivisionId);
-		var student = await _studentRepository.FindAsync(cr.StudentId);
+		// Load the concession type links
+		var links = await _concessionRequestConcessionTypeRepository.GetListAsync(
+			x => x.ConcessionRequestId == concessionRequestId);
+		var ctIds = links.Select(x => x.ConcessionTypeId).ToList();
+		var concessionTypes = await _concessionTypeRepository.GetListAsync(x => ctIds.Contains(x.Id));
+		var ctDict = concessionTypes.ToDictionary(x => x.Id, x => x);
 
-		// Load fee structure details
-		StudentFeeStructure? studentFeeStructure = await _studentFeeStructureRepository.FindAsync(cr.FeeStructureId.Value);
-		string? feeStructureName = studentFeeStructure?.StructureName;
-		var feeHeadDtos = new List<FeeHeadObjectDto>();
-		decimal totalAmount = 0;
-
-		if (cr.FeeStructureId.HasValue)
+		var selectedTypes = links.Select(l => new SelectedConcessionTypeDto
 		{
-			// Get fee structure standard for this standard
-			// var fssQuery = await _feeStructureStandardRepository.GetListAsync(
-			// 	x => x.FeeStructureId == cr.FeeStructureId.Value && x.StandardId == cr.StandardId);
-			// var fss = fssQuery.FirstOrDefault();
-
-			// if (fss != null)
-			// {
-			// var details = await _feeStructureDetailRepository.GetListAsync(
-			// 	x => x.FeeStructureStandardId == fss.Id);
-			// var feeHeadIds = details.Select(d => d.FeeHeadId).ToList();
-			// var feeHeads = await _feeHeadRepository.GetListAsync(x => feeHeadIds.Contains(x.Id));
-			// var feeHeadDict = feeHeads.ToDictionary(x => x.Id, x => x.Name);
-
-			// feeHeadDtos = details.Select(d => new FeeHeadObjectDto
-			// {
-			// 	FeeHeadId = d.FeeHeadId,
-			// 	FeeHeadName = feeHeadDict.GetValueOrDefault(d.FeeHeadId, ""),
-			// 	Amount = d.Amount
-			// }).ToList();
-
-			// totalAmount = details.Sum(d => d.Amount);
-			var feeHeads = await _studentFeeHeadRepository.GetListAsync(
-				x => x.StudentFeeStructureId == studentFeeStructure.Id);
-			var feeHeadIds = feeHeads.Select(d => d.FeeHeadId).ToList();
-			// var feeHeads = await _feeHeadRepository.GetListAsync(x => feeHeadIds.Contains(x.Id));
-			// var feeHeadDict = feeHeads.ToDictionary(x => x.Id, x => x.Name);
-
-			feeHeadDtos = feeHeads.Select(d => new FeeHeadObjectDto
-			{
-				FeeHeadId = d.FeeHeadId,
-				FeeHeadName = d.FeeHeadName,
-				Amount = d.Amount
-			}).ToList();
-
-			totalAmount = feeHeads.Sum(d => d.Amount);
-			// }
-		}
-
-		var studentName = string.Join(" ", new[] { student?.FirstName, student?.MiddleName, student?.LastName }
-			.Where(s => !string.IsNullOrWhiteSpace(s)));
+			ConcessionTypeId = l.ConcessionTypeId,
+			Name = ctDict.GetValueOrDefault(l.ConcessionTypeId)?.Name ?? ""
+		}).ToList();
 
 		return new GetBasicDetailsResponse
 		{
@@ -211,74 +264,15 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 			Data = new GetBasicDetailsData
 			{
 				ConcessionRequestId = cr.Id,
-				AcademicYear = cr.AcademicYear,
 				BoardId = cr.BoardId,
-				BoardName = board?.Type.ToString() ?? "",
 				EducationMediumId = cr.EducationMediumId,
-				EducationMediumName = medium?.Name ?? "",
 				StandardId = cr.StandardId,
-				StandardName = standard?.Name ?? "",
 				DivisionId = cr.DivisionId,
-				DivisionName = division?.Name ?? "",
 				StudentId = cr.StudentId,
-				StudentName = studentName ?? string.Empty,
-				FeeStructureId = cr.FeeStructureId,
-				FeeStructureName = feeStructureName ?? string.Empty,
-				FeeHeads = feeHeadDtos,
-				Totalamount = totalAmount,
 				Status = (int) cr.Status,
-				CurrentStep = cr.CurrentStep,
-				CompletedSteps = cr.GetCompletedSteps(),
+				SelectedConcessionTypes = selectedTypes,
 				CreatedAt = cr.CreationTime,
 				UpdatedAt = cr.LastModificationTime
-			}
-		};
-	}
-
-	// ─── Step 2 PUT ──────────────────────────────────────────────────────────
-
-	public async Task<SaveConcessionTypesResponse> SaveConcessionTypesAsync(Guid concessionRequestId, SaveConcessionTypesRequest input)
-	{
-		ConcessionRequest? cr = await _concessionRequestRepository.GetAsync(concessionRequestId);
-
-		// Full replacement — delete existing
-		var existing = await _concessionRequestConcessionTypeRepository.GetListAsync(
-			x => x.ConcessionRequestId == concessionRequestId);
-		await _concessionRequestConcessionTypeRepository.DeleteManyAsync(existing);
-
-		// Also delete step 3 and step 4 data (cascade replacement)
-		var existingMappings = await _feeHeadMappingRepository.GetListAsync(
-			x => x.ConcessionRequestId == concessionRequestId);
-		await _feeHeadMappingRepository.DeleteManyAsync(existingMappings);
-
-		var existingValues = await _feeHeadValueRepository.GetListAsync(
-			x => x.ConcessionRequestId == concessionRequestId);
-		await _feeHeadValueRepository.DeleteManyAsync(existingValues);
-
-		// Insert new
-		var newLinks = input.ConcessionTypeIds.Select(ctId =>
-			new ConcessionRequestConcessionType(GuidGenerator.Create(), concessionRequestId, ctId)).ToList();
-		await _concessionRequestConcessionTypeRepository.InsertManyAsync(newLinks, autoSave: true);
-
-		cr.AdvanceStep(2);
-		await _concessionRequestRepository.UpdateAsync(cr);
-
-		// Load concession type names for response
-		var concessionTypes = await _concessionTypeRepository.GetListAsync(
-			x => input.ConcessionTypeIds.Contains(x.Id));
-		var ctDict = concessionTypes.ToDictionary(x => x.Id, x => x.Name);
-
-		return new SaveConcessionTypesResponse
-		{
-			Success = true,
-			Data = new SaveConcessionTypesData
-			{
-				ConcessionRequestId = concessionRequestId,
-				SelectedConcessionTypes = input.ConcessionTypeIds.Select(ctId => new SelectedConcessionTypeDto
-				{
-					ConcessionTypeId = ctId,
-					Name = ctDict.GetValueOrDefault(ctId, "")
-				}).ToList()
 			}
 		};
 	}
@@ -288,6 +282,17 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 	public async Task<SaveFeeHeadsDataResponse> SaveFeeHeadsDataAsync(Guid concessionRequestId, SaveFeeHeadsDataRequest input)
 	{
 		var cr = await _concessionRequestRepository.GetAsync(concessionRequestId);
+
+		// Load the registered concession types for this request
+		var registeredLinks = await _concessionRequestConcessionTypeRepository.GetListAsync(
+			x => x.ConcessionRequestId == concessionRequestId);
+		var registeredCtIds = registeredLinks.Select(x => x.ConcessionTypeId).ToHashSet();
+
+		// Validate that all ConcessionTypeIds in the input are registered (Step 1+2)
+		foreach (var item in input.FeeHeadsData)
+		{
+
+		}
 
 		// Full replacement
 		var existing = await _feeHeadMappingRepository.GetListAsync(
@@ -323,56 +328,44 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 
 	public async Task<SaveValueEntryResponse> SaveValueEntryAsync(Guid concessionRequestId, SaveValueEntryRequest input)
 	{
-		ConcessionRequest? cr = await _concessionRequestRepository.GetAsync(concessionRequestId);
+		var cr = await _concessionRequestRepository.GetAsync(concessionRequestId);
 
-		// Contract: request must be in DRAFT (0) or IN_PROGRESS (1) — 409 otherwise
-		if (
-			cr.Status == ConcessionRequestStatus.APPROVED ||
+		if (cr.Status == ConcessionRequestStatus.APPROVED ||
 			cr.Status == ConcessionRequestStatus.REJECTED)
 		{
-			throw new UserFriendlyException(
-				"Concession request has already been submitted and cannot be modified.",
-				"CONFLICT");
+			throw new BusinessException("ShikshaMitra:ConcessionRequestStatusConflict")
+				.WithData("Message", "Concession request has already been submitted and cannot be modified.");
 		}
 
-		// Load step 3 mappings to validate completeness
-		List<ConcessionRequestFeeHeadMapping> mappings = await _feeHeadMappingRepository.GetListAsync(
+		// Load step 3 mappings
+		var mappings = await _feeHeadMappingRepository.GetListAsync(
 			x => x.ConcessionRequestId == concessionRequestId);
 
-		// Load student fee heads — these carry the actual annualBaseAmount per fee head
-		Guid? studentFeeStructureId = cr.FeeStructureId;
+		// Load student fee heads for annual base amounts
 		var studentFeeHeads = await _studentFeeHeadRepository.GetListAsync(
-			x => x.StudentFeeStructureId == studentFeeStructureId);
-
-		// annualBase keyed by FeeHeadId (the domain fee-head UUID, not the StudentFeeHead entity Id)
+			x => x.StudentFeeStructureId == cr.FeeStructureId);
 		var annualBaseDict = studentFeeHeads.ToDictionary(x => x.FeeHeadId, x => (double) x.Amount);
-
-		// Fee head display names keyed by FeeHeadId
 		var feeHeadNameDict = studentFeeHeads.ToDictionary(x => x.FeeHeadId, x => x.FeeHeadName);
 
-		// Load concession type names
-		var allConcessionTypeIds = mappings.Select(m => m.ConcessionTypeId).Distinct().ToList();
-		var concessionTypes = await _concessionTypeRepository.GetListAsync(
-			x => allConcessionTypeIds.Contains(x.Id));
+		// Load concession types for response
+		var allCtIds = mappings.Select(m => m.ConcessionTypeId).Distinct().ToList();
+		var concessionTypes = await _concessionTypeRepository.GetListAsync(x => allCtIds.Contains(x.Id));
 		var ctDict = concessionTypes.ToDictionary(x => x.Id, x => x);
 
-		// Validate: all fee heads mapped in Step 3 must be present in the payload
+		// Validate all step-3 fee heads are present in payload
 		foreach (var mapping in mappings)
 		{
 			var block = input.ConcessionTypeValues.FirstOrDefault(b => b.ConcessionTypeId == mapping.ConcessionTypeId);
 			if (block == null || !block.FeeHeadValues.Any(v => v.FeeHeadId == mapping.FeeHeadId))
 			{
-				var fhName = feeHeadNameDict.GetValueOrDefault(mapping.FeeHeadId, mapping.FeeHeadId.ToString());
-				var ctName = ctDict.ContainsKey(mapping.ConcessionTypeId)
-					? ctDict[mapping.ConcessionTypeId].Name
-					: mapping.ConcessionTypeId.ToString();
-				throw new UserFriendlyException(
-					$"All fee heads mapped in Step 3 must have a value entry.",
-					"INCOMPLETE_VALUE_ENTRY");
+
+
+				throw new BusinessException("ShikshaMitra:IncompleteValueEntry")
+					.WithData("Message", "All fee heads mapped in Step 3 must have a value entry.");
 			}
 		}
 
-		// Validate: submitted feeHeadIds must exist in the Step 3 mapping for that concession type
+		// Validate submitted feeHeads exist in step-3 mapping for that concession type
 		foreach (var block in input.ConcessionTypeValues)
 		{
 			var mappedFeeHeadIds = mappings
@@ -383,9 +376,10 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 			foreach (var entry in block.FeeHeadValues)
 			{
 				if (!mappedFeeHeadIds.Contains(entry.FeeHeadId))
-					throw new UserFriendlyException(
-						$"Fee head {entry.FeeHeadId} was not found in the mapping for concession type {block.ConcessionTypeId}.",
-						"NOT_FOUND");
+					throw new BusinessException("ShikshaMitra:FeeHeadNotFoundInMapping")
+						.WithData("FeeHeadId", entry.FeeHeadId)
+						.WithData("ConcessionTypeId", block.ConcessionTypeId)
+						.WithData("Message", $"Fee head {entry.FeeHeadId} was not found in the mapping for concession type {block.ConcessionTypeId}.");
 			}
 		}
 
@@ -406,35 +400,32 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 
 			foreach (var entry in block.FeeHeadValues)
 			{
-				double annualBase = annualBaseDict.GetValueOrDefault(entry.FeeHeadId, 0);
+				var annualBase = annualBaseDict.GetValueOrDefault(entry.FeeHeadId, 0);
 
-				// Validate discount value per basedOn mode
 				if (entry.BasedOn == DiscountBasedOn.PERCENTAGE)
 				{
 					if (entry.Amount < 0 || entry.Amount > 100)
-						throw new UserFriendlyException(
-							"Percentage discount cannot exceed 100%.",
-							"INVALID_DISCOUNT_VALUE");
+						throw new BusinessException("ShikshaMitra:InvalidPercentageDiscount")
+							.WithData("Message", "Percentage discount cannot exceed 100%.");
 				}
 				else
 				{
 					if (entry.Amount < 0 || entry.Amount > annualBase)
-						throw new UserFriendlyException(
-							"Flat discount amount cannot exceed the annual base amount.",
-							"INVALID_DISCOUNT_VALUE");
+						throw new BusinessException("ShikshaMitra:InvalidFlatDiscount")
+							.WithData("Message", "Flat discount amount cannot exceed the annual base amount.");
 				}
 
-				// Compute discount and net amounts server-side
-				double discountAmount = entry.BasedOn == DiscountBasedOn.PERCENTAGE
+				var discountAmount = entry.BasedOn == DiscountBasedOn.PERCENTAGE
 					? (entry.Amount / 100.0) * annualBase
 					: entry.Amount;
-				double netAmount = annualBase - discountAmount;
+				var netAmount = annualBase - discountAmount;
 
-				// Validate client-submitted netAmount within ±0.01 rounding tolerance
 				if (Math.Abs(entry.NetAmount - netAmount) > 0.01)
-					throw new UserFriendlyException(
-						$"Net amount mismatch for fee head {entry.FeeHeadId}. Expected {netAmount:F2}, got {entry.NetAmount:F2}.",
-						"INVALID_NET_AMOUNT");
+					throw new BusinessException("ShikshaMitra:NetAmountMismatch")
+						.WithData("FeeHeadId", entry.FeeHeadId)
+						.WithData("Expected", netAmount)
+						.WithData("Received", entry.NetAmount)
+						.WithData("Message", $"Net amount mismatch for fee head {entry.FeeHeadId}. Expected {netAmount:F2}, got {entry.NetAmount:F2}.");
 
 				newValues.Add(new ConcessionRequestFeeHeadValue(
 					GuidGenerator.Create(),
@@ -465,7 +456,7 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 			{
 				ConcessionTypeId = block.ConcessionTypeId,
 				ConcessionTypeName = ct?.Name ?? "",
-				//ConcessionType = ct != null ? (int) ct.BasedOn : 0,
+				ConcessionType = 0, // ConcessionType enum integer (default 0; extend as needed)
 				FeeHeadValues = feeHeadResults,
 				TotalDiscountAmount = blockTotalDiscount,
 				TotalNetAmount = blockTotalNet
@@ -494,6 +485,155 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 		};
 	}
 
+	// ─── Step 5 PUT — Document Upload ────────────────────────────────────────
+
+	public async Task<UploadDocumentsResponse> UploadDocumentsAsync(Guid concessionRequestId, UploadDocumentsRequest input)
+	{
+		var cr = await _concessionRequestRepository.GetAsync(concessionRequestId);
+
+		if (cr.Status == ConcessionRequestStatus.APPROVED ||
+			cr.Status == ConcessionRequestStatus.REJECTED)
+		{
+			throw new BusinessException("ShikshaMitra:ConcessionRequestStatusConflict")
+				.WithData("Message", "Concession request has already been submitted and cannot be modified.");
+		}
+
+		// Load concession type links for this request to validate ConcessionTypeIds
+		var links = await _concessionRequestConcessionTypeRepository.GetListAsync(
+			x => x.ConcessionRequestId == concessionRequestId);
+		var validConcessionTypeIds = links.Select(x => x.ConcessionTypeId).ToHashSet();
+
+		// Load all concession type document definitions
+		var ctIds = input.ConcessionTypeDocuments.Select(b => b.ConcessionTypeId).ToList();
+		var concessionTypes = await _concessionTypeRepository.GetListAsync(x => ctIds.Contains(x.Id));
+		var ctDict = concessionTypes.ToDictionary(x => x.Id, x => x);
+
+		var allConcessionTypeDocDefs = await _concessionTypeDocumentRepository.GetListAsync(
+			x => ctIds.Contains(x.ConcessionTypeId));
+		var docDefDict = allConcessionTypeDocDefs.ToDictionary(x => x.Id, x => x);
+
+		var resultBlocks = new List<ConcessionTypeDocumentResult>();
+
+		foreach (var block in input.ConcessionTypeDocuments)
+		{
+			// Validate concession type is assigned to this request
+			if (!validConcessionTypeIds.Contains(block.ConcessionTypeId))
+				throw new BusinessException("ShikshaMitra:ConcessionTypeNotAssigned_Step1")
+					.WithData("ConcessionTypeId", block.ConcessionTypeId)
+					.WithData("Message", $"Concession type {block.ConcessionTypeId} is not assigned to this concession request. Please complete Step 1 first.");
+
+			var ct = ctDict.GetValueOrDefault(block.ConcessionTypeId);
+
+			foreach (var docEntry in block.Documents)
+			{
+				// Upsert document record
+				var existing = await _concessionRequestDocumentRepository.FirstOrDefaultAsync(
+					x => x.ConcessionRequestId == concessionRequestId
+					  && x.ConcessionTypeId == block.ConcessionTypeId
+					  && x.DocumentId == docEntry.DocumentId);
+
+				if (existing != null)
+				{
+					existing.Update(docEntry.Url, docEntry.Status);
+					await _concessionRequestDocumentRepository.UpdateAsync(existing);
+				}
+				else
+				{
+					var newDoc = new ConcessionRequestDocument(
+						GuidGenerator.Create(),
+						CurrentTenant.Id,
+						concessionRequestId,
+						block.ConcessionTypeId,
+						docEntry.DocumentId,
+						docEntry.Url,
+						docEntry.Status);
+					await _concessionRequestDocumentRepository.InsertAsync(newDoc);
+				}
+			}
+
+			// Build response result
+			var uploadedDocs = new List<UploadedDocumentDetail>();
+			foreach (var docEntry in block.Documents)
+			{
+				var docDef = docDefDict.GetValueOrDefault(docEntry.DocumentId);
+				uploadedDocs.Add(new UploadedDocumentDetail
+				{
+					DocumentId = docEntry.DocumentId,
+					DocumentName = docDef?.DocumentName ?? docEntry.DocumentId.ToString(),
+					Url = docEntry.Url,
+					Status = docEntry.Status,
+					UploadedAt = docEntry.Status == 1 ? DateTime.UtcNow : null
+				});
+			}
+
+			resultBlocks.Add(new ConcessionTypeDocumentResult
+			{
+				ConcessionTypeId = block.ConcessionTypeId,
+				ConcessionTypeName = ct?.Name ?? "",
+				Documents = uploadedDocs
+			});
+		}
+
+		cr.AdvanceStep(5);
+		await _concessionRequestRepository.UpdateAsync(cr);
+
+		return new UploadDocumentsResponse
+		{
+			Success = true,
+			Data = new UploadDocumentsData
+			{
+				ConcessionRequestId = concessionRequestId,
+				RequestStatus = (int) cr.Status,
+				ConcessionTypeDocuments = resultBlocks
+			}
+		};
+	}
+
+	// ─── GET Documents ────────────────────────────────────────────────────────
+
+	public async Task<GetDocumentsResponse> GetConcessionDocumentsAsync(
+		Guid studentConcessionTypeRequestId, int? status, int page, int pageSize)
+	{
+		// studentConcessionTypeRequestId is the ConcessionRequestConcessionType link Id
+		var link = await _concessionRequestConcessionTypeRepository.GetAsync(studentConcessionTypeRequestId);
+		var concessionRequestId = link.ConcessionRequestId;
+
+		var docs = await _concessionRequestDocumentRepository.GetListAsync(
+			x => x.ConcessionRequestId == concessionRequestId
+			  && x.ConcessionTypeId == link.ConcessionTypeId);
+
+		if (status.HasValue)
+			docs = docs.Where(x => x.Status == status.Value).ToList();
+
+		// Load document definitions for names
+		var docIds = docs.Select(d => d.DocumentId).ToList();
+		var docDefs = await _concessionTypeDocumentRepository.GetListAsync(x => docIds.Contains(x.Id));
+		var docDefDict = docDefs.ToDictionary(x => x.Id, x => x);
+
+		var totalCount = docs.Count;
+		var pagedDocs = docs.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+		var items = pagedDocs.Select(d => new ConcessionDocumentItem
+		{
+			DocumentId = d.DocumentId,
+			DocumentName = docDefDict.GetValueOrDefault(d.DocumentId)?.DocumentName ?? d.DocumentId.ToString(),
+			Url = d.Url,
+			Status = d.Status,
+			UploadedAt = d.UploadedAt
+		}).ToList();
+
+		return new GetDocumentsResponse
+		{
+			Success = true,
+			StudentConcessionTypeRequestId = studentConcessionTypeRequestId,
+			TotalCount = totalCount,
+			CurrentPage = page,
+			PageSize = pageSize,
+			TotalPages = (int) Math.Ceiling(totalCount / (double) pageSize),
+			Items = items
+		};
+	}
+
 	// ─── Get Student Concession Requests ─────────────────────────────────────
 
 	public async Task<ConcessionListResponse> GetStudentConcessionRequestsAsync(
@@ -510,27 +650,23 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 		var studentName = string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }
 			.Where(s => !string.IsNullOrWhiteSpace(s)));
 
-		// Query concession requests for this student
 		var query = await _concessionRequestRepository.GetQueryableAsync();
 		query = query.Where(x => x.StudentId == studentId);
-
 		if (status.HasValue)
 			query = query.Where(x => (int) x.Status == status.Value);
 
 		var totalCount = query.Count();
 		var allRequests = query.OrderByDescending(x => x.CreationTime).ToList();
 
-		// Summary counts (unfiltered by status)
 		var allForStudent = await _concessionRequestRepository.GetListAsync(x => x.StudentId == studentId);
-		var totalApplications = allForStudent.Count;
 		var pendingApplications = allForStudent.Count(x => x.Status == ConcessionRequestStatus.PENDING);
 		var approvedApplications = allForStudent.Count(x => x.Status == ConcessionRequestStatus.APPROVED);
 		var rejectedApplications = allForStudent.Count(x => x.Status == ConcessionRequestStatus.REJECTED);
 
 		var pagedRequests = allRequests.Skip((page - 1) * pageSize).Take(pageSize).ToList();
-
-		// Build items — load concession type links
 		var requestIds = pagedRequests.Select(r => r.Id).ToList();
+
+		// Load concession type links
 		var concessionTypeLinks = await _concessionRequestConcessionTypeRepository.GetListAsync(
 			x => requestIds.Contains(x.ConcessionRequestId));
 		var ctIds = concessionTypeLinks.Select(x => x.ConcessionTypeId).Distinct().ToList();
@@ -544,11 +680,18 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 		var feeHeads = await _feeHeadRepository.GetListAsync(x => fhIds.Contains(x.Id));
 		var fhDict = feeHeads.ToDictionary(x => x.Id, x => x);
 
+		// Load uploaded documents
+		var uploadedDocs = await _concessionRequestDocumentRepository.GetListAsync(
+			x => requestIds.Contains(x.ConcessionRequestId));
+		// Load doc definitions for names
+		var docDefIds = uploadedDocs.Select(d => d.DocumentId).Distinct().ToList();
+		var docDefs = await _concessionTypeDocumentRepository.GetListAsync(x => docDefIds.Contains(x.Id));
+		var docDefDict = docDefs.ToDictionary(x => x.Id, x => x);
+
 		var items = new List<ConcessionRequestItemDto>();
 		foreach (var cr in pagedRequests)
 		{
 			var crLinks = concessionTypeLinks.Where(x => x.ConcessionRequestId == cr.Id).ToList();
-			// One item per concession type link
 			foreach (var link in crLinks)
 			{
 				var ct = ctDict.GetValueOrDefault(link.ConcessionTypeId);
@@ -564,15 +707,31 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 					Description = fhDict.ContainsKey(v.FeeHeadId) ? fhDict[v.FeeHeadId].Description : null
 				}).ToList();
 
+				// Uploaded documents for this concession type
+				var crDocs = uploadedDocs
+					.Where(d => d.ConcessionRequestId == cr.Id && d.ConcessionTypeId == link.ConcessionTypeId)
+					.ToList();
+				var submittedDocuments = crDocs.Select(d => new SubmittedDocumentDto
+				{
+					DocumentId = d.DocumentId,
+					DocumentName = docDefDict.GetValueOrDefault(d.DocumentId)?.DocumentName ?? d.DocumentId.ToString(),
+					Url = d.Url,
+					UploadedAt = d.UploadedAt,
+					Status = d.Status
+				}).ToList();
+
+				bool isDocumentUploaded = submittedDocuments.Any() && submittedDocuments.All(d => d.Status == 1);
+
 				items.Add(new ConcessionRequestItemDto
 				{
 					StudentConcessionTypeRequestId = link.Id,
-					//ConcessionType = ct != null ? (int) ct.BasedOn : 0,
+					ConcessionTypeId = link.ConcessionTypeId,
 					ConcessionTypeName = ct?.Name ?? "",
 					Status = (int) cr.Status,
 					TotalAmount = crValues.Sum(v => v.NetAmount),
 					FeeHeads = feeHeadItems,
-					SubmittedDocuments = new List<SubmittedDocumentDto>(),
+					SubmittedDocuments = submittedDocuments,
+					IsDocumentUploaded = isDocumentUploaded,
 					CreatedAt = cr.CreationTime,
 					UpdatedAt = cr.LastModificationTime,
 					Message = cr.ApproverMessage ?? cr.RejectionReason,
@@ -594,7 +753,7 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 			},
 			ConcessionBasicDetail = new ApplicationConcessionBasicDetail
 			{
-				TotalApplications = totalApplications,
+				TotalApplications = allForStudent.Count,
 				PendingApplications = pendingApplications,
 				ApprovedApplications = approvedApplications,
 				RejectedApplications = rejectedApplications
@@ -612,15 +771,16 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 	public async Task<ApprovalResponse> ApproveConcessionRequestAsync(
 		Guid studentConcessionTypeRequestId, ApprovalRequest input)
 	{
-		// studentConcessionTypeRequestId is the ConcessionRequestConcessionType.Id
 		var link = await _concessionRequestConcessionTypeRepository.GetAsync(studentConcessionTypeRequestId);
 		var cr = await _concessionRequestRepository.GetAsync(link.ConcessionRequestId);
 
 		if (cr.Status == ConcessionRequestStatus.APPROVED)
-			throw new UserFriendlyException("Concession request is already approved.", "CONFLICT");
+			throw new BusinessException("ShikshaMitra:ConcessionRequestAlreadyApproved")
+				.WithData("Message", "Concession request is already approved.");
 
 		if (cr.Status == ConcessionRequestStatus.REJECTED)
-			throw new UserFriendlyException("Cannot approve a rejected concession request.", "CONFLICT");
+			throw new BusinessException("ShikshaMitra:CannotApproveRejectedRequest")
+				.WithData("Message", "Cannot approve a rejected concession request.");
 
 		var approverId = _currentUser.Id ?? Guid.Empty;
 		cr.Approve(approverId, input.Message);
@@ -647,10 +807,12 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 		var cr = await _concessionRequestRepository.GetAsync(link.ConcessionRequestId);
 
 		if (cr.Status == ConcessionRequestStatus.REJECTED)
-			throw new UserFriendlyException("Concession request is already rejected.", "CONFLICT");
+			throw new BusinessException("ShikshaMitra:ConcessionRequestAlreadyRejected")
+				.WithData("Message", "Concession request is already rejected.");
 
 		if (cr.Status == ConcessionRequestStatus.APPROVED)
-			throw new UserFriendlyException("Cannot reject an approved concession request.", "CONFLICT");
+			throw new BusinessException("ShikshaMitra:CannotRejectApprovedRequest")
+				.WithData("Message", "Cannot reject an approved concession request.");
 
 		var rejectorId = _currentUser.Id ?? Guid.Empty;
 		cr.Reject(rejectorId, input.Message);
@@ -675,19 +837,17 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 	{
 		var query = await _concessionRequestRepository.GetQueryableAsync();
 		query = query.Where(x => x.BoardId == boardId && x.EducationMediumId == educationMediumId);
-
 		if (status.HasValue)
 			query = query.Where(x => (int) x.Status == status.Value);
 
 		var allRequests = query.OrderByDescending(x => x.CreationTime).ToList();
 
-		// Status counts (unfiltered)
-		var allForFilter = (await _concessionRequestRepository.GetListAsync(
-			x => x.BoardId == boardId && x.EducationMediumId == educationMediumId));
+		// Status counts
+		var allForFilter = await _concessionRequestRepository.GetListAsync(
+			x => x.BoardId == boardId && x.EducationMediumId == educationMediumId);
 		int pendingCount = allForFilter.Count(x => x.Status == ConcessionRequestStatus.PENDING);
 		int approvedCount = allForFilter.Count(x => x.Status == ConcessionRequestStatus.APPROVED);
 		int rejectedCount = allForFilter.Count(x => x.Status == ConcessionRequestStatus.REJECTED);
-		int totalCount = allRequests.Count;
 
 		// Load student data for search + response
 		var studentIds = allRequests.Select(r => r.StudentId).Distinct().ToList();
@@ -706,12 +866,12 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 					|| s.RollNo?.ToString().Contains(search) == true
 					|| s.GrNo?.ToString().Contains(search) == true;
 			}).ToList();
-			totalCount = allRequests.Count;
 		}
 
+		int totalCount = allRequests.Count;
 		var pagedRequests = allRequests.Skip((page - 1) * pageSize).Take(pageSize).ToList();
 
-		// Load standard/division names
+		// Load standards/divisions
 		var standardIds = pagedRequests.Select(r => r.StandardId).Distinct().ToList();
 		var divisionIds = pagedRequests.Select(r => r.DivisionId).Distinct().ToList();
 		var standards = await _standardRepository.GetListAsync(x => standardIds.Contains(x.Id));
@@ -719,28 +879,55 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 		var standardDict = standards.ToDictionary(x => x.Id, x => x.Name);
 		var divisionDict = divisions.ToDictionary(x => x.Id, x => x.Name);
 
-		// Count total concession requests per student
-		var requestCountByStudent = allForFilter
-			.GroupBy(x => x.StudentId)
-			.ToDictionary(g => g.Key, g => g.Count());
+		// Load concession type names per request (first concession type name)
+		var requestIds = pagedRequests.Select(r => r.Id).ToList();
+		var ctLinks = await _concessionRequestConcessionTypeRepository.GetListAsync(
+			x => requestIds.Contains(x.ConcessionRequestId));
+		var ctIds = ctLinks.Select(x => x.ConcessionTypeId).Distinct().ToList();
+		var concessionTypes = await _concessionTypeRepository.GetListAsync(x => ctIds.Contains(x.Id));
+		var ctNameDict = concessionTypes.ToDictionary(x => x.Id, x => x.Name);
 
 		var items = pagedRequests.Select(r =>
 		{
 			studentDict.TryGetValue(r.StudentId, out var s);
 			var name = s != null
-				? string.Join(" ", new[] { s.FirstName, s.MiddleName, s.LastName }.Where(x => !string.IsNullOrWhiteSpace(x)))
+				? string.Join(" ", new[] { s.FirstName, s.MiddleName, s.LastName }
+					.Where(x => !string.IsNullOrWhiteSpace(x)))
 				: "";
+
+			// Find first concession type name for this request
+			var firstCtLink = ctLinks.FirstOrDefault(l => l.ConcessionRequestId == r.Id);
+			var concessionTypeName = firstCtLink != null
+				? ctNameDict.GetValueOrDefault(firstCtLink.ConcessionTypeId, "")
+				: "";
+
+			var statusName = r.Status switch
+			{
+				ConcessionRequestStatus.PENDING => "Pending",
+				ConcessionRequestStatus.APPROVED => "Approved",
+				ConcessionRequestStatus.REJECTED => "Rejected",
+				_ => r.Status.ToString()
+			};
+
 			return new ConcessionApplicationDto
 			{
 				ConcessionRequestId = r.Id,
+				StudentId = r.StudentId,
 				StudentName = name,
 				RollNo = s?.RollNo?.ToString() ?? "",
 				GrNumber = s?.GrNo?.ToString(),
 				StandardName = standardDict.GetValueOrDefault(r.StandardId, ""),
 				DivisionName = divisionDict.GetValueOrDefault(r.DivisionId, ""),
+				ConcessionType = concessionTypeName,
+				RequestDate = r.CreationTime.ToString("yyyy-MM-dd"),
 				Email = string.Empty,
 				ContactNo = string.Empty,
-				TotalConcessionApplication = requestCountByStudent.GetValueOrDefault(r.StudentId, 0)
+				Status = (int) r.Status,
+				StatusName = statusName,
+				CreatedAt = r.CreationTime,
+				UpdatedAt = r.LastModificationTime,
+				ApproverComments = r.ApproverMessage ?? r.RejectionReason,
+				ApprovedAt = r.ApprovedAt
 			};
 		}).ToList();
 
@@ -761,17 +948,15 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 
 	public async Task DeleteConcessionApplicationAsync(Guid studentConcessionTypeRequestId)
 	{
-		// studentConcessionTypeRequestId is the ConcessionRequestConcessionType.Id
 		var link = await _concessionRequestConcessionTypeRepository.FindAsync(studentConcessionTypeRequestId);
 		if (link == null)
-			return; // Idempotent — already deleted
+			return; // Idempotent
 
 		var cr = await _concessionRequestRepository.GetAsync(link.ConcessionRequestId);
 
 		if (cr.Status == ConcessionRequestStatus.APPROVED)
-			throw new UserFriendlyException(
-				"Cannot delete an approved concession application.",
-				"CONFLICT");
+			throw new BusinessException("ShikshaMitra:CannotDeleteApprovedRequest")
+				.WithData("Message", "Cannot delete an approved concession application.");
 
 		// Delete all related data
 		var allLinks = await _concessionRequestConcessionTypeRepository.GetListAsync(
@@ -785,6 +970,10 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 		var allValues = await _feeHeadValueRepository.GetListAsync(
 			x => x.ConcessionRequestId == cr.Id);
 		await _feeHeadValueRepository.DeleteManyAsync(allValues);
+
+		var allDocs = await _concessionRequestDocumentRepository.GetListAsync(
+			x => x.ConcessionRequestId == cr.Id);
+		await _concessionRequestDocumentRepository.DeleteManyAsync(allDocs);
 
 		await _concessionRequestRepository.DeleteAsync(cr.Id);
 	}

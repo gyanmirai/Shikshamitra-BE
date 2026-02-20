@@ -5,9 +5,9 @@ using ShikshaMitra.Finance.ConcessionRequests;
 
 namespace ShikshaMitra.Application.Contracts.Finance.ConcessionRequests.Dtos;
 
-// ─── Step 1 ───────────────────────────────────────────────────────────────────
+// ─── Step 1+2 (merged) ────────────────────────────────────────────────────────
 
-public class CreateBasicDetailsRequest
+public class CreateConcessionRequestInput
 {
 	[Required]
 	public Guid BoardId { get; set; }
@@ -23,13 +23,9 @@ public class CreateBasicDetailsRequest
 
 	[Required]
 	public Guid StudentId { get; set; }
-}
 
-// ─── Step 2 ───────────────────────────────────────────────────────────────────
-
-public class SaveConcessionTypesRequest
-{
 	[Required]
+	[MinLength(1)]
 	public List<Guid> ConcessionTypeIds { get; set; } = new();
 }
 
@@ -82,6 +78,37 @@ public class FeeHeadValueEntry
 	public double NetAmount { get; set; }
 }
 
+// ─── Step 5 — Document Upload ─────────────────────────────────────────────────
+
+public class UploadDocumentsRequest
+{
+	[Required]
+	public List<ConcessionTypeDocumentBlock> ConcessionTypeDocuments { get; set; } = new();
+}
+
+public class ConcessionTypeDocumentBlock
+{
+	[Required]
+	public Guid ConcessionTypeId { get; set; }
+
+	[Required]
+	public List<DocumentUploadEntry> Documents { get; set; } = new();
+}
+
+public class DocumentUploadEntry
+{
+	[Required]
+	public Guid DocumentId { get; set; }
+
+	[Required]
+	public string Url { get; set; }
+
+	/// <summary>0 = Pending, 1 = Uploaded.</summary>
+	[Required]
+	[Range(0, 1)]
+	public int Status { get; set; }
+}
+
 // ─── Approve / Reject ─────────────────────────────────────────────────────────
 
 public class ApprovalRequest
@@ -111,4 +138,13 @@ public class GetConcessionApplicationsRequest
 	public int Page { get; set; } = 1;
 	public int PageSize { get; set; } = 20;
 	public string? Search { get; set; }
+}
+
+// ─── Get Documents ────────────────────────────────────────────────────────────
+
+public class GetDocumentsRequest
+{
+	public int? Status { get; set; }
+	public int Page { get; set; } = 1;
+	public int PageSize { get; set; } = 20;
 }

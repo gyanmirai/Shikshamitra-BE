@@ -303,6 +303,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<ConcessionRequestConcessionType> ConcessionRequestConcessionTypes { get; set; }
 	public DbSet<ConcessionRequestFeeHeadMapping> ConcessionRequestFeeHeadMappings { get; set; }
 	public DbSet<ConcessionRequestFeeHeadValue> ConcessionRequestFeeHeadValues { get; set; }
+	public DbSet<ConcessionRequestDocument> ConcessionRequestDocuments { get; set; }
 	#endregion
 
 	#region Charges

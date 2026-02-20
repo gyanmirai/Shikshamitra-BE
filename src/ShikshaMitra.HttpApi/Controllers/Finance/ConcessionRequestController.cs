@@ -1,125 +1,160 @@
 using System;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Application.Contracts.Finance.ConcessionRequests;
 using ShikshaMitra.Application.Contracts.Finance.ConcessionRequests.Dtos;
-using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.HttpApi.Controllers.Finance;
 
+[Authorize]
 [ApiController]
-[Route("api")]
-public class ConcessionRequestController : AbpControllerBase
+[Route("api/concession-request")]
+public class ConcessionRequestController : ControllerBase
 {
-	private readonly IConcessionRequestAppService _concessionRequestAppService;
+	private readonly IConcessionRequestAppService _appService;
 
-	public ConcessionRequestController(IConcessionRequestAppService concessionRequestAppService)
+	public ConcessionRequestController(IConcessionRequestAppService appService)
 	{
-		_concessionRequestAppService = concessionRequestAppService;
+		_appService = appService;
 	}
 
-	// ─── Step 1 POST ─────────────────────────────────────────────────────────
+	// ─── Step 1+2 merged — POST /api/concession-request ─────────────────────
 
-	/// <summary>Step 1: Create basic details for a concession request.</summary>
-	[HttpPost("concession-request/basic-details")]
-	[ProducesResponseType(typeof(CreateBasicDetailsResponse), 201)]
-	public async Task<IActionResult> CreateBasicDetailsAsync([FromBody] CreateBasicDetailsRequest input)
+	[HttpPost]
+	[ProducesResponseType(StatusCodes.Status201Created)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status409Conflict)]
+	public async Task<IActionResult> CreateConcessionRequest([FromBody] CreateConcessionRequestInput input)
 	{
-		var result = await _concessionRequestAppService.CreateBasicDetailsAsync(input);
+		var result = await _appService.CreateConcessionRequestAsync(input);
 		return StatusCode(201, result);
 	}
 
-	// ─── Step 1 GET ──────────────────────────────────────────────────────────
+	// ─── GET /api/concession-request/{id} ────────────────────────────────────
 
-	/// <summary>Step 1: Get basic details of a concession request by ID.</summary>
-	[HttpGet("concession-request/basic-details/{concessionRequestId:guid}")]
-	[ProducesResponseType(typeof(GetBasicDetailsResponse), 200)]
-	public async Task<GetBasicDetailsResponse> GetBasicDetailsAsync([FromRoute] Guid concessionRequestId)
+	[HttpGet("{concessionRequestId:guid}")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> GetBasicDetails([FromRoute] Guid concessionRequestId)
 	{
-		return await _concessionRequestAppService.GetBasicDetailsAsync(concessionRequestId);
+		var result = await _appService.GetBasicDetailsAsync(concessionRequestId);
+		return Ok(result);
 	}
 
-	// ─── Step 2 PUT ──────────────────────────────────────────────────────────
+	// ─── Step 3 — PUT /api/concession-request/{id}/fee-heads ─────────────────
 
-	/// <summary>Step 2: Save selected concession types for a concession request.</summary>
-	[HttpPut("concession-request/{concessionRequestId:guid}/concession-types")]
-	[ProducesResponseType(typeof(SaveConcessionTypesResponse), 200)]
-	public async Task<SaveConcessionTypesResponse> SaveConcessionTypesAsync(
-		[FromRoute] Guid concessionRequestId,
-		[FromBody] SaveConcessionTypesRequest input)
-	{
-		return await _concessionRequestAppService.SaveConcessionTypesAsync(concessionRequestId, input);
-	}
-
-	// ─── Step 3 PUT ──────────────────────────────────────────────────────────
-
-	/// <summary>Step 3: Save fee head data for a concession request.</summary>
-	[HttpPut("concession-requests/{concessionRequestId:guid}/feeHeadsData")]
-	[ProducesResponseType(typeof(SaveFeeHeadsDataResponse), 200)]
-	public async Task<SaveFeeHeadsDataResponse> SaveFeeHeadsDataAsync(
+	[HttpPut("{concessionRequestId:guid}/fee-heads")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> SaveFeeHeadsData(
 		[FromRoute] Guid concessionRequestId,
 		[FromBody] SaveFeeHeadsDataRequest input)
 	{
-		return await _concessionRequestAppService.SaveFeeHeadsDataAsync(concessionRequestId, input);
+		var result = await _appService.SaveFeeHeadsDataAsync(concessionRequestId, input);
+		return Ok(result);
 	}
 
-	// ─── Step 4 PUT ──────────────────────────────────────────────────────────
+	// ─── Step 4 — PUT /api/concession-request/{id}/value-entry ───────────────
 
-	/// <summary>Step 4: Save discount value entry for a concession request.</summary>
-	[HttpPut("concession-requests/{concessionRequestId:guid}/value-entry")]
-	[ProducesResponseType(typeof(SaveValueEntryResponse), 200)]
-	public async Task<SaveValueEntryResponse> SaveValueEntryAsync(
+	[HttpPut("{concessionRequestId:guid}/value-entry")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status409Conflict)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> SaveValueEntry(
 		[FromRoute] Guid concessionRequestId,
 		[FromBody] SaveValueEntryRequest input)
 	{
-		return await _concessionRequestAppService.SaveValueEntryAsync(concessionRequestId, input);
+		var result = await _appService.SaveValueEntryAsync(concessionRequestId, input);
+		return Ok(result);
 	}
 
-	// ─── Get Student Concession Requests ─────────────────────────────────────
+	// ─── Step 5 — PUT /api/concession-request/{id}/document-upload ───────────
 
-	/// <summary>Get all concession requests for a specific student.</summary>
-	[HttpGet("concession-requests/{studentId:guid}")]
-	[ProducesResponseType(typeof(ConcessionListResponse), 200)]
-	public async Task<ConcessionListResponse> GetStudentConcessionRequestsAsync(
+	[HttpPut("{concessionRequestId:guid}/document-upload")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	[ProducesResponseType(StatusCodes.Status409Conflict)]
+	public async Task<IActionResult> UploadDocuments(
+		[FromRoute] Guid concessionRequestId,
+		[FromBody] UploadDocumentsRequest input)
+	{
+		var result = await _appService.UploadDocumentsAsync(concessionRequestId, input);
+		return Ok(result);
+	}
+
+	// ─── GET /api/concession-request/{id}/documents ───────────────────────────
+
+	[HttpGet("{studentConcessionTypeRequestId:guid}/documents")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> GetDocuments(
+		[FromRoute] Guid studentConcessionTypeRequestId,
+		[FromQuery] int? status = null,
+		[FromQuery] int page = 1,
+		[FromQuery] int pageSize = 20)
+	{
+		var result = await _appService.GetConcessionDocumentsAsync(
+			studentConcessionTypeRequestId, status, page, pageSize);
+		return Ok(result);
+	}
+
+	// ─── GET /api/concession-request/students/{studentId} ────────────────────
+
+	[HttpGet("students/{studentId:guid}")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> GetStudentConcessionRequests(
 		[FromRoute] Guid studentId,
 		[FromQuery] int? status = null,
 		[FromQuery] int page = 1,
 		[FromQuery] int pageSize = 20,
 		[FromQuery] string? search = null)
 	{
-		return await _concessionRequestAppService.GetStudentConcessionRequestsAsync(studentId, status, page, pageSize, search);
+		var result = await _appService.GetStudentConcessionRequestsAsync(studentId, status, page, pageSize, search);
+		return Ok(result);
 	}
 
-	// ─── Approve ─────────────────────────────────────────────────────────────
+	// ─── POST /api/concession-request/{id}/approve ───────────────────────────
 
-	/// <summary>Approve a concession request.</summary>
-	[HttpPost("concession-requests/{studentConcessionTypeRequestId:guid}/approve")]
-	[ProducesResponseType(typeof(ApprovalResponse), 200)]
-	public async Task<ApprovalResponse> ApproveConcessionRequestAsync(
+	[HttpPost("{studentConcessionTypeRequestId:guid}/approve")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	[ProducesResponseType(StatusCodes.Status409Conflict)]
+	public async Task<IActionResult> Approve(
 		[FromRoute] Guid studentConcessionTypeRequestId,
 		[FromBody] ApprovalRequest input)
 	{
-		return await _concessionRequestAppService.ApproveConcessionRequestAsync(studentConcessionTypeRequestId, input);
+		var result = await _appService.ApproveConcessionRequestAsync(studentConcessionTypeRequestId, input);
+		return Ok(result);
 	}
 
-	// ─── Reject ──────────────────────────────────────────────────────────────
+	// ─── POST /api/concession-request/{id}/reject ────────────────────────────
 
-	/// <summary>Reject a concession request.</summary>
-	[HttpPost("concession-requests/{studentConcessionTypeRequestId:guid}/reject")]
-	[ProducesResponseType(typeof(RejectionResponse), 200)]
-	public async Task<RejectionResponse> RejectConcessionRequestAsync(
+	[HttpPost("{studentConcessionTypeRequestId:guid}/reject")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	[ProducesResponseType(StatusCodes.Status409Conflict)]
+	public async Task<IActionResult> Reject(
 		[FromRoute] Guid studentConcessionTypeRequestId,
 		[FromBody] RejectionRequest input)
 	{
-		return await _concessionRequestAppService.RejectConcessionRequestAsync(studentConcessionTypeRequestId, input);
+		var result = await _appService.RejectConcessionRequestAsync(studentConcessionTypeRequestId, input);
+		return Ok(result);
 	}
 
-	// ─── Get Concession Applications ─────────────────────────────────────────
+	// ─── GET /api/concession-request/applications ─────────────────────────────
 
-	/// <summary>Get all concession applications (admin view).</summary>
-	[HttpGet("concession-applications")]
-	[ProducesResponseType(typeof(ConcessionApplicationsResponse), 200)]
-	public async Task<ConcessionApplicationsResponse> GetConcessionApplicationsAsync(
+	[HttpGet("applications")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	public async Task<IActionResult> GetConcessionApplications(
 		[FromQuery] Guid boardId,
 		[FromQuery] Guid educationMediumId,
 		[FromQuery] int? status = null,
@@ -127,19 +162,20 @@ public class ConcessionRequestController : AbpControllerBase
 		[FromQuery] int pageSize = 20,
 		[FromQuery] string? search = null)
 	{
-		return await _concessionRequestAppService.GetConcessionApplicationsAsync(
+		var result = await _appService.GetConcessionApplicationsAsync(
 			boardId, educationMediumId, status, page, pageSize, search);
+		return Ok(result);
 	}
 
-	// ─── Delete ───────────────────────────────────────────────────────────────
+	// ─── DELETE /api/concession-request/{id} ─────────────────────────────────
 
-	/// <summary>Delete a concession application.</summary>
-	[HttpDelete("concession-requests/delete-concession/{studentConcessionTypeRequestId:guid}")]
-	[ProducesResponseType(204)]
-	public async Task<IActionResult> DeleteConcessionApplicationAsync(
-		[FromRoute] Guid studentConcessionTypeRequestId)
+	[HttpDelete("{studentConcessionTypeRequestId:guid}")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	[ProducesResponseType(StatusCodes.Status409Conflict)]
+	public async Task<IActionResult> Delete([FromRoute] Guid studentConcessionTypeRequestId)
 	{
-		await _concessionRequestAppService.DeleteConcessionApplicationAsync(studentConcessionTypeRequestId);
+		await _appService.DeleteConcessionApplicationAsync(studentConcessionTypeRequestId);
 		return NoContent();
 	}
 }

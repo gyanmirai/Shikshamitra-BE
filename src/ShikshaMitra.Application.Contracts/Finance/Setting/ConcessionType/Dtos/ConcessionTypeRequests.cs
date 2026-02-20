@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using ShikshaMitra.Finance.Setting.ConcessionType;
+using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Application.Contracts.Finance.Setting.ConcessionType.Dtos;
 
@@ -44,6 +45,8 @@ public class ConcessionDocumentDto
 {
 	[Required]
 	public string DocumentName { get; set; }
+
+	public Guid? Id { get; set; }
 
 	[Required]
 	public long DocumentSize { get; set; }

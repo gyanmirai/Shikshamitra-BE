@@ -146,6 +146,7 @@ public class ConcessionTypeAppService : ApplicationService, IConcessionTypeAppSe
 			Documents = documents.Select(d => new ConcessionDocumentDto
 			{
 				DocumentName = d.DocumentName,
+				Id = d.Id,
 				DocumentSize = d.DocumentSize,
 				AcceptedFormat = d.AcceptedFormats.Split(',', StringSplitOptions.RemoveEmptyEntries)
 								  .Select(f => (ConcessionDocumentFormat) int.Parse(f)).ToList()

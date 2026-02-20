@@ -1,18 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
-using ShikshaMitra.Finance.ConcessionRequests;
 
 namespace ShikshaMitra.Application.Contracts.Finance.ConcessionRequests.Dtos;
 
-// ─── Step 1 POST Response ─────────────────────────────────────────────────────
+// ─── Step 1+2 Response ────────────────────────────────────────────────────────
 
-public class CreateBasicDetailsResponse
+public class CreateConcessionRequestResponse
 {
 	public bool Success { get; set; }
-	public CreateBasicDetailsData Data { get; set; }
+	public CreateConcessionRequestData Data { get; set; }
 }
 
-public class CreateBasicDetailsData
+public class CreateConcessionRequestData
 {
 	public Guid ConcessionRequestId { get; set; }
 	public Guid BoardId { get; set; }
@@ -20,11 +19,15 @@ public class CreateBasicDetailsData
 	public Guid StandardId { get; set; }
 	public Guid DivisionId { get; set; }
 	public Guid StudentId { get; set; }
-	public string AcademicYear { get; set; }
 	public int Status { get; set; }
-	public int CurrentStep { get; set; }
-	public List<int> CompletedSteps { get; set; } = new();
+	public List<SelectedConcessionTypeDto> SelectedConcessionTypes { get; set; } = new();
 	public DateTime CreatedAt { get; set; }
+}
+
+public class SelectedConcessionTypeDto
+{
+	public Guid ConcessionTypeId { get; set; }
+	public string Name { get; set; }
 }
 
 // ─── Step 1 GET Response ──────────────────────────────────────────────────────
@@ -38,53 +41,15 @@ public class GetBasicDetailsResponse
 public class GetBasicDetailsData
 {
 	public Guid ConcessionRequestId { get; set; }
-	public string AcademicYear { get; set; }
 	public Guid BoardId { get; set; }
-	public string BoardName { get; set; }
 	public Guid EducationMediumId { get; set; }
-	public string EducationMediumName { get; set; }
 	public Guid StandardId { get; set; }
-	public string StandardName { get; set; }
 	public Guid DivisionId { get; set; }
-	public string DivisionName { get; set; }
 	public Guid StudentId { get; set; }
-	public string StudentName { get; set; }
-	public Guid? FeeStructureId { get; set; }
-	public string FeeStructureName { get; set; }
-	public List<FeeHeadObjectDto> FeeHeads { get; set; } = new();
-	public decimal Totalamount { get; set; }
 	public int Status { get; set; }
-	public int CurrentStep { get; set; }
-	public List<int> CompletedSteps { get; set; } = new();
+	public List<SelectedConcessionTypeDto> SelectedConcessionTypes { get; set; } = new();
 	public DateTime CreatedAt { get; set; }
 	public DateTime? UpdatedAt { get; set; }
-}
-
-public class FeeHeadObjectDto
-{
-	public Guid FeeHeadId { get; set; }
-	public string FeeHeadName { get; set; }
-	public decimal Amount { get; set; }
-}
-
-// ─── Step 2 Response ──────────────────────────────────────────────────────────
-
-public class SaveConcessionTypesResponse
-{
-	public bool Success { get; set; }
-	public SaveConcessionTypesData Data { get; set; }
-}
-
-public class SaveConcessionTypesData
-{
-	public Guid ConcessionRequestId { get; set; }
-	public List<SelectedConcessionTypeDto> SelectedConcessionTypes { get; set; } = new();
-}
-
-public class SelectedConcessionTypeDto
-{
-	public Guid ConcessionTypeId { get; set; }
-	public string Name { get; set; }
 }
 
 // ─── Step 3 Response ──────────────────────────────────────────────────────────
@@ -115,7 +80,7 @@ public class ConcessionTypeValueResult
 {
 	public Guid ConcessionTypeId { get; set; }
 	public string ConcessionTypeName { get; set; }
-	//public int ConcessionType { get; set; }
+	public int ConcessionType { get; set; }
 	public List<FeeHeadValueResult> FeeHeadValues { get; set; } = new();
 	public double TotalDiscountAmount { get; set; }
 	public double TotalNetAmount { get; set; }
@@ -130,6 +95,59 @@ public class FeeHeadValueResult
 	public double Amount { get; set; }
 	public double DiscountAmount { get; set; }
 	public double NetAmount { get; set; }
+}
+
+// ─── Step 5 — Document Upload Response ───────────────────────────────────────
+
+public class UploadDocumentsResponse
+{
+	public bool Success { get; set; }
+	public UploadDocumentsData Data { get; set; }
+}
+
+public class UploadDocumentsData
+{
+	public Guid ConcessionRequestId { get; set; }
+	public int RequestStatus { get; set; }
+	public List<ConcessionTypeDocumentResult> ConcessionTypeDocuments { get; set; } = new();
+}
+
+public class ConcessionTypeDocumentResult
+{
+	public Guid ConcessionTypeId { get; set; }
+	public string ConcessionTypeName { get; set; }
+	public List<UploadedDocumentDetail> Documents { get; set; } = new();
+}
+
+public class UploadedDocumentDetail
+{
+	public Guid DocumentId { get; set; }
+	public string DocumentName { get; set; }
+	public string Url { get; set; }
+	public int Status { get; set; }
+	public DateTime? UploadedAt { get; set; }
+}
+
+// ─── Get Documents Response ───────────────────────────────────────────────────
+
+public class GetDocumentsResponse
+{
+	public bool Success { get; set; }
+	public Guid StudentConcessionTypeRequestId { get; set; }
+	public int TotalCount { get; set; }
+	public int CurrentPage { get; set; }
+	public int PageSize { get; set; }
+	public int TotalPages { get; set; }
+	public List<ConcessionDocumentItem> Items { get; set; } = new();
+}
+
+public class ConcessionDocumentItem
+{
+	public Guid DocumentId { get; set; }
+	public string DocumentName { get; set; }
+	public string Url { get; set; }
+	public int Status { get; set; }
+	public DateTime? UploadedAt { get; set; }
 }
 
 // ─── Get Student Concession Requests ─────────────────────────────────────────
@@ -166,12 +184,13 @@ public class ApplicationConcessionBasicDetail
 public class ConcessionRequestItemDto
 {
 	public Guid StudentConcessionTypeRequestId { get; set; }
-	//public int ConcessionType { get; set; }
+	public Guid ConcessionTypeId { get; set; }
 	public string ConcessionTypeName { get; set; }
 	public int Status { get; set; }
 	public double TotalAmount { get; set; }
 	public List<FeeHeadItemDto> FeeHeads { get; set; } = new();
 	public List<SubmittedDocumentDto> SubmittedDocuments { get; set; } = new();
+	public bool IsDocumentUploaded { get; set; }
 	public DateTime CreatedAt { get; set; }
 	public DateTime? UpdatedAt { get; set; }
 	public string? Message { get; set; }
@@ -191,8 +210,9 @@ public class SubmittedDocumentDto
 {
 	public Guid DocumentId { get; set; }
 	public string DocumentName { get; set; }
-	public string DocumentUrl { get; set; }
-	public DateTime UploadedAt { get; set; }
+	public string Url { get; set; }
+	public DateTime? UploadedAt { get; set; }
+	public int Status { get; set; }
 }
 
 // ─── Approve / Reject Responses ───────────────────────────────────────────────
@@ -236,12 +256,20 @@ public class ConcessionApplicationsResponse
 public class ConcessionApplicationDto
 {
 	public Guid ConcessionRequestId { get; set; }
+	public Guid StudentId { get; set; }
 	public string StudentName { get; set; }
 	public string RollNo { get; set; }
 	public string? GrNumber { get; set; }
 	public string StandardName { get; set; }
 	public string DivisionName { get; set; }
+	public string ConcessionType { get; set; }
+	public string RequestDate { get; set; }
 	public string Email { get; set; }
 	public string ContactNo { get; set; }
-	public int TotalConcessionApplication { get; set; }
+	public int Status { get; set; }
+	public string StatusName { get; set; }
+	public DateTime CreatedAt { get; set; }
+	public DateTime? UpdatedAt { get; set; }
+	public string? ApproverComments { get; set; }
+	public DateTime? ApprovedAt { get; set; }
 }

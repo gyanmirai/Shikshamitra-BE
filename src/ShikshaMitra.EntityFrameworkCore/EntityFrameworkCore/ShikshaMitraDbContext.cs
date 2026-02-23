@@ -60,6 +60,8 @@ using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Finance.ConcessionRequests;
+using ShikshaMitra.Finance.Expenses;
+using ShikshaMitra.Finance.Incomes;
 using ShikshaMitra.Finance.Setting;
 using ShikshaMitra.Finance.StudentFeeAssignment;
 
@@ -308,6 +310,14 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region Charges
 	public DbSet<ShikshaMitra.Finance.Charges.Charge> Charges { get; set; }
+	#endregion
+
+	#region Incomes
+	public DbSet<Income> Incomes { get; set; }
+	#endregion
+
+	#region Expenses
+	public DbSet<Expense> Expenses { get; set; }
 	#endregion
 
 	#endregion

@@ -78,13 +78,11 @@ public class IncomeController : AbpController
 	/// Update income
 	/// </summary>
 	/// <param name="incomeId">Unique identifier of the income transaction</param>
-	/// <param name="academicYearId">Academic year identifier</param>
 	/// <param name="input">Income update details</param>
 	/// <returns>Updated income details</returns>
 	[HttpPut("{income-id}")]
 	public Task<IncomeCreateUpdateResponse> UpdateAsync(
 		[FromRoute(Name = "income-id")] Guid incomeId,
-		[FromQuery] Guid academicYearId,
 		[FromBody] IncomeUpdateRequest input)
 	{
 		return _incomeAppService.UpdateAsync(incomeId, input);

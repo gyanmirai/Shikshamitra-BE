@@ -84,7 +84,6 @@ public class ExpenseController : AbpController
 	[HttpPut("{expense-id}")]
 	public Task<ExpenseCreateUpdateResponse> UpdateAsync(
 		[FromRoute(Name = "expense-id")] Guid expenseId,
-		[FromQuery] Guid academicYearId,
 		[FromBody] ExpenseUpdateRequest input)
 	{
 		return _expenseAppService.UpdateAsync(expenseId, input);

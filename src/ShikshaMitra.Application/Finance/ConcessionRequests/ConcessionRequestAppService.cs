@@ -356,6 +356,7 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 		var selectedTypes = links.Select(l => new SelectedConcessionTypeDto
 		{
 			ConcessionTypeId = l.ConcessionTypeId,
+			ConcessionRequestConcessionTypeId = l.Id,
 			Name = ctDict.GetValueOrDefault(l.ConcessionTypeId)?.Name ?? ""
 		}).ToList();
 

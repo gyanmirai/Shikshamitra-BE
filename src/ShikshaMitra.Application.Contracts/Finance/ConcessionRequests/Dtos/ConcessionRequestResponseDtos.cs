@@ -26,6 +26,7 @@ public class CreateConcessionRequestData
 
 public class SelectedConcessionTypeDto
 {
+	public Guid ConcessionRequestConcessionTypeId { get; set; }
 	public Guid ConcessionTypeId { get; set; }
 	public string Name { get; set; }
 }
@@ -176,6 +177,7 @@ public class StudentBasicDetailsDto
 public class ApplicationConcessionBasicDetail
 {
 	public int TotalApplications { get; set; }
+	public int DraftApplications { get; set; }
 	public int PendingApplications { get; set; }
 	public int ApprovedApplications { get; set; }
 	public int RejectedApplications { get; set; }
@@ -243,6 +245,7 @@ public class RejectionResponse
 
 public class ConcessionApplicationsResponse
 {
+	public int DraftCount { get; set; }
 	public int PendingCount { get; set; }
 	public int ApprovedCount { get; set; }
 	public int RejectedCount { get; set; }
@@ -262,14 +265,15 @@ public class ConcessionApplicationDto
 	public string? GrNumber { get; set; }
 	public string StandardName { get; set; }
 	public string DivisionName { get; set; }
-	public string ConcessionType { get; set; }
 	public string RequestDate { get; set; }
 	public string Email { get; set; }
 	public string ContactNo { get; set; }
-	public int Status { get; set; }
-	public string StatusName { get; set; }
+	/// <summary>Total number of concession type applications within this request.</summary>
+	public int TotalConcessionApplications { get; set; }
+	public int DraftCount { get; set; }
+	public int PendingCount { get; set; }
+	public int ApprovedCount { get; set; }
+	public int RejectedCount { get; set; }
 	public DateTime CreatedAt { get; set; }
 	public DateTime? UpdatedAt { get; set; }
-	public string? ApproverComments { get; set; }
-	public DateTime? ApprovedAt { get; set; }
 }

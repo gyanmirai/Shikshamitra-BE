@@ -4,7 +4,8 @@ public enum ConcessionRequestStatus
 {
 	PENDING = 0,
 	APPROVED = 1,
-	REJECTED = 2
+	REJECTED = 2,
+	DRAFT = 3
 }
 
 public enum DiscountBasedOn

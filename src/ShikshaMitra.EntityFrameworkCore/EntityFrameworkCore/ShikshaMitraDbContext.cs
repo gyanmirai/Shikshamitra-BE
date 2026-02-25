@@ -297,7 +297,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region StudentFeeAssignment
 	public DbSet<StudentFeeStructure> StudentFeeStructures { get; set; }
-	public DbSet<StudentFeeHead> StudentFeeHeads { get; set; }
 	#endregion
 
 	#region ConcessionRequests

@@ -1727,15 +1727,6 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
-                    b.Property<DateTime?>("ApprovedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("ApproverId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ApproverMessage")
-                        .HasColumnType("text");
-
                     b.Property<Guid>("BoardId")
                         .HasColumnType("uuid");
 
@@ -1797,20 +1788,8 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<DateTime?>("RejectedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("RejectionReason")
-                        .HasColumnType("text");
-
-                    b.Property<Guid?>("RejectorId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid>("StandardId")
                         .HasColumnType("uuid");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
 
                     b.Property<Guid>("StudentId")
                         .HasColumnType("uuid");
@@ -1829,11 +1808,62 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ApproverId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ApproverMessage")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("ConcessionRequestId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("ConcessionTypeId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<DateTime?>("RejectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RejectionReason")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("RejectorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -1846,6 +1876,9 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequestDocument", b =>
                 {
                     b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ConcessionRequestConcessionTypeId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("ConcessionRequestId")
@@ -1897,6 +1930,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("ConcessionRequestConcessionTypeId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("ConcessionRequestId")
                         .HasColumnType("uuid");
 
@@ -1924,6 +1960,9 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<int>("BasedOn")
                         .HasColumnType("integer");
+
+                    b.Property<Guid>("ConcessionRequestConcessionTypeId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("ConcessionRequestId")
                         .HasColumnType("uuid");
@@ -2979,87 +3018,12 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("ReceiptBooks", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Finance.StudentFeeAssignment.StudentFeeHead", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("CategoryName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
-
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
-
-                    b.Property<Guid>("FeeHeadId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("FeeHeadName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
-
-                    b.Property<bool>("IsOneTime")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsOptional")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsSelected")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<Guid?>("StandardFeeStructureId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("StudentFeeStructureId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StudentFeeStructureId");
-
-                    b.ToTable("StudentFeeHeads", (string)null);
-                });
-
             modelBuilder.Entity("ShikshaMitra.Finance.StudentFeeAssignment.StudentFeeStructure", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime>("AssignedAt")
+                    b.Property<DateTime>("AssignedOn")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -3109,10 +3073,6 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<Guid>("StandardId")
                         .HasColumnType("uuid");
-
-                    b.Property<string>("StructureName")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.Property<Guid>("StudentId")
                         .HasColumnType("uuid");
@@ -10578,15 +10538,6 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("EducationMediumStage");
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Finance.StudentFeeAssignment.StudentFeeHead", b =>
-                {
-                    b.HasOne("ShikshaMitra.Finance.StudentFeeAssignment.StudentFeeStructure", null)
-                        .WithMany("StudentFeeHeads")
-                        .HasForeignKey("StudentFeeStructureId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("ShikshaMitra.Groups.Group", b =>
                 {
                     b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", null)
@@ -12516,11 +12467,6 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureStandard", b =>
                 {
                     b.Navigation("FeeStructureDetails");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Finance.StudentFeeAssignment.StudentFeeStructure", b =>
-                {
-                    b.Navigation("StudentFeeHeads");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Groups.Group", b =>

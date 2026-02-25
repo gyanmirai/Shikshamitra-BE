@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using ShikshaMitra.Finance.ConcessionRequests;
@@ -43,7 +43,10 @@ public class FeeHeadsDataItem
 	public Guid ConcessionTypeId { get; set; }
 
 	[Required]
-	public List<Guid> SelectedFeeHeadIds { get; set; } = new();
+	public Guid ConcessionRequestConcessionTypeId { get; set; }
+
+	[Required]
+	public List<Guid> feeHeadIds { get; set; } = new();
 }
 
 // ─── Step 4 ───────────────────────────────────────────────────────────────────
@@ -58,6 +61,8 @@ public class ConcessionTypeValueBlock
 {
 	[Required]
 	public Guid ConcessionTypeId { get; set; }
+	[Required]
+	public Guid ConcessionRequestConcessionTypeId { get; set; }
 
 	[Required]
 	public List<FeeHeadValueEntry> FeeHeadValues { get; set; } = new();
@@ -92,6 +97,9 @@ public class ConcessionTypeDocumentBlock
 	public Guid ConcessionTypeId { get; set; }
 
 	[Required]
+	public Guid ConcessionRequestConcessionTypeId { get; set; }
+
+	[Required]
 	public List<DocumentUploadEntry> Documents { get; set; } = new();
 }
 
@@ -100,8 +108,7 @@ public class DocumentUploadEntry
 	[Required]
 	public Guid DocumentId { get; set; }
 
-	[Required]
-	public string Url { get; set; }
+	public string? Url { get; set; }
 
 	/// <summary>0 = Pending, 1 = Uploaded.</summary>
 	[Required]

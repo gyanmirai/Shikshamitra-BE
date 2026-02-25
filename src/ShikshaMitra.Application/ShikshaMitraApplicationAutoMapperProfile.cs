@@ -120,8 +120,7 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		// Student Fee Structure mappings
 		CreateMap<StudentFeeStructure, StudentFeeStructureResponseDto>()
 			.ForMember(dest => dest.StudentFeeStructureId, opt => opt.MapFrom(src => src.Id))
-			.ForMember(dest => dest.FeeHeads, opt => opt.MapFrom(src => src.StudentFeeHeads));
-		CreateMap<StudentFeeHead, StudentFeeHeadDto>();
+			.ForMember(dest => dest.FeeHeads, opt => opt.Ignore());
 
 		// Library - BookCategory mappings
 		CreateMap<ShikshaMitra.Library.Setting.GeneralSetting.BookCategory.BookCategory,

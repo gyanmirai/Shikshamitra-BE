@@ -10,6 +10,8 @@ public class ConcessionRequestFeeHeadValue : Entity<Guid>
 {
 	public Guid ConcessionRequestId { get; private set; }
 	public Guid ConcessionTypeId { get; private set; }
+
+	public Guid ConcessionRequestConcessionTypeId { get; private set; }
 	public Guid FeeHeadId { get; private set; }
 
 	public DiscountBasedOn BasedOn { get; private set; }
@@ -29,6 +31,7 @@ public class ConcessionRequestFeeHeadValue : Entity<Guid>
 		Guid id,
 		Guid concessionRequestId,
 		Guid concessionTypeId,
+		Guid concessionRequestConcessionTypeId,
 		Guid feeHeadId,
 		DiscountBasedOn basedOn,
 		double amount,
@@ -37,6 +40,7 @@ public class ConcessionRequestFeeHeadValue : Entity<Guid>
 	{
 		ConcessionRequestId = concessionRequestId;
 		ConcessionTypeId = concessionTypeId;
+		ConcessionRequestConcessionTypeId = concessionRequestConcessionTypeId;
 		FeeHeadId = feeHeadId;
 		BasedOn = basedOn;
 		Amount = amount;

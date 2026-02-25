@@ -9,18 +9,37 @@ using ShikshaMitra.Application.Contracts.Finance.Setting.FeeCategory.Dtos; // Fo
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp;
+using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+
 
 namespace ShikshaMitra.Finance.Setting;
 
 [Authorize]
 [RemoteService(false)]
 public class ReceiptBookAppService(
-	IRepository<ReceiptBook, Guid> receiptBookRepository
+	IRepository<ReceiptBook, Guid> receiptBookRepository,
+	IAcademicYearRepository academicYearRepository,
+	IEducationBoardRepository educationBoardRepository,
+	IEducationMediumRepository educationMediumRepository,
+	IEducationMediumStageRepository educationMediumStageRepository
 ) : ApplicationService, IReceiptBookAppService
+
 {
 	public async Task<ReceiptBookResponse> CreateAsync(Guid academicYearId, ReceiptBookCreateRequest input)
 	{
-		var receiptBook = new ReceiptBook(
+		// Validate Academic Year
+		await academicYearRepository.GetAsync(academicYearId);
+
+		// Validate other related entities
+		await educationBoardRepository.GetAsync(input.BoardId);
+		await educationMediumRepository.GetAsync(input.MediumId);
+		await educationMediumStageRepository.GetAsync(input.MediumStageId);
+
+		try
+		{
+			var receiptBook = new ReceiptBook(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
 			academicYearId,
@@ -35,18 +54,28 @@ public class ReceiptBookAppService(
 			input.Description
 		);
 
-		await receiptBookRepository.InsertAsync(receiptBook);
+			await receiptBookRepository.InsertAsync(receiptBook, autoSave: true);
 
-		var queryable = await receiptBookRepository.WithDetailsAsync(
-			x => x.EducationBoard,
-			x => x.EducationMedium,
-			x => x.EducationMediumStage
-		);
-		var createdReceiptBook = await AsyncExecuter.FirstOrDefaultAsync(
-			queryable.Where(x => x.Id == receiptBook.Id)
-		);
+			var queryable = await receiptBookRepository.WithDetailsAsync(
+				x => x.EducationBoard,
+				x => x.EducationMedium,
+				x => x.EducationMediumStage
+			);
+			var createdReceiptBook = await AsyncExecuter.FirstOrDefaultAsync(
+				queryable.Where(x => x.Id == receiptBook.Id)
+			);
 
-		return MapToResponseWithNavigationProps(createdReceiptBook ?? receiptBook);
+			return MapToResponseWithNavigationProps(createdReceiptBook ?? receiptBook);
+		}
+		catch (Exception ex)
+		{
+			if (ex is BusinessException || ex is Volo.Abp.Domain.Entities.EntityNotFoundException)
+			{
+				throw;
+			}
+			throw new BusinessException("Failed to create receipt book", ex.Message);
+		}
+
 	}
 
 	public async Task<ReceiptBookListResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string search = null)
@@ -116,6 +145,11 @@ public class ReceiptBookAppService(
 
 	public async Task<MessageResponse> UpdateAsync(Guid receiptBookId, ReceiptBookUpdateRequest input)
 	{
+		// Validate related entities
+		await educationBoardRepository.GetAsync(input.BoardId);
+		await educationMediumRepository.GetAsync(input.MediumId);
+		await educationMediumStageRepository.GetAsync(input.MediumStageId);
+
 		var receiptBook = await receiptBookRepository.GetAsync(receiptBookId);
 
 		receiptBook.Update(
@@ -130,13 +164,14 @@ public class ReceiptBookAppService(
 			input.Description
 		);
 
-		await receiptBookRepository.UpdateAsync(receiptBook);
+		await receiptBookRepository.UpdateAsync(receiptBook, autoSave: true);
 
 		return new MessageResponse
 		{
 			Message = "Receipt book updated successfully"
 		};
 	}
+
 
 	public async Task<MessageResponse> DeleteAsync(Guid receiptBookId)
 	{

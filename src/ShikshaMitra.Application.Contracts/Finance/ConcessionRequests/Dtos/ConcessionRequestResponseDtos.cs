@@ -26,8 +26,35 @@ public class CreateConcessionRequestData
 
 public class SelectedConcessionTypeDto
 {
+	public Guid ConcessionRequestConcessionTypeId { get; set; }
 	public Guid ConcessionTypeId { get; set; }
 	public string Name { get; set; }
+}
+
+// ─── Step 1+2 PUT Response ────────────────────────────────────────────────────
+
+public class UpdateConcessionRequestResponse
+{
+	public bool Success { get; set; }
+	public UpdateConcessionRequestData Data { get; set; }
+}
+
+public class UpdateConcessionRequestData
+{
+	public Guid ConcessionRequestId { get; set; }
+	public Guid BoardId { get; set; }
+	public string BoardName { get; set; }
+	public Guid EducationMediumId { get; set; }
+	public string EducationMediumName { get; set; }
+	public Guid StandardId { get; set; }
+	public string StandardName { get; set; }
+	public Guid DivisionId { get; set; }
+	public string DivisionName { get; set; }
+	public Guid StudentId { get; set; }
+	public string StudentName { get; set; }
+	public int Status { get; set; }
+	public List<SelectedConcessionTypeDto> SelectedConcessionTypes { get; set; } = new();
+	public DateTime? UpdatedAt { get; set; }
 }
 
 // ─── Step 1 GET Response ──────────────────────────────────────────────────────
@@ -42,10 +69,15 @@ public class GetBasicDetailsData
 {
 	public Guid ConcessionRequestId { get; set; }
 	public Guid BoardId { get; set; }
+	public string BoardName { get; set; }
 	public Guid EducationMediumId { get; set; }
+	public string EducationMediumName { get; set; }
 	public Guid StandardId { get; set; }
+	public string StandardName { get; set; }
 	public Guid DivisionId { get; set; }
+	public string DivisionName { get; set; }
 	public Guid StudentId { get; set; }
+	public string StudentName { get; set; }
 	public int Status { get; set; }
 	public List<SelectedConcessionTypeDto> SelectedConcessionTypes { get; set; } = new();
 	public DateTime CreatedAt { get; set; }
@@ -176,6 +208,7 @@ public class StudentBasicDetailsDto
 public class ApplicationConcessionBasicDetail
 {
 	public int TotalApplications { get; set; }
+	public int DraftApplications { get; set; }
 	public int PendingApplications { get; set; }
 	public int ApprovedApplications { get; set; }
 	public int RejectedApplications { get; set; }
@@ -243,6 +276,7 @@ public class RejectionResponse
 
 public class ConcessionApplicationsResponse
 {
+	public int DraftCount { get; set; }
 	public int PendingCount { get; set; }
 	public int ApprovedCount { get; set; }
 	public int RejectedCount { get; set; }
@@ -262,14 +296,106 @@ public class ConcessionApplicationDto
 	public string? GrNumber { get; set; }
 	public string StandardName { get; set; }
 	public string DivisionName { get; set; }
-	public string ConcessionType { get; set; }
 	public string RequestDate { get; set; }
 	public string Email { get; set; }
 	public string ContactNo { get; set; }
-	public int Status { get; set; }
-	public string StatusName { get; set; }
+	/// <summary>Total number of concession type applications within this request.</summary>
+	public int TotalConcessionApplications { get; set; }
+	public int DraftCount { get; set; }
+	public int PendingCount { get; set; }
+	public int ApprovedCount { get; set; }
+	public int RejectedCount { get; set; }
 	public DateTime CreatedAt { get; set; }
 	public DateTime? UpdatedAt { get; set; }
-	public string? ApproverComments { get; set; }
-	public DateTime? ApprovedAt { get; set; }
+}
+
+// ─── Step 3 GET — Fee Heads (Edit/Resume) ────────────────────────────────────
+
+public class GetFeeHeadsResponse
+{
+	public bool Success { get; set; }
+	public GetFeeHeadsData Data { get; set; }
+}
+
+public class GetFeeHeadsData
+{
+	public Guid ConcessionRequestId { get; set; }
+	public Guid StudentId { get; set; }
+	public List<ConcessionTypeFeeHeadDto> ConcessionTypes { get; set; } = new();
+}
+
+public class ConcessionTypeFeeHeadDto
+{
+	public Guid ConcessionTypeId { get; set; }
+	public string ConcessionName { get; set; }
+	/// <summary>e.g. "PERCENTAGE" or "FLAT"</summary>
+	public string DiscountType { get; set; }
+	public List<Guid> FeeHeadIds { get; set; } = new();
+}
+
+// ─── Step 4 GET — Value Entries (Edit/Resume) ────────────────────────────────
+
+public class GetValueEntriesResponse
+{
+	public bool Success { get; set; }
+	public GetValueEntriesData Data { get; set; }
+}
+
+public class GetValueEntriesData
+{
+	public Guid ConcessionRequestId { get; set; }
+	public Guid StudentId { get; set; }
+	public List<ConcessionTypeValueEntryDto> ConcessionTypeValues { get; set; } = new();
+}
+
+public class ConcessionTypeValueEntryDto
+{
+	public Guid ConcessionTypeId { get; set; }
+	public string ConcessionName { get; set; }
+	public List<FeeHeadValueEntryDto> FeeHeadValues { get; set; } = new();
+}
+
+public class FeeHeadValueEntryDto
+{
+	public Guid FeeHeadId { get; set; }
+	public string FeeHeadName { get; set; }
+	/// <summary>0 = Amount (flat ₹), 1 = Percentage (%)</summary>
+	public int BasedOn { get; set; }
+	public double Amount { get; set; }
+	public double NetAmount { get; set; }
+}
+
+// ─── Step 5 GET — Document Upload (Edit/Resume) ──────────────────────────────
+
+public class GetDocumentUploadResponse
+{
+	public bool Success { get; set; }
+	public GetDocumentUploadData Data { get; set; }
+}
+
+public class GetDocumentUploadData
+{
+	public Guid ConcessionRequestId { get; set; }
+	public Guid StudentId { get; set; }
+	public List<ConcessionTypeDocumentUploadDto> ConcessionTypeDocuments { get; set; } = new();
+}
+
+public class ConcessionTypeDocumentUploadDto
+{
+	public Guid ConcessionTypeId { get; set; }
+	public string ConcessionTypeName { get; set; }
+	public List<DocumentSlotDto> Documents { get; set; } = new();
+}
+
+public class DocumentSlotDto
+{
+	public Guid DocumentId { get; set; }
+	public string DocumentName { get; set; }
+	/// <summary>Accepted format integers: 0=PDF, 1=JPEG, 2=PNG, 3=DOC, 4=DOCX, 5=XLS</summary>
+	public List<int> AcceptedFormat { get; set; } = new();
+	/// <summary>Previously uploaded file URL. null if not yet uploaded.</summary>
+	public string? Url { get; set; }
+	/// <summary>0 = Pending (not yet uploaded), 1 = Uploaded</summary>
+	public int Status { get; set; }
+	public DateTime? UploadedAt { get; set; }
 }

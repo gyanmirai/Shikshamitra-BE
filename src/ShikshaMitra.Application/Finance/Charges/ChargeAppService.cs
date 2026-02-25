@@ -142,6 +142,11 @@ public class ChargeAppService : ApplicationService, IChargeAppService
 						  where charge.AcademicYearId == academicYearId
 						  select new { charge, student, category, standard, division, board, medium, requestor };
 
+		// Compute status counts across all charges for the academic year (before status filter)
+		var pendingCount = await AsyncExecuter.CountAsync(joinedQuery.Where(x => x.charge.Status == ChargeStatus.Pending));
+		var approvedCount = await AsyncExecuter.CountAsync(joinedQuery.Where(x => x.charge.Status == ChargeStatus.Approved));
+		var rejectedCount = await AsyncExecuter.CountAsync(joinedQuery.Where(x => x.charge.Status == ChargeStatus.Rejected));
+
 		// Apply filters
 		joinedQuery = joinedQuery.Where(x => x.charge.Status == (ChargeStatus) input.Status);
 
@@ -216,6 +221,9 @@ public class ChargeAppService : ApplicationService, IChargeAppService
 			CurrentPage = input.Page,
 			PageSize = input.PageSize,
 			TotalPages = totalPages,
+			PendingCount = pendingCount,
+			ApprovedCount = approvedCount,
+			RejectedCount = rejectedCount,
 			Message = "Charges retrieved successfully"
 		};
 	}

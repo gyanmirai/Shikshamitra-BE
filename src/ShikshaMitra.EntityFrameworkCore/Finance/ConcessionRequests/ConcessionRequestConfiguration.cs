@@ -14,8 +14,6 @@ public class ConcessionRequestConfiguration : IEntityTypeConfiguration<Concessio
 
 		builder.Property(x => x.AcademicYear).HasMaxLength(10).IsRequired();
 		builder.Property(x => x.CompletedStepsRaw).HasColumnType("text");
-		builder.Property(x => x.ApproverMessage).HasColumnType("text");
-		builder.Property(x => x.RejectionReason).HasColumnType("text");
 
 		builder.HasMany(x => x.ConcessionRequestConcessionTypes)
 			.WithOne()

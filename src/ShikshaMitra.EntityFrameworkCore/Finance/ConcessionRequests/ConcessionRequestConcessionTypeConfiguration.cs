@@ -14,6 +14,9 @@ public class ConcessionRequestConcessionTypeConfiguration : IEntityTypeConfigura
 
 		builder.Property(x => x.ConcessionRequestId).IsRequired();
 		builder.Property(x => x.ConcessionTypeId).IsRequired();
+		builder.Property(x => x.ApproverMessage).HasColumnType("text");
+		builder.Property(x => x.RejectionReason).HasColumnType("text");
+		builder.Property(x => x.Status).IsRequired();
 
 		builder.HasMany(x => x.FeeHeadMappings)
 			.WithOne()

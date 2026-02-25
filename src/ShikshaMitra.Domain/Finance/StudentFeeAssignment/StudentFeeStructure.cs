@@ -16,15 +16,10 @@ public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public Guid FeeStructureStandardId { get; private set; }
 
-	public string StructureName { get; private set; }
-
-	public DateTime AssignedAt { get; private set; }
-
-	public ICollection<StudentFeeHead> StudentFeeHeads { get; private set; }
+	public DateTime AssignedOn { get; private set; }
 
 	protected StudentFeeStructure()
 	{
-		StudentFeeHeads = new List<StudentFeeHead>();
 	}
 
 	public StudentFeeStructure(
@@ -32,21 +27,17 @@ public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? tenantId,
 		Guid studentId,
 		Guid standardId,
-		Guid feeStructureStandardId,
-		string structureName) : base(id)
+		Guid feeStructureStandardId) : base(id)
 	{
 		TenantId = tenantId;
 		StudentId = Check.NotNull(studentId, nameof(studentId));
 		StandardId = Check.NotNull(standardId, nameof(standardId));
 		FeeStructureStandardId = Check.NotNull(feeStructureStandardId, nameof(feeStructureStandardId));
-		StructureName = Check.NotNullOrWhiteSpace(structureName, nameof(structureName));
-		AssignedAt = DateTime.UtcNow;
-		StudentFeeHeads = new List<StudentFeeHead>();
+		AssignedOn = DateTime.UtcNow;
 	}
 
-	public void AddFeeHead(StudentFeeHead feeHead)
+	public void UpdateFeeStructure(Guid feeStructureStandardId)
 	{
-		Check.NotNull(feeHead, nameof(feeHead));
-		StudentFeeHeads.Add(feeHead);
+		FeeStructureStandardId = Check.NotNull(feeStructureStandardId, nameof(feeStructureStandardId));
 	}
 }

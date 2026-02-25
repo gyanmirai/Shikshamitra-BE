@@ -72,6 +72,22 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 	}
 
+	public void UpdateBasicDetails(
+		Guid boardId,
+		Guid educationMediumId,
+		Guid standardId,
+		Guid divisionId,
+		Guid studentId,
+		Guid? feeStructureId)
+	{
+		BoardId = boardId;
+		EducationMediumId = educationMediumId;
+		StandardId = standardId;
+		DivisionId = divisionId;
+		StudentId = studentId;
+		FeeStructureId = feeStructureId;
+	}
+
 	public List<int> GetCompletedSteps()
 	{
 		if (string.IsNullOrWhiteSpace(CompletedStepsRaw))

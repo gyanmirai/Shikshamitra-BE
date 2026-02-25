@@ -29,6 +29,30 @@ public class CreateConcessionRequestInput
 	public List<Guid> ConcessionTypeIds { get; set; } = new();
 }
 
+// ─── Step 1+2 PUT (Update) ────────────────────────────────────────────────────
+
+public class UpdateConcessionRequestInput
+{
+	[Required]
+	public Guid BoardId { get; set; }
+
+	[Required]
+	public Guid EducationMediumId { get; set; }
+
+	[Required]
+	public Guid StandardId { get; set; }
+
+	[Required]
+	public Guid DivisionId { get; set; }
+
+	[Required]
+	public Guid StudentId { get; set; }
+
+	[Required]
+	[MinLength(1)]
+	public List<Guid> ConcessionTypeIds { get; set; } = new();
+}
+
 // ─── Step 3 ───────────────────────────────────────────────────────────────────
 
 public class SaveFeeHeadsDataRequest

@@ -43,6 +43,22 @@ public class ConcessionRequestController : ControllerBase
 		return Ok(result);
 	}
 
+	// ─── Step 1+2 merged — PUT /api/concession-request/{id} ──────────────────
+
+	[HttpPut("{concessionRequestId:guid}")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	[ProducesResponseType(StatusCodes.Status409Conflict)]
+	[ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+	public async Task<IActionResult> UpdateConcessionRequest(
+		[FromRoute] Guid concessionRequestId,
+		[FromBody] UpdateConcessionRequestInput input)
+	{
+		var result = await _appService.UpdateConcessionRequestAsync(concessionRequestId, input);
+		return Ok(result);
+	}
+
 	// ─── Step 3 — PUT /api/concession-request/{id}/fee-heads ─────────────────
 
 	[HttpPut("{concessionRequestId:guid}/fee-heads")]
@@ -100,6 +116,39 @@ public class ConcessionRequestController : ControllerBase
 	{
 		var result = await _appService.GetConcessionDocumentsAsync(
 			studentConcessionTypeRequestId, status, page, pageSize);
+		return Ok(result);
+	}
+
+	// ─── GET /api/concession-request/{id}/fee-heads (Step 3 Edit/Resume) ──────
+
+	[HttpGet("{concessionRequestId:guid}/fee-heads")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> GetFeeHeads([FromRoute] Guid concessionRequestId)
+	{
+		var result = await _appService.GetConcessionRequestFeeHeadsAsync(concessionRequestId);
+		return Ok(result);
+	}
+
+	// ─── GET /api/concession-request/{id}/value-entries (Step 4 Edit/Resume) ──
+
+	[HttpGet("{concessionRequestId:guid}/value-entries")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> GetValueEntries([FromRoute] Guid concessionRequestId)
+	{
+		var result = await _appService.GetConcessionRequestValueEntriesAsync(concessionRequestId);
+		return Ok(result);
+	}
+
+	// ─── GET /api/concession-request/{id}/document-upload (Step 5 Edit/Resume) ─
+
+	[HttpGet("{concessionRequestId:guid}/document-upload")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public async Task<IActionResult> GetDocumentUpload([FromRoute] Guid concessionRequestId)
+	{
+		var result = await _appService.GetConcessionRequestDocumentsForResumeAsync(concessionRequestId);
 		return Ok(result);
 	}
 

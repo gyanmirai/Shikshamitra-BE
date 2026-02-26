@@ -649,6 +649,16 @@ public class GroupAppService : ApplicationService, IGroupAppService
                            nameBasedEmployeeRules.Count > 0 ||
                            group.Members.Count > 0;
 
+        // Resolve role names for both rule-based and name-based role IDs
+        var allRoleIds = group.RuleBasedRoleIds.Concat(group.NameBasedRoleIds).Distinct().ToList();
+        var roleMap = new Dictionary<Guid, string>();
+        if (allRoleIds.Count > 0)
+        {
+            var roleQuery = await _roleRepository.GetQueryableAsync();
+            var roles = await AsyncExecuter.ToListAsync(roleQuery.Where(r => allRoleIds.Contains(r.Id)));
+            roleMap = roles.ToDictionary(r => r.Id, r => r.Name);
+        }
+
         // Build academic selections for both rule-based and name-based
         var ruleBasedAcademicSelection = hasRuleBased && group.RuleBasedDivisionIds.Count > 0
             ? await BuildAcademicSelectionAsync(group.RuleBasedDivisionIds)
@@ -664,7 +674,11 @@ public class GroupAppService : ApplicationService, IGroupAppService
             nameBasedDto = new NameBasedSelectionResponseDto
             {
                 AcademicSelection = nameBasedAcademicSelection,
-                RoleIds = group.NameBasedRoleIds,
+                Roles = group.NameBasedRoleIds.Select(id => new RoleInfoDto
+                {
+                    Id = id,
+                    Name = roleMap.GetValueOrDefault(id, string.Empty)
+                }).ToList(),
                 StudentFilters = nameBasedStudentRules.Select(r => new StudentRuleDto
                 {
                     Id = r.Id,
@@ -702,7 +716,11 @@ public class GroupAppService : ApplicationService, IGroupAppService
             RuleBased = hasRuleBased ? new RuleBasedSelectionResponseDto
             {
                 AcademicSelection = ruleBasedAcademicSelection,
-                RoleIds = group.RuleBasedRoleIds,
+                Roles = group.RuleBasedRoleIds.Select(id => new RoleInfoDto
+                {
+                    Id = id,
+                    Name = roleMap.GetValueOrDefault(id, string.Empty)
+                }).ToList(),
                 StudentFilters = ruleBasedStudentRules.Select(r => new StudentRuleDto
                 {
                     Id = r.Id,

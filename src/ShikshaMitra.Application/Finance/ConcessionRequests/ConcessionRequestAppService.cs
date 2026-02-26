@@ -264,7 +264,7 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 	public async Task<UpdateConcessionRequestResponse> UpdateConcessionRequestAsync(
 		Guid concessionRequestId, UpdateConcessionRequestInput input)
 	{
-		var cr = await _concessionRequestRepository.GetAsync(concessionRequestId);
+		var cr = await _concessionRequestRepository.GetAsync(concessionRequestId,includeDetails:true);
 
 		// Block update if any concession type in this request is already processed
 		var existingLinks = await _concessionRequestConcessionTypeRepository.GetListAsync(
@@ -288,11 +288,23 @@ public class ConcessionRequestAppService : ApplicationService, IConcessionReques
 				.WithData("Message", $"Concession type(s) not found: {string.Join(", ", invalidIds)}");
 
 		// Full replacement of concession type links
-		await _concessionRequestConcessionTypeRepository.DeleteManyAsync(existingLinks);
 
-		var newLinks = input.ConcessionTypeIds.Select(ctId =>
-			new ConcessionRequestConcessionType(GuidGenerator.Create(), concessionRequestId, ctId)).ToList();
-		await _concessionRequestConcessionTypeRepository.InsertManyAsync(newLinks, autoSave: true);
+		// await _concessionRequestConcessionTypeRepository.DeleteManyAsync(existingLinks, autoSave: true);
+		cr.DeleteConcessionRequestConcessionType(existingLinks);
+
+
+		var newLinks = new List<ConcessionRequestConcessionType>();
+
+		foreach (var ctId in input.ConcessionTypeIds)
+		{
+			// newLinks.Add(new ConcessionRequestConcessionType(GuidGenerator.Create(), concessionRequestId, ctId));
+
+			cr.addNewConcessionRequestConcessionType(new ConcessionRequestConcessionType(GuidGenerator.Create(), concessionRequestId, ctId));
+		}
+
+		// var newLinks = input.ConcessionTypeIds.Select(ctId =>
+		// 	new ConcessionRequestConcessionType(GuidGenerator.Create(), concessionRequestId, ctId)).ToList();
+		// await _concessionRequestConcessionTypeRepository.InsertManyAsync(newLinks, autoSave: true);
 
 		// Resolve fee structure (may change if studentId changed)
 		var studentFeeStructure = await _studentFeeStructureRepository.FirstOrDefaultAsync(

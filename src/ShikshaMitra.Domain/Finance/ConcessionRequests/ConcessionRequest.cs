@@ -1,3 +1,4 @@
+﻿using JetBrains.Annotations;
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -28,11 +29,10 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string CompletedStepsRaw { get; private set; }
 
 	// Navigation
-	public virtual ICollection<ConcessionRequestConcessionType> ConcessionRequestConcessionTypes { get; private set; }
+	public ICollection<ConcessionRequestConcessionType> ConcessionRequestConcessionTypes { get; set; }
 
 	protected ConcessionRequest()
 	{
-		ConcessionRequestConcessionTypes = new List<ConcessionRequestConcessionType>();
 	}
 
 	public ConcessionRequest(
@@ -100,5 +100,24 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				result.Add(n);
 		}
 		return result;
+	}
+
+	public void DeleteConcessionRequestConcessionType(
+	ConcessionRequestConcessionType data)
+	{
+		ConcessionRequestConcessionTypes.Remove(data);
+	}
+
+	public void DeleteConcessionRequestConcessionType(
+	List<ConcessionRequestConcessionType> data)
+	{
+		ConcessionRequestConcessionTypes.RemoveAll(data);
+	}
+
+	public void addNewConcessionRequestConcessionType(ConcessionRequestConcessionType data)
+	{
+
+
+		ConcessionRequestConcessionTypes.Add(data);
 	}
 }

@@ -135,5 +135,9 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		CreateMap<ShikshaMitra.Library.Setting.ChargeCategory.LibraryChargeCategory,
 			ShikshaMitra.Library.Setting.ChargeCategory.Dtos.LibraryChargeCategoryDto>()
 			.ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.ChargeType));
+
+		// Library - Book mappings
+		CreateMap<ShikshaMitra.Library.Books.Book, ShikshaMitra.Library.Books.BookDto>()
+			.ForMember(dest => dest.Language, opt => opt.MapFrom(src => src.Language.ToString()));
 	}
 }

@@ -375,6 +375,9 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<LibrarySection> LibrarySections { get; set; }
 	public DbSet<LibraryShelf> LibraryShelves { get; set; }
 	#endregion
+	#region Books
+	public DbSet<ShikshaMitra.Library.Books.Book> Books { get; set; }
+	#endregion
 	#endregion
 
 	// Apply BookCategory configuration

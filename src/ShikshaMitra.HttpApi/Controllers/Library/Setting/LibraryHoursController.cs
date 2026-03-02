@@ -8,7 +8,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.HttpApi.Controllers.Library.Setting;
 
 [Area("Library")]
-[Route("api/library-hours")]
+[Route("api/library/library-hours")]
 public class LibraryHoursController : AbpController
 {
 	private readonly ILibraryTimingAppService _service;

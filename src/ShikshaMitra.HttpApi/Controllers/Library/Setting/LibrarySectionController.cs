@@ -9,7 +9,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.HttpApi.Controllers.Library.Setting;
 
 [Area("Library")]
-[Route("api/sections")]
+[Route("api/library/sections")]
 public class LibrarySectionController : AbpController
 {
 	private readonly ILibrarySectionAppService _service;

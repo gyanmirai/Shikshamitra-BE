@@ -5,25 +5,19 @@ using ShikshaMitra.Students.Attendance.Settings;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
+using Volo.Abp.Guids;
 
 namespace ShikshaMitra.Students.Attendances;
 
 /// <summary>
 /// Domain manager for StudentLeave entity - handles business logic and validation
 /// </summary>
-public class StudentLeaveManager : DomainService
+public class StudentLeaveManager(
+	IRepository<Student, Guid> studentRepository,
+	IStudentLeaveTypeRepository studentLeaveTypeRepository,
+	IGuidGenerator guidGenerator
+) : DomainService
 {
-	private readonly IRepository<Student, Guid> _studentRepository;
-	private readonly IStudentLeaveTypeRepository _studentLeaveTypeRepository;
-	
-	public StudentLeaveManager(
-		IRepository<Student, Guid> studentRepository,
-		IStudentLeaveTypeRepository studentLeaveTypeRepository)
-	{
-		_studentRepository = studentRepository;
-		_studentLeaveTypeRepository = studentLeaveTypeRepository;
-	}
-	
 	/// <summary>
 	/// Creates a new student leave request with validation
 	/// </summary>
@@ -39,36 +33,36 @@ public class StudentLeaveManager : DomainService
 		string? attachmentContentType)
 	{
 		// Validate student exists
-		var student = await _studentRepository.GetAsync(studentId);
+		var student = await studentRepository.GetAsync(studentId);
 		if (student == null)
 		{
 			throw new BusinessException("StudentLeave:StudentNotFound")
 				.WithData("StudentId", studentId);
 		}
-		
+
 		// Validate leave type exists and is active
-		var leaveType = await _studentLeaveTypeRepository.GetAsync(studentLeaveTypeId);
+		var leaveType = await studentLeaveTypeRepository.GetAsync(studentLeaveTypeId);
 		if (leaveType == null)
 		{
 			throw new BusinessException("StudentLeave:LeaveTypeNotFound")
 				.WithData("LeaveTypeId", studentLeaveTypeId);
 		}
-		
+
 		if (!leaveType.IsActive)
 		{
 			throw new BusinessException("StudentLeave:LeaveTypeNotActive")
 				.WithData("LeaveTypeId", studentLeaveTypeId);
 		}
-		
+
 		// Validate dates
 		ValidateDates(isHalfDay, leaveDate, endDate);
-		
+
 		// Validate attachment
 		ValidateAttachment(attachment, attachmentFileName, attachmentContentType);
-		
+
 		// Create the leave entity
 		var leave = new StudentLeave(
-			GuidGenerator.Create(),
+			guidGenerator.Create(),
 			CurrentTenant.Id,
 			studentId,
 			student.AcademicMediumId,
@@ -82,10 +76,10 @@ public class StudentLeaveManager : DomainService
 			attachment,
 			attachmentFileName,
 			attachmentContentType);
-		
+
 		return leave;
 	}
-	
+
 	/// <summary>
 	/// Updates an existing student leave request (only if status is Pending)
 	/// </summary>
@@ -106,27 +100,27 @@ public class StudentLeaveManager : DomainService
 			throw new BusinessException("StudentLeave:CannotUpdateNonPending")
 				.WithData("Status", studentLeave.Status);
 		}
-		
+
 		// Validate leave type exists and is active
-		var leaveType = await _studentLeaveTypeRepository.GetAsync(studentLeaveTypeId);
+		var leaveType = await studentLeaveTypeRepository.GetAsync(studentLeaveTypeId);
 		if (leaveType == null)
 		{
 			throw new BusinessException("StudentLeave:LeaveTypeNotFound")
 				.WithData("LeaveTypeId", studentLeaveTypeId);
 		}
-		
+
 		if (!leaveType.IsActive)
 		{
 			throw new BusinessException("StudentLeave:LeaveTypeNotActive")
 				.WithData("LeaveTypeId", studentLeaveTypeId);
 		}
-		
+
 		// Validate dates
 		ValidateDates(isHalfDay, leaveDate, endDate);
-		
+
 		// Validate attachment
 		ValidateAttachment(attachment, attachmentFileName, attachmentContentType);
-		
+
 		// Update the leave entity
 		studentLeave.UpdateLeaveRequest(
 			studentLeaveTypeId,
@@ -137,10 +131,10 @@ public class StudentLeaveManager : DomainService
 			attachment,
 			attachmentFileName,
 			attachmentContentType);
-		
+
 		return studentLeave;
 	}
-	
+
 	/// <summary>
 	/// Approves a student leave request
 	/// </summary>
@@ -151,11 +145,11 @@ public class StudentLeaveManager : DomainService
 			throw new BusinessException("StudentLeave:CannotApproveNonPending")
 				.WithData("Status", studentLeave.Status);
 		}
-		
+
 		studentLeave.Approve(remarks);
 		return await Task.FromResult(studentLeave);
 	}
-	
+
 	/// <summary>
 	/// Rejects a student leave request with a reason
 	/// </summary>
@@ -169,13 +163,13 @@ public class StudentLeaveManager : DomainService
 			throw new BusinessException("StudentLeave:CannotRejectNonPending")
 				.WithData("Status", studentLeave.Status);
 		}
-		
+
 		Check.NotNullOrWhiteSpace(rejectionReason, nameof(rejectionReason));
-		
+
 		studentLeave.Reject(rejectionReason, remarks);
 		return await Task.FromResult(studentLeave);
 	}
-	
+
 	/// <summary>
 	/// Validates leave dates based on business rules
 	/// </summary>
@@ -188,7 +182,7 @@ public class StudentLeaveManager : DomainService
 			throw new BusinessException("StudentLeave:LeaveDateTooFarInPast")
 				.WithData("MaxPastDays", StudentLeaveConsts.MaxPastDays);
 		}
-		
+
 		if (isHalfDay)
 		{
 			// For half-day leave, end date must be null
@@ -204,13 +198,13 @@ public class StudentLeaveManager : DomainService
 			{
 				throw new BusinessException("StudentLeave:FullDayRequiresEndDate");
 			}
-			
+
 			// End date must be >= start date
 			if (endDate < leaveDate)
 			{
 				throw new BusinessException("StudentLeave:EndDateBeforeStartDate");
 			}
-			
+
 			// Validate leave duration doesn't exceed maximum
 			var duration = (endDate.Value.Date - leaveDate.Date).Days + 1;
 			if (duration > StudentLeaveConsts.MaxLeaveDurationDays)
@@ -221,7 +215,7 @@ public class StudentLeaveManager : DomainService
 			}
 		}
 	}
-	
+
 	/// <summary>
 	/// Validates attachment file
 	/// </summary>
@@ -231,7 +225,7 @@ public class StudentLeaveManager : DomainService
 		{
 			return; // Attachment is optional
 		}
-		
+
 		// Validate file size
 		if (attachment.Length > StudentLeaveConsts.MaxAttachmentSize)
 		{
@@ -239,18 +233,18 @@ public class StudentLeaveManager : DomainService
 				.WithData("MaxSize", StudentLeaveConsts.MaxAttachmentSize)
 				.WithData("ActualSize", attachment.Length);
 		}
-		
+
 		// Validate filename and content type are provided
 		if (string.IsNullOrWhiteSpace(attachmentFileName))
 		{
 			throw new BusinessException("StudentLeave:AttachmentFileNameRequired");
 		}
-		
+
 		if (string.IsNullOrWhiteSpace(attachmentContentType))
 		{
 			throw new BusinessException("StudentLeave:AttachmentContentTypeRequired");
 		}
-		
+
 		// Validate content type is allowed
 		if (!StudentLeaveConsts.AllowedContentTypes.Contains(attachmentContentType.ToLowerInvariant()))
 		{
@@ -259,7 +253,7 @@ public class StudentLeaveManager : DomainService
 				.WithData("AllowedTypes", string.Join(", ", StudentLeaveConsts.AllowedContentTypes));
 		}
 	}
-	
+
 	/// <summary>
 	/// Calculates total days for a leave period
 	/// </summary>
@@ -269,12 +263,12 @@ public class StudentLeaveManager : DomainService
 		{
 			return 0.5m;
 		}
-		
+
 		if (endDate == null)
 		{
 			throw new ArgumentNullException(nameof(endDate), "End date is required for full-day leave");
 		}
-		
+
 		// Calculate total days (inclusive of both start and end date)
 		var days = (endDate.Value.Date - startDate.Date).Days + 1;
 		return days;

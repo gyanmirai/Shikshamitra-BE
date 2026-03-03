@@ -221,6 +221,7 @@ public class StudentSeederContributor : BaseSeederContributor
 			GenerateAadharNumber(random),
 			null, // ApparId
 			null, // PanNo
+			null, // PenNo
 			religion,
 			castNames[(int)castCategory],
 			castCategory,

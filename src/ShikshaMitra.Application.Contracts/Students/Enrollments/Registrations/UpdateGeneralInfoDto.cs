@@ -23,6 +23,7 @@ public class UpdateGeneralInfoDto
 	public string? AadharNo { get; set; }
 	public string? ApparId { get; set; }
 	public string? PanNo { get; set; }
+	public string? PennNo { get; set; }
 	public ReligionEnum? Religion { get; set; }
 	public required string FamilyCast { get; set; }
 	public CastCategoryEnum CastCategory { get; set; }

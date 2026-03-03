@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
+using ShikshaMitra.Students.StudentRecords;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -41,7 +42,13 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public InquiryPreference? InquiryPreference { get; private set; }
 	public EducationMedium? AcademicMedium { get; private set; }
 
-	public ICollection<StudentNote> Notes { get; private set; } = new List<StudentNote>(); 
+	public ICollection<StudentNote> Notes { get; private set; } = new List<StudentNote>();
+
+	/// <summary>
+	/// Ordered log of every operational status transition for this student.
+	/// Each entry is append-only and carries the creator / timestamp via ABP auditing.
+	/// </summary>
+	public ICollection<StudentStatusHistory> StatusHistories { get; private set; } = new List<StudentStatusHistory>();
 
 	private Student()
 	{
@@ -76,6 +83,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		RollNo = rollNo;
 		Status = status;
 		Notes = new List<StudentNote>();
+		StatusHistories = new List<StudentStatusHistory>();
 	}
 
 	/// <summary>
@@ -297,6 +305,62 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void ChangeStatus(StudentLifeCycleStatusEnum status)
 	{
 		Status = status;
+	}
+
+	/// <summary>
+	/// Changes the student's operational status (Active / Inactive / Left) and appends an
+	/// immutable audit entry with the optional remarks.
+	/// </summary>
+	/// <remarks>
+	/// Allowed only once the student has reached the operational lifecycle
+	/// (Enrolled, InActive, or Left). Earlier stages such as Inquiry or Registration
+	/// must follow the structured enrollment workflow.
+	/// <para>
+	/// Mapping: <see cref="StudentStatus.Active"/> → Enrolled,
+	///          <see cref="StudentStatus.Inactive"/> → InActive,
+	///          <see cref="StudentStatus.Left"/> → Left.
+	/// </para>
+	/// </remarks>
+	public void ChangeOperationalStatus(StudentStatus newStatus, string? remarks)
+	{
+		var allowedFromStatuses = new[]
+		{
+			StudentLifeCycleStatusEnum.Enrolled,
+			StudentLifeCycleStatusEnum.InActive,
+			StudentLifeCycleStatusEnum.Left,
+		};
+
+		if (!Array.Exists(allowedFromStatuses, s => s == Status))
+		{
+			throw new InvalidOperationException(
+				$"Operational status can only be changed for enrolled students. " +
+				$"Current lifecycle status '{Status}' is not eligible.");
+		}
+
+		var targetLifecycleStatus = newStatus switch
+		{
+			StudentStatus.Active   => StudentLifeCycleStatusEnum.Enrolled,
+			StudentStatus.Inactive => StudentLifeCycleStatusEnum.InActive,
+			StudentStatus.Left     => StudentLifeCycleStatusEnum.Left,
+			_ => throw new ArgumentOutOfRangeException(nameof(newStatus), newStatus, "Unknown student status.")
+		};
+
+		if (Status == targetLifecycleStatus)
+		{
+			// No-op: guard against redundant writes that would still create a history row.
+			return;
+		}
+
+		var history = new StudentStatusHistory(
+			id: Guid.NewGuid(),
+			tenantId: TenantId,
+			studentId: Id,
+			fromStatus: Status,
+			toStatus: targetLifecycleStatus,
+			remarks: remarks);
+
+		StatusHistories.Add(history);
+		ChangeStatus(targetLifecycleStatus);
 	}
 
 	/// <summary>

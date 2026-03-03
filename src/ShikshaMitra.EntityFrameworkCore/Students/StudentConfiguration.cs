@@ -40,5 +40,11 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 		// This follows the aggregate pattern - always load the complete aggregate
 		builder.Navigation(x => x.AdditionalDetail).AutoInclude();
 		builder.Navigation(x => x.ContactDetail).AutoInclude();
+
+		// Status history: owned by the aggregate, loaded explicitly via includeDetails.
+		builder.HasMany(x => x.StatusHistories)
+			.WithOne()
+			.HasForeignKey(h => h.StudentId)
+			.OnDelete(DeleteBehavior.Cascade);
 	}
 }

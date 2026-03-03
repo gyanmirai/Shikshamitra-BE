@@ -173,6 +173,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	public DbSet<HouseSettings> HouseSettings { get; set; }
 	public DbSet<StudentManagementSettings> StudentManagementSettings { get; set; }
+	public DbSet<StudentStatusHistory> StudentStatusHistories { get; set; }
 
 	#endregion
 

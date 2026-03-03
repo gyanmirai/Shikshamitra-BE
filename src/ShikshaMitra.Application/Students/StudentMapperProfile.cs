@@ -1,6 +1,8 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Common;
 using ShikshaMitra.Students.Attendance.Settings;
+using ShikshaMitra.Students.Records;
+using ShikshaMitra.Students.StudentRecords;
 using ShikshaMitra.Students.Attendances.Settings;
 using ShikshaMitra.Students.Enrollments.Notes;
 using ShikshaMitra.Students.Enrollments.Registrations;
@@ -146,5 +148,13 @@ public class StudentMapperProfile : Profile
         CreateMap<CreateUpdateStudentNoteDto, StudentNote>();
 
 		CreateMap<HouseSettings, HouseSettingsDto>();
+
+		// StudentStatusHistory → StudentStatusHistoryDto
+		// OperationalStatus is derived from ToStatus so we compute it during mapping.
+		CreateMap<StudentStatusHistory, StudentStatusHistoryDto>()
+			.ForMember(dest => dest.OperationalStatus, opt => opt.MapFrom(src =>
+				src.ToStatus == StudentLifeCycleStatusEnum.Enrolled  ? StudentStatus.Active   :
+				src.ToStatus == StudentLifeCycleStatusEnum.InActive  ? StudentStatus.Inactive :
+				                                                        StudentStatus.Left));
 	}
 }

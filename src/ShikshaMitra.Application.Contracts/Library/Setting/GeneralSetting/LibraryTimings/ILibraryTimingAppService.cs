@@ -1,20 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
+using ShikshaMitra.Library.Shared;
 using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings
 {
 	public interface ILibraryTimingAppService : IApplicationService
 	{
-		Task<List<LibraryTimingDto>> GetListAsync();
-		//Task<List<LibraryTimingDto>> CreateOrUpdateAsync(List<CreateUpdateLibraryTimingDto> input);
-
-		Task<LibraryTimingDto> CreateAsync(CreateUpdateLibraryTimingDto input);
-
-		Task<LibraryTimingDto> UpdateAsync(Guid id, CreateUpdateLibraryTimingDto input);
-		Task DeleteAsync(int day);
+		Task<PaginatedResponse<LibraryTimingDto>> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10);
+		Task<GenericUpdatedResponse> UpdateHoursAsync(Guid academicYearId, LibraryHoursUpdateRequest input);
 	}
 }

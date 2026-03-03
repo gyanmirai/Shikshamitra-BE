@@ -12,12 +12,21 @@ public class CurriculumFileManagementAppService(
 	IBlobContainer blobContainer
 ) : ApplicationService, ICurriculumFileManagementAppService
 {
-	public async Task<string> UploadAsync(string originalFileName, Stream stream)
+	public async Task<string> UploadAsync(string fileName, byte[] fileBytes)
 	{
-		var blobName = $"{Guid.NewGuid()}{Path.GetExtension(originalFileName)}";
+		var uploadFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
 
-		await blobContainer.SaveAsync(blobName, stream);
+		if (!Directory.Exists(uploadFolder))
+		{
+			Directory.CreateDirectory(uploadFolder);
+		}
 
-		return blobName;
+		var filePath = Path.Combine(uploadFolder, fileName);
+
+		await File.WriteAllBytesAsync(filePath, fileBytes);
+
+		return $"/uploads/{fileName}";
 	}
+
+
 }

@@ -21,6 +21,8 @@ using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Finance.StudentFeeAssignment;
+using ShikshaMitra.Application.Contracts.Finance.StudentFeeAssignment.Dtos;
 
 namespace ShikshaMitra;
 
@@ -32,11 +34,7 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		 * Alternatively, you can split your mapping configurations
 		 * into multiple profile classes for a better organization. */
 
-		CreateMap<BookCategory, BookCategoryDto>();
-		CreateMap<CreateUpdateBookCategoryDto, BookCategory>();
-
-		CreateMap<LibraryTiming, LibraryTimingDto>();
-		CreateMap<LibraryTimingDto, LibraryTiming>();
+		// BookCategory and LibraryTiming mappings are defined at the bottom of this profile
 
 		// Event Types mapping
 		CreateMap<EventType, EventTypeDto>();
@@ -118,5 +116,28 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 			.ForMember(dest => dest.AnnouncementType, opt => opt.MapFrom(src => src.AnnouncementTypeName));
 		CreateMap<CreateUpdateAnnouncementTypeDto, AnnouncementType>()
 			.ForMember(dest => dest.AnnouncementTypeName, opt => opt.MapFrom(src => src.AnnouncementType));
+
+		// Student Fee Structure mappings
+		CreateMap<StudentFeeStructure, StudentFeeStructureResponseDto>()
+			.ForMember(dest => dest.StudentFeeStructureId, opt => opt.MapFrom(src => src.Id))
+			.ForMember(dest => dest.FeeHeads, opt => opt.Ignore());
+
+		// Library - BookCategory mappings
+		CreateMap<ShikshaMitra.Library.Setting.GeneralSetting.BookCategory.BookCategory,
+			ShikshaMitra.Library.Setting.GeneralSetting.BookCategory.BookCategoryDto>()
+			.ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Name));
+
+		// Library - LibraryTiming mappings
+		CreateMap<ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings.LibraryTiming,
+			ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings.LibraryTimingDto>();
+
+		// Library - LibraryChargeCategory mappings
+		CreateMap<ShikshaMitra.Library.Setting.ChargeCategory.LibraryChargeCategory,
+			ShikshaMitra.Library.Setting.ChargeCategory.Dtos.LibraryChargeCategoryDto>()
+			.ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.ChargeType));
+
+		// Library - Book mappings
+		CreateMap<ShikshaMitra.Library.Books.Book, ShikshaMitra.Library.Books.BookDto>()
+			.ForMember(dest => dest.Language, opt => opt.MapFrom(src => src.Language.ToString()));
 	}
 }

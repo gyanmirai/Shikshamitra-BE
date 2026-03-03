@@ -1,11 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Library.Setting.GeneralSetting
@@ -15,19 +10,22 @@ namespace ShikshaMitra.Library.Setting.GeneralSetting
 		public void Configure(EntityTypeBuilder<LibraryTiming> builder)
 		{
 			builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "LibraryTimings", ShikshaMitraConsts.DbSchema);
-
 			builder.ConfigureByConvention();
 
 			builder.Property(x => x.Day)
+				.IsRequired()
+				.HasMaxLength(20);
+
+			builder.Property(x => x.StartTime)
+				.HasMaxLength(20);
+
+			builder.Property(x => x.EndTime)
+				.HasMaxLength(20);
+
+			builder.Property(x => x.Status)
 				.IsRequired();
 
-			builder.Property(x => x.OpeningTime)
-				.IsRequired();
-
-			builder.Property(x => x.ClosingTime)
-				.IsRequired();
-
-			builder.HasIndex(x => x.Day).IsUnique();
+			builder.Property(x => x.AcademicYearId);
 		}
 	}
 }

@@ -1,0 +1,22 @@
+namespace ShikshaMitra.Finance.Charges;
+
+/// <summary>
+/// Represents the status of a charge
+/// </summary>
+public enum ChargeStatus
+{
+	/// <summary>
+	/// Charge is pending approval
+	/// </summary>
+	Pending = 0,
+
+	/// <summary>
+	/// Charge has been approved
+	/// </summary>
+	Approved = 1,
+
+	/// <summary>
+	/// Charge has been rejected
+	/// </summary>
+	Rejected = 2
+}

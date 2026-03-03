@@ -3,8 +3,6 @@ using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Academic.HomeworkAssignment;
-using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
-using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -22,6 +20,9 @@ using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
+using ShikshaMitra.Library.Setting.ChargeCategory;
+using ShikshaMitra.Library.Setting.BorrowingRules;
+using ShikshaMitra.Library.Setting.Sections;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.Attendance;
@@ -58,6 +59,11 @@ using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.Examination.Exams;
+using ShikshaMitra.Finance.ConcessionRequests;
+using ShikshaMitra.Finance.Expenses;
+using ShikshaMitra.Finance.Incomes;
+using ShikshaMitra.Finance.Setting;
+using ShikshaMitra.Finance.StudentFeeAssignment;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -263,14 +269,56 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region GeneralSetting
 	#region FeeHead
-	DbSet<FeeHead> FeeHeads { get; set; }
+	// DbSet<FeeHead> FeeHeads { get; set; } // Removing old reference if it existed or was commented
+	public DbSet<ShikshaMitra.Finance.Setting.FeeHead> FeeHeads { get; set; }
+
+	public DbSet<ReceiptBook> ReceiptBooks { get; set; }
 	#endregion
 
+	#region FeeStructure
+	public DbSet<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructure> FeeStructures { get; set; }
+	public DbSet<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureStandard> FeeStructureStandards { get; set; }
+	public DbSet<ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureDetail> FeeStructureDetails { get; set; }
+	#endregion
 
-	#region PaymentStatusOption
-	DbSet<PaymentStatusOption> PaymentStatusOptions { get; set; }
+	#region ConcessionType
+	public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionType> ConcessionTypes { get; set; }
+	public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeFeeHead> ConcessionTypeFeeHeads { get; set; }
+	public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeDocument> ConcessionTypeDocuments { get; set; }
+	public DbSet<ChargeCategory> ChargeCategories { get; set; }
+	public DbSet<IncomeCategory> IncomeCategories { get; set; }
+	public DbSet<ExpenseCategory> ExpenseCategories { get; set; }
+	public DbSet<ShikshaMitra.Finance.Setting.BankAccount> BankAccounts { get; set; }
 	#endregion
+
+	public DbSet<FeeCategory> FeeCategories { get; set; }
+
 	#endregion
+
+	#region StudentFeeAssignment
+	public DbSet<StudentFeeStructure> StudentFeeStructures { get; set; }
+	#endregion
+
+	#region ConcessionRequests
+	public DbSet<ConcessionRequest> ConcessionRequests { get; set; }
+	public DbSet<ConcessionRequestConcessionType> ConcessionRequestConcessionTypes { get; set; }
+	public DbSet<ConcessionRequestFeeHeadMapping> ConcessionRequestFeeHeadMappings { get; set; }
+	public DbSet<ConcessionRequestFeeHeadValue> ConcessionRequestFeeHeadValues { get; set; }
+	public DbSet<ConcessionRequestDocument> ConcessionRequestDocuments { get; set; }
+	#endregion
+
+	#region Charges
+	public DbSet<ShikshaMitra.Finance.Charges.Charge> Charges { get; set; }
+	#endregion
+
+	#region Incomes
+	public DbSet<Income> Incomes { get; set; }
+	#endregion
+
+	#region Expenses
+	public DbSet<Expense> Expenses { get; set; }
+	#endregion
+
 	#endregion
 	#endregion
 
@@ -315,7 +363,20 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Library
 	#region GeneralSetting
 	public DbSet<LibraryTiming> LibraryTimings { get; set; }
-	public DbSet<BookCategory> BookCategories { get; set; } //here <BookCategory> is the entity class name and BookCategory is the table name
+	public DbSet<BookCategory> BookCategories { get; set; }
+	#endregion
+	#region ChargeCategory
+	public DbSet<LibraryChargeCategory> LibraryChargeCategories { get; set; }
+	#endregion
+	#region BorrowingRules
+	public DbSet<BorrowingRule> BorrowingRules { get; set; }
+	#endregion
+	#region Sections
+	public DbSet<LibrarySection> LibrarySections { get; set; }
+	public DbSet<LibraryShelf> LibraryShelves { get; set; }
+	#endregion
+	#region Books
+	public DbSet<ShikshaMitra.Library.Books.Book> Books { get; set; }
 	#endregion
 	#endregion
 

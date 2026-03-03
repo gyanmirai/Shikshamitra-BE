@@ -15,6 +15,10 @@ public class BookCopy : Entity<Guid>
 
     public Guid ShelfId { get; set; }
 
+    public BookCopyStatus Status { get; set; }
+
+    public string? Remarks { get; set; }
+
     protected BookCopy() { }
 
     public BookCopy(Guid id, Guid bookId, int copyNumber, string accessionNumber, Guid sectionId, Guid shelfId)
@@ -25,5 +29,6 @@ public class BookCopy : Entity<Guid>
         AccessionNumber = accessionNumber;
         SectionId = sectionId;
         ShelfId = shelfId;
+        Status = BookCopyStatus.Available;
     }
 }

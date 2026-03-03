@@ -28,6 +28,13 @@ public class BookCopyConfiguration : IEntityTypeConfiguration<BookCopy>
         builder.Property(x => x.ShelfId)
             .IsRequired();
 
+        builder.Property(x => x.Status)
+            .IsRequired()
+            .HasDefaultValue(BookCopyStatus.Available);
+
+        builder.Property(x => x.Remarks)
+            .HasMaxLength(500);
+
         builder.HasOne<Book>()
             .WithMany(b => b.Copies)
             .HasForeignKey(c => c.BookId)

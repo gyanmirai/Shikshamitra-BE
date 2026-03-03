@@ -9,4 +9,6 @@ public class BookCopyDto
     public string AccessionNumber { get; set; }
     public Guid SectionId { get; set; }
     public Guid ShelfId { get; set; }
+    public string Status { get; set; }
+    public string? Remarks { get; set; }
 }

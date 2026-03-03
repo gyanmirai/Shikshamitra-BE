@@ -10,7 +10,9 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Library.Books;
 
 [RemoteService(false)]
-public class BookAppService(IRepository<Book, Guid> _bookRepository)
+public class BookAppService(
+    IRepository<Book, Guid> _bookRepository,
+    IRepository<BookCopy, Guid> _bookCopyRepository)
     : ApplicationService, IBookAppService
 {
     public async Task<PaginatedResponse<BookDto>> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10)
@@ -108,5 +110,31 @@ public class BookAppService(IRepository<Book, Guid> _bookRepository)
     public async Task DeleteAsync(Guid bookId)
     {
         await _bookRepository.DeleteAsync(bookId, autoSave: true);
+    }
+
+    public async Task<GenericUpdatedResponse> PutCopiesAsync(Guid bookId, PutBookCopiesRequest input)
+    {
+        var book = await _bookRepository.GetAsync(bookId);
+
+        // Delete existing copies
+        await _bookCopyRepository.DeleteDirectAsync(x => x.BookId == bookId);
+
+        // Insert new copies
+        var copies = input.Copies.Select(c => new BookCopy(
+            GuidGenerator.Create(),
+            bookId,
+            c.CopyNumber,
+            c.AccessionNumber,
+            c.SectionId,
+            c.ShelfId
+        )).ToList();
+
+        await _bookCopyRepository.InsertManyAsync(copies, autoSave: true);
+
+        return new GenericUpdatedResponse
+        {
+            Id = book.Id.ToString(),
+            Message = "Book copies updated successfully."
+        };
     }
 }

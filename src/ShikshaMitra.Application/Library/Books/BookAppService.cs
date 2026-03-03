@@ -137,4 +137,27 @@ public class BookAppService(
             Message = "Book copies updated successfully."
         };
     }
+
+    public async Task<GenericUpdatedResponse> UpdateCopyStatusAsync(Guid bookId, string accessionNumber, UpdateBookCopyStatusRequest input)
+    {
+        var query = await _bookCopyRepository.GetQueryableAsync();
+        var copy = await AsyncExecuter.FirstOrDefaultAsync(
+            query.Where(x => x.BookId == bookId && x.AccessionNumber == accessionNumber));
+
+        if (copy == null)
+        {
+            throw new UserFriendlyException($"Book copy with accession number '{accessionNumber}' not found.", code: "404");
+        }
+
+        copy.Status = input.Status;
+        copy.Remarks = input.Remarks;
+
+        await _bookCopyRepository.UpdateAsync(copy, autoSave: true);
+
+        return new GenericUpdatedResponse
+        {
+            Id = copy.Id.ToString(),
+            Message = "Book copy status updated successfully."
+        };
+    }
 }

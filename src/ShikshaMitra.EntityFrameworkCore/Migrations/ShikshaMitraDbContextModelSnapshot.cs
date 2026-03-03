@@ -5484,11 +5484,20 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("CopyNumber")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<Guid>("SectionId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("ShelfId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
 
                     b.HasKey("Id");
 

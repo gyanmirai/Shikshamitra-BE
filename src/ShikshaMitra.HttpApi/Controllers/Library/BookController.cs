@@ -62,4 +62,11 @@ public class BookController : AbpController
         var result = await _bookAppService.PutCopiesAsync(bookId, input);
         return Ok(result);
     }
+
+    [HttpPut("{bookId:guid}/copies/{accessionNumber}/status")]
+    public async Task<IActionResult> UpdateCopyStatusAsync(Guid bookId, string accessionNumber, [FromBody] UpdateBookCopyStatusRequest input)
+    {
+        var result = await _bookAppService.UpdateCopyStatusAsync(bookId, accessionNumber, input);
+        return Ok(result);
+    }
 }

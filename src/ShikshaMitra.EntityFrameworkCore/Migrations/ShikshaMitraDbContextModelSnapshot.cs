@@ -102,7 +102,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppClassTeachers", (string)null);
+                    b.ToTable("AppClassTeachers", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubject", b =>
@@ -198,7 +198,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("SubjectId");
 
-                    b.ToTable("AppStandardSubjectAssignments", (string)null);
+                    b.ToTable("AppStandardSubjectAssignments", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectChapter", b =>
@@ -265,7 +265,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("AssignedSubjectId");
 
-                    b.ToTable("AppSubjectChapters", (string)null);
+                    b.ToTable("AppSubjectChapters", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectDocument", b =>
@@ -329,7 +329,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("AssignedSubjectId");
 
-                    b.ToTable("AppChapterDocuments", (string)null);
+                    b.ToTable("AppChapterDocuments", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubjectTeacher", b =>
@@ -348,7 +348,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("AssignedSubjectId", "TeacherId");
 
-                    b.ToTable("AppSubjectTeachers", (string)null);
+                    b.ToTable("AppSubjectTeachers", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroup", b =>
@@ -417,7 +417,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("AcademicMediumId");
 
-                    b.ToTable("AppElectiveGroups", (string)null);
+                    b.ToTable("AppElectiveGroups", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.ElectiveGroupComponent", b =>
@@ -432,7 +432,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("SubjectId");
 
-                    b.ToTable("AppElectiveGroupComponents", (string)null);
+                    b.ToTable("AppElectiveGroupComponents", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.Settings.Subject", b =>
@@ -501,7 +501,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("EducationMediumId");
 
-                    b.ToTable("AppSubjects", (string)null);
+                    b.ToTable("AppSubjects", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.TeacherSubjectAllocation", b =>
@@ -570,7 +570,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("StandardId", "DivisionId", "SubjectId");
 
-                    b.ToTable("AppTeacherSubjectAllocations", (string)null);
+                    b.ToTable("AppTeacherSubjectAllocations", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.Exam", b =>
@@ -640,7 +640,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppExams", (string)null);
+                    b.ToTable("AppExams", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamDivision", b =>
@@ -658,7 +658,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("ExamId");
 
-                    b.ToTable("AppExamDivisions", (string)null);
+                    b.ToTable("AppExamDivisions", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubject", b =>
@@ -695,7 +695,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("ExamId");
 
-                    b.ToTable("AppExamSubjects", (string)null);
+                    b.ToTable("AppExamSubjects", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Examination.Exams.ExamSubjectDivision", b =>
@@ -720,7 +720,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("ExamSubjectId");
 
-                    b.ToTable("AppExamSubjectDivisions", (string)null);
+                    b.ToTable("AppExamSubjectDivisions", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Examination.Settings.ExamType", b =>
@@ -791,7 +791,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("Name", "AcademicMediumId")
                         .IsUnique();
 
-                    b.ToTable("AppExamTypes", (string)null);
+                    b.ToTable("AppExamTypes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Examination.Settings.GradeRange", b =>
@@ -817,7 +817,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("GradingScaleId");
 
-                    b.ToTable("AppGradeRanges", (string)null);
+                    b.ToTable("AppGradeRanges", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Examination.Settings.GradingScale", b =>
@@ -884,7 +884,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppGradingScales", (string)null);
+                    b.ToTable("AppGradingScales", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Homework.HomeworkAssignmentType", b =>
@@ -908,7 +908,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppHomeworkAssignmentTypes", (string)null);
+                    b.ToTable("AppHomeworkAssignmentTypes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentDivisionSchedule", b =>
@@ -956,7 +956,7 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_AssignmentDivisionSchedules_AssignmentId_DivisionId");
 
-                    b.ToTable("AppAssignmentDivisionSchedules", (string)null);
+                    b.ToTable("AppAssignmentDivisionSchedules", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentEntity", b =>
@@ -1072,7 +1072,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId", "StandardId", "SubjectId")
                         .HasDatabaseName("IX_Assignments_Tenant_Standard_Subject");
 
-                    b.ToTable("AppAssignments", (string)null);
+                    b.ToTable("AppAssignments", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.AssignmentType", b =>
@@ -1140,7 +1140,7 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_AssignmentTypes_AcademicMediumId_Name");
 
-                    b.ToTable("AppAssignmentTypes", (string)null);
+                    b.ToTable("AppAssignmentTypes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkAssignmentEntity", b =>
@@ -1273,7 +1273,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId")
                         .HasDatabaseName("IX_HomeworkAssignments_TenantId");
 
-                    b.ToTable("AppHomeworkAssignments", (string)null);
+                    b.ToTable("AppHomeworkAssignments", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkDivisionSchedule", b =>
@@ -1321,7 +1321,7 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_HomeworkDivisionSchedules_HomeworkId_DivisionId");
 
-                    b.ToTable("AppHomeworkDivisionSchedules", (string)null);
+                    b.ToTable("AppHomeworkDivisionSchedules", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkType", b =>
@@ -1389,7 +1389,7 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_HomeworkTypes_AcademicMediumId_Name");
 
-                    b.ToTable("AppHomeworkTypes", (string)null);
+                    b.ToTable("AppHomeworkTypes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.StudentSubmissionEntity", b =>
@@ -1513,7 +1513,7 @@ namespace ShikshaMitra.Migrations
                         .HasDatabaseName("IX_StudentSubmissions_Student_Homework")
                         .HasFilter("\"AssignmentId\" IS NULL");
 
-                    b.ToTable("AppStudentHomeworkAssignmentSubmissions", (string)null);
+                    b.ToTable("AppStudentHomeworkAssignmentSubmissions", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Communication.AnnouncementTypes.AnnouncementType", b =>
@@ -1588,7 +1588,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId", "AcademicMediumId", "AnnouncementTypeName")
                         .HasDatabaseName("IX_AnnouncementTypes_Tenant_Medium_Name");
 
-                    b.ToTable("AnnouncementTypes", (string)null);
+                    b.ToTable("AnnouncementTypes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Charges.Charge", b =>
@@ -1714,7 +1714,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("AcademicYearId", "Status")
                         .HasDatabaseName("IX_Charges_AcademicYearId_Status");
 
-                    b.ToTable("Charges", (string)null);
+                    b.ToTable("Charges", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequest", b =>
@@ -1800,7 +1800,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ConcessionRequests", (string)null);
+                    b.ToTable("ConcessionRequests", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequestConcessionType", b =>
@@ -1870,7 +1870,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("ConcessionRequestId", "ConcessionTypeId")
                         .IsUnique();
 
-                    b.ToTable("ConcessionRequestConcessionTypes", (string)null);
+                    b.ToTable("ConcessionRequestConcessionTypes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequestDocument", b =>
@@ -1922,7 +1922,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ConcessionRequestDocuments", (string)null);
+                    b.ToTable("ConcessionRequestDocuments", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequestFeeHeadMapping", b =>
@@ -1947,7 +1947,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("ConcessionRequestId", "ConcessionTypeId", "FeeHeadId")
                         .IsUnique();
 
-                    b.ToTable("ConcessionRequestFeeHeadMappings", (string)null);
+                    b.ToTable("ConcessionRequestFeeHeadMappings", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequestFeeHeadValue", b =>
@@ -1984,7 +1984,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("ConcessionRequestId", "ConcessionTypeId", "FeeHeadId")
                         .IsUnique();
 
-                    b.ToTable("ConcessionRequestFeeHeadValues", (string)null);
+                    b.ToTable("ConcessionRequestFeeHeadValues", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Expenses.Expense", b =>
@@ -2069,7 +2069,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Expenses", (string)null);
+                    b.ToTable("Expenses", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Incomes.Income", b =>
@@ -2154,7 +2154,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Incomes", (string)null);
+                    b.ToTable("Incomes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.BankAccount", b =>
@@ -2248,7 +2248,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("BankAccounts", (string)null);
+                    b.ToTable("BankAccounts", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.ChargeCategory", b =>
@@ -2320,7 +2320,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ChargeCategories", (string)null);
+                    b.ToTable("ChargeCategories", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.ConcessionType.ConcessionType", b =>
@@ -2394,7 +2394,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("AcademicYearId");
 
-                    b.ToTable("ConcessionTypes", (string)null);
+                    b.ToTable("ConcessionTypes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeDocument", b =>
@@ -2420,7 +2420,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("ConcessionTypeId");
 
-                    b.ToTable("ConcessionTypeDocuments", (string)null);
+                    b.ToTable("ConcessionTypeDocuments", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeFeeHead", b =>
@@ -2438,7 +2438,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("ConcessionTypeId");
 
-                    b.ToTable("ConcessionTypeFeeHeads", (string)null);
+                    b.ToTable("ConcessionTypeFeeHeads", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.ExpenseCategory", b =>
@@ -2510,7 +2510,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ExpenseCategories", (string)null);
+                    b.ToTable("ExpenseCategories", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.FeeCategory", b =>
@@ -2577,7 +2577,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("FeeCategories", (string)null);
+                    b.ToTable("FeeCategories", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.FeeHead", b =>
@@ -2650,7 +2650,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("FeeHeads", (string)null);
+                    b.ToTable("FeeHeads", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.FeeStructure.FeeStructure", b =>
@@ -2725,7 +2725,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("FeeStructures", (string)null);
+                    b.ToTable("FeeStructures", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureDetail", b =>
@@ -2786,7 +2786,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("FeeStructureStandardId");
 
-                    b.ToTable("FeeStructureDetails", (string)null);
+                    b.ToTable("FeeStructureDetails", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureStandard", b =>
@@ -2842,7 +2842,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("FeeStructureId");
 
-                    b.ToTable("FeeStructureStandards", (string)null);
+                    b.ToTable("FeeStructureStandards", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.IncomeCategory", b =>
@@ -2914,7 +2914,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("IncomeCategories", (string)null);
+                    b.ToTable("IncomeCategories", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.ReceiptBook", b =>
@@ -3015,7 +3015,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("MediumStageId");
 
-                    b.ToTable("ReceiptBooks", (string)null);
+                    b.ToTable("ReceiptBooks", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.StudentFeeAssignment.StudentFeeStructure", b =>
@@ -3085,7 +3085,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("StudentId");
 
-                    b.ToTable("StudentFeeStructures", (string)null);
+                    b.ToTable("StudentFeeStructures", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Groups.Group", b =>
@@ -3178,7 +3178,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("Name", "TenantId")
                         .HasDatabaseName("AppGroups_Name_Tenant");
 
-                    b.ToTable("AppGroups", (string)null);
+                    b.ToTable("AppGroups", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Groups.GroupEmployeeRule", b =>
@@ -3208,7 +3208,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("GroupId", "SelectionType")
                         .HasDatabaseName("AppGroupEmployeeRules_GroupId_SelectionType");
 
-                    b.ToTable("AppGroupEmployeeRules", (string)null);
+                    b.ToTable("AppGroupEmployeeRules", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Groups.GroupMember", b =>
@@ -3240,7 +3240,7 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("AppGroupMembers_Unique");
 
-                    b.ToTable("AppGroupMembers", (string)null);
+                    b.ToTable("AppGroupMembers", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Groups.GroupStudentRule", b =>
@@ -3270,7 +3270,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("GroupId", "SelectionType")
                         .HasDatabaseName("AppGroupStudentRules_GroupId_SelectionType");
 
-                    b.ToTable("AppGroupStudentRules", (string)null);
+                    b.ToTable("AppGroupStudentRules", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.EmployeeLeave", b =>
@@ -3367,7 +3367,7 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_EmployeeLeaves_Tenant_PublicId");
 
-                    b.ToTable("AppEmployeeLeaves", (string)null);
+                    b.ToTable("AppEmployeeLeaves", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories.AutomatedNotificationsSettings", b =>
@@ -3400,7 +3400,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppAutomatedNotificationsSettings", (string)null);
+                    b.ToTable("AppAutomatedNotificationsSettings", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories.CustomAttendanceRule", b =>
@@ -3448,7 +3448,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppCustomAttendanceRules", (string)null);
+                    b.ToTable("AppCustomAttendanceRules", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories.NotificationInfo", b =>
@@ -3491,7 +3491,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppNotificationInfos", (string)null);
+                    b.ToTable("AppNotificationInfos", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicy", b =>
@@ -3600,7 +3600,7 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_MediumStageId_PolicyName");
 
-                    b.ToTable("AppEmployeeLeavePolicies", (string)null);
+                    b.ToTable("AppEmployeeLeavePolicies", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeaveType", b =>
@@ -3685,7 +3685,7 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_MediumStageId_Type");
 
-                    b.ToTable("AppEmployeeLeaveTypes", (string)null);
+                    b.ToTable("AppEmployeeLeaveTypes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Calendar.EventTypes.EventType", b =>
@@ -3763,7 +3763,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("Name", "TenantId");
 
-                    b.ToTable("AppEventTypes", (string)null);
+                    b.ToTable("AppEventTypes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Calendar.Events.Event", b =>
@@ -3881,7 +3881,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("Title", "TenantId")
                         .HasDatabaseName("IX_AppEvents_Title_TenantId");
 
-                    b.ToTable("AppEvents", (string)null);
+                    b.ToTable("AppEvents", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Calendar.HolidayType", b =>
@@ -3956,7 +3956,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("Name", "TenantId")
                         .IsUnique();
 
-                    b.ToTable("AppHolidayTypes", (string)null);
+                    b.ToTable("AppHolidayTypes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Calendar.Holidays.Holiday", b =>
@@ -4056,7 +4056,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("StartDate", "EndDate")
                         .HasDatabaseName("AppHolidays_DateRange");
 
-                    b.ToTable("AppHolidays", (string)null);
+                    b.ToTable("AppHolidays", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
@@ -4390,7 +4390,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId", "EmployeeStatusType")
                         .HasDatabaseName("IX_Employees_TenantId_Status");
 
-                    b.ToTable("AppEmployees", (string)null);
+                    b.ToTable("AppEmployees", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.EmployeeAdditionalDetails", b =>
@@ -4461,7 +4461,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId")
                         .HasDatabaseName("IX_EmployeeAdditionalDetails_TenantId");
 
-                    b.ToTable("AppEmployeeAdditionalDetails", (string)null);
+                    b.ToTable("AppEmployeeAdditionalDetails", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.EmployeeAttendance", b =>
@@ -4536,7 +4536,7 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_EmployeeAttendances_Tenant_Employee_Date");
 
-                    b.ToTable("AppEmployeeAttendances", (string)null);
+                    b.ToTable("AppEmployeeAttendances", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Payroll.EmployeePayrollComponent", b =>
@@ -4580,7 +4580,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("EmployeeId", "IsEarning");
 
-                    b.ToTable("AppEmployeePayrollComponents", (string)null);
+                    b.ToTable("AppEmployeePayrollComponents", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Payroll.EmployeePayrollDetails", b =>
@@ -4641,7 +4641,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("EmployeeId")
                         .IsUnique();
 
-                    b.ToTable("AppEmployeePayrollDetails", (string)null);
+                    b.ToTable("AppEmployeePayrollDetails", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Settings.DocumentSetting", b =>
@@ -4712,7 +4712,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppDocumentSettings", (string)null);
+                    b.ToTable("AppDocumentSettings", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.EventAndHolidays.EventAndHoliday", b =>
@@ -4784,7 +4784,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppEventAndHolidays", (string)null);
+                    b.ToTable("AppEventAndHolidays", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", b =>
@@ -4847,7 +4847,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("PayElementId");
 
-                    b.ToTable("AppPayrollStructures", (string)null);
+                    b.ToTable("AppPayrollStructures", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.SalarySlips.SalarySlip", b =>
@@ -4963,7 +4963,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("Year", "Month")
                         .HasDatabaseName("IX_HR_SalarySlips_Year_Month");
 
-                    b.ToTable("HR_SalarySlips", (string)null);
+                    b.ToTable("HR_SalarySlips", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.DeductionComponent", b =>
@@ -5067,7 +5067,7 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_DeductionComponents_TenantId_Name");
 
-                    b.ToTable("AppDeductionComponents", (string)null);
+                    b.ToTable("AppDeductionComponents", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.EarningComponent", b =>
@@ -5171,7 +5171,7 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_EarningComponents_TenantId_Name");
 
-                    b.ToTable("AppEarningComponents", (string)null);
+                    b.ToTable("AppEarningComponents", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.PayElement", b =>
@@ -5230,7 +5230,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppPayElements", (string)null);
+                    b.ToTable("AppPayElements", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.ProfessionalTax", b =>
@@ -5298,7 +5298,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppProfessionalTaxes", (string)null);
+                    b.ToTable("AppProfessionalTaxes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.ProvidentFund", b =>
@@ -5368,7 +5368,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppProvidentFunds", (string)null);
+                    b.ToTable("AppProvidentFunds", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Books.Book", b =>
@@ -5465,7 +5465,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("Isbn", "Edition");
 
-                    b.ToTable("AppBooks", (string)null);
+                    b.ToTable("AppBooks", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Books.BookCopy", b =>
@@ -5506,7 +5506,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("BookId");
 
-                    b.ToTable("AppBookCopies", (string)null);
+                    b.ToTable("AppBookCopies", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Setting.BorrowingRules.BorrowingRule", b =>
@@ -5563,7 +5563,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("AcademicYearId", "Role")
                         .IsUnique();
 
-                    b.ToTable("AppBorrowingRules", (string)null);
+                    b.ToTable("AppBorrowingRules", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Setting.ChargeCategory.LibraryChargeCategory", b =>
@@ -5624,7 +5624,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppLibraryChargeCategories", (string)null);
+                    b.ToTable("AppLibraryChargeCategories", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Setting.GeneralSetting.BookCategory.BookCategory", b =>
@@ -5679,7 +5679,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppBookCategories", (string)null);
+                    b.ToTable("AppBookCategories", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings.LibraryTiming", b =>
@@ -5742,7 +5742,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppLibraryTimings", (string)null);
+                    b.ToTable("AppLibraryTimings", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Setting.Sections.LibrarySection", b =>
@@ -5795,7 +5795,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppLibrarySections", (string)null);
+                    b.ToTable("AppLibrarySections", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Setting.Sections.LibraryShelf", b =>
@@ -5815,7 +5815,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("SectionId");
 
-                    b.ToTable("AppLibraryShelves", (string)null);
+                    b.ToTable("AppLibraryShelves", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Security.UserScope.UserScopeAssignment", b =>
@@ -5918,7 +5918,7 @@ namespace ShikshaMitra.Migrations
                         .HasDatabaseName("UQ_UserScopeAssignment")
                         .HasFilter("\"IsDeleted\" = false");
 
-                    b.ToTable("UserScopeAssignments", (string)null);
+                    b.ToTable("UserScopeAssignments", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceDay", b =>
@@ -5998,7 +5998,7 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_AttendanceDay_Unique");
 
-                    b.ToTable("AppAttendanceDays", (string)null);
+                    b.ToTable("AppAttendanceDays", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceEntry", b =>
@@ -6069,7 +6069,7 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_AttendanceEntry_Unique");
 
-                    b.ToTable("AppAttendanceEntries", (string)null);
+                    b.ToTable("AppAttendanceEntries", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.Attendance.Settings.StudentLeaveType", b =>
@@ -6147,7 +6147,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "LeaveTypeName");
 
-                    b.ToTable("AppStudentLeaveTypes", (string)null);
+                    b.ToTable("AppStudentLeaveTypes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.Attendances.StudentLeave", b =>
@@ -6269,7 +6269,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("AppStudentLeaves", (string)null);
+                    b.ToTable("AppStudentLeaves", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.Records.Settings.HouseSettings", b =>
@@ -6348,7 +6348,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("AcademicMediumId");
 
-                    b.ToTable("AppHouseSettings", (string)null);
+                    b.ToTable("AppHouseSettings", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.Student", b =>
@@ -6485,7 +6485,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("AdmissionApprovalStatus", "DivisionId");
 
-                    b.ToTable("AppStudents", (string)null);
+                    b.ToTable("AppStudents", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentAdditionalDetail", b =>
@@ -6668,7 +6668,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("HouseId");
 
-                    b.ToTable("AppStudentAdditionalDetails", (string)null);
+                    b.ToTable("AppStudentAdditionalDetails", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentBankDetail", b =>
@@ -6752,7 +6752,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("IFSCCode");
 
-                    b.ToTable("StudentBankDetails", (string)null);
+                    b.ToTable("StudentBankDetails", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentCommunicationDetail", b =>
@@ -6814,7 +6814,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("StudentCommunicationDetails", (string)null);
+                    b.ToTable("StudentCommunicationDetails", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentContactDetail", b =>
@@ -6896,7 +6896,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("StudentId");
 
-                    b.ToTable("AppStudentContactDetails", (string)null);
+                    b.ToTable("AppStudentContactDetails", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentDocument", b =>
@@ -6970,7 +6970,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("StudentId", "DocumentTypeId");
 
-                    b.ToTable("AppStudentDocuments", (string)null);
+                    b.ToTable("AppStudentDocuments", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.DocumentType", b =>
@@ -7062,7 +7062,7 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_DocumentTypes_TenantId_Name");
 
-                    b.ToTable("AppDocumentTypes", (string)null);
+                    b.ToTable("AppDocumentTypes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.EntranceExamSlot", b =>
@@ -7139,7 +7139,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("AcademicYearId", "StartDate", "TenantId");
 
-                    b.ToTable("AppEntranceExamSlots", (string)null);
+                    b.ToTable("AppEntranceExamSlots", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.InquiryPreference", b =>
@@ -7206,7 +7206,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId", "AcademicYearId", "PreferenceName")
                         .IsUnique();
 
-                    b.ToTable("AppInquiryPreferences", (string)null);
+                    b.ToTable("AppInquiryPreferences", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.StudentDocumentSetting", b =>
@@ -7317,7 +7317,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("StudentFamilyDetails", (string)null);
+                    b.ToTable("StudentFamilyDetails", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentManagementSettings", b =>
@@ -7368,7 +7368,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppStudentManagementSettings", (string)null);
+                    b.ToTable("AppStudentManagementSettings", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentMedicalRecord", b =>
@@ -7458,7 +7458,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("StudentMedicalRecords", (string)null);
+                    b.ToTable("StudentMedicalRecords", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentNote", b =>
@@ -7518,7 +7518,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("StudentId");
 
-                    b.ToTable("StudentNotes", (string)null);
+                    b.ToTable("StudentNotes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentPreviousSchoolDetail", b =>
@@ -7605,7 +7605,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("StudentPreviousSchoolDetails", (string)null);
+                    b.ToTable("StudentPreviousSchoolDetails", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentStatusHistory", b =>
@@ -7642,7 +7642,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("StudentId");
 
-                    b.ToTable("AppStudentStatusHistories", (string)null);
+                    b.ToTable("AppStudentStatusHistories", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears.AcademicYearPermission", b =>
@@ -7674,7 +7674,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppAcademicYearPermissions", (string)null);
+                    b.ToTable("AppAcademicYearPermissions", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.Divisions.DivisionPermission", b =>
@@ -7706,7 +7706,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppDivisionPermissions", (string)null);
+                    b.ToTable("AppDivisionPermissions", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards.EducationBoardPermission", b =>
@@ -7756,7 +7756,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppEducationBoardPermissions", (string)null);
+                    b.ToTable("AppEducationBoardPermissions", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums.EducationMediumPermission", b =>
@@ -7788,7 +7788,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppEducationMediumPermissions", (string)null);
+                    b.ToTable("AppEducationMediumPermissions", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums.EducationMediumStagePermission", b =>
@@ -7820,7 +7820,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppEducationMediumStagePermissions", (string)null);
+                    b.ToTable("AppEducationMediumStagePermissions", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicSetups.Standards.StandardPermission", b =>
@@ -7852,7 +7852,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppStandardPermissions", (string)null);
+                    b.ToTable("AppStandardPermissions", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", b =>
@@ -7922,7 +7922,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("Name", "TenantId", "StartDate", "EndDate")
                         .IsUnique();
 
-                    b.ToTable("AppAcademicYears", (string)null);
+                    b.ToTable("AppAcademicYears", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.Divisions.Division", b =>
@@ -7995,7 +7995,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("StandardId");
 
-                    b.ToTable("AppDivisions", (string)null);
+                    b.ToTable("AppDivisions", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", b =>
@@ -8059,7 +8059,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("AcademicYearId");
 
-                    b.ToTable("AppEducationBoards", (string)null);
+                    b.ToTable("AppEducationBoards", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", b =>
@@ -8128,7 +8128,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("EducationMediumId");
 
-                    b.ToTable("AppEducationMediumStages", (string)null);
+                    b.ToTable("AppEducationMediumStages", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", b =>
@@ -8194,7 +8194,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("EducationBoardId");
 
-                    b.ToTable("AppEducationMediums", (string)null);
+                    b.ToTable("AppEducationMediums", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.InstituteSetupExtraProperties", b =>
@@ -8211,7 +8211,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppInstituteSetupExtraProperties", (string)null);
+                    b.ToTable("AppInstituteSetupExtraProperties", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Building", b =>
@@ -8265,7 +8265,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppBuildings", (string)null);
+                    b.ToTable("AppBuildings", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Buildings.Floor", b =>
@@ -8291,7 +8291,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("BuildingId");
 
-                    b.ToTable("AppFloors", (string)null);
+                    b.ToTable("AppFloors", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes.RoomType", b =>
@@ -8343,7 +8343,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppRoomTypes", (string)null);
+                    b.ToTable("AppRoomTypes", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.RoomsManagement.Rooms.Room", b =>
@@ -8423,7 +8423,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("RoomTypeId");
 
-                    b.ToTable("AppRooms", (string)null);
+                    b.ToTable("AppRooms", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.ShiftManagement", b =>
@@ -8455,7 +8455,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppShiftManagements", (string)null);
+                    b.ToTable("AppShiftManagements", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.Standards.Standard", b =>
@@ -8529,7 +8529,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("ShiftId");
 
-                    b.ToTable("AppStandards", (string)null);
+                    b.ToTable("AppStandards", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.AuditLogging.AuditLog", b =>
@@ -8651,7 +8651,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "UserId", "ExecutionTime");
 
-                    b.ToTable("AbpAuditLogs", (string)null);
+                    b.ToTable("AbpAuditLogs", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.AuditLogging.AuditLogAction", b =>
@@ -8701,7 +8701,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "ServiceName", "MethodName", "ExecutionTime");
 
-                    b.ToTable("AbpAuditLogActions", (string)null);
+                    b.ToTable("AbpAuditLogActions", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.AuditLogging.EntityChange", b =>
@@ -8750,7 +8750,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "EntityTypeFullName", "EntityId");
 
-                    b.ToTable("AbpEntityChanges", (string)null);
+                    b.ToTable("AbpEntityChanges", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.AuditLogging.EntityPropertyChange", b =>
@@ -8792,7 +8792,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("EntityChangeId");
 
-                    b.ToTable("AbpEntityPropertyChanges", (string)null);
+                    b.ToTable("AbpEntityPropertyChanges", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.BackgroundJobs.BackgroundJobRecord", b =>
@@ -8841,18 +8841,18 @@ namespace ShikshaMitra.Migrations
                     b.Property<byte>("Priority")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("smallint")
-                        .HasDefaultValue((byte)15);
+                        .HasDefaultValue((byte) 15);
 
                     b.Property<short>("TryCount")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("smallint")
-                        .HasDefaultValue((short)0);
+                        .HasDefaultValue((short) 0);
 
                     b.HasKey("Id");
 
                     b.HasIndex("IsAbandoned", "NextTryTime");
 
-                    b.ToTable("AbpBackgroundJobs", (string)null);
+                    b.ToTable("AbpBackgroundJobs", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.BlobStoring.Database.DatabaseBlob", b =>
@@ -8895,7 +8895,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "ContainerId", "Name");
 
-                    b.ToTable("AbpBlobs", (string)null);
+                    b.ToTable("AbpBlobs", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.BlobStoring.Database.DatabaseBlobContainer", b =>
@@ -8929,7 +8929,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "Name");
 
-                    b.ToTable("AbpBlobContainers", (string)null);
+                    b.ToTable("AbpBlobContainers", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.FeatureManagement.FeatureDefinitionRecord", b =>
@@ -8990,7 +8990,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("AbpFeatures", (string)null);
+                    b.ToTable("AbpFeatures", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.FeatureManagement.FeatureGroupDefinitionRecord", b =>
@@ -9018,7 +9018,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("AbpFeatureGroups", (string)null);
+                    b.ToTable("AbpFeatureGroups", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.FeatureManagement.FeatureValue", b =>
@@ -9050,7 +9050,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("Name", "ProviderName", "ProviderKey")
                         .IsUnique();
 
-                    b.ToTable("AbpFeatureValues", (string)null);
+                    b.ToTable("AbpFeatureValues", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.Identity.IdentityClaimType", b =>
@@ -9098,7 +9098,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AbpClaimTypes", (string)null);
+                    b.ToTable("AbpClaimTypes", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.Identity.IdentityLinkUser", b =>
@@ -9123,7 +9123,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("SourceUserId", "SourceTenantId", "TargetUserId", "TargetTenantId")
                         .IsUnique();
 
-                    b.ToTable("AbpLinkUsers", (string)null);
+                    b.ToTable("AbpLinkUsers", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.Identity.IdentityRole", b =>
@@ -9176,7 +9176,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("NormalizedName");
 
-                    b.ToTable("AbpRoles", (string)null);
+                    b.ToTable("AbpRoles", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.Identity.IdentityRoleClaim", b =>
@@ -9204,7 +9204,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("RoleId");
 
-                    b.ToTable("AbpRoleClaims", (string)null);
+                    b.ToTable("AbpRoleClaims", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.Identity.IdentitySecurityLog", b =>
@@ -9280,7 +9280,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "UserId");
 
-                    b.ToTable("AbpSecurityLogs", (string)null);
+                    b.ToTable("AbpSecurityLogs", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.Identity.IdentitySession", b =>
@@ -9335,7 +9335,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "UserId");
 
-                    b.ToTable("AbpSessions", (string)null);
+                    b.ToTable("AbpSessions", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.Identity.IdentityUser", b =>
@@ -9501,7 +9501,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("UserName");
 
-                    b.ToTable("AbpUsers", (string)null);
+                    b.ToTable("AbpUsers", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.Identity.IdentityUserClaim", b =>
@@ -9529,7 +9529,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("AbpUserClaims", (string)null);
+                    b.ToTable("AbpUserClaims", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.Identity.IdentityUserDelegation", b =>
@@ -9555,7 +9555,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AbpUserDelegations", (string)null);
+                    b.ToTable("AbpUserDelegations", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.Identity.IdentityUserLogin", b =>
@@ -9584,7 +9584,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("LoginProvider", "ProviderKey");
 
-                    b.ToTable("AbpUserLogins", (string)null);
+                    b.ToTable("AbpUserLogins", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.Identity.IdentityUserOrganizationUnit", b =>
@@ -9611,7 +9611,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("UserId", "OrganizationUnitId");
 
-                    b.ToTable("AbpUserOrganizationUnits", (string)null);
+                    b.ToTable("AbpUserOrganizationUnits", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.Identity.IdentityUserRole", b =>
@@ -9630,7 +9630,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("RoleId", "UserId");
 
-                    b.ToTable("AbpUserRoles", (string)null);
+                    b.ToTable("AbpUserRoles", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.Identity.IdentityUserToken", b =>
@@ -9655,7 +9655,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("UserId", "LoginProvider", "Name");
 
-                    b.ToTable("AbpUserTokens", (string)null);
+                    b.ToTable("AbpUserTokens", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.Identity.OrganizationUnit", b =>
@@ -9733,7 +9733,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("ParentId");
 
-                    b.ToTable("AbpOrganizationUnits", (string)null);
+                    b.ToTable("AbpOrganizationUnits", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.Identity.OrganizationUnitRole", b =>
@@ -9760,7 +9760,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("RoleId", "OrganizationUnitId");
 
-                    b.ToTable("AbpOrganizationUnitRoles", (string)null);
+                    b.ToTable("AbpOrganizationUnitRoles", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.OpenIddict.Applications.OpenIddictApplication", b =>
@@ -9867,7 +9867,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("ClientId");
 
-                    b.ToTable("OpenIddictApplications", (string)null);
+                    b.ToTable("OpenIddictApplications", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.OpenIddict.Authorizations.OpenIddictAuthorization", b =>
@@ -9916,7 +9916,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("ApplicationId", "Status", "Subject", "Type");
 
-                    b.ToTable("OpenIddictAuthorizations", (string)null);
+                    b.ToTable("OpenIddictAuthorizations", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.OpenIddict.Scopes.OpenIddictScope", b =>
@@ -9993,7 +9993,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("Name");
 
-                    b.ToTable("OpenIddictScopes", (string)null);
+                    b.ToTable("OpenIddictScopes", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.OpenIddict.Tokens.OpenIddictToken", b =>
@@ -10059,7 +10059,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("ApplicationId", "Status", "Subject", "Type");
 
-                    b.ToTable("OpenIddictTokens", (string)null);
+                    b.ToTable("OpenIddictTokens", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.PermissionManagement.PermissionDefinitionRecord", b =>
@@ -10112,7 +10112,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("AbpPermissions", (string)null);
+                    b.ToTable("AbpPermissions", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.PermissionManagement.PermissionGrant", b =>
@@ -10145,7 +10145,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId", "Name", "ProviderName", "ProviderKey")
                         .IsUnique();
 
-                    b.ToTable("AbpPermissionGrants", (string)null);
+                    b.ToTable("AbpPermissionGrants", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.PermissionManagement.PermissionGroupDefinitionRecord", b =>
@@ -10173,7 +10173,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("AbpPermissionGroups", (string)null);
+                    b.ToTable("AbpPermissionGroups", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.SettingManagement.Setting", b =>
@@ -10205,7 +10205,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("Name", "ProviderName", "ProviderKey")
                         .IsUnique();
 
-                    b.ToTable("AbpSettings", (string)null);
+                    b.ToTable("AbpSettings", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.SettingManagement.SettingDefinitionRecord", b =>
@@ -10254,7 +10254,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("AbpSettingDefinitions", (string)null);
+                    b.ToTable("AbpSettingDefinitions", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.TenantManagement.Tenant", b =>
@@ -10323,7 +10323,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("NormalizedName");
 
-                    b.ToTable("AbpTenants", (string)null);
+                    b.ToTable("AbpTenants", (string) null);
                 });
 
             modelBuilder.Entity("Volo.Abp.TenantManagement.TenantConnectionString", b =>
@@ -10342,7 +10342,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("TenantId", "Name");
 
-                    b.ToTable("AbpTenantConnectionStrings", (string)null);
+                    b.ToTable("AbpTenantConnectionStrings", (string) null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.AssignedSubject", b =>
@@ -10478,7 +10478,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasIndex("TeacherId");
 
-                            b1.ToTable("AppAllocatedTeachers", (string)null);
+                            b1.ToTable("AppAllocatedTeachers", (string) null);
 
                             b1.WithOwner("Allocation")
                                 .HasForeignKey("TeacherSubjectAllocationId");
@@ -10920,7 +10920,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasIndex("EmployeeId");
 
-                            b1.ToTable("AppEmployeeDocuments", (string)null);
+                            b1.ToTable("AppEmployeeDocuments", (string) null);
 
                             b1.WithOwner()
                                 .HasForeignKey("EmployeeId");

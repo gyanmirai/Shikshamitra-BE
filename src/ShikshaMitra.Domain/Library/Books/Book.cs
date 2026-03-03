@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -33,6 +34,8 @@ public class Book : AuditedAggregateRoot<Guid>, IMultiTenant
     public int Pages { get; set; }
 
     public int NumberOfCopies { get; set; }
+
+    public List<BookCopy> Copies { get; set; } = new();
 
     protected Book() { }
 

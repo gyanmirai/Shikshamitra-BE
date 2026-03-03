@@ -378,6 +378,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#endregion
 	#region Books
 	public DbSet<ShikshaMitra.Library.Books.Book> Books { get; set; }
+	public DbSet<ShikshaMitra.Library.Books.BookCopy> BookCopies { get; set; }
 	#endregion
 	#endregion
 

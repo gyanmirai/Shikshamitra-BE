@@ -55,4 +55,11 @@ public class BookController : AbpController
         await _bookAppService.DeleteAsync(bookId);
         return Ok(new { });
     }
+
+    [HttpPut("{bookId:guid}/copies")]
+    public async Task<IActionResult> PutCopiesAsync(Guid bookId, [FromBody] PutBookCopiesRequest input)
+    {
+        var result = await _bookAppService.PutCopiesAsync(bookId, input);
+        return Ok(result);
+    }
 }

@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.Students.StudentEnrollments.Registration;
 using System;
 using Volo.Abp.Application.Dtos;
 
@@ -29,7 +30,11 @@ public class StudentEnrollmentListDto : EntityDto
 	public string? Age { get; set; }
 	public DateTimeOffset? DateOfInquiry { get; set; }
 	public GenderEnum? Gender { get; set; }
-	
+
+	public int? RollNo { get; set; }
+	public int? GrNo { get; set; }
+	public Category Category { get; set; } = Category.General;
+
 	public string? Address { get; set; }
 	public string? Address1 { get; set; }
 	public string? Address2 { get; set; }

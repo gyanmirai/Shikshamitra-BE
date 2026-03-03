@@ -6,6 +6,7 @@ using ShikshaMitra.Students.Enrollments.Notes;
 using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using System;
 using System.Collections.Generic;
@@ -71,6 +72,9 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.Gender, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.Gender.HasValue
 				? src.AdditionalDetail.Gender
 				: null))
+			.ForMember(dest => dest.Category, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.Category != Category.General
+				? src.AdditionalDetail.Category
+				: Category.General))
 			.ForMember(dest => dest.Address1, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.Address1 : null))
 			.ForMember(dest => dest.Address2, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.Address2 : null))
 			.ForMember(dest => dest.Address3, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.Address3 : null))

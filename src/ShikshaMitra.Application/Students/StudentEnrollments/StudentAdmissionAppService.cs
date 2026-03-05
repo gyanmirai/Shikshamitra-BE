@@ -55,7 +55,8 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 	public async Task<PagedResultDto<StudentEnrollmentListDto>> GetListAsync(GetStudentAdmissionsInput input)
 	{
 		var query = (await studentRepository.GetQueryableAsync())
-			.Where(s => s.Status == StudentLifeCycleStatusEnum.Admission);
+			.Where(s => s.Status == StudentLifeCycleStatusEnum.Admission
+				&& s.AcademicMediumId == input.AcademicMediumId);
 
 		// Apply filters
 		if (!string.IsNullOrWhiteSpace(input.Search))

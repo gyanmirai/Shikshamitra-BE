@@ -916,7 +916,8 @@ public class StudentRegistrationAppService(
 		var queryable = await studentRepository.GetQueryableAsync();
 
 		var query = queryable
-			.Where(s => s.TenantId == CurrentTenant.Id
+			.Where(s => s.TenantId == CurrentTenant.Id 
+			&& s.Status == StudentLifeCycleStatusEnum.Admission
 				&& (
 					(s.FirstName != null && s.FirstName.ToLower().Contains(normalizedSearchTerm)) ||
 					(s.MiddleName != null && s.MiddleName.ToLower().Contains(normalizedSearchTerm)) ||
@@ -934,7 +935,7 @@ public class StudentRegistrationAppService(
 			results.Add(new StudentSearchResultDto
 			{
 				Id = student.Id,
-				Student = $"{student.FirstName} {student.MiddleName} {student.LastName} {student.Standard?.Name} - {student.Division?.Name} {}".Trim()
+				Student = $"{student.FirstName} {student.MiddleName} {student.LastName} [{student.AcademicMedium.EducationBoard.Type.ToString()}] ({student.Standard?.Name} - {student.Division?.Name})".Trim()
 			});
 		}
 

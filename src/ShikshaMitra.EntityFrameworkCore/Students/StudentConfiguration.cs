@@ -56,6 +56,14 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 
 		builder.Navigation(x => x.AcademicBoard).AutoInclude();
 
+		builder.HasOne(x => x.AcademicMedium)
+			.WithMany()
+			.HasForeignKey(x => x.AcademicMediumId)
+			.OnDelete(DeleteBehavior.Restrict)
+			.IsRequired(false);
+
+		builder.Navigation(x => x.AcademicMedium).AutoInclude();
+
 		builder.HasOne(x => x.Standard)
 			.WithMany()
 			.HasForeignKey(x => x.StandardId)

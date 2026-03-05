@@ -184,6 +184,7 @@ public class StudentEnrollmentDtoEnricher(
 				if (nextReminderDate != null)
 				{
 					dto.NextReminderDate = nextReminderDate;
+					dto.InquiryStatus = latestNote!.Status;
 				}
 			}
 		}

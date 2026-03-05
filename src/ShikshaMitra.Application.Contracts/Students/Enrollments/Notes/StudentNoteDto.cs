@@ -9,4 +9,6 @@ public class StudentNoteDto : EntityDto<Guid>
     public string Note { get; set; }
     public DateTimeOffset NextReminderDate { get; set; }
     public NoteStatusEnum Status { get; set; }
+    public Guid? CreatorId { get; set; }
+    public string CreatorName { get; set; }
 }

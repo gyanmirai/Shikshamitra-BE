@@ -111,7 +111,8 @@ public class StudentInquiryAppService(
 		// Get queryable with related details included for proper mapping
 		var queryable = await studentRepository.WithDetailsAsync(
 			 s => s.AdditionalDetail,
-			 s => s.ContactDetail
+			 s => s.ContactDetail,
+			 s => s.Notes
 		);
 		
 		var query = queryable

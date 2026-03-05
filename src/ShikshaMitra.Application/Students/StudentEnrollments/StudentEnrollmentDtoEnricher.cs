@@ -329,6 +329,17 @@ public class StudentEnrollmentDtoEnricher(
 					dto.Standard = standard.Name;
 				}
 			}
+
+			// calculate progress based on student.additionaldetails.StudentRegistrationStateEnum field
+			if (studentDict.TryGetValue(dto.StudentId, out var stud))
+			{
+				var totalStates = (double)Enum.GetValues<StudentRegistrationStateEnum>()
+					.Count(s => s != StudentRegistrationStateEnum.Default);
+
+				var v = (double) stud.AdditionalDetail?.StudentRegistrationState
+					/ totalStates;
+				dto.Progress = (double) v * 100;
+			}
 		}
 	}
 }

@@ -8,6 +8,7 @@ using ShikshaMitra.Students.Enrollments.Inquiries;
 using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Documents;
+using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -98,6 +99,21 @@ public class RegistrationController : AbpControllerBase
 			maxResultCount,
 			searchTerm
 		);
+		return Result.Success(result);
+	}
+
+	/// <summary>
+	/// Searches for students by name (first, middle, or last name).
+	/// Returns a lightweight list of matching students with their full name and class details.
+	/// </summary>
+	/// <param name="searchTerm">The term to search for within student names (case-insensitive)</param>
+	/// <returns>List of matching students with id and formatted name</returns>
+	[HttpGet("search")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Default)]
+	public async Task<Result<List<StudentSearchResultDto>>> SearchStudentsByNameAsync(
+		[FromQuery] string searchTerm)
+	{
+		var result = await registrationAppService.SearchStudentsByNameAsync(searchTerm);
 		return Result.Success(result);
 	}
 

@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.Students.StudentRecords;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -41,6 +44,9 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	// Navigation for inquiry preference
 	public InquiryPreference? InquiryPreference { get; private set; }
 	public EducationMedium? AcademicMedium { get; private set; }
+	public EducationBoard? AcademicBoard { get; private set; }
+	public Standard? Standard { get; private set; }
+	public Division? Division { get; private set; }
 
 	public ICollection<StudentNote> Notes { get; private set; } = new List<StudentNote>();
 

@@ -46,5 +46,38 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 			.WithOne()
 			.HasForeignKey(h => h.StudentId)
 			.OnDelete(DeleteBehavior.Cascade);
+
+		// set navigation properties to be loaded together with the main entity for EducationBoard, Medium, Division, AcademicYear
+		builder.HasOne(x => x.AcademicBoard)
+			.WithMany()
+			.HasForeignKey(x => x.AcademicBoardId)
+			.OnDelete(DeleteBehavior.Restrict)
+			.IsRequired(false);
+
+		builder.Navigation(x => x.AcademicBoard).AutoInclude();
+
+		builder.HasOne(x => x.AcademicMedium)
+			.WithMany()
+			.HasForeignKey(x => x.AcademicMediumId)
+			.OnDelete(DeleteBehavior.Restrict)
+			.IsRequired(false);
+
+		builder.Navigation(x => x.AcademicMedium).AutoInclude();
+
+		builder.HasOne(x => x.Standard)
+			.WithMany()
+			.HasForeignKey(x => x.StandardId)
+			.OnDelete(DeleteBehavior.Restrict)
+			.IsRequired(false);
+
+		builder.Navigation(x => x.Standard).AutoInclude();
+
+		builder.HasOne(x => x.Division)
+			.WithMany()
+			.HasForeignKey(x => x.DivisionId)
+			.OnDelete(DeleteBehavior.Restrict)
+			.IsRequired(false);
+
+		builder.Navigation(x => x.Division).AutoInclude();
 	}
 }

@@ -91,7 +91,7 @@ public class BookAppService(
             {
                 CopyId = c.Id,
                 AccessionNo = c.AccessionNumber,
-                Status = (int)c.Status,
+                Status = (int) c.Status,
                 Section = new NamedIdDto
                 {
                     Id = c.SectionId,

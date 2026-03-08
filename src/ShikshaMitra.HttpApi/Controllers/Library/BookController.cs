@@ -38,7 +38,7 @@ public class BookController : AbpController
     }
 
     [HttpGet("{bookId:guid}")]
-    public Task<BookDto> GetAsync(Guid bookId)
+    public Task<BookDetailDto> GetAsync(Guid bookId)
     {
         return _bookAppService.GetAsync(bookId);
     }

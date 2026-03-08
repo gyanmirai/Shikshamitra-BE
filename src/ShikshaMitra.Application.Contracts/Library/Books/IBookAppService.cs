@@ -14,4 +14,5 @@ public interface IBookAppService : IApplicationService
     Task DeleteAsync(Guid bookId);
     Task<GenericUpdatedResponse> PutCopiesAsync(Guid bookId, PutBookCopiesRequest input);
     Task<GenericUpdatedResponse> UpdateCopyStatusAsync(Guid bookId, string accessionNumber, UpdateBookCopyStatusRequest input);
+    Task<GenericCreatedResponse> ReserveAsync(Guid bookId, CreateBookReservationRequest input);
 }

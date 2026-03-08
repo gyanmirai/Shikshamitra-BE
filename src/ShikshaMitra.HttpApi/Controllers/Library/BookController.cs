@@ -69,4 +69,11 @@ public class BookController : AbpController
         var result = await _bookAppService.UpdateCopyStatusAsync(bookId, accessionNumber, input);
         return Ok(result);
     }
+
+    [HttpPost("{bookId:guid}/reservations")]
+    public async Task<IActionResult> ReserveAsync(Guid bookId, [FromBody] CreateBookReservationRequest input)
+    {
+        var result = await _bookAppService.ReserveAsync(bookId, input);
+        return StatusCode(201, result);
+    }
 }

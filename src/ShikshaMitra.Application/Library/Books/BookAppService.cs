@@ -17,7 +17,8 @@ public class BookAppService(
     IRepository<BookCopy, Guid> _bookCopyRepository,
     IRepository<BookCategory, Guid> _categoryRepository,
     IRepository<LibrarySection, Guid> _sectionRepository,
-    IRepository<LibraryShelf, Guid> _shelfRepository)
+    IRepository<LibraryShelf, Guid> _shelfRepository,
+    IRepository<BookReservation, Guid> _reservationRepository)
     : ApplicationService, IBookAppService
 {
     public async Task<PaginatedResponse<BookDto>> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10)
@@ -219,6 +220,29 @@ public class BookAppService(
         {
             Id = copy.Id.ToString(),
             Message = "Book copy status updated successfully."
+        };
+    }
+
+    public async Task<GenericCreatedResponse> ReserveAsync(Guid bookId, CreateBookReservationRequest input)
+    {
+        // Verify book exists
+        await _bookRepository.GetAsync(bookId);
+
+        var reservation = new BookReservation(
+            GuidGenerator.Create(),
+            bookId,
+            input.MemberId,
+            input.RequestedDate,
+            input.ReserveDueDate,
+            CurrentTenant.Id
+        );
+
+        await _reservationRepository.InsertAsync(reservation, autoSave: true);
+
+        return new GenericCreatedResponse
+        {
+            Id = reservation.Id.ToString(),
+            Message = "Book reservation created successfully."
         };
     }
 }

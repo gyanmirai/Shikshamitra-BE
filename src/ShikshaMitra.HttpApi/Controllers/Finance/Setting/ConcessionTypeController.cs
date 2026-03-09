@@ -3,7 +3,10 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Application.Contracts.Finance.Setting.ConcessionType;
 using ShikshaMitra.Application.Contracts.Finance.Setting.ConcessionType.Dtos;
+using ShikshaMitra.Common.Responses;
+using ShikshaMitra.Finance.Setting.ConcessionType.Dtos;
 using Volo.Abp;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Setting;
@@ -12,42 +15,40 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Setting;
 [Area("app")]
 
 [Route("api")]
-public class ConcessionTypeController : AbpController
+public class ConcessionTypeController(IConcessionTypeAppService concessionTypeAppService) : AbpController
 {
-	private readonly IConcessionTypeAppService _concessionTypeAppService;
-
-	public ConcessionTypeController(IConcessionTypeAppService concessionTypeAppService)
+	[HttpPost("{academicYearId}/concession-types")]
+	public async Task<Result> CreateAsync(Guid academicYearId, ConcessionTypeRequest concessionTypeRequest)
 	{
-		_concessionTypeAppService = concessionTypeAppService;
+		await concessionTypeAppService.CreateAsync(academicYearId, concessionTypeRequest);
+		return Result.Success("Concession type created successfully.");
 	}
 
-	[HttpPost("concession-types")]
-	public Task<MutationResponse> CreateAsync(Guid academicYearId, ConcessionTypeCreateRequest input)
+	[HttpGet("{academicYearId}/concession-types")]
+	public async Task<Result<PagedResultDto<ConcessionTypeResponse>>> GetListAsync(Guid academicYearId, int skipCount = 0, int maxResultCount = 10, string? searchTerm = null)
 	{
-		return _concessionTypeAppService.CreateAsync(academicYearId, input);
-	}
-
-	[HttpGet("all-concession-types")]
-	public Task<ConcessionTypePaginatedResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
-	{
-		return _concessionTypeAppService.GetListAsync(academicYearId, page, pageSize, search);
+		var concessionTypes = await concessionTypeAppService.GetListAsync(academicYearId, skipCount, maxResultCount, searchTerm);
+		return Result.Success(concessionTypes);
 	}
 
 	[HttpGet("concession-types/{concessionTypeId}")]
-	public Task<ConcessionTypeResponse> GetAsync(Guid concessionTypeId)
+	public async Task<Result<ConcessionTypeResponse>> GetAsync(Guid concessionTypeId)
 	{
-		return _concessionTypeAppService.GetAsync(concessionTypeId);
+		var concessionType = await concessionTypeAppService.GetAsync(concessionTypeId);
+		return Result.Success(concessionType);
 	}
 
 	[HttpPut("concession-types/{concessionTypeId}")]
-	public Task<MutationResponse> UpdateAsync(Guid concessionTypeId, ConcessionTypeUpdateRequest input)
+	public async Task<Result> UpdateAsync(Guid concessionTypeId, ConcessionTypeRequest concessionTypeUpdateRequest)
 	{
-		return _concessionTypeAppService.UpdateAsync(concessionTypeId, input);
+		await concessionTypeAppService.UpdateAsync(concessionTypeId, concessionTypeUpdateRequest);
+		return Result.Success("Concession type updated successfully.");
 	}
 
 	[HttpDelete("concession-types/{concessionTypeId}")]
-	public Task<MutationResponse> DeleteAsync(Guid concessionTypeId)
+	public async Task<Result> DeleteAsync(Guid concessionTypeId)
 	{
-		return _concessionTypeAppService.DeleteAsync(concessionTypeId);
+		await concessionTypeAppService.DeleteAsync(concessionTypeId);
+		return Result.Success("Concession type deleted successfully.");
 	}
 }

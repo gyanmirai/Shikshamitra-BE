@@ -1,225 +1,113 @@
-﻿using System;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Application.Contracts.Finance.Setting.ConcessionType;
 using ShikshaMitra.Application.Contracts.Finance.Setting.ConcessionType.Dtos;
-using ShikshaMitra.Finance.Setting;
 using ShikshaMitra.Finance.Setting.ConcessionType;
+using ShikshaMitra.Finance.Setting.ConcessionType.Dtos;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using System;
+using System.Linq;
+using System.Linq.Dynamic.Core;
+using System.Threading.Tasks;
 using Volo.Abp;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
-
+using Volo.Abp.Guids;
 
 [Authorize]
 [RemoteService(false)]
-public class ConcessionTypeAppService : ApplicationService, IConcessionTypeAppService
+public class ConcessionTypeAppService(
+	IRepository<ConcessionType, Guid> concessionTypeRepository,
+	IRepository<AcademicYear, Guid> academicYearRepository,
+	IGuidGenerator guidGenerator
+) : ApplicationService, IConcessionTypeAppService
 {
-	private readonly IRepository<ConcessionType, Guid> _concessionTypeRepository;
-	private readonly IRepository<ConcessionTypeFeeHead, Guid> _concessionTypeFeeHeadRepository;
-	private readonly IRepository<ConcessionTypeDocument, Guid> _concessionTypeDocumentRepository;
-	private readonly IRepository<FeeHead, Guid> _feeHeadRepository;
-	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
-
-	public ConcessionTypeAppService(
-		IRepository<ConcessionType, Guid> concessionTypeRepository,
-		IRepository<ConcessionTypeFeeHead, Guid> concessionTypeFeeHeadRepository,
-		IRepository<ConcessionTypeDocument, Guid> concessionTypeDocumentRepository,
-		IRepository<FeeHead, Guid> feeHeadRepository,
-		IRepository<AcademicYear, Guid> academicYearRepository)
+	public async Task CreateAsync(Guid academicYearId, ConcessionTypeRequest concessionTypeRequest)
 	{
-		_concessionTypeRepository = concessionTypeRepository;
-		_concessionTypeFeeHeadRepository = concessionTypeFeeHeadRepository;
-		_concessionTypeDocumentRepository = concessionTypeDocumentRepository;
-		_feeHeadRepository = feeHeadRepository;
-		_academicYearRepository = academicYearRepository;
-	}
-
-	public async Task<MutationResponse> CreateAsync(Guid academicYearId, ConcessionTypeCreateRequest input)
-	{
-		// Validation
-		var academicYear = await _academicYearRepository.GetAsync(academicYearId); // Ensure exists
-
-		// Create Entity
+		var academicYear = await academicYearRepository.GetAsync(academicYearId) ?? throw new UserFriendlyException("Academic Year not found.");
 		var concessionType = new ConcessionType(
-			GuidGenerator.Create(),
-			CurrentTenant.Id,
-			academicYearId,
-			input.Name,
-			input.IsDocumentRequired,
-			input.Description
+			 guidGenerator.Create(),
+			 CurrentTenant.Id,
+			 academicYearId,
+			 concessionTypeRequest.Name,
+			 concessionTypeRequest.Description
 		);
 
-		await _concessionTypeRepository.InsertAsync(concessionType);
-
-		// handle documents separately as they are separate entities
-		if (input.IsDocumentRequired && input.Documents != null)
+		foreach (var document in concessionTypeRequest.Documents)
 		{
-			foreach (var doc in input.Documents)
 			{
-				var acceptedFormatsString = string.Join(",", doc.AcceptedFormat.Select(f => (int) f));
-				var document = new ConcessionTypeDocument(
-					GuidGenerator.Create(),
-					concessionType.Id,
-					doc.DocumentName,
-					doc.DocumentSize,
-					acceptedFormatsString
-				);
-				await _concessionTypeDocumentRepository.InsertAsync(document);
+				concessionType.AddDocument(document.DocumentName, document.DocumentSize, document.AcceptedFormat);
 			}
-		}
 
-		return new MutationResponse
-		{
-			Id = concessionType.Id,
-			Message = "Concession type created successfully"
-		};
+			await concessionTypeRepository.InsertAsync(concessionType);
+		}
 	}
 
-	public async Task<ConcessionTypePaginatedResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
+	public async Task<PagedResultDto<ConcessionTypeResponse>> GetListAsync(Guid academicYearId, int skipCount = 0, int maxResultCount = 10, string? searchTerm = null)
 	{
-		var query = await _concessionTypeRepository.WithDetailsAsync(x => x.ConcessionTypeFeeHeads);
+		var query = await concessionTypeRepository.GetQueryableAsync();
+		query = query.Where(x => x.AcademicYearId == academicYearId && (string.IsNullOrEmpty(searchTerm) || x.Name.Contains(searchTerm)));
+		var totalCount = query.Count();
+		var result = await AsyncExecuter.ToListAsync(
+			query.Skip(skipCount).Take(maxResultCount)
+		);
 
-		query = query.Where(x => x.AcademicYearId == academicYearId);
-
-		if (!string.IsNullOrWhiteSpace(search))
-		{
-			query = query.Where(x => x.Name.Contains(search));
-		}
-
-		var totalCount = await _concessionTypeRepository.AsyncExecuter.CountAsync(query);
-
-		query = query.OrderByDescending(x => x.CreationTime)
-					 .Skip((page - 1) * pageSize)
-					 .Take(pageSize);
-
-		var items = await _concessionTypeRepository.AsyncExecuter.ToListAsync(query);
-
-		// Optimization: Batch load fee head names
-		var feeHeadIds = items.SelectMany(x => x.ConcessionTypeFeeHeads).Select(fh => fh.FeeHeadId).Distinct().ToList();
-		var feeHeads = await _feeHeadRepository.GetListAsync(x => feeHeadIds.Contains(x.Id));
-		var feeHeadDict = feeHeads.ToDictionary(x => x.Id, x => x.Name);
-
-		var dtos = items.Select(x => new ConcessionTypeListItem
-		{
-			Id = x.Id,
-			Name = x.Name,
-			// BasedOn = x.BasedOn == ConcessionBasedOn.Fixed ? "FIXED" : "PERCENTAGE", // Enum to string logic
-			// Amount = x.Amount,
-			IsDocumentRequired = x.IsDocumentRequired,
-
-		}).ToList();
-
-		return new ConcessionTypePaginatedResponse
+		return new PagedResultDto<ConcessionTypeResponse>
 		{
 			TotalCount = totalCount,
-			CurrentPage = page,
-			PageSize = pageSize,
-			TotalPages = (int) Math.Ceiling(totalCount / (double) pageSize),
-			Items = dtos
+			Items = result.Select(x => new ConcessionTypeResponse
+			{
+				Id = x.Id,
+				Name = x.Name,
+				Description = x.Description,
+				Documents = x.ConcessionTypeDocuments.Select(d => new ConcessionTypeDocumentDto
+				{
+					Id = d.Id,
+					DocumentName = d.DocumentName,
+					DocumentSize = d.DocumentSize,
+					AcceptedFormat = d.AcceptedFormats.Select(f => f.DocumentType).ToList(),
+				}).ToList()
+			}).ToList()
 		};
 	}
 
 	public async Task<ConcessionTypeResponse> GetAsync(Guid id)
 	{
-		var concessionType = await _concessionTypeRepository.GetAsync(id);
-
-		// Load details manually or using WithDetailsAsync on single item?
-		// Let's use repository methods to fetch related data
-
-		var feeHeadLinks = await _concessionTypeFeeHeadRepository.GetListAsync(x => x.ConcessionTypeId == id);
-		var feeHeadIds = feeHeadLinks.Select(x => x.FeeHeadId).ToList();
-		var feeHeads = await _feeHeadRepository.GetListAsync(x => feeHeadIds.Contains(x.Id));
-
-		var documents = await _concessionTypeDocumentRepository.GetListAsync(x => x.ConcessionTypeId == id);
-
+		var concessionType = await concessionTypeRepository.GetAsync(id);
+		if (concessionType == null)
+		{
+			throw new UserFriendlyException("Concession Type not found.");
+		}
 		return new ConcessionTypeResponse
 		{
 			Id = concessionType.Id,
 			Name = concessionType.Name,
-			// BasedOn = concessionType.BasedOn,
-			// Amount = concessionType.Amount,
-			IsDocumentRequired = concessionType.IsDocumentRequired,
-			Description = concessionType.Description,
-			// ApplicableFeeHeads = feeHeads.Select(fh => new FeeHeadRef { Id = fh.Id, Name = fh.Name }).ToList(),
-			Documents = documents.Select(d => new ConcessionDocumentDto
+			Documents = concessionType.ConcessionTypeDocuments.Select(d => new ConcessionTypeDocumentDto
 			{
-				DocumentName = d.DocumentName,
 				Id = d.Id,
+				DocumentName = d.DocumentName,
 				DocumentSize = d.DocumentSize,
-				AcceptedFormat = d.AcceptedFormats.Split(',', StringSplitOptions.RemoveEmptyEntries)
-								  .Select(f => (ConcessionDocumentFormat) int.Parse(f)).ToList()
-			}).ToList()
+				AcceptedFormat = d.AcceptedFormats.Select(f => f.DocumentType).ToList(),
+			}).ToList(),
+			Description = concessionType.Description
 		};
 	}
 
-	public async Task<MutationResponse> UpdateAsync(Guid id, ConcessionTypeUpdateRequest input)
+	public async Task UpdateAsync(Guid id, ConcessionTypeRequest input)
 	{
-		var concessionType = await _concessionTypeRepository.GetAsync(id);
-
-		concessionType.Update(
-			input.Name,
-			input.IsDocumentRequired,
-			input.Description
-		);
-
-		// Update Fee Heads
-		// Simplest strategy: delete all and re-add.
-		var existingFeeHeads = await _concessionTypeFeeHeadRepository.GetListAsync(x => x.ConcessionTypeId == id);
-		await _concessionTypeFeeHeadRepository.DeleteManyAsync(existingFeeHeads);
-
-
-		// Update Documents
-		if (input.IsDocumentRequired)
+		var concessionType = await concessionTypeRepository.GetAsync(id) ?? throw new UserFriendlyException("Concession Type not found.");
+		concessionType.Update(input.Name, input.Description);
+		concessionType.ConcessionTypeDocuments.Clear();
+		foreach (var document in input.Documents)
 		{
-			var existingDocs = await _concessionTypeDocumentRepository.GetListAsync(x => x.ConcessionTypeId == id);
-			await _concessionTypeDocumentRepository.DeleteManyAsync(existingDocs);
-
-			if (input.Documents != null)
-			{
-				var newDocs = input.Documents.Select(doc => new ConcessionTypeDocument(
-					GuidGenerator.Create(),
-					id,
-					doc.DocumentName,
-					doc.DocumentSize,
-					string.Join(",", doc.AcceptedFormat.Select(f => (int) f))
-				)).ToList();
-
-				await _concessionTypeDocumentRepository.InsertManyAsync(newDocs);
-			}
+			concessionType.AddDocument(document.DocumentName, document.DocumentSize, document.AcceptedFormat);
 		}
-		else
-		{
-			// Remove documents if requirement disabled
-			var existingDocs = await _concessionTypeDocumentRepository.GetListAsync(x => x.ConcessionTypeId == id);
-			await _concessionTypeDocumentRepository.DeleteManyAsync(existingDocs);
-		}
-
-		await _concessionTypeRepository.UpdateAsync(concessionType);
-
-		return new MutationResponse
-		{
-			Id = concessionType.Id,
-			Message = "Concession type updated successfully"
-		};
+		await concessionTypeRepository.UpdateAsync(concessionType);
 	}
 
-	public async Task<MutationResponse> DeleteAsync(Guid id)
+	public async Task DeleteAsync(Guid id)
 	{
-		// Delete related data
-		var feeHeads = await _concessionTypeFeeHeadRepository.GetListAsync(x => x.ConcessionTypeId == id);
-		await _concessionTypeFeeHeadRepository.DeleteManyAsync(feeHeads);
-
-		var docs = await _concessionTypeDocumentRepository.GetListAsync(x => x.ConcessionTypeId == id);
-		await _concessionTypeDocumentRepository.DeleteManyAsync(docs);
-
-		await _concessionTypeRepository.DeleteAsync(id);
-
-		return new MutationResponse
-		{
-			Id = id,
-			Message = "Concession type deleted successfully"
-		};
+		var concessionType = await concessionTypeRepository.GetAsync(id) ?? throw new UserFriendlyException("Concession Type not found.");
+		await concessionTypeRepository.DeleteAsync(concessionType);
 	}
 }

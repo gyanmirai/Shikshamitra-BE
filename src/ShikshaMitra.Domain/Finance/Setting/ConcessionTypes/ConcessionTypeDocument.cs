@@ -35,7 +35,7 @@ public class ConcessionTypeDocument : Entity<Guid>
 	{
 		if (!AcceptedFormats.Any(f => f.DocumentType == format))
 		{
-			AcceptedFormats.Add(new ConcessionTypeDocumentFormat(Id, format));
+			AcceptedFormats.Add(new ConcessionTypeDocumentFormat(Guid.NewGuid(), Id, format));
 		}
 	}
 }

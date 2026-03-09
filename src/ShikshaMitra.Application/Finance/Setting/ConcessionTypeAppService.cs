@@ -97,11 +97,7 @@ public class ConcessionTypeAppService(
 	{
 		var concessionType = await concessionTypeRepository.GetAsync(id) ?? throw new UserFriendlyException("Concession Type not found.");
 		concessionType.Update(input.Name, input.Description);
-		concessionType.ConcessionTypeDocuments.Clear();
-		foreach (var document in input.Documents)
-		{
-			concessionType.AddDocument(document.DocumentName, document.DocumentSize, document.AcceptedFormat);
-		}
+		concessionType.ReplaceDocuments(input.Documents.Select(d => (d.DocumentName, d.DocumentSize, d.AcceptedFormat)).ToList());
 		await concessionTypeRepository.UpdateAsync(concessionType);
 	}
 

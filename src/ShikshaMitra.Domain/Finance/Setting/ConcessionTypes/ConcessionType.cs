@@ -15,7 +15,7 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string Name { get; private set; }
 	public string? Description { get; private set; }
 
-	public virtual ICollection<ConcessionTypeDocument> ConcessionTypeDocuments { get; private set; }
+	public virtual ICollection<ConcessionTypeDocument> ConcessionTypeDocuments { get; private set; } = new List<ConcessionTypeDocument>();
 
 	private ConcessionType()
 	{
@@ -57,5 +57,19 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 
 		ConcessionTypeDocuments.Add(document);
+	}
+
+	public void ReplaceDocuments(List<(string DocumentName, long DocumentSize, List<DocumentType> AcceptedFormats)> documents)
+	{
+		ConcessionTypeDocuments.Clear();
+		foreach (var d in documents)
+		{
+			var doc = new ConcessionTypeDocument(Guid.NewGuid(), Id, d.DocumentName, d.DocumentSize);
+			foreach (var format in d.AcceptedFormats)
+			{
+				doc.AddAcceptedFormat(format);
+			}
+			ConcessionTypeDocuments.Add(doc);
+		}
 	}
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -9,17 +9,10 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 
-	public Guid BoardId { get; private set; }
-	public Guid EducationMediumId { get; private set; }
-	public Guid StandardId { get; private set; }
-	public Guid DivisionId { get; private set; }
 	public Guid StudentId { get; private set; }
 
 	/// <summary>Fee structure resolved server-side from board+medium+standard.</summary>
 	public Guid? FeeStructureId { get; private set; }
-
-	/// <summary>Academic year in YY-YY format, e.g. "2025-26".</summary>
-	public string AcademicYear { get; private set; }
 
 	/// <summary>Current wizard step (1–4).</summary>
 	public int CurrentStep { get; private set; }
@@ -47,13 +40,8 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string academicYear) : base(id)
 	{
 		TenantId = tenantId;
-		BoardId = boardId;
-		EducationMediumId = educationMediumId;
-		StandardId = standardId;
-		DivisionId = divisionId;
 		StudentId = studentId;
 		FeeStructureId = feeStructureId;
-		AcademicYear = academicYear;
 		CurrentStep = 1;
 		CompletedStepsRaw = "1";
 		ConcessionRequestConcessionTypes = new List<ConcessionRequestConcessionType>();
@@ -70,22 +58,6 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			steps.Add(step);
 			CompletedStepsRaw = string.Join(",", steps);
 		}
-	}
-
-	public void UpdateBasicDetails(
-		Guid boardId,
-		Guid educationMediumId,
-		Guid standardId,
-		Guid divisionId,
-		Guid studentId,
-		Guid? feeStructureId)
-	{
-		BoardId = boardId;
-		EducationMediumId = educationMediumId;
-		StandardId = standardId;
-		DivisionId = divisionId;
-		StudentId = studentId;
-		FeeStructureId = feeStructureId;
 	}
 
 	public List<int> GetCompletedSteps()

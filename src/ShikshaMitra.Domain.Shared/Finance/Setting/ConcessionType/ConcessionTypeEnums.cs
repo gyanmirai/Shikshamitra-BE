@@ -1,4 +1,4 @@
-namespace ShikshaMitra.Finance.Setting.ConcessionType;
+﻿namespace ShikshaMitra.Finance.Setting.ConcessionType;
 
 public enum ConcessionBasedOn
 {
@@ -6,12 +6,3 @@ public enum ConcessionBasedOn
     Percentage = 1
 }
 
-public enum ConcessionDocumentFormat
-{
-    PDF = 0,
-    JPEG = 1,
-    PNG = 2,
-    DOC = 3,
-    DOCX = 4,
-    XLS = 5
-}

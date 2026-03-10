@@ -23,6 +23,8 @@ using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Finance.StudentFeeAssignment;
 using ShikshaMitra.Application.Contracts.Finance.StudentFeeAssignment.Dtos;
+using ShikshaMitra.Finance.ConcessionRequests;
+using ShikshaMitra.Finance.ConcessionRequests.Dtos;
 
 namespace ShikshaMitra;
 
@@ -33,6 +35,10 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		/* You can configure your AutoMapper mapping configuration here.
 		 * Alternatively, you can split your mapping configurations
 		 * into multiple profile classes for a better organization. */
+
+		// ConcessionRequest mappings
+		CreateMap<ConcessionRequest, ConcessionRequestDto>();
+		CreateMap<CreateUpdateConcessionRequestDto, ConcessionRequest>();
 
 		// BookCategory and LibraryTiming mappings are defined at the bottom of this profile
 

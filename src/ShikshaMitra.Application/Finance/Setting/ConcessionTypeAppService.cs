@@ -35,12 +35,10 @@ public class ConcessionTypeAppService(
 
 		foreach (var document in concessionTypeRequest.Documents)
 		{
-			{
-				concessionType.AddDocument(document.DocumentName, document.DocumentSize, document.AcceptedFormat);
-			}
-
-			await concessionTypeRepository.InsertAsync(concessionType);
+			concessionType.AddDocument(document.DocumentName, document.DocumentSize, document.AcceptedFormat);
 		}
+
+		await concessionTypeRepository.InsertAsync(concessionType);
 	}
 
 	public async Task<PagedResultDto<ConcessionTypeResponse>> GetListAsync(Guid academicYearId, int skipCount = 0, int maxResultCount = 10, string? searchTerm = null)

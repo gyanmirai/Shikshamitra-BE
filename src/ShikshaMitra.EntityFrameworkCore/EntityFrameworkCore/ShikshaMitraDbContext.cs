@@ -59,7 +59,6 @@ using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.Examination.Exams;
-using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.Expenses;
 using ShikshaMitra.Finance.Incomes;
 using ShikshaMitra.Finance.Setting;
@@ -300,14 +299,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region StudentFeeAssignment
 	public DbSet<StudentFeeStructure> StudentFeeStructures { get; set; }
-	#endregion
-
-	#region ConcessionRequests
-	public DbSet<ConcessionRequest> ConcessionRequests { get; set; }
-	public DbSet<ConcessionRequestConcessionType> ConcessionRequestConcessionTypes { get; set; }
-	public DbSet<ConcessionRequestFeeHeadMapping> ConcessionRequestFeeHeadMappings { get; set; }
-	public DbSet<ConcessionRequestFeeHeadValue> ConcessionRequestFeeHeadValues { get; set; }
-	public DbSet<ConcessionRequestDocument> ConcessionRequestDocuments { get; set; }
 	#endregion
 
 	#region Charges

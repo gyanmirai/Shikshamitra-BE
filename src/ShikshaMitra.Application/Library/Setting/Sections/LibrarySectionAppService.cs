@@ -44,7 +44,7 @@ public class LibrarySectionAppService(
 				Id = x.Id,
 				SectionName = x.SectionName,
 				NumberOfShelf = x.NumberOfShelf,
-				ShelfDetails = x.Shelves.Select(s => new SectionDetailsResponse { ShelfName = s.ShelfName,ID=s.Id }).ToList()
+				ShelfDetails = x.Shelves.Select(s => new ShelfDetailDto { ShelfName = s.ShelfName,Id=s.Id }).ToList()
 			}).ToList()
 		};
 	}

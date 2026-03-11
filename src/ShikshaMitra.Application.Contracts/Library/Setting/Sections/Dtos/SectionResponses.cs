@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace ShikshaMitra.Library.Setting.Sections.Dtos;
@@ -8,11 +8,14 @@ public class SectionDto
 	public Guid Id { get; set; }
 	public string? SectionName { get; set; }
 	public int NumberOfShelf { get; set; }
+
+	public List<ShelfDetailDto> ShelfDetails { get; set; } = new();
 }
 
 public class ShelfDetailDto
 {
 	public string? ShelfName { get; set; }
+	public Guid? Id { get; set; }
 }
 
 public class SectionDetailsResponse

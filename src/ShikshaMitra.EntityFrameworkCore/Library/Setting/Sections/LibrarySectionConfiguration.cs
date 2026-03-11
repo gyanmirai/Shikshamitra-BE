@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Library.Setting.Sections;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -9,7 +9,11 @@ namespace ShikshaMitra.Library.Setting.Sections
 	{
 		public void Configure(EntityTypeBuilder<LibrarySection> builder)
 		{
-			builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "LibrarySections", ShikshaMitraConsts.DbSchema);
+			builder.ToTable(
+				ShikshaMitraConsts.DbTablePrefix + "LibrarySections",
+				ShikshaMitraConsts.DbSchema
+			);
+
 			builder.ConfigureByConvention();
 
 			builder.Property(x => x.SectionName)
@@ -19,12 +23,12 @@ namespace ShikshaMitra.Library.Setting.Sections
 			builder.Property(x => x.NumberOfShelf)
 				.IsRequired();
 
-			builder.Property(x => x.AcademicYearId);
-
 			builder.HasMany(x => x.Shelves)
-				.WithOne()
+				.WithOne(x => x.Section)
 				.HasForeignKey(x => x.SectionId)
 				.OnDelete(DeleteBehavior.Cascade);
+
+			builder.Navigation(x => x.Shelves).AutoInclude();
 		}
 	}
 
@@ -41,6 +45,9 @@ namespace ShikshaMitra.Library.Setting.Sections
 
 			builder.Property(x => x.SectionId)
 				.IsRequired();
+
+
+			builder.Navigation(x => x.Section).AutoInclude();
 		}
 	}
 }

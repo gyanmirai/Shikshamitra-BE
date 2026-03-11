@@ -9,7 +9,7 @@ public class SectionDto
 	public string? SectionName { get; set; }
 	public int NumberOfShelf { get; set; }
 
-	public List<ShelfDetailDto> ShelfDetails { get; set; } = new();
+	public List<ShelfDetailDto> ShelfDetails { get; set; }
 }
 
 public class ShelfDetailDto
@@ -17,6 +17,7 @@ public class ShelfDetailDto
 	public string? ShelfName { get; set; }
 	public Guid? Id { get; set; }
 }
+
 
 public class SectionDetailsResponse
 {

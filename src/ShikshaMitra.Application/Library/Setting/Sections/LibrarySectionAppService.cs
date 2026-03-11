@@ -89,16 +89,14 @@ public class LibrarySectionAppService(
 		var section = await _sectionRepository.GetAsync(sectionId);
 
 		var shelfQuery = await _shelfRepository.GetQueryableAsync();
-		var shelves = await AsyncExecuter.ToListAsync(
-			shelfQuery.Where(x => x.SectionId == sectionId)
-		);
+		
 
 		return new SectionDetailsResponse
 		{
 			Id = section.Id.ToString(),
 			SectionName = section.SectionName,
 			NumberOfShelf = section.NumberOfShelf,
-			ShelfDetails = shelves.Select(s => new ShelfDetailDto { ShelfName = s.ShelfName }).ToList()
+			ShelfDetails = section?.Shelves?.Select(s => new ShelfDetailDto { ShelfName = s.ShelfName, Id = s.Id }).ToList()
 		};
 	}
 

@@ -7,7 +7,7 @@ using Volo.Abp.MultiTenancy;
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
 /// <summary>
-/// Represents a homework type (e.g., Written Assignment, Practical Work) 
+/// Represents a homework type (e.g., Written Assignment, Practical Work)
 /// associated with an academic medium
 /// </summary>
 public class HomeworkType : FullAuditedAggregateRoot<Guid>, IMultiTenant

@@ -1,6 +1,6 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
-using ShikshaMitra.HR.Calendar;
+using ShikshaMitra.HR.Calendar.HolidayTypes;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;

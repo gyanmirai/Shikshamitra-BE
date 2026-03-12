@@ -8,10 +8,10 @@ public class TeacherAssignmentUpdateDto
 {
 	[Required]
 	public Guid DivisionId { get; set; }
-	
+
 	[Required]
 	public Guid SubjectId { get; set; }
-	
+
 	[Required]
 	public List<Guid> TeacherIds { get; set; } = new();
 }

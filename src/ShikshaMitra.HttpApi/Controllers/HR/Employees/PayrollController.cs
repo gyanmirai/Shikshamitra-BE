@@ -22,10 +22,14 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 public class PayrollController : AbpControllerBase
 {
 	private readonly IEmployeeAppService _employeeAppService;
+	private readonly IEmployeeAuthorizationService _authorizationService;
 
-	public PayrollController(IEmployeeAppService employeeAppService)
+	public PayrollController(
+		IEmployeeAppService employeeAppService,
+		IEmployeeAuthorizationService authorizationService)
 	{
 		_employeeAppService = employeeAppService;
+		_authorizationService = authorizationService;
 	}
 
 	/// <summary>
@@ -33,9 +37,13 @@ public class PayrollController : AbpControllerBase
 	/// </summary>
 	[HttpGet("{employeeId}/payroll")]
 	[ProducesResponseType(typeof(PayrollContract), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<PayrollContract> GetAsync([FromRoute, Required] Guid employeeId)
 	{
+		// Check access rights - sensitive data (IDOR protection + ownership check)
+		await _authorizationService.CheckEmployeeAccessAsync(employeeId, requireOwnership: true);
+
 		return await _employeeAppService.GetPayrollContractAsync(employeeId);
 	}
 
@@ -44,11 +52,15 @@ public class PayrollController : AbpControllerBase
 	/// </summary>
 	[HttpPut("{employeeId}/payroll")]
 	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<IActionResult> UpdateAsync(
 		[FromRoute, Required] Guid employeeId,
 		[FromBody, Required] PayrollContract request)
 	{
+		// Check sensitive field access (only HR Admin)
+		await _authorizationService.CheckSensitiveFieldAccessAsync(employeeId);
+
 		await _employeeAppService.UpdatePayrollContractAsync(employeeId, request);
 		return Ok();
 	}

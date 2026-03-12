@@ -11,6 +11,6 @@ public class OrganizationUnitDto
     public string Code { get; set; }
 
     public string DisplayName { get; set; }
-    
+
     public  Guid? ParentId { get;  set; }
 }

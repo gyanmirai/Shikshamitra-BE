@@ -42,11 +42,11 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 	public async Task<SalarySlipDto> GetSalarySlipAsync(Guid employeeId, string monthYear)
 	{
 		var stopwatch = Stopwatch.StartNew();
-		
+
 		try
 		{
 			// Input validation
-			_logger.LogInformation("GetSalarySlip request - EmployeeId: {EmployeeId}, MonthYear: {MonthYear}", 
+			_logger.LogInformation("GetSalarySlip request - EmployeeId: {EmployeeId}, MonthYear: {MonthYear}",
 				employeeId, monthYear);
 
 			if (employeeId == Guid.Empty)
@@ -59,20 +59,20 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 			// Check cache first
 			var cacheKey = GetCacheKey(CurrentTenant.Id, employeeId, monthYear);
 			var cachedDto = await _cache.GetAsync(cacheKey);
-			
+
 			if (cachedDto != null)
 			{
 				stopwatch.Stop();
 				_logger.LogInformation("Salary slip retrieved from cache - EmployeeId: {EmployeeId}, " +
-					"MonthYear: {MonthYear}, Duration: {Duration}ms", 
+					"MonthYear: {MonthYear}, Duration: {Duration}ms",
 					employeeId, monthYear, stopwatch.ElapsedMilliseconds);
 				return cachedDto;
 			}
 
 			// Generate or retrieve salary slip (Manager validates employee existence)
 			var salarySlip = await _salarySlipManager.GenerateOrGetSalarySlipAsync(
-				employeeId, 
-				monthYear, 
+				employeeId,
+				monthYear,
 				forceRegenerate: false);
 
 			// Get employee for DTO mapping (already validated by Manager)
@@ -84,7 +84,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 			// Cache the result (cache for finalized slips longer)
 			var cacheOptions = new DistributedCacheEntryOptions
 			{
-				AbsoluteExpirationRelativeToNow = salarySlip.Status == SalarySlipStatus.Finalized 
+				AbsoluteExpirationRelativeToNow = salarySlip.Status == SalarySlipStatus.Finalized
 					? TimeSpan.FromHours(24)  // Finalized slips: 24 hours
 					: TimeSpan.FromMinutes(30) // Draft slips: 30 minutes
 			};
@@ -95,7 +95,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 			_logger.LogInformation("Salary slip processed successfully - EmployeeId: {EmployeeId}, " +
 				"MonthYear: {MonthYear}, Status: {Status}, TotalEarning: {TotalEarning}, " +
 				"TotalDeduction: {TotalDeduction}, NetSalary: {NetSalary}, Duration: {Duration}ms",
-				employeeId, monthYear, salarySlip.Status, salarySlip.TotalEarning, 
+				employeeId, monthYear, salarySlip.Status, salarySlip.TotalEarning,
 				salarySlip.TotalDeduction, salarySlip.NetSalary, stopwatch.ElapsedMilliseconds);
 
 			return dto;
@@ -104,7 +104,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		{
 			stopwatch.Stop();
 			_logger.LogWarning(ex, "User-friendly error in GetSalarySlip - EmployeeId: {EmployeeId}, " +
-				"MonthYear: {MonthYear}, Duration: {Duration}ms", 
+				"MonthYear: {MonthYear}, Duration: {Duration}ms",
 				employeeId, monthYear, stopwatch.ElapsedMilliseconds);
 			throw;
 		}
@@ -112,7 +112,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		{
 			stopwatch.Stop();
 			_logger.LogError(ex, "Unexpected error in GetSalarySlip - EmployeeId: {EmployeeId}, " +
-				"MonthYear: {MonthYear}, Duration: {Duration}ms", 
+				"MonthYear: {MonthYear}, Duration: {Duration}ms",
 				employeeId, monthYear, stopwatch.ElapsedMilliseconds);
 			throw new UserFriendlyException("An error occurred while fetching the salary slip. Please try again.");
 		}

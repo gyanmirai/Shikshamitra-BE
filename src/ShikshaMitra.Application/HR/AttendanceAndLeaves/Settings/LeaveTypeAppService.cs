@@ -26,15 +26,15 @@ public class LeaveTypeAppService : CrudAppService<
 	private readonly ILeaveTypeRepository _leaveTypeRepository;
 	private readonly IDistributedCache<PagedResultDto<LeaveTypeDto>> _cache;
 	private readonly IDistributedCache<LeaveTypeListResponse> _contractCache;
-	
+
 	// Base cache key for all active leave types (unpaginated)
-	private string GetBaseCacheKey() => 
+	private string GetBaseCacheKey() =>
 		$"EmployeeLeaveTypes:Active:Tenant:{CurrentTenant?.Id ?? Guid.Empty}";
-	
+
 	// Paginated cache key
-	private string GetActiveCacheKey(int skipCount, int maxResultCount) => 
+	private string GetActiveCacheKey(int skipCount, int maxResultCount) =>
 		$"{GetBaseCacheKey()}:Skip:{skipCount}:Take:{maxResultCount}";
-	
+
 	// Contract-specific cache key by mediumStageId
 	private string GetContractCacheKey(Guid mediumStageId, int page, int pageSize) =>
 		$"EmployeeLeaveTypes:Contract:Tenant:{CurrentTenant?.Id ?? Guid.Empty}:Org:{mediumStageId}:Page:{page}:Size:{pageSize}";
@@ -81,7 +81,7 @@ public class LeaveTypeAppService : CrudAppService<
 	public override async Task<PagedResultDto<LeaveTypeDto>> GetListAsync(PagedAndSortedResultRequestDto input)
 	{
 		var queryable = await Repository.GetQueryableAsync();
-		
+
 		// Apply sorting
 		var sorting = input.Sorting ?? "Type ASC";
 		queryable = ApplySorting(queryable, sorting);
@@ -142,8 +142,8 @@ public class LeaveTypeAppService : CrudAppService<
 	/// Get paginated leave types for an organization (matches OpenAPI contract)
 	/// </summary>
 	public async Task<LeaveTypeListResponse> GetListByMediumStageIdAsync(
-		Guid mediumStageId, 
-		int page, 
+		Guid mediumStageId,
+		int page,
 		int pageSize,
 		CancellationToken cancellationToken = default)
 	{
@@ -217,7 +217,7 @@ public class LeaveTypeAppService : CrudAppService<
 		}
 		catch (Exception ex)
 		{
-			Logger.LogError(ex, 
+			Logger.LogError(ex,
 				"Failed to fetch leave types for MediumStageId: {MediumStageId}, Page: {Page}, PageSize: {PageSize}",
 				mediumStageId, page, pageSize);
 			throw;
@@ -318,10 +318,10 @@ public class LeaveTypeAppService : CrudAppService<
 		// Clear cache by removing common pagination combinations
 		var baseCacheKey = GetBaseCacheKey();
 		var cacheKeysToRemove = new List<string>();
-		
+
 		int[] commonPageSizes = { 10, 25, 50, 100 };
 		int maxPages = 10;
-		
+
 		foreach (var pageSize in commonPageSizes)
 		{
 			for (int page = 0; page < maxPages; page++)
@@ -330,7 +330,7 @@ public class LeaveTypeAppService : CrudAppService<
 				cacheKeysToRemove.Add(GetActiveCacheKey(skipCount, pageSize));
 			}
 		}
-		
+
 		await _cache.RemoveManyAsync(cacheKeysToRemove);
 	}
 
@@ -340,7 +340,7 @@ public class LeaveTypeAppService : CrudAppService<
 		var cacheKeysToRemove = new List<string>();
 		int[] commonPageSizes = { 10, 25, 50, 100 };
 		int maxPages = 10;
-		
+
 		foreach (var pageSize in commonPageSizes)
 		{
 			for (int page = 1; page <= maxPages; page++)
@@ -348,7 +348,7 @@ public class LeaveTypeAppService : CrudAppService<
 				cacheKeysToRemove.Add(GetContractCacheKey(mediumStageId, page, pageSize));
 			}
 		}
-		
+
 		await _contractCache.RemoveManyAsync(cacheKeysToRemove);
 	}
 
@@ -373,8 +373,8 @@ public class LeaveTypeAppService : CrudAppService<
 			{
 				orderedQueryable = property.ToLower() switch
 				{
-					"type" => direction == "DESC" 
-						? queryable.OrderByDescending(x => x.Type) 
+					"type" => direction == "DESC"
+						? queryable.OrderByDescending(x => x.Type)
 						: queryable.OrderBy(x => x.Type),
 					"color" => direction == "DESC"
 						? queryable.OrderByDescending(x => x.Color)
@@ -390,8 +390,8 @@ public class LeaveTypeAppService : CrudAppService<
 			{
 				orderedQueryable = property.ToLower() switch
 				{
-					"type" => direction == "DESC" 
-						? orderedQueryable!.ThenByDescending(x => x.Type) 
+					"type" => direction == "DESC"
+						? orderedQueryable!.ThenByDescending(x => x.Type)
 						: orderedQueryable!.ThenBy(x => x.Type),
 					"color" => direction == "DESC"
 						? orderedQueryable!.ThenByDescending(x => x.Color)

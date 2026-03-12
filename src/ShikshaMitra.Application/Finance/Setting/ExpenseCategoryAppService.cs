@@ -41,7 +41,7 @@ public class ExpenseCategoryAppService : ApplicationService, IExpenseCategoryApp
     public async Task<PaginatedExpenseCategoryResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
     {
         var query = await _expenseCategoryRepository.GetQueryableAsync();
-        
+
         query = query.Where(x => x.AcademicYearId == academicYearId);
 
         if (!search.IsNullOrWhiteSpace())
@@ -50,7 +50,7 @@ public class ExpenseCategoryAppService : ApplicationService, IExpenseCategoryApp
         }
 
         var totalCount = await AsyncExecuter.CountAsync(query);
-        
+
         var items = await AsyncExecuter.ToListAsync(
             query
             .OrderByDescending(x => x.CreationTime)

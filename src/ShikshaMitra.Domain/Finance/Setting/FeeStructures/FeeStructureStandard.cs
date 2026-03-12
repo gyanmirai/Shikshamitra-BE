@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -15,16 +15,16 @@ public class FeeStructureStandard : FullAuditedEntity<Guid>, IMultiTenant
 
     public ICollection<FeeStructureDetail> FeeStructureDetails { get; private set; }
 
-    protected FeeStructureStandard() 
+    protected FeeStructureStandard()
     {
         FeeStructureDetails = new List<FeeStructureDetail>();
     }
 
     public FeeStructureStandard(
-        Guid id, 
-        Guid? tenantId, 
-        Guid feeStructureId, 
-        Guid standardId, 
+        Guid id,
+        Guid? tenantId,
+        Guid feeStructureId,
+        Guid standardId,
         string name) : base(id)
     {
         TenantId = tenantId;

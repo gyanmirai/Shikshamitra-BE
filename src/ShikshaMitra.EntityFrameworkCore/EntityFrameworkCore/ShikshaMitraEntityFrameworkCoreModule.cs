@@ -3,7 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.EntityFrameworkCore.Security.UserScope;
 using ShikshaMitra.HR.Payroll.SalarySlips;
-using ShikshaMitra.HR.Calendar;
+using ShikshaMitra.HR.Calendar.HolidayTypes;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.EntityFrameworkCore.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.Events;
@@ -77,7 +77,7 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
             options.UseNpgsql();
         });
 
-        // Ensure connection strings are available from configuration  
+        // Ensure connection strings are available from configuration
         Configure<AbpDbConnectionOptions>(options =>
         {
             var connectionString = configuration["ConnectionStrings:Default"];

@@ -74,7 +74,7 @@ public class EfCoreStudentLeaveTypeRepository :
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
-		
+
 		var query = ApplyFilter(dbSet, filterText, isActive, tenantId);
 
 		query = query.OrderBy(sorting.IsNullOrWhiteSpace() ? nameof(StudentLeaveType.LeaveTypeName) : sorting);
@@ -91,7 +91,7 @@ public class EfCoreStudentLeaveTypeRepository :
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
-		
+
 		var query = ApplyFilter(dbSet, filterText, isActive, tenantId);
 
 		return await query.LongCountAsync(GetCancellationToken(cancellationToken));

@@ -61,7 +61,7 @@ public class EmployeeAttendanceConfiguration : IEntityTypeConfiguration<Employee
 		// Note: EducationMediumStageId is denormalized from Employee for performance
 		// This allows scope filtering without joining through Employee
 		// The relationship is maintained through application logic
-		
+
 		// Note: PostgreSQL CHECK constraints cannot reference other tables via subqueries.
 		// EducationMediumStageId consistency is enforced in the application layer
 		// via EmployeeAttendanceAppService.ValidateAndNormalizeEducationMediumStageIdAsync()

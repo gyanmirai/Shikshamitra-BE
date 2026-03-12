@@ -241,8 +241,8 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		ExamObtainedMarks = obtainedMarks;
         // Safe percentage calculation since totalMarks > 0 is validated
         ExamPercentage = (obtainedMarks / totalMarks) * 100;
-		ExamStatus = obtainedMarks >= passingMarks 
-			? EntranceExamStatusEnum.Pass 
+		ExamStatus = obtainedMarks >= passingMarks
+			? EntranceExamStatusEnum.Pass
 			: EntranceExamStatusEnum.Fail;
 		ExamResultDate = DateTimeOffset.UtcNow;
 	}

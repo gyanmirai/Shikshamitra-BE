@@ -201,7 +201,7 @@ public class EmployeeAttendanceAppService : ApplicationService, IEmployeeAttenda
 
 		// Try to find existing attendance record
 		var query = await _employeeAttendanceRepository.GetQueryableAsync();
-		
+
 		if (CurrentTenant.Id.HasValue)
 		{
 			query = query.Where(a => a.TenantId == CurrentTenant.Id);
@@ -457,13 +457,13 @@ public class EmployeeAttendanceAppService : ApplicationService, IEmployeeAttenda
 		try
 		{
 			var userScope = await _userScopeService.GetUserScopeAsync(employeeUserId);
-			
+
 			// If user is admin or has wildcard access, return null (no specific stage)
 			if (userScope.IsAdmin || userScope.HasWildcardMediumStage)
 			{
 				return null;
 			}
-			
+
 			// Return the first MediumStageId if available
 			return userScope.MediumStageIds.FirstOrDefault();
 		}
@@ -494,7 +494,7 @@ public class EmployeeAttendanceAppService : ApplicationService, IEmployeeAttenda
 			return null;
 
 		var duration = timeOut.Value - timeIn.Value;
-		
+
 		// Fix Bug #7: Validate duration is not negative
 		if (duration.TotalSeconds < 0)
 			return "Invalid (Out < In)";
@@ -530,19 +530,19 @@ public class EmployeeAttendanceAppService : ApplicationService, IEmployeeAttenda
 		if (inTime.HasValue && outTime.HasValue)
 		{
 			var hoursWorked = (outTime.Value - inTime.Value).TotalHours;
-			
+
 			// Handle invalid negative duration
 			if (hoursWorked < 0)
 				return EmployeeAttendanceStatusType.Present; // Default to Present for invalid data
-			
+
 			// Less than 4 hours = Half day leave
 			if (hoursWorked < 4)
 				return EmployeeAttendanceStatusType.HalfDayLeave;
-			
+
 			// 4-8 hours = Present (partial or full day)
 			if (hoursWorked < 8)
 				return EmployeeAttendanceStatusType.Present;
-			
+
 			// 8+ hours = Full day present
 			return EmployeeAttendanceStatusType.Present;
 		}

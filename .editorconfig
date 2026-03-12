@@ -160,6 +160,8 @@ csharp_style_prefer_primary_constructors = true:suggestion
 csharp_prefer_system_threading_lock = true:suggestion
 csharp_style_allow_blank_lines_between_consecutive_braces_experimental = false:silent
 
+trim_trailing_whitespace = true
+
 ##########################################
 # .NET Naming Conventions
 # https://docs.microsoft.com/visualstudio/ide/editorconfig-naming-conventions
@@ -328,4 +330,14 @@ tab_width = 4
 dotnet_style_prefer_collection_expression = when_types_loosely_match:suggestion
 dotnet_style_namespace_match_folder = true:suggestion
 
+##########################################
+# Override: Private fields use _camelCase (modern .NET convention)
+##########################################
 
+# _camelCase style
+dotnet_naming_style.underscore_camel_case_style.capitalization = camel_case
+dotnet_naming_style.underscore_camel_case_style.required_prefix = _
+
+# Private fields must be _camelCase (overrides your earlier camelCase-only rule)
+dotnet_naming_rule.stylecop_private_fields_must_be_camel_case_rule.style = underscore_camel_case_style
+dotnet_naming_rule.stylecop_private_fields_must_be_camel_case_rule.severity = warning

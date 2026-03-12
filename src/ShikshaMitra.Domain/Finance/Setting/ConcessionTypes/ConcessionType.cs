@@ -76,14 +76,14 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void RemoveFeeHead(Guid feeHeadId)
 	{
-		// Logic to remove... typically handled by replacing collection or similar in AppService, 
+		// Logic to remove... typically handled by replacing collection or similar in AppService,
 		// given this is a simple join entity, we might just clear and re-add in service or manage collection here.
 		// For now, let's keep it simple.
 	}
 
 	public void AddDocument(string documentName, long documentSize, List<int> acceptedFormats) // acceptedFormats stored how?
 	{
-		// Handling formats might differ based on how we want to store them. 
+		// Handling formats might differ based on how we want to store them.
 		// The spec implies an array of ints. We could store as JSON or related entity.
 		// Given ConcessionDocument is an object in the JSON, let's make it an entity.
 	}

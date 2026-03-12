@@ -38,7 +38,7 @@ public class StudentEnrollmentDtoEnricher(
 			if (medium != null)
 			{
 				dto.AcademicMediumName = medium.Name;
-				
+
 				// Get Academic Board Name through Medium
 				dto.AcademicBoardId = medium.EducationBoardId;
 				var board = await educationBoardRepository.FindAsync(medium.EducationBoardId);

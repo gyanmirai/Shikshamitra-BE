@@ -205,7 +205,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		// Get all active employees
 		var employeeQuery = await _employeeRepository.GetQueryableAsync();
-		
+
 		if (CurrentTenant.Id.HasValue)
 		{
 			employeeQuery = employeeQuery.Where(e => e.TenantId == CurrentTenant.Id);
@@ -254,8 +254,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 					// Generate or get existing salary slip
 					var salarySlip = await _salarySlipManager.GenerateOrGetSalarySlipAsync(
-						employee.Id, 
-						internalMonthYear, 
+						employee.Id,
+						internalMonthYear,
 						forceRegenerate: true);
 
 					// Finalize the salary slip if not already finalized
@@ -386,7 +386,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		}
 
 		// Parse month name
-		if (!DateTime.TryParseExact(monthName, "MMMM", CultureInfo.InvariantCulture, 
+		if (!DateTime.TryParseExact(monthName, "MMMM", CultureInfo.InvariantCulture,
 			DateTimeStyles.None, out var date))
 		{
 			throw new BusinessException("HR:InvalidMonthName")
@@ -421,7 +421,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		// Get holidays for this month
 		var holidayQuery = await _holidayRepository.GetQueryableAsync();
-		
+
 		if (CurrentTenant.Id.HasValue)
 		{
 			holidayQuery = holidayQuery.Where(h => h.TenantId == CurrentTenant.Id);
@@ -431,7 +431,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		var endDate = new DateTimeOffset(lastDay.AddDays(1).AddTicks(-1));
 
 		var holidays = await AsyncExecuter.ToListAsync(
-			holidayQuery.Where(h => 
+			holidayQuery.Where(h =>
 				h.IsHoliday &&
 				h.StartDate <= endDate &&
 				h.EndDate >= startDate)
@@ -461,12 +461,12 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	/// Batch fetch attendance records for multiple employees
 	/// </summary>
 	private async Task<Dictionary<Guid, List<EmployeeAttendance>>> GetAttendanceRecordsAsync(
-		List<Guid> employeeIds, 
-		DateOnly startDate, 
+		List<Guid> employeeIds,
+		DateOnly startDate,
 		DateOnly endDate)
 	{
 		var attendanceQuery = await _attendanceRepository.GetQueryableAsync();
-		
+
 		if (CurrentTenant.Id.HasValue)
 		{
 			attendanceQuery = attendanceQuery.Where(a => a.TenantId == CurrentTenant.Id);
@@ -474,7 +474,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		var attendanceRecords = await AsyncExecuter.ToListAsync(
 			attendanceQuery
-				.Where(a => 
+				.Where(a =>
 					employeeIds.Contains(a.EmployeeId) &&
 					a.AttendanceDate >= startDate &&
 					a.AttendanceDate <= endDate)
@@ -489,7 +489,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	/// Build payroll item for an employee using pre-loaded data (no DB calls)
 	/// </summary>
 	private static RunPayrollItem BuildPayrollItem(
-		Employee employee, 
+		Employee employee,
 		List<EmployeeAttendance> attendanceRecords,
 		EmployeePayrollDetails? payrollDetails,
 		List<EmployeePayrollComponent> components,
@@ -507,7 +507,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			else
 				totalDeduction += component.Amount;
 		}
-		
+
 		var netPay = grossSalary - totalDeduction;
 
 		// Calculate attendance

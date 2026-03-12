@@ -15,15 +15,15 @@ namespace ShikshaMitra.HR.Payroll.SalarySlips;
 /// EF Core repository implementation for SalarySlip entity
 /// Optimized for performance with proper indexing support
 /// </summary>
-public class EfCoreSalarySlipRepository 
-	: EfCoreRepository<ShikshaMitraDbContext, SalarySlip, Guid>, 
+public class EfCoreSalarySlipRepository
+	: EfCoreRepository<ShikshaMitraDbContext, SalarySlip, Guid>,
 	  ISalarySlipRepository
 {
 	private readonly ICurrentTenant _currentTenant;
 
 	public EfCoreSalarySlipRepository(
 		IDbContextProvider<ShikshaMitraDbContext> dbContextProvider,
-		ICurrentTenant currentTenant) 
+		ICurrentTenant currentTenant)
 		: base(dbContextProvider)
 	{
 		_currentTenant = currentTenant;
@@ -34,15 +34,15 @@ public class EfCoreSalarySlipRepository
 	/// Note: Entity is tracked since it may be updated later
 	/// </summary>
 	public async Task<SalarySlip?> GetByEmployeeAndMonthAsync(
-		Guid employeeId, 
+		Guid employeeId,
 		string monthYear,
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
-		
+
 		return await dbSet
 			.Where(x => x.TenantId == _currentTenant.Id &&
-			            x.EmployeeId == employeeId && 
+			            x.EmployeeId == employeeId &&
 			            x.MonthYear == monthYear)
 			.FirstOrDefaultAsync(cancellationToken);
 	}
@@ -52,16 +52,16 @@ public class EfCoreSalarySlipRepository
 	/// Optimized query that doesn't load the entire entity
 	/// </summary>
 	public async Task<bool> ExistsAsync(
-		Guid employeeId, 
+		Guid employeeId,
 		string monthYear,
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
-		
+
 		return await dbSet
 			.AsNoTracking()
 			.Where(x => x.TenantId == _currentTenant.Id &&
-			            x.EmployeeId == employeeId && 
+			            x.EmployeeId == employeeId &&
 			            x.MonthYear == monthYear)
 			.AnyAsync(cancellationToken);
 	}
@@ -74,7 +74,7 @@ public class EfCoreSalarySlipRepository
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
-		
+
 		return await dbSet
 			.AsNoTracking()
 			.Where(x => x.TenantId == _currentTenant.Id &&
@@ -91,7 +91,7 @@ public class EfCoreSalarySlipRepository
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
-		
+
 		return await dbSet
 			.Where(x => x.TenantId == _currentTenant.Id &&
 			            x.MonthYear == monthYear)

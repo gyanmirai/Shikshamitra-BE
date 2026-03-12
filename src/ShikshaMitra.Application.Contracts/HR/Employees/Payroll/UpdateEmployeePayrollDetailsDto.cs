@@ -11,10 +11,10 @@ namespace ShikshaMitra.HR.Employees.Payroll;
 public class UpdateEmployeePayrollDetailsDto : IValidatableObject
 {
 	public PayrollDetailsDto PayrollDetails { get; set; } = new();
-	
+
 	[Required]
 	public List<PayrollComponentDto> Earnings { get; set; } = new();
-	
+
 	[Required]
 	public List<PayrollComponentDto> Deductions { get; set; } = new();
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -45,8 +45,8 @@ public class ReceiptBookController : AbpController
     /// <returns>Paginated list of receipt books</returns>
     [HttpGet]
     public Task<ReceiptBookListResponse> GetListAsync(
-        [FromQuery] Guid academicYearId, 
-        [FromQuery] int page = 1, 
+        [FromQuery] Guid academicYearId,
+        [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
         [FromQuery] string search = null)
     {

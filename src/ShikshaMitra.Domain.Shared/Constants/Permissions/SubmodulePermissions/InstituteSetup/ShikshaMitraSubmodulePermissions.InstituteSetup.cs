@@ -37,12 +37,12 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.BasicInformation";
 			private const string SubmoduleDisplayName = $"{DisplayName}.BasicInformation";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Edit = $"{SubmoduleName}.Edit";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Edit, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -59,12 +59,12 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.AcademicSetup";
 			private const string SubmoduleDisplayName = $"{DisplayName}.AcademicSetup";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Edit = $"{SubmoduleName}.Edit";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Edit, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -81,12 +81,12 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.ShiftManagement";
 			private const string SubmoduleDisplayName = $"{DisplayName}.ShiftManagement";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Edit = $"{SubmoduleName}.Edit";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Edit, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -103,12 +103,12 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.RoomsManagement";
 			private const string SubmoduleDisplayName = $"{DisplayName}.RoomsManagement";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Edit = $"{SubmoduleName}.Edit";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Edit, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{

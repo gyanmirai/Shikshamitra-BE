@@ -84,6 +84,7 @@ public class UpdateEmployeeBasicInfoDto : IValidatableObject
 	public Country? Country { get; set; }
 
 	[MaxLength(20)]
+	[RegularExpression(@"^[0-9]{6,10}$", ErrorMessage = "PIN code must be 6-10 digits")]
 	public string? PinCode { get; set; }
 
 	public Guid? ShiftId { get; set; }

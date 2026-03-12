@@ -7,25 +7,25 @@ public class CreateBankAccountRequest
 {
     [Required]
     public string BankName { get; set; }
-    
+
     [Required]
     public string BranchName { get; set; }
-    
+
     public string? BranchAddress { get; set; }
-    
+
     [Required]
     public string AccountHolderName { get; set; }
-    
+
     public BankAccountType AccountType { get; set; }
-    
+
     [Required]
     public string AccountNumber { get; set; }
-    
+
     public string? Purpose { get; set; }
-    
+
     [Required]
     public string IfscCode { get; set; }
-    
+
     public string? UpiId { get; set; }
 }
 

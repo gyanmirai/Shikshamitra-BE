@@ -134,8 +134,8 @@ public class RegistrationController : AbpControllerBase
 	}
 
 	/// <summary>
-	/// Creates a new student directly in Registration status without going through 
-	/// the inquiry or registration form issued flow. This allows direct registration 
+	/// Creates a new student directly in Registration status without going through
+	/// the inquiry or registration form issued flow. This allows direct registration
 	/// of students from the Registration screen.
 	/// </summary>
 	/// <param name="input">General information data including education medium</param>

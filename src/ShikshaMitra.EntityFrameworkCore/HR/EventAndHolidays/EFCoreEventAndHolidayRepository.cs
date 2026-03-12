@@ -7,5 +7,5 @@ namespace ShikshaMitra.HR.EventAndHolidays;
 
 public class EFCoreEventAndHolidayRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider) : EfCoreRepository<ShikshaMitraDbContext, EventAndHoliday,Guid>(dbContextProvider),IEventAndHolidayRepository
 {
-	
+
 }

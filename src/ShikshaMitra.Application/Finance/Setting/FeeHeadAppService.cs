@@ -49,7 +49,7 @@ public class FeeHeadAppService : ApplicationService, IFeeHeadAppService
     public async Task<FeeHeadListResponse> GetListAsync(Guid academicYearId, Guid? feeCategoryId = null, string search = null, int page = 1, int pageSize = 10)
     {
         var query = await _feeHeadRepository.GetQueryableAsync();
-        
+
         query = query.Where(x => x.AcademicYearId == academicYearId);
 
         if (feeCategoryId.HasValue)
@@ -101,7 +101,7 @@ public class FeeHeadAppService : ApplicationService, IFeeHeadAppService
     public async Task<MessageResponse> UpdateAsync(Guid feeHeadId, FeeHeadUpdateRequest input)
     {
         var feeHead = await _feeHeadRepository.GetAsync(feeHeadId);
-        
+
         feeHead.Update(input.FeeCategoryId, input.Name, input.Description);
 
         await _feeHeadRepository.UpdateAsync(feeHead);
@@ -125,7 +125,7 @@ public class FeeHeadAppService : ApplicationService, IFeeHeadAppService
     public async Task<MessageResponse> UpdateStatusAsync(Guid feeHeadId, FeeHeadStatusUpdateRequest input)
     {
         var feeHead = await _feeHeadRepository.GetAsync(feeHeadId);
-        
+
         feeHead.SetActiveStatus(input.IsActive);
 
         await _feeHeadRepository.UpdateAsync(feeHead);

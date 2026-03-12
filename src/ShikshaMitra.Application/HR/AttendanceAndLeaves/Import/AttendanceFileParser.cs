@@ -44,7 +44,7 @@ public class AttendanceFileParser : ITransientDependency
 	/// Parses attendance file (Excel or CSV) and extracts rows
 	/// </summary>
 	public async Task<AttendanceFileParseResult> ParseFileAsync(
-		Stream fileStream, 
+		Stream fileStream,
 		string fileName,
 		CancellationToken cancellationToken = default)
 	{
@@ -121,7 +121,7 @@ public class AttendanceFileParser : ITransientDependency
 		// Parse header row
 		var headerRow = usedRows[0];
 		var columnMapping = ParseHeaderRow(headerRow, result);
-		
+
 		if (!result.IsValid)
 			return;
 
@@ -129,7 +129,7 @@ public class AttendanceFileParser : ITransientDependency
 		foreach (var row in usedRows.Skip(1))
 		{
 			var rowNumber = row.RowNumber();
-			
+
 			// Skip empty rows
 			if (row.CellsUsed().Count() == 0)
 				continue;
@@ -158,7 +158,7 @@ public class AttendanceFileParser : ITransientDependency
 	private async Task ParseCsvFileAsync(Stream fileStream, AttendanceFileParseResult result)
 	{
 		using var reader = new StreamReader(fileStream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-		
+
 		var config = new CsvConfiguration(CultureInfo.InvariantCulture)
 		{
 			HasHeaderRecord = true,

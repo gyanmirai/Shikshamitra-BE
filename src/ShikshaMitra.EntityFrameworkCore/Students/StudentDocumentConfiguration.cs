@@ -13,7 +13,7 @@ public class StudentDocumentConfiguration : IEntityTypeConfiguration<StudentDocu
 	public void Configure(EntityTypeBuilder<StudentDocument> builder)
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StudentDocuments", ShikshaMitraConsts.DbSchema);
-		
+
 		// Apply default configurations based on ABP conventions
 		builder.ConfigureByConvention();
 

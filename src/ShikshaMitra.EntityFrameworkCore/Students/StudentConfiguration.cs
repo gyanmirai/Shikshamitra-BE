@@ -9,21 +9,21 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 	public void Configure(EntityTypeBuilder<Student> builder)
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "Students", ShikshaMitraConsts.DbSchema);
-		
+
 		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();
-		
+
 		// Configure admission approval columns
 		builder.Property(x => x.AdmissionApprovalStatus)
 			.HasDefaultValue(StudentEnrollmentApprovalState.Pending);
-		
+
 		builder.Property(x => x.AdmissionApprovalRemarks)
 			.HasMaxLength(1000);
-		
+
 		// Add indexes for filtering by admission status and academic year
 		builder.HasIndex(x => new { x.AdmissionApprovalStatus, x.DivisionId });
 		builder.HasIndex(x => new { x.AcademicYearId, x.Status });
-		
+
 		// Configure navigation properties to load aggregate parts together
 		// This ensures the aggregate is loaded as a complete unit
 		builder.HasOne(x => x.AdditionalDetail)

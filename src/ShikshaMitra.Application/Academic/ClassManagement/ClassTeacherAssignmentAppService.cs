@@ -82,10 +82,10 @@ public class ClassTeacherAssignmentAppService(
 		// Get employees who are assigned as class teachers with predicate filtering
 		var teacherIds = classTeachers.Select(ct => ct.TeacherId).Distinct().ToList();
 		var employees = await employeeRepository.GetListAsync(e => teacherIds.Contains(e.Id));
-		
+
 		// Get only the required users using IdentityUserManager queryable
 		var userIds = employees.Where(e => e.UserId.HasValue).Select(e => e.UserId!.Value).Distinct().ToList();
-		var users = userIds.Any() 
+		var users = userIds.Any()
 			? await AsyncExecuter.ToListAsync(identityUserManager.Users.Where(u => userIds.Contains(u.Id)))
 			: new List<IdentityUser>();
 
@@ -154,7 +154,7 @@ public class ClassTeacherAssignmentAppService(
 			// Verify all teachers exist
 			var employees = await employeeRepository.GetListAsync(e => teacherIds.Contains(e.Id));
 			var employeeIds = employees.Select(e => e.Id).ToHashSet();
-			
+
 			var missingTeachers = teacherIds.Where(id => !employeeIds.Contains(id)).ToList();
 			if (missingTeachers.Any())
 			{
@@ -165,7 +165,7 @@ public class ClassTeacherAssignmentAppService(
 			// Verify all standards exist and get education medium stages
 			var standards = await standardRepository.GetListAsync(s => classIds.Contains(s.Id));
 			var standardIds = standards.Select(s => s.Id).ToHashSet();
-			
+
 			var missingStandards = classIds.Where(id => !standardIds.Contains(id)).ToList();
 		if (missingStandards.Any())
 		{
@@ -176,7 +176,7 @@ public class ClassTeacherAssignmentAppService(
 		// Verify all divisions exist
 		var divisions = await divisionRepository.GetListAsync(d => divisionIds.Contains(d.Id));
 		var divisionIdsFound = divisions.Select(d => d.Id).ToHashSet();
-		
+
 		var missingDivisions = divisionIds.Where(id => !divisionIdsFound.Contains(id)).ToList();
 		if (missingDivisions.Any())
 		{
@@ -215,7 +215,7 @@ public class ClassTeacherAssignmentAppService(
 					// Create new assignment
 					var standard = standardLookup[assignment.ClassId];
 					var educationMediumStage = educationMediumStageLookup[standard.EducationMediumStageId];
-					
+
 					var newAssignment = new ClassTeacher.ClassTeacher(
 						guidGenerator.Create(),
 						CurrentTenant.Id,
@@ -224,7 +224,7 @@ public class ClassTeacherAssignmentAppService(
 						assignment.TeacherId,
 						educationMediumStage.EducationMediumId
 					);
-					
+
 					await classTeacherRepository.InsertAsync(newAssignment);
 				}
 			}

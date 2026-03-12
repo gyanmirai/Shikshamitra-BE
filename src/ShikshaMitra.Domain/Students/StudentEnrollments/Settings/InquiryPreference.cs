@@ -20,7 +20,7 @@ public class InquiryPreference : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// The academic year this preference belongs to
 	/// </summary>
 	public Guid AcademicYearId { get; private set; }
-	
+
 	/// <summary>
 	/// Name of the preference (e.g., "Online", "Offline", "Facebook")
 	/// </summary>

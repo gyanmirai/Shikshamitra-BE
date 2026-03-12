@@ -35,7 +35,7 @@ public class ChapterAppService(
 			);
 
 			await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
-		
+
 			return ObjectMapper.Map<
 				AssignedSubjectChapter,
 				ChapterDto>(assignedSubject.Chapters.Last());

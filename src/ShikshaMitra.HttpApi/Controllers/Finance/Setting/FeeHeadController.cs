@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -46,10 +46,10 @@ public class FeeHeadController : AbpController
     /// <returns>Paginated list of fee heads</returns>
     [HttpGet]
     public Task<FeeHeadListResponse> GetListAsync(
-        [FromQuery] Guid academicYearId, 
-        [FromQuery] Guid? feeCategoryId = null, 
-        [FromQuery] string search = null, 
-        [FromQuery] int page = 1, 
+        [FromQuery] Guid academicYearId,
+        [FromQuery] Guid? feeCategoryId = null,
+        [FromQuery] string search = null,
+        [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10)
     {
         return _feeHeadAppService.GetListAsync(academicYearId, feeCategoryId, search, page, pageSize);

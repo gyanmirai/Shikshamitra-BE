@@ -22,10 +22,14 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 public class FamilyInfoController : AbpControllerBase
 {
 	private readonly IEmployeeAppService _employeeAppService;
+	private readonly IEmployeeAuthorizationService _authorizationService;
 
-	public FamilyInfoController(IEmployeeAppService employeeAppService)
+	public FamilyInfoController(
+		IEmployeeAppService employeeAppService,
+		IEmployeeAuthorizationService authorizationService)
 	{
 		_employeeAppService = employeeAppService;
+		_authorizationService = authorizationService;
 	}
 
 	/// <summary>
@@ -33,6 +37,7 @@ public class FamilyInfoController : AbpControllerBase
 	/// </summary>
 	[HttpPut("{employeeId}/family-info")]
 	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	[ProducesResponseType(StatusCodes.Status500InternalServerError)]
 	public virtual async Task<IActionResult> UpdateAsync(
@@ -50,10 +55,14 @@ public class FamilyInfoController : AbpControllerBase
 	/// </summary>
 	[HttpGet("{employeeId}/family-info")]
 	[ProducesResponseType(typeof(FamilyInfoResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	[ProducesResponseType(StatusCodes.Status500InternalServerError)]
 	public virtual async Task<FamilyInfoResponse> GetAsync([FromRoute, Required] Guid employeeId)
 	{
+		// Check access rights (IDOR protection)
+		await _authorizationService.CheckEmployeeAccessAsync(employeeId);
+
 		var employee = await _employeeAppService.GetAsync(employeeId);
 
 		return FamilyInfoContractMapper.ToResponse(

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -36,33 +36,33 @@ public class SalaryDetailsContract
 	/// Provident Fund rule ID
 	/// </summary>
 	public Guid? PfRuleId { get; set; }
-	
+
 	/// <summary>
 	/// Employee Provident Fund number
 	/// </summary>
 	public string? EpfNumber { get; set; }
-	
+
 	/// <summary>
 	/// Universal Account Number
 	/// </summary>
 	public string? UanNumber { get; set; }
-	
+
 	/// <summary>
 	/// Basic salary amount
 	/// </summary>
 	public decimal? BasicSalary { get; set; }
-	
+
 	/// <summary>
 	/// Punch/Attendance ID
 	/// </summary>
 	public string? PunchId { get; set; }
-	
+
 	/// <summary>
 	/// TDS percentage (0-100)
 	/// </summary>
 	[Range(0, 100)]
 	public decimal? TdsPercentage { get; set; }
-	
+
 	/// <summary>
 	/// Calculated TDS amount
 	/// </summary>
@@ -79,7 +79,7 @@ public class ComponentAmountContract
 	/// </summary>
 	[Required]
 	public Guid ComponentId { get; set; }
-	
+
 	/// <summary>
 	/// Amount for this component
 	/// </summary>

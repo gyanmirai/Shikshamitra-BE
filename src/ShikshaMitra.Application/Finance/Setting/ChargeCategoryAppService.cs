@@ -39,7 +39,7 @@ public class ChargeCategoryAppService : ApplicationService, IChargeCategoryAppSe
     public async Task<PaginatedChargeCategoryResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
     {
         var query = await _chargeCategoryRepository.GetQueryableAsync();
-        
+
         query = query.Where(x => x.AcademicYearId == academicYearId);
 
         if (!search.IsNullOrWhiteSpace())
@@ -48,7 +48,7 @@ public class ChargeCategoryAppService : ApplicationService, IChargeCategoryAppSe
         }
 
         var totalCount = await AsyncExecuter.CountAsync(query);
-        
+
         var items = await AsyncExecuter.ToListAsync(
             query
             .OrderByDescending(x => x.CreationTime)

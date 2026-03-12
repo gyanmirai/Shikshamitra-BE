@@ -44,7 +44,7 @@ public class StudentEmailService : IStudentEmailService, ITransientDependency
                 subject: "Congratulations! Your Admission is Approved - ShikshaMitra",
                 body: htmlBody,
                 isBodyHtml: true);
-                
+
         }
         catch (Exception ex)
         {
@@ -89,22 +89,22 @@ public class StudentEmailService : IStudentEmailService, ITransientDependency
                 <div class='content'>
                     <p>Dear <strong>{HtmlEncoder.Default.Encode(studentName)}</strong>,</p>
                     <p>We are delighted to inform you that your admission to <strong>ShikshaMitra</strong> has been officially approved! We are excited to have you join our academic community.</p>
-                    
+
                     <p>Your student account has been created. You can now access the student portal using the following credentials:</p>
-            
+
                     <div class='credentials'>
                         <p style='margin: 5px 0;'><span class='label'>Username:</span> <span class='value'>{encodedUsername}</span></p>
                         <p style='margin: 5px 0;'><span class='label'>Password:</span> <span class='value'>{encodedPassword}</span></p>
                     </div>
-            
+
                     <p><strong>Note:</strong> For security reasons, please change your password immediately upon your first login.</p>
-            
+
                     <div class='action-box'>
                         <a href='#' class='button'>Login to Student Portal</a>
                     </div>
-            
+
                     <p style='margin-top: 30px;'>If you have any questions, please contact the admissions department.</p>
-            
+
                     <p>Warm regards,<br/>
                     <strong>The Admissions Team<br/>ShikshaMitra</strong></p>
                 </div>

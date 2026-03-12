@@ -9,7 +9,7 @@ public class TeacherSubjectAllocationConfiguration : IEntityTypeConfiguration<Te
 	public void Configure(EntityTypeBuilder<TeacherSubjectAllocation> builder)
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "TeacherSubjectAllocations", ShikshaMitraConsts.DbSchema);
-		
+
 		// Apply default configurations based on ABP conventions
 		builder.ConfigureByConvention();
 
@@ -17,14 +17,14 @@ public class TeacherSubjectAllocationConfiguration : IEntityTypeConfiguration<Te
 		builder.OwnsMany(x => x.Teachers, teachers =>
 		{
 			teachers.ToTable(ShikshaMitraConsts.DbTablePrefix + "AllocatedTeachers", ShikshaMitraConsts.DbSchema);
-			
+
 			// Configure composite key
 			teachers.HasKey(t => new { t.TeacherSubjectAllocationId, t.TeacherId });
-			
+
 			// Configure the foreign key relationship
 			teachers.WithOwner(t => t.Allocation)
 				.HasForeignKey(t => t.TeacherSubjectAllocationId);
-			
+
 			// Index for performance
 			teachers.HasIndex(t => t.TeacherId);
 		});

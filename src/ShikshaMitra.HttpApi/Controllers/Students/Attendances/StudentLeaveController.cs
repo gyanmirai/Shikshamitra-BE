@@ -18,12 +18,12 @@ namespace ShikshaMitra.Students.Attendances;
 public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 {
 	private readonly IStudentLeaveAppService _studentLeaveAppService;
-	
+
 	public StudentLeaveController(IStudentLeaveAppService studentLeaveAppService)
 	{
 		_studentLeaveAppService = studentLeaveAppService;
 	}
-	
+
 	/// <summary>
 	/// Gets a paginated list of student leave requests
 	/// GET: api/students/attendance/leaves
@@ -36,7 +36,7 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	{
 		return _studentLeaveAppService.GetListAsync(input);
 	}
-	
+
 	/// <summary>
 	/// Gets a student leave request by ID
 	/// GET: api/students/attendance/leaves/{id}
@@ -49,7 +49,7 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	{
 		return _studentLeaveAppService.GetAsync(id);
 	}
-	
+
 	/// <summary>
 	/// Creates a new student leave request
 	/// POST: api/students/attendance/leaves
@@ -62,7 +62,7 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	{
 		return _studentLeaveAppService.CreateAsync(input);
 	}
-	
+
 	/// <summary>
 	/// Updates an existing student leave request (only if status is Pending)
 	/// PUT: api/students/attendance/leaves/{id}
@@ -76,7 +76,7 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	{
 		return _studentLeaveAppService.UpdateAsync(id, input);
 	}
-	
+
 	/// <summary>
 	/// Deletes a student leave request
 	/// DELETE: api/students/attendance/leaves/{id}
@@ -88,7 +88,7 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	{
 		return _studentLeaveAppService.DeleteAsync(id);
 	}
-	
+
 	/// <summary>
 	/// Approves a student leave request
 	/// POST: api/students/attendance/leaves/{id}/approve
@@ -102,7 +102,7 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	{
 		return _studentLeaveAppService.ApproveAsync(id, input);
 	}
-	
+
 	/// <summary>
 	/// Rejects a student leave request
 	/// POST: api/students/attendance/leaves/{id}/reject
@@ -116,7 +116,7 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	{
 		return _studentLeaveAppService.RejectAsync(id, input);
 	}
-	
+
 	/// <summary>
 	/// Downloads the attachment file for a leave request
 	/// GET: api/students/attendance/leaves/{id}/attachment
@@ -129,7 +129,7 @@ public class StudentLeaveController : AbpControllerBase, IStudentLeaveAppService
 	{
 		return _studentLeaveAppService.GetAttachmentAsync(id);
 	}
-	
+
 	/// <summary>
 	/// Downloads the attachment file as a file download
 	/// GET: api/students/attendance/leaves/{id}/attachment/download

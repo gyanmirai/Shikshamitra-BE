@@ -13,27 +13,27 @@ public class RunPayrollResponse
 	/// Indicates whether payroll is already generated (locked) for the month
 	/// </summary>
 	public bool IsGenerated { get; set; }
-	
+
 	/// <summary>
 	/// Total number of employees
 	/// </summary>
 	public int TotalCount { get; set; }
-	
+
 	/// <summary>
 	/// Current page index (0-based)
 	/// </summary>
 	public int CurrentPage { get; set; }
-	
+
 	/// <summary>
 	/// Page size
 	/// </summary>
 	public int PageSize { get; set; }
-	
+
 	/// <summary>
 	/// Total number of pages
 	/// </summary>
 	public int TotalPages { get; set; }
-	
+
 	/// <summary>
 	/// Payroll items for employees
 	/// </summary>
@@ -49,47 +49,47 @@ public class RunPayrollItem
 	/// Employee full name
 	/// </summary>
 	public string EmployeeName { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Employee code/identifier
 	/// </summary>
 	public string EmployeeIdentifier { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Whether employee is teaching staff
 	/// </summary>
 	public bool IsTeaching { get; set; }
-	
+
 	/// <summary>
 	/// Basic salary amount
 	/// </summary>
 	public double BasicSalary { get; set; }
-	
+
 	/// <summary>
 	/// Gross salary (sum of all earnings)
 	/// </summary>
 	public double GrossSalary { get; set; }
-	
+
 	/// <summary>
 	/// Total deductions
 	/// </summary>
 	public double TotalDeduction { get; set; }
-	
+
 	/// <summary>
 	/// Net pay (Gross - Deductions)
 	/// </summary>
 	public double NetPay { get; set; }
-	
+
 	/// <summary>
 	/// Number of present days in the month
 	/// </summary>
 	public double PresentDays { get; set; }
-	
+
 	/// <summary>
 	/// Number of half working days (half-day leaves)
 	/// </summary>
 	public double HalfWorkingDays { get; set; }
-	
+
 	/// <summary>
 	/// Total working days in the month (business days excluding holidays)
 	/// </summary>
@@ -159,12 +159,12 @@ public class GetRunPayrollInput
 	/// Month in MMMM-YYYY format
 	/// </summary>
 	public string Month { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Page index (0-based)
 	/// </summary>
 	public int Page { get; set; }
-	
+
 	/// <summary>
 	/// Page size
 	/// </summary>

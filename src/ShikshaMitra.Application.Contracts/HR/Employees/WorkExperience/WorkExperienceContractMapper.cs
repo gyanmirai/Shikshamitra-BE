@@ -27,7 +27,7 @@ public static class WorkExperienceContractMapper
 		if (!string.IsNullOrEmpty(request.City)) addressParts.Add(request.City);
 		if (request.State != null && !string.IsNullOrEmpty(request.State.Name)) addressParts.Add(request.State.Name);
 		if (request.Country != null && !string.IsNullOrEmpty(request.Country.Name)) addressParts.Add(request.Country.Name);
-		
+
 		var organizationAddress = addressParts.Count > 0 ? string.Join(", ", addressParts) : null;
 
 		return new CreateUpdateWorkExperienceDto

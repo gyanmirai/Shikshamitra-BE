@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
 using ShikshaMitra.Application.Contracts.Finance.Setting.ConcessionType.Dtos;
@@ -15,9 +15,9 @@ public interface IConcessionTypeAppService : IApplicationService
     Task<MutationResponse> DeleteAsync(Guid id);
 }
 
-// Defining MutationResponse locally if not available commonly, 
+// Defining MutationResponse locally if not available commonly,
 // but it seems used in other places. I'll define it here if needed or assume it exists.
-// Based on previous tasks, it seems standard. 
+// Based on previous tasks, it seems standard.
 // Just in case, I'll add a simple definition or reuse if I find where it is.
 // Actually, I saw it in the spec. I'll define it in Responses if not already there or use a common one.
 // Let's check FeeCategory DTOs for MessageResponse/MutationResponse availability.

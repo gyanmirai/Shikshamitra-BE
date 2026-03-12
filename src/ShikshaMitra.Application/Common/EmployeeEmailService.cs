@@ -9,7 +9,7 @@ using Volo.Abp.Emailing;
 namespace ShikshaMitra.Common;
 
 /// <summary>
-/// Email service for employee-related communications 
+/// Email service for employee-related communications
 /// </summary>
 public class EmployeeEmailService : IEmployeeEmailService, ITransientDependency
 {
@@ -100,26 +100,26 @@ public class EmployeeEmailService : IEmployeeEmailService, ITransientDependency
 				<div class='content'>
 					<p>Dear <strong>{HtmlEncoder.Default.Encode(employeeName)}</strong>,</p>
 					<p>Welcome to the ShikshaMitra platform! Your employee account has been successfully created. Below are your login credentials:</p>
-            
+
 					<div class='credentials'>
 						<p><span class='label'>Username:</span> <span class='value'>{encodedUsername}</span></p>
 						<p><span class='label'>Password:</span> <span class='value'>{encodedPassword}</span></p>
 					</div>
-            
+
 					<div class='warning'>
 						<strong>⚠️ Important Security Notice:</strong>
 						<p>Please keep your credentials secure and confidential. We recommend that you change your password on your first login. Never share your credentials with anyone.</p>
 					</div>
-            
+
 					<p><strong>Next Steps:</strong></p>
 					<ol>
 						<li>Log in to ShikshaMitra with your credentials</li>
 						<li>Update your password immediately</li>
 						<li>Contact HR if you need any assistance</li>
 					</ol>
-            
+
 					<p>If you have any questions or encounter any issues, please reach out to the HR department.</p>
-            
+
 					<p>Best regards,<br/>
 					<strong>ShikshaMitra Administration Team</strong></p>
 				</div>

@@ -41,7 +41,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public InquiryPreference? InquiryPreference { get; private set; }
 	public EducationMedium? AcademicMedium { get; private set; }
 
-	public ICollection<StudentNote> Notes { get; private set; } = new List<StudentNote>(); 
+	public ICollection<StudentNote> Notes { get; private set; } = new List<StudentNote>();
 
 	private Student()
 	{

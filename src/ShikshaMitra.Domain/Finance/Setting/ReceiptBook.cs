@@ -28,10 +28,10 @@ public class ReceiptBook : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public string Name { get; private set; }
     public string Prefix { get; private set; }
     public string Suffix { get; private set; }
-    
+
     public long StartingNumber { get; private set; }
     public long EndingNumber { get; private set; }
-    
+
     public string Description { get; private set; }
 
     public bool IsActive { get; private set; }
@@ -39,18 +39,18 @@ public class ReceiptBook : FullAuditedAggregateRoot<Guid>, IMultiTenant
     private ReceiptBook() { }
 
     public ReceiptBook(
-        Guid id, 
-        Guid? tenantId, 
-        Guid academicYearId, 
-        Guid boardId, 
-        Guid mediumId, 
-        Guid mediumStageId, 
-        string name, 
-        string prefix, 
-        string suffix, 
-        long startingNumber, 
-        long endingNumber, 
-        string description, 
+        Guid id,
+        Guid? tenantId,
+        Guid academicYearId,
+        Guid boardId,
+        Guid mediumId,
+        Guid mediumStageId,
+        string name,
+        string prefix,
+        string suffix,
+        long startingNumber,
+        long endingNumber,
+        string description,
         bool isActive = true) : base(id)
     {
         TenantId = tenantId;

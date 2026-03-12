@@ -12,7 +12,7 @@ public class ApiSuccessWithIdResponseDto : ApiSuccessResponseDto
 	/// The unique identifier of the created resource
 	/// </summary>
 	public Guid Id { get; set; }
-	
+
 	/// <summary>
 	/// Creates a success response with the specified message and resource ID
 	/// </summary>

@@ -153,7 +153,7 @@ public class UserScopeService : DomainService, IUserScopeService
     {
         var user = await _userRepository.GetAsync(userId, includeDetails: true, cancellationToken: cancellationToken);
         var roleIds = user.Roles.Select(r => r.RoleId).ToList();
-        
+
         if (!roleIds.Any())
         {
             return false;

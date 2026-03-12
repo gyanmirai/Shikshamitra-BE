@@ -24,15 +24,15 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 	public async Task<bool> IsPolicyNameExistsAsync(Guid educationMediumStageId, string policyName, Guid? excludeId = null)
 	{
 		var dbSet = await GetDbSetAsync();
-		var query = dbSet.Where(x => 
-			x.EducationMediumStageId == educationMediumStageId && 
+		var query = dbSet.Where(x =>
+			x.EducationMediumStageId == educationMediumStageId &&
 			x.PolicyName.ToLower() == policyName.ToLower());
-		
+
 		if (excludeId.HasValue)
 		{
 			query = query.Where(x => x.Id != excludeId.Value);
 		}
-		
+
 		return await query.AnyAsync();
 	}
 
@@ -40,8 +40,8 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 	{
 		var dbSet = await GetDbSetAsync();
 		return await dbSet
-			.Where(x => 
-				x.EducationMediumStageId == educationMediumStageId && 
+			.Where(x =>
+				x.EducationMediumStageId == educationMediumStageId &&
 				x.PolicyName.ToLower() == policyName.ToLower())
 			.Include(x => x.LeaveType)
 			.FirstOrDefaultAsync();
@@ -56,7 +56,7 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
-		
+
 		// Build base query with includes
 		IQueryable<LeavePolicy> query = dbSet
 			.Include(x => x.LeaveType)

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using Volo.Abp.Application.Services;
@@ -33,8 +33,8 @@ public class EmployeeStatusAppService : ApplicationService, IEmployeeStatusAppSe
 
 		// Update the status using domain manager
 		employee = await _employeeManager.UpdateEmployeeStatusAsync(
-			employeeId, 
-			input.EmployeeStatusType, 
+			employeeId,
+			input.EmployeeStatusType,
 			null);
 
 		// Save the changes

@@ -19,12 +19,12 @@ public interface IDeductionComponentAppService : ICrudAppService<
 	/// Get all active deduction components with pagination support
 	/// </summary>
 	Task<PagedResultDto<DeductionComponentDto>> GetAllActiveAsync(PagedResultRequestDto input);
-	
+
 	/// <summary>
 	/// Activate a deduction component
 	/// </summary>
 	Task ActivateAsync(Guid id);
-	
+
 	/// <summary>
 	/// Deactivate a deduction component
 	/// </summary>

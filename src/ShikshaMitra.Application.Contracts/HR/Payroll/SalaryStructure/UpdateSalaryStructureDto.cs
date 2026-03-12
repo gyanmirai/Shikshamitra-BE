@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using ShikshaMitra.HR.Employees.Payroll;
 
@@ -14,7 +14,7 @@ public class UpdateSalaryStructureDto : IValidatableObject
 	/// </summary>
 	[Required]
 	public List<SalaryComponentDto> EarningComponents { get; set; } = new();
-	
+
 	/// <summary>
 	/// List of deduction components.
 	/// </summary>

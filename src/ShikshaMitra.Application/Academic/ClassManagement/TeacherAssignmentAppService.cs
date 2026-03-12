@@ -152,7 +152,7 @@ public class TeacherAssignmentAppService(
 			}
 
 			var subjectIds = assignments.Select(a => a.SubjectId).Distinct().ToList();
-			
+
 			List<Subject> subjects;
 			try
 			{
@@ -170,7 +170,7 @@ public class TeacherAssignmentAppService(
 			// Get all teacher allocations for this class - handle table not existing
 			var divisionIds = divisions.Select(d => d.Id).ToList();
 			List<TeacherSubjectAllocation> allocations = new List<TeacherSubjectAllocation>();
-			
+
 			try
 			{
 				allocations = await allocationRepository.GetListAsync(a =>
@@ -180,7 +180,7 @@ public class TeacherAssignmentAppService(
 					includeDetails: true
 				);
 			}
-			catch (Exception ex) when (ex.Message.Contains("42P01") || 
+			catch (Exception ex) when (ex.Message.Contains("42P01") ||
 			                           ex.Message.Contains("does not exist") ||
 			                           ex.InnerException?.Message.Contains("42P01") == true ||
 			                           ex.InnerException?.Message.Contains("does not exist") == true)
@@ -209,7 +209,7 @@ public class TeacherAssignmentAppService(
 
 			List<Employee> employees = new List<Employee>();
 			List<IdentityUser> users = new List<IdentityUser>();
-			
+
 			if (teacherIds.Any())
 			{
 				try
@@ -424,7 +424,7 @@ public class TeacherAssignmentAppService(
 			}
 
 			var employeeIds = employees.Select(e => e.Id).ToHashSet();
-			
+
 			var missingTeachers = allTeacherIds.Where(id => !employeeIds.Contains(id)).ToList();
 			if (missingTeachers.Any())
 			{
@@ -440,11 +440,11 @@ public class TeacherAssignmentAppService(
 
 			// Validate divisions exist
 			var divisionIds = input.Assignments.Select(a => a.DivisionId).Distinct().ToList();
-			
+
 			List<Division> divisions;
 			try
 			{
-				divisions = await divisionRepository.GetListAsync(d => 
+				divisions = await divisionRepository.GetListAsync(d =>
 					divisionIds.Contains(d.Id) && d.StandardId == input.ClassId);
 			}
 			catch (Exception ex)
@@ -458,7 +458,7 @@ public class TeacherAssignmentAppService(
 
 			var validDivisionIds = divisions.Select(d => d.Id).ToHashSet();
 			var invalidDivisions = divisionIds.Where(id => !validDivisionIds.Contains(id)).ToList();
-			
+
 			if (invalidDivisions.Any())
 			{
 				logger.LogWarning(
@@ -474,7 +474,7 @@ public class TeacherAssignmentAppService(
 
 			// Validate subjects exist
 			var subjectIds = input.Assignments.Select(a => a.SubjectId).Distinct().ToList();
-			
+
 			List<Subject> subjects;
 			try
 			{
@@ -491,7 +491,7 @@ public class TeacherAssignmentAppService(
 
 			var validSubjectIds = subjects.Select(s => s.Id).ToHashSet();
 			var invalidSubjects = subjectIds.Where(id => !validSubjectIds.Contains(id)).ToList();
-			
+
 			if (invalidSubjects.Any())
 			{
 				logger.LogWarning(
@@ -515,7 +515,7 @@ public class TeacherAssignmentAppService(
 					includeDetails: true
 				);
 			}
-			catch (Exception ex) when (ex.Message.Contains("42P01") || 
+			catch (Exception ex) when (ex.Message.Contains("42P01") ||
 			                           ex.Message.Contains("does not exist") ||
 			                           ex.InnerException?.Message.Contains("42P01") == true ||
 			                           ex.InnerException?.Message.Contains("does not exist") == true)
@@ -538,7 +538,7 @@ public class TeacherAssignmentAppService(
 					code: "ClassManagement:DatabaseError"
 				);
 			}
-			
+
 			// Create lookup for O(1) access
 			var allocationLookup = existingAllocations.ToDictionary(
 				a => (a.DivisionId, a.SubjectId)
@@ -573,17 +573,17 @@ public class TeacherAssignmentAppService(
 						// Update existing allocation - remove old teachers and add new ones
 						var currentTeacherIds = existingAllocation.Teachers?.Select(t => t.TeacherId).ToHashSet() ?? new HashSet<Guid>();
 						var newTeacherIds = assignment.TeacherIds.ToHashSet();
-						
+
 						// Remove teachers that are no longer assigned
 						var teachersToRemove = existingAllocation.Teachers?
 							.Where(t => !newTeacherIds.Contains(t.TeacherId))
 							.ToList() ?? new List<AllocatedTeacher>();
-						
+
 						foreach (var teacher in teachersToRemove)
 						{
 							existingAllocation.Teachers?.Remove(teacher);
 						}
-						
+
 						// Add new teachers that aren't already assigned
 						var teachersToAdd = newTeacherIds.Except(currentTeacherIds);
 						foreach (var teacherId in teachersToAdd)
@@ -593,10 +593,10 @@ public class TeacherAssignmentAppService(
 								teacherId
 							));
 						}
-						
+
 						await allocationRepository.UpdateAsync(existingAllocation);
 						updatedCount++;
-						
+
 						logger.LogDebug(
 							"Updated allocation for Division {DivisionId}, Subject {SubjectId}",
 							assignment.DivisionId,
@@ -613,16 +613,16 @@ public class TeacherAssignmentAppService(
 							assignment.DivisionId,
 							assignment.SubjectId
 						);
-						
+
 						// Add teachers
 						foreach (var teacherId in assignment.TeacherIds)
 						{
 							newAllocation.Teachers.Add(new AllocatedTeacher(allocationId, teacherId));
 						}
-						
+
 						await allocationRepository.InsertAsync(newAllocation);
 						createdCount++;
-						
+
 						logger.LogDebug(
 							"Created new allocation for Division {DivisionId}, Subject {SubjectId}",
 							assignment.DivisionId,
@@ -715,12 +715,12 @@ public class TeacherAssignmentAppService(
 					code: "ClassManagement:DatabaseError"
 				);
 			}
-			
+
 			// Filter by EmployeeGroup.Teaching
-			employeesQuery = employeesQuery.Where(e => 
+			employeesQuery = employeesQuery.Where(e =>
 				e.EmployeeGroup == EmployeeGroupType.Teaching
 			);
-			
+
 			List<Employee> employees;
 			try
 			{
@@ -780,7 +780,7 @@ public class TeacherAssignmentAppService(
 					code: "ClassManagement:DatabaseError"
 				);
 			}
-			
+
 			// Filter employees to only those with non-null UserId before creating dictionary
 			var employeeLookup = employees
 				.Where(e => e.UserId.HasValue)

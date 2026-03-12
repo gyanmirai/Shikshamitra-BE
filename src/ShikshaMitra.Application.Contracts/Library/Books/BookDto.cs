@@ -12,9 +12,10 @@ public class BookDto
     public string Edition { get; set; }
     public string Subject { get; set; }
     public Guid CategoryId { get; set; }
-    public string Language { get; set; }
+    public int Language { get; set; }
     public string ApplicableAge { get; set; }
     public decimal Price { get; set; }
     public int Pages { get; set; }
     public int NumberOfCopies { get; set; }
+    public string? CoverImage { get; set; }
 }

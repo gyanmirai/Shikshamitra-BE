@@ -22,9 +22,11 @@ public class BookController : AbpController
     public Task<PaginatedResponse<BookDto>> GetListAsync(
         [FromQuery] Guid academicYearId,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 10)
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? search = null,
+        [FromQuery] string? alphabet = null)
     {
-        return _bookAppService.GetListAsync(academicYearId, page, pageSize);
+        return _bookAppService.GetListAsync(academicYearId, page, pageSize, search, alphabet);
     }
 
     [HttpPost]

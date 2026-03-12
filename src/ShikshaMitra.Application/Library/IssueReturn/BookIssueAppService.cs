@@ -275,6 +275,103 @@ public class BookIssueAppService(
         };
     }
 
+    public async Task<ReturnBookSearchDto> SearchReturnBookAsync(string accessionNo)
+    {
+        // Find book copy by accession number
+        var copyQuery = await _bookCopyRepository.GetQueryableAsync();
+        var copy = await AsyncExecuter.FirstOrDefaultAsync(
+            copyQuery.Where(c => c.AccessionNumber == accessionNo));
+
+        if (copy == null)
+            throw new UserFriendlyException($"Book copy with accession number '{accessionNo}' not found.", code: "404");
+
+        // Find active issue for this copy
+        var issueQuery = await _issueRepository.GetQueryableAsync();
+        var issue = await AsyncExecuter.FirstOrDefaultAsync(
+            issueQuery.Where(i =>
+                i.AccessionNumber == accessionNo &&
+                i.Status == BookIssueStatus.Issued));
+
+        if (issue == null)
+            throw new UserFriendlyException($"No active issue found for accession number '{accessionNo}'.", code: "404");
+
+        // Resolve book details
+        var book = await _bookRepository.GetAsync(copy.BookId);
+        var category = await _categoryRepository.FindAsync(book.CategoryId);
+
+        var bookDetails = new ReturnBookSearchBookDto
+        {
+            Id = book.Id,
+            AccessionNo = copy.AccessionNumber,
+            BookTitle = book.Title,
+            Author = book.Author,
+            Isbn = book.Isbn,
+            Publisher = book.Publisher,
+            AddedOn = book.CreationTime,
+            Language = (int)book.Language,
+            Edition = book.Edition,
+            Category = category?.Name ?? string.Empty,
+            Pages = book.Pages,
+            CoverImage = book.CoverImage
+        };
+
+        // Resolve member details
+        var memberDetails = new ReturnBookSearchMemberDto
+        {
+            Id = issue.MemberId
+        };
+
+        if (issue.MemberRole == 0) // Student
+        {
+            var student = await _studentRepository.FindAsync(issue.MemberId);
+            if (student != null)
+            {
+                memberDetails.MemberName = $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim();
+                memberDetails.Avatar = student.AdditionalDetail?.ProfilePictureUrl;
+                memberDetails.Email = student.ContactDetail?.Email;
+                memberDetails.Role = "Student";
+                memberDetails.RollNo = student.RollNo?.ToString();
+                memberDetails.GrNo = student.GrNo?.ToString();
+                memberDetails.Phone = student.ContactDetail?.PrimaryContactNo;
+                memberDetails.JoinDate = student.CreationTime;
+
+                string? standardName = null, divisionName = null;
+                if (student.StandardId.HasValue)
+                {
+                    var std = await _standardRepository.FindAsync(student.StandardId.Value);
+                    standardName = std?.Name;
+                }
+                if (student.DivisionId.HasValue)
+                {
+                    var div = await _divisionRepository.FindAsync(student.DivisionId.Value);
+                    divisionName = div?.Name;
+                }
+                memberDetails.ClassDivision = standardName != null && divisionName != null
+                    ? $"{standardName}-{divisionName}"
+                    : standardName ?? divisionName;
+            }
+        }
+        else // Employee
+        {
+            var employee = await _employeeRepository.FindAsync(issue.MemberId);
+            if (employee != null)
+            {
+                memberDetails.MemberName = $"{employee.FirstName} {employee.LastName}".Trim();
+                memberDetails.Avatar = employee.ProfilePictureBlobName;
+                memberDetails.Email = employee.Email;
+                memberDetails.Role = "Employee";
+                memberDetails.Phone = employee.MobileNo;
+                memberDetails.JoinDate = employee.CreationTime;
+            }
+        }
+
+        return new ReturnBookSearchDto
+        {
+            BookDetails = bookDetails,
+            MemberDetails = memberDetails
+        };
+    }
+
     private async Task<int> ResolveMemberRoleAsync(Guid memberId)
     {
         var student = await _studentRepository.FindAsync(memberId);

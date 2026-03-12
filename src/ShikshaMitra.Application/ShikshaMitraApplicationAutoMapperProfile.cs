@@ -138,7 +138,7 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 
 		// Library - Book mappings
 		CreateMap<ShikshaMitra.Library.Books.Book, ShikshaMitra.Library.Books.BookDto>()
-			.ForMember(dest => dest.Language, opt => opt.MapFrom(src => src.Language.ToString()));
+			.ForMember(dest => dest.Language, opt => opt.MapFrom(src => (int) src.Language));
 
 		// Library - BookCopy mappings
 		CreateMap<ShikshaMitra.Library.Books.BookCopy, ShikshaMitra.Library.Books.BookCopyDto>()

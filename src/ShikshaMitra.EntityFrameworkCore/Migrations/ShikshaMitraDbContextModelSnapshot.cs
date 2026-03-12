@@ -5368,6 +5368,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("character varying(40)")
                         .HasColumnName("ConcurrencyStamp");
 
+                    b.Property<string>("CoverImage")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("CreationTime");
@@ -11268,11 +11272,13 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Library.Setting.Sections.LibraryShelf", b =>
                 {
-                    b.HasOne("ShikshaMitra.Library.Setting.Sections.LibrarySection", null)
+                    b.HasOne("ShikshaMitra.Library.Setting.Sections.LibrarySection", "Section")
                         .WithMany("Shelves")
                         .HasForeignKey("SectionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Section");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceEntry", b =>

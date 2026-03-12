@@ -21,10 +21,27 @@ public class BookAppService(
     IRepository<BookReservation, Guid> _reservationRepository)
     : ApplicationService, IBookAppService
 {
-    public async Task<PaginatedResponse<BookDto>> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10)
+    public async Task<PaginatedResponse<BookDto>> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null, string? alphabet = null)
     {
         var query = await _bookRepository.GetQueryableAsync();
         query = query.Where(x => x.AcademicYearId == academicYearId);
+
+        // Search filter (title, author, or ISBN — min 2 chars)
+        if (!string.IsNullOrWhiteSpace(search) && search.Length >= 2)
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                x.Title.ToLower().Contains(s) ||
+                x.Author.ToLower().Contains(s) ||
+                x.Isbn.ToLower().Contains(s));
+        }
+
+        // Alphabet filter (first letter A-Z)
+        if (!string.IsNullOrWhiteSpace(alphabet) && alphabet.Length == 1 && char.IsLetter(alphabet[0]))
+        {
+            var letter = alphabet.Trim().ToUpper();
+            query = query.Where(x => x.Title.ToUpper().StartsWith(letter));
+        }
 
         var totalCount = await AsyncExecuter.CountAsync(query);
         var totalPages = (int) Math.Ceiling(totalCount / (double) pageSize);
@@ -80,13 +97,15 @@ public class BookAppService(
             Publisher = book.Publisher,
             Subject = book.Subject,
             Isbn = book.Isbn,
-            Language = book.Language.ToString(),
+            Language = (int) book.Language,
             Edition = book.Edition,
             Category = category != null
                 ? new NamedIdDto { Id = category.Id, Name = category.Name }
                 : new NamedIdDto { Id = book.CategoryId, Name = string.Empty },
+            ApplicableAge = book.ApplicableAge,
             Pages = book.Pages,
             Price = book.Price,
+            CoverImage = book.CoverImage,
             AddedOn = book.CreationTime,
             Copies = copies.Select(c => new BookDetailCopyDto
             {
@@ -133,6 +152,7 @@ public class BookAppService(
             academicYearId,
             CurrentTenant.Id
         );
+        entity.CoverImage = input.CoverImage;
 
         await _bookRepository.InsertAsync(entity, autoSave: true);
 
@@ -159,6 +179,7 @@ public class BookAppService(
         entity.Price = input.Price;
         entity.Pages = input.Pages;
         entity.NumberOfCopies = input.NumberOfCopies;
+        entity.CoverImage = input.CoverImage;
 
         await _bookRepository.UpdateAsync(entity, autoSave: true);
 

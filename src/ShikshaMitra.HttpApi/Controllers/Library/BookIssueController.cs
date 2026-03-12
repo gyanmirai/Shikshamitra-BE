@@ -51,4 +51,10 @@ public class BookIssueController : AbpController
     {
         return _bookIssueAppService.GetIssueReturnListAsync(page, pageSize);
     }
+
+    [HttpGet("return-book/search")]
+    public Task<ReturnBookSearchDto> SearchReturnBookAsync([FromQuery] string accessionNo)
+    {
+        return _bookIssueAppService.SearchReturnBookAsync(accessionNo);
+    }
 }

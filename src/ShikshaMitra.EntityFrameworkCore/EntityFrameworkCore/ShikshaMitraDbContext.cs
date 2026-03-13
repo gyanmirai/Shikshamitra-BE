@@ -59,8 +59,12 @@ using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Finance.ConcessionRequests;
+using ShikshaMitra.Finance.Expenses;
+using ShikshaMitra.Finance.Incomes;
 using ShikshaMitra.Finance.Setting;
 using ShikshaMitra.Finance.StudentFeeAssignment;
+using ShikshaMitra.Finance.Setting.ConcessionType;
+using ShikshaMitra.Finance.Setting.ConcessionTypes;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -170,6 +174,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	public DbSet<HouseSettings> HouseSettings { get; set; }
 	public DbSet<StudentManagementSettings> StudentManagementSettings { get; set; }
+	public DbSet<StudentStatusHistory> StudentStatusHistories { get; set; }
 
 	#endregion
 
@@ -280,13 +285,13 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#endregion
 
 	#region ConcessionType
-	public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionType> ConcessionTypes { get; set; }
-	public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeFeeHead> ConcessionTypeFeeHeads { get; set; }
-	public DbSet<ShikshaMitra.Finance.Setting.ConcessionType.ConcessionTypeDocument> ConcessionTypeDocuments { get; set; }
+	public DbSet<ConcessionType> ConcessionTypes { get; set; }
+	public DbSet<ConcessionTypeDocument> ConcessionTypeDocuments { get; set; }
+	public DbSet<ConcessionTypeDocumentFormat> ConcessionTypeDocumentFormats { get; set; }
 	public DbSet<ChargeCategory> ChargeCategories { get; set; }
 	public DbSet<IncomeCategory> IncomeCategories { get; set; }
 	public DbSet<ExpenseCategory> ExpenseCategories { get; set; }
-	public DbSet<ShikshaMitra.Finance.Setting.BankAccount> BankAccounts { get; set; }
+	public DbSet<BankAccount> BankAccounts { get; set; }
 	#endregion
 
 	public DbSet<FeeCategory> FeeCategories { get; set; }
@@ -295,7 +300,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region StudentFeeAssignment
 	public DbSet<StudentFeeStructure> StudentFeeStructures { get; set; }
-	public DbSet<StudentFeeHead> StudentFeeHeads { get; set; }
 	#endregion
 
 	#region ConcessionRequests
@@ -308,6 +312,14 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region Charges
 	public DbSet<ShikshaMitra.Finance.Charges.Charge> Charges { get; set; }
+	#endregion
+
+	#region Incomes
+	public DbSet<Income> Incomes { get; set; }
+	#endregion
+
+	#region Expenses
+	public DbSet<Expense> Expenses { get; set; }
 	#endregion
 
 	#endregion
@@ -365,6 +377,13 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Sections
 	public DbSet<LibrarySection> LibrarySections { get; set; }
 	public DbSet<LibraryShelf> LibraryShelves { get; set; }
+	#endregion
+	#region Books
+	public DbSet<ShikshaMitra.Library.Books.Book> Books { get; set; }
+	public DbSet<ShikshaMitra.Library.Books.BookCopy> BookCopies { get; set; }
+	public DbSet<ShikshaMitra.Library.Books.BookReservation> BookReservations { get; set; }
+	public DbSet<ShikshaMitra.Library.Books.BookIssue> BookIssues { get; set; }
+	public DbSet<ShikshaMitra.Library.Books.LibraryCharge> LibraryCharges { get; set; }
 	#endregion
 	#endregion
 

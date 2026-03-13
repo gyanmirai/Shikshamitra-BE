@@ -1,10 +1,10 @@
-﻿using System;
+﻿using ShikshaMitra.Common;
+using ShikshaMitra.Finance.Setting.ConcessionTypes;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
-using ShikshaMitra.TenantSettings.AcademicYears;
-using ShikshaMitra.Finance.Setting.ConcessionType;
-
 
 namespace ShikshaMitra.Finance.Setting.ConcessionType;
 
@@ -13,16 +13,9 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; private set; }
 	public Guid AcademicYearId { get; private set; }
 	public string Name { get; private set; }
-	// public ConcessionBasedOn BasedOn { get; private set; }
-	// public decimal Amount { get; private set; }
-	public bool IsDocumentRequired { get; private set; }
 	public string? Description { get; private set; }
-	public bool IsActive { get; private set; }
 
-	// Navigation properties
-	public virtual AcademicYear AcademicYear { get; set; }
-	public virtual ICollection<ConcessionTypeFeeHead> ConcessionTypeFeeHeads { get; private set; }
-	public virtual ICollection<ConcessionTypeDocument> ConcessionTypeDocuments { get; private set; }
+	public virtual ICollection<ConcessionTypeDocument> ConcessionTypeDocuments { get; private set; } = new List<ConcessionTypeDocument>();
 
 	private ConcessionType()
 	{
@@ -34,7 +27,6 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? tenantId,
 		Guid academicYearId,
 		string name,
-		bool isDocumentRequired,
 		string? description = null,
 		bool isActive = true
 	) : base(id)
@@ -42,49 +34,42 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		TenantId = tenantId;
 		AcademicYearId = academicYearId;
 		Name = name;
-		// BasedOn = basedOn;
-		// Amount = amount;
-		IsDocumentRequired = isDocumentRequired;
 		Description = description;
-		IsActive = isActive;
-		ConcessionTypeFeeHeads = new List<ConcessionTypeFeeHead>();
 		ConcessionTypeDocuments = new List<ConcessionTypeDocument>();
 	}
 
 	public void Update(
 		string name,
-		bool isDocumentRequired,
 		string? description
 	)
 	{
 		Name = name;
-		// BasedOn = basedOn;
-		// Amount = amount;
-		IsDocumentRequired = isDocumentRequired;
 		Description = description;
 	}
 
-	public void SetActive(bool isActive)
+	public void AddDocument(string documentName, long documentSize, List<DocumentType> acceptedFormats)
 	{
-		IsActive = isActive;
+		var document = new ConcessionTypeDocument(Guid.NewGuid(), Id, documentName, documentSize);
+
+		foreach (var format in acceptedFormats)
+		{
+			document.AddAcceptedFormat(format);
+		}
+
+		ConcessionTypeDocuments.Add(document);
 	}
 
-	public void AddFeeHead(Guid feeHeadId)
+	public void ReplaceDocuments(List<(string DocumentName, long DocumentSize, List<DocumentType> AcceptedFormats)> documents)
 	{
-		ConcessionTypeFeeHeads.Add(new ConcessionTypeFeeHead(Id, feeHeadId));
-	}
-
-	public void RemoveFeeHead(Guid feeHeadId)
-	{
-		// Logic to remove... typically handled by replacing collection or similar in AppService,
-		// given this is a simple join entity, we might just clear and re-add in service or manage collection here.
-		// For now, let's keep it simple.
-	}
-
-	public void AddDocument(string documentName, long documentSize, List<int> acceptedFormats) // acceptedFormats stored how?
-	{
-		// Handling formats might differ based on how we want to store them.
-		// The spec implies an array of ints. We could store as JSON or related entity.
-		// Given ConcessionDocument is an object in the JSON, let's make it an entity.
+		ConcessionTypeDocuments.Clear();
+		foreach (var d in documents)
+		{
+			var doc = new ConcessionTypeDocument(Guid.NewGuid(), Id, d.DocumentName, d.DocumentSize);
+			foreach (var format in d.AcceptedFormats)
+			{
+				doc.AddAcceptedFormat(format);
+			}
+			ConcessionTypeDocuments.Add(doc);
+		}
 	}
 }

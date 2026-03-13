@@ -22,7 +22,7 @@ public class EntranceExamStudentDto
 	public decimal? PassingMarks { get; set; }
 	public decimal? ObtainedMarks { get; set; }
 	public decimal? Percentage { get; set; }
-	public decimal Progress { get; set; } // Enrollment progress percentage
+	public double Progress { get; set; } // Enrollment progress percentage
 	public EntranceExamStatusEnum? ExamStatus { get; set; }
     public string ExamStatusDisplay { get; set; }
 	public StudentLifeCycleStatusEnum EnrollmentState { get; set; }

@@ -9,4 +9,6 @@ public enum StudentLifeCycleStatusEnum
 	Registation = 4,
 	Admission = 5,
 	Enrolled = 6,
+	InActive = 7,
+	Left = 8,
 }

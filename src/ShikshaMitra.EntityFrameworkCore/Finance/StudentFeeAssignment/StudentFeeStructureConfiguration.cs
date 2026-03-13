@@ -11,11 +11,6 @@ public class StudentFeeStructureConfiguration : IEntityTypeConfiguration<Student
 		builder.ToTable("StudentFeeStructures", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
-		builder.HasMany(x => x.StudentFeeHeads)
-			.WithOne()
-			.HasForeignKey(x => x.StudentFeeStructureId)
-			.OnDelete(DeleteBehavior.Cascade);
-
 		builder.HasIndex(x => x.StudentId);
 	}
 }

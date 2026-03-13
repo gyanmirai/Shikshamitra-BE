@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Finance.ConcessionRequests;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -12,10 +12,7 @@ public class ConcessionRequestConfiguration : IEntityTypeConfiguration<Concessio
 		builder.ToTable("ConcessionRequests");
 		builder.ConfigureByConvention();
 
-		builder.Property(x => x.AcademicYear).HasMaxLength(10).IsRequired();
 		builder.Property(x => x.CompletedStepsRaw).HasColumnType("text");
-		builder.Property(x => x.ApproverMessage).HasColumnType("text");
-		builder.Property(x => x.RejectionReason).HasColumnType("text");
 
 		builder.HasMany(x => x.ConcessionRequestConcessionTypes)
 			.WithOne()

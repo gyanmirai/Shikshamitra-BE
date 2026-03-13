@@ -38,6 +38,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public string? AdharNo { get; private set; }
 	public string? ApparId { get; private set; }
 	public string? PanNo { get; private set; }
+	public string? PennNo { get; private set; }
 	public ReligionEnum? Religion { get; private set; }
 	public string FamilyCast { get; private set; }
 	public CastCategoryEnum? CastCategory { get; private set; }
@@ -114,6 +115,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		string? adharNo,
 		string? apparId,
 		string? panNo,
+		string? penNo,
 		ReligionEnum? religion,
 		string familyCast,
 		CastCategoryEnum? castCategory,
@@ -132,6 +134,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		AdharNo = adharNo;
 		ApparId = apparId;
 		PanNo = panNo;
+		PennNo = penNo;
 		Religion = religion;
 		FamilyCast = familyCast;
 		CastCategory = castCategory;

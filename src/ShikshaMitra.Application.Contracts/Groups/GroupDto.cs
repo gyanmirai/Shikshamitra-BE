@@ -92,6 +92,15 @@ public class AcademicSelectionDto
 }
 
 /// <summary>
+/// Lightweight DTO containing role ID and name
+/// </summary>
+public class RoleInfoDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// Rule-based selection response DTO
 /// </summary>
 public class RuleBasedSelectionResponseDto
@@ -102,9 +111,9 @@ public class RuleBasedSelectionResponseDto
     public AcademicSelectionDto? AcademicSelection { get; set; }
 
     /// <summary>
-    /// Role IDs for targeting employees by role
+    /// Roles with ID and Name for targeting employees by role
     /// </summary>
-    public List<Guid> RoleIds { get; set; } = new();
+    public List<RoleInfoDto> Roles { get; set; } = new();
 
     /// <summary>
     /// Student attribute filter rules
@@ -119,7 +128,7 @@ public class RuleBasedSelectionResponseDto
     public bool HasAnySelection()
     {
         return (AcademicSelection != null && AcademicSelection.Divisions.Count > 0) ||
-               RoleIds.Count > 0 ||
+               Roles.Count > 0 ||
                StudentFilters.Count > 0 ||
                EmployeeFilters.Count > 0;
     }

@@ -263,3 +263,7 @@ src/ShikshaMitra.Blazor.Server.Tiered/Logs/*
 
 # Use abp install-libs to restore.
 **/wwwroot/libs/*
+
+.agents/*
+skills-lock.json
+skills-output.txt

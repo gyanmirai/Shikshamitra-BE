@@ -16,6 +16,8 @@ public class ConcessionRequestDocument : AuditedEntity<Guid>, IMultiTenant
 	/// <summary>The concession type this document belongs to (from Step 3 mapping).</summary>
 	public Guid ConcessionTypeId { get; private set; }
 
+	public Guid ConcessionRequestConcessionTypeId { get; private set; }
+
 	/// <summary>The document type identifier (from ConcessionTypeDocument definitions).</summary>
 	public Guid DocumentId { get; private set; }
 
@@ -34,6 +36,7 @@ public class ConcessionRequestDocument : AuditedEntity<Guid>, IMultiTenant
 		Guid? tenantId,
 		Guid concessionRequestId,
 		Guid concessionTypeId,
+		Guid concessionRequestConcessionTypeId,
 		Guid documentId,
 		string url,
 		int status) : base(id)
@@ -41,6 +44,7 @@ public class ConcessionRequestDocument : AuditedEntity<Guid>, IMultiTenant
 		TenantId = tenantId;
 		ConcessionRequestId = concessionRequestId;
 		ConcessionTypeId = concessionTypeId;
+		ConcessionRequestConcessionTypeId = concessionRequestConcessionTypeId;
 		DocumentId = documentId;
 		Url = url;
 		Status = status;

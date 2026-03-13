@@ -121,8 +121,7 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		// Student Fee Structure mappings
 		CreateMap<StudentFeeStructure, StudentFeeStructureResponseDto>()
 			.ForMember(dest => dest.StudentFeeStructureId, opt => opt.MapFrom(src => src.Id))
-			.ForMember(dest => dest.FeeHeads, opt => opt.MapFrom(src => src.StudentFeeHeads));
-		CreateMap<StudentFeeHead, StudentFeeHeadDto>();
+			.ForMember(dest => dest.FeeHeads, opt => opt.Ignore());
 
 		// Library - BookCategory mappings
 		CreateMap<ShikshaMitra.Library.Setting.GeneralSetting.BookCategory.BookCategory,
@@ -137,5 +136,13 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		CreateMap<ShikshaMitra.Library.Setting.ChargeCategory.LibraryChargeCategory,
 			ShikshaMitra.Library.Setting.ChargeCategory.Dtos.LibraryChargeCategoryDto>()
 			.ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.ChargeType));
+
+		// Library - Book mappings
+		CreateMap<ShikshaMitra.Library.Books.Book, ShikshaMitra.Library.Books.BookDto>()
+			.ForMember(dest => dest.Language, opt => opt.MapFrom(src => (int) src.Language));
+
+		// Library - BookCopy mappings
+		CreateMap<ShikshaMitra.Library.Books.BookCopy, ShikshaMitra.Library.Books.BookCopyDto>()
+			.ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.Status.ToString()));
 	}
 }

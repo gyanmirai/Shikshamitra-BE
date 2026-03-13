@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -13,24 +11,15 @@ namespace ShikshaMitra.Students.Attendances;
 /// <summary>
 /// Application service for managing student leave requests
 /// </summary>
-[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
-public class StudentLeaveAppService : ApplicationService, IStudentLeaveAppService
+[RemoteService(false)]
+public class StudentLeaveAppService(
+	IStudentLeaveRepository studentLeaveRepository,
+	StudentLeaveManager studentLeaveManager
+) : ApplicationService, IStudentLeaveAppService
 {
-	private readonly IStudentLeaveRepository _studentLeaveRepository;
-	private readonly StudentLeaveManager _studentLeaveManager;
-
-	public StudentLeaveAppService(
-		IStudentLeaveRepository studentLeaveRepository,
-		StudentLeaveManager studentLeaveManager)
-	{
-		_studentLeaveRepository = studentLeaveRepository;
-		_studentLeaveManager = studentLeaveManager;
-	}
-
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
 	public async Task<PagedResultDto<StudentLeaveDto>> GetListAsync(GetStudentLeaveListInput input)
 	{
-		var totalCount = await _studentLeaveRepository.GetCountAsync(
+		var totalCount = await studentLeaveRepository.GetCountAsync(
 			input.FilterText,
 			input.StudentId,
 			input.EducationMediumId,
@@ -42,7 +31,7 @@ public class StudentLeaveAppService : ApplicationService, IStudentLeaveAppServic
 			input.EndDate,
 			CurrentTenant.Id);
 
-		var leaves = await _studentLeaveRepository.GetListWithDetailsAsync(
+		var leaves = await studentLeaveRepository.GetListWithDetailsAsync(
 			input.FilterText,
 			input.StudentId,
 			input.EducationMediumId,
@@ -62,10 +51,9 @@ public class StudentLeaveAppService : ApplicationService, IStudentLeaveAppServic
 		return new PagedResultDto<StudentLeaveDto>(totalCount, leaveDtos);
 	}
 
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
 	public async Task<StudentLeaveDto> GetAsync(Guid id)
 	{
-		var leave = await _studentLeaveRepository.GetWithDetailsAsync(id);
+		var leave = await studentLeaveRepository.GetWithDetailsAsync(id);
 
 		if (leave == null)
 		{
@@ -76,10 +64,9 @@ public class StudentLeaveAppService : ApplicationService, IStudentLeaveAppServic
 		return MapToDto(leave);
 	}
 
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
 	public async Task<StudentLeaveDto> CreateAsync(CreateStudentLeaveDto input)
 	{
-		var leave = await _studentLeaveManager.CreateAsync(
+		var leave = await studentLeaveManager.CreateAsync(
 			input.StudentId,
 			input.StudentLeaveTypeId,
 			input.IsHalfDay,
@@ -90,18 +77,17 @@ public class StudentLeaveAppService : ApplicationService, IStudentLeaveAppServic
 			input.AttachmentFileName,
 			input.AttachmentContentType);
 
-		await _studentLeaveRepository.InsertAsync(leave, autoSave: true);
+		await studentLeaveRepository.InsertAsync(leave, autoSave: true);
 
 		// Reload with details for complete DTO
-		var leaveWithDetails = await _studentLeaveRepository.GetWithDetailsAsync(leave.Id);
+		var leaveWithDetails = await studentLeaveRepository.GetWithDetailsAsync(leave.Id);
 
 		return MapToDto(leaveWithDetails!);
 	}
 
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
 	public async Task<StudentLeaveDto> UpdateAsync(Guid id, UpdateStudentLeaveDto input)
 	{
-		var leave = await _studentLeaveRepository.GetAsync(id);
+		var leave = await studentLeaveRepository.GetAsync(id);
 
 		if (leave == null)
 		{
@@ -109,7 +95,7 @@ public class StudentLeaveAppService : ApplicationService, IStudentLeaveAppServic
 				.WithData("Id", id);
 		}
 
-		await _studentLeaveManager.UpdateAsync(
+		await studentLeaveManager.UpdateAsync(
 			leave,
 			input.StudentLeaveTypeId,
 			input.IsHalfDay,
@@ -120,18 +106,17 @@ public class StudentLeaveAppService : ApplicationService, IStudentLeaveAppServic
 			input.AttachmentFileName,
 			input.AttachmentContentType);
 
-		await _studentLeaveRepository.UpdateAsync(leave, autoSave: true);
+		await studentLeaveRepository.UpdateAsync(leave, autoSave: true);
 
 		// Reload with details for complete DTO
-		var leaveWithDetails = await _studentLeaveRepository.GetWithDetailsAsync(leave.Id);
+		var leaveWithDetails = await studentLeaveRepository.GetWithDetailsAsync(leave.Id);
 
 		return MapToDto(leaveWithDetails!);
 	}
 
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Delete)]
 	public async Task DeleteAsync(Guid id)
 	{
-		var leave = await _studentLeaveRepository.GetAsync(id);
+		var leave = await studentLeaveRepository.GetAsync(id);
 
 		if (leave == null)
 		{
@@ -146,10 +131,9 @@ public class StudentLeaveAppService : ApplicationService, IStudentLeaveAppServic
 				.WithData("Status", leave.Status);
 		}
 
-		await _studentLeaveRepository.DeleteAsync(leave, autoSave: true);
+		await studentLeaveRepository.DeleteAsync(leave, autoSave: true);
 	}
 
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
 	public async Task<StudentLeaveDto> ApproveAsync(Guid id, ApproveRejectStudentLeaveDto input)
 	{
 		if (input.Status != StudentLeaveStatusEnum.Approved)
@@ -159,7 +143,7 @@ public class StudentLeaveAppService : ApplicationService, IStudentLeaveAppServic
 				.WithData("ActualStatus", input.Status);
 		}
 
-		var leave = await _studentLeaveRepository.GetAsync(id);
+		var leave = await studentLeaveRepository.GetAsync(id);
 
 		if (leave == null)
 		{
@@ -167,17 +151,16 @@ public class StudentLeaveAppService : ApplicationService, IStudentLeaveAppServic
 				.WithData("Id", id);
 		}
 
-		await _studentLeaveManager.ApproveAsync(leave, input.Remarks);
+		await studentLeaveManager.ApproveAsync(leave, input.Remarks);
 
-		await _studentLeaveRepository.UpdateAsync(leave, autoSave: true);
+		await studentLeaveRepository.UpdateAsync(leave, autoSave: true);
 
 		// Reload with details for complete DTO
-		var leaveWithDetails = await _studentLeaveRepository.GetWithDetailsAsync(leave.Id);
+		var leaveWithDetails = await studentLeaveRepository.GetWithDetailsAsync(leave.Id);
 
 		return MapToDto(leaveWithDetails!);
 	}
 
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
 	public async Task<StudentLeaveDto> RejectAsync(Guid id, ApproveRejectStudentLeaveDto input)
 	{
 		if (input.Status != StudentLeaveStatusEnum.Rejected)
@@ -192,7 +175,7 @@ public class StudentLeaveAppService : ApplicationService, IStudentLeaveAppServic
 			throw new BusinessException("StudentLeave:RejectionReasonRequired");
 		}
 
-		var leave = await _studentLeaveRepository.GetAsync(id);
+		var leave = await studentLeaveRepository.GetAsync(id);
 
 		if (leave == null)
 		{
@@ -200,20 +183,19 @@ public class StudentLeaveAppService : ApplicationService, IStudentLeaveAppServic
 				.WithData("Id", id);
 		}
 
-		await _studentLeaveManager.RejectAsync(leave, input.RejectionReason, input.Remarks);
+		await studentLeaveManager.RejectAsync(leave, input.RejectionReason, input.Remarks);
 
-		await _studentLeaveRepository.UpdateAsync(leave, autoSave: true);
+		await studentLeaveRepository.UpdateAsync(leave, autoSave: true);
 
 		// Reload with details for complete DTO
-		var leaveWithDetails = await _studentLeaveRepository.GetWithDetailsAsync(leave.Id);
+		var leaveWithDetails = await studentLeaveRepository.GetWithDetailsAsync(leave.Id);
 
 		return MapToDto(leaveWithDetails!);
 	}
 
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
 	public async Task<StudentLeaveAttachmentDto> GetAttachmentAsync(Guid id)
 	{
-		var leave = await _studentLeaveRepository.GetAsync(id);
+		var leave = await studentLeaveRepository.GetAsync(id);
 
 		if (leave == null)
 		{
@@ -238,35 +220,32 @@ public class StudentLeaveAppService : ApplicationService, IStudentLeaveAppServic
 	/// <summary>
 	/// Maps StudentLeave entity to DTO with computed fields
 	/// </summary>
-	private StudentLeaveDto MapToDto(StudentLeave leave)
+	private StudentLeaveDto MapToDto(StudentLeave leave) => new StudentLeaveDto
 	{
-		return new StudentLeaveDto
-		{
-			Id = leave.Id,
-			StudentId = leave.StudentId,
-			StudentName = leave.Student != null
+		Id = leave.Id,
+		StudentId = leave.StudentId,
+		StudentName = leave.Student != null
 				? $"{leave.Student.FirstName} {leave.Student.LastName}".Trim()
 				: string.Empty,
-			OrganizationName = null, // TODO: Map from EducationMedium if navigation exists
-			ClassName = null, // TODO: Map from Standard if navigation exists
-			DivisionName = null, // TODO: Map from Division if navigation exists
-			StudentLeaveTypeId = leave.StudentLeaveTypeId,
-			LeaveTypeName = leave.StudentLeaveType?.LeaveTypeName ?? string.Empty,
-			LeaveTypeColor = leave.StudentLeaveType?.Color ?? "#000000",
-			IsHalfDay = leave.IsHalfDay,
-			LeaveDate = leave.LeaveDate,
-			EndDate = leave.EndDate,
-			TotalDays = leave.TotalDays,
-			Description = leave.Description,
-			Remarks = leave.Remarks,
-			Status = leave.Status,
-			RejectionReason = leave.RejectionReason,
-			HasAttachment = leave.Attachment != null && leave.Attachment.Length > 0,
-			AttachmentFileName = leave.AttachmentFileName,
-			CreationTime = leave.CreationTime,
-			CreatorId = leave.CreatorId,
-			LastModificationTime = leave.LastModificationTime,
-			LastModifierId = leave.LastModifierId
-		};
-	}
+		OrganizationName = null, // TODO: Map from EducationMedium if navigation exists
+		ClassName = null, // TODO: Map from Standard if navigation exists
+		DivisionName = null, // TODO: Map from Division if navigation exists
+		StudentLeaveTypeId = leave.StudentLeaveTypeId,
+		LeaveTypeName = leave.StudentLeaveType?.LeaveTypeName ?? string.Empty,
+		LeaveTypeColor = leave.StudentLeaveType?.Color ?? "#000000",
+		IsHalfDay = leave.IsHalfDay,
+		LeaveDate = leave.LeaveDate,
+		EndDate = leave.EndDate,
+		TotalDays = leave.TotalDays,
+		Description = leave.Description,
+		Remarks = leave.Remarks,
+		Status = leave.Status,
+		RejectionReason = leave.RejectionReason,
+		HasAttachment = leave.Attachment != null && leave.Attachment.Length > 0,
+		AttachmentFileName = leave.AttachmentFileName,
+		CreationTime = leave.CreationTime,
+		CreatorId = leave.CreatorId,
+		LastModificationTime = leave.LastModificationTime,
+		LastModifierId = leave.LastModifierId
+	};
 }

@@ -1,6 +1,7 @@
 ﻿using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.ValueObjects;
 using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using System;
@@ -175,6 +176,7 @@ public class StudentRegistrationAppService(
 				input.AadharNo,
 				input.ApparId,
 				input.PanNo,
+				input.PennNo,
 				input.Religion,
 				input.FamilyCast,
 				input.CastCategory,
@@ -260,6 +262,7 @@ public class StudentRegistrationAppService(
 				input.AadharNo,
 				input.ApparId,
 				input.PanNo,
+				input.PennNo,
 				input.Religion,
 				input.FamilyCast,
 				input.CastCategory,
@@ -900,6 +903,43 @@ public class StudentRegistrationAppService(
 
 		// Return the updated bank details
 		return await GetBankDetailsAsync(studentId);
+	}
+
+	/// <summary>
+	/// Searches for students whose first name, middle name, or last name contains
+	/// the given search term (case-insensitive).
+	/// </summary>
+	public async Task<List<StudentSearchResultDto>> SearchStudentsByNameAsync(string searchTerm)
+	{
+		var normalizedSearchTerm = (searchTerm ?? string.Empty).Trim().ToLower();
+
+		var queryable = await studentRepository.GetQueryableAsync();
+
+		var query = queryable
+			.Where(s => s.TenantId == CurrentTenant.Id 
+			&& s.Status == StudentLifeCycleStatusEnum.Admission
+				&& (
+					(s.FirstName != null && s.FirstName.ToLower().Contains(normalizedSearchTerm)) ||
+					(s.MiddleName != null && s.MiddleName.ToLower().Contains(normalizedSearchTerm)) ||
+					(s.LastName != null && s.LastName.ToLower().Contains(normalizedSearchTerm))
+				));
+
+		var students = await AsyncExecuter.ToListAsync(query);
+
+		if (students.Count == 0)
+			return new List<StudentSearchResultDto>();
+
+		var results = new List<StudentSearchResultDto>();
+		foreach ( var student in students)
+		{
+			results.Add(new StudentSearchResultDto
+			{
+				Id = student.Id,
+				Student = $"{student.FirstName} {student.MiddleName} {student.LastName} [{student.AcademicMedium.EducationBoard.Type.ToString()}] ({student.Standard?.Name} - {student.Division?.Name})".Trim()
+			});
+		}
+
+		return results;
 	}
 
 	#region Private Helper Methods

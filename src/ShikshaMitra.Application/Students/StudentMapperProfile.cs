@@ -1,11 +1,14 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Common;
 using ShikshaMitra.Students.Attendance.Settings;
+using ShikshaMitra.Students.Records;
+using ShikshaMitra.Students.StudentRecords;
 using ShikshaMitra.Students.Attendances.Settings;
 using ShikshaMitra.Students.Enrollments.Notes;
 using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using System;
 using System.Collections.Generic;
@@ -71,6 +74,9 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.Gender, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.Gender.HasValue
 				? src.AdditionalDetail.Gender
 				: null))
+			.ForMember(dest => dest.Category, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.Category != Category.General
+				? src.AdditionalDetail.Category
+				: Category.General))
 			.ForMember(dest => dest.Address1, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.Address1 : null))
 			.ForMember(dest => dest.Address2, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.Address2 : null))
 			.ForMember(dest => dest.Address3, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.Address3 : null))
@@ -142,5 +148,13 @@ public class StudentMapperProfile : Profile
         CreateMap<CreateUpdateStudentNoteDto, StudentNote>();
 
 		CreateMap<HouseSettings, HouseSettingsDto>();
+
+		// StudentStatusHistory → StudentStatusHistoryDto
+		// OperationalStatus is derived from ToStatus so we compute it during mapping.
+		CreateMap<StudentStatusHistory, StudentStatusHistoryDto>()
+			.ForMember(dest => dest.OperationalStatus, opt => opt.MapFrom(src =>
+				src.ToStatus == StudentLifeCycleStatusEnum.Enrolled  ? StudentStatus.Active   :
+				src.ToStatus == StudentLifeCycleStatusEnum.InActive  ? StudentStatus.Inactive :
+				                                                        StudentStatus.Left));
 	}
 }

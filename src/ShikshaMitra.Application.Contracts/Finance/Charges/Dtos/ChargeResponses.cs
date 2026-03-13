@@ -52,6 +52,9 @@ public class ChargeListResponse
 	public int CurrentPage { get; set; }
 	public int PageSize { get; set; }
 	public int TotalPages { get; set; }
+	public int PendingCount { get; set; }
+	public int ApprovedCount { get; set; }
+	public int RejectedCount { get; set; }
 	public string Message { get; set; }
 }
 

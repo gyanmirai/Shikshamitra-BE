@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.Students.StudentEnrollments.Registration;
 using System;
 using Volo.Abp.Application.Dtos;
 
@@ -13,7 +14,7 @@ public class StudentEnrollmentListDto : EntityDto
 	public string? FirstName { get; set; }
 	public string? MiddleName { get; set; }
 	public string? LastName { get; set; }
-
+	
 	public Guid? AcademicYearId { get; set; }
 	public string? AcademicYearName { get; set; }
 	public Guid? AcademicBoardId { get; set; }
@@ -30,6 +31,10 @@ public class StudentEnrollmentListDto : EntityDto
 	public DateTimeOffset? DateOfInquiry { get; set; }
 	public GenderEnum? Gender { get; set; }
 
+	public int? RollNo { get; set; }
+	public int? GrNo { get; set; }
+	public Category Category { get; set; } = Category.General;
+
 	public string? Address { get; set; }
 	public string? Address1 { get; set; }
 	public string? Address2 { get; set; }
@@ -41,11 +46,11 @@ public class StudentEnrollmentListDto : EntityDto
 	public string? PrimaryContactNo { get; set; }
 	public string? SecondaryContactNo { get; set; }
 	public string? Email { get; set; }
-
+	
 	public string? PreviousSchool { get; set; }
 	public Guid? InquiryPreferenceId { get; set; }
 	public string? InquiryPreference { get; set; }
-	public NoteStatusEnum? InquiryStatus { get; set; }
+	public NoteStatusEnum InquiryStatus { get; set; } = NoteStatusEnum.Pending;
 	public DateTimeOffset? NextReminderDate { get; set; }
 	public double Progress { get; set; } = 0;
 	public string? Remarks { get; set; }

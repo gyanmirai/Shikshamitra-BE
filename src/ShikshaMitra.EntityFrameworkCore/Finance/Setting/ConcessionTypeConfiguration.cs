@@ -11,5 +11,7 @@ public class ConcessionTypeConfiguration : IEntityTypeConfiguration<ConcessionTy
 	{
 		builder.ToTable("ConcessionTypes", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+
+		builder.Navigation(x => x.ConcessionTypeDocuments).AutoInclude();
 	}
 }

@@ -9,16 +9,20 @@ public interface IConcessionRequestAppService : IApplicationService
 {
 	// Step 1+2 merged — Create concession request with concession types
 	Task<CreateConcessionRequestResponse> CreateConcessionRequestAsync(CreateConcessionRequestInput input);
+	Task<UpdateConcessionRequestResponse> UpdateConcessionRequestAsync(Guid concessionRequestId, UpdateConcessionRequestInput input);
 	Task<GetBasicDetailsResponse> GetBasicDetailsAsync(Guid concessionRequestId);
 
 	// Step 3
 	Task<SaveFeeHeadsDataResponse> SaveFeeHeadsDataAsync(Guid concessionRequestId, SaveFeeHeadsDataRequest input);
+	Task<GetFeeHeadsResponse> GetConcessionRequestFeeHeadsAsync(Guid concessionRequestId);
 
 	// Step 4
 	Task<SaveValueEntryResponse> SaveValueEntryAsync(Guid concessionRequestId, SaveValueEntryRequest input);
+	Task<GetValueEntriesResponse> GetConcessionRequestValueEntriesAsync(Guid concessionRequestId);
 
 	// Step 5 — Document Upload
 	Task<UploadDocumentsResponse> UploadDocumentsAsync(Guid concessionRequestId, UploadDocumentsRequest input);
+	Task<GetDocumentUploadResponse> GetConcessionRequestDocumentsForResumeAsync(Guid concessionRequestId);
 
 	// Get documents list for a request
 	Task<GetDocumentsResponse> GetConcessionDocumentsAsync(Guid studentConcessionTypeRequestId, int? status, int page, int pageSize);

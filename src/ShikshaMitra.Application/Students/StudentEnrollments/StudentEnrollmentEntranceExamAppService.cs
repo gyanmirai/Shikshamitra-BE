@@ -152,7 +152,7 @@ public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, I
 				ExamStatus = result.additionalDetail.ExamStatus,
 				ExamStatusDisplay = result.additionalDetail.ExamStatus?.ToString() ?? "Not Scheduled",
 				EnrollmentState = result.student.Status,
-				Progress = CalculateEnrollmentProgress(result.student.Status)
+				Progress = CalculateRegistrationProgress(result.student.AdditionalDetail!.StudentRegistrationState)
 			};
 			return dto;
 		}).ToList();
@@ -393,20 +393,15 @@ public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, I
 			queryable.Where(sd => sd.EntranceExamSlotId == slotId));
 	}
 
-	private decimal CalculateEnrollmentProgress(StudentLifeCycleStatusEnum status)
+	private double CalculateRegistrationProgress(StudentRegistrationStateEnum status)
 	{
 		// Calculate progress based on enrollment stages
 		// Assuming 7 stages total: New, Inquiry, RegistrationFormIssued, EntranceExam, Registration, Admission, Enrolled
-		return status switch
-		{
-			StudentLifeCycleStatusEnum.New => 0m,
-			StudentLifeCycleStatusEnum.Inquiry => 14.29m,
-			StudentLifeCycleStatusEnum.RegistrationFormIssued => 28.57m,
-			StudentLifeCycleStatusEnum.EntranceExam => 42.86m,
-			StudentLifeCycleStatusEnum.Registation => 57.14m,
-			StudentLifeCycleStatusEnum.Admission => 71.43m,
-			StudentLifeCycleStatusEnum.Enrolled => 100m,
-			_ => 0m
-		};
+		var totalStates = (double) Enum.GetValues<StudentRegistrationStateEnum>()
+					.Count(s => s != StudentRegistrationStateEnum.Default);
+
+		var v = (double) status
+			/ totalStates;
+		return (double) v * 100;
 	}
 }

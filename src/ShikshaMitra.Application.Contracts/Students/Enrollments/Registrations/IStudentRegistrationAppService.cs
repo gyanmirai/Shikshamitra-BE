@@ -1,5 +1,6 @@
 ﻿using ShikshaMitra.Students.StudentEnrollments;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 
@@ -137,4 +138,11 @@ public interface IStudentRegistrationAppService
 	/// <param name="input">Bank details data</param>
 	/// <returns>Updated bank details information</returns>
 	Task<StudentBankDetailsDto> UpdateBankDetailsAsync(Guid studentId, UpdateBankDetailsDto input);
+
+	/// <summary>
+	/// Searches for students whose first name, middle name, or last name contains the given search term (case-insensitive).
+	/// </summary>
+	/// <param name="searchTerm">The search term to match against student names</param>
+	/// <returns>List of matching students with their full name and class details</returns>
+	Task<List<StudentSearchResultDto>> SearchStudentsByNameAsync(string searchTerm);
 }

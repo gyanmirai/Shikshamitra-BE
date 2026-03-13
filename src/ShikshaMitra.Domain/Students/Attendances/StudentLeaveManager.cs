@@ -5,25 +5,19 @@ using ShikshaMitra.Students.Attendance.Settings;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
+using Volo.Abp.Guids;
 
 namespace ShikshaMitra.Students.Attendances;
 
 /// <summary>
 /// Domain manager for StudentLeave entity - handles business logic and validation
 /// </summary>
-public class StudentLeaveManager : DomainService
+public class StudentLeaveManager(
+	IRepository<Student, Guid> studentRepository,
+	IStudentLeaveTypeRepository studentLeaveTypeRepository,
+	IGuidGenerator guidGenerator
+) : DomainService
 {
-	private readonly IRepository<Student, Guid> _studentRepository;
-	private readonly IStudentLeaveTypeRepository _studentLeaveTypeRepository;
-
-	public StudentLeaveManager(
-		IRepository<Student, Guid> studentRepository,
-		IStudentLeaveTypeRepository studentLeaveTypeRepository)
-	{
-		_studentRepository = studentRepository;
-		_studentLeaveTypeRepository = studentLeaveTypeRepository;
-	}
-
 	/// <summary>
 	/// Creates a new student leave request with validation
 	/// </summary>
@@ -39,7 +33,7 @@ public class StudentLeaveManager : DomainService
 		string? attachmentContentType)
 	{
 		// Validate student exists
-		var student = await _studentRepository.GetAsync(studentId);
+		var student = await studentRepository.GetAsync(studentId);
 		if (student == null)
 		{
 			throw new BusinessException("StudentLeave:StudentNotFound")
@@ -47,7 +41,7 @@ public class StudentLeaveManager : DomainService
 		}
 
 		// Validate leave type exists and is active
-		var leaveType = await _studentLeaveTypeRepository.GetAsync(studentLeaveTypeId);
+		var leaveType = await studentLeaveTypeRepository.GetAsync(studentLeaveTypeId);
 		if (leaveType == null)
 		{
 			throw new BusinessException("StudentLeave:LeaveTypeNotFound")
@@ -68,7 +62,7 @@ public class StudentLeaveManager : DomainService
 
 		// Create the leave entity
 		var leave = new StudentLeave(
-			GuidGenerator.Create(),
+			guidGenerator.Create(),
 			CurrentTenant.Id,
 			studentId,
 			student.AcademicMediumId,
@@ -108,7 +102,7 @@ public class StudentLeaveManager : DomainService
 		}
 
 		// Validate leave type exists and is active
-		var leaveType = await _studentLeaveTypeRepository.GetAsync(studentLeaveTypeId);
+		var leaveType = await studentLeaveTypeRepository.GetAsync(studentLeaveTypeId);
 		if (leaveType == null)
 		{
 			throw new BusinessException("StudentLeave:LeaveTypeNotFound")

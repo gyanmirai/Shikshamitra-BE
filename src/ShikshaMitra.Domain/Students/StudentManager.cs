@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -24,7 +24,7 @@ public async Task<List<Student>> AssignRollNumbersAsync(Guid divisionId, List<(G
 		// Check for uniqueness of roll numbers in the division
 		// We only care about non-null roll numbers
 		var rollNumbersToCheck = studentRollNumbers.Where(x => x.RollNo.HasValue).Select(x => x.RollNo!.Value).ToList();
-		
+
 		if (rollNumbersToCheck.Any())
 		{
 			var existingStudentsWithRollNo = await studentRepository.GetListAsync(s => s.DivisionId == divisionId && s.RollNo != null);
@@ -37,7 +37,7 @@ public async Task<List<Student>> AssignRollNumbersAsync(Guid divisionId, List<(G
 				{
 					throw new UserFriendlyException($"Student {student.FirstName} does not belong to the specified division.");
 				}
-				
+
 				if (newRollNo.HasValue)
 				{
 					// Check if any OTHER student in the division already has this roll number
@@ -46,7 +46,7 @@ public async Task<List<Student>> AssignRollNumbersAsync(Guid divisionId, List<(G
 					{
 						throw new UserFriendlyException($"Roll no: {newRollNo} already exists for student: {duplicate.FirstName} {duplicate.LastName}.");
 					}
-					
+
 					// Also check regarding the Input List itself for duplicates
 					if (studentRollNumbers.Count(x => x.RollNo == newRollNo) > 1)
 					{
@@ -57,8 +57,8 @@ public async Task<List<Student>> AssignRollNumbersAsync(Guid divisionId, List<(G
 				// Assign
 				student.AssignRollNo(newRollNo);
 			}
-		} 
-		else 
+		}
+		else
 		{
 			// All nulls? Just assign.
 			foreach (var (studentId, newRollNo) in studentRollNumbers)
@@ -67,7 +67,7 @@ public async Task<List<Student>> AssignRollNumbersAsync(Guid divisionId, List<(G
 				student.AssignRollNo(newRollNo);
 			}
 		}
-		
+
 		return students;
 	}
 }

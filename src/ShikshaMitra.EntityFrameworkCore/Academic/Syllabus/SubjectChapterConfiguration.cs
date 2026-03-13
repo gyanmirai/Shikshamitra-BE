@@ -10,7 +10,7 @@ public class SubjectChapterConfiguration : IEntityTypeConfiguration<AssignedSubj
 	public void Configure(EntityTypeBuilder<AssignedSubjectChapter> builder)
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "SubjectChapters", ShikshaMitraConsts.DbSchema);
-		
+
 		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();
 

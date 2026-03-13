@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -78,7 +78,7 @@ public class ExamSubject : Entity<Guid>
         assignment.SetExamSubjectId(Id);
         RoomAssignments.Add(assignment);
     }
-    
+
     public void RemoveRoomAssignment(Guid assignmentId)
     {
         var assignment = RoomAssignments.FirstOrDefault(x => x.Id == assignmentId);

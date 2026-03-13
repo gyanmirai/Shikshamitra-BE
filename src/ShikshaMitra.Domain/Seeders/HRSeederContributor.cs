@@ -36,6 +36,7 @@ public class HRSeederContributor : BaseSeederContributor
 	private readonly IRepository<EducationMediumStage, Guid> _educationMediumStageRepository;
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
 	private readonly IEmployeeRepository _employeeRepository;
+	private readonly IEmployeeFamilyMemberRepository _familyMemberRepository;
 	private readonly EmployeeManager _employeeManager;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IdentityUserManager _userManager;
@@ -58,6 +59,7 @@ public class HRSeederContributor : BaseSeederContributor
 		IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
 			IRepository<ShiftManagement, Guid> shiftRepository,
 			IEmployeeRepository employeeRepository,
+			IEmployeeFamilyMemberRepository familyMemberRepository,
 			EmployeeManager employeeManager,
 			IIdentityRoleRepository roleRepository,
 			IdentityUserManager userManager,
@@ -77,6 +79,7 @@ public class HRSeederContributor : BaseSeederContributor
 		_educationMediumStageRepository = educationMediumStageRepository;
 		_shiftRepository = shiftRepository;
 		_employeeRepository = employeeRepository;
+		_familyMemberRepository = familyMemberRepository;
 		_employeeManager = employeeManager;
 		_roleRepository = roleRepository;
 		_userManager = userManager;
@@ -632,19 +635,25 @@ public class HRSeederContributor : BaseSeederContributor
 				dateOfJoining: emp.DateOfJoining,
 				employeeGroup: EmployeeGroupType.Teaching,
 				qualification: emp.Qualification,
-							identificationMark1: emp.IdentificationMark,
-							city: emp.City,
-							state: emp.State,
-							country: emp.Country,
-							pinCode: emp.PinCode,
-							shiftId: shiftId
-						);
+											identificationMark1: emp.IdentificationMark,
+												city: emp.City,
+												state: emp.State,
+												country: emp.Country,
+												pinCode: emp.PinCode,
+												shiftId: shiftId
+											);
 
-			await _employeeRepository.InsertAsync(employee, autoSave: true);
-		}
-	}
+									await _employeeRepository.InsertAsync(employee, autoSave: true);
 
-	private async Task SeedNonTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId)
+									// Seed family members for married employees
+									if (emp.MaritalStatus == MaritalStatusType.Married)
+									{
+										await SeedFamilyMembersAsync(employee.Id, emp.FirstName, emp.Gender);
+									}
+								}
+							}
+
+							private async Task SeedNonTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId)
 	{
 		var nonTeachingEmployees = new[]
 		{
@@ -829,19 +838,97 @@ public class HRSeederContributor : BaseSeederContributor
 				dateOfJoining: emp.DateOfJoining,
 				employeeGroup: EmployeeGroupType.NonTeaching,
 				qualification: emp.Qualification,
-				identificationMark1: emp.IdentificationMark,
-				city: emp.City,
-							state: emp.State,
-							country: emp.Country,
-							pinCode: emp.PinCode,
-							shiftId: shiftId
-						);
+						identificationMark1: emp.IdentificationMark,
+						city: emp.City,
+									state: emp.State,
+									country: emp.Country,
+									pinCode: emp.PinCode,
+									shiftId: shiftId
+								);
 
-			await _employeeRepository.InsertAsync(employee, autoSave: true);
-		}
-	}
+						await _employeeRepository.InsertAsync(employee, autoSave: true);
 
-	private async Task<Guid> CreateUserForEmployeeAsync(string firstName, string lastName, string email, string mobileNo)
+						// Seed family members for married employees
+						if (emp.MaritalStatus == MaritalStatusType.Married)
+						{
+							await SeedFamilyMembersAsync(employee.Id, emp.FirstName, emp.Gender);
+						}
+					}
+				}
+
+				/// <summary>
+				/// Seeds sample family members for an employee (Father, Mother, and Spouse if married)
+				/// </summary>
+				private async Task SeedFamilyMembersAsync(Guid employeeId, string employeeFirstName, GenderType employeeGender)
+				{
+					var tenantId = CurrentTenant.Id;
+
+					// Father
+					var father = new EmployeeFamilyMember(
+						id: GuidGenerator.Create(),
+						tenantId: tenantId,
+						employeeId: employeeId,
+						relationType: FamilyRelationType.Father,
+						name: $"{employeeFirstName}'s Father",
+						occupation: "Retired",
+						contactNo: "9800000001",
+						address1: "Sample Address 1",
+						address2: "Sample Address 2",
+						address3: null,
+						city: "Mumbai",
+						stateName: "Maharashtra",
+						stateIsoCode: "MH",
+						countryName: "India",
+						countryIsoCode: "IN",
+						pinCode: "400001"
+					);
+					await _familyMemberRepository.InsertAsync(father, autoSave: true);
+
+					// Mother
+					var mother = new EmployeeFamilyMember(
+						id: GuidGenerator.Create(),
+						tenantId: tenantId,
+						employeeId: employeeId,
+						relationType: FamilyRelationType.Mother,
+						name: $"{employeeFirstName}'s Mother",
+						occupation: "Homemaker",
+						contactNo: "9800000002",
+						address1: "Sample Address 1",
+						address2: "Sample Address 2",
+						address3: null,
+						city: "Mumbai",
+						stateName: "Maharashtra",
+						stateIsoCode: "MH",
+						countryName: "India",
+						countryIsoCode: "IN",
+						pinCode: "400001"
+					);
+					await _familyMemberRepository.InsertAsync(mother, autoSave: true);
+
+					// Spouse (for married employees)
+					var spouseName = employeeGender == GenderType.Male ? "Wife" : "Husband";
+					var spouse = new EmployeeFamilyMember(
+						id: GuidGenerator.Create(),
+						tenantId: tenantId,
+						employeeId: employeeId,
+						relationType: FamilyRelationType.Spouse,
+						name: $"{employeeFirstName}'s {spouseName}",
+						occupation: "Professional",
+						contactNo: "9800000003",
+						address1: "Same as employee",
+						address2: null,
+						address3: null,
+						city: "Mumbai",
+						stateName: "Maharashtra",
+						stateIsoCode: "MH",
+						countryName: "India",
+						countryIsoCode: "IN",
+						pinCode: "400001"
+					);
+					await _familyMemberRepository.InsertAsync(spouse, autoSave: true);
+				}
+
+				private async Task<Guid> CreateUserForEmployeeAsync(string firstName, string lastName, string email, string mobileNo)
 	{
 		// Validate mobile number
 		if (string.IsNullOrWhiteSpace(mobileNo) || mobileNo.Length < 4)

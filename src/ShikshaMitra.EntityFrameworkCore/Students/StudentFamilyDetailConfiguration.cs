@@ -37,14 +37,14 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 				oa.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Father_OfficeAddress_Landmark");
 				oa.Property(a => a.City).HasMaxLength(100).HasColumnName("Father_OfficeAddress_City").IsRequired();
 				oa.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Father_OfficeAddress_Pincode");
-				
+
 				// Configure State as owned entity
 				oa.OwnsOne(a => a.State, s =>
 				{
 					s.Property(st => st.Name).HasMaxLength(100).HasColumnName("Father_OfficeAddress_State_Name");
 					s.Property(st => st.IsoCode).HasMaxLength(10).HasColumnName("Father_OfficeAddress_State_IsoCode");
 				});
-				
+
 				// Configure Country as owned entity
 				oa.OwnsOne(a => a.Country, c =>
 				{
@@ -63,14 +63,14 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 				la.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Father_LocalAddress_Landmark");
 				la.Property(a => a.City).HasMaxLength(100).HasColumnName("Father_LocalAddress_City").IsRequired();
 				la.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Father_LocalAddress_Pincode");
-				
+
 				// Configure State as owned entity
 				la.OwnsOne(a => a.State, s =>
 				{
 					s.Property(st => st.Name).HasMaxLength(100).HasColumnName("Father_LocalAddress_State_Name");
 					s.Property(st => st.IsoCode).HasMaxLength(10).HasColumnName("Father_LocalAddress_State_IsoCode");
 				});
-				
+
 				// Configure Country as owned entity
 				la.OwnsOne(a => a.Country, c =>
 				{
@@ -105,14 +105,14 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 				oa.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Mother_OfficeAddress_Landmark");
 				oa.Property(a => a.City).HasMaxLength(100).HasColumnName("Mother_OfficeAddress_City").IsRequired();
 				oa.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Mother_OfficeAddress_Pincode");
-				
+
 				// Configure State as owned entity
 				oa.OwnsOne(a => a.State, s =>
 				{
 					s.Property(st => st.Name).HasMaxLength(100).HasColumnName("Mother_OfficeAddress_State_Name");
 					s.Property(st => st.IsoCode).HasMaxLength(10).HasColumnName("Mother_OfficeAddress_State_IsoCode");
 				});
-				
+
 				// Configure Country as owned entity
 				oa.OwnsOne(a => a.Country, c =>
 				{
@@ -131,14 +131,14 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 				la.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Mother_LocalAddress_Landmark");
 				la.Property(a => a.City).HasMaxLength(100).HasColumnName("Mother_LocalAddress_City").IsRequired();
 				la.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Mother_LocalAddress_Pincode");
-				
+
 				// Configure State as owned entity
 				la.OwnsOne(a => a.State, s =>
 				{
 					s.Property(st => st.Name).HasMaxLength(100).HasColumnName("Mother_LocalAddress_State_Name");
 					s.Property(st => st.IsoCode).HasMaxLength(10).HasColumnName("Mother_LocalAddress_State_IsoCode");
 				});
-				
+
 				// Configure Country as owned entity
 				la.OwnsOne(a => a.Country, c =>
 				{
@@ -173,14 +173,14 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 				oa.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Guardian_OfficeAddress_Landmark");
 				oa.Property(a => a.City).HasMaxLength(100).HasColumnName("Guardian_OfficeAddress_City").IsRequired();
 				oa.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Guardian_OfficeAddress_Pincode");
-				
+
 				// Configure State as owned entity
 				oa.OwnsOne(a => a.State, s =>
 				{
 					s.Property(st => st.Name).HasMaxLength(100).HasColumnName("Guardian_OfficeAddress_State_Name").IsRequired();
 					s.Property(st => st.IsoCode).HasMaxLength(10).HasColumnName("Guardian_OfficeAddress_State_IsoCode").IsRequired();
 				});
-				
+
 				// Configure Country as owned entity
 				oa.OwnsOne(a => a.Country, c =>
 				{
@@ -199,14 +199,14 @@ public class StudentFamilyDetailConfiguration : IEntityTypeConfiguration<Student
 				la.Property(a => a.Address3).HasMaxLength(200).HasColumnName("Guardian_LocalAddress_Landmark");
 				la.Property(a => a.City).HasMaxLength(100).HasColumnName("Guardian_LocalAddress_City").IsRequired();
 				la.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("Guardian_LocalAddress_Pincode");
-				
+
 				// Configure State as owned entity
 				la.OwnsOne(a => a.State, s =>
 				{
 					s.Property(st => st.Name).HasMaxLength(100).HasColumnName("Guardian_LocalAddress_State_Name");
 					s.Property(st => st.IsoCode).HasMaxLength(10).HasColumnName("Guardian_LocalAddress_State_IsoCode");
 				});
-				
+
 				// Configure Country as owned entity
 				la.OwnsOne(a => a.Country, c =>
 				{

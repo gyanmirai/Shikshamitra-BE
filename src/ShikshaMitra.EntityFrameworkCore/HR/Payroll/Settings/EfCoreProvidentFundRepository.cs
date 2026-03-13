@@ -7,5 +7,5 @@ namespace ShikshaMitra.HR.Payroll.Settings;
 
 public class EfCoreProvidentFundRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider) : EfCoreRepository<ShikshaMitraDbContext, ProvidentFund, Guid>(dbContextProvider), IProvidentFundRepository
 {
-	
+
 }

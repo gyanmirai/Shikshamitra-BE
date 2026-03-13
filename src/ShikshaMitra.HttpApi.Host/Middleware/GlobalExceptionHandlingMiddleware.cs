@@ -26,7 +26,7 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 	private readonly IStringLocalizer<ShikshaMitraResource> _localizer;
 
 	public GlobalExceptionHandlingMiddleware(
-		RequestDelegate next, 
+		RequestDelegate next,
 		ILogger<GlobalExceptionHandlingMiddleware> logger,
 		IStringLocalizer<ShikshaMitraResource> localizer)
 	{
@@ -236,12 +236,12 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 		{
 			// Try to localize the message/code
 			var localizedString = _localizer[messageOrCode];
-			
+
 			// If localization is found and different from the key, use it
 			if (!localizedString.ResourceNotFound)
 			{
 				var message = localizedString.Value;
-				
+
 				// Replace placeholders with data from error if available
 				if (errorData != null && errorData.Count > 0)
 				{
@@ -252,10 +252,10 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 						message = message.Replace(placeholder, value);
 					}
 				}
-				
+
 				return message;
 			}
-			
+
 			// If localization not found, return the original message
 			return messageOrCode;
 		}
@@ -347,13 +347,13 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 		{
 			// Try to localize the error code
 			var localizedString = _localizer[businessException.Code];
-			
+
 			// If localization is found and different from the key, use it
 			if (!localizedString.ResourceNotFound)
 			{
 				// Replace placeholders with data from exception if available
 				var message = localizedString.Value;
-				
+
 				if (businessException.Data != null && businessException.Data.Count > 0)
 				{
 					foreach (var key in businessException.Data.Keys)
@@ -363,13 +363,13 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 						message = message.Replace(placeholder, value);
 					}
 				}
-				
+
 				return message;
 			}
-			
+
 			// If localization not found, return the error code or message
-			return !string.IsNullOrEmpty(businessException.Message) 
-				? businessException.Message 
+			return !string.IsNullOrEmpty(businessException.Message)
+				? businessException.Message
 				: businessException.Code;
 		}
 		catch (Exception ex)

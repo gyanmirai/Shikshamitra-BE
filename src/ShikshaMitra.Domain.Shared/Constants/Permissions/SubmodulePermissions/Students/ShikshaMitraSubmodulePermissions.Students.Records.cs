@@ -65,8 +65,8 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string StudentManagementAdd = $"{SubmoduleName}.StudentManagement.Add";
 			public const string StudentManagementDelete = $"{SubmoduleName}.StudentManagement.Delete";
 
-			public static readonly string[] All = { 
-				
+			public static readonly string[] All = {
+
 				StudentManagementView, StudentManagementAdd, StudentManagementDelete
 			};
 

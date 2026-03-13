@@ -29,6 +29,12 @@ dotnet run --project src/ShikshaMitra.HttpApi.Host
 
 ## 📚 Core Concepts
 
+### Architecture & Best Practices
+- [Project Best Practices](./best-practices.md) — Architecture rules, coding conventions, patterns enforced across all modules
+
+### Module Documentation
+- [HR Module](./modules/hr.md) — Employees, Attendance & Leave, Payroll, Calendar
+
 ### UserScope
 Hierarchical access: Board → Medium → Stage → Class → Division
 - Principle: `NULL = ALL`
@@ -48,6 +54,10 @@ Complete tenant isolation
 
 | Topic | Document |
 |-------|----------|
+| **Architecture** | |
+| Best Practices | [best-practices.md](./best-practices.md) |
+| **Module Documentation** | |
+| HR Module | [modules/hr.md](./modules/hr.md) |
 | **API Reference** | |
 | Employee API | [api/employee/README.md](./api/employee/README.md) |
 | Employee Payroll API | [api/employee/Employee-Payroll-API.md](./api/employee/Employee-Payroll-API.md) |

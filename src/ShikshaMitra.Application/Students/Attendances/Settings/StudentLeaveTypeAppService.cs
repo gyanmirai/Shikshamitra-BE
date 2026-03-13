@@ -87,9 +87,9 @@ public class StudentLeaveTypeAppService : ApplicationService, IStudentLeaveTypeA
 	public async Task DeleteAsync(Guid id)
 	{
 		var leaveType = await _studentLeaveTypeRepository.GetAsync(id);
-		
+
 		await _studentLeaveTypeManager.ValidateDeleteAsync(leaveType);
-		
+
 		await _studentLeaveTypeRepository.DeleteAsync(leaveType, autoSave: true);
 	}
 
@@ -97,7 +97,7 @@ public class StudentLeaveTypeAppService : ApplicationService, IStudentLeaveTypeA
 	public async Task<ListResultDto<StudentLeaveTypeDto>> GetActiveListAsync()
 	{
 		var leaveTypes = await _studentLeaveTypeRepository.GetActiveLeaveTypesAsync(CurrentTenant.Id);
-		
+
 		return new ListResultDto<StudentLeaveTypeDto>(
 			ObjectMapper.Map<List<StudentLeaveType>, List<StudentLeaveTypeDto>>(leaveTypes));
 	}

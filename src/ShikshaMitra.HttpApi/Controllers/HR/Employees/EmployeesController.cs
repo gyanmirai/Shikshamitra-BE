@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.HR.Employees;
 using Volo.Abp;
-using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.HR.Employees;
@@ -23,10 +22,14 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 public class EmployeesController : AbpControllerBase
 {
     private readonly IEmployeeAppService _employeeAppService;
+    private readonly IEmployeeAuthorizationService _authorizationService;
 
-    public EmployeesController(IEmployeeAppService employeeAppService)
+    public EmployeesController(
+        IEmployeeAppService employeeAppService,
+        IEmployeeAuthorizationService authorizationService)
     {
         _employeeAppService = employeeAppService;
+        _authorizationService = authorizationService;
     }
 
     /// <summary>
@@ -38,10 +41,13 @@ public class EmployeesController : AbpControllerBase
         [FromQuery] Guid? mediumStageId = null,
         [FromQuery] string? status = null,
         [FromQuery, Range(1, int.MaxValue)] int page = 1,
-        [FromQuery, Range(10, 100)] int pageSize = 10,
+        [FromQuery, Range(10, 50)] int pageSize = 10,
         [FromQuery] bool? isTeaching = null,
         [FromQuery] Guid? roleId = null)
     {
+        // SECURITY: Limit max page size to prevent excessive data exposure
+        pageSize = Math.Min(pageSize, 50);
+
         // Create input for existing service
         var input = new GetEmployeeListInput
         {
@@ -62,8 +68,12 @@ public class EmployeesController : AbpControllerBase
     [HttpGet("{employeeId}")]
     [ProducesResponseType(typeof(EmployeeDetails), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public virtual async Task<EmployeeDetails> GetEmployeeByIdAsync(Guid employeeId)
     {
+        // Check access rights (IDOR protection)
+        await _authorizationService.CheckEmployeeAccessAsync(employeeId);
+
         var employee = await _employeeAppService.GetAsync(employeeId);
         return MapToEmployeeDetails(employee);
     }
@@ -74,8 +84,14 @@ public class EmployeesController : AbpControllerBase
     [HttpGet("search")]
     [ProducesResponseType(typeof(EmployeeSearchResponse), StatusCodes.Status200OK)]
     public virtual async Task<EmployeeSearchResponse> SearchEmployeesAsync(
-        [FromQuery, MinLength(2)] string? search = null)
+        [FromQuery, MinLength(3)] string? search = null)
     {
+        // Prevent empty searches (security: enumeration attack prevention)
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            return new EmployeeSearchResponse { Items = new System.Collections.Generic.List<EmployeeSearchItem>() };
+        }
+
         var input = new SearchEmployeeInput
         {
             SearchTerm = search,

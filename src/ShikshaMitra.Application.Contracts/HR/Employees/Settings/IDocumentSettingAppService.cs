@@ -13,22 +13,22 @@ public interface
 	/// Get all document configurations (matches OpenAPI contract)
 	/// </summary>
 	Task<DocumentListResponse> GetDocumentListAsync(int page, int pageSize);
-	
+
 	/// <summary>
 	/// Get document configuration by ID (matches OpenAPI contract)
 	/// </summary>
 	Task<DocumentItem> GetDocumentByIdAsync(Guid documentId);
-	
+
 	/// <summary>
 	/// Create document configuration (matches OpenAPI contract)
 	/// </summary>
 	Task<DocumentCreateResponse> CreateDocumentAsync(DocumentRequest input);
-	
+
 	/// <summary>
 	/// Update document configuration (matches OpenAPI contract)
 	/// </summary>
 	Task UpdateDocumentAsync(Guid documentId, DocumentRequest input);
-	
+
 	/// <summary>
 	/// Delete document configuration (matches OpenAPI contract)
 	/// </summary>

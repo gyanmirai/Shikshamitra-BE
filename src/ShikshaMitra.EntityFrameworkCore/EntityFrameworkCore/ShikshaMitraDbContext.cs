@@ -4,13 +4,12 @@ using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.HR.AttendanceAndLeaves;
-using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.EventAndHolidays;
-using ShikshaMitra.HR.Calendar;
+using ShikshaMitra.HR.Calendar.HolidayTypes;
 using ShikshaMitra.HR.Calendar.EventTypes;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.Events;
@@ -205,6 +204,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	DbSet<Employee> Employees { get; set; }
 	DbSet<EmployeeAdditionalDetails> EmployeeAdditionalDetails { get; set; }
+	DbSet<EmployeeFamilyMember> EmployeeFamilyMembers { get; set; }
 	DbSet<DocumentSetting> DocumentSettings { get; set; }
 
 	// Employee Payroll

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -17,12 +17,12 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
     protected FeeStructureDetail() { }
 
     public FeeStructureDetail(
-        Guid id, 
-        Guid? tenantId, 
-        Guid feeStructureStandardId, 
-        Guid feeHeadId, 
-        decimal amount, 
-        bool isOneTime, 
+        Guid id,
+        Guid? tenantId,
+        Guid feeStructureStandardId,
+        Guid feeHeadId,
+        decimal amount,
+        bool isOneTime,
         bool isOptional) : base(id)
     {
         TenantId = tenantId;

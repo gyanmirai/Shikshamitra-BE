@@ -16,7 +16,7 @@ public class EventAndHolidayAppService(IEventAndHolidayRepository eventAndHolida
 				e => e.StartDate.Year == date.Year && e.StartDate.Month == date.Month,
 				includeDetails: true
 			);
-		
+
 		return new PagedResultDto<EventAndHolidayDto>
 		{
 			TotalCount = eventAndHoliday.Count,

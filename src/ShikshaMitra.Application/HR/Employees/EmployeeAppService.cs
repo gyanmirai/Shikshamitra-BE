@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.Payroll;
@@ -22,7 +22,10 @@ namespace ShikshaMitra.HR.Employees;
 public class EmployeeAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeeAdditionalDetailsRepository additionalDetailsRepository,
+	IEmployeeFamilyMemberRepository familyMemberRepository,
 	EmployeeManager employeeManager,
+	EmployeeDocumentManager employeeDocumentManager,
+	EmployeeAuthorizationService authorizationService,
 	PayrollStructureManager payrollStructureManager,
 	IBlobContainer blobContainer,
 	IEmployeeCacheManager employeeCacheManager,
@@ -53,7 +56,49 @@ public class EmployeeAppService(
 		var employee = await employeeRepository.GetWithDetailsAsync(id, includePayrollStructure: true)
 			?? throw new EntityNotFoundException(typeof(Employee), id);
 
-		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
+		var employeeDto = ObjectMapper.Map<Employee, EmployeeDto>(employee);
+
+		// Load family members from separate table
+		await LoadFamilyMembersAsync(employeeDto, id);
+
+		return employeeDto;
+	}
+
+	private async Task LoadFamilyMembersAsync(EmployeeDto employeeDto, Guid employeeId)
+	{
+		var familyMembers = await familyMemberRepository.GetByEmployeeIdAsync(employeeId);
+
+		var father = familyMembers.FirstOrDefault(fm => fm.RelationType == FamilyRelationType.Father);
+		var mother = familyMembers.FirstOrDefault(fm => fm.RelationType == FamilyRelationType.Mother);
+		var spouse = familyMembers.FirstOrDefault(fm => fm.RelationType == FamilyRelationType.Spouse);
+
+		employeeDto.FatherDetails = MapFamilyMemberToContactDetailsDto(father);
+		employeeDto.MotherDetails = MapFamilyMemberToContactDetailsDto(mother);
+		employeeDto.SpouseDetails = MapFamilyMemberToContactDetailsDto(spouse);
+	}
+
+	private static ContactDetailsDto? MapFamilyMemberToContactDetailsDto(EmployeeFamilyMember? member)
+	{
+		if (member == null)
+		{
+			return null;
+		}
+
+		return new ContactDetailsDto
+		{
+			Name = member.Name,
+			Occupation = member.Occupation,
+			ContactNo = member.ContactNo,
+			Address1 = member.Address1,
+			Address2 = member.Address2,
+			Address3 = member.Address3,
+			City = member.City,
+			StateName = member.StateName,
+			StateIsoCode = member.StateIsoCode,
+			CountryName = member.CountryName,
+			CountryIsoCode = member.CountryIsoCode,
+			PinCode = member.PinCode
+		};
 	}
 
 	public async Task<EmployeeDto> CreateBasicInfoAsync(CreateEmployeeBasicInfoDto input)
@@ -382,18 +427,21 @@ public class EmployeeAppService(
 
 	public async Task<EmployeeDto> UpdateFamilyInfo(Guid employeeId, UpdateEmployeeFamilyDetailsDto input)
 	{
-		// convert the input to domain model and update the employee
+		// SECURITY: Check authorization before update
+		await authorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 
+		// Convert the input to domain model and update the employee family members
 		ContactDetails? fatherDetails = ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input.FatherDetails);
 		ContactDetails? motherDetails = ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input.MotherDetails);
 		ContactDetails? spouseDetails = ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input.SpouseDetails);
 
-		Employee? employee =
-			await employeeManager.UpdateFamilyInfoByEmployeeIdAsync(employeeId, fatherDetails, motherDetails,
-				spouseDetails);
+		await employeeManager.UpdateFamilyInfoByEmployeeIdAsync(employeeId, fatherDetails, motherDetails, spouseDetails);
 
-		// Save the employee (cache invalidation handled in repository)
-		employee = await employeeRepository.UpdateAsync(employee);
+		// Get employee to return (family members are now loaded separately)
+		var employee = await employeeRepository.GetAsync(employeeId);
+
+		// Invalidate cache
+		await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
 
 		// Return the DTO
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
@@ -411,12 +459,12 @@ public class EmployeeAppService(
 		});
 
 		// Call the domain service
-		await employeeManager.AddDocumentsAsync(employeeId, employeeDocuments);
+		await employeeDocumentManager.AddDocumentsAsync(employeeId, employeeDocuments);
 	}
 
 	public async Task<DocumentDto> GetDocumentAsync(Guid employeeId, Guid documentId)
 	{
-		EmployeeDocument document = await employeeManager.GetDocumentAsync(employeeId, documentId);
+		EmployeeDocument document = await employeeDocumentManager.GetDocumentAsync(employeeId, documentId);
 
 		await using var stream = await blobContainer.GetAsync(document.BlobName);
 		await using var memoryStream = new MemoryStream();
@@ -432,7 +480,7 @@ public class EmployeeAppService(
 
 	public async Task<List<DocumentMetadataDto>> GetDocumentMetadataAsync(Guid employeeId)
 	{
-		var documents = await employeeManager.GetDocumentsAsync(employeeId);
+		var documents = await employeeDocumentManager.GetDocumentsAsync(employeeId);
 		return documents.Select(doc => new DocumentMetadataDto
 		{
 			Id = doc.Id,
@@ -444,7 +492,7 @@ public class EmployeeAppService(
 
 	public async Task<DocumentDto> UpdateDocumentAsync(Guid employeeId, Guid documentId, DocumentDto documentDto)
 	{
-		var updatedDocument = await employeeManager.UpdateDocumentAsync(
+		var updatedDocument = await employeeDocumentManager.UpdateDocumentAsync(
 			employeeId,
 			documentId,
 			documentDto.FileName,
@@ -623,12 +671,12 @@ public class EmployeeAppService(
 
 	public async Task DeleteDocumentAsync(Guid employeeId, Guid documentId)
 	{
-		await employeeManager.DeleteDocumentAsync(employeeId, documentId);
+		await employeeDocumentManager.DeleteDocumentAsync(employeeId, documentId);
 	}
 
 	public async Task<string> UploadProfilePictureAsync(Guid employeeId, string fileName, byte[] fileContent)
 	{
-		return await employeeManager.UploadProfilePictureAsync(employeeId, fileName, fileContent);
+		return await employeeDocumentManager.UploadProfilePictureAsync(employeeId, fileName, fileContent);
 	}
 
 	public async Task<DocumentDto?> GetProfilePictureAsync(Guid employeeId)
@@ -912,8 +960,8 @@ public class EmployeeAppService(
 
 	public async Task<EmployeeSearchResponse> SearchAsync(SearchEmployeeInput input)
 	{
-		// Validate minimum search length
-		if (string.IsNullOrEmpty(input.SearchTerm) || input.SearchTerm.Length < 2)
+		// Validate minimum search length (matches controller MinLength(3))
+		if (string.IsNullOrEmpty(input.SearchTerm) || input.SearchTerm.Length < 3)
 		{
 			return new EmployeeSearchResponse { Items = new List<EmployeeSearchItem>() };
 		}

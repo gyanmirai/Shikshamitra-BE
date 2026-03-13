@@ -11,27 +11,27 @@ namespace ShikshaMitra.Academic.Curriculum;
 public class StudentElectiveSelection : FullAuditedEntity<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
-	
+
 	/// <summary>
 	/// Student ID
 	/// </summary>
 	public Guid StudentId { get; private set; }
-	
+
 	/// <summary>
 	/// Elective Group ID
 	/// </summary>
 	public Guid ElectiveGroupId { get; private set; }
-	
+
 	/// <summary>
 	/// Selected Subject ID from the elective group
 	/// </summary>
 	public Guid SelectedSubjectId { get; private set; }
-	
+
 	/// <summary>
 	/// Academic Medium ID
 	/// </summary>
 	public Guid AcademicMediumId { get; private set; }
-	
+
 	/// <summary>
 	/// Student's original preference (optional)
 	/// </summary>

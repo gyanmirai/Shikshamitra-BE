@@ -12,27 +12,27 @@ public class StudentDocument : FullAuditedEntity<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 	public Guid StudentId { get; private set; }
-	
+
 	/// <summary>
 	/// Reference to the DocumentType configuration
 	/// </summary>
 	public Guid DocumentTypeId { get; private set; }
-	
+
 	/// <summary>
 	/// Blob storage path/key for the document
 	/// </summary>
 	public string BlobName { get; private set; }
-	
+
 	/// <summary>
 	/// Original filename uploaded by user
 	/// </summary>
 	public string FileName { get; private set; }
-	
+
 	/// <summary>
 	/// MIME type of the document
 	/// </summary>
 	public string ContentType { get; private set; }
-	
+
 	/// <summary>
 	/// File size in bytes
 	/// </summary>
@@ -66,7 +66,7 @@ public class StudentDocument : FullAuditedEntity<Guid>, IMultiTenant
 		BlobName = Check.NotNullOrWhiteSpace(blobName, nameof(blobName));
 		FileName = Check.NotNullOrWhiteSpace(fileName, nameof(fileName));
 		ContentType = Check.NotNullOrWhiteSpace(contentType, nameof(contentType));
-		
+
 		if (size <= 0)
 		{
 			throw new ArgumentException("File size must be greater than zero", nameof(size));
@@ -86,7 +86,7 @@ public class StudentDocument : FullAuditedEntity<Guid>, IMultiTenant
 		BlobName = Check.NotNullOrWhiteSpace(blobName, nameof(blobName));
 		FileName = Check.NotNullOrWhiteSpace(fileName, nameof(fileName));
 		ContentType = Check.NotNullOrWhiteSpace(contentType, nameof(contentType));
-		
+
 		if (size <= 0)
 		{
 			throw new ArgumentException("File size must be greater than zero", nameof(size));

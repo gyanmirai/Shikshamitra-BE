@@ -16,6 +16,6 @@ public class EmployeeAttendanceSummaryDto
 	public int LeaveDays { get; set; }
 
 	public int HalfDayLeaves { get; set; }
-	
+
 	public PagedResultDto<EmployeeAttendanceDto> EmployeeAttendances { get; set; }
 }

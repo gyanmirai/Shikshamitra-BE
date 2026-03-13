@@ -51,7 +51,7 @@ public class UserScopeAssignmentConfiguration : IEntityTypeConfiguration<UserSco
         // Capture the index builder to avoid duplicate index creation
         var lookupIndex = builder.HasIndex(x => new { x.TenantId, x.UserId, x.IsActive, x.IsDeleted })
             .HasDatabaseName("IX_UserScopeAssignments_Lookup");
-        
+
         // Use Npgsql-specific include properties on the same index
         lookupIndex.IncludeProperties(x => new
         {
@@ -84,7 +84,7 @@ public class UserScopeAssignmentConfiguration : IEntityTypeConfiguration<UserSco
 
         // Foreign Keys (optional - can be added later if needed for referential integrity)
         // Commenting out for now as relationships may not be configured yet
-        
+
         /*
         builder.HasOne<IdentityUser>()
             .WithMany()

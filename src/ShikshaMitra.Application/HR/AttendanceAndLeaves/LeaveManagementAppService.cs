@@ -74,8 +74,8 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 				var startOfMonth = new DateTimeOffset(new DateTime(year.Value, month.Value, 1));
 				var endOfMonth = new DateTimeOffset(startOfMonth.DateTime.AddMonths(1).AddDays(-1));
 
-				query = query.Where(x => 
-					x.StartDate >= startOfMonth && 
+				query = query.Where(x =>
+					x.StartDate >= startOfMonth &&
 					x.StartDate <= endOfMonth);
 			}
 			else if (year.HasValue)
@@ -83,8 +83,8 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 				var startOfYear = new DateTimeOffset(new DateTime(year.Value, 1, 1));
 				var endOfYear = new DateTimeOffset(new DateTime(year.Value, 12, 31));
 
-				query = query.Where(x => 
-					x.StartDate >= startOfYear && 
+				query = query.Where(x =>
+					x.StartDate >= startOfYear &&
 					x.StartDate <= endOfYear);
 			}
 
@@ -365,7 +365,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 			// Validate file type
 			var allowedExtensions = new[] { ".pdf", ".jpg", ".jpeg", ".png" };
 			var extension = Path.GetExtension(fileName).ToLowerInvariant();
-			
+
 			if (string.IsNullOrEmpty(extension))
 			{
 				throw new UserFriendlyException("File must have a valid extension");
@@ -402,7 +402,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves
 			}
 
 			var extension = Path.GetExtension(fileName).ToLowerInvariant();
-			
+
 			// Check magic numbers (file signatures)
 			var isPdf = fileBytes[0] == 0x25 && fileBytes[1] == 0x50 && fileBytes[2] == 0x44 && fileBytes[3] == 0x46; // %PDF
 			var isJpeg = fileBytes[0] == 0xFF && fileBytes[1] == 0xD8 && fileBytes[2] == 0xFF;

@@ -13,5 +13,5 @@ public class EfCoreIDocumentSettingRepository(IDbContextProvider<ShikshaMitraDbC
 	: EfCoreRepository<ShikshaMitraDbContext, DocumentSetting, Guid>(dbContextProvider),
 		IDocumentSettingRepository
 {
-	
+
 }

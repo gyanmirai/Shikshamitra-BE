@@ -10,17 +10,17 @@ using Volo.Abp.EntityFrameworkCore;
 
 namespace ShikshaMitra.HR.Employees.Payroll;
 
-public class EfCoreEmployeePayrollDetailsRepository 
-	: EfCoreRepository<ShikshaMitraDbContext, EmployeePayrollDetails, Guid>, 
+public class EfCoreEmployeePayrollDetailsRepository
+	: EfCoreRepository<ShikshaMitraDbContext, EmployeePayrollDetails, Guid>,
 	  IEmployeePayrollDetailsRepository
 {
-	public EfCoreEmployeePayrollDetailsRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider) 
+	public EfCoreEmployeePayrollDetailsRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
 		: base(dbContextProvider)
 	{
 	}
 
 	public async Task<EmployeePayrollDetails?> GetByEmployeeIdAsync(
-		Guid employeeId, 
+		Guid employeeId,
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
@@ -32,7 +32,7 @@ public class EfCoreEmployeePayrollDetailsRepository
 	/// Batch fetch payroll details for multiple employees (single query)
 	/// </summary>
 	public async Task<Dictionary<Guid, EmployeePayrollDetails>> GetByEmployeeIdsAsync(
-		IEnumerable<Guid> employeeIds, 
+		IEnumerable<Guid> employeeIds,
 		CancellationToken cancellationToken = default)
 	{
 		var idList = employeeIds.ToList();
@@ -65,17 +65,17 @@ public class EfCoreEmployeePayrollDetailsRepository
 		}
 }
 
-public class EfCoreEmployeePayrollComponentRepository 
-	: EfCoreRepository<ShikshaMitraDbContext, EmployeePayrollComponent, Guid>, 
+public class EfCoreEmployeePayrollComponentRepository
+	: EfCoreRepository<ShikshaMitraDbContext, EmployeePayrollComponent, Guid>,
 	  IEmployeePayrollComponentRepository
 {
-	public EfCoreEmployeePayrollComponentRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider) 
+	public EfCoreEmployeePayrollComponentRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
 		: base(dbContextProvider)
 	{
 	}
 
 	public async Task<List<EmployeePayrollComponent>> GetByEmployeeIdAsync(
-		Guid employeeId, 
+		Guid employeeId,
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
@@ -85,7 +85,7 @@ public class EfCoreEmployeePayrollComponentRepository
 	}
 
 	public async Task<List<EmployeePayrollComponent>> GetEarningsByEmployeeIdAsync(
-		Guid employeeId, 
+		Guid employeeId,
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
@@ -95,7 +95,7 @@ public class EfCoreEmployeePayrollComponentRepository
 	}
 
 	public async Task<List<EmployeePayrollComponent>> GetDeductionsByEmployeeIdAsync(
-		Guid employeeId, 
+		Guid employeeId,
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
@@ -105,8 +105,8 @@ public class EfCoreEmployeePayrollComponentRepository
 	}
 
 	public async Task DeleteByEmployeeIdAsync(
-		Guid employeeId, 
-		bool isEarning, 
+		Guid employeeId,
+		bool isEarning,
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
@@ -124,7 +124,7 @@ public class EfCoreEmployeePayrollComponentRepository
 	/// Batch fetch payroll components for multiple employees (single query)
 	/// </summary>
 	public async Task<ILookup<Guid, EmployeePayrollComponent>> GetByEmployeeIdsAsync(
-		IEnumerable<Guid> employeeIds, 
+		IEnumerable<Guid> employeeIds,
 		CancellationToken cancellationToken = default)
 	{
 		var idList = employeeIds.ToList();

@@ -288,7 +288,7 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 
 		// 2. Check UserScope access (basic check for now)
 		var userScope = await _userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
-		if (!userScope.IsAdmin && userScope.StandardIds.Any() && 
+		if (!userScope.IsAdmin && userScope.StandardIds.Any() &&
 			!userScope.StandardIds.Contains(assignment.StandardId))
 		{
 			throw new BusinessException("Volo.Abp:010001"); // Unauthorized
@@ -367,7 +367,7 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		{
 			var schedule = new AssignmentDivisionSchedule(
 				GuidGenerator.Create(),
-				assignment.Id,          
+				assignment.Id,
 				divisionInput.DivisionId,
 				divisionInput.PublishDate,
 				divisionInput.DueDate,

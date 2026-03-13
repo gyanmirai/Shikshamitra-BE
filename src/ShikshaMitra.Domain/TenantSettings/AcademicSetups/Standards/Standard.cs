@@ -18,7 +18,7 @@ public class Standard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public int AgeLowerLimit { get; internal set; }
 
 	public Guid? ShiftId { get; internal set; }
-	
+
 	public ShiftManagement Shift { get; set; }
 
 	private Standard()

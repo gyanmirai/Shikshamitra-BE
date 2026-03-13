@@ -12,17 +12,17 @@ public class DeductionComponentDto : FullAuditedEntityDto<Guid>
 	/// Name of the deduction component
 	/// </summary>
 	public string Name { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Description of the component
 	/// </summary>
 	public string? Description { get; set; }
-	
+
 	/// <summary>
 	/// Component type (Fixed or Variable)
 	/// </summary>
 	public DeductionComponentType ComponentType { get; set; }
-	
+
 	/// <summary>
 	/// What this component depends on
 	/// </summary>
@@ -37,17 +37,17 @@ public class DeductionComponentDto : FullAuditedEntityDto<Guid>
 	/// Amount (can be numeric like "1800" or percentage like "10%")
 	/// </summary>
 	public string Amount { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Whether visible in payslip
 	/// </summary>
 	public bool VisibleInPayslip { get; set; }
-	
+
 	/// <summary>
 	/// Display order
 	/// </summary>
 	public int DisplayOrder { get; set; }
-	
+
 	/// <summary>
 	/// Whether component is active
 	/// </summary>

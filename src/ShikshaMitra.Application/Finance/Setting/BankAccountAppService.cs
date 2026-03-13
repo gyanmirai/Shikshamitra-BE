@@ -44,19 +44,19 @@ public class BankAccountAppService : ApplicationService, IBankAccountAppService
     public async Task<PaginatedBankAccountResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
     {
         var query = await _bankAccountRepository.GetQueryableAsync();
-        
+
         query = query.Where(x => x.AcademicYearId == academicYearId);
 
         if (!search.IsNullOrWhiteSpace())
         {
-            query = query.Where(x => x.BankName.Contains(search) || 
-                                     x.BranchName.Contains(search) || 
+            query = query.Where(x => x.BankName.Contains(search) ||
+                                     x.BranchName.Contains(search) ||
                                      x.AccountNumber.Contains(search) ||
                                      x.AccountHolderName.Contains(search));
         }
 
         var totalCount = await AsyncExecuter.CountAsync(query);
-        
+
         var items = await AsyncExecuter.ToListAsync(
             query
             .OrderByDescending(x => x.CreationTime)

@@ -1,4 +1,4 @@
-using ShikshaMitra.HR.Calendar;
+﻿using ShikshaMitra.HR.Calendar.HolidayTypes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;

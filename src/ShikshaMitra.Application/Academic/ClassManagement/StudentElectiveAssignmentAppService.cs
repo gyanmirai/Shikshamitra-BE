@@ -143,7 +143,7 @@ public class StudentElectiveAssignmentAppService(
 					.Select(a => a.SelectedSubjectId)
 					.Distinct()
 					.ToList();
-				
+
 				if (invalidSubjects.Any())
 				{
 					throw new BusinessException("ClassManagement:SubjectNotInElectiveGroup")

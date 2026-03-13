@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace ShikshaMitra.HR.Payroll.SalaryStructure;
 
@@ -11,7 +11,7 @@ public class SalaryStructureResponseDto
 	/// List of earning components.
 	/// </summary>
 	public List<SalaryComponentDto> EarningComponents { get; set; } = new();
-	
+
 	/// <summary>
 	/// List of deduction components.
 	/// </summary>

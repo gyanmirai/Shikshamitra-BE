@@ -114,7 +114,7 @@ public class StudentInquiryAppService(
 			 s => s.ContactDetail,
 			 s => s.Notes
 		);
-		
+
 		var query = queryable
 			.Where(s => s.Status == StudentLifeCycleStatusEnum.Inquiry
 				&& s.AcademicMediumId == academicMediumId
@@ -134,7 +134,7 @@ public class StudentInquiryAppService(
 		}
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
-		
+
 		if (totalCount == 0)
 		{
 			return new PagedResultDto<StudentEnrollmentListDto>(0, new List<StudentEnrollmentListDto>());
@@ -147,7 +147,7 @@ public class StudentInquiryAppService(
 
 		var results = await AsyncExecuter.ToListAsync(pagedQuery);
 		var resultList = ObjectMapper.Map<List<Student>, List<StudentEnrollmentListDto>>(results);
-		
+
 		// Use batch enrichment to avoid N+1 problem
 		await dtoEnricher.EnrichDtoListAsync(resultList, results);
 

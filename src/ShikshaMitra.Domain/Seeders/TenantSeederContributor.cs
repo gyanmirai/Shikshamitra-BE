@@ -68,7 +68,7 @@ public class TenantSeederContributor(
 			var tenant = await tenantManager.CreateAsync(input.Name);
 			// Override the generated ID with our hardcoded ID
 			typeof(Tenant).GetProperty("Id")?.SetValue(tenant, tenantInfo.Id);
-			
+
 			input.MapExtraPropertiesTo(tenant);
 
 			await tenantRepository.InsertAsync(tenant);

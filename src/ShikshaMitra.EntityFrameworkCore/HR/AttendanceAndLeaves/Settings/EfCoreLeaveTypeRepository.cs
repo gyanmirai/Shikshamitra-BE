@@ -24,15 +24,15 @@ public class EfCoreLeaveTypeRepository : EfCoreRepository<ShikshaMitraDbContext,
 	public async Task<bool> IsTypeExistsAsync(Guid educationMediumStageId, string type, Guid? excludeId = null)
 	{
 		var dbSet = await GetDbSetAsync();
-		var query = dbSet.Where(x => 
-			x.EducationMediumStageId == educationMediumStageId && 
+		var query = dbSet.Where(x =>
+			x.EducationMediumStageId == educationMediumStageId &&
 			x.Type.ToLower() == type.ToLower());
-		
+
 		if (excludeId.HasValue)
 		{
 			query = query.Where(x => x.Id != excludeId.Value);
 		}
-		
+
 		return await query.AnyAsync();
 	}
 
@@ -40,8 +40,8 @@ public class EfCoreLeaveTypeRepository : EfCoreRepository<ShikshaMitraDbContext,
 	{
 		var dbSet = await GetDbSetAsync();
 		return await dbSet
-			.Where(x => 
-				x.EducationMediumStageId == educationMediumStageId && 
+			.Where(x =>
+				x.EducationMediumStageId == educationMediumStageId &&
 				x.Type.ToLower() == type.ToLower())
 			.FirstOrDefaultAsync();
 	}

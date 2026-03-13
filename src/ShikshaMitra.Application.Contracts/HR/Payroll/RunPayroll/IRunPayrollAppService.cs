@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
@@ -14,7 +14,7 @@ public interface IRunPayrollAppService : IApplicationService
 	/// <param name="input">Input with month, page, and pageSize</param>
 	/// <returns>Payroll preview with employee items</returns>
 	Task<RunPayrollResponse> GetPreviewAsync(GetRunPayrollInput input);
-	
+
 	/// <summary>
 	/// Generate and lock payroll for a month
 	/// </summary>

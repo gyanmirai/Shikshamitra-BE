@@ -8,13 +8,16 @@ namespace ShikshaMitra.HR.Employees;
 public class CreateEmployeeBasicInfoDto : IValidatableObject
 {
 	[MaxLength(256)]
+	[RegularExpression(@"^[a-zA-Z\s\.\-']+$", ErrorMessage = "Last name contains invalid characters")]
 	public string? LastName { get; set; }
 
 	[Required(ErrorMessage = "First name is required.")]
 	[MaxLength(256)]
+	[RegularExpression(@"^[a-zA-Z\s\.\-']+$", ErrorMessage = "First name contains invalid characters")]
 	public string FirstName { get; set; }
 
 	[MaxLength(256)]
+	[RegularExpression(@"^[a-zA-Z\s\.\-']+$", ErrorMessage = "Middle name contains invalid characters")]
 	public string? MiddleName { get; set; }
 
 	[MaxLength(128)]

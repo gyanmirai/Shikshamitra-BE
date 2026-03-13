@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -29,7 +29,7 @@ public class EventController : ShikshaMitraController
     /// </summary>
     /// <remarks>
     /// Sample request:
-    /// 
+    ///
     ///     GET /api/calendar/events?search=Team%20Meeting&pageNumber=1&pageSize=10&sorting=title
     /// </remarks>
     /// <param name="input">Filter and pagination parameters</param>
@@ -68,7 +68,7 @@ public class EventController : ShikshaMitraController
     /// </summary>
     /// <remarks>
     /// Sample request:
-    /// 
+    ///
     ///     POST /api/calendar/events?academicYearId=3fa85f64-5717-4562-b3fc-2c963f66afa6
     ///     {
     ///         "title": "Team Meeting",
@@ -98,7 +98,7 @@ public class EventController : ShikshaMitraController
     /// </summary>
     /// <remarks>
     /// Sample request:
-    /// 
+    ///
     ///     PUT /api/calendar/events/3fa85f64-5717-4562-b3fc-2c963f66afa6
     ///     {
     ///         "title": "Team Meeting - Updated",

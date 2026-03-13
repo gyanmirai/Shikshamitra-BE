@@ -3339,7 +3339,50 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppEmployeeLeaves", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories.AutomatedNotificationsSettings", b =>
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.NotificationInfo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDelivered")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("NotificationTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("NotificationType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReceiverName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReceiverRole")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AppNotificationInfos", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.AutomatedNotificationsSettings", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -3372,7 +3415,7 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppAutomatedNotificationsSettings", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories.CustomAttendanceRule", b =>
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.CustomAttendanceRule", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -3418,49 +3461,6 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("AppCustomAttendanceRules", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories.NotificationInfo", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<bool>("IsDelivered")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTimeOffset>("NotificationTime")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("NotificationType")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ReceiverName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ReceiverRole")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("AppNotificationInfos", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicy", b =>
@@ -3853,7 +3853,7 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppEvents", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.HR.Calendar.HolidayType", b =>
+            modelBuilder.Entity("ShikshaMitra.HR.Calendar.HolidayTypes.HolidayType", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -4211,137 +4211,10 @@ namespace ShikshaMitra.Migrations
                                 .HasColumnType("text");
                         });
 
-                    b.ComplexProperty<Dictionary<string, object>>("FatherDetails", "ShikshaMitra.HR.Employees.Employee.FatherDetails#ContactDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("Address1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("City")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("ContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("CountryIsoCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("CountryName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Name")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Occupation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PinCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("StateIsoCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("StateName")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("MotherDetails", "ShikshaMitra.HR.Employees.Employee.MotherDetails#ContactDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("Address1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("City")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("ContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("CountryIsoCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("CountryName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Name")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Occupation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PinCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("StateIsoCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("StateName")
-                                .HasColumnType("text");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("SpouseDetails", "ShikshaMitra.HR.Employees.Employee.SpouseDetails#ContactDetails", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("Address1")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address2")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Address3")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("City")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("ContactNo")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("CountryIsoCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("CountryName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Name")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Occupation")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("PinCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("StateIsoCode")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("StateName")
-                                .HasColumnType("text");
-                        });
-
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
                         .HasDatabaseName("IX_Employees_Email");
-
-                    b.HasIndex("EmployeeCode")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Employees_EmployeeCode_Unique");
 
                     b.HasIndex("PayrollStructureId");
 
@@ -4355,6 +4228,10 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("UserId")
                         .HasDatabaseName("IX_Employees_UserId");
+
+                    b.HasIndex("TenantId", "EmployeeCode")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Employees_TenantId_EmployeeCode_Unique");
 
                     b.HasIndex("TenantId", "EmployeeStatusType")
                         .HasDatabaseName("IX_Employees_TenantId_Status");
@@ -4506,6 +4383,111 @@ namespace ShikshaMitra.Migrations
                         .HasDatabaseName("IX_EmployeeAttendances_Tenant_Employee_Date");
 
                     b.ToTable("AppEmployeeAttendances", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.Employees.EmployeeFamilyMember", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Address1")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Address2")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Address3")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ContactNo")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("CountryIsoCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("CountryName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Occupation")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("PinCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<int>("RelationType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("StateIsoCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("StateName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId")
+                        .HasDatabaseName("IX_EmployeeFamilyMembers_EmployeeId");
+
+                    b.HasIndex("EmployeeId", "RelationType")
+                        .IsUnique()
+                        .HasDatabaseName("IX_EmployeeFamilyMembers_EmployeeId_RelationType_Unique");
+
+                    b.ToTable("AppEmployeeFamilyMembers", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Payroll.EmployeePayrollComponent", b =>
@@ -11184,6 +11166,17 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Employee");
                 });
 
+            modelBuilder.Entity("ShikshaMitra.HR.Employees.EmployeeFamilyMember", b =>
+                {
+                    b.HasOne("ShikshaMitra.HR.Employees.Employee", "Employee")
+                        .WithMany("FamilyMembers")
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Payroll.EmployeePayrollComponent", b =>
                 {
                     b.HasOne("ShikshaMitra.HR.Employees.Employee", "Employee")
@@ -12889,6 +12882,8 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
                 {
                     b.Navigation("AdditionalDetails");
+
+                    b.Navigation("FamilyMembers");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Books.Book", b =>

@@ -78,7 +78,7 @@ public class SalarySlipController : AbpControllerBase
 			var monthName = parts[0];
 			var year = parts[1];
 
-			if (DateTime.TryParseExact(monthName, "MMMM", CultureInfo.InvariantCulture, 
+			if (DateTime.TryParseExact(monthName, "MMMM", CultureInfo.InvariantCulture,
 				DateTimeStyles.None, out var date))
 			{
 				return $"{year}-{date.Month:D2}";

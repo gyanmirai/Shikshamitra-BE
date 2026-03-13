@@ -12,12 +12,12 @@ namespace ShikshaMitra.Students.Attendance.Settings;
 public class StudentLeaveType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
-	
+
 	/// <summary>
 	/// Name of the leave type (e.g., "Sick", "Casual Leave", "Medical Leave")
 	/// </summary>
 	public string LeaveTypeName { get; private set; }
-	
+
 	/// <summary>
 	/// Color code for UI representation (hex color code)
 	/// </summary>
@@ -53,7 +53,7 @@ public class StudentLeaveType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void SetLeaveTypeName(string leaveTypeName)
 	{
 		LeaveTypeName = Check.NotNullOrWhiteSpace(leaveTypeName, nameof(leaveTypeName), StudentLeaveTypeConsts.MaxLeaveTypeNameLength);
-		
+
 		if (leaveTypeName.Length < StudentLeaveTypeConsts.MinLeaveTypeNameLength)
 		{
 			throw new BusinessException("SM:LeaveTypeNameTooShort")
@@ -68,7 +68,7 @@ public class StudentLeaveType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void SetColor(string color)
 	{
 		Color = Check.NotNullOrWhiteSpace(color, nameof(color), StudentLeaveTypeConsts.MaxColorLength);
-		
+
 		// Validate hex color format
 		if (!System.Text.RegularExpressions.Regex.IsMatch(color, @"^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"))
 		{

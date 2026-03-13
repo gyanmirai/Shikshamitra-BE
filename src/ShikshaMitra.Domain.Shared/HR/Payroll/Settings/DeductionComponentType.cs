@@ -9,7 +9,7 @@ public enum DeductionComponentType
 	/// Fixed amount component (e.g., PF = 1800)
 	/// </summary>
 	Fixed = 0,
-	
+
 	/// <summary>
 	/// Variable/percentage-based component (e.g., Tax = 10% of Gross)
 	/// </summary>

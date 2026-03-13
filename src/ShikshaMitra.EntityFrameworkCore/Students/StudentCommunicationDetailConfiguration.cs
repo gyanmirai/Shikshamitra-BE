@@ -23,14 +23,14 @@ public class StudentCommunicationDetailConfiguration : IEntityTypeConfiguration<
 			la.Property(a => a.Address3).HasMaxLength(200).HasColumnName("LocalAddress_Landmark");
 			la.Property(a => a.City).HasMaxLength(100).HasColumnName("LocalAddress_City").IsRequired();
 			la.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("LocalAddress_Pincode");
-			
+
 			// Configure State as owned entity
 			la.OwnsOne(a => a.State, s =>
 			{
 				s.Property(st => st.Name).HasMaxLength(100).HasColumnName("LocalAddress_State_Name");
 				s.Property(st => st.IsoCode).HasMaxLength(10).HasColumnName("LocalAddress_State_IsoCode");
 			});
-			
+
 			// Configure Country as owned entity
 			la.OwnsOne(a => a.Country, c =>
 			{
@@ -49,14 +49,14 @@ public class StudentCommunicationDetailConfiguration : IEntityTypeConfiguration<
 			pa.Property(a => a.Address3).HasMaxLength(200).HasColumnName("PermanentAddress_Landmark");
 			pa.Property(a => a.City).HasMaxLength(100).HasColumnName("PermanentAddress_City").IsRequired();
 			pa.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("PermanentAddress_Pincode");
-			
+
 			// Configure State as owned entity
 			pa.OwnsOne(a => a.State, s =>
 			{
 				s.Property(st => st.Name).HasMaxLength(100).HasColumnName("PermanentAddress_State_Name");
 				s.Property(st => st.IsoCode).HasMaxLength(10).HasColumnName("PermanentAddress_State_IsoCode");
 			});
-			
+
 			// Configure Country as owned entity
 			pa.OwnsOne(a => a.Country, c =>
 			{
@@ -75,14 +75,14 @@ public class StudentCommunicationDetailConfiguration : IEntityTypeConfiguration<
 			ea.Property(a => a.Address3).HasMaxLength(200).HasColumnName("EmergencyAddress_Landmark");
 			ea.Property(a => a.City).HasMaxLength(100).HasColumnName("EmergencyAddress_City").IsRequired();
 			ea.Property(a => a.Pincode).HasMaxLength(10).HasColumnName("EmergencyAddress_Pincode");
-			
+
 			// Configure State as owned entity
 			ea.OwnsOne(a => a.State, s =>
 			{
 				s.Property(st => st.Name).HasMaxLength(100).HasColumnName("EmergencyAddress_State_Name");
 				s.Property(st => st.IsoCode).HasMaxLength(10).HasColumnName("EmergencyAddress_State_IsoCode");
 			});
-			
+
 			// Configure Country as owned entity
 			ea.OwnsOne(a => a.Country, c =>
 			{

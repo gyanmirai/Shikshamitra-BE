@@ -12,17 +12,17 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 	: EfCoreRepository<ShikshaMitraDbContext, EmployeeLeave, Guid>(dbContextProvider), IEmployeeLeaveRepository
 {
 	public async Task<bool> HasOverlappingLeaveAsync(
-		Guid employeeId, 
-		DateTimeOffset startDate, 
+		Guid employeeId,
+		DateTimeOffset startDate,
 		DateTimeOffset endDate,
 		Guid? excludeLeaveId = null)
 	{
 		var dbSet = await GetDbSetAsync();
 
-		var query = dbSet.Where(x => 
+		var query = dbSet.Where(x =>
 			x.EmployeeId == employeeId &&
 			!x.IsDeleted &&
-			(x.Status == EmployeeLeaveStatusType.Pending || 
+			(x.Status == EmployeeLeaveStatusType.Pending ||
 			 x.Status == EmployeeLeaveStatusType.Approved ||
 			 x.Status == EmployeeLeaveStatusType.Reviewed) &&
 			((x.StartDate <= startDate && x.EndDate >= startDate) ||
@@ -38,8 +38,8 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 	}
 
 	public async Task<int> GetApprovedLeaveDaysAsync(
-		Guid employeeId, 
-		Guid leaveTypeId, 
+		Guid employeeId,
+		Guid leaveTypeId,
 		int year)
 	{
 		var dbSet = await GetDbSetAsync();
@@ -48,7 +48,7 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 		var endOfYear = new DateTimeOffset(new DateTime(year, 12, 31));
 
 		var leaves = await dbSet
-			.Where(x => 
+			.Where(x =>
 				x.EmployeeId == employeeId &&
 				x.LeaveTypeId == leaveTypeId &&
 				x.Status == EmployeeLeaveStatusType.Approved &&

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Application.Contracts.HR.Calendar.CalendarView;
@@ -29,9 +29,9 @@ public class CalendarViewController : ShikshaMitraController
     /// </summary>
     /// <remarks>
     /// Sample request:
-    /// 
+    ///
     ///     GET /api/calendar/view?academicYearId=550e8400-e29b-41d4-a716-446655440000&amp;page=1&amp;search=holiday
-    /// 
+    ///
     /// Supports filtering by:
     /// - academicYearId (required): Filter by academic year
     /// - eventTypeIds: Filter by specific event types
@@ -56,9 +56,9 @@ public class CalendarViewController : ShikshaMitraController
     /// </summary>
     /// <remarks>
     /// Sample request:
-    /// 
+    ///
     ///     GET /api/calendar/items/550e8400-e29b-41d4-a716-446655440000
-    /// 
+    ///
     /// Returns:
     /// - For events: id, calendarItemType, status, title, date, time, audienceCount, eventType, mode, venue, description
     /// - For holidays: id, calendarItemType, status, title, date, audienceCount, holidayType, description

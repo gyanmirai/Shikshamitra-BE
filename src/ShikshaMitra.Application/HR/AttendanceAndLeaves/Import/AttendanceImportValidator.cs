@@ -42,7 +42,7 @@ public class AttendanceImportValidator : ITransientDependency
 		}
 
 		var employeeCodeUpper = row.EmployeeCode.Trim().ToUpperInvariant();
-		
+
 		if (!employeeLookup.TryGetValue(employeeCodeUpper, out var employee))
 		{
 			var suggestions = FindSimilarEmployeeCodes(employeeCodeUpper, employeeLookup.Keys);
@@ -92,7 +92,7 @@ public class AttendanceImportValidator : ITransientDependency
 		{
 			var cleanRowContact = CleanPhoneNumber(row.ContactNo);
 			var cleanEmployeeContact = CleanPhoneNumber(employee.MobileNo);
-			
+
 			if (!string.Equals(cleanRowContact, cleanEmployeeContact, StringComparison.OrdinalIgnoreCase))
 			{
 				result.AddWarning(
@@ -357,7 +357,7 @@ public class AttendanceImportValidator : ITransientDependency
 			var h = int.Parse(timeMatch.Groups[1].Value);
 			var m = int.Parse(timeMatch.Groups[2].Value);
 			hours = h + (m / 60.0);
-			
+
 			if (hours < 0 || hours > MaxWorkingHoursPerDay)
 			{
 				return new HoursParseResult

@@ -52,7 +52,7 @@ public class AdditionalInfoController : AbpControllerBase
 	{
 		var updateDto = AdditionalInfoContractMapper.ToUpdateDto(request);
 		await _employeeAppService.UpdateAdditionalDetailsAsync(employeeId, updateDto);
-		
+
 		return Ok();
 	}
 }

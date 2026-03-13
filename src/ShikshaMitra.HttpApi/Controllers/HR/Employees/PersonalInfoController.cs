@@ -22,10 +22,14 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 public class PersonalInfoController : AbpControllerBase
 {
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
+	private readonly IEmployeeAuthorizationService _authorizationService;
 
-	public PersonalInfoController(IEmployeePersonalInfoAppService personalInfoAppService)
+	public PersonalInfoController(
+		IEmployeePersonalInfoAppService personalInfoAppService,
+		IEmployeeAuthorizationService authorizationService)
 	{
 		_personalInfoAppService = personalInfoAppService;
+		_authorizationService = authorizationService;
 	}
 
 	/// <summary>
@@ -50,9 +54,13 @@ public class PersonalInfoController : AbpControllerBase
 	/// </summary>
 	[HttpGet("{employeeId}/personal-info")]
 	[ProducesResponseType(typeof(PersonalInfoResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<PersonalInfoResponse> GetAsync([FromRoute, Required] Guid employeeId)
 	{
+		// Check access rights (IDOR protection)
+		await _authorizationService.CheckEmployeeAccessAsync(employeeId);
+
 		var result = await _personalInfoAppService.GetAsync(employeeId);
 		return PersonalInfoContractMapper.ToResponse(result);
 	}
@@ -63,11 +71,15 @@ public class PersonalInfoController : AbpControllerBase
 	[HttpPut("{employeeId}/personal-info")]
 	[ProducesResponseType(typeof(PersonalInfoResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<PersonalInfoResponse> UpdateAsync(
 		[FromRoute, Required] Guid employeeId,
 		[FromBody, Required] PersonalInfoRequest request)
 	{
+		// Check modify access (IDOR protection)
+		await _authorizationService.CheckEmployeeModifyAccessAsync(employeeId);
+
 		ValidateRequest(request);
 
 		var updateDto = PersonalInfoContractMapper.ToUpdateDto(request);

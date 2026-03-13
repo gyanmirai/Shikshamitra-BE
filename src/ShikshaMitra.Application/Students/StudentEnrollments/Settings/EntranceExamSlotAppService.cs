@@ -83,7 +83,7 @@ public class EntranceExamSlotAppService : ShikshaMitraAppService, IEntranceExamS
 		foreach (var slot in slots)
 		{
 			var enrolledCount = await GetEnrolledStudentsCountAsync(slot.Id);
-			
+
 			var dto = ObjectMapper.Map<EntranceExamSlot, EntranceExamSlotDto>(slot);
 			dto.EnrolledStudents = enrolledCount;
 			dto.AvailableSeats = slot.StudentLimit - enrolledCount;
@@ -210,18 +210,18 @@ public class EntranceExamSlotAppService : ShikshaMitraAppService, IEntranceExamS
 			var availableSeats = slot.StudentLimit - enrolledCount;
 
 			// Only include slots with available capacity
-			if (availableSeats > 0 && 
+			if (availableSeats > 0 &&
 			    (!input.MinAvailableSeats.HasValue || availableSeats >= input.MinAvailableSeats.Value))
 			{
 				var dto = ObjectMapper.Map<EntranceExamSlot, AvailableExamSlotDto>(slot);
 				dto.AvailableSeats = availableSeats;
-				
+
 				// Format display text
 				var slotNamePart = !string.IsNullOrWhiteSpace(slot.SlotName) ? $"{slot.SlotName} - " : "";
 				var datePart = slot.StartDate.ToString("MMM dd, yyyy");
 				var timePart = $"({slot.GetStartTime():hh\\:mm} - {slot.GetEndTime():hh\\:mm})";
 				dto.DisplayText = $"{slotNamePart}{datePart} {timePart} - Room {slot.RoomNo} - {availableSeats} seats available";
-				
+
 				availableSlots.Add(dto);
 			}
 		}

@@ -52,7 +52,7 @@ public class EmployeeSalaryStructureController : AbpController
 		[FromBody] UpdateSalaryStructureDto input)
 	{
 		await _salaryStructureAppService.UpdateAsync(employeeId, input);
-		
+
 		return Ok(new
 		{
 			message = "Salary structure updated successfully"

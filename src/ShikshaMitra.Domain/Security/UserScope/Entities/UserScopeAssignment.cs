@@ -14,7 +14,7 @@ namespace ShikshaMitra.Security.UserScope;
 /// - If DivisionId is NULL but StandardId is set → User has access to ALL divisions in that class
 /// - If StandardId is NULL but MediumStageId is set → User has access to ALL classes in that stage
 /// - And so on up the hierarchy
-/// 
+///
 /// Multiple rows are created for specific entities (e.g., multiple divisions require multiple rows).
 /// </remarks>
 public class UserScopeAssignment : FullAuditedAggregateRoot<Guid>, IMultiTenant, ISoftDelete

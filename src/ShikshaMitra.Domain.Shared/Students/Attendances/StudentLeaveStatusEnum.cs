@@ -9,12 +9,12 @@ public enum StudentLeaveStatusEnum
 	/// Leave request is pending approval
 	/// </summary>
 	Pending = 0,
-	
+
 	/// <summary>
 	/// Leave request has been approved
 	/// </summary>
 	Approved = 1,
-	
+
 	/// <summary>
 	/// Leave request has been rejected
 	/// </summary>

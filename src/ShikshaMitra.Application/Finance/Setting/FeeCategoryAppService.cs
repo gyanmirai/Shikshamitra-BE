@@ -43,7 +43,7 @@ public class FeeCategoryAppService : ApplicationService, IFeeCategoryAppService
     public async Task<FeeCategoryListResponse> GetListAsync(Guid academicYearId, string search = null, int page = 1, int pageSize = 10)
     {
         var query = await _feeCategoryRepository.GetQueryableAsync();
-        
+
         query = query.Where(x => x.AcademicYearId == academicYearId);
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -82,7 +82,7 @@ public class FeeCategoryAppService : ApplicationService, IFeeCategoryAppService
     public async Task<MessageResponse> UpdateAsync(Guid feeCategoryId, FeeCategoryUpdateRequest input)
     {
         var feeCategory = await _feeCategoryRepository.GetAsync(feeCategoryId);
-        
+
         feeCategory.Update(input.Name, input.Description);
 
         await _feeCategoryRepository.UpdateAsync(feeCategory);

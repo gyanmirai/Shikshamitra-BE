@@ -33,7 +33,7 @@ public static class EarningComponentMapper
 			DisplayOrder = 0
 		};
 	}
-	
+
 	/// <summary>
 	/// Maps PayrollComponentCreateRequestDto to UpdateEarningComponentDto
 	/// </summary>
@@ -123,9 +123,9 @@ public static class EarningComponentMapper
 
 		return 0;
 	}
-	
+
 	#region Private Helper Methods
-	
+
 	/// <summary>
 	/// Parses the component type from string and isFixed flag.
 	/// The isFixed flag takes precedence over componentType string.
@@ -166,7 +166,7 @@ public static class EarningComponentMapper
 		// PRIORITY 3: Default to Variable when isFixed is false and componentType is not provided/invalid
 		return EarningComponentType.Variable;
 	}
-	
+
 	/// <summary>
 	/// Parses the dependency from string to enum
 	/// </summary>
@@ -193,7 +193,7 @@ public static class EarningComponentMapper
 			_ => ComponentDependency.None
 		};
 	}
-	
+
 	/// <summary>
 	/// Formats the amount based on component type and dependency.
 	/// For dependent variable components, appends % if not already present.
@@ -205,7 +205,7 @@ public static class EarningComponentMapper
 		{
 			return amount.ToString("G29"); // Remove trailing zeros
 		}
-		
+
 		// For variable components with a dependency, treat as percentage
 		// Validate percentage range
 		if (amount < 0 || amount > 100)
@@ -213,10 +213,10 @@ public static class EarningComponentMapper
 			throw new BusinessException("ShikshaMitra:InvalidPercentage")
 				.WithData("message", "Percentage amount must be between 0 and 100.");
 		}
-		
+
 		return $"{amount:G29}%";
 	}
-	
+
 	/// <summary>
 	/// Parses the amount string to decimal, removing % if present
 	/// </summary>
@@ -226,20 +226,20 @@ public static class EarningComponentMapper
 		{
 			return 0;
 		}
-		
+
 		var trimmed = amountStr.Trim();
-		
+
 		// Remove % suffix if present
 		if (trimmed.EndsWith("%"))
 		{
 			trimmed = trimmed.TrimEnd('%');
 		}
-		
+
 		if (decimal.TryParse(trimmed, out var result))
 		{
 			return result;
 		}
-		
+
 		return 0;
 	}
 

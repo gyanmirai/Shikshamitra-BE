@@ -16,11 +16,9 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 		builder.ConfigureByConvention();
 
 		// Configure value objects as complex properties
-		builder.ComplexProperty(e => e.FatherDetails);
-		builder.ComplexProperty(e => e.MotherDetails);
-		builder.ComplexProperty(e => e.SpouseDetails);
 		builder.ComplexProperty(e => e.BankDetails);
 		// Note: AdditionalDetails is now a separate entity with its own table (see EmployeeAdditionalDetailsConfiguration)
+		// Note: FamilyMembers (Father/Mother/Spouse) are now in separate table (see EmployeeFamilyMemberConfiguration)
 
 		// Configure owned collections (stored as JSON)
 		builder.OwnsMany(e => e.WorkExperiences, ew => ew.ToJson());
@@ -101,9 +99,9 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 		builder.HasIndex(e => e.UserId)
 			.HasDatabaseName("IX_Employees_UserId");
 
-		builder.HasIndex(e => e.EmployeeCode)
+		builder.HasIndex(e => new { e.TenantId, e.EmployeeCode })
 			.IsUnique()
-			.HasDatabaseName("IX_Employees_EmployeeCode_Unique");
+			.HasDatabaseName("IX_Employees_TenantId_EmployeeCode_Unique");
 
 		builder.HasIndex(e => e.Email)
 			.HasDatabaseName("IX_Employees_Email");

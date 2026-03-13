@@ -558,6 +558,68 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppBookIssues",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    BookCopyId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AccessionNumber = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    MemberId = table.Column<Guid>(type: "uuid", nullable: false),
+                    MemberRole = table.Column<int>(type: "integer", nullable: false),
+                    IssueDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    DueDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ReturnDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    Status = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    ChargeCategoryId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", nullable: true),
+                    FineDueDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    Remarks = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppBookIssues", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppBooks",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Title = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    Isbn = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    Author = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    Publisher = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    Edition = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    Subject = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    CategoryId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Language = table.Column<int>(type: "integer", nullable: false),
+                    ApplicableAge = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
+                    Price = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
+                    Pages = table.Column<int>(type: "integer", nullable: false),
+                    NumberOfCopies = table.Column<int>(type: "integer", nullable: false),
+                    CoverImage = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppBooks", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppBorrowingRules",
                 columns: table => new
                 {
@@ -1105,6 +1167,34 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppLibraryCharges",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    MemberId = table.Column<Guid>(type: "uuid", nullable: false),
+                    MemberRole = table.Column<int>(type: "integer", nullable: false),
+                    ChargeCategoryId = table.Column<Guid>(type: "uuid", nullable: false),
+                    BookIssueId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
+                    ChargeDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    DueDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    PaymentStatus = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    PaidDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    Remarks = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppLibraryCharges", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppLibrarySections",
                 columns: table => new
                 {
@@ -1468,6 +1558,7 @@ namespace ShikshaMitra.Migrations
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     ConcessionRequestId = table.Column<Guid>(type: "uuid", nullable: false),
                     ConcessionTypeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ConcessionRequestConcessionTypeId = table.Column<Guid>(type: "uuid", nullable: false),
                     DocumentId = table.Column<Guid>(type: "uuid", nullable: false),
                     Url = table.Column<string>(type: "text", nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
@@ -1489,6 +1580,7 @@ namespace ShikshaMitra.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     ConcessionRequestId = table.Column<Guid>(type: "uuid", nullable: false),
                     ConcessionTypeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ConcessionRequestConcessionTypeId = table.Column<Guid>(type: "uuid", nullable: false),
                     FeeHeadId = table.Column<Guid>(type: "uuid", nullable: false),
                     BasedOn = table.Column<int>(type: "integer", nullable: false),
                     Amount = table.Column<double>(type: "double precision", nullable: false),
@@ -1506,22 +1598,10 @@ namespace ShikshaMitra.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    BoardId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EducationMediumId = table.Column<Guid>(type: "uuid", nullable: false),
-                    StandardId = table.Column<Guid>(type: "uuid", nullable: false),
-                    DivisionId = table.Column<Guid>(type: "uuid", nullable: false),
                     StudentId = table.Column<Guid>(type: "uuid", nullable: false),
                     FeeStructureId = table.Column<Guid>(type: "uuid", nullable: true),
-                    AcademicYear = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
-                    Status = table.Column<int>(type: "integer", nullable: false),
                     CurrentStep = table.Column<int>(type: "integer", nullable: false),
                     CompletedStepsRaw = table.Column<string>(type: "text", nullable: false),
-                    ApproverId = table.Column<Guid>(type: "uuid", nullable: true),
-                    ApproverMessage = table.Column<string>(type: "text", nullable: true),
-                    ApprovedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    RejectorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    RejectionReason = table.Column<string>(type: "text", nullable: true),
-                    RejectedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -1535,6 +1615,30 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ConcessionRequests", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ConcessionTypes",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "text", nullable: false),
+                    Description = table.Column<string>(type: "text", nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ConcessionTypes", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -1561,6 +1665,35 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ExpenseCategories", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Expenses",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CategoryId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    CategoryTags = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,4)", nullable: false),
+                    PaymentMethod = table.Column<int>(type: "integer", nullable: false),
+                    PaymentDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Notes = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Expenses", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -1697,6 +1830,35 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_IncomeCategories", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Incomes",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CategoryId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    CategoryTags = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,4)", nullable: false),
+                    PaymentMethod = table.Column<int>(type: "integer", nullable: false),
+                    PaymentDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Notes = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Incomes", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -1980,8 +2142,7 @@ namespace ShikshaMitra.Migrations
                     StudentId = table.Column<Guid>(type: "uuid", nullable: false),
                     StandardId = table.Column<Guid>(type: "uuid", nullable: false),
                     FeeStructureStandardId = table.Column<Guid>(type: "uuid", nullable: false),
-                    StructureName = table.Column<string>(type: "text", nullable: false),
-                    AssignedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    AssignedOn = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -2483,33 +2644,49 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "ConcessionTypes",
+                name: "AppBookCopies",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    BookId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CopyNumber = table.Column<int>(type: "integer", nullable: false),
+                    AccessionNumber = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    SectionId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ShelfId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    Remarks = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppBookCopies", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppBookCopies_AppBooks_BookId",
+                        column: x => x.BookId,
+                        principalTable: "AppBooks",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppBookReservations",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "text", nullable: false),
-                    IsDocumentRequired = table.Column<bool>(type: "boolean", nullable: false),
-                    Description = table.Column<string>(type: "text", nullable: true),
-                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
-                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
-                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    BookId = table.Column<Guid>(type: "uuid", nullable: false),
+                    MemberId = table.Column<Guid>(type: "uuid", nullable: false),
+                    RequestedDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ReserveDueDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_ConcessionTypes", x => x.Id);
+                    table.PrimaryKey("PK_AppBookReservations", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_ConcessionTypes_AppAcademicYears_AcademicYearId",
-                        column: x => x.AcademicYearId,
-                        principalTable: "AppAcademicYears",
+                        name: "FK_AppBookReservations_AppBooks_BookId",
+                        column: x => x.BookId,
+                        principalTable: "AppBooks",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -2650,7 +2827,21 @@ namespace ShikshaMitra.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     ConcessionRequestId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ConcessionTypeId = table.Column<Guid>(type: "uuid", nullable: false)
+                    ConcessionTypeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    ApproverId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ApproverMessage = table.Column<string>(type: "text", nullable: true),
+                    ApprovedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    RejectorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    RejectionReason = table.Column<string>(type: "text", nullable: true),
+                    RejectedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -2660,6 +2851,26 @@ namespace ShikshaMitra.Migrations
                         name: "FK_ConcessionRequestConcessionTypes_ConcessionRequests_Concess~",
                         column: x => x.ConcessionRequestId,
                         principalTable: "ConcessionRequests",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ConcessionTypeDocuments",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ConcessionTypeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DocumentName = table.Column<string>(type: "text", nullable: false),
+                    DocumentSize = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ConcessionTypeDocuments", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ConcessionTypeDocuments_ConcessionTypes_ConcessionTypeId",
+                        column: x => x.ConcessionTypeId,
+                        principalTable: "ConcessionTypes",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -2747,40 +2958,6 @@ namespace ShikshaMitra.Migrations
                         column: x => x.StudentDocumentSettingId,
                         principalTable: "StudentDocumentSettings",
                         principalColumn: "Id");
-                });
-
-            migrationBuilder.CreateTable(
-                name: "StudentFeeHeads",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    StudentFeeStructureId = table.Column<Guid>(type: "uuid", nullable: false),
-                    StandardFeeStructureId = table.Column<Guid>(type: "uuid", nullable: true),
-                    FeeHeadId = table.Column<Guid>(type: "uuid", nullable: false),
-                    FeeHeadName = table.Column<string>(type: "text", nullable: false),
-                    CategoryName = table.Column<string>(type: "text", nullable: false),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    IsOptional = table.Column<bool>(type: "boolean", nullable: false),
-                    IsOneTime = table.Column<bool>(type: "boolean", nullable: false),
-                    IsSelected = table.Column<bool>(type: "boolean", nullable: false),
-                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_StudentFeeHeads", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_StudentFeeHeads_StudentFeeStructures_StudentFeeStructureId",
-                        column: x => x.StudentFeeStructureId,
-                        principalTable: "StudentFeeStructures",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -2901,46 +3078,6 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "ConcessionTypeDocuments",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ConcessionTypeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    DocumentName = table.Column<string>(type: "text", nullable: false),
-                    DocumentSize = table.Column<long>(type: "bigint", nullable: false),
-                    AcceptedFormats = table.Column<string>(type: "text", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ConcessionTypeDocuments", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ConcessionTypeDocuments_ConcessionTypes_ConcessionTypeId",
-                        column: x => x.ConcessionTypeId,
-                        principalTable: "ConcessionTypes",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ConcessionTypeFeeHeads",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ConcessionTypeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    FeeHeadId = table.Column<Guid>(type: "uuid", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ConcessionTypeFeeHeads", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ConcessionTypeFeeHeads_ConcessionTypes_ConcessionTypeId",
-                        column: x => x.ConcessionTypeId,
-                        principalTable: "ConcessionTypes",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "AppRooms",
                 columns: table => new
                 {
@@ -3014,6 +3151,7 @@ namespace ShikshaMitra.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     ConcessionRequestId = table.Column<Guid>(type: "uuid", nullable: false),
                     ConcessionTypeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ConcessionRequestConcessionTypeId = table.Column<Guid>(type: "uuid", nullable: false),
                     FeeHeadId = table.Column<Guid>(type: "uuid", nullable: false)
                 },
                 constraints: table =>
@@ -3024,6 +3162,25 @@ namespace ShikshaMitra.Migrations
                         columns: x => new { x.ConcessionRequestId, x.ConcessionTypeId },
                         principalTable: "ConcessionRequestConcessionTypes",
                         principalColumns: new[] { "ConcessionRequestId", "ConcessionTypeId" },
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppConcessionTypeDocumentFormats",
+                columns: table => new
+                {
+                    ConcessionTypeDocumentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DocumentType = table.Column<int>(type: "integer", nullable: false),
+                    Id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppConcessionTypeDocumentFormats", x => x.ConcessionTypeDocumentId);
+                    table.ForeignKey(
+                        name: "FK_AppConcessionTypeDocumentFormats_ConcessionTypeDocuments_Co~",
+                        column: x => x.ConcessionTypeDocumentId,
+                        principalTable: "ConcessionTypeDocuments",
+                        principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
 
@@ -3207,83 +3364,6 @@ namespace ShikshaMitra.Migrations
                         principalTable: "AppEducationMediums",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AppStudents",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    FirstName = table.Column<string>(type: "text", nullable: true),
-                    MiddleName = table.Column<string>(type: "text", nullable: true),
-                    LastName = table.Column<string>(type: "text", nullable: true),
-                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: true),
-                    AcademicBoardId = table.Column<Guid>(type: "uuid", nullable: true),
-                    AcademicMediumId = table.Column<Guid>(type: "uuid", nullable: false),
-                    AcademicMediumStageId = table.Column<Guid>(type: "uuid", nullable: true),
-                    StandardId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DivisionId = table.Column<Guid>(type: "uuid", nullable: true),
-                    GrNo = table.Column<int>(type: "integer", nullable: true),
-                    RollNo = table.Column<int>(type: "integer", nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    AdmissionApprovalStatus = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
-                    AdmissionApprovalRemarks = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
-                    FamilyDetailId = table.Column<Guid>(type: "uuid", nullable: true),
-                    CommunicationDetailId = table.Column<Guid>(type: "uuid", nullable: true),
-                    MedicalRecordId = table.Column<Guid>(type: "uuid", nullable: true),
-                    PreviousSchoolDetailId = table.Column<Guid>(type: "uuid", nullable: true),
-                    BankDetailId = table.Column<Guid>(type: "uuid", nullable: true),
-                    InquiryPreferenceId = table.Column<Guid>(type: "uuid", nullable: true),
-                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
-                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
-                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AppStudents", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AppStudents_AppEducationMediums_AcademicMediumId",
-                        column: x => x.AcademicMediumId,
-                        principalTable: "AppEducationMediums",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_AppStudents_AppInquiryPreferences_InquiryPreferenceId",
-                        column: x => x.InquiryPreferenceId,
-                        principalTable: "AppInquiryPreferences",
-                        principalColumn: "Id");
-                    table.ForeignKey(
-                        name: "FK_AppStudents_StudentBankDetails_BankDetailId",
-                        column: x => x.BankDetailId,
-                        principalTable: "StudentBankDetails",
-                        principalColumn: "Id");
-                    table.ForeignKey(
-                        name: "FK_AppStudents_StudentCommunicationDetails_CommunicationDetail~",
-                        column: x => x.CommunicationDetailId,
-                        principalTable: "StudentCommunicationDetails",
-                        principalColumn: "Id");
-                    table.ForeignKey(
-                        name: "FK_AppStudents_StudentFamilyDetails_FamilyDetailId",
-                        column: x => x.FamilyDetailId,
-                        principalTable: "StudentFamilyDetails",
-                        principalColumn: "Id");
-                    table.ForeignKey(
-                        name: "FK_AppStudents_StudentMedicalRecords_MedicalRecordId",
-                        column: x => x.MedicalRecordId,
-                        principalTable: "StudentMedicalRecords",
-                        principalColumn: "Id");
-                    table.ForeignKey(
-                        name: "FK_AppStudents_StudentPreviousSchoolDetails_PreviousSchoolDeta~",
-                        column: x => x.PreviousSchoolDetailId,
-                        principalTable: "StudentPreviousSchoolDetails",
-                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -3575,274 +3655,6 @@ namespace ShikshaMitra.Migrations
                         principalTable: "AppHomeworkTypes",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AppAttendanceEntries",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    AttendanceDayId = table.Column<Guid>(type: "uuid", nullable: false),
-                    StudentId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    Remarks = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    MarkedByUserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AppAttendanceEntries", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AppAttendanceEntries_AppAttendanceDays_AttendanceDayId",
-                        column: x => x.AttendanceDayId,
-                        principalTable: "AppAttendanceDays",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_AppAttendanceEntries_AppStudents_StudentId",
-                        column: x => x.StudentId,
-                        principalTable: "AppStudents",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AppStudentAdditionalDetails",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DateOfBirth = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    Gender = table.Column<int>(type: "integer", nullable: true),
-                    ProfilePictureUrl = table.Column<string>(type: "text", nullable: true),
-                    DateOfInquiry = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    InquiryNo = table.Column<string>(type: "text", nullable: false),
-                    InquiryPreferenceId = table.Column<Guid>(type: "uuid", nullable: true),
-                    RegistrationFormNo = table.Column<string>(type: "text", nullable: true),
-                    RegistrationAmount = table.Column<double>(type: "double precision", nullable: true),
-                    EntranceExamSlotId = table.Column<Guid>(type: "uuid", nullable: true),
-                    ExamDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    ExamStartTime = table.Column<TimeSpan>(type: "interval", nullable: true),
-                    ExamEndTime = table.Column<TimeSpan>(type: "interval", nullable: true),
-                    ExamRoomNo = table.Column<int>(type: "integer", nullable: true),
-                    ExamTotalMarks = table.Column<decimal>(type: "numeric", nullable: true),
-                    ExamPassingMarks = table.Column<decimal>(type: "numeric", nullable: true),
-                    ExamObtainedMarks = table.Column<decimal>(type: "numeric", nullable: true),
-                    ExamPercentage = table.Column<decimal>(type: "numeric", nullable: true),
-                    ExamStatus = table.Column<int>(type: "integer", nullable: true),
-                    ExamResultDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    AdharNo = table.Column<string>(type: "text", nullable: true),
-                    ApparId = table.Column<string>(type: "text", nullable: true),
-                    PanNo = table.Column<string>(type: "text", nullable: true),
-                    Religion = table.Column<int>(type: "integer", nullable: true),
-                    FamilyCast = table.Column<string>(type: "text", nullable: false),
-                    CastCategory = table.Column<int>(type: "integer", nullable: true),
-                    Nationality = table.Column<string>(type: "text", nullable: true),
-                    BirthPlace = table.Column<string>(type: "text", nullable: true),
-                    MotherTongue = table.Column<int>(type: "integer", nullable: true),
-                    Category = table.Column<int>(type: "integer", nullable: false),
-                    IsBPLStudent = table.Column<bool>(type: "boolean", nullable: true),
-                    BPLCardNo = table.Column<string>(type: "text", nullable: true),
-                    HaveDisability = table.Column<bool>(type: "boolean", nullable: true),
-                    SecondLanguage = table.Column<string>(type: "text", nullable: true),
-                    EmergencyContactNo = table.Column<string>(type: "text", nullable: true),
-                    EmergencyRelationName = table.Column<string>(type: "text", nullable: true),
-                    EmergencyRelationType = table.Column<string>(type: "text", nullable: true),
-                    IsSingleParentChild = table.Column<bool>(type: "boolean", nullable: true),
-                    IsSingleChild = table.Column<bool>(type: "boolean", nullable: true),
-                    PreviousSchool = table.Column<string>(type: "text", nullable: true),
-                    LastClassPassed = table.Column<string>(type: "text", nullable: true),
-                    HouseId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsGlobalHouseLeader = table.Column<bool>(type: "boolean", nullable: true),
-                    IsDivisionHouseLeader = table.Column<bool>(type: "boolean", nullable: true),
-                    StudentRegistrationState = table.Column<int>(type: "integer", nullable: false),
-                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AppStudentAdditionalDetails", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AppStudentAdditionalDetails_AppHouseSettings_HouseId",
-                        column: x => x.HouseId,
-                        principalTable: "AppHouseSettings",
-                        principalColumn: "Id");
-                    table.ForeignKey(
-                        name: "FK_AppStudentAdditionalDetails_AppStudents_Id",
-                        column: x => x.Id,
-                        principalTable: "AppStudents",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AppStudentContactDetails",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    PrimaryContactNo = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    SecondaryContactNo = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
-                    Email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
-                    Address1 = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
-                    Address2 = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
-                    Address3 = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
-                    City = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    State_Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    State_IsoCode = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
-                    Country_Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    Country_IsoCode = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
-                    Pincode = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
-                    StudentId = table.Column<Guid>(type: "uuid", nullable: true),
-                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AppStudentContactDetails", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AppStudentContactDetails_AppStudents_Id",
-                        column: x => x.Id,
-                        principalTable: "AppStudents",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_AppStudentContactDetails_AppStudents_StudentId",
-                        column: x => x.StudentId,
-                        principalTable: "AppStudents",
-                        principalColumn: "Id");
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AppStudentDocuments",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    StudentId = table.Column<Guid>(type: "uuid", nullable: false),
-                    DocumentTypeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    BlobName = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
-                    FileName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
-                    ContentType = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    Size = table.Column<long>(type: "bigint", nullable: false),
-                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AppStudentDocuments", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AppStudentDocuments_AppDocumentTypes_DocumentTypeId",
-                        column: x => x.DocumentTypeId,
-                        principalTable: "AppDocumentTypes",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_AppStudentDocuments_AppStudents_StudentId",
-                        column: x => x.StudentId,
-                        principalTable: "AppStudents",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AppStudentLeaves",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    StudentId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EducationMediumId = table.Column<Guid>(type: "uuid", nullable: true),
-                    StandardId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DivisionId = table.Column<Guid>(type: "uuid", nullable: true),
-                    StudentLeaveTypeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsHalfDay = table.Column<bool>(type: "boolean", nullable: false),
-                    LeaveDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    EndDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    TotalDays = table.Column<decimal>(type: "numeric(5,2)", precision: 5, scale: 2, nullable: false),
-                    Description = table.Column<string>(type: "character varying(5000)", maxLength: 5000, nullable: true),
-                    Remarks = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    RejectionReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    Attachment = table.Column<byte[]>(type: "bytea", nullable: true),
-                    AttachmentFileName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
-                    AttachmentContentType = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
-                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
-                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AppStudentLeaves", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AppStudentLeaves_AppStudentLeaveTypes_StudentLeaveTypeId",
-                        column: x => x.StudentLeaveTypeId,
-                        principalTable: "AppStudentLeaveTypes",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_AppStudentLeaves_AppStudents_StudentId",
-                        column: x => x.StudentId,
-                        principalTable: "AppStudents",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "StudentNotes",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    StudentId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Note = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false),
-                    NextReminderDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_StudentNotes", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_StudentNotes_AppStudents_StudentId",
-                        column: x => x.StudentId,
-                        principalTable: "AppStudents",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -4366,6 +4178,101 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppStudents",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    FirstName = table.Column<string>(type: "text", nullable: true),
+                    MiddleName = table.Column<string>(type: "text", nullable: true),
+                    LastName = table.Column<string>(type: "text", nullable: true),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AcademicBoardId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AcademicMediumId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AcademicMediumStageId = table.Column<Guid>(type: "uuid", nullable: true),
+                    StandardId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DivisionId = table.Column<Guid>(type: "uuid", nullable: true),
+                    GrNo = table.Column<int>(type: "integer", nullable: true),
+                    RollNo = table.Column<int>(type: "integer", nullable: true),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    AdmissionApprovalStatus = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    AdmissionApprovalRemarks = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    FamilyDetailId = table.Column<Guid>(type: "uuid", nullable: true),
+                    CommunicationDetailId = table.Column<Guid>(type: "uuid", nullable: true),
+                    MedicalRecordId = table.Column<Guid>(type: "uuid", nullable: true),
+                    PreviousSchoolDetailId = table.Column<Guid>(type: "uuid", nullable: true),
+                    BankDetailId = table.Column<Guid>(type: "uuid", nullable: true),
+                    InquiryPreferenceId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppStudents", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppStudents_AppDivisions_DivisionId",
+                        column: x => x.DivisionId,
+                        principalTable: "AppDivisions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_AppStudents_AppEducationBoards_AcademicBoardId",
+                        column: x => x.AcademicBoardId,
+                        principalTable: "AppEducationBoards",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_AppStudents_AppEducationMediums_AcademicMediumId",
+                        column: x => x.AcademicMediumId,
+                        principalTable: "AppEducationMediums",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_AppStudents_AppInquiryPreferences_InquiryPreferenceId",
+                        column: x => x.InquiryPreferenceId,
+                        principalTable: "AppInquiryPreferences",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_AppStudents_AppStandards_StandardId",
+                        column: x => x.StandardId,
+                        principalTable: "AppStandards",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_AppStudents_StudentBankDetails_BankDetailId",
+                        column: x => x.BankDetailId,
+                        principalTable: "StudentBankDetails",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_AppStudents_StudentCommunicationDetails_CommunicationDetail~",
+                        column: x => x.CommunicationDetailId,
+                        principalTable: "StudentCommunicationDetails",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_AppStudents_StudentFamilyDetails_FamilyDetailId",
+                        column: x => x.FamilyDetailId,
+                        principalTable: "StudentFamilyDetails",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_AppStudents_StudentMedicalRecords_MedicalRecordId",
+                        column: x => x.MedicalRecordId,
+                        principalTable: "StudentMedicalRecords",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_AppStudents_StudentPreviousSchoolDetails_PreviousSchoolDeta~",
+                        column: x => x.PreviousSchoolDetailId,
+                        principalTable: "StudentPreviousSchoolDetails",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppSubjectChapters",
                 columns: table => new
                 {
@@ -4412,6 +4319,299 @@ namespace ShikshaMitra.Migrations
                         name: "FK_AppSubjectTeachers_AppStandardSubjectAssignments_AssignedSu~",
                         column: x => x.AssignedSubjectId,
                         principalTable: "AppStandardSubjectAssignments",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppAttendanceEntries",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AttendanceDayId = table.Column<Guid>(type: "uuid", nullable: false),
+                    StudentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    Remarks = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    MarkedByUserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppAttendanceEntries", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppAttendanceEntries_AppAttendanceDays_AttendanceDayId",
+                        column: x => x.AttendanceDayId,
+                        principalTable: "AppAttendanceDays",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_AppAttendanceEntries_AppStudents_StudentId",
+                        column: x => x.StudentId,
+                        principalTable: "AppStudents",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppStudentAdditionalDetails",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DateOfBirth = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    Gender = table.Column<int>(type: "integer", nullable: true),
+                    ProfilePictureUrl = table.Column<string>(type: "text", nullable: true),
+                    DateOfInquiry = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    InquiryNo = table.Column<string>(type: "text", nullable: false),
+                    InquiryPreferenceId = table.Column<Guid>(type: "uuid", nullable: true),
+                    RegistrationFormNo = table.Column<string>(type: "text", nullable: true),
+                    RegistrationAmount = table.Column<double>(type: "double precision", nullable: true),
+                    EntranceExamSlotId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ExamDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ExamStartTime = table.Column<TimeSpan>(type: "interval", nullable: true),
+                    ExamEndTime = table.Column<TimeSpan>(type: "interval", nullable: true),
+                    ExamRoomNo = table.Column<int>(type: "integer", nullable: true),
+                    ExamTotalMarks = table.Column<decimal>(type: "numeric", nullable: true),
+                    ExamPassingMarks = table.Column<decimal>(type: "numeric", nullable: true),
+                    ExamObtainedMarks = table.Column<decimal>(type: "numeric", nullable: true),
+                    ExamPercentage = table.Column<decimal>(type: "numeric", nullable: true),
+                    ExamStatus = table.Column<int>(type: "integer", nullable: true),
+                    ExamResultDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    AdharNo = table.Column<string>(type: "text", nullable: true),
+                    ApparId = table.Column<string>(type: "text", nullable: true),
+                    PanNo = table.Column<string>(type: "text", nullable: true),
+                    PennNo = table.Column<string>(type: "text", nullable: true),
+                    Religion = table.Column<int>(type: "integer", nullable: true),
+                    FamilyCast = table.Column<string>(type: "text", nullable: false),
+                    CastCategory = table.Column<int>(type: "integer", nullable: true),
+                    Nationality = table.Column<string>(type: "text", nullable: true),
+                    BirthPlace = table.Column<string>(type: "text", nullable: true),
+                    MotherTongue = table.Column<int>(type: "integer", nullable: true),
+                    Category = table.Column<int>(type: "integer", nullable: false),
+                    IsBPLStudent = table.Column<bool>(type: "boolean", nullable: true),
+                    BPLCardNo = table.Column<string>(type: "text", nullable: true),
+                    HaveDisability = table.Column<bool>(type: "boolean", nullable: true),
+                    SecondLanguage = table.Column<string>(type: "text", nullable: true),
+                    EmergencyContactNo = table.Column<string>(type: "text", nullable: true),
+                    EmergencyRelationName = table.Column<string>(type: "text", nullable: true),
+                    EmergencyRelationType = table.Column<string>(type: "text", nullable: true),
+                    IsSingleParentChild = table.Column<bool>(type: "boolean", nullable: true),
+                    IsSingleChild = table.Column<bool>(type: "boolean", nullable: true),
+                    PreviousSchool = table.Column<string>(type: "text", nullable: true),
+                    LastClassPassed = table.Column<string>(type: "text", nullable: true),
+                    HouseId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsGlobalHouseLeader = table.Column<bool>(type: "boolean", nullable: true),
+                    IsDivisionHouseLeader = table.Column<bool>(type: "boolean", nullable: true),
+                    StudentRegistrationState = table.Column<int>(type: "integer", nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppStudentAdditionalDetails", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppStudentAdditionalDetails_AppHouseSettings_HouseId",
+                        column: x => x.HouseId,
+                        principalTable: "AppHouseSettings",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_AppStudentAdditionalDetails_AppStudents_Id",
+                        column: x => x.Id,
+                        principalTable: "AppStudents",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppStudentContactDetails",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    PrimaryContactNo = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    SecondaryContactNo = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    Email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    Address1 = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    Address2 = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    Address3 = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    City = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    State_Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    State_IsoCode = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
+                    Country_Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    Country_IsoCode = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
+                    Pincode = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
+                    StudentId = table.Column<Guid>(type: "uuid", nullable: true),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppStudentContactDetails", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppStudentContactDetails_AppStudents_Id",
+                        column: x => x.Id,
+                        principalTable: "AppStudents",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_AppStudentContactDetails_AppStudents_StudentId",
+                        column: x => x.StudentId,
+                        principalTable: "AppStudents",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppStudentDocuments",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    StudentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DocumentTypeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    BlobName = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    FileName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    ContentType = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    Size = table.Column<long>(type: "bigint", nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppStudentDocuments", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppStudentDocuments_AppDocumentTypes_DocumentTypeId",
+                        column: x => x.DocumentTypeId,
+                        principalTable: "AppDocumentTypes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_AppStudentDocuments_AppStudents_StudentId",
+                        column: x => x.StudentId,
+                        principalTable: "AppStudents",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppStudentLeaves",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    StudentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    EducationMediumId = table.Column<Guid>(type: "uuid", nullable: true),
+                    StandardId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DivisionId = table.Column<Guid>(type: "uuid", nullable: true),
+                    StudentLeaveTypeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsHalfDay = table.Column<bool>(type: "boolean", nullable: false),
+                    LeaveDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    EndDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    TotalDays = table.Column<decimal>(type: "numeric(5,2)", precision: 5, scale: 2, nullable: false),
+                    Description = table.Column<string>(type: "character varying(5000)", maxLength: 5000, nullable: true),
+                    Remarks = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    RejectionReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    Attachment = table.Column<byte[]>(type: "bytea", nullable: true),
+                    AttachmentFileName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
+                    AttachmentContentType = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppStudentLeaves", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppStudentLeaves_AppStudentLeaveTypes_StudentLeaveTypeId",
+                        column: x => x.StudentLeaveTypeId,
+                        principalTable: "AppStudentLeaveTypes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_AppStudentLeaves_AppStudents_StudentId",
+                        column: x => x.StudentId,
+                        principalTable: "AppStudents",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppStudentStatusHistories",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    StudentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    FromStatus = table.Column<int>(type: "integer", nullable: false),
+                    ToStatus = table.Column<int>(type: "integer", nullable: false),
+                    Remarks = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppStudentStatusHistories", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppStudentStatusHistories_AppStudents_StudentId",
+                        column: x => x.StudentId,
+                        principalTable: "AppStudents",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "StudentNotes",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    StudentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Note = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false),
+                    NextReminderDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_StudentNotes", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_StudentNotes_AppStudents_StudentId",
+                        column: x => x.StudentId,
+                        principalTable: "AppStudents",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -4775,6 +4975,47 @@ namespace ShikshaMitra.Migrations
                 table: "AppAttendanceEntries",
                 columns: new[] { "AttendanceDayId", "StudentId" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppBookCopies_AccessionNumber",
+                table: "AppBookCopies",
+                column: "AccessionNumber",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppBookCopies_BookId",
+                table: "AppBookCopies",
+                column: "BookId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppBookIssues_AccessionNumber",
+                table: "AppBookIssues",
+                column: "AccessionNumber");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppBookIssues_BookCopyId",
+                table: "AppBookIssues",
+                column: "BookCopyId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppBookIssues_MemberId",
+                table: "AppBookIssues",
+                column: "MemberId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppBookReservations_BookId",
+                table: "AppBookReservations",
+                column: "BookId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppBookReservations_MemberId",
+                table: "AppBookReservations",
+                column: "MemberId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppBooks_Isbn_Edition",
+                table: "AppBooks",
+                columns: new[] { "Isbn", "Edition" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_AppBorrowingRules_AcademicYearId_Role",
@@ -5241,6 +5482,21 @@ namespace ShikshaMitra.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_AppLibraryCharges_BookIssueId",
+                table: "AppLibraryCharges",
+                column: "BookIssueId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppLibraryCharges_ChargeCategoryId",
+                table: "AppLibraryCharges",
+                column: "ChargeCategoryId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppLibraryCharges_MemberId",
+                table: "AppLibraryCharges",
+                column: "MemberId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AppLibraryShelves_SectionId",
                 table: "AppLibraryShelves",
                 column: "SectionId");
@@ -5405,6 +5661,11 @@ namespace ShikshaMitra.Migrations
                 columns: new[] { "TenantId", "LeaveTypeName" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_AppStudents_AcademicBoardId",
+                table: "AppStudents",
+                column: "AcademicBoardId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AppStudents_AcademicMediumId",
                 table: "AppStudents",
                 column: "AcademicMediumId");
@@ -5430,6 +5691,11 @@ namespace ShikshaMitra.Migrations
                 column: "CommunicationDetailId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_AppStudents_DivisionId",
+                table: "AppStudents",
+                column: "DivisionId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AppStudents_FamilyDetailId",
                 table: "AppStudents",
                 column: "FamilyDetailId");
@@ -5448,6 +5714,16 @@ namespace ShikshaMitra.Migrations
                 name: "IX_AppStudents_PreviousSchoolDetailId",
                 table: "AppStudents",
                 column: "PreviousSchoolDetailId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppStudents_StandardId",
+                table: "AppStudents",
+                column: "StandardId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppStudentStatusHistories_StudentId",
+                table: "AppStudentStatusHistories",
+                column: "StudentId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AppSubjectChapters_AssignedSubjectId",
@@ -5521,16 +5797,6 @@ namespace ShikshaMitra.Migrations
                 name: "IX_ConcessionTypeDocuments_ConcessionTypeId",
                 table: "ConcessionTypeDocuments",
                 column: "ConcessionTypeId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ConcessionTypeFeeHeads_ConcessionTypeId",
-                table: "ConcessionTypeFeeHeads",
-                column: "ConcessionTypeId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ConcessionTypes_AcademicYearId",
-                table: "ConcessionTypes",
-                column: "AcademicYearId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_FeeStructureDetails_FeeStructureStandardId",
@@ -5627,11 +5893,6 @@ namespace ShikshaMitra.Migrations
                 name: "IX_StudentBankDetails_IFSCCode",
                 table: "StudentBankDetails",
                 column: "IFSCCode");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_StudentFeeHeads_StudentFeeStructureId",
-                table: "StudentFeeHeads",
-                column: "StudentFeeStructureId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_StudentFeeStructures_StudentId",
@@ -5762,6 +6023,15 @@ namespace ShikshaMitra.Migrations
                 name: "AppBookCategories");
 
             migrationBuilder.DropTable(
+                name: "AppBookCopies");
+
+            migrationBuilder.DropTable(
+                name: "AppBookIssues");
+
+            migrationBuilder.DropTable(
+                name: "AppBookReservations");
+
+            migrationBuilder.DropTable(
                 name: "AppBorrowingRules");
 
             migrationBuilder.DropTable(
@@ -5771,6 +6041,9 @@ namespace ShikshaMitra.Migrations
                 name: "AppClassTeachers");
 
             migrationBuilder.DropTable(
+                name: "AppConcessionTypeDocumentFormats");
+
+            migrationBuilder.DropTable(
                 name: "AppCustomAttendanceRules");
 
             migrationBuilder.DropTable(
@@ -5778,9 +6051,6 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "AppDivisionPermissions");
-
-            migrationBuilder.DropTable(
-                name: "AppDivisions");
 
             migrationBuilder.DropTable(
                 name: "AppDocumentSettings");
@@ -5870,6 +6140,9 @@ namespace ShikshaMitra.Migrations
                 name: "AppLibraryChargeCategories");
 
             migrationBuilder.DropTable(
+                name: "AppLibraryCharges");
+
+            migrationBuilder.DropTable(
                 name: "AppLibraryShelves");
 
             migrationBuilder.DropTable(
@@ -5909,6 +6182,9 @@ namespace ShikshaMitra.Migrations
                 name: "AppStudentManagementSettings");
 
             migrationBuilder.DropTable(
+                name: "AppStudentStatusHistories");
+
+            migrationBuilder.DropTable(
                 name: "AppSubjectTeachers");
 
             migrationBuilder.DropTable(
@@ -5930,13 +6206,10 @@ namespace ShikshaMitra.Migrations
                 name: "ConcessionRequestFeeHeadValues");
 
             migrationBuilder.DropTable(
-                name: "ConcessionTypeDocuments");
-
-            migrationBuilder.DropTable(
-                name: "ConcessionTypeFeeHeads");
-
-            migrationBuilder.DropTable(
                 name: "ExpenseCategories");
+
+            migrationBuilder.DropTable(
+                name: "Expenses");
 
             migrationBuilder.DropTable(
                 name: "FeeCategories");
@@ -5954,6 +6227,9 @@ namespace ShikshaMitra.Migrations
                 name: "IncomeCategories");
 
             migrationBuilder.DropTable(
+                name: "Incomes");
+
+            migrationBuilder.DropTable(
                 name: "OpenIddictScopes");
 
             migrationBuilder.DropTable(
@@ -5963,7 +6239,7 @@ namespace ShikshaMitra.Migrations
                 name: "ReceiptBooks");
 
             migrationBuilder.DropTable(
-                name: "StudentFeeHeads");
+                name: "StudentFeeStructures");
 
             migrationBuilder.DropTable(
                 name: "StudentNotes");
@@ -5990,7 +6266,13 @@ namespace ShikshaMitra.Migrations
                 name: "AppAttendanceDays");
 
             migrationBuilder.DropTable(
+                name: "AppBooks");
+
+            migrationBuilder.DropTable(
                 name: "AppSubjectChapters");
+
+            migrationBuilder.DropTable(
+                name: "ConcessionTypeDocuments");
 
             migrationBuilder.DropTable(
                 name: "AppEmployeeLeavePolicies");
@@ -6035,16 +6317,10 @@ namespace ShikshaMitra.Migrations
                 name: "ConcessionRequestConcessionTypes");
 
             migrationBuilder.DropTable(
-                name: "ConcessionTypes");
-
-            migrationBuilder.DropTable(
                 name: "FeeStructureStandards");
 
             migrationBuilder.DropTable(
                 name: "OpenIddictAuthorizations");
-
-            migrationBuilder.DropTable(
-                name: "StudentFeeStructures");
 
             migrationBuilder.DropTable(
                 name: "AppStudents");
@@ -6054,6 +6330,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "AppStandardSubjectAssignments");
+
+            migrationBuilder.DropTable(
+                name: "ConcessionTypes");
 
             migrationBuilder.DropTable(
                 name: "AppEmployeeLeaveTypes");
@@ -6095,6 +6374,9 @@ namespace ShikshaMitra.Migrations
                 name: "OpenIddictApplications");
 
             migrationBuilder.DropTable(
+                name: "AppDivisions");
+
+            migrationBuilder.DropTable(
                 name: "AppInquiryPreferences");
 
             migrationBuilder.DropTable(
@@ -6116,13 +6398,13 @@ namespace ShikshaMitra.Migrations
                 name: "AppElectiveGroups");
 
             migrationBuilder.DropTable(
-                name: "AppStandards");
-
-            migrationBuilder.DropTable(
                 name: "AppSubjects");
 
             migrationBuilder.DropTable(
                 name: "AppPayElements");
+
+            migrationBuilder.DropTable(
+                name: "AppStandards");
 
             migrationBuilder.DropTable(
                 name: "AppEducationMediumStages");

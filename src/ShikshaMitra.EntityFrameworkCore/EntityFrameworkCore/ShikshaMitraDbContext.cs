@@ -65,6 +65,7 @@ using ShikshaMitra.Finance.Setting;
 using ShikshaMitra.Finance.StudentFeeAssignment;
 using ShikshaMitra.Finance.Setting.ConcessionType;
 using ShikshaMitra.Finance.Setting.ConcessionTypes;
+using ShikshaMitra.Library.Members;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -385,6 +386,10 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<ShikshaMitra.Library.Books.BookIssue> BookIssues { get; set; }
 	public DbSet<ShikshaMitra.Library.Books.LibraryCharge> LibraryCharges { get; set; }
 	#endregion
+	#region Members
+	public DbSet<LibraryMember> LibraryMembers { get; set; } 
+	#endregion
+
 	#endregion
 
 	// Apply BookCategory configuration

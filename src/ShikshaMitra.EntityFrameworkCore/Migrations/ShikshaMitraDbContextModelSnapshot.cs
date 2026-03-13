@@ -5672,6 +5672,72 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppLibraryCharges", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Library.Members.LibraryMember", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("MemberIdentifier")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AppLibraryMembers", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Library.Setting.BorrowingRules.BorrowingRule", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6779,10 +6845,16 @@ namespace ShikshaMitra.Migrations
                     b.Property<bool?>("IsGlobalHouseLeader")
                         .HasColumnType("boolean");
 
+                    b.Property<bool?>("IsLibraryMember")
+                        .HasColumnType("boolean");
+
                     b.Property<bool?>("IsSingleChild")
                         .HasColumnType("boolean");
 
                     b.Property<bool?>("IsSingleParentChild")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool?>("IsTransportMember")
                         .HasColumnType("boolean");
 
                     b.Property<string>("LastClassPassed")

@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Students.Enrollments.Registrations;
+﻿using ShikshaMitra.Library.Members;
+using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.ValueObjects;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
@@ -33,7 +34,8 @@ public class StudentRegistrationAppService(
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
 	EntityValidationService validationService,
-	StudentEnrollmentDtoEnricher dtoEnricher
+	StudentEnrollmentDtoEnricher dtoEnricher,
+	ILibraryMemberAppService libraryMemberAppService
 ) : ApplicationService, IStudentRegistrationAppService
 {
 	// Valid statuses for registration operations
@@ -593,7 +595,9 @@ public class StudentRegistrationAppService(
 			EmergencyRelation = additionalDetail?.EmergencyRelationType,
 			EmergencyContactNo = additionalDetail?.EmergencyContactNo,
 			IsSingleChild = additionalDetail?.IsSingleChild ?? false,
-			IsSingleParentChild = additionalDetail?.IsSingleParentChild ?? false
+			IsSingleParentChild = additionalDetail?.IsSingleParentChild ?? false,
+			IsLibraryMember = additionalDetail?.IsLibraryMember ?? false,
+			IsTransportMember = additionalDetail?.IsTransportMember ?? false,
 		};
 
 		return result;
@@ -624,8 +628,15 @@ public class StudentRegistrationAppService(
 			input.EmergencyContactNo,
 			input.IsSingleChild,
 			input.IsSingleParentChild,
-			input.Category
+			input.Category,
+			input.IsLibraryMember,
+			input.IsTransportMember
 		);
+
+		// TODO: if a student is considered as librarymember, trigger library member creation workflow
+		await libraryMemberAppService.HandleLibraryMemberAsync(studentId, input.IsLibraryMember);
+
+		// TODO: if a student is considered as transportmember, trigger transport member creation workflow
 
 		// Save changes
 		await studentAdditionalDetailRepository.UpdateAsync(student.AdditionalDetail, autoSave: true);

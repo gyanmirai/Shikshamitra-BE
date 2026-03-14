@@ -6,6 +6,7 @@ public class LibraryMemberDto
 {
     public Guid Id { get; set; }
     public string MemberName { get; set; }
+    public string? MemberIdentifier { get; set; }
     public string? Avatar { get; set; }
     public string? Email { get; set; }
     public string Role { get; set; }

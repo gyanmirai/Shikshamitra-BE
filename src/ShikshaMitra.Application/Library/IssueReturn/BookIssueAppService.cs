@@ -25,7 +25,8 @@ public class BookIssueAppService(
     IRepository<Student, Guid> _studentRepository,
     IRepository<Employee, Guid> _employeeRepository,
     IRepository<Standard, Guid> _standardRepository,
-    IRepository<Division, Guid> _divisionRepository)
+    IRepository<Division, Guid> _divisionRepository,
+    IRepository<Members.LibraryMember, Guid> _libraryMemberRepository)
     : ApplicationService, IBookIssueAppService
 {
     public async Task<GenericCreatedResponse> IssueAsync(IssueBookRequest input)
@@ -308,7 +309,7 @@ public class BookIssueAppService(
             Isbn = book.Isbn,
             Publisher = book.Publisher,
             AddedOn = book.CreationTime,
-            Language = (int)book.Language,
+            Language = (int) book.Language,
             Edition = book.Edition,
             Category = category?.Name ?? string.Empty,
             Pages = book.Pages,
@@ -415,10 +416,13 @@ public class BookIssueAppService(
         var reserved = await AsyncExecuter.CountAsync(
             resQuery.Where(r => r.MemberId == student.Id));
 
+        var libMember = await _libraryMemberRepository.FindAsync(x => x.StudentId == student.Id);
+
         return new LibraryMemberDto
         {
             Id = student.Id,
             MemberName = $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim(),
+            MemberIdentifier = libMember?.MemberIdentifier,
             Avatar = student.AdditionalDetail?.ProfilePictureUrl,
             Email = student.ContactDetail?.Email,
             Role = "Student",
@@ -453,6 +457,7 @@ public class BookIssueAppService(
         {
             Id = employee.Id,
             MemberName = $"{employee.FirstName} {employee.LastName}".Trim(),
+            MemberIdentifier = employee.EmployeeCode,
             Avatar = employee.ProfilePictureBlobName,
             Email = employee.Email,
             Role = "Employee",

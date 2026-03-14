@@ -174,6 +174,12 @@ IGuidGenerator guidGenerator
       var divisionsLookup = (await AsyncExecuter.ToListAsync(divQuery.Where(d => divisionIds.Contains(d.Id))))
         .ToDictionary(d => d.Id, d => d.Name);
 
+      var studentIds = students.Select(s => s.Id).ToList();
+      var libMembers = await AsyncExecuter.ToListAsync(
+          (await libraryMemberRepository.GetQueryableAsync()).Where(lm => studentIds.Contains(lm.StudentId))
+      );
+      var libMemberLookup = libMembers.ToDictionary(lm => lm.StudentId, lm => lm.MemberIdentifier);
+
       foreach (var student in students)
       {
         string? standardName = student.StandardId.HasValue ? standardsLookup.GetValueOrDefault(student.StandardId.Value) : null;
@@ -184,6 +190,7 @@ IGuidGenerator guidGenerator
         {
           Id = student.Id,
           MemberName = $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim(),
+          MemberIdentifier = libMemberLookup.GetValueOrDefault(student.Id),
           Avatar = student.AdditionalDetail?.ProfilePictureUrl,
           Email = student.ContactDetail?.Email,
           Role = "Student",
@@ -206,6 +213,7 @@ IGuidGenerator guidGenerator
         {
           Id = emp.Id,
           MemberName = $"{emp.FirstName} {emp.MiddleName} {emp.LastName}".Trim(),
+          MemberIdentifier = emp.EmployeeCode,
           Avatar = emp.ProfilePictureBlobName,
           Email = emp.Email,
           Role = emp.EmployeeGroup == EmployeeGroupType.Teaching ? "Teacher" : "Staff",

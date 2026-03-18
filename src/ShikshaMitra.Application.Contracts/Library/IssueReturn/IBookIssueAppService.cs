@@ -12,4 +12,5 @@ public interface IBookIssueAppService : IApplicationService
     Task<AccessionBookDto> GetByAccessionAsync(string accessionNo);
     Task<LibraryMemberDto> GetMemberAsync(Guid memberId);
     Task<PaginatedResponse<IssueReturnItemDto>> GetIssueReturnListAsync(int page = 1, int pageSize = 20);
+    Task<ReturnBookSearchDto> SearchReturnBookAsync(string accessionNo);
 }

@@ -67,7 +67,7 @@ public class StudentDocumentManager : DomainService
 			d => d.StudentId == studentId && d.DocumentTypeId == documentTypeId);
 
 		StudentDocument studentDocument;
-		
+
 		if (existingDocument != null)
 		{
 			// Delete old blob
@@ -122,7 +122,7 @@ public class StudentDocumentManager : DomainService
 	{
 		// 1. Validate document exists and belongs to student
 		var document = await _studentDocumentRepository.GetAsync(documentId);
-		
+
 		if (document.StudentId != studentId)
 		{
 			throw new BusinessException("StudentDocument:NotBelongsToStudent")
@@ -147,7 +147,7 @@ public class StudentDocumentManager : DomainService
 	{
 		// Get all documents for the student
 		var documents = await _studentDocumentRepository.GetListAsync(d => d.StudentId == studentId);
-		
+
 		if (!documents.Any())
 		{
 			return new List<(StudentDocument, DocumentType)>();
@@ -177,7 +177,7 @@ public class StudentDocumentManager : DomainService
 	{
 		// 1. Validate document exists and belongs to student
 		var document = await _studentDocumentRepository.GetAsync(documentId);
-		
+
 		if (document.StudentId != studentId)
 		{
 			throw new BusinessException("StudentDocument:NotBelongsToStudent")
@@ -195,7 +195,7 @@ public class StudentDocumentManager : DomainService
 	/// <summary>
 	/// Gets the status of required documents for a student
 	/// </summary>
-	public async Task<List<(DocumentType documentType, StudentDocument? uploadedDocument)>> 
+	public async Task<List<(DocumentType documentType, StudentDocument? uploadedDocument)>>
 		GetRequiredDocumentsStatusAsync(Guid studentId)
 	{
 		// Get all document types for the tenant
@@ -289,7 +289,7 @@ public class StudentDocumentManager : DomainService
 	private void ValidateFileSize(long sizeInBytes, DocumentType documentType)
 	{
 		var sizeInMB = sizeInBytes / (1024.0 * 1024.0);
-		
+
 		if (sizeInMB > documentType.MaxSizeMB)
 		{
 			throw new BusinessException("Document:FileSizeExceeded")
@@ -308,7 +308,7 @@ public class StudentDocumentManager : DomainService
 		var sanitizedFileName = SanitizeFileName(fileName);
 		var uniqueId = Guid.NewGuid().ToString("N");
 		var tenantId = CurrentTenant.Id?.ToString("N") ?? "host";
-		
+
 		return $"student-documents/{tenantId}/{studentId:N}/{documentTypeId:N}_{uniqueId}_{sanitizedFileName}";
 	}
 

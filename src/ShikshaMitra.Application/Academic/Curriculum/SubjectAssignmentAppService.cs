@@ -100,7 +100,7 @@ public class SubjectAssignmentAppService(
 
 		// Group assignments
 		var groupedAssignments = new List<SubjectAssignmentGroupDto>();
-		
+
 		var groupedByElective = assignments
 			.Where(a => a.SubjectType == SubjectType.Elective && a.ElectiveGroupId.HasValue)
 			.GroupBy(a => a.ElectiveGroupId)
@@ -111,12 +111,12 @@ public class SubjectAssignmentAppService(
 			.ToList();
 
 
-        
+
         // I need to fetch all subjects for these assignments to get Name and Color.
         var subjectIds = assignments.Select(x => x.SubjectId).Distinct().ToList();
         var subjectsDict = (await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id)))
                            .ToDictionary(s => s.Id);
-        
+
         var electiveGroupIds = assignments.Where(x => x.ElectiveGroupId.HasValue).Select(x => x.ElectiveGroupId.Value).Distinct().ToList();
         var electiveGroupsDict = (await electiveGroupRepository.GetListAsync(g => electiveGroupIds.Contains(g.Id)))
                                  .ToDictionary(g => g.Id);
@@ -124,21 +124,21 @@ public class SubjectAssignmentAppService(
         foreach (var coreAssignment in coreSubjects)
         {
             subjectsDict.TryGetValue(coreAssignment.SubjectId, out var subject);
-            
+
             groupedAssignments.Add(new SubjectAssignmentGroupDto
             {
                 Id = coreAssignment.Id,
                 SubjectType = coreAssignment.SubjectType,
                 Status = coreAssignment.Status,
                 Color = subject?.Color, // Use subject color for core
-                Subjects = new List<SubjectLiteDto> 
+                Subjects = new List<SubjectLiteDto>
                 {
                     new SubjectLiteDto
                     {
                         SubjectType = coreAssignment.SubjectType,
                         SubjectId = coreAssignment.SubjectId,
                         SubjectName = subject?.Name,
-                        SubjectCode = coreAssignment.SubjectCode, // Or subject.Code? 
+                        SubjectCode = coreAssignment.SubjectCode, // Or subject.Code?
                         Color = subject?.Color
                     }
                 }
@@ -158,7 +158,7 @@ public class SubjectAssignmentAppService(
                 ElectiveGroupId = first.ElectiveGroupId,
                 ElectiveGroupName = electiveGroup?.Name,
                 Color = electiveGroup?.Color,
-                Subjects = group.Select(a => 
+                Subjects = group.Select(a =>
                 {
                     subjectsDict.TryGetValue(a.SubjectId, out var subj);
                     return new SubjectLiteDto
@@ -172,11 +172,11 @@ public class SubjectAssignmentAppService(
                 }).ToList()
             });
         }
-        
+
         // Pagination
         var totalCount = groupedAssignments.Count;
         var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
-        
+
         var pagedItems = groupedAssignments
             .Skip(page * pageSize)
             .Take(pageSize)
@@ -195,11 +195,11 @@ public class SubjectAssignmentAppService(
 	public async Task<SubjectAssignmentDto> GetAsync(Guid assignmentId)
 	{
 		var assignment = await assignmentRepository.GetAsync(assignmentId);
-		
+
 		List<AssignedSubject> groupAssignments;
 		if (assignment.ElectiveGroupId.HasValue)
 		{
-			groupAssignments = await assignmentRepository.GetListAsync(a => 
+			groupAssignments = await assignmentRepository.GetListAsync(a =>
 				a.ElectiveGroupId == assignment.ElectiveGroupId && a.StandardId == assignment.StandardId
 			);
 		}
@@ -224,7 +224,7 @@ public class SubjectAssignmentAppService(
 
 		if (existingEntity.ElectiveGroupId.HasValue)
 		{
-			existingGroup = await assignmentRepository.GetListAsync(x => 
+			existingGroup = await assignmentRepository.GetListAsync(x =>
 				x.ElectiveGroupId == existingEntity.ElectiveGroupId && x.StandardId == existingEntity.StandardId
 			);
 		}
@@ -252,7 +252,7 @@ public class SubjectAssignmentAppService(
 				existingSubject.Description = inputSubject.Description;
 				existingSubject.ChangeStatus(input.Status);
 				existingSubject.StandardId = input.ClassId; // Allow moving standard?
-				
+
 				// Update Teachers
 				if (inputSubject.PrimaryTeacherId.HasValue)
 				{
@@ -263,11 +263,11 @@ public class SubjectAssignmentAppService(
 					existingSubject.SetSecondaryTeachers(inputSubject.SecondaryTeacherId);
 				}
 
-				// Update specific fields like Elective Group ID if shifted? 
-				// For now assuming we keep them in the same group or the input defines the new group ID? 
+				// Update specific fields like Elective Group ID if shifted?
+				// For now assuming we keep them in the same group or the input defines the new group ID?
 				// The input defines the structure.
 				existingSubject.ElectiveGroupId = inputSubject.ElectiveGroupId;
-				existingSubject.SubjectType = (inputSubject.ElectiveGroupId == null || inputSubject.ElectiveGroupId == Guid.Empty) 
+				existingSubject.SubjectType = (inputSubject.ElectiveGroupId == null || inputSubject.ElectiveGroupId == Guid.Empty)
 					? SubjectType.Core : SubjectType.Elective;
 
 				await assignmentRepository.UpdateAsync(existingSubject);
@@ -291,7 +291,7 @@ public class SubjectAssignmentAppService(
 
 				if (inputSubject.PrimaryTeacherId.HasValue)
 					newSubject.SetPrimaryTeacher(inputSubject.PrimaryTeacherId.Value);
-				
+
 				if (inputSubject.SecondaryTeacherId != null)
 					newSubject.SetSecondaryTeachers(inputSubject.SecondaryTeacherId);
 
@@ -317,24 +317,24 @@ public class SubjectAssignmentAppService(
 			}
 		}
 
-		// Re-fetch or use modified list. 
-		// Since we modified existingGroup in memory (for updates) and adding new ones, 
+		// Re-fetch or use modified list.
+		// Since we modified existingGroup in memory (for updates) and adding new ones,
 		// wait, new ones were added to repo, but we need to include them in response.
 		// Let's re-fetch to be safe and accurate, or construct response manually.
 		// Since we might have deleted the one with 'assignmentId', we return the updated group.
-		// If 'assignmentId' was deleted, what ID do we return? 
+		// If 'assignmentId' was deleted, what ID do we return?
 		// The controller returns the DTO. The DTO Id is usually the first one.
-		
-		// If all deleted? 
+
+		// If all deleted?
 		if (processedSubjectIds.Count == 0) return null; // Should not happen due to validation
 
 		// Re-fetch the group based on any of the surviving IDs or the new configuration
 		// If we switched from Core to Elective or vice versa, logic holds.
-		
+
 		// For response, we can just use GetList logic behavior for this group.
 		// But to be fast, let's map what we have if we tracked it well.
 		// Safest is to Refetch using one of the current IDs.
-		var representativeId = existingGroup.FirstOrDefault(x => processedSubjectIds.Contains(x.SubjectId))?.Id 
+		var representativeId = existingGroup.FirstOrDefault(x => processedSubjectIds.Contains(x.SubjectId))?.Id
 			?? existingGroup.LastOrDefault()?.Id; // Fallback
 
 		if (representativeId.HasValue)
@@ -372,10 +372,10 @@ public class SubjectAssignmentAppService(
 			var assignments = await assignmentRepository.GetListAsync(a =>
 				assignmentIds.Contains(a.Id)
 			);
-			
+
 			// We should probably find the GROUPS for these IDs and publish the whole groups?
 			// Assumption: User selects items in UI, if they select an elective, do they select the whole group?
-			// Usually yes. But let's be safe and publish what is requested. 
+			// Usually yes. But let's be safe and publish what is requested.
 			// If input is list of IDs, we publish those IDs.
 
 			if (assignments.Count == 0)
@@ -389,9 +389,9 @@ public class SubjectAssignmentAppService(
 				assignment.Status = SubjectStatus.Published;
 				assignment.PublishedAt = DateTime.UtcNow;
 			}
-			
+
 			await assignmentRepository.UpdateManyAsync(assignments, autoSave: true);
-			
+
 			return new PublishResponseDto
 			{
 				Status = SubjectStatus.Published,
@@ -408,11 +408,11 @@ public class SubjectAssignmentAppService(
 	public async Task DeleteAsync(Guid assignmentId)
 	{
 		var assignment = await assignmentRepository.GetAsync(assignmentId);
-		
+
 		List<AssignedSubject> groupAssignments;
 		if (assignment.ElectiveGroupId.HasValue)
 		{
-			groupAssignments = await assignmentRepository.GetListAsync(a => 
+			groupAssignments = await assignmentRepository.GetListAsync(a =>
 				a.ElectiveGroupId == assignment.ElectiveGroupId && a.StandardId == assignment.StandardId
 			);
 		}
@@ -438,7 +438,7 @@ public class SubjectAssignmentAppService(
 			var result = new List<CoreElectiveSubjectResponseDto>();
 			foreach (var coreSubject in coreSubjects)
 			{
-				var subjectDto = new CoreElectiveSubjectResponseDto	
+				var subjectDto = new CoreElectiveSubjectResponseDto
 				{
 					Id = coreSubject.Id,
 					Name = coreSubject.Name,
@@ -451,7 +451,7 @@ public class SubjectAssignmentAppService(
 
 			foreach (var electiveGroup in electiveGroups)
 			{
-				var subjectDto = new CoreElectiveSubjectResponseDto	
+				var subjectDto = new CoreElectiveSubjectResponseDto
 				{
 					Id = electiveGroup.Id,
 					Name = electiveGroup.Name,

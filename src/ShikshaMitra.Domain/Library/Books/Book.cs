@@ -35,6 +35,8 @@ public class Book : AuditedAggregateRoot<Guid>, IMultiTenant
 
     public int NumberOfCopies { get; set; }
 
+    public string? CoverImage { get; set; }
+
     public List<BookCopy> Copies { get; set; } = new();
 
     protected Book() { }

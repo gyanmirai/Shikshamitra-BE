@@ -55,12 +55,14 @@ public class EmployeeDto : EntityDto<Guid>
 	public string? PinCode { get; set; }
 
 	// Value Objects
-	public ContactDetailsDto FatherDetails { get; set; }
-	public ContactDetailsDto MotherDetails { get; set; }
-	public ContactDetailsDto SpouseDetails { get; set; }
 	public BankDetailsDto BankDetails { get; set; }
 
 	public List<WorkExperienceDto> WorkExperiences { get; set; } = [];
+
+	// Family Members - loaded separately from new table
+	public ContactDetailsDto? FatherDetails { get; set; }
+	public ContactDetailsDto? MotherDetails { get; set; }
+	public ContactDetailsDto? SpouseDetails { get; set; }
 
 	// Profile Picture stored in blob storage
 	public string? ProfilePictureBlobName { get; set; }

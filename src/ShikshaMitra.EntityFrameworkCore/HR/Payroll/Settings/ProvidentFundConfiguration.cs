@@ -10,6 +10,6 @@ public class ProvidentFundConfiguration : IEntityTypeConfiguration<ProvidentFund
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ProvidentFunds", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
-		
+
 	}
 }

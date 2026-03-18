@@ -82,7 +82,7 @@ public class BulkScopeAssignmentDto : IValidatableObject
         {
             yield return new ValidationResult(
                 "At least one scope parameter (AcademicYearIds, EducationBoardIds, EducationMediumIds, EducationMediumStageIds, StandardIds, or DivisionIds) must be provided.",
-                new[] { nameof(AcademicYearIds), nameof(EducationBoardIds), nameof(EducationMediumIds), 
+                new[] { nameof(AcademicYearIds), nameof(EducationBoardIds), nameof(EducationMediumIds),
                        nameof(EducationMediumStageIds), nameof(StandardIds), nameof(DivisionIds) });
         }
     }

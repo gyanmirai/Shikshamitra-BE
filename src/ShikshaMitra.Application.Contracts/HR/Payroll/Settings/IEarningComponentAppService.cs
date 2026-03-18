@@ -19,12 +19,12 @@ public interface IEarningComponentAppService : ICrudAppService<
 	/// Get all active earning components with pagination support
 	/// </summary>
 	Task<PagedResultDto<EarningComponentDto>> GetAllActiveAsync(PagedResultRequestDto input);
-	
+
 	/// <summary>
 	/// Activate an earning component
 	/// </summary>
 	Task ActivateAsync(Guid id);
-	
+
 	/// <summary>
 	/// Deactivate an earning component
 	/// </summary>

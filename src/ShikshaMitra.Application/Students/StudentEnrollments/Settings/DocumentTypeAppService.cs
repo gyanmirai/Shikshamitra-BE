@@ -51,7 +51,7 @@ public class DocumentTypeAppService : ApplicationService, IDocumentTypeAppServic
 			.Take(input.MaxResultCount);
 
 		var documentTypes = await AsyncExecuter.ToListAsync(pagedQuery);
-		
+
 		// Map manually to handle enum conversion
 		var dtos = documentTypes.Select(dt => new DocumentTypeDto
 		{

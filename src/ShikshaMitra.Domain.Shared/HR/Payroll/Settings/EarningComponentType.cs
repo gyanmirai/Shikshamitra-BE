@@ -9,7 +9,7 @@ public enum EarningComponentType
 	/// Fixed amount component (e.g., Basic Salary = 30000)
 	/// </summary>
 	Fixed = 0,
-	
+
 	/// <summary>
 	/// Variable/percentage-based component (e.g., HRA = 40% of Basic)
 	/// </summary>

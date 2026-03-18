@@ -13,13 +13,13 @@ public class Room : AuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid BuildingId { get; set; }
 	public Guid FloorId { get; set; }
 	public Guid RoomTypeId { get; set; }
-	
+
 	// Benches Details
 	public int TotalBenches { get; set; }
 	public int BenchCapacity { get; set; }
 	public int BenchesPerRow { get; set; }
 	public int BenchesPerColumn { get; set; }
-	
+
 	// Features (stored as JSON array)
 	public List<string>? Features { get; set; }
 }

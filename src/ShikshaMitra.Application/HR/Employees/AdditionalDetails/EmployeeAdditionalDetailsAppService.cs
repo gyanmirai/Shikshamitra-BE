@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
@@ -47,7 +47,7 @@ public class EmployeeAdditionalDetailsAppService(
 
 		// Check if additional details already exist
 		var existingDetails = await additionalDetailsRepository.GetByEmployeeIdAsync(employeeId);
-		
+
 		EmployeeAdditionalDetails additionalDetails;
 		bool isCreated;
 

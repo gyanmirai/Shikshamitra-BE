@@ -167,7 +167,7 @@ public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, I
 		var additionalDetail = await _studentAdditionalDetailRepository.GetAsync(studentId);
 		var medium = await _educationMediumRepository.GetAsync(student.AcademicMediumId);
 		var board = await _educationBoardRepository.GetAsync(medium.EducationBoardId);
-		
+
 		Standard standard = null;
 		if (student.StandardId.HasValue)
 		{

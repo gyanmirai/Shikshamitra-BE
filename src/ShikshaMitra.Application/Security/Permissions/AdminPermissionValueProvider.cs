@@ -30,7 +30,7 @@ public class AdminPermissionValueProvider : PermissionValueProvider
 		IPermissionStore permissionStore,
 		IIdentityUserRepository userRepository,
 		IIdentityRoleRepository roleRepository,
-		IOptions<UserScopeOptions> options) 
+		IOptions<UserScopeOptions> options)
 		: base(permissionStore)
 	{
 		_userRepository = userRepository;

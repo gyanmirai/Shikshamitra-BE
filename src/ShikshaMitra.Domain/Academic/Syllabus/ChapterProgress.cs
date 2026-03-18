@@ -66,21 +66,21 @@ public class ChapterProgress : FullAuditedEntity<Guid>
 	#endregion
 
 	#region Methods
-	
+
 	public void UpdateProgress(int progress, string? description = null)
 	{
 		if (progress < 0 || progress > 100)
 		{
 			throw new ArgumentOutOfRangeException(nameof(progress), "Progress must be between 0 and 100.");
 		}
-		
+
 		Progress = progress;
-		
+
 		if (!string.IsNullOrWhiteSpace(description))
 		{
 			Remarks = description;
 		}
-		
+
 		if (progress == 100 && !CompletionDate.HasValue)
 		{
 			CompletionDate = DateTime.UtcNow;
@@ -89,12 +89,12 @@ public class ChapterProgress : FullAuditedEntity<Guid>
 		{
 			CompletionDate = null;
 		}
-		
+
 		if (progress > 0 && !StartDate.HasValue)
 		{
 			StartDate = DateTime.UtcNow;
 		}
 	}
-	
+
 	#endregion
 }

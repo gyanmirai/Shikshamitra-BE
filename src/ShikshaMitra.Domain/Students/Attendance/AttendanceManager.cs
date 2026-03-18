@@ -77,7 +77,7 @@ public class AttendanceManager : DomainService
 		List<AttendanceEntryInput> entries)
 	{
 		var attendanceDay = await _attendanceDayRepository.GetAsync(attendanceDayId);
-		
+
 		// Ensure the day is not locked
 		attendanceDay.EnsureNotLocked();
 

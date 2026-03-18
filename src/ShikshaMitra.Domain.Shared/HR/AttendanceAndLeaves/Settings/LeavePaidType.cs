@@ -9,7 +9,7 @@ public enum LeavePaidType
 	/// Paid leave - salary is paid during leave
 	/// </summary>
 	Paid = 0,
-	
+
 	/// <summary>
 	/// Unpaid leave - salary is deducted during leave
 	/// </summary>

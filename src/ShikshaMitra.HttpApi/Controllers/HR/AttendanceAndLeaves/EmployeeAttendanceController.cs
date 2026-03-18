@@ -93,13 +93,13 @@ public class EmployeeAttendanceController : AbpControllerBase
 	/// </summary>
 	/// <remarks>
 	/// **Expected File Format:**
-	/// 
+	///
 	/// | Employee Name | Hours Worked | Time In | Time Out | status | Employee Code | Contact No |
 	/// |--------------|--------------|---------|----------|--------|---------------|------------|
 	/// | John Doe     | 8.5          | 09:00   | 17:30    | Present | EMP001       | 9876543210 |
-	/// 
+	///
 	/// **Supported Formats:** Excel (.xlsx), CSV (.csv)
-	/// 
+	///
 	/// **Features:**
 	/// - Partial success: failed rows don't prevent others from importing
 	/// - Automatic employee lookup by code

@@ -6,5 +6,5 @@ namespace ShikshaMitra.HR.Payroll.Settings;
 
 public interface IProfessionalTaxAppService : ICrudAppService<ProfessionalTaxDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateProfessionalTaxDto>
 {
-	
+
 }

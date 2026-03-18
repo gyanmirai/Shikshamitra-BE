@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -24,7 +24,7 @@ public class LibrarySectionAppService(
 		query = query.Where(x => x.AcademicYearId == academicYearId);
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
-		var totalPages = (int) Math.Ceiling(totalCount / (double) pageSize);
+		var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
 		var items = await AsyncExecuter.ToListAsync(
 			query
@@ -43,7 +43,8 @@ public class LibrarySectionAppService(
 			{
 				Id = x.Id,
 				SectionName = x.SectionName,
-				NumberOfShelf = x.NumberOfShelf
+				NumberOfShelf = x.NumberOfShelf,
+				ShelfDetails = x.Shelves.Select(s => new ShelfDetailDto { ShelfName = s.ShelfName,Id=s.Id }).ToList()
 			}).ToList()
 		};
 	}
@@ -88,16 +89,14 @@ public class LibrarySectionAppService(
 		var section = await _sectionRepository.GetAsync(sectionId);
 
 		var shelfQuery = await _shelfRepository.GetQueryableAsync();
-		var shelves = await AsyncExecuter.ToListAsync(
-			shelfQuery.Where(x => x.SectionId == sectionId)
-		);
+		
 
 		return new SectionDetailsResponse
 		{
 			Id = section.Id.ToString(),
 			SectionName = section.SectionName,
 			NumberOfShelf = section.NumberOfShelf,
-			ShelfDetails = shelves.Select(s => new ShelfDetailDto { ShelfName = s.ShelfName }).ToList()
+			ShelfDetails = section?.Shelves?.Select(s => new ShelfDetailDto { ShelfName = s.ShelfName, Id = s.Id }).ToList()
 		};
 	}
 

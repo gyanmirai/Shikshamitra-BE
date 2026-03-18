@@ -44,6 +44,9 @@ public class BookConfiguration : IEntityTypeConfiguration<Book>
 
         builder.Property(x => x.AcademicYearId);
 
+        builder.Property(x => x.CoverImage)
+            .HasMaxLength(512);
+
         builder.HasIndex(x => new { x.Isbn, x.Edition });
     }
 }

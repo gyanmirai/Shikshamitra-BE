@@ -72,7 +72,7 @@ public class DocumentType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		// Remove duplicates and sort
 		var uniqueFormats = formats.Distinct().OrderBy(x => x).ToList();
-		
+
 		// Store as comma-separated enum values
 		AcceptedFormatsData = string.Join(",", uniqueFormats.Select(x => (int)x));
 	}

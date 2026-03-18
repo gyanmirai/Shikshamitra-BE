@@ -29,11 +29,11 @@ public class HRMapperProfile : Profile
 
 		CreateMap<ContactDetails, ContactDetailsDto>().ReverseMap();
 		CreateMap<BankDetails, BankDetailsDto>().ReverseMap();
-		
+
 		// Employee Payroll Component mappings for Salary Structure API
 		CreateMap<EmployeePayrollComponent, SalaryComponentDto>();
 		CreateMap<SalaryComponentDto, EmployeePayrollComponent>();
-		
+
 		// Also map to the legacy PayrollComponentDto for backward compatibility
 		CreateMap<EmployeePayrollComponent, Employees.Payroll.PayrollComponentDto>();
 		CreateMap<Employees.Payroll.PayrollComponentDto, EmployeePayrollComponent>();
@@ -79,10 +79,10 @@ public class HRMapperProfile : Profile
 		# endregion
 
 		#region Events & Holidays
-		
+
 		CreateMap<EventAndHoliday, EventAndHolidayDto>();
 		CreateMap<CreateUpdateEventAndHolidayDto, EventAndHoliday>();
-		
+
 		#endregion
 
 		#region Payroll

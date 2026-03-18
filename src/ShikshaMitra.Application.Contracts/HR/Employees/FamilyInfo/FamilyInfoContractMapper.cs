@@ -88,7 +88,7 @@ public static class FamilyInfoContractMapper
 				Address2 = contactDetails.Address2,
 				Address3 = contactDetails.Address3,
 				City = contactDetails.City,
-				State = !string.IsNullOrEmpty(contactDetails.StateName) 
+				State = !string.IsNullOrEmpty(contactDetails.StateName)
 					? new StateInfo { Name = contactDetails.StateName, IsoCode = contactDetails.StateIsoCode ?? string.Empty }
 					: null,
 				Country = !string.IsNullOrEmpty(contactDetails.CountryName)

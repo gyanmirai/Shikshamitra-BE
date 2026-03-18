@@ -1,4 +1,4 @@
-using ShikshaMitra.Localization;
+﻿using ShikshaMitra.Localization;
 using Volo.Abp.AuditLogging;
 using Volo.Abp.BackgroundJobs;
 using Volo.Abp.FeatureManagement;
@@ -24,7 +24,7 @@ namespace ShikshaMitra;
     typeof(AbpOpenIddictDomainSharedModule),
     typeof(AbpPermissionManagementDomainSharedModule),
     typeof(AbpSettingManagementDomainSharedModule),
-    typeof(AbpTenantManagementDomainSharedModule)    
+    typeof(AbpTenantManagementDomainSharedModule)
     )]
 [DependsOn(typeof(BlobStoringDatabaseDomainSharedModule))]
     public class ShikshaMitraDomainSharedModule : AbpModule

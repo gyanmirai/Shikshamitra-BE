@@ -18,7 +18,7 @@ public class AttendanceEntryConfiguration : IEntityTypeConfiguration<AttendanceE
 		builder.Property(ae => ae.AttendanceDayId).IsRequired();
 		builder.Property(ae => ae.StudentId).IsRequired();
 		builder.Property(ae => ae.MarkedByUserId).IsRequired();
-		
+
 		builder.Property(ae => ae.Status)
 			.IsRequired()
 			.HasConversion<string>()

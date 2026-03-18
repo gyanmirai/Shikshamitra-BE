@@ -57,4 +57,14 @@ public class UpdateAdditionalDetailsDto
 	/// Indicates if student is from a single parent family
 	/// </summary>
 	public bool IsSingleParentChild { get; set; }
+
+	/// <summary>
+	/// Indicates if student is library member or not
+	/// </summary>
+	public bool IsLibraryMember { get; set; } = false;
+
+	/// <summary>
+	/// Indicates if student is transport member or not
+	/// </summary>
+	public bool IsTransportMember { get; set; } = false;
 }

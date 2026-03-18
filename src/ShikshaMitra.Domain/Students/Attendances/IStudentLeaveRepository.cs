@@ -29,7 +29,7 @@ public interface IStudentLeaveRepository : IRepository<StudentLeave, Guid>
 		int skipCount = 0,
 		Guid? tenantId = null,
 		CancellationToken cancellationToken = default);
-	
+
 	/// <summary>
 	/// Gets the count of student leaves based on filters
 	/// </summary>
@@ -45,14 +45,14 @@ public interface IStudentLeaveRepository : IRepository<StudentLeave, Guid>
 		DateTimeOffset? endDate = null,
 		Guid? tenantId = null,
 		CancellationToken cancellationToken = default);
-	
+
 	/// <summary>
 	/// Gets a single student leave with navigation properties included
 	/// </summary>
 	Task<StudentLeave?> GetWithDetailsAsync(
 		Guid id,
 		CancellationToken cancellationToken = default);
-	
+
 	/// <summary>
 	/// Gets a list of student leaves with navigation properties included
 	/// </summary>

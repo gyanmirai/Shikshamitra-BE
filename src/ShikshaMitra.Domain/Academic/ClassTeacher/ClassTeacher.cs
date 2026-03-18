@@ -35,7 +35,7 @@ public class ClassTeacher : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserS
 	/// Gets or sets the tenant identifier for multi-tenancy support.
 	/// </summary>
 	public virtual Guid? TenantId { get; private set; }
-	
+
 	// IUserScopedEntity implementation
 	public Guid? AcademicYearId { get; private set; }
 	public Guid? EducationBoardId { get; private set; }

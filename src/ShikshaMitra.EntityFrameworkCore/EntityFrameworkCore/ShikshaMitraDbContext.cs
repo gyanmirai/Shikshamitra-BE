@@ -4,13 +4,12 @@ using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.HR.AttendanceAndLeaves;
-using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.EventAndHolidays;
-using ShikshaMitra.HR.Calendar;
+using ShikshaMitra.HR.Calendar.HolidayTypes;
 using ShikshaMitra.HR.Calendar.EventTypes;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.Events;
@@ -65,7 +64,7 @@ using ShikshaMitra.Finance.Setting;
 using ShikshaMitra.Finance.StudentFeeAssignment;
 using ShikshaMitra.Finance.Setting.ConcessionType;
 using ShikshaMitra.Finance.Setting.ConcessionTypes;
-using ShikshaMitra.Finance.ConcessionRequests;
+using ShikshaMitra.Library.Members;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -205,6 +204,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	DbSet<Employee> Employees { get; set; }
 	DbSet<EmployeeAdditionalDetails> EmployeeAdditionalDetails { get; set; }
+	DbSet<EmployeeFamilyMember> EmployeeFamilyMembers { get; set; }
 	DbSet<DocumentSetting> DocumentSettings { get; set; }
 
 	// Employee Payroll
@@ -381,6 +381,10 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	public DbSet<ShikshaMitra.Library.Books.BookIssue> BookIssues { get; set; }
 	public DbSet<ShikshaMitra.Library.Books.LibraryCharge> LibraryCharges { get; set; }
 	#endregion
+	#region Members
+	public DbSet<LibraryMember> LibraryMembers { get; set; } 
+	#endregion
+
 	#endregion
 
 	// Apply BookCategory configuration

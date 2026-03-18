@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Volo.Abp.Application.Dtos;
@@ -27,7 +27,7 @@ public static class PfRuleOpenApiMapper
 			UpdatedAt = dto.LastModificationTime
 		};
 	}
-	
+
 	/// <summary>
 	/// Maps ProvidentFundDto to PfRuleCreateResponseDto (OpenAPI)
 	/// </summary>
@@ -39,7 +39,7 @@ public static class PfRuleOpenApiMapper
 			CreatedAt = dto.CreationTime
 		};
 	}
-	
+
 	/// <summary>
 	/// Maps ProvidentFundDto to PfRuleUpdateResponseDto (OpenAPI)
 	/// </summary>
@@ -51,7 +51,7 @@ public static class PfRuleOpenApiMapper
 			UpdatedAt = dto.LastModificationTime ?? DateTime.UtcNow
 		};
 	}
-	
+
 	/// <summary>
 	/// Maps PagedResultDto to PaginatedPfRuleResponseDto (OpenAPI)
 	/// </summary>
@@ -63,10 +63,10 @@ public static class PfRuleOpenApiMapper
 		int currentPage,
 		int pageSize)
 	{
-		var totalPages = pageSize > 0 
-			? (int)Math.Ceiling((double)pagedResult.TotalCount / pageSize) 
+		var totalPages = pageSize > 0
+			? (int)Math.Ceiling((double)pagedResult.TotalCount / pageSize)
 			: 0;
-		
+
 		return new PaginatedPfRuleResponseDto
 		{
 			TotalCount = (int)pagedResult.TotalCount,
@@ -76,7 +76,7 @@ public static class PfRuleOpenApiMapper
 			Items = pagedResult.Items.Select(ToPfRuleResponse).ToList()
 		};
 	}
-	
+
 	/// <summary>
 	/// Maps a list of ProvidentFundDto to PaginatedPfRuleResponseDto (OpenAPI)
 	/// </summary>
@@ -86,10 +86,10 @@ public static class PfRuleOpenApiMapper
 		int currentPage,
 		int pageSize)
 	{
-		var totalPages = pageSize > 0 
-			? (int)Math.Ceiling((double)totalCount / pageSize) 
+		var totalPages = pageSize > 0
+			? (int)Math.Ceiling((double)totalCount / pageSize)
 			: 0;
-		
+
 		return new PaginatedPfRuleResponseDto
 		{
 			TotalCount = totalCount,

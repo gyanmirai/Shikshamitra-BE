@@ -37,9 +37,9 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Dashboard";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Dashboard";
-			
+
 			public const string View = $"{SubmoduleName}.View";
-			
+
 			public static readonly string[] All = { View };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -53,11 +53,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Reports";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Reports";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -73,11 +73,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Notification";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Notification";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{

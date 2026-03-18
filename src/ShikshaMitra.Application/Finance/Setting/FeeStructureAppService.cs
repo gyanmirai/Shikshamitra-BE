@@ -224,13 +224,13 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 			// This suggests one Standard can have multiple named structures (e.g. "General", "RTE").
 			// My entity FeeStructureStandard has a 'Name' property. So for a given StandardId, we can have multiple entries with different Names.
 
-			// Strategy: For the given StandardId, identify existing ones by Name. Update if exists, create if not. 
-			// Better strategy for bulk save: 
-			// Remove existing configurations for this standard and recreate them? Or smart update? 
-			// Documentation implies "Save", suggesting replacement or update. 
-			// Let's assume we replace the configuration for this StandardId entirely or merge. 
+			// Strategy: For the given StandardId, identify existing ones by Name. Update if exists, create if not.
+			// Better strategy for bulk save:
+			// Remove existing configurations for this standard and recreate them? Or smart update?
+			// Documentation implies "Save", suggesting replacement or update.
+			// Let's assume we replace the configuration for this StandardId entirely or merge.
 			// Given the nested complexity, clearing and re-adding for the specific StandardId might be safest if 'StandardFeeStructures' list is comprehensive.
-			// However, usually we should be careful with Ids. But here requests don't have Ids, just Names. 
+			// However, usually we should be careful with Ids. But here requests don't have Ids, just Names.
 			// So we can assume re-creation or update by Name.
 
 			// Let's try matching by Name.
@@ -280,7 +280,7 @@ public class FeeStructureAppService : ApplicationService, IFeeStructureAppServic
 					if (existingDetail != null)
 					{
 						// Update
-						// Properties are private set, need a method strictly speaking, or use reflection/private access if allowed, 
+						// Properties are private set, need a method strictly speaking, or use reflection/private access if allowed,
 						// but here I should probably delete and recreate if I didn't add Update method.
 						// Wait, I didn't add Update method to FeeStructureDetail.
 						// I'll delete and recreate for simplicity and correctness with immutable-style entities.

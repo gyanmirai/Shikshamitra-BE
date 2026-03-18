@@ -7,6 +7,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.Groups;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Calendar;
+using ShikshaMitra.HR.Calendar.HolidayTypes;
 using ShikshaMitra.HR.Calendar.EventTypes;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.Events;
@@ -144,7 +145,7 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 
 		// Library - Book mappings
 		CreateMap<ShikshaMitra.Library.Books.Book, ShikshaMitra.Library.Books.BookDto>()
-			.ForMember(dest => dest.Language, opt => opt.MapFrom(src => src.Language.ToString()));
+			.ForMember(dest => dest.Language, opt => opt.MapFrom(src => (int) src.Language));
 
 		// Library - BookCopy mappings
 		CreateMap<ShikshaMitra.Library.Books.BookCopy, ShikshaMitra.Library.Books.BookCopyDto>()

@@ -7,5 +7,5 @@ namespace ShikshaMitra.HR.Payroll.Settings;
 
 public class EfCoreProfessionalTaxRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider) : EfCoreRepository<ShikshaMitraDbContext, ProfessionalTax, Guid>(dbContextProvider),IProfessionalTaxRepository
 {
-	
+
 }

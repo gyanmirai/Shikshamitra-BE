@@ -130,7 +130,7 @@ public class ExamAppService(
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
 
-		// Assumption: IsRoomAssigned flag is not persisted in Exam entity based on current knowledge. 
+		// Assumption: IsRoomAssigned flag is not persisted in Exam entity based on current knowledge.
 		// Returning true if there are any room assignments or false otherwise, or strictly following what was decided.
 		// Actually, the Manager didn't persist IsRoomAssigned. So I can't return it accurately if I don't store it.
 		// However, I can check if any subject has room assignments.

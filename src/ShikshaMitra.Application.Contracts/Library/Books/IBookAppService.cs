@@ -7,7 +7,7 @@ namespace ShikshaMitra.Library.Books;
 
 public interface IBookAppService : IApplicationService
 {
-    Task<PaginatedResponse<BookDto>> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10);
+    Task<PaginatedResponse<BookDto>> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null, string? alphabet = null);
     Task<BookDetailDto> GetAsync(Guid bookId);
     Task<GenericCreatedResponse> CreateAsync(Guid? academicYearId, CreateBookRequest input);
     Task<GenericUpdatedResponse> UpdateAsync(Guid bookId, UpdateBookRequest input);

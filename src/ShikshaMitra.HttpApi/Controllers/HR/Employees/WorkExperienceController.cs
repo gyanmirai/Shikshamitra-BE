@@ -53,7 +53,7 @@ public class WorkExperienceController : AbpControllerBase
 	{
 		var updateDtoList = WorkExperienceContractMapper.ToUpdateDtoList(request);
 		await _employeeAppService.UpdateExperienceInfo(employeeId, updateDtoList);
-		
+
 		return Ok();
 	}
 }

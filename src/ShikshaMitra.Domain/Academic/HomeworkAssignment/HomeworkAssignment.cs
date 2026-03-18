@@ -39,36 +39,36 @@ public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTe
 
 	// Core Properties
 	public Guid SubjectId { get; set; }
-	
+
 	/// <summary>
 	/// Legacy single chapter ID (for backward compatibility)
 	/// New assignments use ChapterIdsJson for multi-chapter support
 	/// </summary>
 	public Guid? ChapterId { get; set; }
-	
+
 	public string Title { get; set; } = string.Empty;
 	public string Description { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Legacy homework assignment type ID (nullable - for backward compatibility)
 	/// New assignments use HomeworkTypeId
 	/// </summary>
 	public Guid? HomeworkAssignmentTypeId { get; set; }
-	
+
 	/// <summary>
 	/// Legacy single document URL (for backward compatibility)
 	/// New assignments use AttachmentsJson for multi-file support
 	/// </summary>
 	public string? DocumentUrl { get; set; }
-	
+
 	public SubmissionType SubmissionType { get; set; }
-	
+
 	/// <summary>
 	/// Legacy due date (nullable - for backward compatibility)
 	/// New assignments use division schedules for per-division due dates
 	/// </summary>
 	public DateTime? DueDate { get; set; }
-	
+
 	/// <summary>
 	/// Legacy publish flag (for backward compatibility)
 	/// New assignments use division-level IsPublished in schedules

@@ -10,6 +10,6 @@ public class EventAndHolidayConfiguration : IEntityTypeConfiguration<EventAndHol
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "EventAndHolidays", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
-		
+
 	}
 }

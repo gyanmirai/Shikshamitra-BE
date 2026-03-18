@@ -27,8 +27,8 @@ public static class ReportingManagerContractMapper
 		return new ReportingManagerResponse
 		{
 			EmployeeId = dto.EmployeeId,
-			ReportingManager = dto.ReportingManager != null 
-				? ToManagerInfo(dto.ReportingManager) 
+			ReportingManager = dto.ReportingManager != null
+				? ToManagerInfo(dto.ReportingManager)
 				: null
 		};
 	}

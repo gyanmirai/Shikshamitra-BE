@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Volo.Abp.Domain.Entities;
 
@@ -11,7 +11,7 @@ public class ExamSubjectDivision : Entity<Guid>
     public int Capacity { get; private set; }
     public List<Guid> RoomIds { get; private set; }
 
-    private ExamSubjectDivision() 
+    private ExamSubjectDivision()
     {
         RoomIds = new List<Guid>();
     }

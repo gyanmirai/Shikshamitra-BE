@@ -67,7 +67,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
     {
         try
         {
-            _logger.LogInformation("Attempting to assign scope. UserId: {UserId}, RoleName: {RoleName}", 
+            _logger.LogInformation("Attempting to assign scope. UserId: {UserId}, RoleName: {RoleName}",
                 input.UserId, input.RoleName);
 
             // Note: This validation is also enforced at DTO level via IValidatableObject
@@ -119,7 +119,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 // Handle unique constraint violation (UQ_UserScopeAssignment)
                 if (IsUniqueConstraintViolation(dbEx))
                 {
-                    _logger.LogWarning(dbEx, 
+                    _logger.LogWarning(dbEx,
                         "Duplicate scope assignment detected. UserId: {UserId}, RoleName: {RoleName}",
                         input.UserId, input.RoleName);
                     throw new UserFriendlyException(
@@ -132,7 +132,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 if (IsForeignKeyViolation(dbEx))
                 {
                     var correlationId = Guid.NewGuid();
-                    _logger.LogWarning(dbEx, 
+                    _logger.LogWarning(dbEx,
                         "Foreign key violation during scope assignment. UserId: {UserId}, RoleName: {RoleName}, CorrelationId: {CorrelationId}",
                         input.UserId, input.RoleName, correlationId);
                     throw new UserFriendlyException(
@@ -211,7 +211,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 var foundUsers = await Task.WhenAll(
                     batch.Select(async userId => new { UserId = userId, Exists = await _userRepository.FindAsync(userId) != null })
                 );
-                
+
                 missingUserIds.AddRange(foundUsers.Where(x => !x.Exists).Select(x => x.UserId));
             }
 
@@ -249,7 +249,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
                 var existingQuery = (await _scopeRepository.GetQueryableAsync())
                     .Where(x => x.UserId.HasValue && distinctUserIds.Contains(x.UserId.Value));
-                
+
                 var existingAssignments = await AsyncExecuter.ToListAsync(existingQuery);
                 deletedCount = existingAssignments.Count;
 
@@ -552,7 +552,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
     {
         try
         {
-            _logger.LogDebug("Getting hierarchical scope information for user {UserId}, AcademicYear filter: {AcademicYearId}", 
+            _logger.LogDebug("Getting hierarchical scope information for user {UserId}, AcademicYear filter: {AcademicYearId}",
                 userId, academicYearId?.ToString() ?? "All");
 
             // Get user info - throw 404 if user doesn't exist
@@ -650,13 +650,13 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
         // Load academic years for the tenant (with optional filter)
         var academicYearsQuery = await _academicYearRepository.GetQueryableAsync();
-        
+
         if (academicYearId.HasValue)
         {
             // Filter to specific academic year
             academicYearsQuery = academicYearsQuery.Where(ay => ay.Id == academicYearId.Value);
         }
-        
+
         var academicYears = await AsyncExecuter.ToListAsync(academicYearsQuery);
 
         var hierarchy = new List<AcademicYearScopeNode>();

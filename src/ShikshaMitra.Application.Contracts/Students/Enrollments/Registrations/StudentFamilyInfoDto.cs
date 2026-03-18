@@ -10,7 +10,7 @@ public class StudentFamilyInfoDto
 {
 	public Guid StudentId { get; set; }
 	public StudentLifeCycleStatusEnum Status { get; set; }
-	
+
 	/// <summary>
 	/// Father details
 	/// </summary>

@@ -20,17 +20,17 @@ public class StudentManagementController(
 	public async Task<Result<List<StudentRecordDto>>> GetStudentRecords(Guid divisionId)
 	{
 		var (studentRecords, arrangementType, arrangementBy) = await studentManagementAppService.GetStudentRecords(divisionId);
-		
+
 		if (arrangementType.HasValue)
 		{
 			Response.Headers["X-Arrangement-Type"] = arrangementType.Value.ToString();
 		}
-		
+
 		if (arrangementBy.HasValue)
 		{
 			Response.Headers["X-Arrangement-By"] = arrangementBy.Value.ToString();
 		}
-		
+
 		return Result.Success(studentRecords);
 	}
 

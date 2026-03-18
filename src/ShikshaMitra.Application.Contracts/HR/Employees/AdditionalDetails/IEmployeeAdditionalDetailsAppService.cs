@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
 
@@ -25,7 +25,7 @@ public interface IEmployeeAdditionalDetailsAppService : IApplicationService
 	/// <param name="employeeId">The employee ID.</param>
 	/// <param name="input">The additional details to upsert.</param>
 	/// <returns>
-	/// A tuple containing the upserted additional details and a boolean indicating 
+	/// A tuple containing the upserted additional details and a boolean indicating
 	/// whether a new record was created (true) or an existing one was updated (false).
 	/// </returns>
 	/// <exception cref="Volo.Abp.Domain.Entities.EntityNotFoundException">

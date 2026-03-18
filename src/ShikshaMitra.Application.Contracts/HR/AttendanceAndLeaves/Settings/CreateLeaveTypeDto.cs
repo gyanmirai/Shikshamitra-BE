@@ -13,7 +13,7 @@ public class CreateLeaveTypeDto
 	[Required]
 	[StringLength(LeaveTypeConsts.MaxTypeLength, MinimumLength = 1)]
 	public string Type { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Color code in HEX format (#RRGGBB)
 	/// </summary>

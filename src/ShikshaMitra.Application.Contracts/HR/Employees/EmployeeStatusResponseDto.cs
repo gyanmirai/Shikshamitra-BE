@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using ShikshaMitra.Common;
 
 namespace ShikshaMitra.HR.Employees;
@@ -12,17 +12,17 @@ public class EmployeeStatusResponseDto
 	/// The employee's unique identifier.
 	/// </summary>
 	public string EmployeeId { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// The previous status before the change.
 	/// </summary>
 	public EmployeeStatusType? PreviousStatus { get; set; }
-	
+
 	/// <summary>
 	/// The current status after the change.
 	/// </summary>
 	public EmployeeStatusType CurrentStatus { get; set; }
-	
+
 	/// <summary>
 	/// Timestamp of when the status was updated.
 	/// </summary>

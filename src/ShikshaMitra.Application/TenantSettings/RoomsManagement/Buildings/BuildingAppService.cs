@@ -151,7 +151,7 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 		}
 
 		await buildingRepository.DeleteAsync(id, autoSave: false);
-		
+
 		await UnitOfWorkManager.Current.SaveChangesAsync();
 	}
 }

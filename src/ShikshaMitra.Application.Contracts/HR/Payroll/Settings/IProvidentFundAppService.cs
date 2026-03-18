@@ -6,5 +6,5 @@ namespace ShikshaMitra.HR.Payroll.Settings;
 
 public interface IProvidentFundAppService : ICrudAppService<ProvidentFundDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateProvidentFundDto>
 {
-	
+
 }

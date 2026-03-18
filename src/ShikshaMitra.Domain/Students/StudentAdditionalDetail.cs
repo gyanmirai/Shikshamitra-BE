@@ -56,6 +56,8 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public string? EmergencyRelationType { get; private set; }
 	public bool? IsSingleParentChild { get; private set; }
 	public bool? IsSingleChild { get; private set; }
+	public bool? IsLibraryMember { get; set; } = false;
+	public bool? IsTransportMember { get; set; } = false;
 
 	public string? PreviousSchool { get; private set; }
 	public string? LastClassPassed { get; private set; }
@@ -167,7 +169,9 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		string? emergencyContactNo,
 		bool isSingleChild,
 		bool isSingleParentChild,
-		Category category)
+		Category category,
+		bool isLibraryMember,
+		bool isTransportMember)
 	{
 		IsBPLStudent = isBPLStudent;
 		BPLCardNo = bplCardNo;
@@ -179,6 +183,8 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		IsSingleChild = isSingleChild;
 		IsSingleParentChild = isSingleParentChild;
 		Category = category;
+		IsLibraryMember = isLibraryMember;
+		IsTransportMember = isTransportMember;
 
 		// Update registration state
 		if (StudentRegistrationState < StudentRegistrationStateEnum.AdditionalDetails)
@@ -244,8 +250,8 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		ExamObtainedMarks = obtainedMarks;
         // Safe percentage calculation since totalMarks > 0 is validated
         ExamPercentage = (obtainedMarks / totalMarks) * 100;
-		ExamStatus = obtainedMarks >= passingMarks 
-			? EntranceExamStatusEnum.Pass 
+		ExamStatus = obtainedMarks >= passingMarks
+			? EntranceExamStatusEnum.Pass
 			: EntranceExamStatusEnum.Fail;
 		ExamResultDate = DateTimeOffset.UtcNow;
 	}

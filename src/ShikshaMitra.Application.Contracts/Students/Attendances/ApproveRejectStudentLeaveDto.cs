@@ -9,10 +9,10 @@ public class ApproveRejectStudentLeaveDto
 {
 	[Required]
 	public StudentLeaveStatusEnum Status { get; set; }
-	
+
 	[MaxLength(StudentLeaveConsts.MaxRemarksLength)]
 	public string? Remarks { get; set; }
-	
+
 	[MaxLength(StudentLeaveConsts.MaxRejectionReasonLength)]
 	public string? RejectionReason { get; set; }
 }

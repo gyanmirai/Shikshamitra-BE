@@ -35,6 +35,8 @@ public class CreateBookRequest
     [Required]
     [Range(1, int.MaxValue, ErrorMessage = "Number of copies must be at least 1.")]
     public int NumberOfCopies { get; set; }
+
+    public string? CoverImage { get; set; }
 }
 
 public class UpdateBookRequest
@@ -69,4 +71,6 @@ public class UpdateBookRequest
     [Required]
     [Range(1, int.MaxValue, ErrorMessage = "Number of copies must be at least 1.")]
     public int NumberOfCopies { get; set; }
+
+    public string? CoverImage { get; set; }
 }

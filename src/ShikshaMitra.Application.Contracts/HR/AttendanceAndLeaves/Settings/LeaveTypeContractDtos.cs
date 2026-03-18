@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -22,17 +22,17 @@ public class LeaveTypeListResponse
 public class LeaveTypeItem
 {
 	public Guid Id { get; set; }
-	
+
 	/// <summary>
 	/// Name of the leave type (maps from Type property)
 	/// </summary>
 	public string Name { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Optional description
 	/// </summary>
 	public string? Description { get; set; }
-	
+
 	/// <summary>
 	/// Color code in HEX format (#RRGGBB)
 	/// </summary>
@@ -59,7 +59,7 @@ public class LeaveTypeCreateRequest
 	/// Organization identifier (from query parameter in controller)
 	/// </summary>
 	public Guid MediumStageId { get; set; }
-	
+
 	/// <summary>
 	/// Name of the leave type
 	/// </summary>
@@ -67,13 +67,13 @@ public class LeaveTypeCreateRequest
 	[MinLength(1)]
 	[StringLength(LeaveTypeConsts.MaxTypeLength)]
 	public string Name { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Optional description
 	/// </summary>
 	[StringLength(LeaveTypeConsts.MaxDescriptionLength)]
 	public string? Description { get; set; }
-	
+
 	/// <summary>
 	/// Color code in HEX format (#RRGGBB)
 	/// </summary>
@@ -93,13 +93,13 @@ public class LeaveTypeUpdateRequest
 	[MinLength(1)]
 	[StringLength(LeaveTypeConsts.MaxTypeLength)]
 	public string? Name { get; set; }
-	
+
 	/// <summary>
 	/// Optional description
 	/// </summary>
 	[StringLength(LeaveTypeConsts.MaxDescriptionLength)]
 	public string? Description { get; set; }
-	
+
 	/// <summary>
 	/// Color code in HEX format (#RRGGBB)
 	/// </summary>

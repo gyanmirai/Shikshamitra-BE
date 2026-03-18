@@ -64,6 +64,7 @@ using ShikshaMitra.Finance.Setting;
 using ShikshaMitra.Finance.StudentFeeAssignment;
 using ShikshaMitra.Finance.Setting.ConcessionType;
 using ShikshaMitra.Finance.Setting.ConcessionTypes;
+using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Library.Members;
 
 namespace ShikshaMitra.EntityFrameworkCore;
@@ -316,6 +317,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 
 	#region ConcessionRequests
 	public DbSet<ConcessionRequest> ConcessionRequests { get; set; }
+	public DbSet<ConcessionFeeHeadMapping> ConcessionFeeHeadMappings { get; set; }
 	#endregion
 
 	#endregion

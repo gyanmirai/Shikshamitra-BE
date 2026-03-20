@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.WorkExperienceContracts;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 
@@ -11,6 +12,7 @@ namespace ShikshaMitra.HR.Employees.WorkExperienceContracts;
 /// <summary>
 /// Application service for managing employee work experience.
 /// </summary>
+[RemoteService(false)]
 public class EmployeeWorkExperienceAppService(
 	IEmployeeRepository employeeRepository,
 	EmployeeManager employeeManager)

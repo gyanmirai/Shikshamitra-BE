@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 
@@ -8,6 +9,7 @@ namespace ShikshaMitra.HR.Employees.AdditionalDetails;
 /// <summary>
 /// Application service for managing employee additional details.
 /// </summary>
+[RemoteService(false)]
 public class EmployeeAdditionalDetailsAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeeAdditionalDetailsRepository additionalDetailsRepository)

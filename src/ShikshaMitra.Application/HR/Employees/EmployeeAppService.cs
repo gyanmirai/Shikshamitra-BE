@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.Payroll;
@@ -19,6 +19,7 @@ using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Employees;
 
+[RemoteService(false)]
 public class EmployeeAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeeAdditionalDetailsRepository additionalDetailsRepository,

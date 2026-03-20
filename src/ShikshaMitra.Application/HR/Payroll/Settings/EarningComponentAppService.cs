@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Caching;
@@ -13,6 +14,7 @@ namespace ShikshaMitra.HR.Payroll.Settings;
 /// <summary>
 /// Application service for managing earning components
 /// </summary>
+[RemoteService(false)]
 public class EarningComponentAppService : CrudAppService<
 	EarningComponent,
 	EarningComponentDto,

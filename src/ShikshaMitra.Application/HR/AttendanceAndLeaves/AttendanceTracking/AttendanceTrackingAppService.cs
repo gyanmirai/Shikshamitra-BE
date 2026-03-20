@@ -15,6 +15,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 /// Application service for attendance tracking (date-wise and employee-wise reports).
 /// Uses DB-side paging/filtering for scalability.
 /// </summary>
+[RemoteService(false)]
 public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrackingAppService
 {
 	private readonly IEmployeeAttendanceRepository _attendanceRepository;

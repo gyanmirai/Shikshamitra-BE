@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
+[RemoteService(false)]
 public class EmployeeLeaveAppService(
 	EmployeeLeaveManager employeeLeaveManager,
 	IEmployeeLeaveRepository employeeLeaveRepository) :

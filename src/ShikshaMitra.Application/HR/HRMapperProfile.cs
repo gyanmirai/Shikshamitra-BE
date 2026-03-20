@@ -62,6 +62,8 @@ public class HRMapperProfile : Profile
 
 		CreateMap<AutomatedNotificationsSettings, AutomatedNotificationsSettingsDto>().ReverseMap();
 
+		CreateMap<NotificationInfo, NotificationInfoDto>();
+
 		CreateMap<CustomAttendanceRule, CustomAttendanceRuleDto>();
 		CreateMap<CreateUpdateCustomAttendanceRuleDto, CustomAttendanceRule>();
 

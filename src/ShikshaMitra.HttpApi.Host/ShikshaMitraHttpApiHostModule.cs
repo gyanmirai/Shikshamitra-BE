@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -217,6 +218,35 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 				options.SwaggerDoc("v1", new OpenApiInfo { Title = "ShikshaMitra API", Version = "v1" });
 				options.DocInclusionPredicate((docName, description) => true);
 				options.CustomSchemaIds(type => type.FullName);
+				options.TagActionsBy(api =>
+				{
+					if (api.ActionDescriptor is not ControllerActionDescriptor controllerAction)
+					{
+						return ["Default"];
+					}
+
+					var ns = controllerAction.ControllerTypeInfo.Namespace ?? string.Empty;
+
+					if (ns.Contains(".Controllers.HR."))
+					{
+						var subModule = ns.Split(".Controllers.HR.").Last().Split('.').First();
+						return
+						[
+							subModule switch
+							{
+								"Employees" => "HR - Employees",
+								"AttendanceAndLeaves" => "HR - Attendance & Leaves",
+								"Payroll" => "HR - Payroll",
+								"Calendar" => "HR - Calendar",
+								"EventAndHolidays" => "HR - Events & Holidays",
+								"Reports" => "HR - Reports",
+								_ => $"HR - {subModule}"
+							}
+						];
+					}
+
+					return [controllerAction.ControllerName];
+				});
 			});
 	}
 

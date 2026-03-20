@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 
@@ -9,6 +10,7 @@ namespace ShikshaMitra.HR.Employees;
 /// <summary>
 /// Application service for managing employee status.
 /// </summary>
+[RemoteService(false)]
 public class EmployeeStatusAppService : ApplicationService, IEmployeeStatusAppService
 {
 	private readonly IEmployeeRepository _employeeRepository;

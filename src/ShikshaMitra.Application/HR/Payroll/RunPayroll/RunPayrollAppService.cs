@@ -21,6 +21,7 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 /// <summary>
 /// Application service for running payroll - generates preview and locks payroll for a month
 /// </summary>
+[RemoteService(false)]
 public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 {
 	private readonly IRepository<Employee, Guid> _employeeRepository;

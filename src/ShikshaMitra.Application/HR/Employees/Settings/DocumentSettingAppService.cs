@@ -12,6 +12,7 @@ using Volo.Abp.Guids;
 
 namespace ShikshaMitra.HR.Employees.Settings;
 
+[RemoteService(false)]
 public class DocumentSettingAppService(
 	IDocumentSettingRepository repository,
 	IGuidGenerator guidGenerator,

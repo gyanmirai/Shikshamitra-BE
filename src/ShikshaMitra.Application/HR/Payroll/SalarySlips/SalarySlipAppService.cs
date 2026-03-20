@@ -14,6 +14,7 @@ namespace ShikshaMitra.HR.Payroll.SalarySlips;
 /// <summary>
 /// Application service for salary slip operations with caching and performance optimizations
 /// </summary>
+[RemoteService(false)]
 public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 {
 	private readonly ISalarySlipRepository _salarySlipRepository;

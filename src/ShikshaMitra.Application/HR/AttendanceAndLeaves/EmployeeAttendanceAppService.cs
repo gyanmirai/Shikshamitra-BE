@@ -21,6 +21,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 /// Employee Attendance Application Service.
 /// Provides operations for viewing, updating, and importing attendance records.
 /// </summary>
+[RemoteService(false)]
 public class EmployeeAttendanceAppService : ApplicationService, IEmployeeAttendanceAppService
 {
 	private readonly IEmployeeAttendanceRepository _employeeAttendanceRepository;

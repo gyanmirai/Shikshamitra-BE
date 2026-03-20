@@ -3,11 +3,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.HR.Payroll.PayrollStructures;
 
+[RemoteService(false)]
 public class PayrollStructureAppService(
 	IPayrollStructureRepository payrollStructureRepository,
 	IEmployeeRepository employeeRepository,

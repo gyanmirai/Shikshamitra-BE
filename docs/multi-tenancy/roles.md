@@ -1,4 +1,4 @@
-﻿# ShikshaMitra Role Setup Guide
+# ShikshaMitra Role Setup Guide
 
 ## 🎯 Overview
 
@@ -212,7 +212,7 @@ But their **UserScope** determines:
 ## 📚 Related Documentation
 
 - [API Endpoints](../api/endpoints.md)
-- [UserScope Usage Guide](../UserScope-Usage.md)
+- [UserScope Usage Guide](../platform/UserScope-Usage.md)
 
 ---
 

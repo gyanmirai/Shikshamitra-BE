@@ -1,4 +1,4 @@
-﻿# Employee Eager Loading Implementation
+# Employee Eager Loading Implementation
 
 ## Overview
 This document details the comprehensive eager loading strategy implemented for the Employee entity to eliminate N+1 query problems and optimize database performance.
@@ -404,4 +404,4 @@ This implementation follows Entity Framework Core best practices and ABP Framewo
 **Date**: December 2024  
 **Version**: 1.0  
 **Status**: ✅ Implemented & Build Successful  
-**Related**: [Employee-Improvements-Summary.md](./Employee-Improvements-Summary.md)
+**Related**: [Employee-Improvements-Summary.md](../../architecture/employee/Employee-Improvements-Summary.md)

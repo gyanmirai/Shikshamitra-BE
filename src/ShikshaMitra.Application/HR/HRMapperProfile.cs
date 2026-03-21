@@ -49,15 +49,6 @@ public class HRMapperProfile : Profile
 
 		#region Attendeance and Leaves
 
-		#region Employee Attendance
-
-		CreateMap<EmployeeAttendance, EmployeeAttendanceDto>()
-			.ForMember(x => x.EmployeeName,
-				opt => opt.MapFrom(x => x.Employee.FirstName + " " + x.Employee.LastName));
-		CreateMap<CreateUpdateEmployeeAttendanceDto, EmployeeAttendance>();
-
-		#endregion
-
 		# region Employee Settings
 
 		CreateMap<AutomatedNotificationsSettings, AutomatedNotificationsSettingsDto>().ReverseMap();
@@ -69,10 +60,8 @@ public class HRMapperProfile : Profile
 
 		#endregion
 
-		# region Employee Leave
+		# region Leave Policy
 
-		CreateMap<EmployeeLeave, EmployeeLeaveDto>();
-		CreateMap<CreateUpdateEmployeeLeaveDto, EmployeeLeave>();
 		CreateMap<LeavePolicy, LeavePolicyDto>();
 		CreateMap<CreateUpdateLeavePolicyDto, LeavePolicy>();
 

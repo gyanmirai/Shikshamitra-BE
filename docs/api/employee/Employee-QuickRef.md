@@ -1,4 +1,4 @@
-﻿# Employee API - Quick Reference Guide
+# Employee API - Quick Reference Guide
 
 ## Overview
 Quick reference for working with the Employee module after the optimization updates.
@@ -547,9 +547,9 @@ The following indexes are automatically created:
 
 ## Resources
 
-- [Employee Improvements Summary](./Employee-Improvements-Summary.md) - Overview of all improvements
-- [Eager Loading Implementation](./Employee-EagerLoading-Implementation.md) - Navigation property optimization details
-- [Caching Implementation](./Employee-Caching-Implementation.md) - Distributed caching strategy and benchmarks
+- [Employee Improvements Summary](../../architecture/employee/Employee-Improvements-Summary.md) - Overview of all improvements
+- [Eager Loading Implementation](../../implementation/employee/Employee-EagerLoading-Implementation.md) - Navigation property optimization details
+- [Caching Implementation](../../implementation/employee/Employee-Caching-Implementation.md) - Distributed caching strategy and benchmarks
 - [ABP Framework Documentation](https://docs.abp.io/)
 - [EF Core Performance Best Practices](https://docs.microsoft.com/ef/core/performance/)
 

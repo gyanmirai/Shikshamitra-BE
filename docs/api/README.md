@@ -1,124 +1,113 @@
-﻿# API Documentation
+---
+description: API documentation index for ShikshaMitra (REST, modules, Postman).
+tags: [api, docs, rest]
+---
 
-RESTful API documentation for ShikshaMitra.
+# API documentation
 
-## 📁 Documentation Organization
+REST API documentation for ShikshaMitra.
 
-### Module Documentation
-- **[Employee Module](./employee/)** ⭐ **Featured** - Comprehensive documentation with enterprise optimizations
-  - Complete API reference
-  - Performance optimization guides (95% faster)
-  - Distributed caching (90% DB load reduction)
-  - Eager loading strategies (99.7% query reduction)
-  - Production deployment checklists
-  - **NEW**: [Payroll API](./employee/Employee-Payroll-API.md) - Complete payroll management
+## Documentation organization
 
-### Implementation Guides
-- **[Employee Implementations](../implementation/employee/)** - Step-by-step feature implementation guides
-  - Payroll system setup
-  - Database migrations
-  - Code examples
-  - Testing procedures
+### Module documentation
 
-### General API Reference
-- **[endpoints.md](./endpoints.md)** - Complete API endpoint reference
+- **[Employee](./employee/)** — CRUD, profile, documents, additional details, payroll endpoints  
+  - [Payroll API](./employee/Employee-Payroll-API.md)  
+  - Optimization narratives: [architecture/employee/](../architecture/employee/)  
+  - Backend implementation notes: [implementation/employee/](../implementation/employee/)
 
-## Quick Overview
+- **[Payroll (master data)](./payroll/)** — Earning and deduction component APIs  
+  - [Earning Components](./payroll/Earning-Components-API.md)  
+  - [Deduction Components](./payroll/Deduction-Components-API.md)
+
+- **[Rooms / facilities](./rooms/)** — Buildings, room types, rooms
+
+### General reference
+
+- **[endpoints.md](./endpoints.md)** — Endpoint listing
+
+### Implementation (backend)
+
+- **[implementation/](../implementation/)** — EF Core, caching, HR submodule guides (not a substitute for this API reference)
+
+## Quick overview
 
 ### Base URL
+
 ```
 https://localhost:44300
 ```
 
 ### Authentication
-All requests require JWT token in `Authorization` header:
+
+JWT in the `Authorization` header:
+
 ```
 Authorization: Bearer {token}
 ```
 
-### Tenant Context
-Tenant-specific requests require `__tenant` header:
+### Tenant context
+
 ```
 __tenant: {tenant-id}
 ```
 
 ### Testing
-See [../../postman/](../../postman/) for:
-- Postman collection
-- Environment setup
-- Test automation
 
-## API Categories
+See [postman/](../../postman/) for collections and environments.
 
-### Core APIs
-- **Authentication**: Login and token management
-- **Tenants**: Tenant creation and management (Host Admin)
-- **Users**: User CRUD operations (Tenant)
-- **Roles**: Role management (Tenant)
-- **UserScope**: Scope assignment and queries (Tenant)
+## API categories
 
-### HR Module
-- **[Employee APIs](./employee/)** - Complete employee management with advanced optimizations
-  - CRUD operations
-  - Profile management
-  - Document handling
-  - **Payroll management** (NEW)
-  - Performance: 1-2ms (cached), 99.7% fewer queries
-  - [Implementation Guides](../implementation/employee/) - Step-by-step setup instructions
+### Core
 
-### Future Modules (Planned)
-- **Student Management** - Student CRUD and enrollment
-- **Academic Setup** - Boards, mediums, standards, divisions
-- **Attendance** - Student and employee attendance tracking
-- **Payroll** - Salary processing and pay slip generation
+- **Authentication** — login and tokens  
+- **Tenants** — host admin  
+- **Users / Roles** — tenant scope  
+- **UserScope** — scope assignment (see [platform docs](../platform/))
 
-## Start Here
+### HR
 
-### For General API Usage
-1. **API Reference** → [endpoints.md](./endpoints.md)
-2. **Testing APIs** → [../../postman/README.md](../../postman/README.md)
+- **Employees** — [employee/](./employee/)  
+- **Payroll master data** — [payroll/](./payroll/)
 
-### For Employee Module
-1. **Overview** → [Employee Module README](./employee/README.md)
-2. **Quick Reference** → [Employee Quick Guide](./employee/Employee-QuickRef.md)
-3. **Payroll API** → [Payroll API Documentation](./employee/Employee-Payroll-API.md)
-4. **Implementation** → [Payroll Implementation Guide](../implementation/employee/README.md)
-5. **Performance Optimization** → [Complete Summary](./employee/Employee-Complete-Optimization-Summary.md)
+### Planned / other product areas
 
-### For Implementing Features
-1. **Choose Feature** → Browse [implementation/employee/](../implementation/employee/)
-2. **Follow QuickStart** → Get up and running in 15-30 minutes
-3. **Reference API Docs** → Use API documentation for endpoint details
-4. **Test & Deploy** → Follow testing and deployment guides
+Student management, academic setup, and broader payroll/payslip flows may expand over time; check `endpoints.md` and OpenAPI for the latest surface.
 
-### By Role
-- **Backend Developer** → Employee module implementation guides
-- **Frontend Developer** → endpoints.md for API contracts
-- **DevOps Engineer** → Employee deployment checklists
-- **Architect** → Employee optimization patterns for other modules
+## Start here
+
+### General API usage
+
+1. [endpoints.md](./endpoints.md)  
+2. [Postman README](../../postman/README.md)
+
+### Employee module
+
+1. [Employee README](./employee/README.md)  
+2. [Employee quick reference](./employee/Employee-QuickRef.md)  
+3. [Payroll API](./employee/Employee-Payroll-API.md)  
+4. [Implementation guides](../implementation/employee/README.md)  
+5. [Optimization summary](../architecture/employee/Employee-Complete-Optimization-Summary.md)
+
+### By role
+
+- **Backend** — [implementation/](../implementation/README.md) + [best practices](../best-practices.md)  
+- **Frontend** — this `api/` tree and `endpoints.md`  
+- **Architect** — [architecture/](../architecture/employee/) for employee patterns  
 
 ---
 
-## 🎯 Featured: Employee Module Optimizations
+## Featured: employee module optimizations
 
-The Employee module showcases enterprise-level patterns applicable across all modules:
+Patterns documented for Employee (caching, eager loading, indexes) apply to other modules:
 
-### Performance Achievements
 ```
-Before → After (Improvement)
+Before → After (example)
 ├─ Queries: 301+ → 1 (99.7% reduction)
 ├─ Memory: 500MB → 1MB (99% reduction)
 ├─ Response: 3000ms → 150ms (95% faster)
-└─ DB Load: 1500/min → 150/min (90% reduction)
+└─ DB load: 1500/min → 150/min (90% reduction)
 ```
-
-### Applicable Patterns
-- **Blob Storage** - Binary data optimization
-- **Eager Loading** - N+1 query elimination
-- **Distributed Caching** - Read performance boost
-- **Database Indexes** - Query optimization
-
-**Use as template for:** Student, Course, Department, and other modules
 
 ---
 

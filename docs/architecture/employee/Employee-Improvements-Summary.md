@@ -1,4 +1,4 @@
-﻿# Employee API Improvements Summary
+# Employee API Improvements Summary
 
 ## Overview
 This document summarizes the comprehensive improvements made to the Employee HR module based on best practices and optimization recommendations.
@@ -206,7 +206,7 @@ if (imageBytes != null)
 ## Recommendations for Future Enhancements
 
 ### High Priority
-1. ✅ **Add Eager Loading** - **IMPLEMENTED** - See [Employee-EagerLoading-Implementation.md](./Employee-EagerLoading-Implementation.md)
+1. ✅ **Add Eager Loading** - **IMPLEMENTED** - See [Employee-EagerLoading-Implementation.md](../../implementation/employee/Employee-EagerLoading-Implementation.md)
 2. ✅ **Add Indexes** - **IMPLEMENTED** - Database indexes on UserId, EmployeeCode, Email, RoleId
 3. ✅ **Add Caching** - **IMPLEMENTED** - See [Employee-Caching-Implementation.md](./Employee-Caching-Implementation.md)
 4. **Bulk Operations**: Add methods for bulk employee creation/update
@@ -264,9 +264,9 @@ The Employee module has been significantly improved with:
 All changes maintain backward compatibility except for profile picture handling, which requires a simple migration for API consumers.
 
 ### Documentation
-- [Employee Eager Loading Implementation](./Employee-EagerLoading-Implementation.md) - Complete guide to navigation property optimization
-- [Employee Caching Implementation](./Employee-Caching-Implementation.md) - Distributed caching strategy and performance gains
-- [Employee Quick Reference](./Employee-QuickRef.md) - Developer quick reference guide
+- [Employee Eager Loading Implementation](../../implementation/employee/Employee-EagerLoading-Implementation.md) - Complete guide to navigation property optimization
+- [Employee Caching Implementation](../../implementation/employee/Employee-Caching-Implementation.md) - Distributed caching strategy and performance gains
+- [Employee Quick Reference](../../api/employee/Employee-QuickRef.md) - Developer quick reference guide
 
 ---
 **Date**: December 2024  

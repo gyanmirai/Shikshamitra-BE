@@ -1,4 +1,6 @@
-﻿# Documentation Directory Structure
+# Documentation Directory Structure
+
+> **Historical snapshot:** May not match the current tree. See [docs/README.md](../README.md).
 
 ## 📁 Reorganized Structure
 
@@ -222,11 +224,13 @@ All documents should link to:
 
 ## 🔗 Quick Access Links
 
-### Most Used Documents
-1. [Employee Quick Reference](./employee/Employee-QuickRef.md)
-2. [Employee Complete Summary](./employee/Employee-Complete-Optimization-Summary.md)
-3. [Main API Documentation](./README.md)
-4. [General API Endpoints](./endpoints.md)
+*(Paths below updated for the current tree; this file is still a snapshot.)*
+
+### Most used documents
+1. [Employee Quick Reference](../api/employee/Employee-QuickRef.md)
+2. [Employee complete summary](../architecture/employee/Employee-Complete-Optimization-Summary.md)
+3. [Main API documentation](../api/README.md)
+4. [General API endpoints](../api/endpoints.md)
 
 ### By Frequency
 | Document | Estimated Daily Access | Priority |

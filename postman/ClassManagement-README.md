@@ -403,7 +403,7 @@ Some endpoints require specific permissions:
 ## 📚 Related Documentation
 
 - [API Reference](../docs/api/README.md)
-- [UserScope Usage](../docs/UserScope-Usage.md)
+- [UserScope Usage](../docs/platform/UserScope-Usage.md)
 - [Multi-tenancy Guide](../docs/multi-tenancy/README.md)
 
 ## 🔗 Related Collections

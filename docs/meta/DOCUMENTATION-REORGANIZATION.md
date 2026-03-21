@@ -1,4 +1,6 @@
-﻿# Documentation Organization - Summary
+# Documentation Organization - Summary
+
+> **Historical note:** This file describes an older reorganization. For the **current** layout, see [docs/README.md](../README.md) and [docs/meta/README.md](./README.md).
 
 ## ✅ Completed Actions
 

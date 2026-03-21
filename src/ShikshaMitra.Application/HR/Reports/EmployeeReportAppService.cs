@@ -9,15 +9,17 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.HR.Reports;
 
+[RemoteService(false)]
 public class EmployeeReportAppService(
 	IEmployeeRepository employeeRepository,
 	IPdfService pdfService,
 	IExcelService excelService)
-	: ApplicationService
+	: ApplicationService, IEmployeeReportAppService
 {
 	public async Task<IEnumerable<EmployeeDto>> GetEmployeeReport(EmployeeReportFilterDto input)
 	{

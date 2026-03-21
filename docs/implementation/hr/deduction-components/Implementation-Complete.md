@@ -1,4 +1,4 @@
-﻿# Deduction Components API - Implementation Complete ✅
+# Deduction Components API - Implementation Complete ✅
 
 ## Summary
 
@@ -107,7 +107,7 @@ The Deduction Components API has been successfully implemented following the sam
 
 ### 8. Documentation
 
-- ✅ `docs/api/Deduction-Components-API.md`
+- ✅ `docs/api/payroll/Deduction-Components-API.md`
   - Complete API reference
   - Examples and validation rules
 
@@ -329,9 +329,9 @@ Can be integrated with Employee Payroll API:
 
 ## 📚 Related Documentation
 
-- [Deduction Components API Reference](docs/api/Deduction-Components-API.md)
+- [Deduction Components API Reference](../../../api/payroll/Deduction-Components-API.md)
 - [Earning Components API Reference](docs/api/Earning-Components-API.md)
-- [Employee Payroll API Reference](docs/api/Employee-Payroll-API.md)
+- [Employee Payroll API Reference](../../../api/employee/Employee-Payroll-API.md)
 
 ---
 

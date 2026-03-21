@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -207,6 +208,121 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		});
 	}
 
+	private static string GetSwaggerModule(string ns)
+	{
+		if (ns.Contains(".HR.") || ns.Contains(".Controllers.HR")) return "v1-hr";
+		if (ns.Contains(".Controllers.Academic")) return "v1-academic";
+		if (ns.Contains(".Controllers.Students") || ns.StartsWith("ShikshaMitra.Students.")) return "v1-students";
+		if (ns.Contains(".Controllers.Finance")) return "v1-finance";
+		if (ns.Contains(".Controllers.Library")) return "v1-library";
+		return "v1-admin";
+	}
+
+	private static string[] GetSwaggerTags(string ns, string controllerName)
+	{
+		// HR Module — handles both ShikshaMitra.Controllers.HR.* and ShikshaMitra.HttpApi.Controllers.HR.*
+		if (ns.Contains(".Controllers.HR."))
+		{
+			var sub = ns.Split(".Controllers.HR.").Last().Split('.').First();
+			return
+			[
+				sub switch
+				{
+					"Employees" => "HR - Employees",
+					"AttendanceAndLeaves" => "HR - Attendance & Leaves",
+					"Payroll" => "HR - Payroll",
+					"Calendar" => "HR - Calendar",
+					"EventAndHolidays" => "HR - Events & Holidays",
+					"Reports" => "HR - Reports",
+					_ => $"HR - {sub}"
+				}
+			];
+		}
+
+		// Academic Module
+		if (ns.Contains(".Controllers.Academic."))
+		{
+			var sub = ns.Split(".Controllers.Academic.").Last().Split('.').First();
+			return
+			[
+				sub switch
+				{
+					"HomeworkAssignment" => "Academic - Homework & Assignments",
+					"Syllabus" => "Academic - Syllabus",
+					"ClassManagement" => "Academic - Class Management",
+					"ClassTeacher" => "Academic - Class Teacher",
+					"Curriculum" => "Academic - Curriculum",
+					"Examination" => "Academic - Examination",
+					_ => $"Academic - {sub}"
+				}
+			];
+		}
+
+		// Students Module — handles .Controllers.Students.* and ShikshaMitra.Students.Attendances.*
+		if (ns.Contains(".Controllers.Students."))
+		{
+			var sub = ns.Split(".Controllers.Students.").Last().Split('.').First();
+			return
+			[
+				sub switch
+				{
+					"Enrollments" or "StudentEnrollments" => "Students - Enrollments",
+					"Attendances" => "Students - Attendance",
+					"Records" => "Students - Records",
+					_ => $"Students - {sub}"
+				}
+			];
+		}
+		if (ns.StartsWith("ShikshaMitra.Students.Attendances"))
+			return ["Students - Attendance"];
+
+		// Finance Module — handles .Controllers.Finance.Setting and .Controllers.Finance (root-level)
+		if (ns.Contains(".Controllers.Finance"))
+		{
+			if (ns.Contains(".Controllers.Finance."))
+			{
+				var sub = ns.Split(".Controllers.Finance.").Last().Split('.').First();
+				return
+				[
+					sub switch
+					{
+						"Setting" => "Finance - Settings",
+						"StudentFeeAssignment" => "Finance - Student Fee Assignment",
+						_ => $"Finance - {sub}"
+					}
+				];
+			}
+			return ["Finance - General"];
+		}
+
+		// Library Module — handles .Controllers.Library.Setting and .Controllers.Library (root-level)
+		if (ns.Contains(".Controllers.Library"))
+		{
+			if (ns.Contains(".Controllers.Library."))
+			{
+				var sub = ns.Split(".Controllers.Library.").Last().Split('.').First();
+				return
+				[
+					sub switch
+					{
+						"Setting" => "Library - Settings",
+						"Members" => "Library - Members",
+						_ => $"Library - {sub}"
+					}
+				];
+			}
+			return ["Library - General"];
+		}
+
+		// Admin / everything else
+		if (ns.Contains(".Controllers.TenantSettings")) return ["Admin - Tenant Settings"];
+		if (ns.Contains(".Controllers.Security")) return ["Admin - Security"];
+		if (ns.Contains(".Controllers.Communication")) return ["Admin - Communication"];
+		if (ns.Contains(".Controllers.Groups")) return ["Admin - Groups"];
+
+		return [controllerName];
+	}
+
 	private static void ConfigureSwaggerServices(ServiceConfigurationContext context, IConfiguration configuration)
 	{
 		context.Services.AddAbpSwaggerGenWithOAuth(
@@ -214,9 +330,35 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			new Dictionary<string, string> { { "ShikshaMitra", "ShikshaMitra API" } },
 			options =>
 			{
-				options.SwaggerDoc("v1", new OpenApiInfo { Title = "ShikshaMitra API", Version = "v1" });
-				options.DocInclusionPredicate((docName, description) => true);
+				// Define separate Swagger documents per module
+				options.SwaggerDoc("v1-hr", new OpenApiInfo { Title = "HR Module APIs", Version = "v1" });
+				options.SwaggerDoc("v1-academic", new OpenApiInfo { Title = "Academic Module APIs", Version = "v1" });
+				options.SwaggerDoc("v1-students", new OpenApiInfo { Title = "Students Module APIs", Version = "v1" });
+				options.SwaggerDoc("v1-finance", new OpenApiInfo { Title = "Finance Module APIs", Version = "v1" });
+				options.SwaggerDoc("v1-library", new OpenApiInfo { Title = "Library Module APIs", Version = "v1" });
+				options.SwaggerDoc("v1-admin", new OpenApiInfo { Title = "Admin & Settings APIs", Version = "v1" });
+
+				// Route each API to the correct document based on controller namespace
+				options.DocInclusionPredicate((docName, apiDescription) =>
+				{
+					if (apiDescription.ActionDescriptor is not ControllerActionDescriptor controllerAction)
+						return docName == "v1-admin";
+
+					var ns = controllerAction.ControllerTypeInfo.Namespace ?? string.Empty;
+					return GetSwaggerModule(ns) == docName;
+				});
+
 				options.CustomSchemaIds(type => type.FullName);
+
+				// Sub-group within each document using tags
+				options.TagActionsBy(api =>
+				{
+					if (api.ActionDescriptor is not ControllerActionDescriptor controllerAction)
+						return ["Default"];
+
+					var ns = controllerAction.ControllerTypeInfo.Namespace ?? string.Empty;
+					return GetSwaggerTags(ns, controllerAction.ControllerName);
+				});
 			});
 	}
 
@@ -355,7 +497,12 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		app.UseSwagger();
 		app.UseAbpSwaggerUI(c =>
 		{
-			c.SwaggerEndpoint("/swagger/v1/swagger.json", "ShikshaMitra API");
+			c.SwaggerEndpoint("/swagger/v1-hr/swagger.json", "HR Module APIs");
+			c.SwaggerEndpoint("/swagger/v1-academic/swagger.json", "Academic Module APIs");
+			c.SwaggerEndpoint("/swagger/v1-students/swagger.json", "Students Module APIs");
+			c.SwaggerEndpoint("/swagger/v1-finance/swagger.json", "Finance Module APIs");
+			c.SwaggerEndpoint("/swagger/v1-library/swagger.json", "Library Module APIs");
+			c.SwaggerEndpoint("/swagger/v1-admin/swagger.json", "Admin & Settings APIs");
 
 			var configuration = context.ServiceProvider.GetRequiredService<IConfiguration>();
 			c.OAuthClientId(configuration["AuthServer:SwaggerClientId"]);

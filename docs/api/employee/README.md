@@ -1,4 +1,4 @@
-﻿# Employee Module Documentation
+# Employee Module Documentation
 
 ## Overview
 This directory contains comprehensive documentation for the Employee module optimizations and implementation details.
@@ -54,9 +54,11 @@ API endpoints for managing supplementary employee information:
 
 ---
 
-### Implementation Guides
+### Related documentation (architecture & backend implementation)
 
-#### [Complete Optimization Summary](./Employee-Complete-Optimization-Summary.md) 🎯
+Guides below live outside this folder: summaries under [`docs/architecture/employee/`](../../architecture/employee/), implementation deep-dives under [`docs/implementation/employee/`](../../implementation/employee/).
+
+#### [Complete Optimization Summary](../../architecture/employee/Employee-Complete-Optimization-Summary.md) 🎯
 **Best for:** Tech Leads, Architects, Project Managers
 
 Complete overview of all optimizations including:
@@ -73,7 +75,7 @@ Complete overview of all optimizations including:
 
 ---
 
-#### [Improvements Summary](./Employee-Improvements-Summary.md) 📝
+#### [Improvements Summary](../../architecture/employee/Employee-Improvements-Summary.md) 📝
 **Best for:** All Developers
 
 High-level overview of improvements:
@@ -85,7 +87,7 @@ High-level overview of improvements:
 
 ---
 
-#### [Eager Loading Implementation](./Employee-EagerLoading-Implementation.md) ⚡
+#### [Eager Loading Implementation](../../implementation/employee/Employee-EagerLoading-Implementation.md) ⚡
 **Best for:** Backend Developers
 
 Technical deep-dive into navigation property optimization:
@@ -103,7 +105,7 @@ Technical deep-dive into navigation property optimization:
 
 ---
 
-#### [Caching Implementation](./Employee-Caching-Implementation.md) 🚀
+#### [Caching Implementation](../../implementation/employee/Employee-Caching-Implementation.md) 🚀
 **Best for:** Backend Developers, DevOps Engineers
 
 Distributed caching strategy and implementation:
@@ -143,22 +145,22 @@ API endpoints for managing supplementary employee information:
 
 ### For New Developers
 1. Start with [Quick Reference Guide](./Employee-QuickRef.md)
-2. Review [Improvements Summary](./Employee-Improvements-Summary.md)
+2. Review [Improvements Summary](../../architecture/employee/Employee-Improvements-Summary.md)
 3. Check specific guides as needed
 
 ### For Backend Developers
-1. [Eager Loading Implementation](./Employee-EagerLoading-Implementation.md) - Understand query optimization
-2. [Caching Implementation](./Employee-Caching-Implementation.md) - Learn caching patterns
+1. [Eager Loading Implementation](../../implementation/employee/Employee-EagerLoading-Implementation.md) - Understand query optimization
+2. [Caching Implementation](../../implementation/employee/Employee-Caching-Implementation.md) - Learn caching patterns
 3. [Quick Reference Guide](./Employee-QuickRef.md) - Daily reference
 
 ### For Tech Leads/Architects
-1. [Complete Optimization Summary](./Employee-Complete-Optimization-Summary.md) - Full overview
+1. [Complete Optimization Summary](../../architecture/employee/Employee-Complete-Optimization-Summary.md) - Full overview
 2. Review all implementation guides for details
 3. Use as reference for other modules
 
 ### For DevOps Engineers
-1. [Caching Implementation](./Employee-Caching-Implementation.md) - Redis setup
-2. [Complete Optimization Summary](./Employee-Complete-Optimization-Summary.md) - Deployment checklist
+1. [Caching Implementation](../../implementation/employee/Employee-Caching-Implementation.md) - Redis setup
+2. [Complete Optimization Summary](../../architecture/employee/Employee-Complete-Optimization-Summary.md) - Deployment checklist
 3. Monitoring section in caching guide
 
 ---
@@ -181,13 +183,13 @@ API endpoints for managing supplementary employee information:
 ### I want to...
 
 **...understand overall improvements**
-→ Read [Improvements Summary](./Employee-Improvements-Summary.md)
+→ Read [Improvements Summary](../../architecture/employee/Employee-Improvements-Summary.md)
 
 **...fix N+1 query problems**
-→ See [Eager Loading Implementation](./Employee-EagerLoading-Implementation.md)
+→ See [Eager Loading Implementation](../../implementation/employee/Employee-EagerLoading-Implementation.md)
 
 **...implement caching**
-→ Follow [Caching Implementation](./Employee-Caching-Implementation.md)
+→ Follow [Caching Implementation](../../implementation/employee/Employee-Caching-Implementation.md)
 
 **...use the Employee API**
 → Check [Quick Reference Guide](./Employee-QuickRef.md)
@@ -199,29 +201,29 @@ API endpoints for managing supplementary employee information:
 → Follow [Payroll Implementation Guide](../../implementation/employee/README.md)
 
 **...deploy to production**
-→ Use [Complete Optimization Summary](./Employee-Complete-Optimization-Summary.md) deployment checklist
+→ Use [Complete Optimization Summary](../../architecture/employee/Employee-Complete-Optimization-Summary.md) deployment checklist
 
 **...optimize queries**
-→ Review [Eager Loading Implementation](./Employee-EagerLoading-Implementation.md)
+→ Review [Eager Loading Implementation](../../implementation/employee/Employee-EagerLoading-Implementation.md)
 
 **...set up Redis**
-→ See [Caching Implementation](./Employee-Caching-Implementation.md) configuration section
+→ See [Caching Implementation](../../implementation/employee/Employee-Caching-Implementation.md) configuration section
 
 ---
 
 ## 📖 Reading Order Recommendations
 
 ### For Comprehensive Understanding (Full Journey)
-1. [Improvements Summary](./Employee-Improvements-Summary.md) - What changed
-2. [Eager Loading Implementation](./Employee-EagerLoading-Implementation.md) - Query optimization
-3. [Caching Implementation](./Employee-Caching-Implementation.md) - Performance boost
-4. [Complete Optimization Summary](./Employee-Complete-Optimization-Summary.md) - Big picture
+1. [Improvements Summary](../../architecture/employee/Employee-Improvements-Summary.md) - What changed
+2. [Eager Loading Implementation](../../implementation/employee/Employee-EagerLoading-Implementation.md) - Query optimization
+3. [Caching Implementation](../../implementation/employee/Employee-Caching-Implementation.md) - Performance boost
+4. [Complete Optimization Summary](../../architecture/employee/Employee-Complete-Optimization-Summary.md) - Big picture
 5. [Quick Reference Guide](./Employee-QuickRef.md) - Daily use
 
 ### For Quick Implementation (Practical Approach)
 1. [Quick Reference Guide](./Employee-QuickRef.md) - Get coding fast
-2. [Eager Loading Implementation](./Employee-EagerLoading-Implementation.md) - Understand the pattern
-3. [Caching Implementation](./Employee-Caching-Implementation.md) - Add performance
+2. [Eager Loading Implementation](../../implementation/employee/Employee-EagerLoading-Implementation.md) - Understand the pattern
+3. [Caching Implementation](../../implementation/employee/Employee-Caching-Implementation.md) - Add performance
 4. Reference others as needed
 
 ---
@@ -356,4 +358,4 @@ If you find issues or have suggestions:
 ## Quick Links
 - [Back to API Documentation](../)
 - [Employee Quick Reference](./Employee-QuickRef.md)
-- [Complete Optimization Summary](./Employee-Complete-Optimization-Summary.md)
+- [Complete Optimization Summary](../../architecture/employee/Employee-Complete-Optimization-Summary.md)

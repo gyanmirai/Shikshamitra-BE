@@ -1,4 +1,4 @@
-﻿# Deduction Components Implementation
+# Deduction Components Implementation
 
 Implementation guide for payroll deduction components (taxes, provident fund, professional tax, etc.).
 
@@ -21,11 +21,11 @@ Covers:
 
 **Need to understand the implementation?** → Read `Implementation-Complete.md`
 
-**Need API documentation?** → See `/docs/api/Deduction-Components-API.md`
+**Need API documentation?** → See [Deduction Components API](../../../api/payroll/Deduction-Components-API.md)
 
 ## 🔗 Related
 
-- **API Documentation**: `/docs/api/Deduction-Components-API.md`
+- **API Documentation**: [api/payroll/Deduction-Components-API.md](../../../api/payroll/Deduction-Components-API.md)
 - **Earning Components**: `../earning-components/`
 - **HR Module**: `../`
 

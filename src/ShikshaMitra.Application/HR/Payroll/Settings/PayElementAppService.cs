@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.Payroll.Settings;
 
+[RemoteService(false)]
 public class PayElementAppService(IPayElementRepository payElementRepository, PayElementManager payElementManager)
 	: CrudAppService<PayElement, PayElementDto, Guid, PagedAndSortedResultRequestDto, CreateUpdatePayElementDto>(
 			payElementRepository),

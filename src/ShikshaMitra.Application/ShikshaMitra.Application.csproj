@@ -48,6 +48,7 @@
 
   <ItemGroup>
     <Folder Include="Academic\Syllabus\" />
+    <Folder Include="HR\AttendanceAndLeaves\Import\" />
     <Folder Include="Library\Setting\GeneralSetting\LoanPolicies\" />
   </ItemGroup>
 

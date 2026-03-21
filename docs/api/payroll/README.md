@@ -1,4 +1,4 @@
-﻿# Payroll APIs
+# Payroll APIs
 
 This directory contains documentation for all Payroll Management APIs in the ShikshaMitra system.
 
@@ -51,10 +51,17 @@ curl -X GET "https://localhost:44300/api/payroll/earning-components/active"
 
 ---
 
-## Coming Soon
+### 2. Deduction Components API
 
-### Deduction Components API
-Manage master data for payroll deductions (PF, Professional Tax, TDS, etc.)
+**Path**: [Deduction-Components-API.md](./Deduction-Components-API.md)
+
+**Purpose**: Master data for payroll deductions (PF, professional tax, TDS, etc.).
+
+**Base URL**: `/api/payroll/deduction-components` (see the API doc for full routes).
+
+---
+
+## Coming Soon
 
 ### Payroll Structures API
 Define complete payroll structures combining earning and deduction components
@@ -145,9 +152,10 @@ All APIs return consistent error responses:
 
 ## Quick Links
 
-- [Earning Components API Documentation](./Earning-Components-API.md)
-- [Implementation Guide](../../EARNING_COMPONENTS_IMPLEMENTATION_COMPLETE.md)
-- [Quick Start Guide](../../EARNING_COMPONENTS_QUICK_START.md)
+- [Earning Components API](./Earning-Components-API.md)
+- [Deduction Components API](./Deduction-Components-API.md)
+- [HR earning components — implementation](../../../implementation/hr/earning-components/README.md)
+- [HR deduction components — implementation](../../../implementation/hr/deduction-components/README.md)
 
 ---
 

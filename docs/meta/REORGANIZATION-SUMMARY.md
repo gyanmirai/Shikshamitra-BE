@@ -1,4 +1,6 @@
-﻿# Documentation Reorganization Summary
+# Documentation Reorganization Summary
+
+> **Historical note:** See [docs/README.md](../README.md) for the current documentation layout.
 
 ## ✅ Reorganization Complete
 
@@ -76,7 +78,7 @@ Each module now has its own folder with:
 ### Main Entry Points
 1. **[docs/api/README.md](../README.md)** - Start here for all API docs
 2. **[docs/api/employee/README.md](./README.md)** - Employee module home
-3. **[docs/api/DIRECTORY-STRUCTURE.md](../DIRECTORY-STRUCTURE.md)** - Structure guide
+3. **[DIRECTORY-STRUCTURE.md](./DIRECTORY-STRUCTURE.md)** - Structure guide (historical snapshot)
 
 ### Quick Access by Role
 
@@ -89,15 +91,15 @@ Start → docs/api/employee/README.md
 
 #### For Architects
 ```
-Start → docs/api/employee/Employee-Complete-Optimization-Summary.md
-      → Review all implementation guides
+Start → docs/architecture/employee/Employee-Complete-Optimization-Summary.md
+      → Review docs/implementation/employee/ guides
       → Plan similar patterns
 ```
 
 #### For DevOps
 ```
-Start → docs/api/employee/Employee-Caching-Implementation.md
-      → Employee-Complete-Optimization-Summary.md (deployment)
+Start → docs/implementation/employee/Employee-Caching-Implementation.md
+      → docs/architecture/employee/Employee-Complete-Optimization-Summary.md (deployment)
       → Infrastructure setup
 ```
 
@@ -262,7 +264,7 @@ This sets the standard for all future documentation in the project.
 ## Quick Links
 - [Main API Documentation](../README.md)
 - [Employee Module](./README.md)
-- [Directory Structure Guide](../DIRECTORY-STRUCTURE.md)
+- [Directory Structure Guide](./DIRECTORY-STRUCTURE.md)
 - [General API Endpoints](../endpoints.md)
 
 ---

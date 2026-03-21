@@ -1,4 +1,4 @@
-﻿# Earning Components API - Implementation Summary
+# Earning Components API - Implementation Summary
 
 ## ✅ Implementation Complete
 
@@ -501,7 +501,7 @@ The Earning Components API is designed to work seamlessly with the Employee Payr
 
 ## 📚 References
 
-- [API Documentation](docs/api/payroll/Earning-Components-API.md)
+- [API Documentation](../../../api/payroll/Earning-Components-API.md)
 - [ABP Framework Documentation](https://docs.abp.io)
 - [Domain-Driven Design](https://docs.abp.io/en/abp/latest/Domain-Driven-Design)
 - [Repository Pattern](https://docs.abp.io/en/abp/latest/Repositories)

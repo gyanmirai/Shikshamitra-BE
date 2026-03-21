@@ -1,4 +1,4 @@
-﻿# Employee Caching Implementation
+# Employee Caching Implementation
 
 ## Overview
 This document details the comprehensive distributed caching strategy implemented for the Employee module to dramatically improve read performance and reduce database load.
@@ -556,6 +556,6 @@ public async Task Should_Reduce_Database_Queries_With_Caching()
 **Version**: 1.0  
 **Status**: ✅ Implemented & Build Successful  
 **Related Documents:**
-- [Employee Improvements Summary](./Employee-Improvements-Summary.md)
+- [Employee Improvements Summary](../../architecture/employee/Employee-Improvements-Summary.md)
 - [Employee Eager Loading Implementation](./Employee-EagerLoading-Implementation.md)
-- [Employee Quick Reference](./Employee-QuickRef.md)
+- [Employee Quick Reference](../../api/employee/Employee-QuickRef.md)

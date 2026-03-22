@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.HR;
 using ShikshaMitra.HR.Calendar.Events;
 using ShikshaMitra.HR.Calendar.EventTypes;
 using ShikshaMitra.Application.Contracts.HR.Calendar.Events;
@@ -65,11 +66,16 @@ public class EventAppService : CrudAppService<
 
         var eventDtos = ObjectMapper.Map<List<Event>, List<EventDto>>(items);
 
-        // Populate EventType data for each event
+        // Batch-load all EventTypes to avoid N+1 queries
+        var eventTypeIds = eventDtos.Select(e => e.EventTypeId).Distinct().ToList();
+        var eventTypes = await _asyncExecuter.ToListAsync(
+            (await _eventTypeRepository.GetQueryableAsync()).Where(et => eventTypeIds.Contains(et.Id)));
+        var eventTypeMap = eventTypes.ToDictionary(et => et.Id, et => ObjectMapper.Map<EventType, EventTypeDto>(et));
+
         foreach (var eventDto in eventDtos)
         {
-            var eventType = await _eventTypeRepository.GetAsync(eventDto.EventTypeId);
-            eventDto.EventType = ObjectMapper.Map<EventType, EventTypeDto>(eventType);
+            if (eventTypeMap.TryGetValue(eventDto.EventTypeId, out var etDto))
+                eventDto.EventType = etDto;
         }
 
         return new PagedResultDto<EventDto>(totalCount, eventDtos);
@@ -129,23 +135,16 @@ public class EventAppService : CrudAppService<
 
     public override async Task<EventDto> CreateAsync(CreateUpdateEventDto input)
     {
-        // Validate that the referenced EventType exists and get its name
-        var eventType = await _eventTypeRepository.FindAsync(x => x.Id == input.EventTypeId);
-        if (eventType == null)
-        {
-            throw new BusinessException($"Event type with ID '{input.EventTypeId}' does not exist.");
-        }
+        var eventType = await _eventTypeRepository.FindAsync(x => x.Id == input.EventTypeId)
+            ?? throw new BusinessException(HRErrorCodes.EventTypeNotFound);
 
         Event entity;
         var isMeetingEvent = eventType.Name.Equals(EventTypeNames.MeetingEvent, StringComparison.OrdinalIgnoreCase);
 
         if (isMeetingEvent)
         {
-            // For "Meeting Event" type: MeetingDate is required
             if (!input.MeetingDate.HasValue)
-            {
-                throw new BusinessException("Meeting date is required for Meeting Event type.");
-            }
+                throw new BusinessException(HRErrorCodes.EventMeetingDateRequired);
 
             entity = Event.CreateMeetingEvent(
                 CurrentTenant.Id,
@@ -165,11 +164,8 @@ public class EventAppService : CrudAppService<
         }
         else
         {
-            // For other event types: MeetingDate should not be provided
             if (input.MeetingDate.HasValue)
-            {
-                throw new BusinessException("Meeting date should not be provided for non-meeting event types.");
-            }
+                throw new BusinessException(HRErrorCodes.EventMeetingDateNotAllowed);
 
             entity = Event.CreateEvent(
                 CurrentTenant.Id,
@@ -200,22 +196,15 @@ public class EventAppService : CrudAppService<
     {
         var entity = await _eventRepository.GetAsync(id);
 
-        // Validate that the referenced EventType exists and get its name
-        var eventType = await _eventTypeRepository.FindAsync(x => x.Id == input.EventTypeId);
-        if (eventType == null)
-        {
-            throw new BusinessException($"Event type with ID '{input.EventTypeId}' does not exist.");
-        }
+        var eventType = await _eventTypeRepository.FindAsync(x => x.Id == input.EventTypeId)
+            ?? throw new BusinessException(HRErrorCodes.EventTypeNotFound);
 
         var isMeetingEvent = eventType.Name.Equals(EventTypeNames.MeetingEvent, StringComparison.OrdinalIgnoreCase);
 
         if (isMeetingEvent)
         {
-            // For "Meeting Event" type: MeetingDate is required
             if (!input.MeetingDate.HasValue)
-            {
-                throw new BusinessException("Meeting date is required for Meeting Event type.");
-            }
+                throw new BusinessException(HRErrorCodes.EventMeetingDateRequired);
 
             entity.UpdateMeetingEvent(
                 input.Title,
@@ -232,11 +221,8 @@ public class EventAppService : CrudAppService<
         }
         else
         {
-            // For other event types: MeetingDate should not be provided
             if (input.MeetingDate.HasValue)
-            {
-                throw new BusinessException("Meeting date should not be provided for non-meeting event types.");
-            }
+                throw new BusinessException(HRErrorCodes.EventMeetingDateNotAllowed);
 
             entity.UpdateEvent(
                 input.Title,

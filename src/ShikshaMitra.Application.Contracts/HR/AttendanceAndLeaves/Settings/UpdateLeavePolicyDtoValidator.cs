@@ -1,0 +1,28 @@
+using FluentValidation;
+
+namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+
+public class UpdateLeavePolicyDtoValidator : AbstractValidator<UpdateLeavePolicyDto>
+{
+	public UpdateLeavePolicyDtoValidator()
+	{
+		RuleFor(x => x.PolicyName)
+			.NotEmpty()
+			.MinimumLength(1)
+			.MaximumLength(LeavePolicyConsts.MaxPolicyNameLength);
+
+		RuleFor(x => x.LeaveType)
+			.NotEmpty()
+			.MinimumLength(1)
+			.MaximumLength(LeavePolicyConsts.MaxLeaveTypeLength);
+
+		RuleFor(x => x.MaximumDaysPerYear)
+			.InclusiveBetween(LeavePolicyConsts.MinMaximumDaysPerYear, LeavePolicyConsts.MaxMaximumDaysPerYear);
+
+		RuleFor(x => x.PaidType).IsInEnum();
+
+		RuleFor(x => x.Description)
+			.MaximumLength(LeavePolicyConsts.MaxDescriptionLength)
+			.When(x => x.Description != null);
+	}
+}

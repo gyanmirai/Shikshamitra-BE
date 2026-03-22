@@ -1,12 +1,10 @@
-﻿using QuestPDF.Fluent;
-using QuestPDF.Helpers;
-using QuestPDF.Infrastructure;
+using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
 using ShikshaMitra.Common.Excel;
 using ShikshaMitra.Common.PDF;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -15,10 +13,11 @@ using Volo.Abp.Application.Services;
 namespace ShikshaMitra.HR.Reports;
 
 [RemoteService(false)]
+[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.View)]
 public class EmployeeReportAppService(
 	IEmployeeRepository employeeRepository,
-	IPdfService pdfService,
-	IExcelService excelService)
+	HRPdfService hrPdfService,
+	HRExcelService hrExcelService)
 	: ApplicationService, IEmployeeReportAppService
 {
 	public async Task<IEnumerable<EmployeeDto>> GetEmployeeReport(EmployeeReportFilterDto input)
@@ -59,19 +58,10 @@ public class EmployeeReportAppService(
 	public async Task<byte[]> GetExportEmployeeReport(EmployeeReportFilterDto input,
 		ExportOptionType exportOptionType)
 	{
-		IEnumerable<EmployeeContactDto> employeeReport = await GetEmployeeContactReport(input);
+		var employeeReport = await GetEmployeeContactReport(input);
 
-		if (exportOptionType == ExportOptionType.PDF)
-		{
-			HRPdfService hrPdfService = new HRPdfService(pdfService);
-
-			return await hrPdfService.GenerateEmployeeContactReport(employeeReport);
-		}
-		else
-		{
-			HRExcelService hrExcelService = new HRExcelService(excelService);
-
-			return hrExcelService.GenerateEmployeeContactExcel(employeeReport);
-		}
+		return exportOptionType == ExportOptionType.PDF
+			? await hrPdfService.GenerateEmployeeContactReport(employeeReport)
+			: hrExcelService.GenerateEmployeeContactExcel(employeeReport);
 	}
 }

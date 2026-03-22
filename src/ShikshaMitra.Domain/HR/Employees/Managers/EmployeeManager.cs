@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
+using ShikshaMitra.HR;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Guids;
@@ -26,21 +27,21 @@ public class EmployeeManager(
 	private async Task<Employee> GetEmployeeAsync(Guid employeeId)
 	{
 		return await employeeRepository.FindAsync(employeeId)
-			?? throw new BusinessException($"Employee with ID {employeeId} does not exist.");
+			?? throw new BusinessException(HRErrorCodes.EmployeeNotFound);
 	}
 
 	/// <summary>Returns the identity user or throws <see cref="BusinessException"/> when not found.</summary>
 	private async Task<IdentityUser> GetUserAsync(Guid userId)
 	{
 		return await userRepository.FindAsync(userId)
-			?? throw new BusinessException($"User with ID {userId} does not exist.");
+			?? throw new BusinessException(HRErrorCodes.UserNotFound);
 	}
 
 	/// <summary>Returns the identity role or throws <see cref="BusinessException"/> when not found.</summary>
 	private async Task<IdentityRole> GetRoleAsync(Guid roleId)
 	{
 		return await roleRepository.FindAsync(roleId)
-			?? throw new BusinessException($"Role with ID {roleId} does not exist.");
+			?? throw new BusinessException(HRErrorCodes.RoleNotFound);
 	}
 
 	public async Task<Employee> CreateEmployeeAsync(
@@ -93,7 +94,7 @@ public class EmployeeManager(
 				"[EmployeeManager] User validation failed: UserId={UserId} does not exist",
 				userId
 			);
-			throw new BusinessException($"User with ID {userId} does not exist.");
+			throw new BusinessException(HRErrorCodes.UserNotFound);
 		}
 
 		logger.LogDebug("[EmployeeManager] User validated: UserId={UserId}", userId);
@@ -223,23 +224,21 @@ public class EmployeeManager(
 			// Remove from current role — fail fast so the swap is atomic
 			var removeResult = await userManager.RemoveFromRoleAsync(
 				user,
-				oldRole.Name ?? throw new BusinessException($"Role '{employee.RoleId}' has no name.")
+				oldRole.Name ?? throw new BusinessException(HRErrorCodes.RoleNameMissing)
 			);
 			if (!removeResult.Succeeded)
 			{
-				var errors = string.Join(", ", removeResult.Errors.Select(e => e.Description));
-				throw new BusinessException($"Failed to remove user from role '{oldRole.Name}': {errors}");
+				throw new BusinessException(HRErrorCodes.RoleRemovalFailed);
 			}
 
 			// Assign to new role
 			var addResult = await userManager.AddToRoleAsync(
 				user,
-				newRole.Name ?? throw new BusinessException($"Role '{roleId.Value}' has no name.")
+				newRole.Name ?? throw new BusinessException(HRErrorCodes.RoleNameMissing)
 			);
 			if (!addResult.Succeeded)
 			{
-				var errors = string.Join(", ", addResult.Errors.Select(e => e.Description));
-				throw new BusinessException($"Failed to assign user to role '{newRole.Name}': {errors}");
+				throw new BusinessException(HRErrorCodes.RoleAssignmentFailed);
 			}
 		}
 
@@ -304,14 +303,14 @@ public class EmployeeManager(
 		// DateOfBirth is optional; only validate when provided
 		if (employee.DateOfBirth.HasValue && employee.DateOfBirth.Value >= today)
 		{
-			throw new BusinessException("Date of birth cannot be in the future.");
+			throw new BusinessException(HRErrorCodes.DobInFuture);
 		}
 
 		// Both dates must be present for this cross-field rule to apply
 		if (employee.DateOfJoining.HasValue && employee.DateOfBirth.HasValue
 			&& employee.DateOfJoining.Value <= employee.DateOfBirth.Value)
 		{
-			throw new BusinessException("Date of joining must be after date of birth.");
+			throw new BusinessException(HRErrorCodes.DojBeforeDob);
 		}
 	}
 
@@ -403,22 +402,22 @@ public class EmployeeManager(
 	{
 		if (string.IsNullOrWhiteSpace(details.Name))
 		{
-			throw new BusinessException($"{relationType} name is required.");
+			throw new BusinessException(HRErrorCodes.FamilyMemberNameRequired);
 		}
 
 		if (details.Name.Length > 256)
 		{
-			throw new BusinessException($"{relationType} name cannot exceed 256 characters.");
+			throw new BusinessException(HRErrorCodes.FamilyMemberNameTooLong);
 		}
 
 		if (!string.IsNullOrWhiteSpace(details.ContactNo) && details.ContactNo.Length > 20)
 		{
-			throw new BusinessException($"{relationType} contact number cannot exceed 20 characters.");
+			throw new BusinessException(HRErrorCodes.FamilyContactTooLong);
 		}
 
 		if (!string.IsNullOrWhiteSpace(details.PinCode) && details.PinCode.Length > 10)
 		{
-			throw new BusinessException($"{relationType} PIN code cannot exceed 10 characters.");
+			throw new BusinessException(HRErrorCodes.FamilyPincodeTooLong);
 		}
 	}
 

@@ -1,10 +1,11 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Payroll.RunPayroll;
+using ShikshaMitra.HR;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -45,11 +46,9 @@ public class RunPayrollController : AbpControllerBase
 		[FromQuery, Range(0, int.MaxValue)] int page = 0,
 		[FromQuery, Range(10, 100)] int pageSize = 50)
 	{
-		// Validate month format (MMMM-YYYY)
 		if (!System.Text.RegularExpressions.Regex.IsMatch(month, @"^[A-Z]+-\d{4}$"))
 		{
-			throw new UserFriendlyException(
-				"Invalid month format. Expected format: MMMM-YYYY (e.g., JANUARY-2025)");
+			throw new BusinessException(ShikshaMitra.HR.HRErrorCodes.InvalidMonthYearFormat);
 		}
 
 		return await _runPayrollAppService.GetPreviewAsync(new GetRunPayrollInput

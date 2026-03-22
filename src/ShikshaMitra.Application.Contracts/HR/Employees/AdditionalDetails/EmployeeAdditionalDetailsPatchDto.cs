@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace ShikshaMitra.HR.Employees.AdditionalDetails;
 
 /// <summary>
@@ -12,7 +10,6 @@ public class EmployeeAdditionalDetailsPatchDto
 	/// Below Poverty Line card number.
 	/// Set to null to clear, omit to leave unchanged.
 	/// </summary>
-	[MaxLength(50, ErrorMessage = "BPL Card No cannot exceed 50 characters.")]
 	public string? BplCardNo { get; set; }
 
 	/// <summary>
@@ -29,7 +26,6 @@ public class EmployeeAdditionalDetailsPatchDto
 	/// <summary>
 	/// Second language known by the employee.
 	/// </summary>
-	[MaxLength(50, ErrorMessage = "Second Language cannot exceed 50 characters.")]
 	public string? SecondLanguage { get; set; }
 
 	/// <summary>
@@ -42,6 +38,3 @@ public class EmployeeAdditionalDetailsPatchDto
 	/// </summary>
 	public bool? TransportMember { get; set; }
 }
-
-
-

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
+using ShikshaMitra.HR;
 using Volo.Abp;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Services;
@@ -56,7 +57,7 @@ public class EmployeeDocumentManager(
 		var employee = await employeeRepository.GetAsync(employeeId);
 		var document = employee.Documents.FirstOrDefault(d => d.Id == documentId);
 		return document
-			?? throw new BusinessException($"Document with ID {documentId} does not exist.");
+			?? throw new BusinessException(HRErrorCodes.EmployeeDocumentNotFound);
 	}
 
 	public async Task<List<EmployeeDocument>> GetDocumentsAsync(Guid employeeId)
@@ -78,7 +79,7 @@ public class EmployeeDocumentManager(
 
 		var employee = await employeeRepository.GetAsync(employeeId);
 		var document = employee.Documents.FirstOrDefault(d => d.Id == documentId)
-			?? throw new BusinessException($"Document with ID {documentId} does not exist.");
+			?? throw new BusinessException(HRErrorCodes.EmployeeDocumentNotFound);
 
 		await blobContainer.SaveAsync(document.BlobName, content, overrideExisting: true);
 
@@ -92,7 +93,7 @@ public class EmployeeDocumentManager(
 	{
 		var employee = await employeeRepository.GetAsync(employeeId);
 		var document = employee.Documents.FirstOrDefault(d => d.Id == documentId)
-			?? throw new BusinessException($"Document with ID {documentId} does not exist.");
+			?? throw new BusinessException(HRErrorCodes.EmployeeDocumentNotFound);
 
 		await blobContainer.DeleteAsync(document.BlobName);
 

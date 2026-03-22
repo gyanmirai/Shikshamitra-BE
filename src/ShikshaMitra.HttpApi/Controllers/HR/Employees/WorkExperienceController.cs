@@ -1,11 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.WorkExperienceContracts;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
@@ -14,7 +13,6 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 
 /// <summary>
 /// Employee work experience management controller
-/// Handles CRUD operations for employee work history in the school ERP system
 /// </summary>
 [Area("app")]
 [RemoteService(Name = "Default")]
@@ -22,11 +20,11 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 [Authorize]
 public class WorkExperienceController : AbpControllerBase
 {
-	private readonly IEmployeeAppService _employeeAppService;
+	private readonly IEmployeeWorkExperienceAppService _workExperienceAppService;
 
-	public WorkExperienceController(IEmployeeAppService employeeAppService)
+	public WorkExperienceController(IEmployeeWorkExperienceAppService workExperienceAppService)
 	{
-		_employeeAppService = employeeAppService;
+		_workExperienceAppService = workExperienceAppService;
 	}
 
 	/// <summary>
@@ -37,8 +35,7 @@ public class WorkExperienceController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<List<WorkExperienceContract>> GetAsync([FromRoute, Required] Guid employeeId)
 	{
-		var employee = await _employeeAppService.GetAsync(employeeId);
-		return WorkExperienceContractMapper.ToResponseList(employee.WorkExperiences);
+		return await _workExperienceAppService.GetAsync(employeeId);
 	}
 
 	/// <summary>
@@ -51,9 +48,7 @@ public class WorkExperienceController : AbpControllerBase
 		[FromRoute, Required] Guid employeeId,
 		[FromBody, Required] List<WorkExperienceContract> request)
 	{
-		var updateDtoList = WorkExperienceContractMapper.ToUpdateDtoList(request);
-		await _employeeAppService.UpdateExperienceInfo(employeeId, updateDtoList);
-
+		await _workExperienceAppService.UpsertAsync(employeeId, request);
 		return Ok();
 	}
 }

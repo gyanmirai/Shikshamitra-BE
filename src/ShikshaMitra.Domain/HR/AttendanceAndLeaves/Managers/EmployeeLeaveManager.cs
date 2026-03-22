@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
+using ShikshaMitra.HR;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Guids;
@@ -13,15 +14,12 @@ public class EmployeeLeaveManager(IEmployeeLeaveRepository employeeLeaveReposito
 	{
 		if (employeeLeave.Status != EmployeeLeaveStatusType.Pending)
 		{
-			throw new BusinessException("Leave request is already approved or rejected");
+			throw new BusinessException(HRErrorCodes.LeaveInvalidStatusTransition);
 		}
 
 		return employeeLeave;
 	}
 
-	/// <summary>
-	/// ✅ FIXED: Removed reflection abuse, uses entity factory method
-	/// </summary>
 	public Task<EmployeeLeave> CreateAsync(
 		Guid employeeId,
 		Guid leaveTypeId,
@@ -33,7 +31,6 @@ public class EmployeeLeaveManager(IEmployeeLeaveRepository employeeLeaveReposito
 		var leaveId = guidGenerator.Create();
 		var tenantId = CurrentTenant?.Id ?? Guid.Empty;
 
-		// ✅ Use factory method instead of direct reflection
 		var leave = EmployeeLeave.Create(
 			leaveId,
 			tenantId,

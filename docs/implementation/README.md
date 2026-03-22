@@ -1,46 +1,40 @@
 ---
-description: Index of backend implementation guides (HR, employee, security).
+description: Index of backend implementation guides (HR, security).
 tags: [implementation, docs, hr]
 ---
 
 # Implementation guides
 
-Step-by-step and deep-dive documentation for **how** features are built: EF Core, application services, permissions, pagination, and payroll-related subdomains.
+Deep-dive documentation for **how** HR application-layer refactors and HttpApi migrations were done, plus cross-cutting security notes. For **behavior and API surface**, use [PRDs](../prd/hr/README.md).
 
 ## Layout
 
 ```
 implementation/
-├── employee/           # Employee entity: caching, eager loading, additional details
-├── hr/                 # HR sub-features (components, leave, pagination, permissions)
-│   ├── deduction-components/
-│   ├── earning-components/
-│   ├── leave-management/
-│   ├── pagination/
-│   └── permissions/
+├── hr/                 # HR application layer + HttpApi migration notes
 └── security/           # Cross-cutting permission / bypass notes
 ```
 
 ## Module index
 
-| Area | README | Notes |
-|------|--------|--------|
-| **Employee** | [employee/README.md](./employee/README.md) | Eager loading, caching, additional details; payroll → API doc + source |
-| **HR (payroll components, leave, etc.)** | [hr/README.md](./hr/README.md) | Entry point for all `hr/` subfolders |
-| **HR — earning components** | [hr/earning-components/README.md](./hr/earning-components/README.md) | |
-| **HR — deduction components** | [hr/deduction-components/README.md](./hr/deduction-components/README.md) | |
-| **HR — leave management** | [hr/leave-management/README.md](./hr/leave-management/README.md) | |
-| **HR — pagination** | [hr/pagination/README.md](./hr/pagination/README.md) | |
-| **HR — permissions** | [hr/permissions/README.md](./hr/permissions/README.md) | |
+| Area | Document | Notes |
+|------|----------|--------|
+| **HR** | [hr/README.md](./hr/README.md) | Application patterns, refactoring log, HttpApi migration |
 | **Security** | [security/admin-bypass-permissions.md](./security/admin-bypass-permissions.md) | Admin bypass / permission examples |
+
+## Architecture decisions (EF, caching, payroll model)
+
+Recorded as ADRs (not step-by-step implementation folders):
+
+- [Architecture decisions index](../architecture/decisions/README.md)
 
 ## Conventions
 
 When adding guides:
 
-1. Place them under the **module folder** that owns the code (`employee/`, `hr/...`, etc.).
-2. Prefer names: `Module-Feature-Implementation.md`, `Implementation-Complete.md`, `Quick-Start.md`, or a local `README.md` as the index.
-3. Link to **API** docs under `docs/api/` instead of duplicating endpoint tables.
+1. Place them under the folder that owns the code (`hr/`, `security/`, etc.).
+2. Prefer a local `README.md` as the index for that folder.
+3. Link to [PRDs](../prd/hr/README.md) for endpoints and behavior instead of duplicating tables.
 4. Follow [docs/best-practices.md](../best-practices.md) for layering and structure.
 
 ## Related

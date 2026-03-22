@@ -1,7 +1,10 @@
-﻿namespace ShikshaMitra.HR.Payroll.Settings;
+namespace ShikshaMitra.HR.Payroll.Settings;
 
 /// <summary>
-/// Type of deduction component calculation
+/// Type of deduction component calculation.
+/// Intentionally separate from <see cref="EarningComponentType"/> — deductions and earnings
+/// carry different business semantics (e.g., statutory deductions, employer contributions)
+/// and may diverge in future (e.g., a deduction-specific "Slab-based" type).
 /// </summary>
 public enum DeductionComponentType
 {

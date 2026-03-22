@@ -1,4 +1,4 @@
-﻿# ShikshaMitra — Project Best Practices
+# ShikshaMitra — Project Best Practices
 
 > **Audience**: AI agents, solution architects.
 > **Applies to**: All modules across the ShikshaMitra backend.
@@ -179,6 +179,8 @@ Domain services (`DomainService` base class) exist when logic:
 - Thin orchestration: validate input → delegate to domain service → persist via repository → map to DTO.
 - Never contain business logic — that belongs in domain services or entities.
 - Use `ObjectMapper.Map<>()` (AutoMapper) for DTO ↔ Entity mapping.
+- **Single Responsibility**: One AppService per cohesive concern. Target ~200 lines max per class; if larger, split by concern.
+- **No manual `MapToDto` helpers** — register all mappings in the module's `AutoMapper Profile`. Exception: complex projections or DTO-to-DTO transforms may use extension methods in the Application layer.
 
 ### 3.2 DTOs
 
@@ -186,12 +188,58 @@ Domain services (`DomainService` base class) exist when logic:
 - Input DTOs: `Create{Entity}Dto`, `Update{Entity}Dto`, `Get{Entity}ListInput`.
 - Output DTOs: `{Entity}Dto`, `{Entity}ListResponse`.
 - No domain types in DTOs — enums from Domain.Shared are acceptable.
+- **No mapper classes in Application.Contracts** — Contracts define shapes only; mapping lives in the Application layer.
 
 ### 3.3 Authorization
 
-- Use `[Authorize]` on controllers or app service methods.
+Two-layer authorization pattern:
+
+1. **Coarse-grained** — `[Authorize(Permission)]` attribute on every public AppService method. Enforces "does this user have the right to call this endpoint at all?"
+2. **Fine-grained (IDOR)** — Programmatic ownership/access checks inside the method body for operations on a specific resource. Use a dedicated authorization service (e.g., `EmployeeAuthorizationService.CheckEmployeeAccessAsync(id)`).
+
+```csharp
+[Authorize(HRPermissions.Employee.EmployeeList.View)]
+public async Task<EmployeeDto> GetAsync(Guid employeeId)
+{
+    await _authorizationService.CheckEmployeeAccessAsync(employeeId);
+    // ...
+}
+```
+
 - Define permissions in `ShikshaMitraPermissions` (Application.Contracts).
 - Per-module permission definition providers: `HRPermissionDefinitionProvider`, `StudentsPermissionDefinitionProvider`, etc.
+
+### 3.4 Input Validation (FluentValidation)
+
+- Use **FluentValidation** for all input DTO validation. ABP auto-discovers validators via `Volo.Abp.FluentValidation`.
+- Validators live in **Application.Contracts**, alongside the DTOs they validate.
+- Naming: `{DtoName}Validator` (e.g., `CreateEmployeeBasicInfoDtoValidator`).
+- DataAnnotations (`[Required]`, `[MaxLength]`) may coexist for simple constraints, but FluentValidation is the primary mechanism for complex rules.
+- Remove inline validation from AppService methods once a validator exists for the DTO.
+
+### 3.5 Error Handling
+
+- All business/domain errors use **`BusinessException`** with error codes from a centralized catalog.
+- Error code constants live in `Domain.Shared` (e.g., `HRErrorCodes.cs`).
+- Convention: `"{Module}:{SubModule}:{6-digit code}"` (e.g., `"HR:Employee:010001"`).
+- **Never use `UserFriendlyException`** for business errors — reserve it only for truly exceptional edge cases where no error code makes sense.
+- `BusinessException` supports localization via the ABP localization framework.
+
+```csharp
+// Good
+throw new BusinessException(HRErrorCodes.EmployeeEmailAlreadyExists);
+
+// Avoid
+throw new UserFriendlyException("Email is already in use.");
+```
+
+### 3.6 Domain Events
+
+- Use ABP's **distributed event bus** (`IDistributedEventBus`) for key state changes that other modules may react to.
+- Event Transfer Objects (ETOs) live in **Domain.Shared** under `{Module}/Events/`.
+- Naming: `{Entity}{Action}Eto` (e.g., `EmployeeCreatedEto`, `PayrollLockedEto`).
+- Publish events **after** the core operation succeeds (after repository save).
+- Event handlers live in the Application layer under `{Module}/EventHandlers/`.
 
 ---
 
@@ -219,6 +267,14 @@ Domain services (`DomainService` base class) exist when logic:
 - Thin delegation: controller → app service interface → return.
 - Use `[ProducesResponseType]` for OpenAPI documentation.
 - Area: `[Area("app")]`, Remote service: `[RemoteService(Name = "Default")]`.
+- Inline validation in controllers is discouraged — use FluentValidation on input DTOs instead.
+
+### 5.1 Contract Mappers
+
+- Contract mappers (static classes that convert between HTTP-layer Request/Response types and AppService DTOs) belong in the **HttpApi** project under `Mappers/{Module}/`.
+- They are NOT allowed in Application.Contracts — Contracts define shapes only.
+- Use `BusinessException(HRErrorCodes.X)` for mapping failures, never `UserFriendlyException`.
+- Naming: `{Concern}ContractMapper` (e.g., `PersonalInfoContractMapper`).
 
 ---
 

@@ -1,6 +1,5 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
@@ -104,8 +103,6 @@ public class RunPayrollRequest
 	/// <summary>
 	/// Payroll month in MMMM-YYYY format (e.g., JANUARY-2025)
 	/// </summary>
-	[Required]
-	[RegularExpression(@"^[A-Z]+-\d{4}$", ErrorMessage = "Month must be in MMMM-YYYY format (e.g., JANUARY-2025)")]
 	public string Month { get; set; } = string.Empty;
 }
 

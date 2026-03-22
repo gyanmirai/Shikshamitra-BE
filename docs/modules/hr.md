@@ -1,7 +1,9 @@
-﻿# HR Module — Technical Reference
+# HR Module -- Technical Reference
 
 > **Audience**: AI agents, solution architects.
 > **Namespace root**: `ShikshaMitra.HR`
+>
+> **See also**: [PRD & API Contracts](../prd/hr/README.md) for behavior specs, business rules, and endpoint reference; [Architecture decisions (ADRs)](../architecture/decisions/README.md) for employee loading/caching and payroll model.
 
 ---
 
@@ -103,29 +105,40 @@ The HR module manages the full employee lifecycle within a multi-tenant educatio
 
 ### 2.7 Application Services
 
+> **Refactored**: The original `EmployeeAppService` (1 145 lines) was decomposed into focused services.
+> All 5 employee controllers now use focused service interfaces instead of `IEmployeeAppService`.
+> 28 FluentValidation validators were added across HR Application.Contracts.
+> Domain error handling is standardized — all business errors use `BusinessException` with `HRErrorCodes`.
+> See [application-layer-refactoring.md](../implementation/hr/application-layer-refactoring.md) and [httpapi-migration.md](../implementation/hr/httpapi-migration.md) for full details.
+
 | App Service | Key Methods |
 |---|---|
-| `EmployeeAppService` | `CreateBasicInfoAsync` (creates IdentityUser + Employee atomically), `UpdateBasicInfoAsync`, `UpdateFamilyInfo`, `UpdateExperienceInfo`, `UpdateBankDetails`, `UpdateAdditionalDetailsAsync`, `UpdateEmployeeStatus`, `UploadDocumentsAsync`, `GetDocumentAsync`, `DeleteDocumentAsync`, `UploadProfilePictureAsync`, `GetProfilePictureAsync`, `GetPayrollDetailsAsync`, `UpdatePayrollDetailsAsync`, `UpdatePayrollStructureAsync` |
-| `EmployeePersonalInfoAppService` | Granular personal info CRUD (separated from main app service) |
-| `EmployeeFamilyInfoAppService` | Dedicated family member management |
+| `EmployeePersonalInfoAppService` | `CreateAsync`, `GetAsync`, `UpdateAsync`, `GetByUserIdAsync`, `GetWithDetailsAsync`, `UpdateBankDetailsAsync` |
+| `EmployeeDocumentAppService` | `UploadDocumentsAsync`, `GetDocumentAsync`, `DeleteDocumentAsync`, `UploadProfilePictureAsync`, `GetProfilePictureAsync` |
+| `EmployeePayrollAppService` | `GetPayrollDetailsAsync`, `UpdatePayrollDetailsAsync`, `GetPayrollContractAsync`, `UpdatePayrollContractAsync` |
+| `EmployeeSearchAppService` | `GetFilteredListAsync`, `SearchAsync` |
+| `EmployeeFamilyInfoAppService` | Family member management (`GetAsync`, `UpsertAsync`) |
 | `EmployeeAdditionalDetailsAppService` | Additional details CRUD + PATCH support |
 | `EmployeeWorkExperienceAppService` | Work experience CRUD |
-| `EmployeeStatusAppService` | Status transitions |
+| `EmployeeStatusAppService` | Status transitions with domain events |
 | `ReportingManagerAppService` | Reporting hierarchy management |
 | `DocumentSettingAppService` | Document type configuration per tenant |
+| ~~`EmployeeAppService`~~ | **Deprecated** — `IEmployeeAppService` marked `[Obsolete]`, retained for test compatibility |
 
 ### 2.8 HTTP Controllers
 
-| Controller | Route | Purpose |
-|---|---|---|
-| `EmployeesController` | `api/employees` | Employee CRUD, list with pagination/filtering |
-| `PersonalInfoController` | `api/employees/{id}/personal-info` | Personal info subset |
-| `FamilyInfoController` | `api/employees/{id}/family` | Family members |
-| `AdditionalInfoController` | `api/employees/{id}/additional-info` | Additional details |
-| `WorkExperienceController` | `api/employees/{id}/work-experience` | Work experience |
-| `PayrollController` | `api/employees/{id}/payroll` | Employee payroll details |
-| `ReportingManagerController` | `api/employees/reporting-manager` | Reporting hierarchy |
-| `DocumentConfigController` | `api/employees/document-config` | Document settings |
+All controllers delegate to focused service interfaces. Contract mappers live in `HttpApi/Mappers/HR/` (see [httpapi-migration.md](../implementation/hr/httpapi-migration.md)).
+
+| Controller | Route | Service | Purpose |
+|---|---|---|---|
+| `EmployeesController` | `api/employees` | `IEmployeeSearchAppService` + `IEmployeePersonalInfoAppService` | Employee CRUD, list with pagination/filtering |
+| `PersonalInfoController` | `api/employees/{id}/personal-info` | `IEmployeePersonalInfoAppService` | Personal info subset |
+| `FamilyInfoController` | `api/employees/{id}/family` | `IEmployeeFamilyInfoAppService` | Family members |
+| `AdditionalInfoController` | `api/employees/{id}/additional-info` | `IEmployeeAdditionalDetailsAppService` | Additional details |
+| `WorkExperienceController` | `api/employees/{id}/work-experience` | `IEmployeeWorkExperienceAppService` | Work experience |
+| `PayrollController` | `api/employees/{id}/payroll` | `IEmployeePayrollAppService` | Employee payroll details |
+| `ReportingManagerController` | `api/employees/reporting-manager` | `ReportingManagerAppService` | Reporting hierarchy |
+| `DocumentConfigController` | `api/employees/document-config` | `DocumentSettingAppService` | Document settings |
 
 ---
 
@@ -265,17 +278,19 @@ Generated by `EmployeeCodeGenerator`:
 ## 8. Data Flow: Employee Creation
 
 ```
-Controller → EmployeeAppService.CreateBasicInfoAsync
-  ├── Validate email uniqueness
+Controller → EmployeePersonalInfoAppService.CreateAsync
+  ├── FluentValidation (auto, via CreateEmployeePersonalInfoDtoValidator)
+  ├── BusinessException if email/mobile missing or duplicate
   ├── Generate unique username
-  ├── Create IdentityUser + assign role (transactional)
+  ├── Create IdentityUser + set password (transactional UoW)
   ├── EmployeeManager.CreateEmployeeAsync
   │     ├── Validate user + role existence
   │     ├── EmployeeCodeGenerator.GenerateAsync → employee code
   │     └── new Employee(...)
   ├── Repository.InsertAsync
   ├── UoW.CompleteAsync (commit)
-  └── Send welcome email (fire-and-forget)
+  ├── Publish EmployeeCreatedEto (distributed event)
+  └── Send welcome email
 ```
 
 ---

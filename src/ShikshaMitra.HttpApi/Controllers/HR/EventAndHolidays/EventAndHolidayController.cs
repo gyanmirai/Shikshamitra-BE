@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -12,7 +12,9 @@ namespace ShikshaMitra.Controllers.HR.EventAndHolidays;
 
 /// <summary>
 /// API Controller for managing events and holidays.
+/// Deprecated: Use the Calendar module endpoints instead (api/events, api/holidays).
 /// </summary>
+[Obsolete("Use Calendar module controllers (EventController, HolidayController) instead.")]
 [Area("app")]
 [RemoteService(Name = "Default")]
 [Route("api/events-and-holidays")]

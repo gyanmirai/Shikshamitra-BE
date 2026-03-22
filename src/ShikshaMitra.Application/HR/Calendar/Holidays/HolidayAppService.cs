@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
+using ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
+using ShikshaMitra.HR;
 using ShikshaMitra.HR.Calendar;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.HolidayTypes;
@@ -85,11 +86,16 @@ public class HolidayAppService : CrudAppService<
 
         var holidayDtos = ObjectMapper.Map<List<Holiday>, List<HolidayDto>>(items);
 
-        // Populate HolidayType data for each holiday
+        // Batch-load all HolidayTypes to avoid N+1 queries
+        var typeIds = holidayDtos.Select(h => h.HolidayTypeId).Distinct().ToList();
+        var holidayTypes = await AsyncExecuter.ToListAsync(
+            (await _holidayTypeRepository.GetQueryableAsync()).Where(ht => typeIds.Contains(ht.Id)));
+        var typeMap = holidayTypes.ToDictionary(ht => ht.Id, ht => ObjectMapper.Map<HolidayType, HolidayTypeDto>(ht));
+
         foreach (var holidayDto in holidayDtos)
         {
-            var holidayType = await _holidayTypeRepository.GetAsync(holidayDto.HolidayTypeId);
-            holidayDto.HolidayType = ObjectMapper.Map<HolidayType, HolidayTypeDto>(holidayType);
+            if (typeMap.TryGetValue(holidayDto.HolidayTypeId, out var htDto))
+                holidayDto.HolidayType = htDto;
         }
 
         return new PagedResultDto<HolidayDto>(
@@ -175,12 +181,9 @@ public class HolidayAppService : CrudAppService<
     /// </summary>
     public override async Task<HolidayDto> CreateAsync(CreateUpdateHolidayDto input)
     {
-        // Validate that the referenced HolidayType exists
         var holidayTypeExists = await _holidayTypeRepository.AnyAsync(x => x.Id == input.HolidayTypeId);
         if (!holidayTypeExists)
-        {
-            throw new BusinessException($"Holiday type with ID '{input.HolidayTypeId}' does not exist.");
-        }
+            throw new BusinessException(HRErrorCodes.HolidayTypeNotFound);
 
         var holiday = Holiday.Create(
             CurrentTenant.Id,

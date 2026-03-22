@@ -1,14 +1,12 @@
-﻿using System.ComponentModel.DataAnnotations;
-
 namespace ShikshaMitra.HR.Payroll.Settings;
 
 public class CreateUpdatePayElementDto
 {
-	[Required] [MaxLength(50)] public string Code { get; set; }
+	public string Code { get; set; }
 
-	[Required] [MaxLength(100)] public string Name { get; set; }
+	public string Name { get; set; }
 
-	[Required] public PayElementType Type { get; set; }
+	public PayElementType Type { get; set; }
 
 	public bool IsEmployeeSpecific { get; set; }
 	public bool IsDependent { get; set; }
@@ -18,7 +16,7 @@ public class CreateUpdatePayElementDto
 
 public class DependentPropertiesDto
 {
-	public string ElementId { get; set; } // Code of the dependent element
-	public float? Percentage { get; set; } // Percentage of the dependent element
-	public float? Amount { get; set; } // Fixed amount of the dependent element
+	public string ElementId { get; set; }
+	public float? Percentage { get; set; }
+	public float? Amount { get; set; }
 }

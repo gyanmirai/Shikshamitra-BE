@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
+using ShikshaMitra.HR;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using System;
@@ -59,7 +60,7 @@ public class SalarySlipManager : DomainService
 		{
 			if (forceRegenerate)
 			{
-				throw new UserFriendlyException("Cannot regenerate a finalized salary slip");
+				throw new BusinessException(HRErrorCodes.SalarySlipAlreadyFinalized);
 			}
 			_logger.LogInformation("Finalized salary slip already exists for Employee: {EmployeeId}, Month: {MonthYear}",
 				employeeId, monthYear);
@@ -141,13 +142,13 @@ public class SalarySlipManager : DomainService
 	{
 		if (string.IsNullOrWhiteSpace(monthYear))
 		{
-			throw new UserFriendlyException("MonthYear parameter is required");
+			throw new BusinessException(HRErrorCodes.MonthYearRequired);
 		}
 
 		if (!DateTime.TryParseExact(monthYear + "-01", "yyyy-MM-dd", null,
 			System.Globalization.DateTimeStyles.None, out _))
 		{
-			throw new UserFriendlyException("Invalid monthYear format. Expected format: YYYY-MM (e.g., 2025-01)");
+			throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat);
 		}
 	}
 }

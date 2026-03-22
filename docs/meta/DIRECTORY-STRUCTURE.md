@@ -226,9 +226,9 @@ All documents should link to:
 
 *(Paths below updated for the current tree; this file is still a snapshot.)*
 
-### Most used documents
-1. [Employee Quick Reference](../api/employee/Employee-QuickRef.md)
-2. [Employee complete summary](../architecture/employee/Employee-Complete-Optimization-Summary.md)
+### Most used documents (current; older paths below may be historical)
+1. [HR PRD & API contracts](../prd/hr/README.md)
+2. [Architecture decisions (ADRs)](../architecture/decisions/README.md)
 3. [Main API documentation](../api/README.md)
 4. [General API endpoints](../api/endpoints.md)
 

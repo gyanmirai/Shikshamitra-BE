@@ -1,17 +1,18 @@
 namespace ShikshaMitra.HR.Calendar;
 
 /// <summary>
-/// Calendar item type enumeration to distinguish between events and holidays
+/// Distinguishes between events and holidays on the school calendar.
+/// Used by the unified calendar feed to render items with the correct styling and behaviour.
 /// </summary>
 public enum CalendarItemType
 {
     /// <summary>
-    /// Event calendar item
+    /// A scheduled event (e.g., parent-teacher meeting, sports day).
     /// </summary>
     Event = 0,
 
     /// <summary>
-    /// Holiday calendar item
+    /// A declared holiday (e.g., national holiday, school closure).
     /// </summary>
     Holiday = 1
 }

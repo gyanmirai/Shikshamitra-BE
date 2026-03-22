@@ -11,15 +11,15 @@ Multi-tenant school management system built with ABP Framework (.NET 9).
 
 ```
 docs/
-├── api/                 → API reference (endpoints, examples, quick refs)
+├── prd/                 → PRD & API contracts (behavior specs + endpoint reference)
+├── api/                 → API reference (rooms, general endpoints)
 ├── architecture/        → Cross-module design & optimization narratives
 ├── implementation/      → How features are built (EF, caching, migrations)
 ├── platform/            → UserScope & bulk scope assignment
 ├── multi-tenancy/       → Tenants, roles
 ├── testing/             → Test guides and summaries
 ├── modules/             → Module overviews (e.g. HR)
-├── meta/                → Historical reorg notes (not source of truth)
-└── improvements/        → One-off fix notes
+└── meta/                → Historical reorg notes (not source of truth)
 ```
 
 ## Quick Start
@@ -48,7 +48,8 @@ dotnet run --project src/ShikshaMitra.HttpApi.Host
 
 ### Module documentation
 
-- [HR module](./modules/hr.md) — employees, attendance and leave, payroll, calendar.
+- [HR module](./modules/hr.md) -- technical reference (entities, domain services, repositories)
+- [HR PRD & API Contracts](./prd/hr/README.md) -- behavior specs and endpoint reference for all HR submodules
 
 ### UserScope
 
@@ -73,19 +74,30 @@ Hierarchical access: Board → Medium → Stage → Class → Division. Principl
 |-------|----------|
 | **Standards** | |
 | Best practices | [best-practices.md](./best-practices.md) |
-| **API reference** | |
+| **PRD & API contracts** | |
+| HR PRD index | [prd/hr/README.md](./prd/hr/README.md) |
+| Employees | [prd/hr/employees/](./prd/hr/employees/prd.md) |
+| Calendar | [prd/hr/calendar/](./prd/hr/calendar/prd.md) |
+| Attendance & Leaves | [prd/hr/attendance-leaves/](./prd/hr/attendance-leaves/prd.md) |
+| Payroll Operations | [prd/hr/payroll/](./prd/hr/payroll/prd.md) |
+| Payroll Settings | [prd/hr/payroll/settings/](./prd/hr/payroll/settings/prd.md) |
+| Reports | [prd/hr/reports/](./prd/hr/reports/prd.md) |
+| **API reference (other)** | |
 | API hub | [api/README.md](./api/README.md) |
-| Employee API | [api/employee/README.md](./api/employee/README.md) |
-| Employee payroll API | [api/employee/Employee-Payroll-API.md](./api/employee/Employee-Payroll-API.md) |
-| Payroll components APIs | [api/payroll/README.md](./api/payroll/README.md) |
 | Rooms / facilities | [api/rooms/README.md](./api/rooms/README.md) |
 | General endpoints | [api/endpoints.md](./api/endpoints.md) |
-| **Architecture narratives** | |
-| Employee optimizations | [architecture/employee/README.md](./architecture/employee/README.md) |
-| Payroll architecture | [architecture/payroll/PAYROLL-ARCHITECTURE.md](./architecture/payroll/PAYROLL-ARCHITECTURE.md) |
+| **Architecture** | |
+| Architecture hub | [architecture/README.md](./architecture/README.md) |
+| **Architecture decisions (ADRs)** | |
+| ADR index | [architecture/decisions/README.md](./architecture/decisions/README.md) |
+| Employee eager loading | [architecture/decisions/001-employee-eager-loading.md](./architecture/decisions/001-employee-eager-loading.md) |
+| Employee caching | [architecture/decisions/002-employee-caching-strategy.md](./architecture/decisions/002-employee-caching-strategy.md) |
+| Payroll two-tier model | [architecture/decisions/003-payroll-two-tier-architecture.md](./architecture/decisions/003-payroll-two-tier-architecture.md) |
 | **Implementation guides** | |
-| Employee (backend) | [implementation/employee/README.md](./implementation/employee/README.md) |
-| HR submodule guides | [implementation/hr/README.md](./implementation/hr/README.md) |
+| HR implementation notes | [implementation/hr/README.md](./implementation/hr/README.md) |
+| HR Application layer patterns | [implementation/hr/application-layer-patterns.md](./implementation/hr/application-layer-patterns.md) |
+| HR Application refactoring log | [implementation/hr/application-layer-refactoring.md](./implementation/hr/application-layer-refactoring.md) |
+| HR HttpApi migration | [implementation/hr/httpapi-migration.md](./implementation/hr/httpapi-migration.md) |
 | All implementation areas | [implementation/README.md](./implementation/README.md) |
 | **Platform** | |
 | UserScope | [platform/UserScope-Usage.md](./platform/UserScope-Usage.md) |
@@ -101,13 +113,17 @@ Hierarchical access: Board → Medium → Stage → Class → Division. Principl
 
 ## Documentation types
 
+### `docs/prd/`
+
+Behavior specifications (PRD) and API contracts per module. Each submodule has a `prd.md` (business rules, permissions, error codes) and `api-contract.md` (endpoints, request/response shapes). The source of truth for HR API surface.
+
 ### `docs/api/`
 
-Endpoint reference, request/response examples, validation — for API consumers and frontend work.
+Remaining API reference (rooms, general endpoints). HR-specific docs have moved to `docs/prd/hr/`.
 
 ### `docs/architecture/`
 
-Why and how the system is shaped at a high level; optimization summaries and cross-cutting design.
+Architecture decision records ([decisions/README.md](./architecture/decisions/README.md)) and any module-level design notes.
 
 ### `docs/implementation/`
 
@@ -133,19 +149,19 @@ Pass: Temp@123
 
 ### Developers
 
-- [Employee API quick reference](./api/employee/Employee-QuickRef.md)
-- [Employee implementation guides](./implementation/employee/README.md)
+- [HR PRD & API contracts](./prd/hr/README.md)
 - [API endpoints](./api/endpoints.md)
+- [Implementation guides](./implementation/README.md)
 
 ### Architects
 
-- [Employee optimization summary](./architecture/employee/Employee-Complete-Optimization-Summary.md)
+- [Architecture decisions (ADRs)](./architecture/decisions/README.md)
 - [Multi-tenancy](./multi-tenancy/README.md)
 - [UserScope](./platform/UserScope-Usage.md)
 
 ### Project / product
 
-- [Employee API overview](./api/employee/README.md)
+- [HR PRD index](./prd/hr/README.md)
 - [HR implementation index](./implementation/hr/README.md)
 
 ---

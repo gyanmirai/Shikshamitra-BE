@@ -1,13 +1,12 @@
-﻿using ShikshaMitra.HR.Employees;
-using ShikshaMitra.HR.Employees.Payroll;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using System;
-using Volo.Abp.Domain.Repositories;
-using Volo.Abp;
-using Volo.Abp.Domain.Services;
 using Microsoft.Extensions.Logging;
+using ShikshaMitra.HR;
+using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Payroll;
+using System;
+using System.Threading.Tasks;
+using Volo.Abp;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Domain.Services;
 
 namespace ShikshaMitra.HR.Payroll.PayrollStructures;
 
@@ -55,11 +54,11 @@ public class PayrollStructureManager : DomainService
 
 		// Validate employee exists
 		var employee = await _employeeRepository.GetAsync(employeeId)
-			?? throw new UserFriendlyException("Employee not found");
+			?? throw new BusinessException(HRErrorCodes.EmployeeNotFound);
 
 		// Validate payroll structure exists
 		var payrollStructure = await _payrollStructureRepository.GetAsync(payrollStructureId)
-			?? throw new UserFriendlyException("Payroll structure not found");
+			?? throw new BusinessException(HRErrorCodes.PayrollStructureNotFound);
 
 		// Assign structure to employee
 		employee.SetPayrollStructure(payrollStructureId);
@@ -137,7 +136,7 @@ public class PayrollStructureManager : DomainService
 		);
 
 		var employee = await _employeeRepository.GetAsync(employeeId)
-			?? throw new UserFriendlyException("Employee not found");
+			?? throw new BusinessException(HRErrorCodes.EmployeeNotFound);
 
 		employee.RemovePayrollStructure();
 		await _employeeRepository.UpdateAsync(employee);
@@ -175,9 +174,7 @@ public class PayrollStructureManager : DomainService
 
 		if (!employee.PayrollStructureId.HasValue)
 		{
-			throw new UserFriendlyException(
-				"Cannot re-initialize payroll: Employee has no payroll structure assigned."
-			);
+			throw new BusinessException(HRErrorCodes.PayrollNoStructureAssigned);
 		}
 
 		await _initializationService.InitializeFromStructureAsync(employeeId, replaceExisting: true);

@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
+using ShikshaMitra.HR;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
@@ -35,12 +36,12 @@ public class LeaveValidationService : DomainService
 		// 1. Validate date range
 		if (startDate > endDate)
 		{
-			throw new UserFriendlyException("Start date cannot be after end date");
+			throw new BusinessException(HRErrorCodes.LeaveStartAfterEnd);
 		}
 
 		if (startDate.Date < DateTime.Today)
 		{
-			throw new UserFriendlyException("Cannot apply leave for past dates");
+			throw new BusinessException(HRErrorCodes.LeavePastDate);
 		}
 
 		// 2. Check for overlapping leaves
@@ -52,16 +53,14 @@ public class LeaveValidationService : DomainService
 
 		if (hasOverlap)
 		{
-			throw new UserFriendlyException(
-				"You already have a leave request (pending, reviewed, or approved) for overlapping dates. " +
-				"Please cancel or modify the existing request first.");
+			throw new BusinessException(HRErrorCodes.LeaveOverlap);
 		}
 
 		// 3. Get leave policy
 		var leavePolicy = await _leavePolicyRepository.FindAsync(x => x.Id == leaveTypeId);
 		if (leavePolicy == null)
 		{
-			throw new UserFriendlyException("Leave policy not found for this leave type");
+			throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
 		}
 
 		// 4. Check maximum duration per request (if policy specifies)
@@ -70,9 +69,7 @@ public class LeaveValidationService : DomainService
 
 		if (requestedDays > maxDaysPerRequest)
 		{
-			throw new UserFriendlyException(
-				$"Cannot request more than {maxDaysPerRequest} days in a single leave request. " +
-				$"You requested {requestedDays} days.");
+			throw new BusinessException(HRErrorCodes.LeaveMaxDaysExceeded);
 		}
 
 		// 5. Check annual leave balance
@@ -86,9 +83,7 @@ public class LeaveValidationService : DomainService
 
 		if (requestedDays > remainingBalance)
 		{
-			throw new UserFriendlyException(
-				$"Insufficient leave balance. Available: {remainingBalance} days, Requested: {requestedDays} days. " +
-				$"(Annual limit: {leavePolicy.MaximumDaysPerYear} days, Already used: {approvedDaysThisYear} days)");
+			throw new BusinessException(HRErrorCodes.LeaveInsufficientBalance);
 		}
 
 		// 6. Check minimum notice period (2 days advance notice)
@@ -97,17 +92,13 @@ public class LeaveValidationService : DomainService
 
 		if (daysDifference < minimumNoticeDays)
 		{
-			throw new UserFriendlyException(
-				$"Leave must be applied at least {minimumNoticeDays} days in advance. " +
-				$"You are applying with only {daysDifference} day(s) notice.");
+			throw new BusinessException(HRErrorCodes.LeaveNoticePeriod);
 		}
 
 		// 7. Validate against policy requirements
 		if (leavePolicy.RequiresApproval && !leavePolicy.IsActive)
 		{
-			throw new UserFriendlyException(
-				$"The leave policy '{leavePolicy.PolicyName}' is currently inactive. " +
-				"Please contact HR for assistance.");
+			throw new BusinessException(HRErrorCodes.LeavePolicyInactive);
 		}
 	}
 

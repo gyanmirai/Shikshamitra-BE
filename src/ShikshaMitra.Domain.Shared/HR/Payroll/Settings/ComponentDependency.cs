@@ -1,7 +1,10 @@
-﻿namespace ShikshaMitra.HR.Payroll.Settings;
+namespace ShikshaMitra.HR.Payroll.Settings;
 
 /// <summary>
-/// Defines what a component depends on for calculation
+/// Defines what a payroll-settings component depends on for calculation.
+/// This is the master-level enum used in earning/deduction component templates.
+/// <see cref="ShikshaMitra.HR.Employees.Payroll.SalaryComponentDependency"/> is the
+/// employee-level variant that omits <see cref="CustomComponent"/>.
 /// </summary>
 public enum ComponentDependency
 {

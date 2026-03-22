@@ -1,17 +1,17 @@
 namespace ShikshaMitra.HR.Calendar.Events;
 
 /// <summary>
-/// Event mode enumeration
+/// Indicates whether a calendar event is conducted online or in-person.
 /// </summary>
 public enum EventMode
 {
     /// <summary>
-    /// Online event
+    /// Virtual / remote event (e.g., video conference).
     /// </summary>
     Online = 0,
 
     /// <summary>
-    /// Offline event
+    /// In-person / physical-venue event.
     /// </summary>
     Offline = 1
 }

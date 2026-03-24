@@ -1,7 +1,10 @@
-﻿namespace ShikshaMitra.HR.Employees.Payroll;
+namespace ShikshaMitra.HR.Employees.Payroll;
 
 /// <summary>
 /// Defines what a percentage-based salary component depends on for calculation.
+/// This is the employee-level variant of
+/// <see cref="ShikshaMitra.HR.Payroll.Settings.ComponentDependency"/> and intentionally
+/// omits <c>CustomComponent</c>, which is only relevant at the master-settings level.
 /// </summary>
 public enum SalaryComponentDependency
 {

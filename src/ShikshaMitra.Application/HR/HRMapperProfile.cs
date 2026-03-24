@@ -1,8 +1,15 @@
-﻿using AutoMapper;
+using AutoMapper;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.Application.Contracts.HR.Calendar.Events;
+using ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
+using ShikshaMitra.HR.Calendar.Events;
+using ShikshaMitra.HR.Calendar.EventTypes;
+using ShikshaMitra.HR.Calendar.Holidays;
+using ShikshaMitra.HR.Calendar.HolidayTypes;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.AdditionalDetails;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.EventAndHolidays;
@@ -49,28 +56,19 @@ public class HRMapperProfile : Profile
 
 		#region Attendeance and Leaves
 
-		#region Employee Attendance
-
-		CreateMap<EmployeeAttendance, EmployeeAttendanceDto>()
-			.ForMember(x => x.EmployeeName,
-				opt => opt.MapFrom(x => x.Employee.FirstName + " " + x.Employee.LastName));
-		CreateMap<CreateUpdateEmployeeAttendanceDto, EmployeeAttendance>();
-
-		#endregion
-
 		# region Employee Settings
 
 		CreateMap<AutomatedNotificationsSettings, AutomatedNotificationsSettingsDto>().ReverseMap();
+
+		CreateMap<NotificationInfo, NotificationInfoDto>();
 
 		CreateMap<CustomAttendanceRule, CustomAttendanceRuleDto>();
 		CreateMap<CreateUpdateCustomAttendanceRuleDto, CustomAttendanceRule>();
 
 		#endregion
 
-		# region Employee Leave
+		# region Leave Policy
 
-		CreateMap<EmployeeLeave, EmployeeLeaveDto>();
-		CreateMap<CreateUpdateEmployeeLeaveDto, EmployeeLeave>();
 		CreateMap<LeavePolicy, LeavePolicyDto>();
 		CreateMap<CreateUpdateLeavePolicyDto, LeavePolicy>();
 
@@ -78,10 +76,25 @@ public class HRMapperProfile : Profile
 
 		# endregion
 
-		#region Events & Holidays
+		#region Events & Holidays (legacy)
 
 		CreateMap<EventAndHoliday, EventAndHolidayDto>();
 		CreateMap<CreateUpdateEventAndHolidayDto, EventAndHoliday>();
+
+		#endregion
+
+		#region Calendar — Events, EventTypes, Holidays, HolidayTypes
+
+		CreateMap<Event, Application.Contracts.HR.Calendar.Events.EventDto>();
+		CreateMap<EventType, Calendar.EventTypes.EventTypeDto>();
+		CreateMap<Holiday, Application.Contracts.HR.Calendar.Holidays.HolidayDto>();
+		CreateMap<HolidayType, ShikshaMitra.HR.Calendar.HolidayTypeDto>();
+
+		#endregion
+
+		#region Employee Additional Details
+
+		CreateMap<EmployeeAdditionalDetails, Employees.AdditionalDetails.EmployeeAdditionalDetailsDto>();
 
 		#endregion
 

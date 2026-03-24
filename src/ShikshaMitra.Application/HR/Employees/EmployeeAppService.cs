@@ -19,6 +19,8 @@ using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Employees;
 
+[Obsolete("Use focused employee services instead. See docs/implementation/hr/application-layer-patterns.md")]
+[RemoteService(false)]
 public class EmployeeAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeeAdditionalDetailsRepository additionalDetailsRepository,

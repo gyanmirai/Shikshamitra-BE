@@ -38,12 +38,6 @@ public class BookIssueController : AbpController
         return _bookIssueAppService.GetByAccessionAsync(accessionNo);
     }
 
-    [HttpGet("members/{memberId:guid}")]
-    public Task<LibraryMemberDto> GetMemberAsync(Guid memberId)
-    {
-        return _bookIssueAppService.GetMemberAsync(memberId);
-    }
-
     [HttpGet("issue-returns")]
     public Task<PaginatedResponse<IssueReturnItemDto>> GetIssueReturnListAsync(
         [FromQuery] int page = 1,

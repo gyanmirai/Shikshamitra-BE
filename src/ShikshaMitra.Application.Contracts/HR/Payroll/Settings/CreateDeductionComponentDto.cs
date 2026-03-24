@@ -1,5 +1,4 @@
-﻿using System;
-using System.ComponentModel.DataAnnotations;
+using System;
 
 namespace ShikshaMitra.HR.Payroll.Settings;
 
@@ -11,26 +10,21 @@ public class CreateDeductionComponentDto
 	/// <summary>
 	/// Name of the deduction component (must be unique)
 	/// </summary>
-	[Required]
-	[StringLength(DeductionComponentConsts.MaxNameLength, MinimumLength = 1)]
 	public string Name { get; set; } = string.Empty;
 
 	/// <summary>
 	/// Optional description
 	/// </summary>
-	[StringLength(DeductionComponentConsts.MaxDescriptionLength)]
 	public string? Description { get; set; }
 
 	/// <summary>
 	/// Component type
 	/// </summary>
-	[Required]
 	public DeductionComponentType ComponentType { get; set; }
 
 	/// <summary>
 	/// Dependency
 	/// </summary>
-	[Required]
 	public ComponentDependency DependOn { get; set; }
 
 	/// <summary>
@@ -41,8 +35,6 @@ public class CreateDeductionComponentDto
 	/// <summary>
 	/// Amount (numeric or percentage)
 	/// </summary>
-	[Required]
-	[StringLength(DeductionComponentConsts.MaxAmountLength, MinimumLength = 1)]
 	public string Amount { get; set; } = string.Empty;
 
 	/// <summary>

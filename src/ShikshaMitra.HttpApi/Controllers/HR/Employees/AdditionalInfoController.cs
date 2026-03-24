@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.AdditionalDetails;
 using ShikshaMitra.HR.Employees.AdditionalInfo;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
@@ -13,7 +13,6 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 
 /// <summary>
 /// Employee additional information management controller
-/// Handles CRUD operations for employee additional data in the school ERP system
 /// </summary>
 [Area("app")]
 [RemoteService(Name = "Default")]
@@ -21,11 +20,11 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 [Authorize]
 public class AdditionalInfoController : AbpControllerBase
 {
-	private readonly IEmployeeAppService _employeeAppService;
+	private readonly IEmployeeAdditionalDetailsAppService _additionalDetailsAppService;
 
-	public AdditionalInfoController(IEmployeeAppService employeeAppService)
+	public AdditionalInfoController(IEmployeeAdditionalDetailsAppService additionalDetailsAppService)
 	{
-		_employeeAppService = employeeAppService;
+		_additionalDetailsAppService = additionalDetailsAppService;
 	}
 
 	/// <summary>
@@ -36,8 +35,15 @@ public class AdditionalInfoController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<AdditionalInfoContract> GetAsync([FromRoute, Required] Guid employeeId)
 	{
-		var additionalDetails = await _employeeAppService.GetAdditionalDetailsAsync(employeeId);
-		return AdditionalInfoContractMapper.ToResponse(additionalDetails);
+		var dto = await _additionalDetailsAppService.GetAsync(employeeId);
+		return new AdditionalInfoContract
+		{
+			BplCardNo = dto.BplCardNo,
+			PersonWithDisability = dto.PersonWithDisability,
+			SecondLanguage = dto.SecondLanguage,
+			IsLibraryMember = dto.LibraryMember,
+			IsTransportMember = dto.TransportMember
+		};
 	}
 
 	/// <summary>
@@ -50,9 +56,15 @@ public class AdditionalInfoController : AbpControllerBase
 		[FromRoute, Required] Guid employeeId,
 		[FromBody, Required] AdditionalInfoContract request)
 	{
-		var updateDto = AdditionalInfoContractMapper.ToUpdateDto(request);
-		await _employeeAppService.UpdateAdditionalDetailsAsync(employeeId, updateDto);
-
+		var upsertDto = new EmployeeAdditionalDetailsUpsertDto
+		{
+			BplCardNo = request.BplCardNo,
+			PersonWithDisability = request.PersonWithDisability,
+			SecondLanguage = request.SecondLanguage,
+			LibraryMember = request.IsLibraryMember,
+			TransportMember = request.IsTransportMember
+		};
+		await _additionalDetailsAppService.UpsertAsync(employeeId, upsertDto);
 		return Ok();
 	}
 }

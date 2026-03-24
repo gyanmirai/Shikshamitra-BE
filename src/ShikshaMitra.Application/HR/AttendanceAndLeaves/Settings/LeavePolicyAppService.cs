@@ -14,6 +14,7 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
+[RemoteService(false)]
 public class LeavePolicyAppService : CrudAppService<
 	LeavePolicy,
 	LeavePolicyDto,

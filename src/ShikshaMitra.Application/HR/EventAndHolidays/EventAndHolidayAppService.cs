@@ -1,12 +1,18 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.HR.EventAndHolidays;
-// private readonly IFileStorage _fileStorage;
 
+/// <summary>
+/// Deprecated: Use EventAppService and HolidayAppService from HR.Calendar instead.
+/// This service will be removed after data migration is complete.
+/// </summary>
+[Obsolete("Use EventAppService and HolidayAppService from HR.Calendar instead.")]
+[RemoteService(false)]
 public class EventAndHolidayAppService(IEventAndHolidayRepository eventAndHolidayRepository) : CrudAppService<EventAndHoliday, EventAndHolidayDto, Guid, PagedAndSortedResultRequestDto,CreateUpdateEventAndHolidayDto>(eventAndHolidayRepository), IEventAndHolidayAppService
 {
 	public async Task<PagedResultDto<EventAndHolidayDto>> GetEventAndHolidayByMonth(DateTimeOffset date)

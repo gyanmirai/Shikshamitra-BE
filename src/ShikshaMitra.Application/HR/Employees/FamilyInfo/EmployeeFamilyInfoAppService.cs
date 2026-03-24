@@ -1,13 +1,15 @@
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.HR.Employees.FamilyInfo;
 
-/// <summary>
-/// Application service for managing employee family information.
-/// </summary>
+[RemoteService(false)]
+[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 public class EmployeeFamilyInfoAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeeFamilyMemberRepository familyMemberRepository,

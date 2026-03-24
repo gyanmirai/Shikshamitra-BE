@@ -1,5 +1,3 @@
-﻿using System.ComponentModel.DataAnnotations;
-
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
 /// <summary>
@@ -10,28 +8,21 @@ public class UpdateLeavePolicyDto
 	/// <summary>
 	/// Name of the policy
 	/// </summary>
-	[Required]
-	[StringLength(LeavePolicyConsts.MaxPolicyNameLength, MinimumLength = 1)]
 	public string PolicyName { get; set; } = string.Empty;
 
 	/// <summary>
 	/// Associated leave type
 	/// </summary>
-	[Required]
-	[StringLength(LeavePolicyConsts.MaxLeaveTypeLength, MinimumLength = 1)]
 	public string LeaveType { get; set; } = string.Empty;
 
 	/// <summary>
 	/// Maximum days allowed per year (1-365)
 	/// </summary>
-	[Required]
-	[Range(LeavePolicyConsts.MinMaximumDaysPerYear, LeavePolicyConsts.MaxMaximumDaysPerYear)]
 	public int MaximumDaysPerYear { get; set; }
 
 	/// <summary>
 	/// Paid or Unpaid
 	/// </summary>
-	[Required]
 	public LeavePaidType PaidType { get; set; }
 
 	/// <summary>
@@ -52,6 +43,5 @@ public class UpdateLeavePolicyDto
 	/// <summary>
 	/// Optional description
 	/// </summary>
-	[StringLength(LeavePolicyConsts.MaxDescriptionLength)]
 	public string? Description { get; set; }
 }

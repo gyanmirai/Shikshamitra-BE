@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Common;
+using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.Payroll;
 using System;
 using System.Collections.Generic;
@@ -8,6 +8,14 @@ using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.HR.Employees;
 
+/// <summary>
+/// Deprecated: This interface has been decomposed into focused services.
+/// Use IEmployeePersonalInfoAppService, IEmployeeDocumentAppService,
+/// IEmployeePayrollAppService, IEmployeeSearchAppService,
+/// IEmployeeFamilyInfoAppService, IEmployeeWorkExperienceAppService,
+/// IEmployeeAdditionalDetailsAppService, and IEmployeeStatusAppService instead.
+/// </summary>
+[Obsolete("Use the focused employee service interfaces instead. See docs/implementation/hr/application-layer-patterns.md")]
 public interface
 	IEmployeeAppService : ICrudAppService<EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>
 {

@@ -1,4 +1,4 @@
-﻿# 🚀 UserScope API - Quick Start Guide
+# 🚀 UserScope API - Quick Start Guide
 
 **Get up and running in 5 minutes!**
 
@@ -233,8 +233,7 @@ Solution:
 
 For complete details:
 - **UserScope-API-README.md** - Complete collection guide
-- **docs/UserScope-QuickReference.md** - API patterns
-- **docs/UserScope-Comprehensive.md** - In-depth guide
+- **[docs/platform/UserScope-Usage.md](../docs/platform/UserScope-Usage.md)** - UserScope model and usage
 
 ---
 
@@ -243,7 +242,7 @@ For complete details:
 1. Check request description (each request has notes)
 2. View test script (explains what gets auto-saved)
 3. Read UserScope-API-README.md
-4. Refer to docs/UserScope-*.md files
+4. Refer to [docs/platform/UserScope-Usage.md](../docs/platform/UserScope-Usage.md)
 
 ---
 

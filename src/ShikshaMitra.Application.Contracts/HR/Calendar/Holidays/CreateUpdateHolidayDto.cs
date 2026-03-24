@@ -13,38 +13,31 @@ public class CreateUpdateHolidayDto : IValidatableObject
     /// Academic Year ID for filtering holidays by academic year (required)
     /// UUID format: 550e8400-e29b-41d4-a716-446655440000
     /// </summary>
-    [Required(ErrorMessage = "Academic year ID is required")]
     public Guid AcademicYearId { get; set; }
 
     /// <summary>
     /// Name of the holiday (1-256 characters, required)
     /// </summary>
-    [Required(ErrorMessage = "Holiday name is required")]
-    [StringLength(256, MinimumLength = 1, ErrorMessage = "Holiday name must be between 1 and 256 characters")]
     public string HolidayName { get; set; }
 
     /// <summary>
     /// Reference to the EventType, required
     /// </summary>
-    [Required(ErrorMessage = "Holiday type ID is required")]
     public Guid HolidayTypeId { get; set; }
 
     /// <summary>
     /// Start date of the holiday, required
     /// </summary>
-    [Required(ErrorMessage = "Start date is required")]
     public DateTimeOffset StartDate { get; set; }
 
     /// <summary>
     /// End date of the holiday (must be >= StartDate), required
     /// </summary>
-    [Required(ErrorMessage = "End date is required")]
     public DateTimeOffset EndDate { get; set; }
 
     /// <summary>
     /// Optional description (0-500 characters)
     /// </summary>
-    [StringLength(500, ErrorMessage = "Description cannot exceed 500 characters")]
     public string? Description { get; set; }
 
     /// <summary>

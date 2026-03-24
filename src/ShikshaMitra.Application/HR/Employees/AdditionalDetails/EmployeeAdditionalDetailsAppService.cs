@@ -1,13 +1,15 @@
-﻿using System;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
+using System;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 
 namespace ShikshaMitra.HR.Employees.AdditionalDetails;
 
-/// <summary>
-/// Application service for managing employee additional details.
-/// </summary>
+[RemoteService(false)]
+[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_AdditionalDetails.View)]
 public class EmployeeAdditionalDetailsAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeeAdditionalDetailsRepository additionalDetailsRepository)

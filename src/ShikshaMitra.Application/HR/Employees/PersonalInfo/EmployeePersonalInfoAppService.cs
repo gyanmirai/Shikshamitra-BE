@@ -1,6 +1,9 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -8,183 +11,106 @@ using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Guids;
+using Volo.Abp.EventBus.Distributed;
 using Volo.Abp.Identity;
 using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
 
 /// <summary>
-/// Application service for managing employee personal information.
+/// Single owner of employee lifecycle: create, read, update basic info.
 /// </summary>
 [RemoteService(false)]
+[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 public class EmployeePersonalInfoAppService(
 	IEmployeeRepository employeeRepository,
+	IEmployeeFamilyMemberRepository familyMemberRepository,
 	EmployeeManager employeeManager,
 	IdentityUserManager userManager,
 	IIdentityUserRepository userRepository,
 	ILookupNormalizer lookupNormalizer,
 	IGuidGenerator guidGenerator,
 	IEmployeeEmailService emailService,
+	IDistributedEventBus distributedEventBus,
 	ILogger<EmployeePersonalInfoAppService> logger)
 	: ApplicationService, IEmployeePersonalInfoAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	public async Task<EmployeePersonalInfoDto> CreateAsync(CreateEmployeePersonalInfoDto input)
 	{
-		// Validate required fields for user creation
 		if (string.IsNullOrWhiteSpace(input.Email))
-		{
-			throw new UserFriendlyException("Email is required for employee creation.");
-		}
+			throw new BusinessException(HRErrorCodes.EmployeeEmailRequired);
 
 		if (string.IsNullOrWhiteSpace(input.MobileNo))
-		{
-			throw new UserFriendlyException("Mobile number is required for employee creation.");
-		}
+			throw new BusinessException(HRErrorCodes.EmployeeMobileRequired);
 
-		// Validate mobile number length
 		if (input.MobileNo.Length < 4)
-		{
-			throw new UserFriendlyException("Mobile number must be at least 4 digits.");
-		}
+			throw new BusinessException(HRErrorCodes.EmployeeMobileTooShort);
 
-		// Check if email already exists
 		var normalizedEmail = lookupNormalizer.NormalizeEmail(input.Email);
 		var existingUserByEmail = await userRepository.FindByNormalizedEmailAsync(normalizedEmail);
 		if (existingUserByEmail != null)
+			throw new BusinessException(HRErrorCodes.EmployeeEmailAlreadyExists);
+
+		using var uow = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true });
+
+		var username = await GenerateUniqueUsernameAsync(input.FirstName, input.LastName);
+		var last4Digits = input.MobileNo[^4..];
+		var capitalizedUsername = char.ToUpper(username[0]) + username[1..];
+		var password = $"{capitalizedUsername}@{last4Digits}";
+
+		var user = new IdentityUser(guidGenerator.Create(), username, input.Email, CurrentTenant.Id);
+		user.Name = input.FirstName;
+		user.Surname = input.LastName;
+		user.SetEmailConfirmed(true);
+		user.SetPhoneNumber(input.MobileNo, false);
+
+		var userCreateResult = await userManager.CreateAsync(user, password);
+		if (!userCreateResult.Succeeded)
 		{
-			throw new UserFriendlyException($"Email '{input.Email}' is already in use.");
+			var errors = string.Join(", ", userCreateResult.Errors.Select(e => e.Description));
+			logger.LogError("User creation failed for {Email}: {Errors}", input.Email, errors);
+			throw new BusinessException(HRErrorCodes.EmployeeUserCreationFailed).WithData("details", errors);
 		}
 
-		// Use explicit transaction to ensure atomicity
-		using (var uow = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true }))
+		var employee = await employeeManager.CreateEmployeeAsync(
+			userId: user.Id, roleId: input.RoleId,
+			firstName: input.FirstName, lastName: input.LastName,
+			middleName: input.MiddleName, shortName: input.ShortName,
+			employeeStatusType: input.EmployeeStatusType, dateOfBirth: input.DateOfBirth,
+			familyCast: input.FamilyCaste, castType: input.CastType,
+			genderType: input.GenderType, religion: input.Religion,
+			maritalStatus: input.MaritalStatus, bloodGroup: input.BloodGroup,
+			mobileNo: input.MobileNo, secondaryMobileNo: input.SecondaryMobileNo,
+			email: input.Email, address1: input.Address1, address2: input.Address2,
+			address3: input.Address3, department: input.Department,
+			designation: input.Designation, dateOfJoining: input.DateOfJoining,
+			employeeGroup: input.EmployeeGroup, qualification: input.Qualification,
+			identificationMark1: input.IdentificationMark1, city: input.City,
+			state: input.State, country: input.Country, pinCode: input.Pincode,
+			shiftId: input.ShiftId);
+
+		employee = await employeeRepository.InsertAsync(employee);
+		await uow.CompleteAsync();
+
+		logger.LogInformation(
+			"Employee created: EmployeeId={EmployeeId}, Code={EmployeeCode}, Email={Email}",
+			employee.Id, employee.EmployeeCode, input.Email);
+
+		await distributedEventBus.PublishAsync(new HR.Events.EmployeeCreatedEto
 		{
-			try
-			{
-				// Step 1: Generate unique username
-				var username = await GenerateUniqueUsernameAsync(input.FirstName, input.LastName);
+			EmployeeId = employee.Id,
+			EmployeeCode = employee.EmployeeCode,
+			FullName = $"{input.FirstName} {input.LastName}".Trim(),
+			Email = input.Email,
+			TenantId = CurrentTenant.Id,
+			CreatedAt = DateTime.UtcNow
+		});
 
-				// Step 2: Generate password (Username@last4digitsOfMobile - with uppercase first letter)
-				var last4Digits = input.MobileNo.Substring(input.MobileNo.Length - 4);
-				var capitalizedUsername = char.ToUpper(username[0]) + username.Substring(1);
-				var password = $"{capitalizedUsername}@{last4Digits}";
+		var fullName = $"{input.FirstName} {input.LastName}".Trim();
+		await emailService.SendWelcomeEmailAsync(input.Email, fullName, username, password);
 
-				// Step 3: Create user
-				var user = new IdentityUser(
-					guidGenerator.Create(),
-					username,
-					input.Email,
-					CurrentTenant.Id
-				);
-
-				user.Name = input.FirstName;
-				user.Surname = input.LastName;
-				user.SetEmailConfirmed(true);
-				user.SetPhoneNumber(input.MobileNo, false);
-
-				// Create user with password
-				var userCreateResult = await userManager.CreateAsync(user, password);
-				if (!userCreateResult.Succeeded)
-				{
-					throw new UserFriendlyException(
-						"Failed to create user: " +
-						string.Join(", ", userCreateResult.Errors.Select(e => e.Description))
-					);
-				}
-
-				// Verify user was created successfully
-				var createdUser = await userRepository.FindAsync(user.Id);
-				if (createdUser == null)
-				{
-					throw new BusinessException("User was not created successfully.");
-				}
-
-				// Step 4: Create employee using EmployeeManager with user's ID
-				var employee = await employeeManager.CreateEmployeeAsync(
-					userId: user.Id,
-					roleId: input.RoleId,
-					firstName: input.FirstName,
-					lastName: input.LastName,
-					middleName: input.MiddleName,
-					shortName: input.ShortName,
-					employeeStatusType: input.EmployeeStatusType,
-					dateOfBirth: input.DateOfBirth,
-					familyCast: input.FamilyCaste, // DTO uses correct spelling, entity uses FamilyCast
-					castType: input.CastType,
-					genderType: input.GenderType,
-					religion: input.Religion,
-					maritalStatus: input.MaritalStatus,
-					bloodGroup: input.BloodGroup,
-					mobileNo: input.MobileNo,
-					secondaryMobileNo: input.SecondaryMobileNo,
-					email: input.Email,
-					address1: input.Address1,
-					address2: input.Address2,
-					address3: input.Address3,
-					department: input.Department,
-					designation: input.Designation,
-					dateOfJoining: input.DateOfJoining,
-					employeeGroup: input.EmployeeGroup,
-					qualification: input.Qualification,
-					identificationMark1: input.IdentificationMark1,
-					city: input.City,
-					state: input.State,
-					country: input.Country,
-					pinCode: input.Pincode,
-					shiftId: input.ShiftId
-				);
-
-				// Save the employee
-				employee = await employeeRepository.InsertAsync(employee);
-
-				logger.LogInformation(
-					"[PersonalInfo] Employee created successfully: EmployeeId={EmployeeId}, EmployeeCode={EmployeeCode}",
-					employee.Id,
-					employee.EmployeeCode
-				);
-
-				// Commit transaction
-				await uow.CompleteAsync();
-
-				logger.LogInformation(
-					"[PersonalInfo] Transaction completed: EmployeeId={EmployeeId}, Email={Email}",
-					employee.Id,
-					input.Email
-				);
-
-				// Send welcome email with credentials
-				var fullName = $"{input.FirstName} {input.LastName}".Trim();
-				await emailService.SendWelcomeEmailAsync(input.Email, fullName, username, password);
-
-				logger.LogInformation(
-					"[PersonalInfo] Welcome email sent to: {Email}",
-					input.Email
-				);
-
-				// Return the mapped DTO
-				return MapToDto(employee);
-			}
-			catch (UserFriendlyException ex)
-			{
-				logger.LogWarning(
-					ex,
-					"[PersonalInfo] Validation failed for {Email}: {Message}",
-					input.Email,
-					ex.Message
-				);
-				// Transaction will be automatically rolled back
-				throw;
-			}
-			catch (Exception ex)
-			{
-				logger.LogError(
-					ex,
-					"[PersonalInfo] Unexpected error for {Email}",
-					input.Email
-				);
-				// Transaction will be automatically rolled back
-				throw;
-			}
-		}
+		return MapToDto(employee);
 	}
 
 	public async Task<EmployeePersonalInfoDto> GetAsync(Guid id)
@@ -236,6 +162,62 @@ public class EmployeePersonalInfoAppService(
 
 		// Return the mapped DTO
 		return MapToDto(employee);
+	}
+
+	public async Task<EmployeeDto> GetByUserIdAsync(Guid userId)
+	{
+		var employee = await employeeRepository.GetEmployeeByUserIdAsync(userId)
+			?? throw new EntityNotFoundException(typeof(Employee), userId);
+
+		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
+	}
+
+	public async Task<EmployeeDto> GetWithDetailsAsync(Guid id)
+	{
+		var employee = await employeeRepository.GetWithDetailsAsync(id, includePayrollStructure: true)
+			?? throw new EntityNotFoundException(typeof(Employee), id);
+
+		var employeeDto = ObjectMapper.Map<Employee, EmployeeDto>(employee);
+
+		var familyMembers = await familyMemberRepository.GetByEmployeeIdAsync(id);
+		var father = familyMembers.FirstOrDefault(fm => fm.RelationType == FamilyRelationType.Father);
+		var mother = familyMembers.FirstOrDefault(fm => fm.RelationType == FamilyRelationType.Mother);
+		var spouse = familyMembers.FirstOrDefault(fm => fm.RelationType == FamilyRelationType.Spouse);
+
+		employeeDto.FatherDetails = MapFamilyMemberToContactDetailsDto(father);
+		employeeDto.MotherDetails = MapFamilyMemberToContactDetailsDto(mother);
+		employeeDto.SpouseDetails = MapFamilyMemberToContactDetailsDto(spouse);
+
+		return employeeDto;
+	}
+
+	private static ContactDetailsDto? MapFamilyMemberToContactDetailsDto(EmployeeFamilyMember? member)
+	{
+		if (member == null) return null;
+
+		return new ContactDetailsDto
+		{
+			Name = member.Name,
+			Occupation = member.Occupation,
+			ContactNo = member.ContactNo,
+			Address1 = member.Address1,
+			Address2 = member.Address2,
+			Address3 = member.Address3,
+			City = member.City,
+			StateName = member.StateName,
+			StateIsoCode = member.StateIsoCode,
+			CountryName = member.CountryName,
+			CountryIsoCode = member.CountryIsoCode,
+			PinCode = member.PinCode
+		};
+	}
+
+	public async Task<EmployeeDto> UpdateBankDetailsAsync(Guid employeeId, BankDetailsDto input)
+	{
+		var bankDetails = ObjectMapper.Map<BankDetailsDto, BankDetails>(input);
+		var employee = await employeeManager.UpdateBankDetailsByEmployeeIdAsync(employeeId, bankDetails);
+		employee = await employeeRepository.UpdateAsync(employee);
+		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
 	}
 
 	private EmployeePersonalInfoDto MapToDto(Employee employee)
@@ -329,7 +311,7 @@ public class EmployeePersonalInfoAppService(
 			sequence++;
 			if (sequence > 99)
 			{
-				throw new UserFriendlyException("Unable to generate unique username.");
+				throw new BusinessException(HRErrorCodes.EmployeeUsernameGenerationFailed);
 			}
 		}
 	}

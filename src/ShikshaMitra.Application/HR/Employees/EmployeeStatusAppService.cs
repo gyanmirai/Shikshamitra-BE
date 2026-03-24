@@ -1,44 +1,43 @@
-﻿using System;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
+using System;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
+using Volo.Abp.EventBus.Distributed;
 
 namespace ShikshaMitra.HR.Employees;
 
-/// <summary>
-/// Application service for managing employee status.
-/// </summary>
-public class EmployeeStatusAppService : ApplicationService, IEmployeeStatusAppService
+[RemoteService(false)]
+[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
+public class EmployeeStatusAppService(
+	IEmployeeRepository employeeRepository,
+	EmployeeManager employeeManager,
+	IDistributedEventBus distributedEventBus)
+	: ApplicationService, IEmployeeStatusAppService
 {
-	private readonly IEmployeeRepository _employeeRepository;
-	private readonly EmployeeManager _employeeManager;
-
-	public EmployeeStatusAppService(
-		IEmployeeRepository employeeRepository,
-		EmployeeManager employeeManager)
-	{
-		_employeeRepository = employeeRepository;
-		_employeeManager = employeeManager;
-	}
-
-	/// <inheritdoc />
 	public async Task<EmployeeStatusResponseDto> ChangeStatusAsync(Guid employeeId, ChangeEmployeeStatusDto input)
 	{
-		// Get the employee to capture previous status
-		var employee = await _employeeRepository.GetAsync(employeeId)
+		var employee = await employeeRepository.GetAsync(employeeId)
 			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
 
 		var previousStatus = employee.EmployeeStatusType;
 
-		// Update the status using domain manager
-		employee = await _employeeManager.UpdateEmployeeStatusAsync(
-			employeeId,
-			input.EmployeeStatusType,
-			null);
+		employee = await employeeManager.UpdateEmployeeStatusAsync(
+			employeeId, input.EmployeeStatusType, null);
 
-		// Save the changes
-		await _employeeRepository.UpdateAsync(employee);
+		await employeeRepository.UpdateAsync(employee);
+
+		await distributedEventBus.PublishAsync(new HR.Events.EmployeeStatusChangedEto
+		{
+			EmployeeId = employee.Id,
+			PreviousStatus = previousStatus?.ToString(),
+			CurrentStatus = input.EmployeeStatusType.ToString(),
+			TenantId = CurrentTenant.Id,
+			ChangedAt = DateTime.UtcNow
+		});
 
 		return new EmployeeStatusResponseDto
 		{

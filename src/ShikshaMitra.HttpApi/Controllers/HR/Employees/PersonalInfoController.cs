@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -13,7 +13,6 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 
 /// <summary>
 /// Employee personal information management controller
-/// Handles CRUD operations for employee personal data in the school ERP system
 /// </summary>
 [Area("app")]
 [RemoteService(Name = "Default")]
@@ -41,11 +40,8 @@ public class PersonalInfoController : AbpControllerBase
 	public virtual async Task<PersonalInfoResponse> CreateAsync(
 		[FromBody, Required] PersonalInfoRequest request)
 	{
-		ValidateRequest(request);
-
 		var createDto = PersonalInfoContractMapper.ToCreateDto(request);
 		var result = await _personalInfoAppService.CreateAsync(createDto);
-
 		return PersonalInfoContractMapper.ToResponse(result);
 	}
 
@@ -58,9 +54,7 @@ public class PersonalInfoController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<PersonalInfoResponse> GetAsync([FromRoute, Required] Guid employeeId)
 	{
-		// Check access rights (IDOR protection)
 		await _authorizationService.CheckEmployeeAccessAsync(employeeId);
-
 		var result = await _personalInfoAppService.GetAsync(employeeId);
 		return PersonalInfoContractMapper.ToResponse(result);
 	}
@@ -77,71 +71,9 @@ public class PersonalInfoController : AbpControllerBase
 		[FromRoute, Required] Guid employeeId,
 		[FromBody, Required] PersonalInfoRequest request)
 	{
-		// Check modify access (IDOR protection)
 		await _authorizationService.CheckEmployeeModifyAccessAsync(employeeId);
-
-		ValidateRequest(request);
-
 		var updateDto = PersonalInfoContractMapper.ToUpdateDto(request);
 		var result = await _personalInfoAppService.UpdateAsync(employeeId, updateDto);
-
 		return PersonalInfoContractMapper.ToResponse(result);
 	}
-
-	#region Validation
-
-	private void ValidateRequest(PersonalInfoRequest request)
-	{
-		if (string.IsNullOrWhiteSpace(request.FirstName))
-		{
-			throw new UserFriendlyException("First name is required.");
-		}
-
-		if (string.IsNullOrWhiteSpace(request.LastName))
-		{
-			throw new UserFriendlyException("Last name is required.");
-		}
-
-		if (string.IsNullOrWhiteSpace(request.MobileNo))
-		{
-			throw new UserFriendlyException("Mobile number is required.");
-		}
-
-		if (request.RoleId == Guid.Empty)
-		{
-			throw new UserFriendlyException("Role ID is required.");
-		}
-
-		if (request.ShiftId == Guid.Empty)
-		{
-			throw new UserFriendlyException("Shift ID is required.");
-		}
-
-		// Validate age >= 18 at joining date
-		if (request.Dob.HasValue)
-		{
-			var age = request.Doj.Year - request.Dob.Value.Year;
-			if (request.Doj < request.Dob.Value.AddYears(age))
-			{
-				age--;
-			}
-
-			if (age < 18)
-			{
-				throw new UserFriendlyException("Employee must be at least 18 years old at the time of joining.");
-			}
-		}
-
-		if (request.Dob.HasValue && request.Dob.Value >= DateTime.UtcNow)
-		{
-			throw new UserFriendlyException("Date of birth cannot be in the future.");
-		}
-
-		if (request.Dob.HasValue && request.Doj < request.Dob.Value)
-		{
-			throw new UserFriendlyException("Date of joining cannot be before date of birth.");
-		}
-	}
-
-	#endregion
 }

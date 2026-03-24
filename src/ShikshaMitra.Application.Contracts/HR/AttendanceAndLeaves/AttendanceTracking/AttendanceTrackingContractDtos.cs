@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
@@ -139,7 +138,6 @@ public class GetAttendanceDateWiseInput
 	/// <summary>
 	/// Attendance date (supports DD-MM-YYYY format and ISO date-time)
 	/// </summary>
-	[Required]
 	public string AttendanceDate { get; set; } = string.Empty;
 
 	/// <summary>
@@ -147,10 +145,8 @@ public class GetAttendanceDateWiseInput
 	/// </summary>
 	public AttendanceTrackingStatus? Status { get; set; }
 
-	[Range(1, int.MaxValue)]
 	public int Page { get; set; } = 1;
 
-	[Range(10, 100)]
 	public int PageSize { get; set; } = 10;
 }
 
@@ -159,19 +155,16 @@ public class GetAttendanceDateWiseInput
 /// </summary>
 public class GetAttendanceEmployeeWiseInput
 {
-	[Required]
 	public Guid EmployeeId { get; set; }
 
 	/// <summary>
 	/// Start date (DD-MM-YYYY format)
 	/// </summary>
-	[Required]
 	public string StartDate { get; set; } = string.Empty;
 
 	/// <summary>
 	/// End date (DD-MM-YYYY format)
 	/// </summary>
-	[Required]
 	public string EndDate { get; set; } = string.Empty;
 
 	/// <summary>

@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Guids;
@@ -13,6 +14,7 @@ namespace ShikshaMitra.HR.Payroll.SalaryStructure;
 /// <summary>
 /// Application service for managing employee salary structure.
 /// </summary>
+[RemoteService(false)]
 public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSalaryStructureAppService
 {
 	private readonly IEmployeeRepository _employeeRepository;

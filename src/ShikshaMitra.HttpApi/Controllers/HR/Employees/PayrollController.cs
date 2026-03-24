@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -13,7 +13,6 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 
 /// <summary>
 /// Employee payroll information management controller
-/// Handles operations for managing employee payroll data in the school ERP system
 /// </summary>
 [Area("app")]
 [RemoteService(Name = "Default")]
@@ -21,14 +20,14 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 [Authorize]
 public class PayrollController : AbpControllerBase
 {
-	private readonly IEmployeeAppService _employeeAppService;
+	private readonly IEmployeePayrollAppService _payrollAppService;
 	private readonly IEmployeeAuthorizationService _authorizationService;
 
 	public PayrollController(
-		IEmployeeAppService employeeAppService,
+		IEmployeePayrollAppService payrollAppService,
 		IEmployeeAuthorizationService authorizationService)
 	{
-		_employeeAppService = employeeAppService;
+		_payrollAppService = payrollAppService;
 		_authorizationService = authorizationService;
 	}
 
@@ -41,10 +40,8 @@ public class PayrollController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<PayrollContract> GetAsync([FromRoute, Required] Guid employeeId)
 	{
-		// Check access rights - sensitive data (IDOR protection + ownership check)
 		await _authorizationService.CheckEmployeeAccessAsync(employeeId, requireOwnership: true);
-
-		return await _employeeAppService.GetPayrollContractAsync(employeeId);
+		return await _payrollAppService.GetPayrollContractAsync(employeeId);
 	}
 
 	/// <summary>
@@ -58,10 +55,8 @@ public class PayrollController : AbpControllerBase
 		[FromRoute, Required] Guid employeeId,
 		[FromBody, Required] PayrollContract request)
 	{
-		// Check sensitive field access (only HR Admin)
 		await _authorizationService.CheckSensitiveFieldAccessAsync(employeeId);
-
-		await _employeeAppService.UpdatePayrollContractAsync(employeeId, request);
+		await _payrollAppService.UpdatePayrollContractAsync(employeeId, request);
 		return Ok();
 	}
 }

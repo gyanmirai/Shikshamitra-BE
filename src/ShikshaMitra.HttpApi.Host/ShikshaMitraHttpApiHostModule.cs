@@ -391,33 +391,31 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 	{
 		var fileName = "encryption-certificate.pfx";
 		var password = config["MyAppCertificate:X590:Password"];
-
 		var file = Path.Combine(environment.ContentRootPath, fileName);
+
 		if (File.Exists(file))
 		{
 			var created = File.GetCreationTime(file);
-			var days = (DateTime.Now - created).TotalDays;
-			if (days > 180)
+			if ((DateTime.Now - created).TotalDays <= 180)
 			{
-				File.Delete(file);
+				// Fix: Added EphemeralKeySet to avoid "Access Denied" on restricted environments
+				return new X509Certificate2(file, password,
+					X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet);
 			}
-			else
-			{
-				return new X509Certificate2(file, password, X509KeyStorageFlags.MachineKeySet);
-			}
+			File.Delete(file);
 		}
 
+		using var algorithm = RSA.Create(2048);
+		var subject = new X500DistinguishedName("CN=ShikshaMitra Encryption");
+		var request = new CertificateRequest(subject, algorithm, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+		request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyEncipherment, true));
 
-		using var algorithm = RSA.Create(keySizeInBits: 2048);
-		var subject = new X500DistinguishedName("CN=Fabrikam Encryption Certificate");
-		var request = new CertificateRequest(subject, algorithm,
-			HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-		request.CertificateExtensions.Add(new X509KeyUsageExtension(
-			X509KeyUsageFlags.KeyEncipherment, critical: true));
-		var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow,
-			DateTimeOffset.UtcNow.AddYears(2));
-		File.WriteAllBytes(file, certificate.Export(X509ContentType.Pfx, password));
-		return new X509Certificate2(file, password, X509KeyStorageFlags.MachineKeySet);
+		var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddYears(2));
+		var pfxData = certificate.Export(X509ContentType.Pfx, password);
+		File.WriteAllBytes(file, pfxData);
+
+		return new X509Certificate2(pfxData, password,
+			X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet);
 	}
 
 	private X509Certificate2 GetSigningCertificate(IWebHostEnvironment environment, IConfiguration config)
@@ -429,27 +427,25 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		if (File.Exists(file))
 		{
 			var created = File.GetCreationTime(file);
-			var days = (DateTime.Now - created).TotalDays;
-			if (days > 180)
+			if ((DateTime.Now - created).TotalDays <= 180)
 			{
-				File.Delete(file);
+				return new X509Certificate2(file, password,
+					X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet);
 			}
-			else
-			{
-				return new X509Certificate2(file, password, X509KeyStorageFlags.MachineKeySet);
-			}
+			File.Delete(file);
 		}
 
-		using var algorithm = RSA.Create(keySizeInBits: 2048);
-		var subject = new X500DistinguishedName("CN=Fabrikam Signing Certificate");
+		using var algorithm = RSA.Create(2048);
+		var subject = new X500DistinguishedName("CN=ShikshaMitra Signing");
 		var request = new CertificateRequest(subject, algorithm, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-		request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature,
-			critical: true));
+		request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
 
 		var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddYears(2));
+		var pfxData = certificate.Export(X509ContentType.Pfx, password);
+		File.WriteAllBytes(file, pfxData);
 
-		File.WriteAllBytes(file, certificate.Export(X509ContentType.Pfx, password));
-		return new X509Certificate2(file, password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet);
+		return new X509Certificate2(pfxData, password,
+			X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet);
 	}
 
 	public override void OnApplicationInitialization(ApplicationInitializationContext context)

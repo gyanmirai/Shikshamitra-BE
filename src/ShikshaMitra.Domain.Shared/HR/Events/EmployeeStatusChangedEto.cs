@@ -10,6 +10,8 @@ public class EmployeeStatusChangedEto
 	public Guid EmployeeId { get; set; }
 	public string? PreviousStatus { get; set; }
 	public string CurrentStatus { get; set; } = default!;
+	/// <summary>Audit trail: optional reason supplied when changing status.</summary>
+	public string? ChangeReason { get; set; }
 	public Guid? TenantId { get; set; }
 	public DateTime ChangedAt { get; set; }
 }

@@ -120,6 +120,8 @@ Behavior specifications (PRD) and API contracts per module. Each submodule has a
 
 **Obsolete:** [HR-Employee-PersonalInfoAPI.md](./HR-Employee-PersonalInfoAPI.md) — replaced by the employees PRD contract above.
 
+**Legacy pointer:** [HR-Employee-Status.md](./HR-Employee-Status.md) — redirects to [employees API contract](./prd/hr/employees/api-contract.md) for `PUT /api/employees/{employeeId}/status`.
+
 ### `docs/api/`
 
 Remaining API reference (rooms, general endpoints). HR-specific docs have moved to `docs/prd/hr/`.

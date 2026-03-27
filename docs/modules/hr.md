@@ -138,6 +138,7 @@ All controllers delegate to focused service interfaces. Contract mappers live in
 | `WorkExperienceController` | `api/employees/{id}/work-experience` | `IEmployeeWorkExperienceAppService` | Work experience |
 | `PayrollController` | `api/employees/{id}/payroll` | `IEmployeePayrollAppService` | Employee payroll details |
 | `ReportingManagerController` | `api/employees/reporting-manager` | `ReportingManagerAppService` | Reporting hierarchy |
+| `EmployeeStatusController` | `api/employees/{id}/status` | `IEmployeeStatusAppService` | Employment status (Active / Inactive / Left / Retired) |
 | `DocumentConfigController` | `api/employees/document-config` | `DocumentSettingAppService` | Document settings |
 
 ---

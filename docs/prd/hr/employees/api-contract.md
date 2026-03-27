@@ -60,6 +60,12 @@ All endpoints require a Bearer token and `__tenant` header.
 | PUT | `/api/employees/{employeeId}/reporting-manager` | Assign reporting manager |
 | GET | `/api/employees/reporting-manager/{managerId}/employees` | List employees under manager |
 
+### Employment status (`api/employees`)
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| PUT | `/api/employees/{employeeId}/status` | Change employment status (Active / Inactive / Left / Retired) |
+
 ### Document Configuration (`api/employees/documents`)
 
 | Method | Route | Description |
@@ -389,6 +395,41 @@ EmployeesUnderManagerResponse {
   employees: [{ id, employeeIdentifier, fullName, designation }]
 }
 ```
+
+---
+
+### PUT /api/employees/{employeeId}/status
+
+**Permission:** `HR.Employee.EmployeeList.Add` (same as other employee writes). **Modify access:** `CheckEmployeeModifyAccessAsync` (HR Manager / HR Admin or host admin; tenant-isolated).
+
+**Request body:**
+
+| Field | Type | Required | Constraints |
+|-------|------|----------|-------------|
+| employeeStatusType | int | yes | 0=Active, 1=Inactive, 2=Left, 3=Retired |
+| remarks | string | no | max 2000 chars; **required non-empty** when `employeeStatusType` is 2 (Left) or 3 (Retired) |
+
+**Response (200):**
+
+```
+EmployeeStatusUpdateResponse {
+  employeeId: string            // Guid as string
+  previousStatus: int?         // null if previously unset
+  currentStatus: int
+  updatedAt: string            // RFC 3339 date-time (DateTimeOffset)
+}
+```
+
+**Behavior:**
+
+- **Idempotent:** If the employee already has the requested status, returns **200** with current data; does **not** persist again, invalidate cache, or publish `EmployeeStatusChangedEto`.
+- **Transitions:** `EmployeeStatusTransitionValidator` enforces rules (see [prd.md](prd.md) §10). Currently: non-empty `remarks` when target is Left or Retired; **Left** or **Retired** → **Active** is not allowed.
+- **Errors:** Validation uses ABP/FluentValidation (`400`). Business rules use `BusinessException` with codes below. **403** if modify access denied. **404** if employee not found.
+
+| Code | When |
+|------|------|
+| `HR:Employee:010024` | Remarks required for transition to Left or Retired |
+| `HR:Employee:010025` | Disallowed transition (e.g. Left/Retired → Active) |
 
 ---
 

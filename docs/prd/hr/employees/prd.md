@@ -73,8 +73,14 @@ Manages the full employee lifecycle within a multi-tenant school: onboarding, pr
 
 ### 10. Status Management
 
-1. Admin changes employee status (Active, Inactive, Left, Retired).
-2. System publishes `EmployeeStatusChangedEto` (distributed event).
+1. Admin changes employment status via `PUT /api/employees/{employeeId}/status` with `employeeStatusType` (0–3) and optional `remarks` (stored as `ChangeReason` on the employee).
+2. Before update: `CheckEmployeeModifyAccessAsync` runs (HR Manager / HR Admin or host admin; tenant isolation).
+3. `EmployeeStatusTransitionValidator` enforces rules (single place to extend the matrix):
+   - Non-empty trimmed `remarks` required when the **target** status is **Left** or **Retired**.
+   - **Left** or **Retired** → **Active** is rejected.
+4. **Idempotent:** Requesting the same status as the current one returns success without DB update, cache invalidation, or event.
+5. On a real change: persist via `EmployeeManager.UpdateEmployeeStatusAsync`, invalidate employee cache, publish `EmployeeStatusChangedEto` (includes optional `ChangeReason`).
+6. Permission: `HR.Employee.EmployeeList.Add`.
 
 ### 11. Search and Filter
 
@@ -159,6 +165,8 @@ Additionally, programmatic authorization checks:
 | `HR:Employee:010021` | FamilyMemberNameTooLong | Family member name > 256 chars |
 | `HR:Employee:010022` | FamilyContactTooLong | Family contact > 20 chars |
 | `HR:Employee:010023` | FamilyPincodeTooLong | Family pincode > 10 chars |
+| `HR:Employee:010024` | EmployeeStatusRemarksRequired | Remarks required when status is Left or Retired |
+| `HR:Employee:010025` | EmployeeStatusInvalidTransition | Disallowed status transition |
 | `HR:Employee:010101` | EmployeeDocumentNotFound | Document ID not found |
 | `HR:Employee:010201` | EmployeePayrollStructureRequired | Payroll structure not assigned |
 | `HR:Employee:010202` | EmployeePayrollDetailsRequired | Payroll details missing |
@@ -170,7 +178,7 @@ Additionally, programmatic authorization checks:
 | Event | Trigger | Payload |
 |-------|---------|---------|
 | `EmployeeCreatedEto` | Employee created | EmployeeId, EmployeeCode, FullName, Email, TenantId, CreatedAt |
-| `EmployeeStatusChangedEto` | Status transition | EmployeeId, PreviousStatus, CurrentStatus, TenantId, ChangedAt |
+| `EmployeeStatusChangedEto` | Status transition (not fired on idempotent same-status call) | EmployeeId, PreviousStatus, CurrentStatus, ChangeReason (optional), TenantId, ChangedAt |
 
 ---
 

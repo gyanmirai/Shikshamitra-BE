@@ -1,17 +1,16 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using ShikshaMitra.Finance.Setting.ConcessionType;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Finance.Setting.ConcessionTypes;
+using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Finance.Setting;
 
 public class ConcessionTypeDocumentFormatConfiguration : IEntityTypeConfiguration<ConcessionTypeDocumentFormat>
 {
-	public void Configure(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<ConcessionTypeDocumentFormat> builder)
+	public void Configure(EntityTypeBuilder<ConcessionTypeDocumentFormat> builder)
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ConcessionTypeDocumentFormats", ShikshaMitraConsts.DbSchema);
 
-		builder.HasKey(e => e.ConcessionTypeDocumentId);
-		builder.Property(e => e.ConcessionTypeDocumentId).ValueGeneratedNever();
-		builder.Property(e => e.DocumentType).IsRequired();
+		builder.ConfigureByConvention();
 	}
 }

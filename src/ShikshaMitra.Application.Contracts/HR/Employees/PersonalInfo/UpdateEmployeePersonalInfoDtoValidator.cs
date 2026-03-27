@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using FluentValidation;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
@@ -16,6 +18,9 @@ public class UpdateEmployeePersonalInfoDtoValidator : AbstractValidator<UpdateEm
 
 		RuleFor(x => x.RoleId).NotEmpty();
 
+		RuleFor(x => x.ShiftId).Must(id => id.HasValue && id.Value != Guid.Empty)
+			.WithMessage("Shift is required.");
+
 		RuleFor(x => x.MiddleName).MaximumLength(256);
 		RuleFor(x => x.ShortName).MaximumLength(128);
 		RuleFor(x => x.FamilyCaste).MaximumLength(128);
@@ -26,6 +31,12 @@ public class UpdateEmployeePersonalInfoDtoValidator : AbstractValidator<UpdateEm
 			.MaximumLength(15)
 			.Matches(@"^\+?[\d\s\-()]+$")
 			.When(x => !string.IsNullOrEmpty(x.SecondaryMobileNo));
+
+		RuleFor(x => x.SecondaryMobileNo)
+			.Must((dto, secondary) => string.IsNullOrWhiteSpace(secondary) || string.IsNullOrWhiteSpace(dto.MobileNo) ||
+				NormalizeDigits(dto.MobileNo) != NormalizeDigits(secondary))
+			.WithMessage("Secondary mobile number must be different from the primary mobile number.")
+			.When(x => !string.IsNullOrWhiteSpace(x.SecondaryMobileNo) && !string.IsNullOrWhiteSpace(x.MobileNo));
 
 		RuleFor(x => x.Email)
 			.MaximumLength(256)
@@ -46,4 +57,7 @@ public class UpdateEmployeePersonalInfoDtoValidator : AbstractValidator<UpdateEm
 			.Matches(@"^\d{6}$")
 			.When(x => !string.IsNullOrEmpty(x.Pincode));
 	}
+
+	private static string NormalizeDigits(string? value) =>
+		value == null ? string.Empty : new string(value.Where(char.IsDigit).ToArray());
 }

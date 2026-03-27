@@ -160,9 +160,9 @@ Create a new employee.
 | familyCaste | string | no | max 128 |
 | maritalStatus | int | no | 0=Unmarried, 1=Married, 2=Divorced, 3=Widowed |
 | bloodGroup | int | no | 1=A+ .. 8=O- |
-| email | string | no | valid email, max 256 |
+| email | string | **yes** (create) | valid email, max 256; required when creating an employee (identity + welcome flow) |
 | mobileNo | string | yes | `^[6-9]\d{9}$`, max 15 |
-| secondaryMobileNo | string | no | max 15 |
+| secondaryMobileNo | string | no | max 15; if set, must use a different number than `mobileNo` (digits compared after normalization) |
 | doj | DateTime | yes | <= 1 year in future |
 | isTeaching | bool | yes | |
 | department | string | no | |
@@ -185,7 +185,22 @@ PersonalInfoResponse {
 }
 ```
 
-**Status codes:** 201, 400 (validation)
+**Status codes:** 201, 400 (validation or business rule), 403 (missing HR employee-create permission)
+
+**Error response (typical):** HTTP 4xx with JSON body:
+
+```
+{
+  "isSuccess": false,
+  "error": {
+    "code": "VALIDATION_ERROR" | "BUSINESS_ERROR" | ...,
+    "message": "human-readable summary",
+    "fields": { "mobileNo": "...", "email": "..." }
+  }
+}
+```
+
+`fields` is present for many validation failures (per-property messages); it may be omitted when not applicable.
 
 ---
 
@@ -201,7 +216,7 @@ PersonalInfoResponse {
 
 **Request body:** `PersonalInfoRequest` (same shape as create, relaxed required fields)
 
-**Status codes:** 200, 400, 403, 404
+**Status codes:** 200, 400 (validation or business rule), 403, 404
 
 ---
 

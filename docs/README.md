@@ -77,6 +77,7 @@ Hierarchical access: Board → Medium → Stage → Class → Division. Principl
 | **PRD & API contracts** | |
 | HR PRD index | [prd/hr/README.md](./prd/hr/README.md) |
 | Employees | [prd/hr/employees/](./prd/hr/employees/prd.md) |
+| Employees API contract | [prd/hr/employees/api-contract.md](./prd/hr/employees/api-contract.md) |
 | Calendar | [prd/hr/calendar/](./prd/hr/calendar/prd.md) |
 | Attendance & Leaves | [prd/hr/attendance-leaves/](./prd/hr/attendance-leaves/prd.md) |
 | Payroll Operations | [prd/hr/payroll/](./prd/hr/payroll/prd.md) |
@@ -115,7 +116,9 @@ Hierarchical access: Board → Medium → Stage → Class → Division. Principl
 
 ### `docs/prd/`
 
-Behavior specifications (PRD) and API contracts per module. Each submodule has a `prd.md` (business rules, permissions, error codes) and `api-contract.md` (endpoints, request/response shapes). The source of truth for HR API surface.
+Behavior specifications (PRD) and API contracts per module. Each submodule has a `prd.md` (business rules, permissions, error codes) and `api-contract.md` (endpoints, request/response shapes). The source of truth for HR API surface. After building `ShikshaMitra.HttpApi.Host`, OpenAPI JSON is emitted under `src/ShikshaMitra.HttpApi.Host/obj/**/EndpointInfo/` (use Swagger UI at runtime for the live schema).
+
+**Obsolete:** [HR-Employee-PersonalInfoAPI.md](./HR-Employee-PersonalInfoAPI.md) — replaced by the employees PRD contract above.
 
 ### `docs/api/`
 

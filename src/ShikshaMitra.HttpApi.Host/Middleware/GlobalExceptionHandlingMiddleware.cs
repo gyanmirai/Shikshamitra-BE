@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common.Responses;
@@ -81,14 +81,14 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 			context.Response.Clear();
 		}
 
-		var (errorCode, errorMessage, errorData) = GetErrorDetailsFromResponse(responseBody, statusCode);
+		var (errorCode, errorMessage, errorData, validationFields) = GetErrorDetailsFromResponse(responseBody, statusCode);
 
 		// Localize the error message if it looks like a localization key
 		var localizedMessage = LocalizeErrorMessage(errorCode ?? errorMessage, errorData);
 
 		var error = statusCode switch
 		{
-			400 => Error.Create("VALIDATION_ERROR", localizedMessage),
+			400 => Error.Create("VALIDATION_ERROR", localizedMessage, validationFields),
 			401 => Error.Create("UNAUTHORIZED", localizedMessage ?? "Authentication required. Please provide valid credentials."),
 			403 => Error.Create("FORBIDDEN", localizedMessage ?? "You don't have permission to access this resource."),
 			404 => Error.Create("NOT_FOUND", localizedMessage),
@@ -108,7 +108,8 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 		await context.Response.WriteAsync(jsonResponse);
 	}
 
-	private (string? ErrorCode, string ErrorMessage, Dictionary<string, object>? ErrorData) GetErrorDetailsFromResponse(string responseBody, int statusCode)
+	private (string? ErrorCode, string ErrorMessage, Dictionary<string, object>? ErrorData, Dictionary<string, string>? ValidationFields)
+		GetErrorDetailsFromResponse(string responseBody, int statusCode)
 	{
 		try
 		{
@@ -116,35 +117,40 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 			{
 				var jsonDoc = JsonDocument.Parse(responseBody);
 
-				// Check for .NET validation errors format
+				// Check for .NET validation errors format (model state / ProblemDetails)
 				if (jsonDoc.RootElement.TryGetProperty("errors", out var errorsElement))
 				{
-					var validationErrors = new List<string>();
-
+					var fields = new Dictionary<string, string>(StringComparer.Ordinal);
 					foreach (var error in errorsElement.EnumerateObject())
 					{
 						var fieldName = error.Name;
-						if (error.Value.ValueKind == JsonValueKind.Array)
+						if (error.Value.ValueKind != JsonValueKind.Array)
 						{
-							foreach (var errorMessage in error.Value.EnumerateArray())
-							{
-								validationErrors.Add($"{errorMessage.GetString()}");
-							}
+							continue;
+						}
+
+						var msgs = error.Value.EnumerateArray()
+							.Select(e => e.GetString())
+							.Where(s => !string.IsNullOrEmpty(s))
+							.ToList();
+						if (msgs.Count > 0)
+						{
+							fields[fieldName] = string.Join("; ", msgs);
 						}
 					}
 
-					if (validationErrors.Any())
+					if (fields.Count > 0)
 					{
-						return (null, string.Join("; ", validationErrors), null);
+						var msg = string.Join("; ", fields.Select(kv => $"{kv.Key}: {kv.Value}"));
+						return (null, msg, null, fields);
 					}
 
-					// If we have a title, use that
 					if (jsonDoc.RootElement.TryGetProperty("title", out var titleElement))
 					{
 						var title = titleElement.GetString();
 						if (!string.IsNullOrEmpty(title))
 						{
-							return (null, title, null);
+							return (null, title, null, null);
 						}
 					}
 				}
@@ -156,19 +162,16 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 					string? errorMessage = null;
 					Dictionary<string, object>? errorData = null;
 
-					// Check for code
 					if (errorElement.TryGetProperty("code", out var codeElement))
 					{
 						errorCode = codeElement.GetString();
 					}
 
-					// Check for message
 					if (errorElement.TryGetProperty("message", out var messageElement))
 					{
 						errorMessage = messageElement.GetString();
 					}
 
-					// Check for data
 					if (errorElement.TryGetProperty("data", out var dataElement))
 					{
 						errorData = new Dictionary<string, object>();
@@ -178,36 +181,32 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 						}
 					}
 
-					// If we have a code, return it for localization
 					if (!string.IsNullOrEmpty(errorCode))
 					{
-						return (errorCode, errorMessage ?? errorCode, errorData);
+						return (errorCode, errorMessage ?? errorCode, errorData, null);
 					}
 
-					// Otherwise return message
 					if (!string.IsNullOrEmpty(errorMessage))
 					{
-						return (null, errorMessage, errorData);
+						return (null, errorMessage, errorData, null);
 					}
 
-					// If message is empty, try details
 					if (errorElement.TryGetProperty("details", out var detailsElement))
 					{
 						var details = detailsElement.GetString();
 						if (!string.IsNullOrEmpty(details))
 						{
-							return (null, details, errorData);
+							return (null, details, errorData, null);
 						}
 					}
 				}
 
-				// Check for simple title property (for .NET error responses)
 				else if (jsonDoc.RootElement.TryGetProperty("title", out var simpleTitleElement))
 				{
 					var title = simpleTitleElement.GetString();
 					if (!string.IsNullOrEmpty(title))
 					{
-						return (null, title, null);
+						return (null, title, null, null);
 					}
 				}
 			}
@@ -217,7 +216,6 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 			// If JSON parsing fails, fall back to default messages
 		}
 
-		// Fallback to default messages based on status code
 		var defaultMessage = statusCode switch
 		{
 			400 => "Validation failed",
@@ -227,7 +225,7 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 			_ => "An error occurred"
 		};
 
-		return (null, defaultMessage, null);
+		return (null, defaultMessage, null, null);
 	}
 
 	private string LocalizeErrorMessage(string messageOrCode, Dictionary<string, object>? errorData)
@@ -287,10 +285,7 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 	{
 		return exception switch
 		{
-			AbpValidationException validationEx => (
-				(int) HttpStatusCode.BadRequest,
-				Error.Create("VALIDATION_ERROR", GetValidationErrorMessage(validationEx))
-			),
+			AbpValidationException validationEx => BuildValidationErrorResponse(validationEx),
 			ValidationException validationEx => (
 				(int) HttpStatusCode.BadRequest,
 				Error.Create("VALIDATION_ERROR", validationEx.Message)
@@ -322,18 +317,44 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 		};
 	}
 
-	private static string GetValidationErrorMessage(AbpValidationException validationException)
+	private static (int StatusCode, Error Error) BuildValidationErrorResponse(AbpValidationException validationException)
 	{
-		if (validationException.ValidationErrors?.Any() == true)
-		{
-			var errors = validationException.ValidationErrors
-				.Select(error => $"{error.MemberNames.FirstOrDefault()}: {error.ErrorMessage}")
-				.ToList();
+		var (message, fields) = GetValidationErrorDetails(validationException);
+		return (
+			(int) HttpStatusCode.BadRequest,
+			Error.Create("VALIDATION_ERROR", message, fields)
+		);
+	}
 
-			return string.Join("; ", errors);
+	private static (string Message, Dictionary<string, string>? Fields) GetValidationErrorDetails(
+		AbpValidationException validationException)
+	{
+		if (validationException.ValidationErrors?.Any() != true)
+		{
+			return (validationException.Message, null);
 		}
 
-		return validationException.Message;
+		var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+		foreach (var error in validationException.ValidationErrors)
+		{
+			var member = error.MemberNames?.FirstOrDefault();
+			if (string.IsNullOrEmpty(member))
+			{
+				member = "_";
+			}
+
+			if (fields.TryGetValue(member, out var existing))
+			{
+				fields[member] = $"{existing}; {error.ErrorMessage}";
+			}
+			else
+			{
+				fields[member] = error.ErrorMessage ?? string.Empty;
+			}
+		}
+
+		var message = string.Join("; ", fields.Select(kv => kv.Key == "_" ? kv.Value : $"{kv.Key}: {kv.Value}"));
+		return (message, fields);
 	}
 
 	private string GetLocalizedBusinessExceptionMessage(BusinessException businessException)

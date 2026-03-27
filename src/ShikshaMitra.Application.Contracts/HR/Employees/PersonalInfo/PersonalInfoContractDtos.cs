@@ -1,12 +1,14 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
 
 /// <summary>
 /// Request DTO for creating or updating employee personal information
 /// </summary>
-public class PersonalInfoRequest
+public class PersonalInfoRequest : IValidatableObject
 {
 	[Required]
 	[MaxLength(256)]
@@ -55,11 +57,10 @@ public class PersonalInfoRequest
 	public string? Email { get; set; }
 
 	[Required]
-	[Phone]
+	[RegularExpression(@"^[6-9]\d{9}$", ErrorMessage = "Invalid mobile number. Must be 10 digits starting with 6-9.")]
 	[MaxLength(15)]
 	public string MobileNo { get; set; } = string.Empty;
 
-	[Phone]
 	[MaxLength(15)]
 	public string? SecondaryMobileNo { get; set; }
 
@@ -94,7 +95,23 @@ public class PersonalInfoRequest
 	public string? City { get; set; }
 
 	[MaxLength(10)]
+	[RegularExpression(@"^$|^\d{6}$", ErrorMessage = "Pincode must be 6 digits.")]
 	public string? PinCode { get; set; }
+
+	public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+	{
+		if (!string.IsNullOrWhiteSpace(SecondaryMobileNo) && !string.IsNullOrWhiteSpace(MobileNo))
+		{
+			var primaryDigits = new string(MobileNo.Where(char.IsDigit).ToArray());
+			var secondaryDigits = new string(SecondaryMobileNo.Where(char.IsDigit).ToArray());
+			if (primaryDigits.Length > 0 && secondaryDigits.Length > 0 && primaryDigits == secondaryDigits)
+			{
+				yield return new ValidationResult(
+					"Secondary mobile number must be different from the primary mobile number.",
+					[nameof(SecondaryMobileNo)]);
+			}
+		}
+	}
 }
 
 /// <summary>

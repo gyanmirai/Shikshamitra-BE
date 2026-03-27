@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Common.Responses;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using Volo.Abp;
@@ -36,7 +37,8 @@ public class PersonalInfoController : AbpControllerBase
 	/// </summary>
 	[HttpPost("personal-info")]
 	[ProducesResponseType(typeof(PersonalInfoResponse), StatusCodes.Status201Created)]
-	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(typeof(Result), StatusCodes.Status403Forbidden)]
 	public virtual async Task<PersonalInfoResponse> CreateAsync(
 		[FromBody, Required] PersonalInfoRequest request)
 	{
@@ -50,8 +52,8 @@ public class PersonalInfoController : AbpControllerBase
 	/// </summary>
 	[HttpGet("{employeeId}/personal-info")]
 	[ProducesResponseType(typeof(PersonalInfoResponse), StatusCodes.Status200OK)]
-	[ProducesResponseType(StatusCodes.Status403Forbidden)]
-	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	[ProducesResponseType(typeof(Result), StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
 	public virtual async Task<PersonalInfoResponse> GetAsync([FromRoute, Required] Guid employeeId)
 	{
 		await _authorizationService.CheckEmployeeAccessAsync(employeeId);
@@ -64,9 +66,9 @@ public class PersonalInfoController : AbpControllerBase
 	/// </summary>
 	[HttpPut("{employeeId}/personal-info")]
 	[ProducesResponseType(typeof(PersonalInfoResponse), StatusCodes.Status200OK)]
-	[ProducesResponseType(StatusCodes.Status400BadRequest)]
-	[ProducesResponseType(StatusCodes.Status403Forbidden)]
-	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	[ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(typeof(Result), StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
 	public virtual async Task<PersonalInfoResponse> UpdateAsync(
 		[FromRoute, Required] Guid employeeId,
 		[FromBody, Required] PersonalInfoRequest request)

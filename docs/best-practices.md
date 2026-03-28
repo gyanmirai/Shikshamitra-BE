@@ -344,3 +344,52 @@ All use namespace `ShikshaMitra.Common` or `ShikshaMitra.HR.*`.
 - Analyzers: Roslynator (code analysis + formatting).
 - XML doc comments on public API surfaces (domain services, app services, repository interfaces).
 - Tab indentation throughout.
+
+---
+
+## 11. Docs Contribution Standard
+
+### 11.1 Documentation IA (module-first)
+
+- Module-owned docs must live under `docs/modules/<module>/`.
+- Standard module layout:
+  - `README.md`
+  - `prd/`
+  - `contracts/raw/`
+  - `contracts/curated/`
+  - `implementation/`
+  - `testing/`
+- Cross-cutting docs must live under `docs/common/`. Architecture decisions stay under `docs/architecture/`. Root-level guidance is limited to `README.md` and `best-practices.md`.
+
+### 11.2 Contract Naming Rules
+
+- Curated contracts: `kebab-case` + `-api.md`.
+- Raw contracts: `kebab-case` + `-api.raw.YYYY-MM-DD.md`.
+
+### 11.3 Curated Contract Required Sections
+
+Every curated contract file under `contracts/curated/` must include this exact heading order:
+
+1. `## Purpose`
+2. `## Endpoint(s)`
+3. `## Auth & permissions`
+4. `## Request headers`
+5. `## Path/query/body contract`
+6. `## Response contract (success + errors)`
+7. `## Business rules / invariants`
+8. `## Idempotency / concurrency notes (if relevant)`
+9. `## Examples (minimal, copy-ready)`
+10. `## Change log`
+
+### 11.4 PRD vs Contract Boundary
+
+- `prd/` documents behavior, rules, permissions, transitions, and invariants.
+- `contracts/` documents endpoint wire contract (request/response/error shapes).
+- PRD and contract docs must cross-link; neither should silently replace the other.
+
+### 11.5 Cross-link Rules
+
+- Every module `README.md` links to `prd`, `contracts`, `implementation`, and `testing`.
+- Every PRD subdomain `README.md` links to its curated contract.
+- Broken links in active docs are not allowed.
+

@@ -17,7 +17,7 @@ The HR module manages the full employee lifecycle within a multi-tenant educatio
 |---|---|---|
 | **Employees** | `ShikshaMitra.HR.Employees` | Employee aggregate, family, documents, profile, bank details, work experience, additional details, payroll details, code generation, caching |
 | **AttendanceAndLeaves** | `ShikshaMitra.HR.AttendanceAndLeaves` | Daily attendance records, leave requests, leave approval workflow, leave policies, leave types, custom attendance rules, automated notifications |
-| **Payroll** | `ShikshaMitra.HR.Payroll` | Payroll structures, salary slips, earning/deduction components, pay elements, professional tax, provident fund, attendance import |
+| **Payroll** | `ShikshaMitra.HR.Payroll` | Payroll structures, salary slips, day calculation settings, earning/deduction components, provident fund rules, attendance import |
 | **Calendar** | `ShikshaMitra.HR.Calendar` | Events, holidays, event types, holiday types, calendar view aggregation |
 | ~~**EventAndHolidays**~~ | ~~`ShikshaMitra.HR.EventAndHolidays`~~ | **Deprecated — removed.** The flat `EventAndHoliday` aggregate duplicated `HR/Calendar/`. Consolidated into `Calendar`. Code and DB table to be deleted after data migration completes. |
 | **Reports** | (Application only) | PDF/Excel report generation for employee data |

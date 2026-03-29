@@ -1,13 +1,10 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
 
 namespace ShikshaMitra.HR.Payroll.Settings;
 
-/// <summary>
-/// Domain service for managing earning components with business logic
-/// </summary>
 public class EarningComponentManager : DomainService
 {
 	private readonly IEarningComponentRepository _earningComponentRepository;
@@ -21,13 +18,14 @@ public class EarningComponentManager : DomainService
 		string name,
 		string? description,
 		EarningComponentType componentType,
+		CalculationType calculationType,
+		decimal? amount,
+		decimal? percentage,
+		Guid? selectedEarningComponentId,
 		ComponentDependency dependOn,
-		Guid? customComponentId,
-		string amount,
 		bool visibleInPayslip,
 		int displayOrder = 0)
 	{
-		// Check if name already exists
 		await CheckNameAvailabilityAsync(name);
 
 		var earningComponent = new EarningComponent(
@@ -36,9 +34,11 @@ public class EarningComponentManager : DomainService
 			name,
 			description,
 			componentType,
-			dependOn,
-			customComponentId,
+			calculationType,
 			amount,
+			percentage,
+			selectedEarningComponentId,
+			dependOn,
 			visibleInPayslip,
 			displayOrder
 		);
@@ -51,13 +51,14 @@ public class EarningComponentManager : DomainService
 		string name,
 		string? description,
 		EarningComponentType componentType,
+		CalculationType calculationType,
+		decimal? amount,
+		decimal? percentage,
+		Guid? selectedEarningComponentId,
 		ComponentDependency dependOn,
-		Guid? customComponentId,
-		string amount,
 		bool visibleInPayslip,
 		int displayOrder)
 	{
-		// Check if name already exists (excluding current component)
 		if (earningComponent.Name != name)
 		{
 			await CheckNameAvailabilityAsync(name, earningComponent.Id);
@@ -67,9 +68,11 @@ public class EarningComponentManager : DomainService
 			name,
 			description,
 			componentType,
-			dependOn,
-			customComponentId,
+			calculationType,
 			amount,
+			percentage,
+			selectedEarningComponentId,
+			dependOn,
 			visibleInPayslip,
 			displayOrder
 		);

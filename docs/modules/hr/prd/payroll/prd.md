@@ -17,7 +17,7 @@ Handles payroll execution and salary output: assigning payroll structures to emp
 
 ### 1. Payroll Structures
 
-1. A payroll structure links an employee to a set of pay elements with amounts, scoped by education medium/stage.
+1. A payroll structure links an employee to configured earning and deduction components with amounts, scoped by education medium/stage.
 2. `PayrollStructureManager.SetEmployeePayrollStructureAsync` validates employee and structure exist, assigns the structure, and optionally auto-initializes payroll data (EmployeePayrollDetails + EmployeePayrollComponents).
 3. If the employee already has payroll data, components are synced with the new structure; otherwise initialized from scratch.
 4. `RemoveEmployeePayrollStructureAsync` clears the assignment; optionally deletes payroll data.

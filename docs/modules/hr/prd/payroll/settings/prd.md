@@ -2,108 +2,108 @@
 
 ## Purpose
 
-Manages the master data that drives payroll computation: earning components (Basic Salary, HRA, DA, etc.), deduction components (PF, PT, TDS, etc.), pay elements, provident fund rules, and professional tax slabs. These are tenant-scoped configuration entities referenced by employee salary structures and payroll runs.
+Manages the tenant-scoped payroll master configuration used by payroll runs and salary structures. The current API surface covers day calculation settings, earning components, deduction components, and provident fund (PF) rules.
 
 ## Actors
 
 | Actor | Description |
-|-------|-------------|
-| Admin | CRUDs all payroll setting entities; activates/deactivates components |
-| System | References settings during salary slip generation and payroll runs |
+|---|---|
+| Admin | Configures payroll settings for an academic year and maintains salary components and PF rules |
+| System | Reads payroll settings during payroll preview, payroll lock, and downstream salary computations |
 
 ---
 
 ## Behaviors
 
-### 1. Earning Components
+### 1. Day Calculation Settings
 
-1. Admin creates an earning component with name, type (Fixed or Variable/Percentage), dependency (None/Basic/Gross/Custom), amount, and visibility.
-2. **Fixed components**: amount is a plain decimal value.
-3. **Percentage/Variable components**: amount stored with `%` suffix; validated 0-100 range. Requires a `dependOn` value.
-4. Dependency can reference a custom component (`CustomComponentId`).
-5. Active components are cached (24-hour TTL) for fast retrieval.
-6. Admin can soft-delete by deactivating instead of hard-deleting.
+1. Admin saves payroll day calculation settings for an academic year using `academicYearId`.
+2. System supports a primary calculation mode through `dayCalculationType`.
+3. Supported modes are:
+   - `working-days`
+   - `total-month-days`
+   - `manual-days`
+4. When `working-days` is selected, no extra day count is required.
+5. When `manual-days` is selected, a manual day count must be provided and remain within the allowed month range.
+6. Successful save returns a simple success response and becomes the active calculation basis for payroll processing in that academic year.
 
-### 2. Deduction Components
+### 2. Earning Components
 
-1. Identical structure and behavior to earning components.
-2. Same CRUD, activation/deactivation, caching, and validation rules.
+1. Admin creates, updates, lists, retrieves, and deletes earning components.
+2. All list and create operations are scoped by `academicYearId`.
+3. Each component includes:
+   - `earningComponentName`
+   - `description`
+   - `earningType`
+   - `calculationType`
+   - `amount`
+   - `percentage`
+   - `selectedEarningComponentId`
+   - `visibleInPayslip`
+4. Components may reference another configured component through `selectedEarningComponentId`.
+5. List responses are paginated and support search.
+6. Single-item retrieval returns the component plus any nested custom-component metadata needed by the client.
 
-### 3. Pay Elements
+### 3. Deduction Components
 
-1. Admin CRUDs pay elements -- generic credit/debit entries.
-2. Each element has a code (unique, max 50), name (max 100), type (Credit or Debit), and optional dependency configuration.
-3. Employee-specific flag indicates whether the element amount varies per employee.
+1. Admin creates, updates, lists, retrieves, and deletes deduction components.
+2. All list and create operations are scoped by `academicYearId`.
+3. Deduction components follow the same overall interaction model as earning components, with deduction-specific field names and response DTOs.
+4. List responses are paginated and support search.
+5. Single-item retrieval returns deduction component details plus nested custom-component metadata when applicable.
 
-### 4. Provident Fund Rules
+### 4. PF Rules
 
-1. Admin CRUDs PF rules defining employee and employer contribution percentages.
-2. Code must be uppercase alphanumeric with underscores (`^[A-Z_]+$`, 2-20 chars).
-3. Both percentages must be 0-100.
-4. PF rules are referenced by employee payroll details (`pfRuleId`).
-
-### 5. Professional Tax
-
-1. Admin CRUDs tax slab configurations per gender type.
-2. Each slab defines: from-salary, to-salary, and tax amount.
-3. No HTTP controller exposed; available only via application service.
+1. Admin creates, updates, lists, and deletes PF rules for an academic year.
+2. All list and create operations are scoped by `academicYearId`.
+3. Each PF rule contains:
+   - `name`
+   - `code`
+   - `employeePercentage`
+   - `employerPercentage`
+4. Create returns the created rule identity and creation timestamp.
+5. List responses are paginated and provide created/updated timestamps for operational traceability.
 
 ---
 
 ## Business Rules
 
-- Component names: 1-200 chars; descriptions: max 500 chars.
-- Fixed components ignore `dependOn`; variable/percentage components require it.
-- Percentage amount must be 0-100.
-- PF codes must be unique within the tenant.
-- Component `displayOrder` controls rendering sequence.
-- Active components are served from distributed cache (24h TTL); mutations invalidate cache.
-- Multi-tenancy: all settings are tenant-isolated.
+- Payroll settings are tenant-isolated and require bearer auth plus tenant context.
+- Academic-year-scoped endpoints must receive a valid `academicYearId`.
+- Day calculation mode must be one of the supported values from the API contract.
+- Manual day count is only valid when the selected day calculation mode requires it.
+- Earning and deduction component list endpoints support pagination and optional search.
+- Component payloads may include both direct value fields and relational fields such as `selectedEarningComponentId` or `selectedDeductionComponentId`.
+- PF rule percentages must remain valid numeric percentages.
+- Mutations rely on request validation and standard API error responses for invalid payloads or missing resources.
 
 ---
 
 ## Permissions
 
-| Permission Key | Description |
-|----------------|-------------|
-| `HR.PayrollManagement.Settings.EarningComponents.View` | View earning components |
-| `HR.PayrollManagement.Settings.EarningComponents.Add` | Create/update earning components |
-| `HR.PayrollManagement.Settings.EarningComponents.Delete` | Delete earning components |
-| `HR.PayrollManagement.Settings.DeductionComponents.View` | View deduction components |
-| `HR.PayrollManagement.Settings.DeductionComponents.Add` | Create/update deduction components |
-| `HR.PayrollManagement.Settings.DeductionComponents.Delete` | Delete deduction components |
-| `HR.PayrollManagement.Settings.PfRule.View` | View PF rules |
-| `HR.PayrollManagement.Settings.PfRule.Add` | Create/update PF rules |
-| `HR.PayrollManagement.Settings.PfRule.Delete` | Delete PF rules |
+| Permission Area | Description |
+|---|---|
+| Payroll settings configuration | Required for day calculation settings changes |
+| Earning components | View and manage earning component definitions |
+| Deduction components | View and manage deduction component definitions |
+| PF rules | View and manage provident fund rule definitions |
+
+Note: Exact permission keys should be taken from the application layer and source contract usage where enforced.
 
 ---
 
-## Error Codes
+## Error Handling
 
-Payroll settings currently rely on ABP's built-in entity-not-found and validation exceptions. No custom `HRErrorCodes` are defined specifically for settings CRUD operations.
-
----
-
-## Enums
-
-| Enum | Values |
-|------|--------|
-| EarningComponentType | Fixed=0, Variable=1 |
-| DeductionComponentType | Fixed=0, Variable=1 |
-| ComponentDependency | None=0, Basic=1, Gross=2, CustomComponent=3 |
-| SalaryComponentType | Fixed=0, Percentage=1 |
-| SalaryComponentDependency | None=0, Basic=1, Gross=2 |
-| PayElementType | Credit=0, Debit=1 |
-
----
-
-## Domain Events
-
-None currently published by the Payroll Settings submodule.
+- Validation failures return `400 Bad Request`.
+- Unauthorized access returns `401 Unauthorized`.
+- Missing payroll setting resources return `404 Not Found` where applicable.
+- Forbidden responses may be returned for admin-only flows such as restricted PF rule operations.
 
 ---
 
 ## Dependencies
 
-- [Payroll Operations](../prd.md) -- salary slip generation uses component definitions
-- [Employees](../../employees/prd.md) -- employee payroll references PF rules and component structures
+- [Payroll Operations](../prd.md) -- consumes payroll settings during payroll preview and lock flows
+- [Employees](../../employees/prd.md) -- employee payroll structures depend on configured salary components and PF rules
+- [Canonical curated contract](../../../contracts/curated/payroll-settings-api.md)
+- [Raw contract source](../../../contracts/raw/payroll-settings-api.raw.2026-03-28.md)

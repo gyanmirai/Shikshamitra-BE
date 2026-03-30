@@ -4,8 +4,6 @@ using ShikshaMitra.Common.Responses;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.Enrollments.Inquiries;
 using ShikshaMitra.Students.StudentEnrollments;
-using System;
-using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 

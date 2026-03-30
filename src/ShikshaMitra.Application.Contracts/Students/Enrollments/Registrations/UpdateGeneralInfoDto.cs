@@ -9,6 +9,7 @@ namespace ShikshaMitra.Students.Enrollments.Registrations;
 /// </summary>
 public class UpdateGeneralInfoDto
 {
+	public required string FormNo { get; set; }
 	public required string FirstName { get; set; }
 	public string? MiddleName { get; set; }
 	public required string LastName { get; set; }
@@ -30,6 +31,7 @@ public class UpdateGeneralInfoDto
 	public string? Nationality { get; set; }
 	public string? BirthPlace { get; set; }
 	public MotherTongueEnum? MotherTongue { get; set; }
+	public Guid? InquiryPreferenceId { get; set; }
 
 	public string? Address1 { get; set; }
 	public string? Address2 { get; set; }

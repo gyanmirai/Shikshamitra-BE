@@ -36,10 +36,15 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 			.HasForeignKey<StudentContactDetail>(x => x.Id)
 			.OnDelete(DeleteBehavior.Cascade);
 
-		// Optional: Auto-include aggregate parts when loading Student
-		// This follows the aggregate pattern - always load the complete aggregate
+		builder.HasOne(x => x.FamilyDetail)
+			.WithOne()
+			.HasForeignKey<StudentFamilyDetail>(x => x.Id)
+			.OnDelete(DeleteBehavior.Cascade);
+
+		// Auto-include aggregate parts when loading Student
 		builder.Navigation(x => x.AdditionalDetail).AutoInclude();
 		builder.Navigation(x => x.ContactDetail).AutoInclude();
+		builder.Navigation(x => x.FamilyDetail).AutoInclude();
 
 		// Status history: owned by the aggregate, loaded explicitly via includeDetails.
 		builder.HasMany(x => x.StatusHistories)

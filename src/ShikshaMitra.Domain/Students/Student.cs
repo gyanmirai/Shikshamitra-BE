@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
+using ShikshaMitra.Students.ValueObjects;
 using ShikshaMitra.Students.StudentRecords;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
@@ -518,6 +519,17 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void AssignGrNo(int? grNo)
 	{
 		GrNo = grNo;
+	}
+
+	public void UpdateFamilyInfo(
+		ParentGuardianDetails? fatherDetails,
+		ParentGuardianDetails? motherDetails,
+		ParentGuardianDetails? guardianDetails,
+		List<Guid>? siblingStudentIds)
+	{
+		FamilyDetail ??= new StudentFamilyDetail(Id, TenantId);
+		FamilyDetail.UpdateFamilyInformation(fatherDetails, motherDetails, guardianDetails, siblingStudentIds);
+		AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.Family);
 	}
 
 	private void EnsureAdditionalDetailExists()

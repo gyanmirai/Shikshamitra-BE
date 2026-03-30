@@ -230,7 +230,9 @@ public class StudentSeederContributor : BaseSeederContributor
 			motherTongue,
 			"ABC Public School", // Previous school
 			"Class 9", // Last class passed
-			StudentRegistrationStateEnum.BankDetails // Complete registration state
+			StudentRegistrationStateEnum.BankDetails, // Complete registration state
+			null,
+			"1234"
 		);
 
 		// Create contact details

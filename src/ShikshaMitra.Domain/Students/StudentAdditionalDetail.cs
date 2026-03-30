@@ -126,9 +126,10 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		MotherTongueEnum? motherTongue,
 		string? previousSchool,
 		string? lastClassPassed,
-        StudentRegistrationStateEnum state
-
-        )
+        StudentRegistrationStateEnum state,
+		Guid? inquiryPreferenceId,
+		string registrationFormNo
+		)
 	{
 		DateOfBirth = dateOfBirth;
 		Gender = gender;
@@ -146,6 +147,8 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		PreviousSchool = previousSchool;
 		LastClassPassed = lastClassPassed;
         StudentRegistrationState = state;
+		InquiryPreferenceId = inquiryPreferenceId;
+		RegistrationFormNo = registrationFormNo;
     }
 
 	public void IssueRegistrationForm(
@@ -186,11 +189,13 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		IsLibraryMember = isLibraryMember;
 		IsTransportMember = isTransportMember;
 
-		// Update registration state
-		if (StudentRegistrationState < StudentRegistrationStateEnum.AdditionalDetails)
-		{
-			StudentRegistrationState = StudentRegistrationStateEnum.AdditionalDetails;
-		}
+		AdvanceRegistrationState(StudentRegistrationStateEnum.AdditionalDetails);
+	}
+
+	public void AdvanceRegistrationState(StudentRegistrationStateEnum newState)
+	{
+		if (StudentRegistrationState < newState)
+			StudentRegistrationState = newState;
 	}
 
 	/// <summary>

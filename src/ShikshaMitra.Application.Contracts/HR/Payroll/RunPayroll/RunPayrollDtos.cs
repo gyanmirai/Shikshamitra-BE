@@ -93,6 +93,25 @@ public class RunPayrollItem
 	/// Total working days in the month (business days excluding holidays)
 	/// </summary>
 	public double TotalWorkingDays { get; set; }
+
+	/// <summary>
+	/// Itemized earning components contributing to gross salary
+	/// </summary>
+	public List<RunPayrollComponentItem> EarningComponents { get; set; } = new();
+
+	/// <summary>
+	/// Itemized deduction components contributing to total deduction
+	/// </summary>
+	public List<RunPayrollComponentItem> DeductionComponents { get; set; } = new();
+}
+
+/// <summary>
+/// Lightweight earning/deduction component line item in a payroll preview
+/// </summary>
+public class RunPayrollComponentItem
+{
+	public string Name { get; set; } = string.Empty;
+	public double Amount { get; set; }
 }
 
 /// <summary>

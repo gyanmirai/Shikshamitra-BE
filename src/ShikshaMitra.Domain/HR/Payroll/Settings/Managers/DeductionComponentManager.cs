@@ -1,13 +1,10 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
 
 namespace ShikshaMitra.HR.Payroll.Settings;
 
-/// <summary>
-/// Domain service for managing deduction components with business logic
-/// </summary>
 public class DeductionComponentManager : DomainService
 {
 	private readonly IDeductionComponentRepository _deductionComponentRepository;
@@ -21,13 +18,14 @@ public class DeductionComponentManager : DomainService
 		string name,
 		string? description,
 		DeductionComponentType componentType,
+		CalculationType calculationType,
+		decimal? amount,
+		decimal? percentage,
+		Guid? selectedDeductionComponentId,
 		ComponentDependency dependOn,
-		Guid? customComponentId,
-		string amount,
 		bool visibleInPayslip,
 		int displayOrder = 0)
 	{
-		// Check if name already exists
 		await CheckNameAvailabilityAsync(name);
 
 		var deductionComponent = new DeductionComponent(
@@ -36,9 +34,11 @@ public class DeductionComponentManager : DomainService
 			name,
 			description,
 			componentType,
-			dependOn,
-			customComponentId,
+			calculationType,
 			amount,
+			percentage,
+			selectedDeductionComponentId,
+			dependOn,
 			visibleInPayslip,
 			displayOrder
 		);
@@ -51,13 +51,14 @@ public class DeductionComponentManager : DomainService
 		string name,
 		string? description,
 		DeductionComponentType componentType,
+		CalculationType calculationType,
+		decimal? amount,
+		decimal? percentage,
+		Guid? selectedDeductionComponentId,
 		ComponentDependency dependOn,
-		Guid? customComponentId,
-		string amount,
 		bool visibleInPayslip,
 		int displayOrder)
 	{
-		// Check if name already exists (excluding current component)
 		if (deductionComponent.Name != name)
 		{
 			await CheckNameAvailabilityAsync(name, deductionComponent.Id);
@@ -67,9 +68,11 @@ public class DeductionComponentManager : DomainService
 			name,
 			description,
 			componentType,
-			dependOn,
-			customComponentId,
+			calculationType,
 			amount,
+			percentage,
+			selectedDeductionComponentId,
+			dependOn,
 			visibleInPayslip,
 			displayOrder
 		);

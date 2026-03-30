@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Hosting;
@@ -14,7 +14,6 @@ using OpenIddict.Validation.AspNetCore;
 using QuestPDF.Infrastructure;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Extensions;
-using ShikshaMitra.Middleware;
 using ShikshaMitra.MultiTenancy;
 using System;
 using System.Collections.Generic;
@@ -475,7 +474,6 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 		app.UseCorrelationId();
 		app.UseStaticFiles();
-		app.UseCustomHeader();
 		app.UseRouting();
 		app.UseCors();
 		app.UseAuthentication();

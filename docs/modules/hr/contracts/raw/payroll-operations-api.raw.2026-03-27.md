@@ -66,7 +66,14 @@ RunPayrollResponse {
     presentDays: double
     halfWorkingDays: double
     totalWorkingDays: double
+    earningComponents: RunPayrollComponentItem[]
+    deductionComponents: RunPayrollComponentItem[]
   }]
+}
+
+RunPayrollComponentItem {
+  name: string
+  amount: double               // >= 0
 }
 ```
 

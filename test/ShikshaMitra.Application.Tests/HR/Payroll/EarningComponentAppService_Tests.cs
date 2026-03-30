@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Payroll.Settings;
@@ -33,8 +33,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Name = "Test Basic Salary",
             Description = "Monthly basic salary component",
             ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "50000",
+            Amount = 50000m,
             VisibleInPayslip = true,
             DisplayOrder = 1
         };
@@ -64,8 +65,10 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Name = "Test Performance Bonus",
             Description = "Quarterly performance bonus",
             ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
             DependOn = ComponentDependency.Basic,
-            Amount = "10%",
+            Amount = null,
+            Percentage = 10m,
             VisibleInPayslip = true,
             DisplayOrder = 5
         };
@@ -77,7 +80,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         result.ShouldNotBeNull();
         result.ComponentType.ShouldBe(EarningComponentType.Variable);
         result.DependOn.ShouldBe(ComponentDependency.Basic);
-        result.Amount.ShouldBe("10%");
+        result.CalculationType.ShouldBe(CalculationType.Percentage);
+        result.Percentage.ShouldBe(10m);
+        result.Amount.ShouldBeNull();
     }
 
     [Fact]
@@ -89,8 +94,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         {
             Name = componentName,
             ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "10000"
+            Amount = 10000m
         };
 
         await _earningComponentAppService.CreateAsync(input1);
@@ -99,8 +105,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         {
             Name = componentName,
             ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "5000"
+            Amount = 5000m
         };
 
         // Act & Assert
@@ -118,8 +125,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         {
             Name = "", // Empty name
             ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "10000"
+            Amount = 10000m
         };
 
         // Act & Assert
@@ -137,8 +145,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         {
             Name = "  Test Component With Spaces  ",
             ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "10000"
+            Amount = 10000m
         };
 
         // Act
@@ -263,8 +272,10 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Name = "Updated Name",
             Description = "Updated description",
             ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
             DependOn = ComponentDependency.Gross,
-            Amount = "15%",
+            Amount = null,
+            Percentage = 15m,
             VisibleInPayslip = false,
             DisplayOrder = 10
         };
@@ -279,7 +290,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         result.Description.ShouldBe("Updated description");
         result.ComponentType.ShouldBe(EarningComponentType.Variable);
         result.DependOn.ShouldBe(ComponentDependency.Gross);
-        result.Amount.ShouldBe("15%");
+        result.CalculationType.ShouldBe(CalculationType.Percentage);
+        result.Percentage.ShouldBe(15m);
+        result.Amount.ShouldBeNull();
         result.VisibleInPayslip.ShouldBeFalse();
         result.DisplayOrder.ShouldBe(10);
     }
@@ -295,8 +308,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         {
             Name = "Component 1", // Trying to use existing name
             ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "10000"
+            Amount = 10000m
         };
 
         // Act & Assert
@@ -317,8 +331,11 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Name = "Same Name Component", // Same name
             Description = "Updated description only",
             ComponentType = created.ComponentType,
+            CalculationType = created.CalculationType,
             DependOn = created.DependOn,
-            Amount = created.Amount
+            Amount = created.Amount,
+            Percentage = created.Percentage,
+            SelectedEarningComponentId = created.SelectedEarningComponentId
         };
 
         // Act
@@ -420,8 +437,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         {
             Name = "Component & Bonus (50%) - Test",
             ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "5000"
+            Amount = 5000m
         };
 
         // Act
@@ -439,15 +457,19 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         {
             Name = "Percentage Component",
             ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
             DependOn = ComponentDependency.Basic,
-            Amount = "10.5%"
+            Amount = null,
+            Percentage = 10.5m
         };
 
         // Act
         var result = await _earningComponentAppService.CreateAsync(input);
 
         // Assert
-        result.Amount.ShouldBe("10.5%");
+        result.CalculationType.ShouldBe(CalculationType.Percentage);
+        result.Percentage.ShouldBe(10.5m);
+        result.Amount.ShouldBeNull();
     }
 
     [Fact]
@@ -458,15 +480,16 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         {
             Name = "Large Amount Component",
             ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "999999999"
+            Amount = 999999999m
         };
 
         // Act
         var result = await _earningComponentAppService.CreateAsync(input);
 
         // Assert
-        result.Amount.ShouldBe("999999999");
+        result.Amount.ShouldBe(999999999m);
     }
 
     [Fact]
@@ -478,8 +501,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Name = "No Description Component",
             Description = null,
             ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "10000"
+            Amount = 10000m
         };
 
         // Act
@@ -503,8 +527,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Name = name,
             Description = $"Test description for {name}",
             ComponentType = type,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "10000",
+            Amount = 10000m,
             VisibleInPayslip = true,
             DisplayOrder = displayOrder
         };

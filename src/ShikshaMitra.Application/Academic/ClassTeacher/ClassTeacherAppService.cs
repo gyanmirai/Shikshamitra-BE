@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees;
@@ -18,7 +18,7 @@ public class ClassTeacherAppService(
 {
 	public async Task AssignOrUpdateTeachersAsync(
 		List<AssignClassTeacherDto> assignments,
-		Guid academicMediumId
+		Guid educationMediumId
 	)
 	{
 		foreach (var item in assignments)
@@ -43,7 +43,7 @@ public class ClassTeacherAppService(
 						item.ClassId,
 						item.DivisionId,
 						item.TeacherId,
-						academicMediumId
+						educationMediumId
 					);
 					await assignmentRepository.InsertAsync(assignment);
 				}

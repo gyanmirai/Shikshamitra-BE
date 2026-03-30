@@ -1,28 +1,51 @@
-﻿using System;
-using System.ComponentModel.DataAnnotations;
+using System;
 
 namespace ShikshaMitra.HR.Payroll.Settings;
 
-/// <summary>
-/// DTO matching the OpenAPI PayrollComponentCreateRequest schema for creating/updating earning or deduction components.
-/// </summary>
-public class PayrollComponentCreateRequestDto
+public class EarningComponentCreateRequestDto
 {
-    [Required]
-    public string ComponentName { get; set; } = string.Empty;
+	public string EarningComponentName { get; set; } = string.Empty;
+	public string? Description { get; set; }
+	public string EarningType { get; set; } = string.Empty;
+	public string CalculationType { get; set; } = string.Empty;
+	public decimal? Amount { get; set; }
+	public decimal? Percentage { get; set; }
+	public Guid? SelectedEarningComponentId { get; set; }
+	public bool VisibleInPayslip { get; set; } = true;
+}
 
-    public string? Description { get; set; }
+public class EarningComponentUpdateRequestDto
+{
+	public string EarningComponentName { get; set; } = string.Empty;
+	public string? Description { get; set; }
+	public string EarningType { get; set; } = string.Empty;
+	public string CalculationType { get; set; } = string.Empty;
+	public decimal? Amount { get; set; }
+	public decimal? Percentage { get; set; }
+	public Guid? SelectedEarningComponentId { get; set; }
+	public bool VisibleInPayslip { get; set; } = true;
+}
 
-    [Required]
-    public bool IsFixed { get; set; }
+public class DeductionComponentCreateRequestDto
+{
+	public string DeductionComponentName { get; set; } = string.Empty;
+	public string? Description { get; set; }
+	public string DeductionType { get; set; } = string.Empty;
+	public string CalculationType { get; set; } = string.Empty;
+	public decimal? Amount { get; set; }
+	public decimal? Percentage { get; set; }
+	public Guid? SelectedDeductionComponentId { get; set; }
+	public bool VisibleInPayslip { get; set; } = true;
+}
 
-    public string? ComponentType { get; set; } // "FIXED" or "PERCENTAGE"
-
-    public double? Amount { get; set; }
-
-    public bool VisibleInPayslip { get; set; }
-
-    public string? DependOn { get; set; } // "GROSS", "BASIC", "CUSTOM_COMPONENT"
-
-    public Guid? CustomComponentId { get; set; }
+public class DeductionComponentUpdateRequestDto
+{
+	public string DeductionComponentName { get; set; } = string.Empty;
+	public string? Description { get; set; }
+	public string DeductionType { get; set; } = string.Empty;
+	public string CalculationType { get; set; } = string.Empty;
+	public decimal? Amount { get; set; }
+	public decimal? Percentage { get; set; }
+	public Guid? SelectedDeductionComponentId { get; set; }
+	public bool VisibleInPayslip { get; set; } = true;
 }

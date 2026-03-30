@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Application.Contracts.Groups;
 using ShikshaMitra.Application.Contracts.Communication.AnnouncementTypes;
@@ -57,10 +57,7 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 				opt => opt.Ignore()); // Will be populated separately
 		CreateMap<CreateUpdateEventDto, ShikshaMitra.HR.Calendar.Events.Event>();
 
-		// Earning Components
 		CreateMap<EarningComponent, EarningComponentDto>();
-
-		// Deduction Components
 		CreateMap<DeductionComponent, DeductionComponentDto>();
 
 		// Building and Floor mappings

@@ -115,5 +115,24 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
+
+		public static class PayrollManagement_SettingsDayCalculation
+		{
+			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Settings.DayCalculation";
+			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.Settings.DayCalculation";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+
+			public static readonly string[] All = { View, Add, Delete };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+			};
+		}
 	}
 }

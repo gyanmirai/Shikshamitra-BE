@@ -17,7 +17,7 @@ Handles payroll execution and salary output: assigning payroll structures to emp
 
 ### 1. Payroll Structures
 
-1. A payroll structure links an employee to a set of pay elements with amounts, scoped by education medium/stage.
+1. A payroll structure links an employee to configured earning and deduction components with amounts, scoped by education medium/stage.
 2. `PayrollStructureManager.SetEmployeePayrollStructureAsync` validates employee and structure exist, assigns the structure, and optionally auto-initializes payroll data (EmployeePayrollDetails + EmployeePayrollComponents).
 3. If the employee already has payroll data, components are synced with the new structure; otherwise initialized from scratch.
 4. `RemoveEmployeePayrollStructureAsync` clears the assignment; optionally deletes payroll data.
@@ -27,7 +27,7 @@ Handles payroll execution and salary output: assigning payroll structures to emp
 ### 2. Run Payroll
 
 1. Admin previews payroll for a given month (format: `MMMM-YYYY`, e.g., `JANUARY-2025`).
-2. Preview returns per-employee: basic salary, gross salary, total deductions, net pay, present/half-day/total working days.
+2. Preview returns per-employee: basic salary, gross salary, total deductions, net pay, present/half-day/total working days, **and itemized earning/deduction component line items** (name + amount each).
 3. Admin locks payroll for the month. If already locked, returns `PayrollAlreadyLocked`. If no employees found, returns `PayrollNoEmployees`.
 4. Lock response reports: employees processed, skipped, failed, and any error messages.
 5. System publishes `PayrollLockedEto` (distributed event) after successful lock.
@@ -98,6 +98,34 @@ Handles payroll execution and salary output: assigning payroll structures to emp
 | Event | Trigger | Payload |
 |-------|---------|---------|
 | `PayrollLockedEto` | Payroll locked for a month | Month, Year, EmployeeCount, TenantId, LockedAt |
+
+---
+
+## Earning & Deduction Component API Tiers
+
+The system exposes earning and deduction components through two distinct API tiers.
+
+### Master / Settings APIs (tenant-level catalog)
+
+Full CRUD for component definitions shared across the tenant. These define **what** components exist (name, calculation type, visibility, etc.), not what any specific employee is assigned.
+
+- `GET/POST/PUT/DELETE /api/payroll/earning-components` -- `EarningComponentController`
+- `GET/POST/PUT/DELETE /api/payroll/deduction-components` -- `DeductionComponentController`
+- Permissions: `PayrollManagement_SettingsEarningComponents`, `PayrollManagement_SettingsDeductionComponents`
+- PRD: [Payroll Settings](settings/prd.md)
+
+### Employee-scoped APIs (per-employee instances with amounts)
+
+These assign component **instances** to individual employees and expose them at different granularity levels:
+
+| Endpoint | Granularity | Shape |
+|----------|-------------|-------|
+| `GET /api/employees/{id}/payroll` | Lightweight contract | `ComponentAmountContract` (`componentId` + `amount`) |
+| `GET /api/payroll/employees/{id}/salary-structure` | Full structure | `SalaryComponentDto` (name, amount, type, dependency, flags) |
+| `GET /api/payroll/run` (preview) | Aggregated + line items | `RunPayrollComponentItem` (name + amount) per employee |
+| `GET /api/payroll/salary-slips` | Finalized slip | `SalaryComponent` (name, description, amount, type, dependency, flags) |
+
+**Relationship:** Settings APIs define the catalog; employee-scoped APIs assign instances with amounts derived from (or independent of) that catalog.
 
 ---
 

@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.EntityFrameworkCore.Security.UserScope;
 using ShikshaMitra.HR.Payroll.SalarySlips;
+using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Calendar.HolidayTypes;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.EntityFrameworkCore.HR.Calendar.Holidays;
@@ -65,6 +66,7 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
             options.AddRepository<HolidayType, EFCoreHolidayTypeRepository>();
             options.AddRepository<Holiday, EFCoreHolidayRepository>();
             options.AddRepository<Event, EFCoreEventRepository>();
+            options.AddRepository<DayCalculationSetting, EfCoreDayCalculationSettingRepository>();
         });
 
         // Register custom repository extensions

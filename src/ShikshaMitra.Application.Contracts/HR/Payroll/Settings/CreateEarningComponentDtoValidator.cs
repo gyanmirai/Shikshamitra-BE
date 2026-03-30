@@ -8,7 +8,6 @@ public class CreateEarningComponentDtoValidator : AbstractValidator<CreateEarnin
 	{
 		RuleFor(x => x.Name)
 			.NotEmpty()
-			.MinimumLength(1)
 			.MaximumLength(EarningComponentConsts.MaxNameLength);
 
 		RuleFor(x => x.Description)
@@ -16,11 +15,24 @@ public class CreateEarningComponentDtoValidator : AbstractValidator<CreateEarnin
 			.When(x => x.Description != null);
 
 		RuleFor(x => x.ComponentType).IsInEnum();
+		RuleFor(x => x.CalculationType).IsInEnum();
 		RuleFor(x => x.DependOn).IsInEnum();
 
 		RuleFor(x => x.Amount)
-			.NotEmpty()
-			.MinimumLength(1)
-			.MaximumLength(EarningComponentConsts.MaxAmountLength);
+			.NotNull()
+			.GreaterThanOrEqualTo(0)
+			.When(x => x.CalculationType == Settings.CalculationType.Amount)
+			.WithMessage("Amount is required when calculationType is AMOUNT.");
+
+		RuleFor(x => x.Percentage)
+			.NotNull()
+			.InclusiveBetween(0, 100)
+			.When(x => x.CalculationType == Settings.CalculationType.Percentage)
+			.WithMessage("Percentage must be between 0 and 100 when calculationType is PERCENTAGE.");
+
+		RuleFor(x => x.SelectedEarningComponentId)
+			.NotNull()
+			.When(x => x.CalculationType == Settings.CalculationType.Percentage)
+			.WithMessage("selectedEarningComponentId is required when calculationType is PERCENTAGE.");
 	}
 }

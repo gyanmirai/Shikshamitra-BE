@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Payroll.Settings;
@@ -33,8 +33,10 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             Name = "Test Provident Fund",
             Description = "Employee PF contribution",
             ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            Percentage = 12m,
+            SelectedDeductionComponentId = Guid.NewGuid(),
             DependOn = ComponentDependency.Basic,
-            Amount = "12%",
             VisibleInPayslip = true,
             DisplayOrder = 1
         };
@@ -48,8 +50,10 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         result.Name.ShouldBe(input.Name);
         result.Description.ShouldBe(input.Description);
         result.ComponentType.ShouldBe(DeductionComponentType.Fixed);
+        result.CalculationType.ShouldBe(CalculationType.Percentage);
+        result.Percentage.ShouldBe(12m);
+        result.Amount.ShouldBeNull();
         result.DependOn.ShouldBe(ComponentDependency.Basic);
-        result.Amount.ShouldBe(input.Amount);
         result.VisibleInPayslip.ShouldBeTrue();
         result.DisplayOrder.ShouldBe(1);
         result.IsActive.ShouldBeTrue();
@@ -64,8 +68,9 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             Name = "Test Life Insurance Premium",
             Description = "Monthly insurance premium",
             ComponentType = DeductionComponentType.Variable,
+            CalculationType = CalculationType.Amount,
+            Amount = 500m,
             DependOn = ComponentDependency.None,
-            Amount = "500",
             VisibleInPayslip = true,
             DisplayOrder = 5
         };
@@ -77,7 +82,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         result.ShouldNotBeNull();
         result.ComponentType.ShouldBe(DeductionComponentType.Variable);
         result.DependOn.ShouldBe(ComponentDependency.None);
-        result.Amount.ShouldBe("500");
+        result.Amount.ShouldBe(500m);
     }
 
     [Fact]
@@ -89,8 +94,9 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         {
             Name = componentName,
             ComponentType = DeductionComponentType.Fixed,
-            DependOn = ComponentDependency.None,
-            Amount = "1000"
+            CalculationType = CalculationType.Amount,
+            Amount = 1000m,
+            DependOn = ComponentDependency.None
         };
 
         await _deductionComponentAppService.CreateAsync(input1);
@@ -99,8 +105,9 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         {
             Name = componentName,
             ComponentType = DeductionComponentType.Variable,
-            DependOn = ComponentDependency.None,
-            Amount = "500"
+            CalculationType = CalculationType.Amount,
+            Amount = 500m,
+            DependOn = ComponentDependency.None
         };
 
         // Act & Assert
@@ -118,8 +125,9 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         {
             Name = "", // Empty name
             ComponentType = DeductionComponentType.Fixed,
-            DependOn = ComponentDependency.None,
-            Amount = "1000"
+            CalculationType = CalculationType.Amount,
+            Amount = 1000m,
+            DependOn = ComponentDependency.None
         };
 
         // Act & Assert
@@ -137,8 +145,9 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         {
             Name = "  Test Deduction With Spaces  ",
             ComponentType = DeductionComponentType.Fixed,
-            DependOn = ComponentDependency.None,
-            Amount = "1000"
+            CalculationType = CalculationType.Amount,
+            Amount = 1000m,
+            DependOn = ComponentDependency.None
         };
 
         // Act
@@ -264,8 +273,10 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             Name = "Updated Deduction",
             Description = "Updated description",
             ComponentType = DeductionComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
+            Percentage = 5m,
+            SelectedDeductionComponentId = Guid.NewGuid(),
             DependOn = ComponentDependency.Gross,
-            Amount = "5%",
             VisibleInPayslip = false,
             DisplayOrder = 10
         };
@@ -280,7 +291,9 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         result.Description.ShouldBe("Updated description");
         result.ComponentType.ShouldBe(DeductionComponentType.Variable);
         result.DependOn.ShouldBe(ComponentDependency.Gross);
-        result.Amount.ShouldBe("5%");
+        result.CalculationType.ShouldBe(CalculationType.Percentage);
+        result.Percentage.ShouldBe(5m);
+        result.Amount.ShouldBeNull();
         result.VisibleInPayslip.ShouldBeFalse();
         result.DisplayOrder.ShouldBe(10);
     }
@@ -296,8 +309,9 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         {
             Name = "Deduction 1", // Trying to use existing name
             ComponentType = DeductionComponentType.Fixed,
-            DependOn = ComponentDependency.None,
-            Amount = "1000"
+            CalculationType = CalculationType.Amount,
+            Amount = 1000m,
+            DependOn = ComponentDependency.None
         };
 
         // Act & Assert
@@ -318,8 +332,11 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             Name = "Same Name Deduction", // Same name
             Description = "Updated description only",
             ComponentType = created.ComponentType,
-            DependOn = created.DependOn,
-            Amount = created.Amount
+            CalculationType = created.CalculationType,
+            Amount = created.Amount,
+            Percentage = created.Percentage,
+            SelectedDeductionComponentId = created.SelectedDeductionComponentId,
+            DependOn = created.DependOn
         };
 
         // Act
@@ -421,8 +438,9 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         {
             Name = "Deduction & Tax (10%) - Test",
             ComponentType = DeductionComponentType.Fixed,
-            DependOn = ComponentDependency.None,
-            Amount = "1000"
+            CalculationType = CalculationType.Amount,
+            Amount = 1000m,
+            DependOn = ComponentDependency.None
         };
 
         // Act
@@ -440,15 +458,18 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         {
             Name = "Percentage Deduction",
             ComponentType = DeductionComponentType.Fixed,
-            DependOn = ComponentDependency.Basic,
-            Amount = "12.5%"
+            CalculationType = CalculationType.Percentage,
+            Percentage = 12.5m,
+            SelectedDeductionComponentId = Guid.NewGuid(),
+            DependOn = ComponentDependency.Basic
         };
 
         // Act
         var result = await _deductionComponentAppService.CreateAsync(input);
 
         // Assert
-        result.Amount.ShouldBe("12.5%");
+        result.Percentage.ShouldBe(12.5m);
+        result.CalculationType.ShouldBe(CalculationType.Percentage);
     }
 
     [Fact]
@@ -459,15 +480,16 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         {
             Name = "Large Deduction",
             ComponentType = DeductionComponentType.Fixed,
-            DependOn = ComponentDependency.None,
-            Amount = "500000"
+            CalculationType = CalculationType.Amount,
+            Amount = 500000m,
+            DependOn = ComponentDependency.None
         };
 
         // Act
         var result = await _deductionComponentAppService.CreateAsync(input);
 
         // Assert
-        result.Amount.ShouldBe("500000");
+        result.Amount.ShouldBe(500000m);
     }
 
     [Fact]
@@ -499,8 +521,9 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             Name = name,
             Description = $"Test description for {name}",
             ComponentType = type,
+            CalculationType = CalculationType.Amount,
+            Amount = 1000m,
             DependOn = dependOn,
-            Amount = "1000",
             VisibleInPayslip = true,
             DisplayOrder = displayOrder
         };

@@ -10,6 +10,7 @@ Concise records of significant technical decisions. Each ADR is **append-only**:
 
 **Related**
 
-- [HR module reference](../../modules/hr.md)
-- [HR PRDs](../../prd/hr/README.md)
+- [HR module reference](../../modules/hr/technical-reference.md)
+- [HR PRDs](../../modules/hr/prd/README.md)
 - [Project best practices](../../best-practices.md)
+

@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
@@ -498,15 +498,28 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	{
 		var basicSalary = payrollDetails?.BasicSalary ?? 0m;
 
-		// Single-pass calculation for earnings and deductions (optimized)
+		// Single-pass: compute aggregates and build component line items together
 		var grossSalary = 0m;
 		var totalDeduction = 0m;
+		var earningComponents = new List<RunPayrollComponentItem>(components.Count);
+		var deductionComponents = new List<RunPayrollComponentItem>(components.Count);
 		foreach (var component in components)
 		{
+			var item = new RunPayrollComponentItem
+			{
+				Name = component.Name,
+				Amount = (double)component.Amount
+			};
 			if (component.IsEarning)
+			{
 				grossSalary += component.Amount;
+				earningComponents.Add(item);
+			}
 			else
+			{
 				totalDeduction += component.Amount;
+				deductionComponents.Add(item);
+			}
 		}
 
 		var netPay = grossSalary - totalDeduction;
@@ -526,7 +539,9 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			NetPay = (double)netPay,
 			PresentDays = presentDays,
 			HalfWorkingDays = halfDays,
-			TotalWorkingDays = totalWorkingDays
+			TotalWorkingDays = totalWorkingDays,
+			EarningComponents = earningComponents,
+			DeductionComponents = deductionComponents
 		};
 	}
 

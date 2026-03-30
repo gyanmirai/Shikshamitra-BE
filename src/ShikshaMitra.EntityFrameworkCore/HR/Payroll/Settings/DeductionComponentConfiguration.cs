@@ -1,12 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.HR.Payroll.Settings;
 
-/// <summary>
-/// EF Core configuration for DeductionComponent entity
-/// </summary>
 public class DeductionComponentConfiguration : IEntityTypeConfiguration<DeductionComponent>
 {
 	public void Configure(EntityTypeBuilder<DeductionComponent> builder)
@@ -15,7 +12,6 @@ public class DeductionComponentConfiguration : IEntityTypeConfiguration<Deductio
 
 		builder.ConfigureByConvention();
 
-		// Configure properties
 		builder.Property(x => x.Name)
 			.IsRequired()
 			.HasMaxLength(DeductionComponentConsts.MaxNameLength);
@@ -23,18 +19,25 @@ public class DeductionComponentConfiguration : IEntityTypeConfiguration<Deductio
 		builder.Property(x => x.Description)
 			.HasMaxLength(DeductionComponentConsts.MaxDescriptionLength);
 
-		builder.Property(x => x.Amount)
-			.IsRequired()
-			.HasMaxLength(DeductionComponentConsts.MaxAmountLength);
-
 		builder.Property(x => x.ComponentType)
 			.IsRequired();
 
-		builder.Property(x => x.DependOn)
+		builder.Property(x => x.CalculationType)
 			.IsRequired();
 
-		builder.Property(x => x.CustomComponentId)
+		builder.Property(x => x.Amount)
+			.HasColumnType("decimal(18,2)")
 			.IsRequired(false);
+
+		builder.Property(x => x.Percentage)
+			.HasColumnType("decimal(5,2)")
+			.IsRequired(false);
+
+		builder.Property(x => x.SelectedDeductionComponentId)
+			.IsRequired(false);
+
+		builder.Property(x => x.DependOn)
+			.IsRequired();
 
 		builder.Property(x => x.VisibleInPayslip)
 			.IsRequired()
@@ -48,8 +51,6 @@ public class DeductionComponentConfiguration : IEntityTypeConfiguration<Deductio
 			.IsRequired()
 			.HasDefaultValue(true);
 
-		// Indexes for performance
-		// Unique index on TenantId + Name to ensure uniqueness per tenant
 		builder.HasIndex(x => new { x.TenantId, x.Name })
 			.IsUnique()
 			.HasDatabaseName("IX_DeductionComponents_TenantId_Name");

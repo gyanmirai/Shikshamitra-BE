@@ -100,6 +100,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "HR.PayrollManagement.Settings.EarningComponents", new SubmoduleInfo(PayrollManagement_SettingsEarningComponents.All, PayrollManagement_SettingsEarningComponents.DisplayNames) },
 			{ "HR.PayrollManagement.Settings.DeductionComponents", new SubmoduleInfo(PayrollManagement_SettingsDeductionComponents.All, PayrollManagement_SettingsDeductionComponents.DisplayNames) },
 			{ "HR.PayrollManagement.Settings.PfRule", new SubmoduleInfo(PayrollManagement_SettingsPfRule.All, PayrollManagement_SettingsPfRule.DisplayNames) },
+			{ "HR.PayrollManagement.Settings.DayCalculation", new SubmoduleInfo(PayrollManagement_SettingsDayCalculation.All, PayrollManagement_SettingsDayCalculation.DisplayNames) },
 			{ "HR.AttendanceAndLeave.ImportAttendance", new SubmoduleInfo(AttendanceAndLeave_ImportAttendance.All, AttendanceAndLeave_ImportAttendance.DisplayNames) },
 			{ "HR.AttendanceAndLeave.LeaveManagement", new SubmoduleInfo(AttendanceAndLeave_LeaveManagement.All, AttendanceAndLeave_LeaveManagement.DisplayNames) },
 			{ "HR.AttendanceAndLeave.AttendanceTracking", new SubmoduleInfo(AttendanceAndLeave_AttendanceTracking.All, AttendanceAndLeave_AttendanceTracking.DisplayNames) },

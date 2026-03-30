@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Homework;
@@ -236,6 +236,7 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	DbSet<ProfessionalTax> ProfessionalTaxes { get; set; }
 	public DbSet<EarningComponent> EarningComponents { get; set; }
 	public DbSet<DeductionComponent> DeductionComponents { get; set; }
+	public DbSet<DayCalculationSetting> DayCalculationSettings { get; set; }
 	public DbSet<SalarySlip> SalarySlips { get; set; }
 
 	#endregion

@@ -7,5 +7,6 @@ public class ChangeEmployeeStatusDtoValidator : AbstractValidator<ChangeEmployee
 	public ChangeEmployeeStatusDtoValidator()
 	{
 		RuleFor(x => x.EmployeeStatusType).IsInEnum();
+		RuleFor(x => x.Remarks).MaximumLength(2000);
 	}
 }

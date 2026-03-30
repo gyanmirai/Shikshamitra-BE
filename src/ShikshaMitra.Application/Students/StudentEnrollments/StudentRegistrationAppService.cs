@@ -1,5 +1,6 @@
 ﻿using ShikshaMitra.Library.Members;
 using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.Students.ValueObjects;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
@@ -25,7 +26,6 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 public class StudentRegistrationAppService(
 	IRepository<Student, Guid> studentRepository,
 	IRepository<StudentAdditionalDetail, Guid> studentAdditionalDetailRepository,
-	IRepository<StudentFamilyDetail, Guid> studentFamilyDetailRepository,
 	IRepository<StudentCommunicationDetail, Guid> studentCommunicationDetailRepository,
 	IRepository<StudentMedicalRecord, Guid> studentMedicalRecordRepository,
 	IRepository<StudentPreviousSchoolDetail, Guid> studentPreviousSchoolDetailRepository,
@@ -187,7 +187,9 @@ public class StudentRegistrationAppService(
 				input.MotherTongue,
 				input.PreviousSchool,
 				input.LastClassPassed,
-				StudentRegistrationStateEnum.General
+				StudentRegistrationStateEnum.General,
+				input.InquiryPreferenceId,
+				input.FormNo
 			);
 
 		// Update contact details
@@ -273,7 +275,9 @@ public class StudentRegistrationAppService(
 				input.MotherTongue,
 				input.PreviousSchool,
 				input.LastClassPassed,
-				StudentRegistrationStateEnum.General
+				StudentRegistrationStateEnum.General,
+				input.InquiryPreferenceId,
+				input.FormNo
 			);
 		}
 
@@ -290,17 +294,15 @@ public class StudentRegistrationAppService(
 
 	public async Task<StudentFamilyInfoDto> GetFamilyInfoAsync(Guid studentId)
 	{
-		// Load the student aggregate
+		// FamilyDetail is auto-included via StudentConfiguration
 		var student = await studentRepository.GetAsync(studentId);
 
-		// Validate student status using domain service
 		validationService.ValidateStudentStatus(
 			student,
 			RegistrationStatuses,
 			StudentRegistrationErrorCodes.InvalidStudentStatusForFamilyInfo);
 
-		// Load family detail if exists
-		var familyDetail = await studentFamilyDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
+		var familyDetail = student.FamilyDetail;
 
 		var result = new StudentFamilyInfoDto
 		{
@@ -312,35 +314,22 @@ public class StudentRegistrationAppService(
 			SiblingStudents = new List<SiblingStudentDto>()
 		};
 
-		// Load sibling information if exists
 		if (familyDetail?.SiblingStudentIds != null && familyDetail.SiblingStudentIds.Any())
 		{
 			var siblings = new List<SiblingStudentDto>();
 
 			foreach (var siblingId in familyDetail.SiblingStudentIds)
 			{
+				// Standard and Division are auto-included on Student
 				var sibling = await studentRepository.FirstOrDefaultAsync(x => x.Id == siblingId);
 				if (sibling != null)
 				{
-					Standard? standard = null;
-					Division? division = null;
-
-					if (sibling.StandardId.HasValue)
-					{
-						standard = await standardRepository.FirstOrDefaultAsync(x => x.Id == sibling.StandardId.Value);
-					}
-
-					if (sibling.DivisionId.HasValue)
-					{
-						division = await divisionRepository.FirstOrDefaultAsync(x => x.Id == sibling.DivisionId.Value);
-					}
-
 					siblings.Add(new SiblingStudentDto
 					{
 						StudentId = sibling.Id,
 						FullName = $"{sibling.FirstName} {sibling.MiddleName} {sibling.LastName}".Trim(),
-						StandardName = standard?.Name,
-						DivisionName = division?.Name,
+						StandardName = sibling.Standard?.Name,
+						DivisionName = sibling.Division?.Name,
 						GrNo = sibling.GrNo
 					});
 				}
@@ -354,57 +343,24 @@ public class StudentRegistrationAppService(
 
 	public async Task<StudentFamilyInfoDto> UpdateFamilyInfoAsync(Guid studentId, UpdateFamilyInfoDto input)
 	{
-		// Load the student aggregate
+		// FamilyDetail is auto-included via StudentConfiguration
 		var student = await studentRepository.GetAsync(studentId);
 
-		// Validate student status using domain service
 		validationService.ValidateStudentStatus(
 			student,
 			RegistrationStatuses,
 			StudentRegistrationErrorCodes.InvalidStudentStatusForFamilyUpdate);
 
-		// Validate sibling students exist using domain service
 		await validationService.ValidateSiblingStudentsExistAsync(input.SiblingStudentIds);
 
-		// Load or create family detail
-		var familyDetail = await studentFamilyDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
-		var isNewFamilyDetail = familyDetail == null;
-
-		if (isNewFamilyDetail)
-		{
-			// Create new family detail entity
-			familyDetail = new StudentFamilyDetail(studentId, CurrentTenant.Id);
-			await studentFamilyDetailRepository.InsertAsync(familyDetail, autoSave: false);
-		}
-
-		// Map DTOs to value objects
 		var fatherDetails = input.FatherDetails != null ? MapDtoToParentGuardianDetails(input.FatherDetails) : null;
 		var motherDetails = input.MotherDetails != null ? MapDtoToParentGuardianDetails(input.MotherDetails) : null;
 		var guardianDetails = input.GuardianDetails != null ? MapDtoToParentGuardianDetails(input.GuardianDetails) : null;
 
-		// Update family information
-		familyDetail.UpdateFamilyInformation(
-			fatherDetails,
-			motherDetails,
-			guardianDetails,
-			input.SiblingStudentIds
-		);
+		// Aggregate root owns FamilyDetail creation/update and registration state advancement
+		student.UpdateFamilyInfo(fatherDetails, motherDetails, guardianDetails, input.SiblingStudentIds);
 
-		// Update registration state in additional detail
-		if (student.AdditionalDetail != null)
-		{
-			var currentState = student.AdditionalDetail.StudentRegistrationState;
-			if (currentState < StudentRegistrationStateEnum.Family)
-			{
-				// Update state to Family using reflection (since there's no direct method)
-				var property = student.AdditionalDetail.GetType().GetProperty("StudentRegistrationState");
-				property?.SetValue(student.AdditionalDetail, StudentRegistrationStateEnum.Family);
-				// Persist the registration state change
-				await studentAdditionalDetailRepository.UpdateAsync(student.AdditionalDetail, autoSave: false);
-			}
-		}
-
-		// Note: No need to call UpdateAsync on familyDetail if it's new - InsertAsync already tracked it
+		await studentRepository.UpdateAsync(student, autoSave: true);
 
 		return await GetFamilyInfoAsync(studentId);
 	}
@@ -548,19 +504,7 @@ public class StudentRegistrationAppService(
 			input.EmergencyContactRelation
 		);
 
-		// Update registration state in additional detail
-		if (student.AdditionalDetail != null)
-		{
-			var currentState = student.AdditionalDetail.StudentRegistrationState;
-			if (currentState < StudentRegistrationStateEnum.Communication)
-			{
-				// Update state to Communication using reflection (since there's no direct method)
-				var property = student.AdditionalDetail.GetType().GetProperty("StudentRegistrationState");
-				property?.SetValue(student.AdditionalDetail, StudentRegistrationStateEnum.Communication);
-				// Persist the registration state change
-				await studentAdditionalDetailRepository.UpdateAsync(student.AdditionalDetail, autoSave: false);
-			}
-		}
+		student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.Communication);
 
 		// Commit all changes in a single transaction
 		await UnitOfWorkManager.Current!.SaveChangesAsync();
@@ -718,18 +662,7 @@ public class StudentRegistrationAppService(
 			input.CurrentMedications
 		);
 
-		// Update registration state in additional detail
-		if (student.AdditionalDetail != null)
-		{
-			var currentState = student.AdditionalDetail.StudentRegistrationState;
-			if (currentState < StudentRegistrationStateEnum.MedicalRecords)
-			{
-				var property = student.AdditionalDetail.GetType().GetProperty("StudentRegistrationState");
-				property?.SetValue(student.AdditionalDetail, StudentRegistrationStateEnum.MedicalRecords);
-				// Persist the registration state change
-				await studentAdditionalDetailRepository.UpdateAsync(student.AdditionalDetail, autoSave: false);
-			}
-		}
+		student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.MedicalRecords);
 
 		// Commit all changes in a single transaction
 		await UnitOfWorkManager.Current!.SaveChangesAsync();
@@ -809,18 +742,7 @@ public class StudentRegistrationAppService(
 			input.Remarks
 		);
 
-		// Update registration state in additional detail
-		if (student.AdditionalDetail != null)
-		{
-			var currentState = student.AdditionalDetail.StudentRegistrationState;
-			if (currentState < StudentRegistrationStateEnum.PrevSchoolDetails)
-			{
-				var property = student.AdditionalDetail.GetType().GetProperty("StudentRegistrationState");
-				property?.SetValue(student.AdditionalDetail, StudentRegistrationStateEnum.PrevSchoolDetails);
-				// Persist the registration state change
-				await studentAdditionalDetailRepository.UpdateAsync(student.AdditionalDetail, autoSave: false);
-			}
-		}
+		student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.PrevSchoolDetails);
 
 		// Commit all changes in a single transaction
 		await UnitOfWorkManager.Current!.SaveChangesAsync();
@@ -896,18 +818,7 @@ public class StudentRegistrationAppService(
 			input.SwiftCode
 		);
 
-		// Update registration state in additional detail
-		if (student.AdditionalDetail != null)
-		{
-			var currentState = student.AdditionalDetail.StudentRegistrationState;
-			if (currentState < StudentRegistrationStateEnum.BankDetails)
-			{
-				var property = student.AdditionalDetail.GetType().GetProperty("StudentRegistrationState");
-				property?.SetValue(student.AdditionalDetail, StudentRegistrationStateEnum.BankDetails);
-				// Persist the registration state change
-				await studentAdditionalDetailRepository.UpdateAsync(student.AdditionalDetail, autoSave: false);
-			}
-		}
+		student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.BankDetails);
 
 		// Commit all changes in a single transaction
 		await UnitOfWorkManager.Current!.SaveChangesAsync();

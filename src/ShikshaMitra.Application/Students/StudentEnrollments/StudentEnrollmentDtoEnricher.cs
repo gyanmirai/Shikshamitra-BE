@@ -187,6 +187,15 @@ public class StudentEnrollmentDtoEnricher(
 					dto.InquiryStatus = latestNote!.Status;
 				}
 			}
+
+			if (studentDict.TryGetValue(dto.StudentId, out stud) && stud.AdditionalDetail.InquiryPreferenceId != null)
+			{
+				var inquiryPreference = await inquiryPreferenceRepository.FindAsync(student.AdditionalDetail.InquiryPreferenceId!.Value);
+				if (inquiryPreference != null)
+				{
+					dto.InquiryPreference = inquiryPreference.PreferenceName;
+				}
+			}
 		}
 	}
 
@@ -339,6 +348,15 @@ public class StudentEnrollmentDtoEnricher(
 				var v = (double) stud.AdditionalDetail?.StudentRegistrationState
 					/ totalStates;
 				dto.Progress = (double) v * 100;
+			}
+
+			if (studentDict.TryGetValue(dto.StudentId, out stud) && stud.AdditionalDetail.InquiryPreferenceId != null)
+			{
+				var inquiryPreference = await inquiryPreferenceRepository.FindAsync(student.AdditionalDetail.InquiryPreferenceId!.Value);
+				if (inquiryPreference != null)
+				{
+					dto.InquiryPreference = inquiryPreference.PreferenceName;
+				}
 			}
 		}
 	}

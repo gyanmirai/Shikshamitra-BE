@@ -36,6 +36,8 @@ public class StudentAttendanceDto
 	public string? LastName { get; set; }
 	public string FullName => $"{FirstName} {MiddleName} {LastName}".Trim();
 	public AttendanceStatus Status { get; set; } = AttendanceStatus.Pending;
+	public int PresentDays { get; set; }
+	public double AttendancePercentage { get; set; }
 	public string? Remarks { get; set; }
 }
 

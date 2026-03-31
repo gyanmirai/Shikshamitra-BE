@@ -180,7 +180,7 @@ public class EfCoreEmployeeRepository(
 
 		await InvalidateCacheAsync(employee, cancellationToken);
 
-		await base.DeleteAsync(id, autoSave, cancellationToken);
+		await base.DeleteAsync(employee, autoSave, cancellationToken);
 	}
 
 	/// <summary>

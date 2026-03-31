@@ -12,9 +12,8 @@ All endpoints require a Bearer token and `__tenant` header.
 
 | Method | Route | Description |
 |--------|-------|-------------|
-| GET | `/api/employees` | List employees (paginated, filterable) |
+| GET | `/api/employees` | List/search employees (paginated, filterable) |
 | GET | `/api/employees/{employeeId}` | Get employee details |
-| GET | `/api/employees/search` | Search employees by name/code |
 
 ### Personal Info (`api/employees`)
 
@@ -82,7 +81,7 @@ All endpoints require a Bearer token and `__tenant` header.
 
 ### GET /api/employees
 
-List employees with pagination and filtering.
+List employees with pagination, filtering, and optional search.
 
 **Query params:**
 
@@ -94,6 +93,7 @@ List employees with pagination and filtering.
 | pageSize | int | no | 10 | 10-50 |
 | isTeaching | bool | no | | |
 | roleId | Guid | no | | |
+| search | string | no | | matches name/code/email/mobile |
 
 **Response (200):**
 
@@ -132,18 +132,6 @@ EmployeeSummary {
 **Response (200):** `EmployeeDetails` (same shape as `EmployeeSummary`)
 
 **Status codes:** 200, 403 (IDOR), 404
-
----
-
-### GET /api/employees/search
-
-**Query params:**
-
-| Param | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| search | string | no | minLength 3 |
-
-**Response (200):** `EmployeeSearchResponse { items: EmployeeSearchItem[] }` (max 50 results)
 
 ---
 

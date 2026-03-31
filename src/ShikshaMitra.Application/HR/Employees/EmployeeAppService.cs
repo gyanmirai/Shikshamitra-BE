@@ -929,6 +929,8 @@ public class EmployeeAppService(
 			queryable = queryable.Where(e => e.RoleId == input.RoleId.Value);
 		}
 
+		queryable = ApplySearchFilter(queryable, input.Search);
+
 		// Get total count before pagination
 		var totalCount = await AsyncExecuter.CountAsync(queryable);
 
@@ -960,19 +962,16 @@ public class EmployeeAppService(
 		};
 	}
 
-	public async Task<EmployeeSearchResponse> SearchAsync(SearchEmployeeInput input)
+	private static IQueryable<Employee> ApplySearchFilter(IQueryable<Employee> queryable, string? search)
 	{
-		// Validate minimum search length (matches controller MinLength(3))
-		if (string.IsNullOrEmpty(input.SearchTerm) || input.SearchTerm.Length < 3)
+		if (string.IsNullOrWhiteSpace(search))
 		{
-			return new EmployeeSearchResponse { Items = new List<EmployeeSearchItem>() };
+			return queryable;
 		}
 
-		var searchTerm = input.SearchTerm.ToLower();
-		var queryable = await Repository.GetQueryableAsync();
+		var searchTerm = search.Trim().ToLower();
 
-		// Search by name, employee identifier, email, or mobile number
-		queryable = queryable.Where(e =>
+		return queryable.Where(e =>
 			(e.FirstName != null && e.FirstName.ToLower().Contains(searchTerm)) ||
 			(e.LastName != null && e.LastName.ToLower().Contains(searchTerm)) ||
 			(e.MiddleName != null && e.MiddleName.ToLower().Contains(searchTerm)) ||
@@ -980,20 +979,6 @@ public class EmployeeAppService(
 			(e.Email != null && e.Email.ToLower().Contains(searchTerm)) ||
 			(e.MobileNo != null && e.MobileNo.Contains(searchTerm))
 		);
-
-		// Apply result limit
-		var maxResults = input.MaxResultCount > 0 ? input.MaxResultCount : 50;
-		var employees = await AsyncExecuter.ToListAsync(
-			queryable
-				.OrderBy(e => e.FirstName)
-				.ThenBy(e => e.LastName)
-				.Take(maxResults)
-		);
-
-		// Map to response DTOs
-		var items = employees.Select(MapToEmployeeSearchItem).ToList();
-
-		return new EmployeeSearchResponse { Items = items };
 	}
 
 	private EmployeeSummary MapToEmployeeSummary(Employee employee)
@@ -1018,32 +1003,6 @@ public class EmployeeAppService(
 				StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"),
 				EndTime = employee.Shift.EndTime.ToString("HH:mm:ss")
 			} : null,
-			Status = (int) (employee.EmployeeStatusType ?? EmployeeStatusType.Active)
-		};
-	}
-
-	private EmployeeSearchItem MapToEmployeeSearchItem(Employee employee)
-	{
-		return new EmployeeSearchItem
-		{
-			Id = employee.Id,
-			RoleName = employee.Role?.Name ?? string.Empty,
-			FullName = employee.EmployeeName ?? string.Empty,
-			ThumbnailPicture = employee.ProfilePictureBlobName ?? string.Empty,
-			EmployeeIdentifier = employee.EmployeeCode ?? string.Empty,
-			Dob = employee.DateOfBirth?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MinValue,
-			Gender = employee.GenderType?.ToString() ?? string.Empty,
-			Doj = employee.DateOfJoining?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MinValue,
-			Email = employee.Email ?? string.Empty,
-			MobileNo = employee.MobileNo ?? string.Empty,
-			IsTeaching = employee.EmployeeGroup == EmployeeGroupType.Teaching,
-			Shift = employee.Shift != null ? new ShiftInfo
-			{
-				Id = employee.Shift.Id,
-				Name = employee.Shift.ShiftName ?? string.Empty,
-				StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"),
-				EndTime = employee.Shift.EndTime.ToString("HH:mm:ss")
-			} : new ShiftInfo(),
 			Status = (int) (employee.EmployeeStatusType ?? EmployeeStatusType.Active)
 		};
 	}

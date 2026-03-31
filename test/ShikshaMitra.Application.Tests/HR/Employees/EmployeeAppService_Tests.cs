@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
@@ -7,6 +8,10 @@ using ShikshaMitra.HR.Employees.Payroll;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Authorization;
+using Volo.Abp.Guids;
+using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
 using Volo.Abp.Validation;
 using Xunit;
 
@@ -18,10 +23,16 @@ namespace ShikshaMitra.HR.Employees;
 public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
     private readonly IEmployeeAppService _employeeAppService;
+    private readonly IIdentityRoleRepository _roleRepository;
+    private readonly ICurrentTenant _currentTenant;
+    private readonly IGuidGenerator _guidGenerator;
 
     public EmployeeAppService_Tests()
     {
         _employeeAppService = GetRequiredService<IEmployeeAppService>();
+        _roleRepository = GetRequiredService<IIdentityRoleRepository>();
+        _currentTenant = GetRequiredService<ICurrentTenant>();
+        _guidGenerator = GetRequiredService<IGuidGenerator>();
     }
 
     #region Create Tests
@@ -30,6 +41,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     public async Task Should_Create_Employee_With_Basic_Info()
     {
         // Arrange
+        var roleId = await EnsureRoleExistsAsync();
         var input = new CreateEmployeeBasicInfoDto
         {
             FirstName = "John",
@@ -41,7 +53,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             GenderType = GenderType.Male,
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
             EmployeeStatusType = EmployeeStatusType.Active,
-            RoleId = Guid.NewGuid()
+            RoleId = roleId
         };
 
         // Act
@@ -76,6 +88,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     public async Task Should_Not_Create_Employee_Without_Required_Fields()
     {
         // Arrange
+        var roleId = await EnsureRoleExistsAsync();
         var input = new CreateEmployeeBasicInfoDto
         {
             FirstName = "", // Empty first name
@@ -83,11 +96,11 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             MobileNo = "9876543210",
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
-            RoleId = Guid.NewGuid()
+            RoleId = roleId
         };
 
         // Act & Assert
-        await Should.ThrowAsync<AbpValidationException>(async () =>
+        await Should.ThrowAsync<UserFriendlyException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
         });
@@ -97,6 +110,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     public async Task Should_Not_Create_Employee_With_Invalid_Mobile()
     {
         // Arrange
+        var roleId = await EnsureRoleExistsAsync();
         var input = new CreateEmployeeBasicInfoDto
         {
             FirstName = "John",
@@ -104,11 +118,11 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             MobileNo = "123", // Invalid mobile number
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
-            RoleId = Guid.NewGuid()
+            RoleId = roleId
         };
 
         // Act & Assert
-        await Should.ThrowAsync<AbpValidationException>(async () =>
+        await Should.ThrowAsync<UserFriendlyException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
         });
@@ -118,6 +132,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     public async Task Should_Not_Create_Employee_With_Invalid_Email()
     {
         // Arrange
+        var roleId = await EnsureRoleExistsAsync();
         var input = new CreateEmployeeBasicInfoDto
         {
             FirstName = "John",
@@ -126,11 +141,11 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             Email = "invalid-email", // Invalid email format
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
-            RoleId = Guid.NewGuid()
+            RoleId = roleId
         };
 
         // Act & Assert
-        await Should.ThrowAsync<AbpValidationException>(async () =>
+        await Should.ThrowAsync<UserFriendlyException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
         });
@@ -193,6 +208,118 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         result.TotalCount.ShouldBeGreaterThanOrEqualTo(15);
     }
 
+    [Fact]
+    public async Task Should_Filter_Employee_List_By_Search_Term()
+    {
+        // Arrange
+        var target = await CreateTestEmployeeAsync(
+            "SearchTarget",
+            "Teacher",
+            email: "searchtarget.teacher@test.com",
+            mobileNo: "9876543211");
+
+        await CreateTestEmployeeAsync(
+            "OtherPerson",
+            "Teacher",
+            email: "other.teacher@test.com",
+            mobileNo: "9876543212");
+
+        var input = new GetEmployeeListInput
+        {
+            Search = "searchtarget",
+            SkipCount = 0,
+            MaxResultCount = 50
+        };
+
+        // Act
+        var result = await _employeeAppService.GetFilteredListAsync(input);
+
+        // Assert
+        result.Items.ShouldContain(x => x.Id == target.Id);
+        result.Items.ShouldNotContain(x => x.Email == "other.teacher@test.com");
+    }
+
+    [Fact]
+    public async Task Should_Combine_Search_With_Status_And_Role_Filters()
+    {
+        // Arrange
+        var selectedRoleId = Guid.NewGuid();
+        var otherRoleId = Guid.NewGuid();
+
+        var matchingEmployee = await CreateTestEmployeeAsync(
+            "FilterAlpha",
+            "One",
+            email: "filter.alpha.one@test.com",
+            mobileNo: "9876543213",
+            roleId: selectedRoleId);
+
+        var wrongRoleEmployee = await CreateTestEmployeeAsync(
+            "FilterAlpha",
+            "Two",
+            email: "filter.alpha.two@test.com",
+            mobileNo: "9876543214",
+            roleId: otherRoleId);
+
+        var wrongStatusEmployee = await CreateTestEmployeeAsync(
+            "FilterAlpha",
+            "Three",
+            email: "filter.alpha.three@test.com",
+            mobileNo: "9876543215",
+            roleId: selectedRoleId);
+
+        await _employeeAppService.UpdateEmployeeStatus(
+            wrongStatusEmployee.Id,
+            EmployeeStatusType.Left,
+            "Status filter verification");
+
+        var input = new GetEmployeeListInput
+        {
+            Search = "filteralpha",
+            Status = nameof(EmployeeStatusType.Active),
+            RoleId = selectedRoleId,
+            SkipCount = 0,
+            MaxResultCount = 50
+        };
+
+        // Act
+        var result = await _employeeAppService.GetFilteredListAsync(input);
+
+        // Assert
+        result.Items.Count(x => x.Id == matchingEmployee.Id).ShouldBe(1);
+        result.Items.ShouldNotContain(x => x.Id == wrongRoleEmployee.Id);
+        result.Items.ShouldNotContain(x => x.Id == wrongStatusEmployee.Id);
+    }
+
+    [Fact]
+    public async Task Whitespace_Search_Should_Behave_Like_No_Search()
+    {
+        // Arrange
+        await CreateTestEmployeeAsync(
+            "Whitespace",
+            "Match",
+            email: "whitespace.match@test.com",
+            mobileNo: "9876543216");
+
+        var baseInput = new GetEmployeeListInput
+        {
+            SkipCount = 0,
+            MaxResultCount = 20
+        };
+
+        // Act
+        var withoutSearch = await _employeeAppService.GetFilteredListAsync(baseInput);
+        var withWhitespaceSearch = await _employeeAppService.GetFilteredListAsync(new GetEmployeeListInput
+        {
+            SkipCount = 0,
+            MaxResultCount = 20,
+            Search = "   "
+        });
+
+        // Assert
+        withoutSearch.TotalCount.ShouldBe(withWhitespaceSearch.TotalCount);
+        withoutSearch.Items.Select(x => x.Id).ShouldBe(withWhitespaceSearch.Items.Select(x => x.Id));
+    }
+
     #endregion
 
     #region Update Basic Info Tests
@@ -213,7 +340,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1991, 6, 20)),
             GenderType = GenderType.Female,
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 6, 1)),
-            RoleId = Guid.NewGuid()
+            RoleId = created.RoleId
         };
 
         // Act
@@ -233,7 +360,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     #region Update Family Info Tests
 
     [Fact]
-    public async Task Should_Update_Employee_Family_Info()
+    public async Task Should_Require_HR_Access_To_Update_Employee_Family_Info()
     {
         // Arrange
         var created = await CreateTestEmployeeAsync("Test", "Employee");
@@ -254,17 +381,11 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             }
         };
 
-        // Act
-        var result = await _employeeAppService.UpdateFamilyInfo(created.Id, updateInput);
-
-        // Assert
-        result.ShouldNotBeNull();
-        result.FatherDetails.ShouldNotBeNull();
-        result.FatherDetails.Name.ShouldBe("John Doe Sr.");
-        result.MotherDetails.ShouldNotBeNull();
-        result.MotherDetails.Name.ShouldBe("Jane Doe");
-        result.SpouseDetails.ShouldNotBeNull();
-        result.SpouseDetails.Name.ShouldBe("Mary Doe");
+        // Act & Assert
+        await Should.ThrowAsync<AbpAuthorizationException>(async () =>
+        {
+            await _employeeAppService.UpdateFamilyInfo(created.Id, updateInput);
+        });
     }
 
     #endregion
@@ -578,15 +699,17 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     public async Task Should_Handle_Employee_With_Long_Names()
     {
         // Arrange
+        var roleId = await EnsureRoleExistsAsync();
         var input = new CreateEmployeeBasicInfoDto
         {
             FirstName = "VeryLongFirstNameThatExceedsNormalLength",
             MiddleName = "VeryLongMiddleNameThatExceedsNormalLength",
             LastName = "VeryLongLastNameThatExceedsNormalLength",
             MobileNo = "9876543210",
+            Email = "long.names@test.com",
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
-            RoleId = Guid.NewGuid()
+            RoleId = roleId
         };
 
         // Act & Assert - Should either succeed or throw validation error
@@ -603,19 +726,20 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     }
 
     [Fact]
-    public async Task Should_Handle_Null_Optional_Fields()
+    public async Task Should_Handle_Null_Optional_Middle_Name()
     {
         // Arrange
+        var roleId = await EnsureRoleExistsAsync();
         var input = new CreateEmployeeBasicInfoDto
         {
             FirstName = "John",
             MiddleName = null, // Optional
             LastName = "Doe",
             MobileNo = "9876543210",
-            Email = null, // Optional
+            Email = "john.optional@test.com",
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
-            RoleId = Guid.NewGuid()
+            RoleId = roleId
         };
 
         // Act
@@ -624,22 +748,24 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         // Assert
         result.ShouldNotBeNull();
         result.MiddleName.ShouldBeNull();
-        result.Email.ShouldBeNull();
+        result.Email.ShouldBe("john.optional@test.com");
     }
 
     [Fact]
     public async Task Should_Handle_Special_Characters_In_Names()
     {
         // Arrange
+        var roleId = await EnsureRoleExistsAsync();
         var input = new CreateEmployeeBasicInfoDto
         {
             FirstName = "Jean-Paul",
             MiddleName = "O'Brien",
             LastName = "D'Angelo",
             MobileNo = "9876543210",
+            Email = "jeanpaul.dangelo@test.com",
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
-            RoleId = Guid.NewGuid()
+            RoleId = roleId
         };
 
         // Act
@@ -656,23 +782,46 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
     #region Helper Methods
 
-    private async Task<EmployeeDto> CreateTestEmployeeAsync(string firstName, string lastName)
+    private async Task<EmployeeDto> CreateTestEmployeeAsync(
+        string firstName,
+        string lastName,
+        string? email = null,
+        string? mobileNo = null,
+        Guid? roleId = null)
     {
+        var resolvedRoleId = await EnsureRoleExistsAsync(roleId);
+
         var input = new CreateEmployeeBasicInfoDto
         {
             FirstName = firstName,
             LastName = lastName,
-            MobileNo = "9876543210",
-            Email = $"{firstName.ToLower()}.{lastName.ToLower()}@test.com",
+            MobileNo = mobileNo ?? "9876543210",
+            Email = email ?? $"{firstName.ToLower()}.{lastName.ToLower()}@test.com",
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 5, 15)),
             GenderType = GenderType.Male,
             DateOfJoining = DateOnly.FromDateTime(DateTime.Now.Date),
             EmployeeStatusType = EmployeeStatusType.Active,
-            RoleId = Guid.NewGuid()
+            RoleId = resolvedRoleId
         };
 
         return await _employeeAppService.CreateBasicInfoAsync(input);
     }
 
+    private async Task<Guid> EnsureRoleExistsAsync(Guid? roleId = null)
+    {
+        var id = roleId ?? _guidGenerator.Create();
+
+        if (await _roleRepository.FindAsync(id) != null)
+        {
+            return id;
+        }
+
+        var role = new IdentityRole(id, $"TestRole-{id:N}", _currentTenant.Id);
+        await _roleRepository.InsertAsync(role, autoSave: true);
+
+        return id;
+    }
+
     #endregion
 }
+

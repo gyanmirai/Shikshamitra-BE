@@ -1,5 +1,4 @@
 using System;
-using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -47,7 +46,8 @@ public class EmployeesController : AbpControllerBase
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
 		[FromQuery, Range(10, 50)] int pageSize = 10,
 		[FromQuery] bool? isTeaching = null,
-		[FromQuery] Guid? roleId = null)
+		[FromQuery] Guid? roleId = null,
+		[FromQuery] string? search = null)
 	{
 		pageSize = Math.Min(pageSize, 50);
 
@@ -57,7 +57,8 @@ public class EmployeesController : AbpControllerBase
 			MaxResultCount = pageSize,
 			Status = status,
 			IsTeaching = isTeaching,
-			RoleId = roleId
+			RoleId = roleId,
+			Search = search
 		};
 
 		return await _searchAppService.GetFilteredListAsync(input);
@@ -76,28 +77,6 @@ public class EmployeesController : AbpControllerBase
 
 		var employee = await _personalInfoAppService.GetWithDetailsAsync(employeeId);
 		return MapToEmployeeDetails(employee);
-	}
-
-	/// <summary>
-	/// Search employees by name, identifier, email, or mobile (OpenAPI contract)
-	/// </summary>
-	[HttpGet("search")]
-	[ProducesResponseType(typeof(EmployeeSearchResponse), StatusCodes.Status200OK)]
-	public virtual async Task<EmployeeSearchResponse> SearchEmployeesAsync(
-		[FromQuery, MinLength(3)] string? search = null)
-	{
-		if (string.IsNullOrWhiteSpace(search))
-		{
-			return new EmployeeSearchResponse { Items = new System.Collections.Generic.List<EmployeeSearchItem>() };
-		}
-
-		var input = new SearchEmployeeInput
-		{
-			SearchTerm = search,
-			MaxResultCount = 50
-		};
-
-		return await _searchAppService.SearchAsync(input);
 	}
 
 	private static EmployeeDetails MapToEmployeeDetails(EmployeeDto employee)

@@ -9,5 +9,4 @@ namespace ShikshaMitra.HR.Employees.Search;
 public interface IEmployeeSearchAppService : IApplicationService
 {
 	Task<EmployeeListResponse> GetFilteredListAsync(GetEmployeeListInput input);
-	Task<EmployeeSearchResponse> SearchAsync(SearchEmployeeInput input);
 }

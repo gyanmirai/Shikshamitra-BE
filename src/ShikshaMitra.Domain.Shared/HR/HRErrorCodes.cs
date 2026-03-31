@@ -35,6 +35,7 @@ public static class HRErrorCodes
 
 	// Employee — Documents
 	public const string EmployeeDocumentNotFound = "HR:Employee:010101";
+	public const string EmployeeDocumentConfigurationNotFound = "HR:Employee:010102";
 
 	// Employee — Status
 	public const string EmployeeStatusRemarksRequired = "HR:Employee:010024";

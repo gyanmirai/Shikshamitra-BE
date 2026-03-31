@@ -6703,9 +6703,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
-                    b.Property<Guid?>("FamilyDetailId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("FirstName")
                         .HasColumnType("text");
 
@@ -6765,8 +6762,6 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("CommunicationDetailId");
 
                     b.HasIndex("DivisionId");
-
-                    b.HasIndex("FamilyDetailId");
 
                     b.HasIndex("InquiryPreferenceId");
 
@@ -11197,8 +11192,14 @@ namespace ShikshaMitra.Migrations
                                 .IsRequired()
                                 .HasColumnType("text");
 
+                            b1.Property<Guid?>("DocumentNameId")
+                                .HasColumnType("uuid");
+
                             b1.Property<Guid>("EmployeeId")
                                 .HasColumnType("uuid");
+
+                            b1.Property<DateTime?>("LastModificationTime")
+                                .HasColumnType("timestamp with time zone");
 
                             b1.Property<long>("Size")
                                 .HasColumnType("bigint");
@@ -11208,7 +11209,8 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("Id");
 
-                            b1.HasIndex("EmployeeId");
+                            b1.HasIndex("EmployeeId", "DocumentNameId")
+                                .HasDatabaseName("IX_EmployeeDocuments_EmployeeId_DocumentNameId");
 
                             b1.ToTable("AppEmployeeDocuments", (string)null);
 
@@ -11469,10 +11471,6 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("DivisionId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("ShikshaMitra.Students.StudentFamilyDetail", "FamilyDetail")
-                        .WithMany()
-                        .HasForeignKey("FamilyDetailId");
-
                     b.HasOne("ShikshaMitra.Students.StudentEnrollments.Settings.InquiryPreference", "InquiryPreference")
                         .WithMany()
                         .HasForeignKey("InquiryPreferenceId");
@@ -11499,8 +11497,6 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("CommunicationDetail");
 
                     b.Navigation("Division");
-
-                    b.Navigation("FamilyDetail");
 
                     b.Navigation("InquiryPreference");
 
@@ -11910,6 +11906,12 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentFamilyDetail", b =>
                 {
+                    b.HasOne("ShikshaMitra.Students.Student", null)
+                        .WithOne("FamilyDetail")
+                        .HasForeignKey("ShikshaMitra.Students.StudentFamilyDetail", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.OwnsOne("ShikshaMitra.Students.ValueObjects.ParentGuardianDetails", "FatherDetails", b1 =>
                         {
                             b1.Property<Guid>("StudentFamilyDetailId")
@@ -13038,6 +13040,8 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("AdditionalDetail");
 
                     b.Navigation("ContactDetail");
+
+                    b.Navigation("FamilyDetail");
 
                     b.Navigation("Notes");
 

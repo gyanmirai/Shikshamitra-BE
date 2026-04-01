@@ -39,32 +39,16 @@ public class PersonalInfoController : AbpControllerBase
 	}
 
 	/// <summary>
-	/// Create employee personal information (JSON)
+	/// Create employee personal information with an optional profile picture.
+	/// Send as multipart/form-data. The <c>data</c> field must contain a JSON string
+	/// matching the PersonalInfoRequest schema. The <c>profilePicture</c> field is optional.
 	/// </summary>
 	[HttpPost("personal-info")]
-	[Consumes("application/json")]
+	[Consumes("multipart/form-data")]
 	[ProducesResponseType(typeof(PersonalInfoResponse), StatusCodes.Status201Created)]
 	[ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(typeof(Result), StatusCodes.Status403Forbidden)]
 	public virtual async Task<PersonalInfoResponse> CreateAsync(
-		[FromBody, Required] PersonalInfoRequest request)
-	{
-		var createDto = PersonalInfoContractMapper.ToCreateDto(request);
-		var result = await _personalInfoAppService.CreateAsync(createDto);
-		return PersonalInfoContractMapper.ToResponse(result);
-	}
-
-	/// <summary>
-	/// Create employee personal information with optional profile picture (multipart/form-data).
-	/// The <c>data</c> field must contain a JSON string matching the PersonalInfoRequest schema.
-	/// </summary>
-	[HttpPost("personal-info")]
-	[Consumes("multipart/form-data")]
-	[ApiExplorerSettings(IgnoreApi = true)]
-	[ProducesResponseType(typeof(PersonalInfoResponse), StatusCodes.Status201Created)]
-	[ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
-	[ProducesResponseType(typeof(Result), StatusCodes.Status403Forbidden)]
-	public virtual async Task<PersonalInfoResponse> CreateWithPictureAsync(
 		[FromForm] CreatePersonalInfoWithPictureRequest request)
 	{
 		PersonalInfoRequest? personalInfo;

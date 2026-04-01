@@ -11,6 +11,15 @@ namespace ShikshaMitra.HR.Employees.PersonalInfo;
 public interface IEmployeePersonalInfoAppService : IApplicationService
 {
 	Task<EmployeePersonalInfoDto> CreateAsync(CreateEmployeePersonalInfoDto input);
+
+	/// <summary>
+	/// Creates an employee with a profile picture uploaded in the same operation.
+	/// </summary>
+	Task<EmployeePersonalInfoDto> CreateWithProfilePictureAsync(
+		CreateEmployeePersonalInfoDto input,
+		string profilePictureFileName,
+		byte[] profilePictureContent);
+
 	Task<EmployeePersonalInfoDto> GetAsync(Guid id);
 	Task<EmployeePersonalInfoDto> UpdateAsync(Guid id, UpdateEmployeePersonalInfoDto input);
 

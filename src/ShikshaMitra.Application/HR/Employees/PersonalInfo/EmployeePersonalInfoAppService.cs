@@ -26,6 +26,7 @@ public class EmployeePersonalInfoAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeeFamilyMemberRepository familyMemberRepository,
 	EmployeeManager employeeManager,
+	EmployeeDocumentManager employeeDocumentManager,
 	IdentityUserManager userManager,
 	IIdentityUserRepository userRepository,
 	ILookupNormalizer lookupNormalizer,
@@ -37,6 +38,23 @@ public class EmployeePersonalInfoAppService(
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	public async Task<EmployeePersonalInfoDto> CreateAsync(CreateEmployeePersonalInfoDto input)
+	{
+		return await CreateCoreAsync(input, null, null);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
+	public async Task<EmployeePersonalInfoDto> CreateWithProfilePictureAsync(
+		CreateEmployeePersonalInfoDto input,
+		string profilePictureFileName,
+		byte[] profilePictureContent)
+	{
+		return await CreateCoreAsync(input, profilePictureFileName, profilePictureContent);
+	}
+
+	private async Task<EmployeePersonalInfoDto> CreateCoreAsync(
+		CreateEmployeePersonalInfoDto input,
+		string? profilePictureFileName,
+		byte[]? profilePictureContent)
 	{
 		if (string.IsNullOrWhiteSpace(input.Email))
 			throw new BusinessException(HRErrorCodes.EmployeeEmailRequired);
@@ -90,7 +108,14 @@ public class EmployeePersonalInfoAppService(
 			state: input.State, country: input.Country, pinCode: input.Pincode,
 			shiftId: input.ShiftId);
 
-		employee = await employeeRepository.InsertAsync(employee);
+		employee = await employeeRepository.InsertAsync(employee, autoSave: true);
+
+		if (profilePictureContent != null && !string.IsNullOrWhiteSpace(profilePictureFileName))
+		{
+			await employeeDocumentManager.UploadProfilePictureAsync(
+				employee.Id, profilePictureFileName, profilePictureContent);
+		}
+
 		await uow.CompleteAsync();
 
 		logger.LogInformation(

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.HR.Employees;
@@ -28,6 +28,9 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 			doc.WithOwner().HasForeignKey("EmployeeId");
 			doc.Property<Guid>("Id");
 			doc.HasKey("Id");
+			doc.Property(d => d.DocumentNameId);
+			doc.HasIndex("EmployeeId", "DocumentNameId")
+				.HasDatabaseName("IX_EmployeeDocuments_EmployeeId_DocumentNameId");
 		});
 
 		// Configure owned value objects (stored in same table)

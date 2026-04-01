@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.IO;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -7,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Common.Responses;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.PersonalInfo;
+using ShikshaMitra.Models;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -21,6 +25,8 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 [Authorize]
 public class PersonalInfoController : AbpControllerBase
 {
+	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
 	private readonly IEmployeeAuthorizationService _authorizationService;
 
@@ -33,9 +39,10 @@ public class PersonalInfoController : AbpControllerBase
 	}
 
 	/// <summary>
-	/// Create employee personal information
+	/// Create employee personal information (JSON)
 	/// </summary>
 	[HttpPost("personal-info")]
+	[Consumes("application/json")]
 	[ProducesResponseType(typeof(PersonalInfoResponse), StatusCodes.Status201Created)]
 	[ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(typeof(Result), StatusCodes.Status403Forbidden)]
@@ -44,6 +51,59 @@ public class PersonalInfoController : AbpControllerBase
 	{
 		var createDto = PersonalInfoContractMapper.ToCreateDto(request);
 		var result = await _personalInfoAppService.CreateAsync(createDto);
+		return PersonalInfoContractMapper.ToResponse(result);
+	}
+
+	/// <summary>
+	/// Create employee personal information with optional profile picture (multipart/form-data).
+	/// The <c>data</c> field must contain a JSON string matching the PersonalInfoRequest schema.
+	/// </summary>
+	[HttpPost("personal-info")]
+	[Consumes("multipart/form-data")]
+	[ProducesResponseType(typeof(PersonalInfoResponse), StatusCodes.Status201Created)]
+	[ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(typeof(Result), StatusCodes.Status403Forbidden)]
+	public virtual async Task<PersonalInfoResponse> CreateWithPictureAsync(
+		[FromForm] CreatePersonalInfoWithPictureRequest request)
+	{
+		PersonalInfoRequest? personalInfo;
+		try
+		{
+			personalInfo = JsonSerializer.Deserialize<PersonalInfoRequest>(request.Data, JsonOptions);
+		}
+		catch (JsonException)
+		{
+			throw new UserFriendlyException("The 'data' field does not contain valid PersonalInfoRequest JSON.");
+		}
+
+		if (personalInfo is null)
+			throw new UserFriendlyException("The 'data' field does not contain valid PersonalInfoRequest JSON.");
+
+		var validationResults = new List<ValidationResult>();
+		if (!Validator.TryValidateObject(personalInfo, new ValidationContext(personalInfo), validationResults, true))
+		{
+			var errors = string.Join("; ", validationResults.ConvertAll(r => r.ErrorMessage));
+			throw new UserFriendlyException(errors);
+		}
+
+		var createDto = PersonalInfoContractMapper.ToCreateDto(personalInfo);
+
+		EmployeePersonalInfoDto result;
+		if (request.ProfilePicture is { Length: > 0 })
+		{
+			await using var ms = new MemoryStream();
+			await request.ProfilePicture.CopyToAsync(ms);
+
+			result = await _personalInfoAppService.CreateWithProfilePictureAsync(
+				createDto,
+				request.ProfilePicture.FileName,
+				ms.ToArray());
+		}
+		else
+		{
+			result = await _personalInfoAppService.CreateAsync(createDto);
+		}
+
 		return PersonalInfoContractMapper.ToResponse(result);
 	}
 

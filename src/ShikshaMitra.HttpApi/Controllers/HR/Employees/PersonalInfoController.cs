@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
@@ -60,6 +60,7 @@ public class PersonalInfoController : AbpControllerBase
 	/// </summary>
 	[HttpPost("personal-info")]
 	[Consumes("multipart/form-data")]
+	[ApiExplorerSettings(IgnoreApi = true)]
 	[ProducesResponseType(typeof(PersonalInfoResponse), StatusCodes.Status201Created)]
 	[ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(typeof(Result), StatusCodes.Status403Forbidden)]

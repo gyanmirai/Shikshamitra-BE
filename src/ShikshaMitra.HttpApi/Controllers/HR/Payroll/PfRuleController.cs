@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.Mappers.HR.Payroll;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
@@ -33,7 +34,7 @@ public class PfRuleController : AbpControllerBase
 		[FromBody] CreateUpdateProvidentFundDto input)
 	{
 		var createdPfRule = await _providentFundAppService.CreateAsync(input);
-		return StatusCode(201, PfRuleOpenApiMapper.ToCreateResponse(createdPfRule));
+		return StatusCode(201, PfRuleContractMapper.ToCreateResponse(createdPfRule));
 	}
 
 	[HttpGet("{id}")]
@@ -45,7 +46,7 @@ public class PfRuleController : AbpControllerBase
 	public virtual async Task<PfRuleResponseDto> GetAsync(Guid id)
 	{
 		var pfRule = await _providentFundAppService.GetAsync(id);
-		return PfRuleOpenApiMapper.ToPfRuleResponse(pfRule);
+		return PfRuleContractMapper.ToPfRuleResponse(pfRule);
 	}
 
 	[HttpGet]
@@ -72,7 +73,7 @@ public class PfRuleController : AbpControllerBase
 			input.MaxResultCount,
 			search);
 
-		return PfRuleOpenApiMapper.ToPaginatedResponse(result, page, pageSize);
+		return PfRuleContractMapper.ToPaginatedResponse(result, page, pageSize);
 	}
 
 	[HttpPut("{id}")]
@@ -86,7 +87,7 @@ public class PfRuleController : AbpControllerBase
 		[FromBody] CreateUpdateProvidentFundDto input)
 	{
 		var updatedPfRule = await _providentFundAppService.UpdateAsync(id, input);
-		return PfRuleOpenApiMapper.ToUpdateResponse(updatedPfRule);
+		return PfRuleContractMapper.ToUpdateResponse(updatedPfRule);
 	}
 
 	[HttpDelete("{id}")]

@@ -1,7 +1,6 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees.Payroll;
-using ShikshaMitra.HR.Payroll.PayrollStructures;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,7 +17,6 @@ public class EmployeePayrollAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeePayrollDetailsRepository payrollDetailsRepository,
 	IEmployeePayrollComponentRepository payrollComponentRepository,
-	PayrollStructureManager payrollStructureManager,
 	IEmployeeCacheManager employeeCacheManager,
 	IGuidGenerator guidGenerator)
 	: ApplicationService, IEmployeePayrollAppService
@@ -207,24 +205,4 @@ public class EmployeePayrollAppService(
 		await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
 	}
 
-	public async Task SetPayrollStructureAsync(Guid employeeId, Guid payrollStructureId)
-	{
-		await payrollStructureManager.SetEmployeePayrollStructureAsync(employeeId, payrollStructureId);
 	}
-
-	public async Task RemovePayrollStructureAsync(Guid employeeId)
-	{
-		await payrollStructureManager.RemoveEmployeePayrollStructureAsync(employeeId);
-	}
-
-	public async Task UpdatePayrollStructureAsync(Guid employeeId, CreateUpdateEmployeePayrollStructureDto input)
-	{
-		if (input?.PayrollStructures == null || input.PayrollStructures.Count == 0)
-		{
-			throw new BusinessException(HRErrorCodes.EmployeePayrollStructureRequired);
-		}
-
-		var payrollStructureId = input.PayrollStructures[0].Id;
-		await payrollStructureManager.SetEmployeePayrollStructureAsync(employeeId, payrollStructureId);
-	}
-}

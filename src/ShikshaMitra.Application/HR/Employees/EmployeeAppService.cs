@@ -1,8 +1,7 @@
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.Payroll;
-using ShikshaMitra.HR.Payroll.PayrollStructures;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -28,7 +27,6 @@ public class EmployeeAppService(
 	EmployeeManager employeeManager,
 	EmployeeDocumentManager employeeDocumentManager,
 	EmployeeAuthorizationService authorizationService,
-	PayrollStructureManager payrollStructureManager,
 	IBlobContainer blobContainer,
 	IEmployeeCacheManager employeeCacheManager,
 	IEmployeePayrollDetailsRepository payrollDetailsRepository,
@@ -54,8 +52,8 @@ public class EmployeeAppService(
 
 	public override async Task<EmployeeDto> GetAsync(Guid id)
 	{
-		// Use GetWithDetailsAsync for complete employee data including PayrollStructure
-		var employee = await employeeRepository.GetWithDetailsAsync(id, includePayrollStructure: true)
+		// Use GetWithDetailsAsync for complete employee data
+		var employee = await employeeRepository.GetWithDetailsAsync(id)
 			?? throw new EntityNotFoundException(typeof(Employee), id);
 
 		var employeeDto = ObjectMapper.Map<Employee, EmployeeDto>(employee);
@@ -646,30 +644,6 @@ public class EmployeeAppService(
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
 	}
 
-
-	[RemoteService(false)]
-
-	public async Task SetEmployeePayrollStructure(Guid employeeId, Guid payrollStructureId)
-	{
-		await payrollStructureManager.SetEmployeePayrollStructureAsync(employeeId, payrollStructureId);
-	}
-
-	[RemoteService(false)]
-	public async Task RemoveEmployeePayrollStructure(Guid employeeId)
-	{
-		await payrollStructureManager.RemoveEmployeePayrollStructureAsync(employeeId);
-	}
-
-	public async Task UpdatePayrollStructureAsync(Guid employeeId, CreateUpdateEmployeePayrollStructureDto input)
-	{
-		if (input?.PayrollStructures == null || input.PayrollStructures.Count == 0)
-		{
-			throw new UserFriendlyException("Payroll structure is required.");
-		}
-
-		var payrollStructureId = input.PayrollStructures[0].Id;
-		await payrollStructureManager.SetEmployeePayrollStructureAsync(employeeId, payrollStructureId);
-	}
 
 	public async Task DeleteDocumentAsync(Guid employeeId, Guid documentId)
 	{

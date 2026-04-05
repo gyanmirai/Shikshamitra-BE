@@ -16,7 +16,7 @@ namespace ShikshaMitra.Controllers.HR.Payroll.SalaryStructure;
 [Area("app")]
 [Route("api/payroll/employees/{employeeId}/salary-structure")]
 [Authorize]
-public class EmployeeSalaryStructureController : AbpController
+public class EmployeeSalaryStructureController : AbpControllerBase
 {
 	private readonly IEmployeeSalaryStructureAppService _salaryStructureAppService;
 

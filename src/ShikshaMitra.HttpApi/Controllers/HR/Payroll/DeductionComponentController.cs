@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.Mappers.HR.Payroll;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
@@ -34,7 +35,7 @@ public class DeductionComponentController : AbpControllerBase
 		var result = await _deductionComponentAppService.GetFilteredListAsync(
 			(page - 1) * pageSize, pageSize, search);
 
-		return DeductionComponentMapper.ToPaginatedResponse(result, page, pageSize);
+		return DeductionComponentContractMapper.ToPaginatedResponse(result, page, pageSize);
 	}
 
 	[HttpGet("{id}")]
@@ -44,7 +45,7 @@ public class DeductionComponentController : AbpControllerBase
 	public virtual async Task<DeductionComponentResponseDto> GetAsync(Guid id)
 	{
 		var dto = await _deductionComponentAppService.GetAsync(id);
-		return DeductionComponentMapper.ToResponseDto(dto);
+		return DeductionComponentContractMapper.ToResponseDto(dto);
 	}
 
 	[HttpPost]
@@ -55,7 +56,7 @@ public class DeductionComponentController : AbpControllerBase
 	public virtual async Task<ActionResult<ComponentCreateResponseDto>> CreateAsync(
 		[FromBody] DeductionComponentCreateRequestDto input)
 	{
-		var createDto = DeductionComponentMapper.ToCreateDto(input);
+		var createDto = DeductionComponentContractMapper.ToCreateDto(input);
 		var createdComponent = await _deductionComponentAppService.CreateAsync(createDto);
 		return StatusCode(201, new ComponentCreateResponseDto
 		{
@@ -74,7 +75,7 @@ public class DeductionComponentController : AbpControllerBase
 		[FromBody] DeductionComponentUpdateRequestDto input)
 	{
 		var existingComponent = await _deductionComponentAppService.GetAsync(id);
-		var updateDto = DeductionComponentMapper.ToUpdateDto(input, existingComponent.DisplayOrder);
+		var updateDto = DeductionComponentContractMapper.ToUpdateDto(input, existingComponent.DisplayOrder);
 		await _deductionComponentAppService.UpdateAsync(id, updateDto);
 		return Ok();
 	}

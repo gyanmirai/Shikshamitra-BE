@@ -85,12 +85,10 @@ public class EfCoreEmployeeRepository(
 	/// - Auto-included navigations are loaded via EF Core's optimized query
 	/// </summary>
 	/// <param name="id">Employee ID</param>
-	/// <param name="includePayrollStructure">Whether to include PayrollStructure details</param>
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>Employee with requested relations or null if not found</returns>
 	public async Task<Employee?> GetWithDetailsAsync(
 		Guid id,
-		bool includePayrollStructure = false,
 		CancellationToken cancellationToken = default)
 	{
 		// Try cache first to check if employee exists
@@ -110,17 +108,8 @@ public class EfCoreEmployeeRepository(
 		}
 
 		// Load full entity from database with auto-included navigation properties
-		// and optionally include PayrollStructure
 		var dbSet = await GetDbSetAsync();
 		var query = dbSet.Where(e => e.Id == id);
-
-		// Explicitly include PayrollStructure if requested
-		// (Role, EducationMediumStage, Shift are auto-included via EmployeeConfiguration)
-		if (includePayrollStructure)
-		{
-			query = query.Include(e => e.PayrollStructure)
-				.ThenInclude(ps => ps.PayElement);
-		}
 
 		// Include Documents collection to prevent null reference when accessed
 		query = query.Include(e => e.Documents);
@@ -143,7 +132,7 @@ public class EfCoreEmployeeRepository(
 		}
 
 		// When includeDetails is true, use cached version with navigation properties
-		var employee = await GetWithDetailsAsync(id, includePayrollStructure: false, cancellationToken);
+		var employee = await GetWithDetailsAsync(id, cancellationToken);
 
 		if (employee == null)
 		{

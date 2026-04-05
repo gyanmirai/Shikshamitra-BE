@@ -1,4 +1,4 @@
-# Payroll Operations -- Behavior Specification
+﻿# Payroll Operations -- Behavior Specification
 
 ## Purpose
 
@@ -134,3 +134,4 @@ These assign component **instances** to individual employees and expose them at 
 - [Employees](../employees/prd.md) -- employee payroll details, payroll structure assignment
 - [Payroll Settings](settings/prd.md) -- earning/deduction component definitions, PF rules
 - [Attendance & Leaves](../attendance-leaves/prd.md) -- working days data for payroll computation
+- [Implementation Reference](../../../hr/payroll/README.md) -- full endpoint-level documentation with request/response examples

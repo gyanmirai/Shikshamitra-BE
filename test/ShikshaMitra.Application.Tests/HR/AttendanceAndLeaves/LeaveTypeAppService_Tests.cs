@@ -16,6 +16,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 public class LeaveTypeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
     private readonly ILeaveTypeAppService _leaveTypeAppService;
+    private static readonly Guid TestMediumStageId = Guid.NewGuid();
 
     public LeaveTypeAppService_Tests()
     {
@@ -28,21 +29,21 @@ public class LeaveTypeAppService_Tests : ShikshaMitraApplicationTestBase<Shiksha
     public async Task Should_Create_Leave_Type()
     {
         // Arrange
-        var input = new CreateLeaveTypeDto
+        var input = new LeaveTypeCreateRequest
         {
-            Type = "Test Annual Leave",
+            MediumStageId = TestMediumStageId,
+            Name = "Test Annual Leave",
             Color = "#FF5733"
         };
 
         // Act
-        var result = await _leaveTypeAppService.CreateAsync(input);
+        var result = await _leaveTypeAppService.CreateLeaveTypeAsync(input);
 
         // Assert
         result.ShouldNotBeNull();
         result.Id.ShouldNotBe(Guid.Empty);
-        result.Type.ShouldBe(input.Type);
+        result.Name.ShouldBe(input.Name);
         result.Color.ShouldBe(input.Color);
-        result.IsActive.ShouldBeTrue();
     }
 
     [Fact]
@@ -50,24 +51,26 @@ public class LeaveTypeAppService_Tests : ShikshaMitraApplicationTestBase<Shiksha
     {
         // Arrange
         var leaveTypeName = "Duplicate Leave Type";
-        var input1 = new CreateLeaveTypeDto
+        var input1 = new LeaveTypeCreateRequest
         {
-            Type = leaveTypeName,
+            MediumStageId = TestMediumStageId,
+            Name = leaveTypeName,
             Color = "#FF0000"
         };
 
-        await _leaveTypeAppService.CreateAsync(input1);
+        await _leaveTypeAppService.CreateLeaveTypeAsync(input1);
 
-        var input2 = new CreateLeaveTypeDto
+        var input2 = new LeaveTypeCreateRequest
         {
-            Type = leaveTypeName,
+            MediumStageId = TestMediumStageId,
+            Name = leaveTypeName,
             Color = "#00FF00"
         };
 
         // Act & Assert
         await Should.ThrowAsync<BusinessException>(async () =>
         {
-            await _leaveTypeAppService.CreateAsync(input2);
+            await _leaveTypeAppService.CreateLeaveTypeAsync(input2);
         });
     }
 
@@ -75,16 +78,17 @@ public class LeaveTypeAppService_Tests : ShikshaMitraApplicationTestBase<Shiksha
     public async Task Should_Not_Create_Without_Required_Fields()
     {
         // Arrange
-        var input = new CreateLeaveTypeDto
+        var input = new LeaveTypeCreateRequest
         {
-            Type = "", // Empty type
+            MediumStageId = TestMediumStageId,
+            Name = "", // Empty name
             Color = "#FF0000"
         };
 
-        // Act & Assert
-        await Should.ThrowAsync<AbpValidationException>(async () =>
+        // Act & Assert — ABP validation interceptor catches empty Name via DTO validation
+        await Should.ThrowAsync<Volo.Abp.Validation.AbpValidationException>(async () =>
         {
-            await _leaveTypeAppService.CreateAsync(input);
+            await _leaveTypeAppService.CreateLeaveTypeAsync(input);
         });
     }
 
@@ -92,17 +96,18 @@ public class LeaveTypeAppService_Tests : ShikshaMitraApplicationTestBase<Shiksha
     public async Task Should_Trim_Whitespace_From_Type()
     {
         // Arrange
-        var input = new CreateLeaveTypeDto
+        var input = new LeaveTypeCreateRequest
         {
-            Type = "  Test Leave Type With Spaces  ",
+            MediumStageId = TestMediumStageId,
+            Name = "  Test Leave Type With Spaces  ",
             Color = "#FF0000"
         };
 
         // Act
-        var result = await _leaveTypeAppService.CreateAsync(input);
+        var result = await _leaveTypeAppService.CreateLeaveTypeAsync(input);
 
         // Assert
-        result.Type.ShouldBe("Test Leave Type With Spaces");
+        result.Name.ShouldBe("Test Leave Type With Spaces");
     }
 
     #endregion
@@ -121,7 +126,7 @@ public class LeaveTypeAppService_Tests : ShikshaMitraApplicationTestBase<Shiksha
         // Assert
         result.ShouldNotBeNull();
         result.Id.ShouldBe(created.Id);
-        result.Type.ShouldBe(created.Type);
+        result.Type.ShouldBe(created.Name);
     }
 
     [Fact]
@@ -238,14 +243,13 @@ public class LeaveTypeAppService_Tests : ShikshaMitraApplicationTestBase<Shiksha
         // Arrange
         var created = await CreateTestLeaveTypeAsync("Leave to Delete");
 
-        // Act
+        // Act — DeleteAsync performs soft-delete (deactivation)
         await _leaveTypeAppService.DeleteAsync(created.Id);
 
-        // Assert
-        await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(async () =>
-        {
-            await _leaveTypeAppService.GetAsync(created.Id);
-        });
+        // Assert — entity still exists but is deactivated
+        var result = await _leaveTypeAppService.GetAsync(created.Id);
+        result.ShouldNotBeNull();
+        result.IsActive.ShouldBeFalse();
     }
 
     #endregion
@@ -256,17 +260,18 @@ public class LeaveTypeAppService_Tests : ShikshaMitraApplicationTestBase<Shiksha
     public async Task Should_Handle_Special_Characters_In_Type()
     {
         // Arrange
-        var input = new CreateLeaveTypeDto
+        var input = new LeaveTypeCreateRequest
         {
-            Type = "Leave & Holiday (Special) - Test",
+            MediumStageId = TestMediumStageId,
+            Name = "Leave & Holiday (Special) - Test",
             Color = "#FF0000"
         };
 
         // Act
-        var result = await _leaveTypeAppService.CreateAsync(input);
+        var result = await _leaveTypeAppService.CreateLeaveTypeAsync(input);
 
         // Assert
-        result.Type.ShouldBe(input.Type);
+        result.Name.ShouldBe(input.Name);
     }
 
     [Fact]
@@ -285,19 +290,166 @@ public class LeaveTypeAppService_Tests : ShikshaMitraApplicationTestBase<Shiksha
 
     #endregion
 
+    #region Tier 2 — Color Validation & Normalization
+
+    [Fact]
+    public async Task Should_Reject_Invalid_Hex_Color()
+    {
+        // Arrange
+        var input = new LeaveTypeCreateRequest
+        {
+            MediumStageId = TestMediumStageId,
+            Name = "Invalid Color Leave",
+            Color = "not-a-color"
+        };
+
+        // Act & Assert — DTO RegularExpression attribute rejects invalid hex
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _leaveTypeAppService.CreateLeaveTypeAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Reject_Short_Hex_Color()
+    {
+        // Arrange — 3-digit hex is not valid per regex ^#([A-Fa-f0-9]{6})$
+        var input = new LeaveTypeCreateRequest
+        {
+            MediumStageId = TestMediumStageId,
+            Name = "Short Color Leave",
+            Color = "#F00"
+        };
+
+        // Act & Assert
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _leaveTypeAppService.CreateLeaveTypeAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Reject_Color_Without_Hash()
+    {
+        // Arrange
+        var input = new LeaveTypeCreateRequest
+        {
+            MediumStageId = TestMediumStageId,
+            Name = "No Hash Color Leave",
+            Color = "FF5733"
+        };
+
+        // Act & Assert
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _leaveTypeAppService.CreateLeaveTypeAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Normalize_Lowercase_Color_To_Uppercase()
+    {
+        // Arrange
+        var input = new LeaveTypeCreateRequest
+        {
+            MediumStageId = TestMediumStageId,
+            Name = "Lowercase Color Leave",
+            Color = "#ff5733"
+        };
+
+        // Act
+        var result = await _leaveTypeAppService.CreateLeaveTypeAsync(input);
+
+        // Assert — domain SetColor normalizes to uppercase
+        result.Color.ShouldBe("#FF5733");
+    }
+
+    [Fact]
+    public async Task Should_Normalize_MixedCase_Color_To_Uppercase()
+    {
+        // Arrange
+        var input = new LeaveTypeCreateRequest
+        {
+            MediumStageId = TestMediumStageId,
+            Name = "MixedCase Color Leave",
+            Color = "#aAbBcC"
+        };
+
+        // Act
+        var result = await _leaveTypeAppService.CreateLeaveTypeAsync(input);
+
+        // Assert
+        result.Color.ShouldBe("#AABBCC");
+    }
+
+    [Fact]
+    public async Task Should_Soft_Delete_And_Become_Inactive()
+    {
+        // Arrange
+        var created = await CreateTestLeaveTypeAsync("Soft Delete Test");
+
+        // Act
+        await _leaveTypeAppService.DeleteAsync(created.Id);
+
+        // Assert
+        var result = await _leaveTypeAppService.GetAsync(created.Id);
+        result.IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Should_Update_Color_On_Existing_Leave_Type()
+    {
+        // Arrange
+        var created = await CreateTestLeaveTypeAsync("Color Update Test", "#FF0000");
+
+        var updateInput = new UpdateLeaveTypeDto
+        {
+            Type = "Color Update Test",
+            Color = "#00ff00" // lowercase — should normalize
+        };
+
+        // Act
+        var result = await _leaveTypeAppService.UpdateAsync(created.Id, updateInput);
+
+        // Assert
+        result.Color.ShouldBe("#00FF00");
+    }
+
+    [Fact]
+    public async Task Should_Reject_Empty_Color_On_Update()
+    {
+        // Arrange
+        var created = await CreateTestLeaveTypeAsync("Empty Color Update");
+
+        var updateInput = new UpdateLeaveTypeDto
+        {
+            Type = "Empty Color Update",
+            Color = "" // Empty
+        };
+
+        // Act & Assert — domain SetColor calls Check.NotNullOrWhiteSpace
+        await Should.ThrowAsync<ArgumentException>(async () =>
+        {
+            await _leaveTypeAppService.UpdateAsync(created.Id, updateInput);
+        });
+    }
+
+    #endregion
+
     #region Helper Methods
 
-    private async Task<LeaveTypeDto> CreateTestLeaveTypeAsync(
+    private async Task<LeaveTypeResponse> CreateTestLeaveTypeAsync(
         string type,
         string color = "#FF5733")
     {
-        var input = new CreateLeaveTypeDto
+        var input = new LeaveTypeCreateRequest
         {
-            Type = type,
+            MediumStageId = TestMediumStageId,
+            Name = type,
             Color = color
         };
 
-        return await _leaveTypeAppService.CreateAsync(input);
+        return await _leaveTypeAppService.CreateLeaveTypeAsync(input);
     }
 
     #endregion

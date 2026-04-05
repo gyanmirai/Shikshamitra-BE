@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -88,6 +88,7 @@ public class DeductionComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	private void SetName(string name)
 	{
 		Check.NotNullOrWhiteSpace(name, nameof(name));
+		name = name.Trim();
 		Check.Length(name, nameof(name), DeductionComponentConsts.MaxNameLength);
 		Name = name;
 	}

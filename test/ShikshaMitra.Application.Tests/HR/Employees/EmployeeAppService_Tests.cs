@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -776,6 +776,416 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         result.FirstName.ShouldBe("Jean-Paul");
         result.MiddleName.ShouldBe("O'Brien");
         result.LastName.ShouldBe("D'Angelo");
+    }
+
+    #endregion
+
+    #region Tier 2 — Date Validation
+
+    [Fact]
+    public async Task Should_Reject_Future_Date_Of_Birth()
+    {
+        // Arrange
+        var roleId = await EnsureRoleExistsAsync();
+        var input = new CreateEmployeeBasicInfoDto
+        {
+            FirstName = "Future",
+            LastName = "DOB",
+            MobileNo = "9876543210",
+            Email = "future.dob@test.com",
+            DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(1)),
+            DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
+            RoleId = roleId
+        };
+
+        // Act & Assert — DTO IValidatableObject rejects future DOB
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _employeeAppService.CreateBasicInfoAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Reject_Underage_Employee()
+    {
+        // Arrange — employee must be at least 18 years old at joining
+        var roleId = await EnsureRoleExistsAsync();
+        var input = new CreateEmployeeBasicInfoDto
+        {
+            FirstName = "Young",
+            LastName = "Employee",
+            MobileNo = "9876543210",
+            Email = "young.employee@test.com",
+            DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-16)),
+            DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
+            RoleId = roleId
+        };
+
+        // Act & Assert — DTO IValidatableObject rejects age < 18
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _employeeAppService.CreateBasicInfoAsync(input);
+        });
+    }
+
+    #endregion
+
+    #region Tier 2 — Duplicate & Missing Email
+
+    [Fact]
+    public async Task Should_Reject_Duplicate_Email()
+    {
+        // Arrange
+        var email = "duplicate.email@test.com";
+        await CreateTestEmployeeAsync("First", "Employee", email: email, mobileNo: "9876543217");
+
+        // Act & Assert — second employee with same email should fail
+        await Should.ThrowAsync<UserFriendlyException>(async () =>
+        {
+            await CreateTestEmployeeAsync("Second", "Employee", email: email, mobileNo: "9876543218");
+        });
+    }
+
+    [Fact]
+    public async Task Should_Reject_Null_Email()
+    {
+        // Arrange
+        var roleId = await EnsureRoleExistsAsync();
+        var input = new CreateEmployeeBasicInfoDto
+        {
+            FirstName = "No",
+            LastName = "Email",
+            MobileNo = "9876543210",
+            Email = null, // Missing email
+            DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
+            DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
+            RoleId = roleId
+        };
+
+        // Act & Assert — app service rejects null email
+        await Should.ThrowAsync<UserFriendlyException>(async () =>
+        {
+            await _employeeAppService.CreateBasicInfoAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Reject_Whitespace_Only_Mobile()
+    {
+        // Arrange
+        var roleId = await EnsureRoleExistsAsync();
+        var input = new CreateEmployeeBasicInfoDto
+        {
+            FirstName = "Blank",
+            LastName = "Mobile",
+            MobileNo = "   ", // Whitespace only
+            Email = "blank.mobile@test.com",
+            DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
+            DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
+            RoleId = roleId
+        };
+
+        // Act & Assert — app service rejects whitespace mobile
+        await Should.ThrowAsync<UserFriendlyException>(async () =>
+        {
+            await _employeeAppService.CreateBasicInfoAsync(input);
+        });
+    }
+
+    #endregion
+
+    #region Tier 2 — Bank Details Validation
+
+    [Fact]
+    public async Task Should_Accept_Valid_IFSC_Code_Format()
+    {
+        // Arrange
+        var created = await CreateTestEmployeeAsync("IFSC", "Valid", email: "ifsc.valid@test.com", mobileNo: "9876543219");
+
+        var updateInput = new BankDetailsDto
+        {
+            BankName = "HDFC Bank",
+            AccountNumber = "123456789012",
+            IfscCode = "HDFC0001234",
+            BranchName = "Mumbai Main"
+        };
+
+        // Act
+        var result = await _employeeAppService.UpdateBankDetails(created.Id, updateInput);
+
+        // Assert
+        result.BankDetails.IfscCode.ShouldBe("HDFC0001234");
+    }
+
+    [Fact]
+    public async Task Should_Reject_IFSC_Without_Zero_At_Fifth_Position()
+    {
+        // Arrange
+        var created = await CreateTestEmployeeAsync("IFSC", "NoZero", email: "ifsc.nozero@test.com", mobileNo: "9876543220");
+
+        var updateInput = new BankDetailsDto
+        {
+            BankName = "Test Bank",
+            AccountNumber = "123456789012",
+            IfscCode = "HDFC1001234", // 5th char should be 0
+            BranchName = "Branch"
+        };
+
+        // Act & Assert
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _employeeAppService.UpdateBankDetails(created.Id, updateInput);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Reject_Short_IFSC_Code()
+    {
+        // Arrange
+        var created = await CreateTestEmployeeAsync("IFSC", "Short", email: "ifsc.short@test.com", mobileNo: "9876543221");
+
+        var updateInput = new BankDetailsDto
+        {
+            BankName = "Test Bank",
+            AccountNumber = "123456789012",
+            IfscCode = "HDFC", // Too short
+            BranchName = "Branch"
+        };
+
+        // Act & Assert
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _employeeAppService.UpdateBankDetails(created.Id, updateInput);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Accept_Null_Bank_Details_Fields()
+    {
+        // Arrange — all bank fields are optional
+        var created = await CreateTestEmployeeAsync("Bank", "Optional", email: "bank.optional@test.com", mobileNo: "9876543222");
+
+        var updateInput = new BankDetailsDto
+        {
+            BankName = null,
+            AccountNumber = null,
+            IfscCode = null,
+            BranchName = null
+        };
+
+        // Act
+        var result = await _employeeAppService.UpdateBankDetails(created.Id, updateInput);
+
+        // Assert
+        result.ShouldNotBeNull();
+    }
+
+    #endregion
+
+    #region Tier 2 — Payroll Validation
+
+    [Fact]
+    public async Task Should_Accept_Zero_BasicSalary()
+    {
+        // Arrange
+        var created = await CreateTestEmployeeAsync("Payroll", "ZeroSalary", email: "payroll.zero@test.com", mobileNo: "9876543223");
+
+        var updateInput = new UpdateEmployeePayrollDetailsDto
+        {
+            PayrollDetails = new PayrollDetailsDto
+            {
+                BasicSalary = 0
+            },
+            Earnings = new List<PayrollComponentDto>(),
+            Deductions = new List<PayrollComponentDto>()
+        };
+
+        // Act
+        await _employeeAppService.UpdatePayrollDetailsAsync(created.Id, updateInput);
+
+        // Assert
+        var result = await _employeeAppService.GetPayrollDetailsAsync(created.Id);
+        result.PayrollDetails.BasicSalary.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Should_Reject_Negative_Component_Amount_In_Payroll()
+    {
+        // Arrange
+        var created = await CreateTestEmployeeAsync("Payroll", "NegComp", email: "payroll.negcomp@test.com", mobileNo: "9876543224");
+
+        var updateInput = new UpdateEmployeePayrollDetailsDto
+        {
+            PayrollDetails = new PayrollDetailsDto
+            {
+                BasicSalary = 50000
+            },
+            Earnings = new List<PayrollComponentDto>
+            {
+                new PayrollComponentDto
+                {
+                    Name = "Bad Earning",
+                    ComponentType = SalaryComponentType.Fixed,
+                    Amount = -500, // Negative
+                    IsFixed = false,
+                    IsTemp = false
+                }
+            },
+            Deductions = new List<PayrollComponentDto>()
+        };
+
+        // Act & Assert — DTO validation rejects negative component amount
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _employeeAppService.UpdatePayrollDetailsAsync(created.Id, updateInput);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Reject_Percentage_Component_Without_DependOn()
+    {
+        // Arrange
+        var created = await CreateTestEmployeeAsync("Payroll", "NoDep", email: "payroll.nodep@test.com", mobileNo: "9876543225");
+
+        var updateInput = new UpdateEmployeePayrollDetailsDto
+        {
+            PayrollDetails = new PayrollDetailsDto
+            {
+                BasicSalary = 50000
+            },
+            Earnings = new List<PayrollComponentDto>
+            {
+                new PayrollComponentDto
+                {
+                    Name = "HRA No DependOn",
+                    ComponentType = SalaryComponentType.Percentage,
+                    Amount = 5000,
+                    DependOn = null, // Missing DependOn for Percentage type
+                    IsFixed = false,
+                    IsTemp = false
+                }
+            },
+            Deductions = new List<PayrollComponentDto>()
+        };
+
+        // Act & Assert — DTO validation rejects percentage without DependOn
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _employeeAppService.UpdatePayrollDetailsAsync(created.Id, updateInput);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Reject_TDS_Over_100()
+    {
+        // Arrange
+        var created = await CreateTestEmployeeAsync("Payroll", "TDS", email: "payroll.tds@test.com", mobileNo: "9876543226");
+
+        var updateInput = new UpdateEmployeePayrollDetailsDto
+        {
+            PayrollDetails = new PayrollDetailsDto
+            {
+                BasicSalary = 50000,
+                TdsPercentage = 150 // Over 100
+            },
+            Earnings = new List<PayrollComponentDto>(),
+            Deductions = new List<PayrollComponentDto>()
+        };
+
+        // Act & Assert — DTO validation rejects TDS > 100
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _employeeAppService.UpdatePayrollDetailsAsync(created.Id, updateInput);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Accept_Zero_TDS()
+    {
+        // Arrange
+        var created = await CreateTestEmployeeAsync("Payroll", "ZeroTDS", email: "payroll.zerotds@test.com", mobileNo: "9876543227");
+
+        var updateInput = new UpdateEmployeePayrollDetailsDto
+        {
+            PayrollDetails = new PayrollDetailsDto
+            {
+                BasicSalary = 50000,
+                TdsPercentage = 0
+            },
+            Earnings = new List<PayrollComponentDto>(),
+            Deductions = new List<PayrollComponentDto>()
+        };
+
+        // Act
+        await _employeeAppService.UpdatePayrollDetailsAsync(created.Id, updateInput);
+
+        // Assert
+        var result = await _employeeAppService.GetPayrollDetailsAsync(created.Id);
+        result.PayrollDetails.TdsPercentage.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Should_Update_Payroll_With_Multiple_Earnings_And_Deductions()
+    {
+        // Arrange
+        var created = await CreateTestEmployeeAsync("Payroll", "Multi", email: "payroll.multi@test.com", mobileNo: "9876543228");
+
+        var updateInput = new UpdateEmployeePayrollDetailsDto
+        {
+            PayrollDetails = new PayrollDetailsDto
+            {
+                BasicSalary = 60000,
+                TdsPercentage = 10
+            },
+            Earnings = new List<PayrollComponentDto>
+            {
+                new PayrollComponentDto { Name = "HRA", ComponentType = SalaryComponentType.Fixed, Amount = 15000, IsFixed = true, IsTemp = false },
+                new PayrollComponentDto { Name = "DA", ComponentType = SalaryComponentType.Percentage, Amount = 3000, DependOn = SalaryComponentDependency.Basic, IsFixed = false, IsTemp = false },
+                new PayrollComponentDto { Name = "Special", ComponentType = SalaryComponentType.Fixed, Amount = 5000, IsFixed = false, IsTemp = true }
+            },
+            Deductions = new List<PayrollComponentDto>
+            {
+                new PayrollComponentDto { Name = "PF", ComponentType = SalaryComponentType.Fixed, Amount = 7200, IsFixed = true, IsTemp = false },
+                new PayrollComponentDto { Name = "Tax", ComponentType = SalaryComponentType.Percentage, Amount = 2000, DependOn = SalaryComponentDependency.Gross, IsFixed = false, IsTemp = false }
+            }
+        };
+
+        // Act
+        await _employeeAppService.UpdatePayrollDetailsAsync(created.Id, updateInput);
+
+        // Assert
+        var result = await _employeeAppService.GetPayrollDetailsAsync(created.Id);
+        result.Earnings.Count.ShouldBe(3);
+        result.Deductions.Count.ShouldBe(2);
+        result.PayrollDetails.BasicSalary.ShouldBe(60000);
+        result.PayrollDetails.TdsPercentage.ShouldBe(10);
+    }
+
+    #endregion
+
+    #region Tier 2 — Employee Without Email/Mobile Edge Cases
+
+    [Fact]
+    public async Task Should_Reject_Whitespace_Only_Email()
+    {
+        // Arrange
+        var roleId = await EnsureRoleExistsAsync();
+        var input = new CreateEmployeeBasicInfoDto
+        {
+            FirstName = "Test",
+            LastName = "Doe",
+            MobileNo = "9876543210",
+            Email = "   ", // Whitespace only
+            DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
+            DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
+            RoleId = roleId
+        };
+
+        // Act & Assert — app service checks IsNullOrWhiteSpace for email
+        await Should.ThrowAsync<UserFriendlyException>(async () =>
+        {
+            await _employeeAppService.CreateBasicInfoAsync(input);
+        });
     }
 
     #endregion

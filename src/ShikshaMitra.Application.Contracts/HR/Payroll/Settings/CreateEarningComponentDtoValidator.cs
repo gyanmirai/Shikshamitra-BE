@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 
 namespace ShikshaMitra.HR.Payroll.Settings;
 
@@ -8,6 +8,8 @@ public class CreateEarningComponentDtoValidator : AbstractValidator<CreateEarnin
 	{
 		RuleFor(x => x.Name)
 			.NotEmpty()
+			.Must(x => !string.IsNullOrWhiteSpace(x))
+			.WithMessage("Name must not be empty or whitespace.")
 			.MaximumLength(EarningComponentConsts.MaxNameLength);
 
 		RuleFor(x => x.Description)

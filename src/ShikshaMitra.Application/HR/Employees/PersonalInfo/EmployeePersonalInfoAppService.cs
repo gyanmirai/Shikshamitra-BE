@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
@@ -199,7 +199,7 @@ public class EmployeePersonalInfoAppService(
 
 	public async Task<EmployeeDto> GetWithDetailsAsync(Guid id)
 	{
-		var employee = await employeeRepository.GetWithDetailsAsync(id, includePayrollStructure: true)
+		var employee = await employeeRepository.GetWithDetailsAsync(id)
 			?? throw new EntityNotFoundException(typeof(Employee), id);
 
 		var employeeDto = ObjectMapper.Map<Employee, EmployeeDto>(employee);

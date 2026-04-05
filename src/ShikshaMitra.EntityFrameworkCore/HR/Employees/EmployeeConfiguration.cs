@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.HR.Employees;
@@ -58,12 +58,6 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 			.HasForeignKey(e => e.RoleId)
 			.OnDelete(DeleteBehavior.Restrict)
 			.IsRequired();
-
-		builder.HasOne(e => e.PayrollStructure)
-			.WithMany()
-			.HasForeignKey(e => e.PayrollStructureId)
-			.OnDelete(DeleteBehavior.Restrict)
-			.IsRequired(false);
 
 		builder.HasOne(e => e.Shift)
 			.WithMany()

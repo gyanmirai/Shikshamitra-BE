@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Homework;
@@ -14,7 +14,6 @@ using ShikshaMitra.HR.Calendar.EventTypes;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.Events;
 using ShikshaMitra.Communication.AnnouncementTypes;
-using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
@@ -231,7 +230,6 @@ public class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContext> optio
 	#region Payroll
 
 	DbSet<PayElement> PayElements { get; set; }
-	DbSet<PayrollStructure> PayrollStructures { get; set; }
 	DbSet<ProvidentFund> ProvidentFunds { get; set; }
 	DbSet<ProfessionalTax> ProfessionalTaxes { get; set; }
 	public DbSet<EarningComponent> EarningComponents { get; set; }

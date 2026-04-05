@@ -38,4 +38,8 @@
         <ProjectReference Include="..\ShikshaMitra.Domain.Shared\ShikshaMitra.Domain.Shared.csproj" />
       </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Controllers\HR\Payroll\PayrollStructures\" />
+  </ItemGroup>
+
     </Project>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
 
@@ -13,7 +13,4 @@ public interface IEmployeePayrollAppService : IApplicationService
 	Task UpdatePayrollDetailsAsync(Guid employeeId, UpdateEmployeePayrollDetailsDto input);
 	Task<PayrollContract> GetPayrollContractAsync(Guid employeeId);
 	Task UpdatePayrollContractAsync(Guid employeeId, PayrollContract input);
-	Task SetPayrollStructureAsync(Guid employeeId, Guid payrollStructureId);
-	Task RemovePayrollStructureAsync(Guid employeeId);
-	Task UpdatePayrollStructureAsync(Guid employeeId, CreateUpdateEmployeePayrollStructureDto input);
 }

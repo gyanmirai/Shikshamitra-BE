@@ -1,14 +1,14 @@
-# Payroll Settings -- Behavior Specification
+﻿# Payroll Settings -- Behavior Specification
 
 ## Purpose
 
-Manages the tenant-scoped payroll master configuration used by payroll runs and salary structures. The current API surface covers day calculation settings, earning components, deduction components, and provident fund (PF) rules.
+Manages the tenant-scoped payroll master configuration used by payroll runs and salary structures. The current API surface covers day calculation settings, earning components, deduction components, provident fund (PF) rules, and pay elements. Professional tax configuration exists at the domain layer but is not yet exposed via an API controller.
 
 ## Actors
 
 | Actor | Description |
 |---|---|
-| Admin | Configures payroll settings for an academic year and maintains salary components and PF rules |
+| Admin | Configures payroll settings for an academic year and maintains salary components, PF rules, and pay elements |
 | System | Reads payroll settings during payroll preview, payroll lock, and downstream salary computations |
 
 ---
@@ -20,9 +20,9 @@ Manages the tenant-scoped payroll master configuration used by payroll runs and 
 1. Admin saves payroll day calculation settings for an academic year using `academicYearId`.
 2. System supports a primary calculation mode through `dayCalculationType`.
 3. Supported modes are:
-   - `working-days`
-   - `total-month-days`
-   - `manual-days`
+   - `working-days` (0) — business days excluding weekends/holidays
+   - `total-month-days` (1) — calendar days in the month
+   - `manual-days` (2) — admin-specified number of days
 4. When `working-days` is selected, no extra day count is required.
 5. When `manual-days` is selected, a manual day count must be provided and remain within the allowed month range.
 6. Successful save returns a simple success response and becomes the active calculation basis for payroll processing in that academic year.
@@ -34,11 +34,11 @@ Manages the tenant-scoped payroll master configuration used by payroll runs and 
 3. Each component includes:
    - `earningComponentName`
    - `description`
-   - `earningType`
-   - `calculationType`
+   - `earningType` — `Fixed` (0) or `Variable` (1)
+   - `calculationType` — `Amount` (0) or `Percentage` (1)
    - `amount`
    - `percentage`
-   - `selectedEarningComponentId`
+   - `selectedEarningComponentId` — references another component when `ComponentDependency` is `CustomComponent`
    - `visibleInPayslip`
 4. Components may reference another configured component through `selectedEarningComponentId`.
 5. List responses are paginated and support search.
@@ -58,11 +58,34 @@ Manages the tenant-scoped payroll master configuration used by payroll runs and 
 2. All list and create operations are scoped by `academicYearId`.
 3. Each PF rule contains:
    - `name`
-   - `code`
-   - `employeePercentage`
-   - `employerPercentage`
+   - `code` — unique, uppercase letters and underscores only
+   - `employeePercentage` — 0–100
+   - `employerPercentage` — 0–100
 4. Create returns the created rule identity and creation timestamp.
-5. List responses are paginated and provide created/updated timestamps for operational traceability.
+5. List responses are paginated (page 1-based, pageSize 10–100) and provide created/updated timestamps for operational traceability.
+
+### 5. Pay Elements
+
+1. Admin creates, updates, lists, retrieves, and deletes pay elements.
+2. Each pay element contains:
+   - `code` — unique identifier code
+   - `name` — human-readable name
+   - `type` — `Credit` (0) or `Debit` (1)
+   - `isEmployeeSpecific` — whether amounts differ per employee
+   - `isDependent` — whether this element depends on another
+   - `dependent` — if dependent, includes `elementId`, optional `percentage`, optional `amount`
+   - `isVisibleInPaySlip`
+3. List responses use standard ABP pagination (`PagedAndSortedResultRequestDto`).
+4. No specific permission attributes beyond class-level `[Authorize]`.
+
+### 6. Professional Tax (Not Yet Exposed)
+
+1. Domain model (`ProfessionalTax` aggregate), app service (`ProfessionalTaxAppService`), repository, and DTOs exist.
+2. Supports slab-based tax configuration by:
+   - `genderType` — Male/Female/Other
+   - `fromSalary` / `toSalary` — salary range for the slab
+   - `taxAmount` — tax amount for the slab
+3. **No HTTP controller has been created yet.** This feature is ready for API exposure when needed.
 
 ---
 
@@ -81,14 +104,15 @@ Manages the tenant-scoped payroll master configuration used by payroll runs and 
 
 ## Permissions
 
-| Permission Area | Description |
-|---|---|
-| Payroll settings configuration | Required for day calculation settings changes |
-| Earning components | View and manage earning component definitions |
-| Deduction components | View and manage deduction component definitions |
-| PF rules | View and manage provident fund rule definitions |
+| Permission Area | View | Add/Update | Delete |
+|---|---|---|---|
+| Day Calculation | — | `PayrollManagement_SettingsDayCalculation.Add` | — |
+| Earning Components | `PayrollManagement_SettingsEarningComponents.View` | `PayrollManagement_SettingsEarningComponents.Add` | `PayrollManagement_SettingsEarningComponents.Delete` |
+| Deduction Components | `PayrollManagement_SettingsDeductionComponents.View` | `PayrollManagement_SettingsDeductionComponents.Add` | `PayrollManagement_SettingsDeductionComponents.Delete` |
+| PF Rules | `PayrollManagement_SettingsPfRule.View` | `PayrollManagement_SettingsPfRule.Add` | `PayrollManagement_SettingsPfRule.Delete` |
+| Pay Elements | `[Authorize]` (class-level only) | `[Authorize]` (class-level only) | `[Authorize]` (class-level only) |
 
-Note: Exact permission keys should be taken from the application layer and source contract usage where enforced.
+Note: Pay Elements currently use class-level authorization only — no granular permission keys are enforced.
 
 ---
 
@@ -107,3 +131,4 @@ Note: Exact permission keys should be taken from the application layer and sourc
 - [Employees](../../employees/prd.md) -- employee payroll structures depend on configured salary components and PF rules
 - [Canonical curated contract](../../../contracts/curated/payroll-settings-api.md)
 - [Raw contract source](../../../contracts/raw/payroll-settings-api.raw.2026-03-28.md)
+- [Implementation Reference](../../../../hr/payroll/README.md) -- full endpoint-level documentation with request/response examples

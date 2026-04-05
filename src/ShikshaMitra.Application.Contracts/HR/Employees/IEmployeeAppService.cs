@@ -1,4 +1,4 @@
-using ShikshaMitra.Common;
+﻿using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.Payroll;
 using System;
 using System.Collections.Generic;
@@ -111,8 +111,6 @@ public interface
 	/// <param name="changeReason">The reason for the status change.</param>
 	/// <returns>The updated Employee DTO.</returns>
 	Task<EmployeeDto> UpdateEmployeeStatus(Guid employeeId, EmployeeStatusType employeeStatusType, string? changeReason);
-
-	Task UpdatePayrollStructureAsync(Guid employeeId, CreateUpdateEmployeePayrollStructureDto input);
 
 	/// <summary>
 	/// Gets the complete payroll details for an employee including earnings and deductions.

@@ -858,6 +858,153 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
 
     #endregion
 
+    #region Tier 4 — Activate/Deactivate Lifecycle
+
+    [Fact]
+    public async Task Should_Deactivate_And_Exclude_From_Active_List()
+    {
+        // Arrange
+        var component = await CreateTestEarningComponentAsync("Deactivate Active List");
+        component.IsActive.ShouldBeTrue();
+
+        // Act — deactivate
+        await _earningComponentAppService.DeactivateAsync(component.Id);
+
+        // Assert — should not appear in active list
+        var activeList = await _earningComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+        activeList.Items.ShouldNotContain(x => x.Id == component.Id);
+    }
+
+    [Fact]
+    public async Task Should_Reactivate_And_Include_In_Active_List()
+    {
+        // Arrange — create and deactivate
+        var component = await CreateTestEarningComponentAsync("Reactivate Lifecycle");
+        await _earningComponentAppService.DeactivateAsync(component.Id);
+
+        // Verify excluded from active list
+        var beforeReactivation = await _earningComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+        beforeReactivation.Items.ShouldNotContain(x => x.Id == component.Id);
+
+        // Act — reactivate
+        await _earningComponentAppService.ActivateAsync(component.Id);
+
+        // Assert — should appear in active list again
+        var afterReactivation = await _earningComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+        afterReactivation.Items.ShouldContain(x => x.Id == component.Id);
+    }
+
+    [Fact]
+    public async Task Should_Retain_Data_After_Deactivate_Reactivate_Cycle()
+    {
+        // Arrange
+        var component = await CreateTestEarningComponentAsync("Data Retention");
+
+        // Act — deactivate then reactivate
+        await _earningComponentAppService.DeactivateAsync(component.Id);
+        await _earningComponentAppService.ActivateAsync(component.Id);
+
+        // Assert — all original data should be preserved
+        var retrieved = await _earningComponentAppService.GetAsync(component.Id);
+        retrieved.Name.ShouldBe("Data Retention");
+        retrieved.Amount.ShouldBe(10000m);
+        retrieved.IsActive.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Should_Handle_Full_Component_Lifecycle()
+    {
+        // Step 1: Create
+        var created = await CreateTestEarningComponentAsync("Full Lifecycle Earning", EarningComponentType.Fixed, 1);
+        created.IsActive.ShouldBeTrue();
+
+        // Step 2: Update
+        var updateInput = new UpdateEarningComponentDto
+        {
+            Name = "Full Lifecycle Earning Updated",
+            Description = "Updated description",
+            ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 25000m,
+            VisibleInPayslip = false,
+            DisplayOrder = 2
+        };
+        var updated = await _earningComponentAppService.UpdateAsync(created.Id, updateInput);
+        updated.Name.ShouldBe("Full Lifecycle Earning Updated");
+        updated.Amount.ShouldBe(25000m);
+        updated.VisibleInPayslip.ShouldBeFalse();
+
+        // Step 3: Deactivate
+        await _earningComponentAppService.DeactivateAsync(created.Id);
+        var deactivated = await _earningComponentAppService.GetAsync(created.Id);
+        deactivated.IsActive.ShouldBeFalse();
+
+        // Step 4: Reactivate
+        await _earningComponentAppService.ActivateAsync(created.Id);
+        var reactivated = await _earningComponentAppService.GetAsync(created.Id);
+        reactivated.IsActive.ShouldBeTrue();
+        reactivated.Name.ShouldBe("Full Lifecycle Earning Updated"); // Data preserved
+
+        // Step 5: Delete
+        await _earningComponentAppService.DeleteAsync(created.Id);
+        await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(async () =>
+        {
+            await _earningComponentAppService.GetAsync(created.Id);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Search_Only_Returns_Matching_Components()
+    {
+        // Arrange — create components with distinct names
+        await CreateTestEarningComponentAsync("SearchAlpha Earning One");
+        await CreateTestEarningComponentAsync("SearchAlpha Earning Two");
+        await CreateTestEarningComponentAsync("SearchBeta Earning Three");
+
+        // Act — search for "SearchAlpha"
+        var result = await _earningComponentAppService.GetFilteredListAsync(0, 100, "SearchAlpha");
+
+        // Assert — should only return the two Alpha matches
+        result.Items.Count.ShouldBeGreaterThanOrEqualTo(2);
+        result.Items.ShouldAllBe(x => x.Name.Contains("SearchAlpha"));
+        result.Items.ShouldNotContain(x => x.Name.Contains("SearchBeta"));
+    }
+
+    [Fact]
+    public async Task Should_Include_Deactivated_Components_In_GetListAsync()
+    {
+        // Arrange — create and deactivate a component
+        var component = await CreateTestEarningComponentAsync("Deactivated In Full List");
+        await _earningComponentAppService.DeactivateAsync(component.Id);
+
+        // Act — GetListAsync should return all (including deactivated)
+        var allList = await _earningComponentAppService.GetListAsync(new PagedAndSortedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+
+        // Assert
+        allList.Items.ShouldContain(x => x.Id == component.Id);
+        var found = allList.Items.First(x => x.Id == component.Id);
+        found.IsActive.ShouldBeFalse();
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private async Task<EarningComponentDto> CreateTestEarningComponentAsync(

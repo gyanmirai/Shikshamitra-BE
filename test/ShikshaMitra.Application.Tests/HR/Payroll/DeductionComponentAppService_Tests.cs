@@ -803,6 +803,153 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
 
     #endregion
 
+    #region Tier 4 — Activate/Deactivate Lifecycle
+
+    [Fact]
+    public async Task Should_Deactivate_And_Exclude_From_Active_List()
+    {
+        // Arrange
+        var component = await CreateTestDeductionComponentAsync("Deactivate Active List Ded");
+        component.IsActive.ShouldBeTrue();
+
+        // Act — deactivate
+        await _deductionComponentAppService.DeactivateAsync(component.Id);
+
+        // Assert — should not appear in active list
+        var activeList = await _deductionComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+        activeList.Items.ShouldNotContain(x => x.Id == component.Id);
+    }
+
+    [Fact]
+    public async Task Should_Reactivate_And_Include_In_Active_List()
+    {
+        // Arrange — create and deactivate
+        var component = await CreateTestDeductionComponentAsync("Reactivate Lifecycle Ded");
+        await _deductionComponentAppService.DeactivateAsync(component.Id);
+
+        // Verify excluded
+        var beforeReactivation = await _deductionComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+        beforeReactivation.Items.ShouldNotContain(x => x.Id == component.Id);
+
+        // Act — reactivate
+        await _deductionComponentAppService.ActivateAsync(component.Id);
+
+        // Assert — should appear in active list again
+        var afterReactivation = await _deductionComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+        afterReactivation.Items.ShouldContain(x => x.Id == component.Id);
+    }
+
+    [Fact]
+    public async Task Should_Retain_Data_After_Deactivate_Reactivate_Cycle()
+    {
+        // Arrange
+        var component = await CreateTestDeductionComponentAsync("Data Retention Ded");
+
+        // Act — deactivate then reactivate
+        await _deductionComponentAppService.DeactivateAsync(component.Id);
+        await _deductionComponentAppService.ActivateAsync(component.Id);
+
+        // Assert — all original data should be preserved
+        var retrieved = await _deductionComponentAppService.GetAsync(component.Id);
+        retrieved.Name.ShouldBe("Data Retention Ded");
+        retrieved.Amount.ShouldBe(1000m);
+        retrieved.IsActive.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Should_Handle_Full_Deduction_Component_Lifecycle()
+    {
+        // Step 1: Create
+        var created = await CreateTestDeductionComponentAsync("Full Lifecycle Deduction", DeductionComponentType.Fixed, ComponentDependency.None, 1);
+        created.IsActive.ShouldBeTrue();
+
+        // Step 2: Update
+        var updateInput = new UpdateDeductionComponentDto
+        {
+            Name = "Full Lifecycle Deduction Updated",
+            Description = "Updated description",
+            ComponentType = DeductionComponentType.Variable,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 2500m,
+            VisibleInPayslip = false,
+            DisplayOrder = 2
+        };
+        var updated = await _deductionComponentAppService.UpdateAsync(created.Id, updateInput);
+        updated.Name.ShouldBe("Full Lifecycle Deduction Updated");
+        updated.Amount.ShouldBe(2500m);
+        updated.VisibleInPayslip.ShouldBeFalse();
+
+        // Step 3: Deactivate
+        await _deductionComponentAppService.DeactivateAsync(created.Id);
+        var deactivated = await _deductionComponentAppService.GetAsync(created.Id);
+        deactivated.IsActive.ShouldBeFalse();
+
+        // Step 4: Reactivate
+        await _deductionComponentAppService.ActivateAsync(created.Id);
+        var reactivated = await _deductionComponentAppService.GetAsync(created.Id);
+        reactivated.IsActive.ShouldBeTrue();
+        reactivated.Name.ShouldBe("Full Lifecycle Deduction Updated");
+
+        // Step 5: Delete
+        await _deductionComponentAppService.DeleteAsync(created.Id);
+        await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(async () =>
+        {
+            await _deductionComponentAppService.GetAsync(created.Id);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Search_Only_Returns_Matching_Deductions()
+    {
+        // Arrange
+        await CreateTestDeductionComponentAsync("SearchGamma Deduction One");
+        await CreateTestDeductionComponentAsync("SearchGamma Deduction Two");
+        await CreateTestDeductionComponentAsync("SearchDelta Deduction Three");
+
+        // Act
+        var result = await _deductionComponentAppService.GetFilteredListAsync(0, 100, "SearchGamma");
+
+        // Assert
+        result.Items.Count.ShouldBeGreaterThanOrEqualTo(2);
+        result.Items.ShouldAllBe(x => x.Name.Contains("SearchGamma"));
+        result.Items.ShouldNotContain(x => x.Name.Contains("SearchDelta"));
+    }
+
+    [Fact]
+    public async Task Should_Include_Deactivated_In_GetListAsync()
+    {
+        // Arrange
+        var component = await CreateTestDeductionComponentAsync("Deactivated In Full List Ded");
+        await _deductionComponentAppService.DeactivateAsync(component.Id);
+
+        // Act
+        var allList = await _deductionComponentAppService.GetListAsync(new PagedAndSortedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+
+        // Assert
+        allList.Items.ShouldContain(x => x.Id == component.Id);
+        var found = allList.Items.First(x => x.Id == component.Id);
+        found.IsActive.ShouldBeFalse();
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private async Task<DeductionComponentDto> CreateTestDeductionComponentAsync(

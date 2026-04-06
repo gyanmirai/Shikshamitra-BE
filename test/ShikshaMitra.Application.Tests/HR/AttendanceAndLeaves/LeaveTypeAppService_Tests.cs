@@ -436,6 +436,104 @@ public class LeaveTypeAppService_Tests : ShikshaMitraApplicationTestBase<Shiksha
 
     #endregion
 
+    #region Tier 4 — Deactivation & Active List Lifecycle
+
+    [Fact]
+    public async Task Should_Exclude_Deactivated_LeaveType_From_Active_List()
+    {
+        // Arrange
+        var type1 = await CreateTestLeaveTypeAsync("Active Type For List");
+        var type2 = await CreateTestLeaveTypeAsync("Will Deactivate For List");
+
+        // Act — deactivate one
+        await _leaveTypeAppService.DeleteAsync(type2.Id);
+
+        // Assert — active list should exclude the deactivated type
+        var activeList = await _leaveTypeAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+
+        activeList.Items.ShouldContain(x => x.Id == type1.Id);
+        activeList.Items.ShouldNotContain(x => x.Id == type2.Id);
+    }
+
+    [Fact]
+    public async Task Should_Include_Deactivated_LeaveType_In_GetListAsync()
+    {
+        // Arrange — GetListAsync returns all (active + inactive)
+        var type = await CreateTestLeaveTypeAsync("Deactivated In FullList");
+        await _leaveTypeAppService.DeleteAsync(type.Id);
+
+        // Act
+        var allList = await _leaveTypeAppService.GetListAsync(new PagedAndSortedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+
+        // Assert — deactivated type should still appear
+        allList.Items.ShouldContain(x => x.Id == type.Id);
+        var found = allList.Items.First(x => x.Id == type.Id);
+        found.IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Should_Handle_Full_LeaveType_Lifecycle()
+    {
+        // Step 1: Create
+        var created = await CreateTestLeaveTypeAsync("Full Lifecycle Type", "#AABB00");
+        created.Name.ShouldBe("Full Lifecycle Type");
+        created.Color.ShouldBe("#AABB00");
+
+        // Step 2: Update — change name and color
+        var updateInput = new UpdateLeaveTypeDto
+        {
+            Type = "Full Lifecycle Type Updated",
+            Color = "#00CCDD",
+            Description = "Updated via lifecycle test"
+        };
+        var updated = await _leaveTypeAppService.UpdateAsync(created.Id, updateInput);
+        updated.Type.ShouldBe("Full Lifecycle Type Updated");
+        updated.Color.ShouldBe("#00CCDD");
+
+        // Step 3: Verify via GetAsync
+        var retrieved = await _leaveTypeAppService.GetAsync(created.Id);
+        retrieved.Type.ShouldBe("Full Lifecycle Type Updated");
+        retrieved.IsActive.ShouldBeTrue();
+
+        // Step 4: Soft-delete (deactivate)
+        await _leaveTypeAppService.DeleteAsync(created.Id);
+        var deactivated = await _leaveTypeAppService.GetAsync(created.Id);
+        deactivated.IsActive.ShouldBeFalse();
+        deactivated.Type.ShouldBe("Full Lifecycle Type Updated"); // Data preserved
+    }
+
+    [Fact]
+    public async Task Should_Allow_Multiple_Sequential_Updates_To_Same_LeaveType()
+    {
+        // Arrange
+        var created = await CreateTestLeaveTypeAsync("Sequential Update Type");
+
+        // Act — update multiple times in sequence
+        for (int i = 1; i <= 5; i++)
+        {
+            var updateInput = new UpdateLeaveTypeDto
+            {
+                Type = $"Sequential Update Type V{i}",
+                Color = $"#00{i:D2}{i:D2}00".Substring(0, 7) // generates valid hex
+            };
+            await _leaveTypeAppService.UpdateAsync(created.Id, updateInput);
+        }
+
+        // Assert — should reflect the last update
+        var final = await _leaveTypeAppService.GetAsync(created.Id);
+        final.Type.ShouldBe("Sequential Update Type V5");
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private async Task<LeaveTypeResponse> CreateTestLeaveTypeAsync(

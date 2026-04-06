@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -727,6 +728,213 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 
         // Assert
         result.MaxLeavePerYear.ShouldBe(365);
+    }
+
+    #endregion
+
+    #region Tier 4 — Cross-Entity Lifecycle
+
+    [Fact]
+    public async Task Should_Block_Policy_Creation_After_LeaveType_Deactivation()
+    {
+        // Arrange — create a leave type, then deactivate it
+        var leaveType = await CreateTestLeaveTypeAsync("Will Deactivate Type");
+        await _leaveTypeAppService.DeleteAsync(leaveType.Id); // soft-delete → deactivates
+
+        // Act & Assert — creating a policy with deactivated type should fail
+        var input = new LeavePolicyCreateRequest
+        {
+            MediumStageId = TestMediumStageId,
+            PolicyTitle = "Policy With Deactivated Type",
+            LeaveType = leaveType.Id,
+            MaxLeavePerYear = 10,
+            PaidType = "Paid",
+            CarryForward = false,
+            EncashmentAllowed = false,
+            RequiresApproval = true
+        };
+
+        await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _leavePolicyAppService.CreateLeavePolicyAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Keep_Existing_Policy_Accessible_After_LeaveType_Deactivation()
+    {
+        // Arrange — create a valid policy with an active type
+        var leaveType = await CreateTestLeaveTypeAsync("Type For Existing Policy");
+        var policy = await CreateTestLeavePolicyAsync("Existing Policy Before Deactivation", leaveType.Id);
+
+        // Act — deactivate the leave type AFTER policy was created
+        await _leaveTypeAppService.DeleteAsync(leaveType.Id);
+
+        // Assert — the existing policy should still be retrievable by ID
+        var retrieved = await _leavePolicyAppService.GetAsync(Guid.Parse(policy.Id));
+        retrieved.ShouldNotBeNull();
+        retrieved.PolicyName.ShouldBe("Existing Policy Before Deactivation");
+    }
+
+    [Fact]
+    public async Task Should_Exclude_Deactivated_Policy_From_Active_List()
+    {
+        // Arrange — create policies then deactivate one
+        var policy1 = await CreateTestLeavePolicyAsync("Active List Policy 1");
+        var policy2 = await CreateTestLeavePolicyAsync("Active List Policy 2");
+        var policyToDeactivate = await CreateTestLeavePolicyAsync("Will Be Deactivated Policy");
+
+        // Act — soft-delete (deactivate) one policy
+        await _leavePolicyAppService.DeleteAsync(Guid.Parse(policyToDeactivate.Id));
+
+        // Assert — GetAllActiveAsync should exclude the deactivated policy
+        var activeResult = await _leavePolicyAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+
+        activeResult.Items.ShouldContain(x => x.Id == Guid.Parse(policy1.Id));
+        activeResult.Items.ShouldContain(x => x.Id == Guid.Parse(policy2.Id));
+        activeResult.Items.ShouldNotContain(x => x.Id == Guid.Parse(policyToDeactivate.Id));
+    }
+
+    [Fact]
+    public async Task Should_Allow_Update_With_Different_Active_LeaveType()
+    {
+        // Arrange — create policy with one type, then switch to another active type
+        var type1 = await CreateTestLeaveTypeAsync("Original Type For Swap");
+        var type2 = await CreateTestLeaveTypeAsync("New Type For Swap");
+        var policy = await CreateTestLeavePolicyAsync("Swap LeaveType Policy", type1.Id);
+
+        // Act — update policy to use the second leave type
+        var updateInput = new LeavePolicyCreateRequest
+        {
+            MediumStageId = TestMediumStageId,
+            PolicyTitle = "Swap LeaveType Policy",
+            LeaveType = type2.Id,
+            MaxLeavePerYear = 20,
+            PaidType = "Paid",
+            CarryForward = true,
+            EncashmentAllowed = false,
+            RequiresApproval = true
+        };
+        var updated = await _leavePolicyAppService.UpdateLeavePolicyAsync(Guid.Parse(policy.Id), updateInput);
+
+        // Assert
+        updated.LeaveType.ShouldBe(type2.Id);
+        updated.CarryForward.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Should_Block_Update_When_Switching_To_Inactive_LeaveType()
+    {
+        // Arrange — create policy with active type, then try switching to an inactive one
+        var activeType = await CreateTestLeaveTypeAsync("Active Type For Block");
+        var inactiveType = await CreateTestLeaveTypeAsync("Inactive Type For Block");
+        var policy = await CreateTestLeavePolicyAsync("Block Switch Policy", activeType.Id);
+
+        // Deactivate the target type
+        await _leaveTypeAppService.DeleteAsync(inactiveType.Id);
+
+        // Act & Assert — update should fail when switching to inactive type
+        var updateInput = new LeavePolicyCreateRequest
+        {
+            MediumStageId = TestMediumStageId,
+            PolicyTitle = "Block Switch Policy",
+            LeaveType = inactiveType.Id,
+            MaxLeavePerYear = 10,
+            PaidType = "Paid",
+            CarryForward = false,
+            EncashmentAllowed = false,
+            RequiresApproval = true
+        };
+
+        await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _leavePolicyAppService.UpdateLeavePolicyAsync(Guid.Parse(policy.Id), updateInput);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Create_Multiple_Policies_With_Same_LeaveType()
+    {
+        // Arrange — one leave type can be used by multiple policies
+        var sharedType = await CreateTestLeaveTypeAsync("Shared Leave Type");
+
+        // Act
+        var policy1 = await CreateTestLeavePolicyAsync("Shared Type Policy 1", sharedType.Id);
+        var policy2 = await CreateTestLeavePolicyAsync("Shared Type Policy 2", sharedType.Id);
+
+        // Assert — both policies created successfully with same leave type
+        policy1.LeaveType.ShouldBe(sharedType.Id);
+        policy2.LeaveType.ShouldBe(sharedType.Id);
+        policy1.Id.ShouldNotBe(policy2.Id);
+    }
+
+    [Fact]
+    public async Task Should_Deactivate_And_Verify_GetListAsync_Still_Returns_All()
+    {
+        // Arrange — GetListAsync returns all policies (active + inactive)
+        var policy = await CreateTestLeavePolicyAsync("Deactivate List Check Policy");
+        await _leavePolicyAppService.DeleteAsync(Guid.Parse(policy.Id));
+
+        // Act
+        var allPolicies = await _leavePolicyAppService.GetListAsync(new PagedAndSortedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+
+        // Assert — deactivated policy should still appear in GetListAsync (not filtered)
+        allPolicies.Items.ShouldContain(x => x.Id == Guid.Parse(policy.Id));
+        var found = allPolicies.Items.First(x => x.Id == Guid.Parse(policy.Id));
+        found.IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Should_Handle_Full_Policy_Lifecycle()
+    {
+        // Step 1: Create leave type
+        var leaveType = await CreateTestLeaveTypeAsync("Lifecycle Leave Type");
+
+        // Step 2: Create policy
+        var policy = await CreateTestLeavePolicyAsync("Full Lifecycle Policy", leaveType.Id, "Paid", 20);
+        policy.MaxLeavePerYear.ShouldBe(20);
+        policy.PaidType.ShouldBe("Paid");
+
+        // Step 3: Update policy — change max days, paid type, flags
+        var updateInput = new LeavePolicyCreateRequest
+        {
+            MediumStageId = TestMediumStageId,
+            PolicyTitle = "Full Lifecycle Policy Updated",
+            LeaveType = leaveType.Id,
+            MaxLeavePerYear = 30,
+            PaidType = "Unpaid",
+            CarryForward = true,
+            EncashmentAllowed = true,
+            RequiresApproval = false
+        };
+        var updated = await _leavePolicyAppService.UpdateLeavePolicyAsync(Guid.Parse(policy.Id), updateInput);
+        updated.PolicyTitle.ShouldBe("Full Lifecycle Policy Updated");
+        updated.MaxLeavePerYear.ShouldBe(30);
+        updated.PaidType.ShouldBe("Unpaid");
+        updated.CarryForward.ShouldBeTrue();
+        updated.EncashmentAllowed.ShouldBeTrue();
+        updated.RequiresApproval.ShouldBeFalse();
+
+        // Step 4: Deactivate policy
+        await _leavePolicyAppService.DeleteAsync(Guid.Parse(policy.Id));
+        var deactivated = await _leavePolicyAppService.GetAsync(Guid.Parse(policy.Id));
+        deactivated.IsActive.ShouldBeFalse();
+
+        // Step 5: Verify excluded from active list
+        var activeList = await _leavePolicyAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+        activeList.Items.ShouldNotContain(x => x.Id == Guid.Parse(policy.Id));
     }
 
     #endregion

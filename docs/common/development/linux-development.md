@@ -1,4 +1,4 @@
-# Linux Development Fixes — Hiren
+# Linux development notes
 
 ## Environment
 

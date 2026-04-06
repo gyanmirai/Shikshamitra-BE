@@ -268,3 +268,4 @@ src/ShikshaMitra.Blazor.Server.Tiered/Logs/*
 skills-lock.json
 skills-output.txt
 /.gemini/*
+/.dotnet/.dotnet

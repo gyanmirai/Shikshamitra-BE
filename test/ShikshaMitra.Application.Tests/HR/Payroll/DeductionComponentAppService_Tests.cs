@@ -1,11 +1,10 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Payroll.Settings;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
-using Volo.Abp.Validation;
 using Xunit;
 
 namespace ShikshaMitra.HR.Payroll;
@@ -130,8 +129,8 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             DependOn = ComponentDependency.None
         };
 
-        // Act & Assert
-        await Should.ThrowAsync<AbpValidationException>(async () =>
+        // Act & Assert — domain guard Check.NotNullOrWhiteSpace throws ArgumentException
+        await Should.ThrowAsync<ArgumentException>(async () =>
         {
             await _deductionComponentAppService.CreateAsync(input);
         });
@@ -504,6 +503,449 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         noneDependent.DependOn.ShouldBe(ComponentDependency.None);
         basicDependent.DependOn.ShouldBe(ComponentDependency.Basic);
         grossDependent.DependOn.ShouldBe(ComponentDependency.Gross);
+    }
+
+    #endregion
+
+    #region Tier 2 — Calculation Field Validation
+
+    [Fact]
+    public async Task Should_Reject_Negative_Amount()
+    {
+        // Arrange
+        var input = new CreateDeductionComponentDto
+        {
+            Name = "Negative Amount Deduction",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = -100m
+        };
+
+        // Act & Assert — domain SetCalculationFields rejects negative amounts
+        await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _deductionComponentAppService.CreateAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Accept_Zero_Amount()
+    {
+        // Arrange
+        var input = new CreateDeductionComponentDto
+        {
+            Name = "Zero Amount Deduction",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 0m
+        };
+
+        // Act
+        var result = await _deductionComponentAppService.CreateAsync(input);
+
+        // Assert
+        result.Amount.ShouldBe(0m);
+    }
+
+    [Fact]
+    public async Task Should_Reject_Null_Amount_In_Amount_Mode()
+    {
+        // Arrange
+        var input = new CreateDeductionComponentDto
+        {
+            Name = "Null Amount Deduction",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = null
+        };
+
+        // Act & Assert — domain SetCalculationFields rejects null amount
+        await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _deductionComponentAppService.CreateAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Reject_Percentage_Over_100()
+    {
+        // Arrange
+        var input = new CreateDeductionComponentDto
+        {
+            Name = "Over 100 Percent Deduction",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 101m,
+            SelectedDeductionComponentId = Guid.NewGuid()
+        };
+
+        // Act & Assert — domain SetCalculationFields rejects percentage > 100
+        await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _deductionComponentAppService.CreateAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Accept_Percentage_At_Zero_Boundary()
+    {
+        // Arrange
+        var input = new CreateDeductionComponentDto
+        {
+            Name = "Zero Percent Deduction",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 0m,
+            SelectedDeductionComponentId = Guid.NewGuid()
+        };
+
+        // Act
+        var result = await _deductionComponentAppService.CreateAsync(input);
+
+        // Assert
+        result.Percentage.ShouldBe(0m);
+    }
+
+    [Fact]
+    public async Task Should_Accept_Percentage_At_100_Boundary()
+    {
+        // Arrange
+        var input = new CreateDeductionComponentDto
+        {
+            Name = "Hundred Percent Deduction",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 100m,
+            SelectedDeductionComponentId = Guid.NewGuid()
+        };
+
+        // Act
+        var result = await _deductionComponentAppService.CreateAsync(input);
+
+        // Assert
+        result.Percentage.ShouldBe(100m);
+    }
+
+    [Fact]
+    public async Task Should_Reject_Negative_Percentage()
+    {
+        // Arrange
+        var input = new CreateDeductionComponentDto
+        {
+            Name = "Negative Percent Deduction",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = -5m,
+            SelectedDeductionComponentId = Guid.NewGuid()
+        };
+
+        // Act & Assert
+        await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _deductionComponentAppService.CreateAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Reject_Percentage_Without_SelectedComponentId()
+    {
+        // Arrange
+        var input = new CreateDeductionComponentDto
+        {
+            Name = "No Selected Component Deduction",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 10m,
+            SelectedDeductionComponentId = null
+        };
+
+        // Act & Assert — domain requires selectedDeductionComponentId for percentage mode
+        await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _deductionComponentAppService.CreateAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Reject_Null_Percentage_In_Percentage_Mode()
+    {
+        // Arrange
+        var input = new CreateDeductionComponentDto
+        {
+            Name = "Null Percentage Deduction",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = null,
+            SelectedDeductionComponentId = Guid.NewGuid()
+        };
+
+        // Act & Assert — domain rejects null percentage
+        await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _deductionComponentAppService.CreateAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Clear_Amount_When_Switching_To_Percentage_On_Update()
+    {
+        // Arrange — create with Amount mode
+        var created = await CreateTestDeductionComponentAsync("Switch To Pct Ded");
+        created.Amount.ShouldBe(1000m);
+
+        var updateInput = new UpdateDeductionComponentDto
+        {
+            Name = "Switch To Pct Ded",
+            ComponentType = DeductionComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 12m,
+            SelectedDeductionComponentId = Guid.NewGuid()
+        };
+
+        // Act
+        var result = await _deductionComponentAppService.UpdateAsync(created.Id, updateInput);
+
+        // Assert — Amount should be cleared, Percentage should be set
+        result.CalculationType.ShouldBe(CalculationType.Percentage);
+        result.Percentage.ShouldBe(12m);
+        result.Amount.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Should_Clear_Percentage_When_Switching_To_Amount_On_Update()
+    {
+        // Arrange — create with Percentage mode
+        var createInput = new CreateDeductionComponentDto
+        {
+            Name = "Switch To Amount Ded",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 8m,
+            SelectedDeductionComponentId = Guid.NewGuid()
+        };
+        var created = await _deductionComponentAppService.CreateAsync(createInput);
+        created.Percentage.ShouldBe(8m);
+
+        var updateInput = new UpdateDeductionComponentDto
+        {
+            Name = "Switch To Amount Ded",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 5000m
+        };
+
+        // Act
+        var result = await _deductionComponentAppService.UpdateAsync(created.Id, updateInput);
+
+        // Assert — Percentage should be cleared, Amount should be set
+        result.CalculationType.ShouldBe(CalculationType.Amount);
+        result.Amount.ShouldBe(5000m);
+        result.Percentage.ShouldBeNull();
+        result.SelectedDeductionComponentId.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Should_Create_With_CustomComponent_Dependency()
+    {
+        // Arrange
+        var input = new CreateDeductionComponentDto
+        {
+            Name = "Custom Dependent Deduction",
+            ComponentType = DeductionComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.CustomComponent,
+            Percentage = 3m,
+            SelectedDeductionComponentId = Guid.NewGuid()
+        };
+
+        // Act
+        var result = await _deductionComponentAppService.CreateAsync(input);
+
+        // Assert
+        result.DependOn.ShouldBe(ComponentDependency.CustomComponent);
+    }
+
+    [Fact]
+    public async Task Should_Toggle_VisibleInPayslip()
+    {
+        // Arrange — create with VisibleInPayslip = true
+        var created = await CreateTestDeductionComponentAsync("Payslip Toggle Ded");
+        created.VisibleInPayslip.ShouldBeTrue();
+
+        var updateInput = new UpdateDeductionComponentDto
+        {
+            Name = "Payslip Toggle Ded",
+            ComponentType = created.ComponentType,
+            CalculationType = created.CalculationType,
+            DependOn = created.DependOn,
+            Amount = created.Amount,
+            VisibleInPayslip = false
+        };
+
+        // Act
+        var result = await _deductionComponentAppService.UpdateAsync(created.Id, updateInput);
+
+        // Assert
+        result.VisibleInPayslip.ShouldBeFalse();
+    }
+
+    #endregion
+
+    #region Tier 4 — Activate/Deactivate Lifecycle
+
+    [Fact]
+    public async Task Should_Deactivate_And_Exclude_From_Active_List()
+    {
+        // Arrange
+        var component = await CreateTestDeductionComponentAsync("Deactivate Active List Ded");
+        component.IsActive.ShouldBeTrue();
+
+        // Act — deactivate
+        await _deductionComponentAppService.DeactivateAsync(component.Id);
+
+        // Assert — should not appear in active list
+        var activeList = await _deductionComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+        activeList.Items.ShouldNotContain(x => x.Id == component.Id);
+    }
+
+    [Fact]
+    public async Task Should_Reactivate_And_Include_In_Active_List()
+    {
+        // Arrange — create and deactivate
+        var component = await CreateTestDeductionComponentAsync("Reactivate Lifecycle Ded");
+        await _deductionComponentAppService.DeactivateAsync(component.Id);
+
+        // Verify excluded
+        var beforeReactivation = await _deductionComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+        beforeReactivation.Items.ShouldNotContain(x => x.Id == component.Id);
+
+        // Act — reactivate
+        await _deductionComponentAppService.ActivateAsync(component.Id);
+
+        // Assert — should appear in active list again
+        var afterReactivation = await _deductionComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+        afterReactivation.Items.ShouldContain(x => x.Id == component.Id);
+    }
+
+    [Fact]
+    public async Task Should_Retain_Data_After_Deactivate_Reactivate_Cycle()
+    {
+        // Arrange
+        var component = await CreateTestDeductionComponentAsync("Data Retention Ded");
+
+        // Act — deactivate then reactivate
+        await _deductionComponentAppService.DeactivateAsync(component.Id);
+        await _deductionComponentAppService.ActivateAsync(component.Id);
+
+        // Assert — all original data should be preserved
+        var retrieved = await _deductionComponentAppService.GetAsync(component.Id);
+        retrieved.Name.ShouldBe("Data Retention Ded");
+        retrieved.Amount.ShouldBe(1000m);
+        retrieved.IsActive.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Should_Handle_Full_Deduction_Component_Lifecycle()
+    {
+        // Step 1: Create
+        var created = await CreateTestDeductionComponentAsync("Full Lifecycle Deduction", DeductionComponentType.Fixed, ComponentDependency.None, 1);
+        created.IsActive.ShouldBeTrue();
+
+        // Step 2: Update
+        var updateInput = new UpdateDeductionComponentDto
+        {
+            Name = "Full Lifecycle Deduction Updated",
+            Description = "Updated description",
+            ComponentType = DeductionComponentType.Variable,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 2500m,
+            VisibleInPayslip = false,
+            DisplayOrder = 2
+        };
+        var updated = await _deductionComponentAppService.UpdateAsync(created.Id, updateInput);
+        updated.Name.ShouldBe("Full Lifecycle Deduction Updated");
+        updated.Amount.ShouldBe(2500m);
+        updated.VisibleInPayslip.ShouldBeFalse();
+
+        // Step 3: Deactivate
+        await _deductionComponentAppService.DeactivateAsync(created.Id);
+        var deactivated = await _deductionComponentAppService.GetAsync(created.Id);
+        deactivated.IsActive.ShouldBeFalse();
+
+        // Step 4: Reactivate
+        await _deductionComponentAppService.ActivateAsync(created.Id);
+        var reactivated = await _deductionComponentAppService.GetAsync(created.Id);
+        reactivated.IsActive.ShouldBeTrue();
+        reactivated.Name.ShouldBe("Full Lifecycle Deduction Updated");
+
+        // Step 5: Delete
+        await _deductionComponentAppService.DeleteAsync(created.Id);
+        await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(async () =>
+        {
+            await _deductionComponentAppService.GetAsync(created.Id);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Search_Only_Returns_Matching_Deductions()
+    {
+        // Arrange
+        await CreateTestDeductionComponentAsync("SearchGamma Deduction One");
+        await CreateTestDeductionComponentAsync("SearchGamma Deduction Two");
+        await CreateTestDeductionComponentAsync("SearchDelta Deduction Three");
+
+        // Act
+        var result = await _deductionComponentAppService.GetFilteredListAsync(0, 100, "SearchGamma");
+
+        // Assert
+        result.Items.Count.ShouldBeGreaterThanOrEqualTo(2);
+        result.Items.ShouldAllBe(x => x.Name.Contains("SearchGamma"));
+        result.Items.ShouldNotContain(x => x.Name.Contains("SearchDelta"));
+    }
+
+    [Fact]
+    public async Task Should_Include_Deactivated_In_GetListAsync()
+    {
+        // Arrange
+        var component = await CreateTestDeductionComponentAsync("Deactivated In Full List Ded");
+        await _deductionComponentAppService.DeactivateAsync(component.Id);
+
+        // Act
+        var allList = await _deductionComponentAppService.GetListAsync(new PagedAndSortedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+
+        // Assert
+        allList.Items.ShouldContain(x => x.Id == component.Id);
+        var found = allList.Items.First(x => x.Id == component.Id);
+        found.IsActive.ShouldBeFalse();
     }
 
     #endregion

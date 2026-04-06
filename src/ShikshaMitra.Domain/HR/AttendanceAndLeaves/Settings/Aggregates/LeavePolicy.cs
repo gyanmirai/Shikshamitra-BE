@@ -137,6 +137,7 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	private void SetPolicyName(string policyName)
 	{
 		Check.NotNullOrWhiteSpace(policyName, nameof(policyName));
+		policyName = policyName.Trim();
 		Check.Length(policyName, nameof(policyName), LeavePolicyConsts.MaxPolicyNameLength);
 		PolicyName = policyName;
 	}

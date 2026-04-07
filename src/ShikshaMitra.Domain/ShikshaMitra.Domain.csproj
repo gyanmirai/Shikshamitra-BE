@@ -48,7 +48,24 @@
     <Folder Include="HR\Employees\Payroll\Services\" />
     <Folder Include="HR\Payroll\PayrollStructures\Managers\" />
     <Folder Include="HR\Payroll\PayrollStructures\Services\" />
+    <!-- Students – restructured to mirror HR pattern -->
+    <Folder Include="Students\Students\Aggregates\" />
+    <Folder Include="Students\Students\Entities\" />
+    <Folder Include="Students\Students\ValueObjects\" />
+    <Folder Include="Students\Students\Managers\" />
+    <Folder Include="Students\Students\Services\" />
+    <Folder Include="Students\Students\Repositories\" />
+    <Folder Include="Students\Attendance\Aggregates\" />
+    <Folder Include="Students\Attendance\Entities\" />
+    <Folder Include="Students\Attendance\Managers\" />
+    <Folder Include="Students\Attendance\Repositories\" />
+    <Folder Include="Students\StudentEnrollments\Managers\" />
+    <Folder Include="Students\StudentEnrollments\Repositories\" />
     <Folder Include="Students\StudentEnrollments\StudentInquiries\" />
+    <Folder Include="Students\Fees\Aggregates\" />
+    <Folder Include="Students\Fees\Managers\" />
+    <Folder Include="Students\Fees\Repositories\" />
+    <Folder Include="Students\Fees\Settings\Exceptions\" />
   </ItemGroup>
 
 </Project>

@@ -56,6 +56,8 @@ public class DeductionComponentController : AbpControllerBase
 	public virtual async Task<ActionResult<ComponentCreateResponseDto>> CreateAsync(
 		[FromBody] DeductionComponentCreateRequestDto input)
 	{
+		ArgumentNullException.ThrowIfNull(input);
+
 		var createDto = DeductionComponentContractMapper.ToCreateDto(input);
 		var createdComponent = await _deductionComponentAppService.CreateAsync(createDto);
 		return StatusCode(201, new ComponentCreateResponseDto

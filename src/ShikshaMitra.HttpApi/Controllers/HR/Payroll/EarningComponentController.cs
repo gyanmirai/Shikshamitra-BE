@@ -56,6 +56,8 @@ public class EarningComponentController : AbpControllerBase
 	public virtual async Task<ActionResult<ComponentCreateResponseDto>> CreateAsync(
 		[FromBody] EarningComponentCreateRequestDto input)
 	{
+		ArgumentNullException.ThrowIfNull(input);
+
 		var createDto = EarningComponentContractMapper.ToCreateDto(input);
 		var createdComponent = await _earningComponentAppService.CreateAsync(createDto);
 		return StatusCode(201, new ComponentCreateResponseDto

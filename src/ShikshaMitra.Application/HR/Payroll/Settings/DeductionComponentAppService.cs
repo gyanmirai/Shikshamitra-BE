@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -41,6 +42,8 @@ public class DeductionComponentAppService : CrudAppService<
 
 	public override async Task<DeductionComponentDto> CreateAsync(CreateDeductionComponentDto input)
 	{
+		ArgumentNullException.ThrowIfNull(input);
+
 		var deductionComponent = await _deductionComponentManager.CreateAsync(
 			input.Name,
 			input.Description,
@@ -54,7 +57,16 @@ public class DeductionComponentAppService : CrudAppService<
 			input.DisplayOrder
 		);
 
-		await Repository.InsertAsync(deductionComponent, autoSave: true);
+		try
+		{
+			await Repository.InsertAsync(deductionComponent, autoSave: true);
+		}
+		catch (Exception ex) when (IsDeductionComponentNameUniqueViolation(ex))
+		{
+			throw new BusinessException("ShikshaMitra:DeductionComponentNameAlreadyExists")
+				.WithData("name", input.Name);
+		}
+
 		await ClearCacheAsync();
 
 		return ObjectMapper.Map<DeductionComponent, DeductionComponentDto>(deductionComponent);
@@ -62,6 +74,8 @@ public class DeductionComponentAppService : CrudAppService<
 
 	public override async Task<DeductionComponentDto> UpdateAsync(Guid id, UpdateDeductionComponentDto input)
 	{
+		ArgumentNullException.ThrowIfNull(input);
+
 		var deductionComponent = await Repository.GetAsync(id);
 
 		await _deductionComponentManager.UpdateAsync(
@@ -78,7 +92,16 @@ public class DeductionComponentAppService : CrudAppService<
 			input.DisplayOrder
 		);
 
-		await Repository.UpdateAsync(deductionComponent, autoSave: true);
+		try
+		{
+			await Repository.UpdateAsync(deductionComponent, autoSave: true);
+		}
+		catch (Exception ex) when (IsDeductionComponentNameUniqueViolation(ex))
+		{
+			throw new BusinessException("ShikshaMitra:DeductionComponentNameAlreadyExists")
+				.WithData("name", input.Name);
+		}
+
 		await ClearCacheAsync();
 
 		return ObjectMapper.Map<DeductionComponent, DeductionComponentDto>(deductionComponent);
@@ -189,7 +212,55 @@ public class DeductionComponentAppService : CrudAppService<
 			}
 		}
 
-		await _cache.RemoveManyAsync(cacheKeysToRemove);
+		try
+		{
+			await _cache.RemoveManyAsync(cacheKeysToRemove);
+		}
+		catch (Exception ex)
+		{
+			Logger.LogWarning(
+				ex,
+				"Failed to invalidate deduction component cache for tenant {TenantId}. List endpoints may be stale until expiration.",
+				CurrentTenant?.Id);
+		}
+	}
+
+	/// <summary>
+	/// Maps DB unique violations on (TenantId, Name) to a handled business error (e.g. race after <see cref="DeductionComponentManager"/> check).
+	/// </summary>
+	private static bool IsDeductionComponentNameUniqueViolation(Exception exception)
+	{
+		const string indexName = "IX_DeductionComponents_TenantId_Name";
+		const string tableHint = "AppDeductionComponents";
+
+		for (var ex = exception; ex != null; ex = ex.InnerException!)
+		{
+			var message = ex.Message;
+			if (string.IsNullOrEmpty(message))
+			{
+				continue;
+			}
+
+			if (message.Contains(indexName, StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			if (message.Contains(tableHint, StringComparison.OrdinalIgnoreCase)
+			    && message.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			if (message.Contains("23505", StringComparison.Ordinal)
+			    && (message.Contains(tableHint, StringComparison.OrdinalIgnoreCase)
+			        || message.Contains(indexName, StringComparison.OrdinalIgnoreCase)))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private IQueryable<DeductionComponent> ApplySorting(IQueryable<DeductionComponent> queryable, string sorting)

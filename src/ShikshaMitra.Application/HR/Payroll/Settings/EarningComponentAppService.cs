@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -41,6 +42,8 @@ public class EarningComponentAppService : CrudAppService<
 
 	public override async Task<EarningComponentDto> CreateAsync(CreateEarningComponentDto input)
 	{
+		ArgumentNullException.ThrowIfNull(input);
+
 		var earningComponent = await _earningComponentManager.CreateAsync(
 			input.Name,
 			input.Description,
@@ -54,7 +57,16 @@ public class EarningComponentAppService : CrudAppService<
 			input.DisplayOrder
 		);
 
-		await Repository.InsertAsync(earningComponent, autoSave: true);
+		try
+		{
+			await Repository.InsertAsync(earningComponent, autoSave: true);
+		}
+		catch (Exception ex) when (IsEarningComponentNameUniqueViolation(ex))
+		{
+			throw new BusinessException("ShikshaMitra:EarningComponentNameAlreadyExists")
+				.WithData("name", input.Name);
+		}
+
 		await ClearCacheAsync();
 
 		return ObjectMapper.Map<EarningComponent, EarningComponentDto>(earningComponent);
@@ -62,6 +74,8 @@ public class EarningComponentAppService : CrudAppService<
 
 	public override async Task<EarningComponentDto> UpdateAsync(Guid id, UpdateEarningComponentDto input)
 	{
+		ArgumentNullException.ThrowIfNull(input);
+
 		var earningComponent = await Repository.GetAsync(id);
 
 		await _earningComponentManager.UpdateAsync(
@@ -78,7 +92,16 @@ public class EarningComponentAppService : CrudAppService<
 			input.DisplayOrder
 		);
 
-		await Repository.UpdateAsync(earningComponent, autoSave: true);
+		try
+		{
+			await Repository.UpdateAsync(earningComponent, autoSave: true);
+		}
+		catch (Exception ex) when (IsEarningComponentNameUniqueViolation(ex))
+		{
+			throw new BusinessException("ShikshaMitra:EarningComponentNameAlreadyExists")
+				.WithData("name", input.Name);
+		}
+
 		await ClearCacheAsync();
 
 		return ObjectMapper.Map<EarningComponent, EarningComponentDto>(earningComponent);
@@ -189,7 +212,56 @@ public class EarningComponentAppService : CrudAppService<
 			}
 		}
 
-		await _cache.RemoveManyAsync(cacheKeysToRemove);
+		try
+		{
+			await _cache.RemoveManyAsync(cacheKeysToRemove);
+		}
+		catch (Exception ex)
+		{
+			Logger.LogWarning(
+				ex,
+				"Failed to invalidate earning component cache for tenant {TenantId}. List endpoints may be stale until expiration.",
+				CurrentTenant?.Id);
+		}
+	}
+
+	/// <summary>
+	/// Maps DB unique violations on (TenantId, Name) to a handled business error (e.g. race after <see cref="EarningComponentManager"/> check).
+	/// </summary>
+	private static bool IsEarningComponentNameUniqueViolation(Exception exception)
+	{
+		const string indexName = "IX_EarningComponents_TenantId_Name";
+		const string tableHint = "AppEarningComponents";
+
+		for (var ex = exception; ex != null; ex = ex.InnerException!)
+		{
+			var message = ex.Message;
+			if (string.IsNullOrEmpty(message))
+			{
+				continue;
+			}
+
+			if (message.Contains(indexName, StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			if (message.Contains(tableHint, StringComparison.OrdinalIgnoreCase)
+			    && message.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			// PostgreSQL: 23505 = unique_violation
+			if (message.Contains("23505", StringComparison.Ordinal)
+			    && (message.Contains(tableHint, StringComparison.OrdinalIgnoreCase)
+			        || message.Contains(indexName, StringComparison.OrdinalIgnoreCase)))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private IQueryable<EarningComponent> ApplySorting(IQueryable<EarningComponent> queryable, string sorting)

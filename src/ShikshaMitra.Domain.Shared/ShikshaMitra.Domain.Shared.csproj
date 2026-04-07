@@ -49,6 +49,11 @@
 
   <ItemGroup>
     <Folder Include="HR\Payroll\PayrollStructures\" />
+    <!-- Students – restructured to mirror HR pattern -->
+    <Folder Include="Students\Students\" />
+    <Folder Include="Students\Attendance\" />
+    <Folder Include="Students\StudentEnrollments\" />
+    <Folder Include="Students\Fees\" />
   </ItemGroup>
 
 

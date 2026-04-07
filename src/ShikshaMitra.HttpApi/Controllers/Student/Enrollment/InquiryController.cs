@@ -18,19 +18,20 @@ public class InquiryController(IStudentInquiryAppService studentInquiryAppServic
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_Inquiry.Add)]
 	public async Task<Result> CreateInquiry([FromBody] CreateUpdateInquiryDto createInquiryDto)
     {
-        var createdInquiry = await studentInquiryAppService.CreateStudentInquiryAsync(createInquiryDto);
-        return Result.Success(createdInquiry);
+        await studentInquiryAppService.CreateStudentInquiryAsync(createInquiryDto);
+        return Result.Success();
     }
 
     [HttpGet("inquiries/{studentId}")]
-    public async Task<Result<StudentEnrollmentListDto>> GetInquiryById(Guid studentId)
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_Inquiry.View)]
+	public async Task<Result<StudentDto>> GetInquiryById(Guid studentId)
     {
         var inquiry = await studentInquiryAppService.GetInquiryByIdAsync(studentId);
         return Result.Success(inquiry);
     }
 
 	[HttpPut("inquiries/{studentId}")]
-	public async Task<Result<StudentEnrollmentListDto>> UpdateInquiry(
+	public async Task<Result<StudentDto>> UpdateInquiry(
 		Guid studentId,
 		[FromBody] CreateUpdateInquiryDto updateInquiryDto)
 	{
@@ -39,7 +40,7 @@ public class InquiryController(IStudentInquiryAppService studentInquiryAppServic
 	}
 
 	[HttpGet("{academicMediumId}/inquiries")]
-    public async Task<Result<PagedResultDto<StudentEnrollmentListDto>>> GetInquiriesByMedium(
+    public async Task<Result<PagedResultDto<StudentDto>>> GetInquiriesByMedium(
         Guid academicMediumId,
         [FromQuery] int skipCount = 0,
         [FromQuery] int maxResultCount = 10,

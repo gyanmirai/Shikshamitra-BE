@@ -102,12 +102,14 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	DateTimeOffset? dateOfBirth,
 	GenderEnum? gender,
 	DateTimeOffset? dateOfInquiry,
-	Guid? inquiryPreferenceId)
+	Guid? inquiryPreferenceId,
+	string? previousSchool)
 	{
 		DateOfBirth = dateOfBirth;
 		Gender = gender;
 		DateOfInquiry = dateOfInquiry;
 		InquiryPreferenceId = inquiryPreferenceId;
+		PreviousSchool = previousSchool;
 	}
 
 	public void UpdateGeneralInformation(

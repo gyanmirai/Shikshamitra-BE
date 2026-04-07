@@ -59,15 +59,15 @@ public class StudentMapperProfile : Profile
 		CreateMap<CreateUpdateStudentLeaveTypeDto, StudentLeaveType>();
 
 		// Map Student aggregate to StudentInquiryDto (used in inquiry create/update flows)
-		CreateMap<Student, StudentEnrollmentListDto>()
+		CreateMap<Student, StudentDto>()
 			.ForMember(dest => dest.StudentId, opt => opt.MapFrom(src => src.Id))
 			.ForMember(dest => dest.InquiryNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.InquiryNo : null))
 			.ForMember(dest => dest.StudentName, opt => opt.MapFrom(src =>
 				$"{src.FirstName} {src.MiddleName} {src.LastName}".Trim()))
-			.ForMember(dest => dest.Standard, opt => opt.Ignore())
-			.ForMember(dest => dest.AcademicMediumId, opt => opt.MapFrom(src => src.AcademicMediumId))
-			.ForMember(dest => dest.AcademicBoardId, opt => opt.Ignore())
-			.ForMember(dest => dest.AcademicYearId, opt => opt.MapFrom(src => src.AcademicYearId))
+			.ForMember(dest => dest.AcademicYearName, opt => opt.MapFrom(src => src.AcademicYear.Name))
+			.ForMember(dest => dest.AcademicBoardName, opt => opt.MapFrom(src => src.AcademicBoard.Type.ToString()))
+			.ForMember(dest => dest.AcademicMediumName, opt => opt.MapFrom(src => src.AcademicMedium.Name))
+			.ForMember(dest => dest.Standard, opt => opt.MapFrom(src => src.Standard.Name))
 			.ForMember(dest => dest.DateOfBirth, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.DateOfBirth : null))
 			.ForMember(dest => dest.Age, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.DateOfBirth : null))
 			.ForMember(dest => dest.DateOfInquiry, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.DateOfInquiry : null))

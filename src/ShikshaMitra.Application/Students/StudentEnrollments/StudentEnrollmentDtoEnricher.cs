@@ -22,14 +22,13 @@ public class StudentEnrollmentDtoEnricher(
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<EducationBoard, Guid> educationBoardRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
-	IRepository<Student, Guid> studentRepository,
 	IRepository<InquiryPreference, Guid> inquiryPreferenceRepository) : ITransientDependency
 {
 	/// <summary>
-	/// Enriches a single DTO with related entity names (makes 4 database calls max).
+	/// Enriches a single DTO with related entity names.
 	/// Use this for single-item operations.
 	/// </summary>
-	public async Task EnrichSingleDtoAsync(StudentEnrollmentListDto dto)
+	public async Task EnrichSingleDtoAsync(StudentDto dto, Student student)
 	{
 		// Academic Medium Name and Board Name
 		if (dto.AcademicMediumId != Guid.Empty)
@@ -56,32 +55,29 @@ public class StudentEnrollmentDtoEnricher(
 		}
 
 		// Standard Name
-		if (dto.StudentId != Guid.Empty)
+		if (student.StandardId.HasValue)
 		{
-			// Get the student to read StandardId (mapping didn't include name)
-			var student = await studentRepository.FindAsync(dto.StudentId, includeDetails: true);
-			if (student?.StandardId != null)
-			{
-				var std = await standardRepository.FindAsync(student.StandardId.Value);
-				dto.Standard = std?.Name ?? dto.Standard;
-			}
+			var std = await standardRepository.FindAsync(student.StandardId.Value);
+			dto.Standard = std?.Name ?? dto.Standard;
+		}
 
-			if (student?.Notes.Any() ?? false)
+		if (student.Notes.Any())
+		{
+			var latestNote = student.Notes.OrderByDescending(n => n.CreationTime).FirstOrDefault();
+			if (latestNote != null)
 			{
-				var latestNote = student?.Notes.OrderByDescending(n => n.CreationTime).FirstOrDefault();
-				if (latestNote != null)
-				{
-					dto.NextReminderDate = latestNote.NextReminderDate;
-					dto.InquiryStatus = latestNote.Status;
-				}
+				dto.NextReminderDate = latestNote.NextReminderDate;
+				dto.InquiryStatus = latestNote.Status;
 			}
 		}
 
 		// Inquiry Preference
-		if (dto.InquiryPreferenceId != null && dto.InquiryPreferenceId != Guid.Empty)
+		var inquiryPreferenceId = student.AdditionalDetail?.InquiryPreferenceId ?? dto.InquiryPreferenceId;
+		if (inquiryPreferenceId != null && inquiryPreferenceId != Guid.Empty)
 		{
-			var inquiryPreference = await inquiryPreferenceRepository.FindAsync(dto.InquiryPreferenceId!.Value);
-			if (inquiryPreference != null) {
+			var inquiryPreference = await inquiryPreferenceRepository.FindAsync(inquiryPreferenceId.Value);
+			if (inquiryPreference != null)
+			{
 				dto.InquiryPreference = inquiryPreference.PreferenceName;
 			}
 		}
@@ -111,13 +107,18 @@ public class StudentEnrollmentDtoEnricher(
 	/// Enriches a list of DTOs with related entity names using batch operations
 	/// to avoid N+1 queries. Use this for list operations.
 	/// </summary>
-	public async Task EnrichDtoListAsync(List<StudentEnrollmentListDto> dtos, List<Student> students)
+	public async Task EnrichDtoListAsync(List<StudentDto> dtos, List<Student> students)
 	{
 		if (dtos.Count == 0) return;
 
 		// Collect all unique IDs
 		var mediumIds = dtos.Select(d => d.AcademicMediumId).Where(id => id != Guid.Empty).Distinct().ToList();
 		var standardIds = students.Where(s => s.StandardId.HasValue).Select(s => s.StandardId!.Value).Distinct().ToList();
+		var inquiryPreferenceIds = students
+			.Where(s => s.AdditionalDetail?.InquiryPreferenceId != null)
+			.Select(s => s.AdditionalDetail!.InquiryPreferenceId!.Value)
+			.Distinct()
+			.ToList();
 
 		// Batch fetch all entities sequentially to avoid DbContext concurrency issues
 		var mediums = mediumIds.Any()
@@ -140,12 +141,17 @@ public class StudentEnrollmentDtoEnricher(
 			? await academicYearRepository.GetListAsync(y => yearIds.Contains(y.Id))
 			: new List<AcademicYear>();
 
+		var inquiryPreferences = inquiryPreferenceIds.Any()
+			? await inquiryPreferenceRepository.GetListAsync(ip => inquiryPreferenceIds.Contains(ip.Id))
+			: new List<InquiryPreference>();
+
 		// Create lookup dictionaries for fast access
 		var mediumDict = mediums.ToDictionary(m => m.Id);
 		var standardDict = standards.ToDictionary(s => s.Id);
 		var boardDict = boards.ToDictionary(b => b.Id);
 		var yearDict = years.ToDictionary(y => y.Id);
 		var studentDict = students.ToDictionary(s => s.Id);
+		var inquiryPreferenceDict = inquiryPreferences.ToDictionary(ip => ip.Id);
 
 		// Enrich each DTO using lookups (no database calls in loop)
 		foreach (var dto in dtos)
@@ -168,18 +174,20 @@ public class StudentEnrollmentDtoEnricher(
 				}
 			}
 
-			// Standard name
-			if (studentDict.TryGetValue(dto.StudentId, out var student) && student.StandardId.HasValue)
+			if (!studentDict.TryGetValue(dto.StudentId, out var student))
 			{
-				if (standardDict.TryGetValue(student.StandardId.Value, out var standard))
-				{
-					dto.Standard = standard.Name;
-				}
+				continue;
 			}
 
-			if (studentDict.TryGetValue(dto.StudentId, out var stud) && stud.Notes.Any())
+			// Standard name
+			if (student.StandardId.HasValue && standardDict.TryGetValue(student.StandardId.Value, out var standard))
 			{
-				var latestNote = stud.Notes.OrderByDescending(n => n.CreationTime).FirstOrDefault();
+				dto.Standard = standard.Name;
+			}
+
+			if (student.Notes.Any())
+			{
+				var latestNote = student.Notes.OrderByDescending(n => n.CreationTime).FirstOrDefault();
 				var nextReminderDate = latestNote?.NextReminderDate;
 				if (nextReminderDate != null)
 				{
@@ -188,13 +196,10 @@ public class StudentEnrollmentDtoEnricher(
 				}
 			}
 
-			if (studentDict.TryGetValue(dto.StudentId, out stud) && stud.AdditionalDetail.InquiryPreferenceId != null)
+			var inquiryPreferenceId = student.AdditionalDetail?.InquiryPreferenceId;
+			if (inquiryPreferenceId != null && inquiryPreferenceDict.TryGetValue(inquiryPreferenceId.Value, out var inquiryPreference))
 			{
-				var inquiryPreference = await inquiryPreferenceRepository.FindAsync(student.AdditionalDetail.InquiryPreferenceId!.Value);
-				if (inquiryPreference != null)
-				{
-					dto.InquiryPreference = inquiryPreference.PreferenceName;
-				}
+				dto.InquiryPreference = inquiryPreference.PreferenceName;
 			}
 		}
 	}
@@ -202,7 +207,7 @@ public class StudentEnrollmentDtoEnricher(
 	/// <summary>
 	/// Enriches a list of StudentEnrollmentListDto with related entity names using batch operations.
 	/// </summary>
-	public async Task EnrichRegistrationFormDtoListAsync(List<StudentEnrollmentListDto> dtos, List<Student> students)
+	public async Task EnrichRegistrationFormDtoListAsync(List<StudentDto> dtos, List<Student> students)
 	{
 		if (dtos.Count == 0) return;
 
@@ -273,13 +278,18 @@ public class StudentEnrollmentDtoEnricher(
 	/// <summary>
 	/// Enriches a list of StudentEnrollmentListDto with related entity names using batch operations.
 	/// </summary>
-	public async Task EnrichRegistrationDtoListAsync(List<StudentEnrollmentListDto> dtos, List<Student> students)
+	public async Task EnrichRegistrationDtoListAsync(List<StudentDto> dtos, List<Student> students)
 	{
 		if (dtos.Count == 0) return;
 
 		// Collect all unique IDs
 		var mediumIds = dtos.Select(d => d.AcademicMediumId).Where(id => id != Guid.Empty).Distinct().ToList();
 		var standardIds = students.Where(s => s.StandardId.HasValue).Select(s => s.StandardId!.Value).Distinct().ToList();
+		var inquiryPreferenceIds = students
+			.Where(s => s.AdditionalDetail?.InquiryPreferenceId != null)
+			.Select(s => s.AdditionalDetail!.InquiryPreferenceId!.Value)
+			.Distinct()
+			.ToList();
 
 		// Batch fetch all entities
 		var mediums = mediumIds.Any()
@@ -302,12 +312,17 @@ public class StudentEnrollmentDtoEnricher(
 			? await academicYearRepository.GetListAsync(y => yearIds.Contains(y.Id))
 			: new List<AcademicYear>();
 
+		var inquiryPreferences = inquiryPreferenceIds.Any()
+			? await inquiryPreferenceRepository.GetListAsync(ip => inquiryPreferenceIds.Contains(ip.Id))
+			: new List<InquiryPreference>();
+
 		// Create lookup dictionaries
 		var mediumDict = mediums.ToDictionary(m => m.Id);
 		var standardDict = standards.ToDictionary(s => s.Id);
 		var boardDict = boards.ToDictionary(b => b.Id);
 		var yearDict = years.ToDictionary(y => y.Id);
 		var studentDict = students.ToDictionary(s => s.Id);
+		var inquiryPreferenceDict = inquiryPreferences.ToDictionary(ip => ip.Id);
 
 		// Enrich each DTO
 		foreach (var dto in dtos)
@@ -330,33 +345,34 @@ public class StudentEnrollmentDtoEnricher(
 				}
 			}
 
-			// Standard name
-			if (studentDict.TryGetValue(dto.StudentId, out var student) && student.StandardId.HasValue)
+			if (!studentDict.TryGetValue(dto.StudentId, out var student))
 			{
-				if (standardDict.TryGetValue(student.StandardId.Value, out var standard))
-				{
-					dto.Standard = standard.Name;
-				}
+				continue;
+			}
+
+			// Standard name
+			if (student.StandardId.HasValue && standardDict.TryGetValue(student.StandardId.Value, out var standard))
+			{
+				dto.Standard = standard.Name;
 			}
 
 			// calculate progress based on student.additionaldetails.StudentRegistrationStateEnum field
-			if (studentDict.TryGetValue(dto.StudentId, out var stud))
+			if (student.AdditionalDetail != null)
 			{
-				var totalStates = (double)Enum.GetValues<StudentRegistrationStateEnum>()
+				var totalStates = Enum.GetValues<StudentRegistrationStateEnum>()
 					.Count(s => s != StudentRegistrationStateEnum.Default);
 
-				var v = (double) stud.AdditionalDetail?.StudentRegistrationState
-					/ totalStates;
-				dto.Progress = (double) v * 100;
+				if (totalStates > 0)
+				{
+					var progress = (double)student.AdditionalDetail.StudentRegistrationState / totalStates;
+					dto.Progress = progress * 100;
+				}
 			}
 
-			if (studentDict.TryGetValue(dto.StudentId, out stud) && stud.AdditionalDetail.InquiryPreferenceId != null)
+			var inquiryPreferenceId = student.AdditionalDetail?.InquiryPreferenceId;
+			if (inquiryPreferenceId != null && inquiryPreferenceDict.TryGetValue(inquiryPreferenceId.Value, out var inquiryPreference))
 			{
-				var inquiryPreference = await inquiryPreferenceRepository.FindAsync(student.AdditionalDetail.InquiryPreferenceId!.Value);
-				if (inquiryPreference != null)
-				{
-					dto.InquiryPreference = inquiryPreference.PreferenceName;
-				}
+				dto.InquiryPreference = inquiryPreference.PreferenceName;
 			}
 		}
 	}

@@ -180,10 +180,12 @@ public class StudentSeederContributor : BaseSeederContributor
 			firstName: firstName,
 			middleName: middleName,
 			lastName: lastName,
+			educationYearId: academicYearId,
+			educationBoardId: Guid.Empty, // Can be set if needed
 			educationMediumId: mediumId,
+			educationMediumStageId: Guid.Empty, // Can be set if needed
 			standardId: standardId,
 			divisionId: divisionId,
-			academicYearId: academicYearId,
 			grNo: 10000 + globalCounter, // GR numbers starting from 10001
 			rollNo: rollNo,
 			status: StudentLifeCycleStatusEnum.Admission

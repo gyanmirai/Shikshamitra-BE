@@ -41,6 +41,7 @@
   <ItemGroup>
     <Folder Include="Controllers\HR\EventAndHolidays\" />
     <Folder Include="Controllers\HR\Payroll\PayrollStructures\" />
+	<Folder Include="Controllers\Student\Notification\" />
   </ItemGroup>
 
     </Project>

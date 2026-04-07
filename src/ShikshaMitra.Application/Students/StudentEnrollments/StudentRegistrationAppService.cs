@@ -50,7 +50,7 @@ public class StudentRegistrationAppService(
 		StudentLifeCycleStatusEnum.RegistrationFormIssued,
 		StudentLifeCycleStatusEnum.Registation
 	];
-	public async Task<PagedResultDto<StudentEnrollmentListDto>> GetRegistrationFormsByMediumAsync(
+	public async Task<PagedResultDto<StudentDto>> GetRegistrationFormsByMediumAsync(
 		Guid academicMediumId,
 		int skipCount = 0,
 		int maxResultCount = 10,
@@ -74,7 +74,7 @@ public class StudentRegistrationAppService(
 
 		if (totalCount == 0)
 		{
-			return new PagedResultDto<StudentEnrollmentListDto>(0, new List<StudentEnrollmentListDto>());
+			return new PagedResultDto<StudentDto>(0, new List<StudentDto>());
 		}
 
 		var pagedQuery = query
@@ -83,15 +83,15 @@ public class StudentRegistrationAppService(
 			.Take(maxResultCount);
 
 		var results = await AsyncExecuter.ToListAsync(pagedQuery);
-		var resultList = ObjectMapper.Map<List<Student>, List<StudentEnrollmentListDto>>(results);
+		var resultList = ObjectMapper.Map<List<Student>, List<StudentDto>>(results);
 
 		// Enrich DTOs with related entity names (Standard, Medium, Board, Year)
 		await dtoEnricher.EnrichRegistrationFormDtoListAsync(resultList, results);
 
-		return new PagedResultDto<StudentEnrollmentListDto>(totalCount, resultList);
+		return new PagedResultDto<StudentDto>(totalCount, resultList);
 	}
 
-	public async Task<PagedResultDto<StudentEnrollmentListDto>> GetRegistrationsByMediumAsync(
+	public async Task<PagedResultDto<StudentDto>> GetRegistrationsByMediumAsync(
 		Guid academicMediumId,
 		int skipCount = 0,
 		int maxResultCount = 10,
@@ -115,7 +115,7 @@ public class StudentRegistrationAppService(
 
 		if (totalCount == 0)
 		{
-			return new PagedResultDto<StudentEnrollmentListDto>(0, new List<StudentEnrollmentListDto>());
+			return new PagedResultDto<StudentDto>(0, new List<StudentDto>());
 		}
 
 		var pagedQuery = query
@@ -124,12 +124,12 @@ public class StudentRegistrationAppService(
 			.Take(maxResultCount);
 
 		var results = await AsyncExecuter.ToListAsync(pagedQuery);
-		var resultList = ObjectMapper.Map<List<Student>, List<StudentEnrollmentListDto>>(results);
+		var resultList = ObjectMapper.Map<List<Student>, List<StudentDto>>(results);
 
 		// Enrich DTOs with related entity names (Standard, Medium, Board, Year)
 		await dtoEnricher.EnrichRegistrationDtoListAsync(resultList, results);
 
-		return new PagedResultDto<StudentEnrollmentListDto>(totalCount, resultList);
+		return new PagedResultDto<StudentDto>(totalCount, resultList);
 	}
 
 	public async Task<StudentGeneralDetailsDto> GetRegistrationGeneralDetailsByIdAsync(Guid studentId)
@@ -239,7 +239,10 @@ public class StudentRegistrationAppService(
 			firstName: input.FirstName,
 			middleName: input.MiddleName,
 			lastName: input.LastName,
+			educationYearId: Guid.Empty, // TODO
+			educationBoardId: Guid.Empty, // TODO
 			educationMediumId: input.AcademicMediumId,
+			educationMediumStageId: Guid.Empty, // TODO
 			standardId: input.StandardId,
 			divisionId: input.DivisionId,
 			dateOfBirth: input.DateOfBirth,

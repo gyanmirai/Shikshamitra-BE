@@ -1,7 +1,5 @@
 ﻿using ShikshaMitra.Students.Enrollments.Inquiries;
 using ShikshaMitra.Students.Enrollments.Registrations;
-using ShikshaMitra.TenantSettings.AcademicYears;
-using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using System;
@@ -23,32 +21,10 @@ public class StudentInquiryAppService(
 	IRepository<EducationMedium, Guid> academicMediumRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IGuidGenerator guidGenerator,
-	StudentEnrollmentManagerNew studentEnrollmentManager,
+	StudentEnrollmentManager studentEnrollmentManager,
 	StudentEnrollmentDtoEnricher dtoEnricher
 ) : ApplicationService, IStudentInquiryAppService
 {
-	public async Task<StudentEnrollmentListDto> GetInquiryByIdAsync(Guid studentId)
-	{
-		// Load the complete aggregate with all details
-		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
-
-		// Verify the student is an inquiry
-		if (student.Status != StudentLifeCycleStatusEnum.Inquiry)
-		{
-			throw new BusinessException("", L["Student is not in Inquiry status"]);
-		}
-
-		// Verify tenant isolation
-		if (student.TenantId != CurrentTenant.Id)
-		{
-			throw new BusinessException("", L["Inquiry Not Found"]);
-		}
-
-		var dto = ObjectMapper.Map<Student, StudentEnrollmentListDto>(student);
-		await dtoEnricher.EnrichSingleDtoAsync(dto);
-		return dto;
-	}
-
 	public async Task<StudentEnrollmentListDto> CreateStudentInquiryAsync(
 		CreateUpdateInquiryDto createStudentInquiryDto
 	)
@@ -95,6 +71,28 @@ public class StudentInquiryAppService(
 		// Re-load with details to ensure mapper has all data populated
 		var saved = await studentRepository.GetAsync(student.Id, includeDetails: true);
 		var dto = ObjectMapper.Map<Student, StudentEnrollmentListDto>(saved);
+		await dtoEnricher.EnrichSingleDtoAsync(dto);
+		return dto;
+	}
+
+	public async Task<StudentEnrollmentListDto> GetInquiryByIdAsync(Guid studentId)
+	{
+		// Load the complete aggregate with all details
+		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+
+		// Verify the student is an inquiry
+		if (student.Status != StudentLifeCycleStatusEnum.Inquiry)
+		{
+			throw new BusinessException("", L["Student is not in Inquiry status"]);
+		}
+
+		// Verify tenant isolation
+		if (student.TenantId != CurrentTenant.Id)
+		{
+			throw new BusinessException("", L["Inquiry Not Found"]);
+		}
+
+		var dto = ObjectMapper.Map<Student, StudentEnrollmentListDto>(student);
 		await dtoEnricher.EnrichSingleDtoAsync(dto);
 		return dto;
 	}

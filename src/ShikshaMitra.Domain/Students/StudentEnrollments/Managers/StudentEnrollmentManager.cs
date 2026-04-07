@@ -1,52 +1,37 @@
 ﻿using System;
-using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using Volo.Abp.Domain.Repositories;
+using ShikshaMitra.Students;
 using Volo.Abp.Domain.Services;
-using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
-public class StudentEnrollmentManagerNew(
-	IRepository<Student, Guid> studentRepository,
-	IRepository<StudentAdditionalDetail, Guid> studentAdditionalDetailRepository,
-	ICurrentTenant currentTenant
+/// <summary>
+/// Domain service responsible for enrollment-related business operations,
+/// including generating unique inquiry numbers per academic medium.
+/// </summary>
+public class StudentEnrollmentManager(
+	IStudentRepository studentRepository
 ) : DomainService
 {
-	public async Task<string> GenerateInquiryNumberAsync(Guid academicMediumId)
+	private const string InquiryPrefix = "INQ";
+
+	/// <summary>
+	/// Generates the next sequential inquiry number for the given academic medium
+	/// within the current tenant.
+	/// </summary>
+	/// <param name="academicMediumId">The academic medium to scope the sequence to.</param>
+	/// <param name="cancellationToken">Cancellation token.</param>
+	/// <returns>A formatted inquiry number, e.g. <c>INQ001</c>.</returns>
+	public async Task<string> GenerateInquiryNumberAsync(
+		Guid academicMediumId,
+		CancellationToken cancellationToken = default)
 	{
-		var studentQueryable = await studentRepository.GetQueryableAsync();
-		var additionalDetailQueryable = await studentAdditionalDetailRepository.GetQueryableAsync();
+		var maxSequence = await studentRepository.GetMaxInquirySequenceForMediumAsync(
+			academicMediumId,
+			CurrentTenant.Id,
+			cancellationToken);
 
-		// Pull candidate inquiry numbers and safely parse on client-side to avoid DB-side parse errors
-		var candidateInquiryNumbers =
-			(from s in studentQueryable
-			 join sad in additionalDetailQueryable on s.Id equals sad.Id
-			 where s.AcademicMediumId == academicMediumId && s.TenantId == currentTenant.Id
-			 select sad.InquiryNo)
-			.AsEnumerable(); // switch to client-side for safe parsing
-
-		int maxNumber = 0;
-		foreach (var inquiry in candidateInquiryNumbers)
-		{
-			if (string.IsNullOrWhiteSpace(inquiry))
-			{
-				continue;
-			}
-
-			// Expect format: INQ###, tolerate extra spaces
-			var trimmed = inquiry.Trim();
-			if (trimmed.Length >= 4 && trimmed.StartsWith("INQ", StringComparison.OrdinalIgnoreCase))
-			{
-				var numericPart = trimmed.Substring(3);
-				if (int.TryParse(numericPart, out var n) && n > maxNumber)
-				{
-					maxNumber = n;
-				}
-			}
-		}
-
-		var nextNumber = maxNumber + 1;
-		return $"INQ{nextNumber:D3}";
+		return $"{InquiryPrefix}{maxSequence + 1:D3}";
 	}
 }

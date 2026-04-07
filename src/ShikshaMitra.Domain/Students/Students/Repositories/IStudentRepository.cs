@@ -50,4 +50,14 @@ public interface IStudentRepository : IRepository<Student, Guid>
         Guid? tenantId,
         int academicYear,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the highest sequential number embedded in <c>InquiryNo</c> values
+    /// (format: <c>INQ{NNN}</c>) for the given academic medium and tenant.
+    /// Returns <c>0</c> when no valid inquiry numbers exist yet.
+    /// </summary>
+    Task<int> GetMaxInquirySequenceForMediumAsync(
+        Guid academicMediumId,
+        Guid? tenantId,
+        CancellationToken cancellationToken = default);
 }

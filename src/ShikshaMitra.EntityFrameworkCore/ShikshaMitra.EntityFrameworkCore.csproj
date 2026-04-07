@@ -45,6 +45,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="HR\EventAndHolidays\" />
     <Folder Include="HR\Payroll\PayrollStructures\" />
     <Folder Include="Migrations\" />
   </ItemGroup>

@@ -53,6 +53,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="HR\EventAndHolidays\" />
     <Folder Include="HR\Payroll\PayrollStructures\" />
   </ItemGroup>
 

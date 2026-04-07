@@ -4,6 +4,7 @@ Shared documentation that applies across multiple modules lives here.
 
 ## Areas
 
+- [Development environment](./development/README.md)
 - [Platform](./platform/README.md)
 - [Multi-tenancy](./multi-tenancy/README.md)
 - [Security](./security/README.md)

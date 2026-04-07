@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Hosting;
@@ -231,7 +231,6 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 					"AttendanceAndLeaves" => "HR - Attendance & Leaves",
 					"Payroll" => "HR - Payroll",
 					"Calendar" => "HR - Calendar",
-					"EventAndHolidays" => "HR - Events & Holidays",
 					"Reports" => "HR - Reports",
 					_ => $"HR - {sub}"
 				}
@@ -257,7 +256,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			];
 		}
 
-		// Students Module — handles .Controllers.Students.* and ShikshaMitra.Students.Attendances.*
+		// Students Module — handles .Controllers.Students.* and ShikshaMitra.Students.Attendance.*
 		if (ns.Contains(".Controllers.Students."))
 		{
 			var sub = ns.Split(".Controllers.Students.").Last().Split('.').First();
@@ -272,7 +271,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 				}
 			];
 		}
-		if (ns.StartsWith("ShikshaMitra.Students.Attendances"))
+		if (ns.StartsWith("ShikshaMitra.Students.Attendance"))
 			return ["Students - Attendance"];
 
 		// Finance Module — handles .Controllers.Finance.Setting and .Controllers.Finance (root-level)

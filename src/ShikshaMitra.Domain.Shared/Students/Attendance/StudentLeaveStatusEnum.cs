@@ -1,4 +1,4 @@
-﻿namespace ShikshaMitra.Students.Attendances;
+namespace ShikshaMitra.Students.Attendance;
 
 /// <summary>
 /// Represents the status of a student leave request

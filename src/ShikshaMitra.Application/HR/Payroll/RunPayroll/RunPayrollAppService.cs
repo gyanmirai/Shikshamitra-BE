@@ -1,9 +1,9 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
-using ShikshaMitra.HR.EventAndHolidays;
+using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using System;
 using System.Collections.Generic;
@@ -29,7 +29,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	private readonly IEmployeePayrollDetailsRepository _payrollDetailsRepository;
 	private readonly IEmployeePayrollComponentRepository _payrollComponentRepository;
 	private readonly ISalarySlipRepository _salarySlipRepository;
-	private readonly IRepository<EventAndHoliday, Guid> _holidayRepository;
+	private readonly IRepository<Holiday, Guid> _holidayRepository;
 	private readonly SalarySlipManager _salarySlipManager;
 	private readonly ILogger<RunPayrollAppService> _logger;
 
@@ -43,7 +43,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		IEmployeePayrollDetailsRepository payrollDetailsRepository,
 		IEmployeePayrollComponentRepository payrollComponentRepository,
 		ISalarySlipRepository salarySlipRepository,
-		IRepository<EventAndHoliday, Guid> holidayRepository,
+		IRepository<Holiday, Guid> holidayRepository,
 		SalarySlipManager salarySlipManager,
 		ILogger<RunPayrollAppService> logger)
 	{
@@ -433,7 +433,6 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		var holidays = await AsyncExecuter.ToListAsync(
 			holidayQuery.Where(h =>
-				h.IsHoliday &&
 				h.StartDate <= endDate &&
 				h.EndDate >= startDate)
 		);

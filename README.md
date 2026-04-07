@@ -61,6 +61,10 @@ This is a layered monolith application that consists of the following applicatio
 
 Deploying an ABP application is not different than deploying any .NET or ASP.NET Core application. However, there are some topics that you should care about when you are deploying your applications. You can check ABP's [Deployment documentation](https://docs.abp.io/en/abp/latest/Deployment/Index) before deploying your application.
 
+### Documentation
+
+Backend documentation (modules, APIs, platform) lives under [`docs/`](./docs/README.md). For Linux local setup (roll-forward, EF tools, DbMigrator), see [docs/common/development/linux-development.md](./docs/common/development/linux-development.md).
+
 ### Additional resources
 
 You can see the following resources to learn more about your solution and the ABP Framework:

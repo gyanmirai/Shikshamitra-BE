@@ -1,4 +1,4 @@
-﻿namespace ShikshaMitra.Students.Attendances;
+namespace ShikshaMitra.Students.Attendance;
 
 /// <summary>
 /// Constants for StudentLeave entity validation and constraints

@@ -1,5 +1,6 @@
 ﻿using ShikshaMitra.Students.ValueObjects;
 using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,6 +17,7 @@ namespace ShikshaMitra.Students;
 /// </summary>
 public class EntityValidationService(
 	IRepository<EducationMedium, Guid> academicMediumRepository,
+	IRepository<Standard, Guid> standardRepository,
 	IRepository<Student, Guid> studentRepository) : DomainService
 {
 	/// <summary>
@@ -30,6 +32,21 @@ public class EntityValidationService(
 			throw new BusinessException(
 				StudentRegistrationErrorCodes.AcademicMediumNotFound)
 				.WithData("academicMediumId", academicMediumId);
+		}
+	}
+
+	/// <summary>
+	/// Validates that a standard exists in the system.
+	/// </summary>
+	/// <param name="standardId">The standard identifier</param>
+	/// <exception cref="BusinessException">Thrown when the standard does not exist</exception>
+	public async Task ValidateStandardExistsAsync(Guid standardId)
+	{
+		if (!await standardRepository.AnyAsync(x => x.Id == standardId))
+		{
+			throw new BusinessException(
+				StudentRegistrationErrorCodes.StandardNotFound)
+				.WithData("standardId", standardId);
 		}
 	}
 

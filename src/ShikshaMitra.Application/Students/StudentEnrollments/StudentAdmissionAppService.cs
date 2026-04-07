@@ -52,7 +52,7 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 	/// Gets a paginated list of students in admission stage with filters
 	/// </summary>
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.View)]
-	public async Task<PagedResultDto<StudentEnrollmentListDto>> GetListAsync(GetStudentAdmissionsInput input)
+	public async Task<PagedResultDto<StudentDto>> GetListAsync(GetStudentAdmissionsInput input)
 	{
 		var query = (await studentRepository.GetQueryableAsync())
 			.Where(s => s.Status == StudentLifeCycleStatusEnum.Admission
@@ -83,9 +83,9 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 			query
 		);
 
-		var studentDtos = ObjectMapper.Map<List<Student>, List<StudentEnrollmentListDto>>(students);
+		var studentDtos = ObjectMapper.Map<List<Student>, List<StudentDto>>(students);
 
-		return new PagedResultDto<StudentEnrollmentListDto>(totalCount, studentDtos);
+		return new PagedResultDto<StudentDto>(totalCount, studentDtos);
 	}
 
 	/// <summary>

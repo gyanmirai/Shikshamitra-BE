@@ -4,7 +4,7 @@ using System;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
-public class StudentEnrollmentListDto : EntityDto
+public class StudentDto : EntityDto
 {
 	public Guid StudentId { get; set; }
 	public required string InquiryNo { get; set; }

@@ -1,11 +1,9 @@
 ﻿using ShikshaMitra.Students.Enrollments.Inquiries;
 using ShikshaMitra.Students.Enrollments.Registrations;
-using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Dynamic.Core;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -18,18 +16,26 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 [RemoteService(false)]
 public class StudentInquiryAppService(
 	IRepository<Student, Guid> studentRepository,
-	IRepository<EducationMedium, Guid> academicMediumRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IGuidGenerator guidGenerator,
 	StudentEnrollmentManager studentEnrollmentManager,
-	StudentEnrollmentDtoEnricher dtoEnricher
+	StudentEnrollmentDtoEnricher dtoEnricher,
+	EntityValidationService validationService
 ) : ApplicationService, IStudentInquiryAppService
 {
-	public async Task<StudentEnrollmentListDto> CreateStudentInquiryAsync(
+	public async Task CreateStudentInquiryAsync(
 		CreateUpdateInquiryDto createStudentInquiryDto
 	)
 	{
-		await ValidateReferencesAsync(createStudentInquiryDto);
+		await validationService.ValidateAcademicMediumExistsAsync(createStudentInquiryDto.AcademicMediumId);
+		await validationService.ValidateStandardExistsAsync(createStudentInquiryDto.StandardId);
+
+		var standard = await standardRepository.GetAsync(createStudentInquiryDto.StandardId, includeDetails: true) ?? throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Standard not found");
+
+		if (standard.EducationMediumStage.EducationMedium.Id != createStudentInquiryDto.AcademicMediumId)
+		{
+			throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Standard does not belong to the specified Academic Medium");
+		}
 
 		// Generate inquiry number before creating entities
 		var inquiryNo = await studentEnrollmentManager.GenerateInquiryNumberAsync(
@@ -44,7 +50,10 @@ public class StudentInquiryAppService(
 			createStudentInquiryDto.FirstName,
 			createStudentInquiryDto.MiddleName,
 			createStudentInquiryDto.LastName,
+			standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId,
+			standard.EducationMediumStage.EducationMedium.EducationBoardId,
 			createStudentInquiryDto.AcademicMediumId,
+			standard.EducationMediumStageId,
 			createStudentInquiryDto.StandardId,
 			createStudentInquiryDto.DateOfBirth,
 			createStudentInquiryDto.Gender,
@@ -67,44 +76,31 @@ public class StudentInquiryAppService(
 		// Single repository call - EF Core will handle all child entities
 		// due to cascade configuration
 		await studentRepository.InsertAsync(student, autoSave: true);
-
-		// Re-load with details to ensure mapper has all data populated
-		var saved = await studentRepository.GetAsync(student.Id, includeDetails: true);
-		var dto = ObjectMapper.Map<Student, StudentEnrollmentListDto>(saved);
-		await dtoEnricher.EnrichSingleDtoAsync(dto);
-		return dto;
 	}
 
-	public async Task<StudentEnrollmentListDto> GetInquiryByIdAsync(Guid studentId)
+	public async Task<StudentDto> GetInquiryByIdAsync(Guid studentId)
 	{
 		// Load the complete aggregate with all details
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
 
-		// Verify the student is an inquiry
-		if (student.Status != StudentLifeCycleStatusEnum.Inquiry)
-		{
-			throw new BusinessException("", L["Student is not in Inquiry status"]);
-		}
+		// ABP data filters enforce tenant isolation; validate the lifecycle state
+		validationService.ValidateStudentStatus(
+			student,
+			[StudentLifeCycleStatusEnum.Inquiry],
+			StudentRegistrationErrorCodes.StudentNotInInquiryStatus
+		);
 
-		// Verify tenant isolation
-		if (student.TenantId != CurrentTenant.Id)
-		{
-			throw new BusinessException("", L["Inquiry Not Found"]);
-		}
-
-		var dto = ObjectMapper.Map<Student, StudentEnrollmentListDto>(student);
-		await dtoEnricher.EnrichSingleDtoAsync(dto);
-		return dto;
+		return ObjectMapper.Map<Student, StudentDto>(student);
 	}
 
-	public async Task<PagedResultDto<StudentEnrollmentListDto>> GetInquiriesByMediumAsync(
+	public async Task<PagedResultDto<StudentDto>> GetInquiriesByMediumAsync(
 		Guid academicMediumId,
 		int skipCount = 0,
 		int maxResultCount = 10,
 		string? searchTerm = null
 	)
 	{
-		await CheckAcademicMediumExistsAsync(academicMediumId);
+		await validationService.ValidateAcademicMediumExistsAsync(academicMediumId);
 
 		// Get queryable with related details included for proper mapping
 		var queryable = await studentRepository.WithDetailsAsync(
@@ -135,7 +131,7 @@ public class StudentInquiryAppService(
 
 		if (totalCount == 0)
 		{
-			return new PagedResultDto<StudentEnrollmentListDto>(0, new List<StudentEnrollmentListDto>());
+			return new PagedResultDto<StudentDto>(0, new List<StudentDto>());
 		}
 
 		var pagedQuery = query
@@ -144,23 +140,30 @@ public class StudentInquiryAppService(
 			.Take(maxResultCount);
 
 		var results = await AsyncExecuter.ToListAsync(pagedQuery);
-		var resultList = ObjectMapper.Map<List<Student>, List<StudentEnrollmentListDto>>(results);
+		var resultList = ObjectMapper.Map<List<Student>, List<StudentDto>>(results);
 
-		// Use batch enrichment to avoid N+1 problem
-		await dtoEnricher.EnrichDtoListAsync(resultList, results);
-
-		return new PagedResultDto<StudentEnrollmentListDto>(totalCount, resultList);
+		return new PagedResultDto<StudentDto>(totalCount, resultList);
 	}
 
-	public async Task<StudentEnrollmentListDto> UpdateInquiryAsync(
+	public async Task<StudentDto> UpdateInquiryAsync(
 		Guid studentId,
 		CreateUpdateInquiryDto updateInquiryDto
 	)
 	{
-		await ValidateReferencesAsync(updateInquiryDto);
+		await validationService.ValidateAcademicMediumExistsAsync(updateInquiryDto.AcademicMediumId);
+		await validationService.ValidateStandardExistsAsync(updateInquiryDto.StandardId);
 
 		// Load the complete aggregate (with all parts due to AutoInclude)
 		var student = await studentRepository.GetAsync(studentId);
+
+		// Guard against updating a student that is no longer in inquiry state
+		validationService.ValidateStudentStatus(
+			student,
+			[StudentLifeCycleStatusEnum.Inquiry],
+			StudentRegistrationErrorCodes.StudentNotInInquiryStatus
+		);
+
+		var standard = await standardRepository.GetAsync(updateInquiryDto.StandardId, includeDetails: true) ?? throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Standard not found");
 
 		// Update the aggregate using its business method
 		// This maintains aggregate consistency
@@ -168,7 +171,10 @@ public class StudentInquiryAppService(
 			updateInquiryDto.FirstName,
 			updateInquiryDto.MiddleName,
 			updateInquiryDto.LastName,
+			standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId,
+			standard.EducationMediumStage.EducationMedium.EducationBoardId,
 			updateInquiryDto.AcademicMediumId,
+			standard.EducationMediumStageId,
 			updateInquiryDto.StandardId,
 			updateInquiryDto.DateOfBirth,
 			updateInquiryDto.Gender,
@@ -183,17 +189,13 @@ public class StudentInquiryAppService(
 			updateInquiryDto.City,
 			updateInquiryDto.State,
 			updateInquiryDto.Country,
-			updateInquiryDto.PinCode
+			updateInquiryDto.PinCode,
+			updateInquiryDto.PreviousSchool
 		);
 
 		// Single repository call - EF Core tracks changes to all parts
 		await studentRepository.UpdateAsync(student, autoSave: true);
-
-		// Re-load with details to ensure mapper has all data populated
-		var saved = await studentRepository.GetAsync(student.Id, includeDetails: true);
-		var dto = ObjectMapper.Map<Student, StudentEnrollmentListDto>(saved);
-		await dtoEnricher.EnrichSingleDtoAsync(dto);
-		return dto;
+		return ObjectMapper.Map<Student, StudentDto>(student);
 	}
 
 	public async Task AssignRegistrationFormAsync(
@@ -209,27 +211,5 @@ public class StudentInquiryAppService(
 
 		// Single update call
 		await studentRepository.UpdateAsync(student, autoSave: true);
-	}
-
-	private async Task ValidateReferencesAsync(CreateUpdateInquiryDto inquiryDto)
-	{
-		await CheckAcademicMediumExistsAsync(inquiryDto.AcademicMediumId);
-		await CheckStandardExistsAsync(inquiryDto.StandardId);
-	}
-
-	private async Task CheckStandardExistsAsync(Guid standardId)
-	{
-		if (!await standardRepository.AnyAsync(x => x.Id == standardId))
-		{
-			throw new BusinessException("", L["Standard Not Found"]);
-		}
-	}
-
-	private async Task CheckAcademicMediumExistsAsync(Guid academicMediumId)
-	{
-		if (!await academicMediumRepository.AnyAsync(x => x.Id == academicMediumId))
-		{
-			throw new BusinessException("", L["Academic Medium Not Found"]);
-		}
 	}
 }

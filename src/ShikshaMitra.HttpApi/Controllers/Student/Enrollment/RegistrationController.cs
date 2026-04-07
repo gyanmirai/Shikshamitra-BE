@@ -62,7 +62,7 @@ public class RegistrationController : AbpControllerBase
 	/// <returns>Paginated list of students with registration forms</returns>
 	[HttpGet("forms")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_RegistrationFormIssued.View)]
-	public async Task<Result<PagedResultDto<StudentEnrollmentListDto>>> GetRegistrationFormsAsync(
+	public async Task<Result<PagedResultDto<StudentDto>>> GetRegistrationFormsAsync(
 		[FromQuery] Guid academicMediumId,
 		[FromQuery] int skipCount = 0,
 		[FromQuery] int maxResultCount = 10,
@@ -87,7 +87,7 @@ public class RegistrationController : AbpControllerBase
 	/// <returns>Paginated list of registered students</returns>
 	[HttpGet()]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_RegistrationFormIssued.View)]
-	public async Task<Result<PagedResultDto<StudentEnrollmentListDto>>> GetRegistrationsAsync(
+	public async Task<Result<PagedResultDto<StudentDto>>> GetRegistrationsAsync(
 		[FromQuery] Guid academicMediumId,
 		[FromQuery] int skipCount = 0,
 		[FromQuery] int maxResultCount = 10,

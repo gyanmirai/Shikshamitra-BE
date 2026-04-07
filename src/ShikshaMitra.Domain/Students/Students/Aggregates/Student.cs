@@ -12,6 +12,7 @@ using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
+using ShikshaMitra.TenantSettings.AcademicYears;
 
 namespace ShikshaMitra.Students;
 
@@ -44,6 +45,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	// Navigation for inquiry preference
 	public InquiryPreference? InquiryPreference { get; private set; }
+	public AcademicYear? AcademicYear { get; private set; }
 	public EducationMedium? AcademicMedium { get; private set; }
 	public EducationBoard? AcademicBoard { get; private set; }
 	public Standard? Standard { get; private set; }
@@ -68,10 +70,12 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? firstName,
 		string? middleName,
 		string? lastName,
+		Guid educationYearId,
+		Guid educationBoardId,
 		Guid educationMediumId,
+		Guid educationMediumStageId,
 		Guid? standardId = null,
 		Guid? divisionId = null,
-		Guid? academicYearId = null,
 		int? grNo = null,
 		int? rollNo = null,
 		StudentLifeCycleStatusEnum status = StudentLifeCycleStatusEnum.New
@@ -82,10 +86,13 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		FirstName = firstName;
 		MiddleName = middleName;
 		LastName = lastName;
+		AcademicYearId = educationYearId;
+		AcademicBoardId = educationBoardId;
 		AcademicMediumId = educationMediumId;
+		AcademicMediumStageId = educationMediumStageId;
 		StandardId = standardId;
 		DivisionId = divisionId;
-		AcademicYearId = academicYearId;
+
 		GrNo = grNo;
 		RollNo = rollNo;
 		Status = status;
@@ -103,7 +110,10 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? firstName,
 		string? middleName,
 		string? lastName,
+		Guid educationYearId,
+		Guid educationBoardId,
 		Guid educationMediumId,
+		Guid educationMediumStageId,
 		Guid? standardId,
 		DateTimeOffset? dateOfBirth,
 		GenderEnum? gender,
@@ -129,7 +139,10 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			firstName,
 			middleName,
 			lastName,
+			educationYearId,
+			educationBoardId,
 			educationMediumId,
+			educationMediumStageId,
 			standardId,
 			status: StudentLifeCycleStatusEnum.Inquiry
 		);
@@ -174,7 +187,10 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? firstName,
 		string? middleName,
 		string? lastName,
+		Guid educationYearId,
+		Guid educationBoardId,
 		Guid educationMediumId,
+		Guid educationMediumStageId,
 		Guid? standardId,
 		Guid? divisionId,
 		DateTimeOffset dateOfBirth,
@@ -197,7 +213,10 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			firstName,
 			middleName,
 			lastName,
+			educationYearId,
+			educationBoardId,
 			educationMediumId,
+			educationMediumStageId,
 			standardId,
 			divisionId,
 			status: StudentLifeCycleStatusEnum.Registation
@@ -241,7 +260,10 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? firstName,
 		string? middleName,
 		string? lastName,
+		Guid educationYearId,
+		Guid educationBoardId,
 		Guid educationMediumId,
+		Guid educationMediumStageId,
 		Guid? standardId,
 		DateTimeOffset? dateOfBirth,
 		GenderEnum? gender,
@@ -256,14 +278,15 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? city,
 		State? state,
 		Country? country,
-		string? pinCode
+		string? pinCode,
+		string? previousSchool
 	)
 	{
 		// Update root
-		UpdateDetails(firstName, middleName, lastName, educationMediumId, standardId, StudentLifeCycleStatusEnum.Inquiry);
+		UpdateDetails(firstName, middleName, lastName, educationYearId, educationBoardId, educationMediumId, educationMediumStageId, standardId, StudentLifeCycleStatusEnum.Inquiry);
 
 		// Update aggregate parts
-		AdditionalDetail?.UpdateDetails(dateOfBirth, gender, dateOfInquiry, inquiryPreferenceId);
+		AdditionalDetail?.UpdateDetails(dateOfBirth, gender, dateOfInquiry, inquiryPreferenceId, previousSchool);
 		ContactDetail?.UpdateContactInfo(primaryContactNo, secondaryContactNo, email, address1, address2, address3, city, state, country, pinCode);
 	}
 
@@ -285,7 +308,10 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? firstName,
 		string? middleName,
 		string? lastName,
+		Guid educationYearId,
+		Guid educationBoardId,
 		Guid academicMediumId,
+		Guid educationMediumStageId,
 		Guid? standardId = null,
 		StudentLifeCycleStatusEnum status = StudentLifeCycleStatusEnum.New
 	)
@@ -293,7 +319,10 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		FirstName = firstName;
 		MiddleName = middleName;
 		LastName = lastName;
+		AcademicYearId = educationYearId;
+		AcademicBoardId = educationBoardId;
 		AcademicMediumId = academicMediumId;
+		AcademicMediumStageId = educationMediumStageId;
 		StandardId = standardId;
 		Status = status;
 	}

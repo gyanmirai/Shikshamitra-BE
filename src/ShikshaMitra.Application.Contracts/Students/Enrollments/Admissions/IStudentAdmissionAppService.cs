@@ -15,7 +15,7 @@ public interface IStudentAdmissionAppService : IApplicationService
 	/// <summary>
 	/// Gets a paginated list of students in admission stage with filters
 	/// </summary>
-	Task<PagedResultDto<StudentEnrollmentListDto>> GetListAsync(GetStudentAdmissionsInput input);
+	Task<PagedResultDto<StudentDto>> GetListAsync(GetStudentAdmissionsInput input);
 
 	/// <summary>
 	/// Assigns or changes division for a student

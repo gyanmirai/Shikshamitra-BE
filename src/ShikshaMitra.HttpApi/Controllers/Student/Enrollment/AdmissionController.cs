@@ -37,7 +37,7 @@ public class AdmissionController : AbpControllerBase
 	/// <returns>Paginated list of students in admission stage</returns>
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.View)]
-	public async Task<PagedResultDto<StudentEnrollmentListDto>> GetListAsync([FromQuery] GetStudentAdmissionsInput input)
+	public async Task<PagedResultDto<StudentDto>> GetListAsync([FromQuery] GetStudentAdmissionsInput input)
 	{
 		return await _admissionAppService.GetListAsync(input);
 	}

@@ -7,13 +7,13 @@ using Volo.Abp.Application.Dtos;
 namespace ShikshaMitra.Students.Enrollments.Registrations;
 public interface IStudentRegistrationAppService
 {
-	Task<PagedResultDto<StudentEnrollmentListDto>> GetRegistrationFormsByMediumAsync(
+	Task<PagedResultDto<StudentDto>> GetRegistrationFormsByMediumAsync(
 		Guid academicMediumId,
 		int skipCount = 0,
 		int maxResultCount = 10,
 		string? searchTerm = null);
 
-	Task<PagedResultDto<StudentEnrollmentListDto>> GetRegistrationsByMediumAsync(
+	Task<PagedResultDto<StudentDto>> GetRegistrationsByMediumAsync(
 		Guid academicMediumId,
 		int skipCount = 0,
 		int maxResultCount = 10,

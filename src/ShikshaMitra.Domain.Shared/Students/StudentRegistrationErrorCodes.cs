@@ -125,4 +125,16 @@ public static class StudentRegistrationErrorCodes
 	/// Message: Student must be in Registration status to view registration. Current status: {currentStatus}
 	/// </summary>
 	public const string InvalidStatusForRegistrationListView = "ShikshaMitra.Student:InvalidStatusForRegistrationListView";
+
+	/// <summary>
+	/// Error code: ShikshaMitra.Student:StandardNotFound
+	/// Message: Standard not found with ID: {standardId}
+	/// </summary>
+	public const string StandardNotFound = "ShikshaMitra.Student:StandardNotFound";
+
+	/// <summary>
+	/// Error code: ShikshaMitra.Student:StudentNotInInquiryStatus
+	/// Message: Student must be in Inquiry status. Current status: {currentStatus}
+	/// </summary>
+	public const string StudentNotInInquiryStatus = "ShikshaMitra.Student:StudentNotInInquiryStatus";
 }

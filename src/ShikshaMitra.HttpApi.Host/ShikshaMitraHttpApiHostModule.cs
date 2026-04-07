@@ -111,10 +111,18 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 	private void ConfigureFormOptions(ServiceConfigurationContext context, IConfiguration configuration)
 	{
+		// Missing or zero config yields 0 for MultipartBodyLengthLimit, which rejects every multipart request
+		// ("Multipart body length limit 0 exceeded"). Default matches ASP.NET Core when FormOptions is not overridden.
+		const long defaultMultipartLimit = 128L * 1024 * 1024;
+		const int defaultMemoryBufferThreshold = 64 * 1024;
+
 		context.Services.Configure<FormOptions>(options =>
 		{
-			options.MultipartBodyLengthLimit = configuration.GetValue<long>("FormOptions:MultipartBodyLengthLimit");
-			options.MemoryBufferThreshold = configuration.GetValue<int>("FormOptions:MemoryBufferThreshold");
+			var multipartLimit = configuration.GetValue<long?>("FormOptions:MultipartBodyLengthLimit");
+			options.MultipartBodyLengthLimit = multipartLimit is > 0 ? multipartLimit.Value : defaultMultipartLimit;
+
+			var memoryThreshold = configuration.GetValue<int?>("FormOptions:MemoryBufferThreshold");
+			options.MemoryBufferThreshold = memoryThreshold is > 0 ? memoryThreshold.Value : defaultMemoryBufferThreshold;
 		});
 	}
 

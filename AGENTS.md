@@ -22,7 +22,7 @@
 | Excel export | ClosedXML |
 | Blob storage | ABP BlobStoring (database provider) |
 | Analyzers | Roslynator (code analysis + formatting) |
-| Test framework | xUnit + ABP test infrastructure (in-memory DB) |
+| Test framework | xUnit + ABP test infrastructure (in-memory DB) + WebApplicationFactory (API tests) |
 | CI/CD | GitHub Actions → Azure Web App |
 
 ---
@@ -42,6 +42,7 @@ src/
 
 test/
   ShikshaMitra.Application.Tests       → App service integration tests
+  ShikshaMitra.HttpApi.Tests           → HTTP API endpoint tests (tiered: Critical/Important/Extended/Smoke)
   ShikshaMitra.Domain.Tests            → Domain logic unit tests
   ShikshaMitra.EntityFrameworkCore.Tests → Repository / query tests
   ShikshaMitra.TestBase                → Shared test infrastructure & seeders
@@ -135,12 +136,23 @@ dotnet test
 
 ## Testing
 
-- Test classes: `{AppService}_Tests` (e.g., `EmployeeAppService_Tests`).
+- App-service test classes: `{AppService}_Tests` (e.g., `EmployeeAppService_Tests`).
+- API test classes: `{Controller}Api_Tests` (e.g., `EarningComponentApi_Tests`).
 - Seeders: `ShikshaMitraSeederContributor` → module-specific seeders.
-- **Current coverage**: HR module only. Students, Finance, Academic, Library have **zero test coverage**.
+- **Current coverage**: HR module (app-service + API tests). Students, Finance, Academic, Library have **zero test coverage**.
 
 ```bash
+# App service tests
 dotnet test --filter "Project=ShikshaMitra.Application.Tests"
+
+# API tests (all tiers except smoke)
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "Tier!=Smoke"
+
+# API tests (critical only — fast PR gate)
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "Tier=Critical"
+
+# API tests (by module)
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "Module=HR"
 ```
 
 ---
@@ -162,6 +174,8 @@ dotnet test --filter "Project=ShikshaMitra.Application.Tests"
 | UserScope & bulk scope assignment | `docs/platform/` |
 | Multi-tenancy (tenants, roles) | `docs/multi-tenancy/` |
 | Testing guides | `docs/testing/` |
+| API testing framework & blueprint | `docs/common/testing/api-testing-guide.md` |
+| HR API tests & contract reference | `docs/modules/hr/testing/api-testing.md` |
 | Historical doc moves / old structure notes | `docs/meta/` -- **not** current architecture |
 
 When in doubt, search `docs/` for the module name and open the nearest `README.md`.

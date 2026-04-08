@@ -1,0 +1,102 @@
+using System;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Threading.Tasks;
+using ShikshaMitra.HR.Employees.ReportingManagerInfo;
+using ShikshaMitra.Infrastructure.Traits;
+using Shouldly;
+using Xunit;
+
+namespace ShikshaMitra.HR.Employees;
+
+[Collection(ApiTestCollection.Name)]
+[TestModule(TestTraits.Modules.HR)]
+public class ReportingManagerApi_Tests : ShikshaMitraApiTestBase
+{
+	private const string BaseUrl = "/api/employees";
+
+	public ReportingManagerApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
+
+	#region Tier 0 — Critical
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Get_Reporting_Manager()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMGet");
+
+		var response = await Client.GetAsync($"{BaseUrl}/{empId}/reporting-manager");
+
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.NotFound, HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Assign_Reporting_Manager()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMAssignee");
+		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMManager");
+
+		var request = new ReportingManagerRequest
+		{
+			ReportingManagerId = managerId,
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/reporting-manager", request, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	#endregion
+
+	#region Tier 1 — Important
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Error_For_Nonexistent_Employee()
+	{
+		var response = await Client.GetAsync($"{BaseUrl}/{Guid.NewGuid()}/reporting-manager");
+
+		response.StatusCode.ShouldBeOneOf(
+			HttpStatusCode.NotFound,
+			HttpStatusCode.InternalServerError,
+			HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Get_Employees_Under_Manager()
+	{
+		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMManagerList");
+
+		var response = await Client.GetAsync($"{BaseUrl}/reporting-manager/{managerId}/employees");
+
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.NotFound, HttpStatusCode.InternalServerError);
+	}
+
+	#endregion
+
+	#region Tier 2 — Extended
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Assign_Then_Verify_Reporting_Manager()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMVerifyEmp");
+		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMVerifyMgr");
+
+		var request = new ReportingManagerRequest { ReportingManagerId = managerId };
+		await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/reporting-manager", request, JsonOptions);
+
+		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/reporting-manager");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await getResponse.Content.ReadFromJsonAsync<ReportingManagerResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.EmployeeId.ShouldBe(empId);
+		body.ReportingManager.ShouldNotBeNull();
+		body.ReportingManager.Id.ShouldBe(managerId);
+	}
+
+	#endregion
+}

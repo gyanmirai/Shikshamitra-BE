@@ -9,5 +9,13 @@ public class StudentAdditionalDetailConfiguration : IEntityTypeConfiguration<Stu
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StudentAdditionalDetails", ShikshaMitraConsts.DbSchema);
 		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();
+
+		// add navigation properties for inquiry preference
+		builder.HasOne(x => x.InquiryPreference)
+			.WithMany()
+			.HasForeignKey(x => x.InquiryPreferenceId)
+			.OnDelete(DeleteBehavior.NoAction);
+
+		builder.Navigation(x => x.InquiryPreference).AutoInclude();
 	}
 }

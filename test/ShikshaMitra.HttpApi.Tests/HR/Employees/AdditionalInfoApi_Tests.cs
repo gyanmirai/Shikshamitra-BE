@@ -96,5 +96,66 @@ public class AdditionalInfoApi_Tests : ShikshaMitraApiTestBase
 		body.PersonWithDisability.ShouldBeTrue();
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Clear_All_Fields_With_Null_Values()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "AddInfoClear");
+
+		var populateRequest = new AdditionalInfoContract
+		{
+			BplCardNo = "BPL-CLEAR",
+			PersonWithDisability = true,
+			SecondLanguage = "Marathi",
+			IsLibraryMember = true,
+			IsTransportMember = true,
+		};
+		await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/additional-info", populateRequest, JsonOptions);
+
+		var clearRequest = new AdditionalInfoContract
+		{
+			BplCardNo = null,
+			PersonWithDisability = false,
+			SecondLanguage = null,
+			IsLibraryMember = false,
+			IsTransportMember = false,
+		};
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/additional-info", clearRequest, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/additional-info");
+		var body = await getResponse.Content.ReadFromJsonAsync<AdditionalInfoContract>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.PersonWithDisability.ShouldBeFalse();
+		body.IsLibraryMember.ShouldBeFalse();
+		body.IsTransportMember.ShouldBeFalse();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_RoundTrip_All_Boolean_Fields_As_True()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "AddInfoBools");
+
+		var request = new AdditionalInfoContract
+		{
+			BplCardNo = "BPL-BOOLS",
+			PersonWithDisability = true,
+			SecondLanguage = "French",
+			IsLibraryMember = true,
+			IsTransportMember = true,
+		};
+		await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/additional-info", request, JsonOptions);
+
+		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/additional-info");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await getResponse.Content.ReadFromJsonAsync<AdditionalInfoContract>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.PersonWithDisability.ShouldBeTrue();
+		body.IsLibraryMember.ShouldBeTrue();
+		body.IsTransportMember.ShouldBeTrue();
+		body.SecondLanguage.ShouldBe("French");
+	}
+
 	#endregion
 }

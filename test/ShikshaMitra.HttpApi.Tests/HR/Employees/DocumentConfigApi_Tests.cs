@@ -111,6 +111,93 @@ public class DocumentConfigApi_Tests : ShikshaMitraApiTestBase
 
 	#endregion
 
+	#region Tier 2 — Extended
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Reject_Title_With_Numbers_Or_SpecialChars()
+	{
+		var request = new DocumentRequest
+		{
+			Title = "Invalid123!@#",
+			DocumentSize = 5,
+			DocumentTypes = new List<int> { 1, 2 },
+		};
+
+		var response = await Client.PostAsJsonAsync(BaseUrl, request, JsonOptions);
+
+		response.StatusCode.ShouldBeOneOf(
+			HttpStatusCode.BadRequest,
+			HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Reject_DocumentSize_Out_Of_Range()
+	{
+		var requestZero = new DocumentRequest
+		{
+			Title = "Valid Title",
+			DocumentSize = 0,
+			DocumentTypes = new List<int> { 1 },
+		};
+		var r1 = await Client.PostAsJsonAsync(BaseUrl, requestZero, JsonOptions);
+		r1.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
+
+		var requestOverMax = new DocumentRequest
+		{
+			Title = "Valid Title",
+			DocumentSize = 21,
+			DocumentTypes = new List<int> { 1 },
+		};
+		var r2 = await Client.PostAsJsonAsync(BaseUrl, requestOverMax, JsonOptions);
+		r2.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Complete_Full_CRUD_Lifecycle()
+	{
+		var createRequest = BuildDocumentRequest();
+		var createResponse = await Client.PostAsJsonAsync(BaseUrl, createRequest, JsonOptions);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+		var created = await createResponse.Content.ReadFromJsonAsync<DocumentCreateResponse>(JsonOptions);
+		created.ShouldNotBeNull();
+		created.Id.ShouldNotBe(Guid.Empty);
+
+		var getResponse = await Client.GetAsync($"{BaseUrl}/{created.Id}");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var item = await getResponse.Content.ReadFromJsonAsync<DocumentItem>(JsonOptions);
+		item.ShouldNotBeNull();
+		item.Id.ShouldBe(created.Id);
+
+		var updateRequest = new DocumentRequest
+		{
+			Title = "Updated Document",
+			DocumentSize = 15,
+			DocumentTypes = new List<int> { 1, 2, 3, 4 },
+		};
+		var updateResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{created.Id}", updateRequest, JsonOptions);
+		updateResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+		var verifyResponse = await Client.GetAsync($"{BaseUrl}/{created.Id}");
+		verifyResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var updated = await verifyResponse.Content.ReadFromJsonAsync<DocumentItem>(JsonOptions);
+		updated.ShouldNotBeNull();
+		updated.Title.ShouldBe("Updated Document");
+		updated.DocumentSize.ShouldBe(15);
+
+		var deleteResponse = await Client.DeleteAsync($"{BaseUrl}/{created.Id}");
+		deleteResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+		var goneResponse = await Client.GetAsync($"{BaseUrl}/{created.Id}");
+		goneResponse.StatusCode.ShouldBeOneOf(
+			HttpStatusCode.NotFound,
+			HttpStatusCode.InternalServerError);
+	}
+
+	#endregion
+
 	#region Helpers
 
 	private static DocumentRequest BuildDocumentRequest()

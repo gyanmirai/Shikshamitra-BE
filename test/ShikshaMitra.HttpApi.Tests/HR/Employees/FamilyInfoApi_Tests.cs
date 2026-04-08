@@ -108,5 +108,112 @@ public class FamilyInfoApi_Tests : ShikshaMitraApiTestBase
 		body.FatherDetails.Name.ShouldBe("Verification Father");
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Update_All_Three_Family_Members_With_Full_Address()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "FamAll");
+
+		var request = new FamilyInfoRequest
+		{
+			FatherDetails = new FamilyMemberInfo
+			{
+				Name = "Test Father",
+				Occupation = "Teacher",
+				MobileNo = "9876543210",
+				Address1 = "123 Father Street",
+				City = "Delhi",
+				Pincode = "110001",
+				Country = new CountryInfo { Name = "India", IsoCode = "IN" },
+				State = new StateInfo { Name = "Delhi", IsoCode = "DL" },
+			},
+			MotherDetails = new FamilyMemberInfo
+			{
+				Name = "Test Mother",
+				Occupation = "Doctor",
+				MobileNo = "9876543211",
+				Address1 = "123 Mother Street",
+				City = "Mumbai",
+				Pincode = "400001",
+			},
+			SpouseDetails = new FamilyMemberInfo
+			{
+				Name = "Test Spouse",
+				Occupation = "Engineer",
+				MobileNo = "9876543212",
+				Address1 = "456 Spouse Avenue",
+				City = "Pune",
+				Pincode = "411001",
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/family-info", request, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/family-info");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await getResponse.Content.ReadFromJsonAsync<FamilyInfoResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.FatherDetails.ShouldNotBeNull();
+		body.FatherDetails.Name.ShouldBe("Test Father");
+		body.FatherDetails.City.ShouldBe("Delhi");
+		body.MotherDetails.ShouldNotBeNull();
+		body.MotherDetails.Name.ShouldBe("Test Mother");
+		body.SpouseDetails.ShouldNotBeNull();
+		body.SpouseDetails.Name.ShouldBe("Test Spouse");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Clear_Family_Info_With_Empty_Request()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "FamClear");
+
+		var populateRequest = new FamilyInfoRequest
+		{
+			FatherDetails = new FamilyMemberInfo { Name = "Father To Clear", Occupation = "Worker" },
+		};
+		await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/family-info", populateRequest, JsonOptions);
+
+		var clearRequest = new FamilyInfoRequest();
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/family-info", clearRequest, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Verify_Address_Fields_RoundTrip()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "FamAddr");
+
+		var request = new FamilyInfoRequest
+		{
+			FatherDetails = new FamilyMemberInfo
+			{
+				Name = "Address Father",
+				Address1 = "Line 1",
+				Address2 = "Line 2",
+				Address3 = "Line 3",
+				Country = new CountryInfo { Name = "India", IsoCode = "IN" },
+				State = new StateInfo { Name = "Karnataka", IsoCode = "KA" },
+				City = "Bangalore",
+				Pincode = "560001",
+			},
+		};
+
+		await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/family-info", request, JsonOptions);
+
+		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/family-info");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await getResponse.Content.ReadFromJsonAsync<FamilyInfoResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.FatherDetails.ShouldNotBeNull();
+		body.FatherDetails.Address1.ShouldBe("Line 1");
+		body.FatherDetails.Address2.ShouldBe("Line 2");
+		body.FatherDetails.Address3.ShouldBe("Line 3");
+		body.FatherDetails.City.ShouldBe("Bangalore");
+		body.FatherDetails.Pincode.ShouldBe("560001");
+	}
+
 	#endregion
 }

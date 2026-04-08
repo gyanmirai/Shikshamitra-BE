@@ -1,0 +1,83 @@
+name: API Tests (Scheduled / Full Suite)
+
+on:
+  schedule:
+    # Nightly at 02:00 UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      tiers:
+        description: "Tiers to run (Critical,Important,Extended or All)"
+        required: false
+        default: "All"
+      module:
+        description: "Module filter (e.g., HR) or leave empty for all"
+        required: false
+        default: ""
+
+env:
+  DOTNET_VERSION: "9.0.x"
+
+jobs:
+  full-suite:
+    name: Full API Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Determine filter
+        id: filter
+        run: |
+          FILTER="Tier!=Smoke"
+          TIERS="${{ github.event.inputs.tiers || 'All' }}"
+          MODULE="${{ github.event.inputs.module || '' }}"
+
+          if [ "$TIERS" != "All" ] && [ -n "$TIERS" ]; then
+            IFS=',' read -ra TIER_ARRAY <<< "$TIERS"
+            TIER_FILTER=""
+            for tier in "${TIER_ARRAY[@]}"; do
+              tier=$(echo "$tier" | xargs)
+              if [ -n "$TIER_FILTER" ]; then
+                TIER_FILTER="${TIER_FILTER}|Tier=${tier}"
+              else
+                TIER_FILTER="Tier=${tier}"
+              fi
+            done
+            FILTER="($TIER_FILTER)"
+          fi
+
+          if [ -n "$MODULE" ]; then
+            FILTER="${FILTER}&Module=${MODULE}"
+          fi
+
+          echo "filter=${FILTER}" >> $GITHUB_OUTPUT
+          echo "Using filter: ${FILTER}"
+
+      - name: Run API Tests
+        run: >
+          dotnet test test/ShikshaMitra.HttpApi.Tests
+          --configuration Release
+          --no-build
+          --filter "${{ steps.filter.outputs.filter }}"
+          --logger "trx;LogFileName=full-suite-results.trx"
+          --results-directory ./test-results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-suite-test-results
+          path: ./test-results/*.trx

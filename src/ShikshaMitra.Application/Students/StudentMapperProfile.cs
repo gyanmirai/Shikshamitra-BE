@@ -103,6 +103,9 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.FormNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.RegistrationFormNo : null))
 			.ForMember(dest => dest.NextReminderDate, opt => opt.MapFrom(src => src.Notes.OrderByDescending(x => x.CreationTime).FirstOrDefault().NextReminderDate))
 			.ForMember(dest => dest.InquiryStatus, opt => opt.MapFrom(src => src.Notes.OrderByDescending(x => x.CreationTime).FirstOrDefault().Status))
+			.ForMember(dest => dest.Progress, opt => opt.MapFrom(src => src.AdditionalDetail != null
+				? ((double)src.AdditionalDetail.StudentRegistrationState / (Enum.GetValues<StudentRegistrationStateEnum>().Length - 1))*100
+				: 0))
 			.IncludeAllDerived();
 
 		// Add converter for Age calculation

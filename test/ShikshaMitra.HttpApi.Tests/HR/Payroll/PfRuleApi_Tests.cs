@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -73,7 +74,7 @@ public class PfRuleApi_Tests : ShikshaMitraApiTestBase
 		var updateDto = new CreateUpdateProvidentFundDto
 		{
 			Name = TestDataHelper.UniqueName("UpdatedPF"),
-			Code = TestDataHelper.UniqueName("UPF").Replace("_", "").ToUpperInvariant()[..12],
+			Code = BuildValidPfCode("UPF"),
 			EmployeePercentage = 15m,
 			EmployerPercentage = 13m,
 		};
@@ -115,7 +116,7 @@ public class PfRuleApi_Tests : ShikshaMitraApiTestBase
 		var input = new CreateUpdateProvidentFundDto
 		{
 			Name = $"Searchable_{uniquePart}",
-			Code = $"S{uniquePart}".ToUpperInvariant()[..10],
+			Code = BuildValidPfCode("SEARCH"),
 			EmployeePercentage = 12m,
 			EmployerPercentage = 12m,
 		};
@@ -128,6 +129,39 @@ public class PfRuleApi_Tests : ShikshaMitraApiTestBase
 		body.ShouldNotBeNull();
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Error_For_Duplicate_PF_Code()
+	{
+		var code = BuildValidPfCode("DUP");
+
+		var first = new CreateUpdateProvidentFundDto
+		{
+			Name = TestDataHelper.UniqueName("FirstPF"),
+			Code = code,
+			EmployeePercentage = 12m,
+			EmployerPercentage = 12m
+		};
+
+		var second = new CreateUpdateProvidentFundDto
+		{
+			Name = TestDataHelper.UniqueName("SecondPF"),
+			Code = code,
+			EmployeePercentage = 10m,
+			EmployerPercentage = 10m
+		};
+
+		(await Client.PostAsJsonAsync(BaseUrl, first, JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+		var duplicateResponse = await Client.PostAsJsonAsync(BaseUrl, second, JsonOptions);
+
+		duplicateResponse.IsSuccessStatusCode.ShouldBeFalse();
+		duplicateResponse.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+
+		var errorBody = await duplicateResponse.Content.ReadAsStringAsync();
+		errorBody.ShouldContain("ShikshaMitra:ProvidentFundCodeAlreadyExists");
+	}
+
 	#endregion
 
 	#region Helpers
@@ -137,10 +171,26 @@ public class PfRuleApi_Tests : ShikshaMitraApiTestBase
 		return new CreateUpdateProvidentFundDto
 		{
 			Name = TestDataHelper.UniqueName("StandardPF"),
-			Code = TestDataHelper.UniqueName("PF").Replace("_", "").ToUpperInvariant()[..12],
+			Code = BuildValidPfCode("PF"),
 			EmployeePercentage = 12m,
 			EmployerPercentage = 12m,
 		};
+	}
+
+	private static string BuildValidPfCode(string prefix)
+	{
+		var raw = $"{prefix}_{Guid.NewGuid():N}".ToUpperInvariant();
+		var chars = raw.Select(c =>
+		{
+			if (char.IsLetter(c) || c == '_')
+			{
+				return c;
+			}
+
+			return (char)('A' + (c - '0'));
+		}).ToArray();
+
+		return new string(chars)[..20];
 	}
 
 	private async Task<PfRuleCreateResponseDto> CreatePfRuleAsync()

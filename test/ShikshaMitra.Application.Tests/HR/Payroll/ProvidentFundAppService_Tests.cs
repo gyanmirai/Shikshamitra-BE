@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Payroll.Settings;
 using Shouldly;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Xunit;
 
@@ -43,6 +44,34 @@ public class ProvidentFundAppService_Tests : ShikshaMitraApplicationTestBase<Shi
         result.Code.ShouldBe("STD_PF");
         result.EmployeePercentage.ShouldBe(12);
         result.EmployerPercentage.ShouldBe(12);
+    }
+
+    [Fact]
+    public async Task Should_Not_Create_Duplicate_PF_Code()
+    {
+        // Arrange
+        const string code = "PF_DUPLICATE";
+        await _providentFundAppService.CreateAsync(new CreateUpdateProvidentFundDto
+        {
+            Name = "First PF Rule",
+            Code = code,
+            EmployeePercentage = 10,
+            EmployerPercentage = 10
+        });
+
+        // Act + Assert
+        var exception = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _providentFundAppService.CreateAsync(new CreateUpdateProvidentFundDto
+            {
+                Name = "Second PF Rule",
+                Code = code,
+                EmployeePercentage = 12,
+                EmployerPercentage = 12
+            });
+        });
+
+        exception.Code.ShouldBe("ShikshaMitra:ProvidentFundCodeAlreadyExists");
     }
 
     [Fact]

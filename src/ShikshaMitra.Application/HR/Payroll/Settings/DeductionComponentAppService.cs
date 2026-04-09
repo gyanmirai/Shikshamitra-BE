@@ -118,6 +118,12 @@ public class DeductionComponentAppService : CrudAppService<
 		return await GetFilteredListAsync(input.SkipCount, input.MaxResultCount, null);
 	}
 
+	public override async Task<DeductionComponentDto> GetAsync(Guid id)
+	{
+		var dto = await base.GetAsync(id);
+		return await PopulateSelectedComponentDataAsync(dto);
+	}
+
 	public async Task<PagedResultDto<DeductionComponentDto>> GetFilteredListAsync(int skipCount, int maxResultCount, string? search)
 	{
 		var queryable = await Repository.GetQueryableAsync();
@@ -138,10 +144,10 @@ public class DeductionComponentAppService : CrudAppService<
 				.Take(maxResultCount)
 		);
 
-		return new PagedResultDto<DeductionComponentDto>(
-			totalCount,
-			ObjectMapper.Map<List<DeductionComponent>, List<DeductionComponentDto>>(items)
-		);
+		var mappedItems = ObjectMapper.Map<List<DeductionComponent>, List<DeductionComponentDto>>(items);
+		await PopulateSelectedComponentDataAsync(mappedItems);
+
+		return new PagedResultDto<DeductionComponentDto>(totalCount, mappedItems);
 	}
 
 	public async Task<PagedResultDto<DeductionComponentDto>> GetAllActiveAsync(PagedResultRequestDto input)
@@ -168,6 +174,8 @@ public class DeductionComponentAppService : CrudAppService<
 			totalCount,
 			ObjectMapper.Map<List<DeductionComponent>, List<DeductionComponentDto>>(items)
 		);
+
+		await PopulateSelectedComponentDataAsync(result.Items);
 
 		await _cache.SetAsync(
 			activeCacheKey,
@@ -322,5 +330,62 @@ public class DeductionComponentAppService : CrudAppService<
 		}
 
 		return orderedQueryable ?? queryable.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name);
+	}
+
+	private async Task<DeductionComponentDto> PopulateSelectedComponentDataAsync(DeductionComponentDto dto)
+	{
+		if (!dto.SelectedDeductionComponentId.HasValue)
+		{
+			return dto;
+		}
+
+		var selected = await Repository.FindAsync(dto.SelectedDeductionComponentId.Value);
+		if (selected is null)
+		{
+			return dto;
+		}
+
+		dto.SelectedDeductionComponentName = selected.Name;
+		dto.SelectedDeductionComponentDescription = selected.Description;
+		dto.SelectedDeductionComponentVisibleInPayslip = selected.VisibleInPayslip;
+
+		return dto;
+	}
+
+	private async Task PopulateSelectedComponentDataAsync(IReadOnlyList<DeductionComponentDto> items)
+	{
+		var selectedIds = items
+			.Where(x => x.SelectedDeductionComponentId.HasValue)
+			.Select(x => x.SelectedDeductionComponentId!.Value)
+			.Distinct()
+			.ToList();
+
+		if (selectedIds.Count == 0)
+		{
+			return;
+		}
+
+		var queryable = await Repository.GetQueryableAsync();
+		var selectedComponents = await AsyncExecuter.ToListAsync(
+			queryable.Where(x => selectedIds.Contains(x.Id)));
+
+		var selectedById = selectedComponents.ToDictionary(x => x.Id);
+
+		foreach (var item in items)
+		{
+			if (!item.SelectedDeductionComponentId.HasValue)
+			{
+				continue;
+			}
+
+			if (!selectedById.TryGetValue(item.SelectedDeductionComponentId.Value, out var selected))
+			{
+				continue;
+			}
+
+			item.SelectedDeductionComponentName = selected.Name;
+			item.SelectedDeductionComponentDescription = selected.Description;
+			item.SelectedDeductionComponentVisibleInPayslip = selected.VisibleInPayslip;
+		}
 	}
 }

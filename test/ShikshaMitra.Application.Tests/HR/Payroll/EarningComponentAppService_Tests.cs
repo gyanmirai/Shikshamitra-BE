@@ -16,10 +16,12 @@ namespace ShikshaMitra.HR.Payroll;
 public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
     private readonly IEarningComponentAppService _earningComponentAppService;
+    private readonly IDeductionComponentAppService _deductionComponentAppService;
 
     public EarningComponentAppService_Tests()
     {
         _earningComponentAppService = GetRequiredService<IEarningComponentAppService>();
+        _deductionComponentAppService = GetRequiredService<IDeductionComponentAppService>();
     }
 
     #region Create Tests
@@ -119,6 +121,59 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         {
             await _earningComponentAppService.CreateAsync(input2);
         });
+    }
+
+    [Fact]
+    public async Task Should_Allow_Creating_Same_Name_After_Delete()
+    {
+        // Arrange
+        var input = new CreateEarningComponentDto
+        {
+            Name = "Reusable Deleted Name",
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 1200m
+        };
+
+        var created = await _earningComponentAppService.CreateAsync(input);
+        await _earningComponentAppService.DeleteAsync(created.Id);
+
+        // Act
+        var recreated = await _earningComponentAppService.CreateAsync(input);
+
+        // Assert
+        recreated.Id.ShouldNotBe(created.Id);
+        recreated.Name.ShouldBe(input.Name);
+    }
+
+    [Fact]
+    public async Task Should_Allow_Same_Name_As_Deduction_Component()
+    {
+        // Arrange
+        const string sharedName = "Shared Name Across Modules";
+
+        await _deductionComponentAppService.CreateAsync(new CreateDeductionComponentDto
+        {
+            Name = sharedName,
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 250m
+        });
+
+        // Act
+        var createdEarning = await _earningComponentAppService.CreateAsync(new CreateEarningComponentDto
+        {
+            Name = sharedName,
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 1250m
+        });
+
+        // Assert
+        createdEarning.Name.ShouldBe(sharedName);
     }
 
     [Fact]

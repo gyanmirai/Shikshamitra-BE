@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -160,6 +161,63 @@ public class EarningComponentApi_Tests : ShikshaMitraApiTestBase
 		var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.Created);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Custom_Component_Name_In_List_Response()
+	{
+		var baseComponent = await CreateComponentAsync("BaseForNestedName");
+		var dependentName = TestDataHelper.UniqueName("DependsOnBase");
+
+		var createDependent = new EarningComponentCreateRequestDto
+		{
+			EarningComponentName = dependentName,
+			EarningType = "FIXED",
+			CalculationType = "PERCENTAGE",
+			Percentage = 10m,
+			SelectedEarningComponentId = baseComponent.Id,
+			VisibleInPayslip = true
+		};
+
+		var createResponse = await Client.PostAsJsonAsync(BaseUrl, createDependent, JsonOptions);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+		var listResponse = await Client.GetAsync($"{BaseUrl}?search={dependentName}");
+		listResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var body = await listResponse.Content.ReadFromJsonAsync<EarningComponentPaginatedResponseDto>(JsonOptions);
+		body.ShouldNotBeNull();
+		var dependent = body.Items.FirstOrDefault(x => x.EarningComponentName == dependentName);
+		dependent.ShouldNotBeNull();
+		dependent.CustomComponent.ShouldNotBeNull();
+		dependent.CustomComponent!.ComponentName.ShouldNotBeNullOrWhiteSpace();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Allow_Recreate_Same_Name_After_Delete()
+	{
+		var name = TestDataHelper.UniqueName("RecreateAfterDelete");
+		var input = new EarningComponentCreateRequestDto
+		{
+			EarningComponentName = name,
+			EarningType = "FIXED",
+			CalculationType = "AMOUNT",
+			Amount = 5000m,
+			VisibleInPayslip = true
+		};
+
+		var firstCreate = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+		firstCreate.StatusCode.ShouldBe(HttpStatusCode.Created);
+		var firstBody = await firstCreate.Content.ReadFromJsonAsync<ComponentCreateResponseDto>(JsonOptions);
+		firstBody.ShouldNotBeNull();
+
+		var deleteResponse = await Client.DeleteAsync($"{BaseUrl}/{firstBody.Id}");
+		deleteResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+		var secondCreate = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+		secondCreate.StatusCode.ShouldBe(HttpStatusCode.Created);
 	}
 
 	#endregion

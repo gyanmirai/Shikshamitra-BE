@@ -12,6 +12,9 @@ public class EarningComponentDto : FullAuditedEntityDto<Guid>
 	public decimal? Amount { get; set; }
 	public decimal? Percentage { get; set; }
 	public Guid? SelectedEarningComponentId { get; set; }
+	public string? SelectedEarningComponentName { get; set; }
+	public string? SelectedEarningComponentDescription { get; set; }
+	public bool? SelectedEarningComponentVisibleInPayslip { get; set; }
 	public ComponentDependency DependOn { get; set; }
 	public bool VisibleInPayslip { get; set; }
 	public int DisplayOrder { get; set; }

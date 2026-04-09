@@ -8,6 +8,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Validation;
 using Xunit;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
@@ -178,8 +179,7 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
             PaidType = LeavePaidType.Paid
         };
 
-        // Act & Assert
-        await Should.ThrowAsync<UserFriendlyException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _leavePolicyAppService.CreateAsync(input);
         });

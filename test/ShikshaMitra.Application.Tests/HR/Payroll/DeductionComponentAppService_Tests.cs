@@ -130,8 +130,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             DependOn = ComponentDependency.None
         };
 
-        // Act & Assert — domain guard Check.NotNullOrWhiteSpace throws ArgumentException
-        await Should.ThrowAsync<ArgumentException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _deductionComponentAppService.CreateAsync(input);
         });

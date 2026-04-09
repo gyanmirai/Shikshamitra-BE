@@ -1,6 +1,7 @@
 using System;
 using System.Data.Common;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
@@ -15,7 +16,10 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Infrastructure.Auth;
+using ShikshaMitra.Infrastructure.Data;
+using ShikshaMitra.Seeders;
 using ShikshaMitra.TenantSettings;
+using Volo.Abp.Auditing;
 using Volo.Abp.Authorization;
 using Volo.Abp.BackgroundJobs;
 using Volo.Abp.Data;
@@ -36,7 +40,7 @@ namespace ShikshaMitra;
 /// </summary>
 public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 {
-	private SqliteConnection? _connection;
+	private SqliteConnection? _keepAliveConnection;
 
 	public Guid SeededRoleId { get; private set; }
 	public Guid SeededShiftId { get; private set; }
@@ -45,16 +49,19 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	{
 		var host = base.CreateHost(builder);
 
-		using var scope = host.Services.CreateScope();
-		var dataSeeder = scope.ServiceProvider.GetRequiredService<IDataSeeder>();
-		dataSeeder.SeedAsync(new DataSeedContext()).GetAwaiter().GetResult();
+		Task.Run(async () =>
+		{
+			using var scope = host.Services.CreateScope();
+			var dataSeeder = scope.ServiceProvider.GetRequiredService<IDataSeeder>();
+			await dataSeeder.SeedAsync(new DataSeedContext());
 
-		ResolveSeededLookups(scope.ServiceProvider);
+			await ResolveSeededLookupsAsync(scope.ServiceProvider);
+		}).GetAwaiter().GetResult();
 
 		return host;
 	}
 
-	private void ResolveSeededLookups(IServiceProvider services)
+	private async Task ResolveSeededLookupsAsync(IServiceProvider services)
 	{
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 		var currentTenant = services.GetRequiredService<ICurrentTenant>();
@@ -62,12 +69,12 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 		using (currentTenant.Change(tenantId))
 		{
 			var roleRepo = services.GetRequiredService<IIdentityRoleRepository>();
-			var roles = roleRepo.GetListAsync().GetAwaiter().GetResult();
+			var roles = await roleRepo.GetListAsync();
 			var teacherRole = roles.FirstOrDefault(r => r.Name == "Teacher");
 			SeededRoleId = teacherRole?.Id ?? Guid.Empty;
 
 			var shiftRepo = services.GetRequiredService<IRepository<ShiftManagement, Guid>>();
-			var shifts = shiftRepo.GetListAsync().GetAwaiter().GetResult();
+			var shifts = await shiftRepo.GetListAsync();
 			var fullDayShift = shifts.FirstOrDefault(s => s.ShiftName == "Full Day Shift");
 			SeededShiftId = fullDayShift?.Id ?? Guid.Empty;
 		}
@@ -82,33 +89,31 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			ReplaceDbWithSqlite(services);
 			DisableBackgroundJobs(services);
 			DisableDynamicStores(services);
+			DisableAuditing(services);
 		});
 
 		builder.ConfigureTestServices(services =>
 		{
 			AddTestAuthentication(services);
+			services.AddTransient<StudentSeederContributor, NoOpStudentSeeder>();
 		});
 	}
 
 	private void ReplaceDbWithSqlite(IServiceCollection services)
 	{
-		_connection = new SqliteConnection("Data Source=:memory:");
-		_connection.Open();
+		_keepAliveConnection = new SqliteConnection("Data Source=:memory:");
+		_keepAliveConnection.Open();
 
 		services.Configure<AbpDbContextOptions>(options =>
 		{
 			options.Configure(ctx =>
 			{
-				ctx.DbContextOptions.UseSqlite(_connection);
+				ctx.DbContextOptions.UseSqlite(_keepAliveConnection);
 			});
 		});
 
-		services.AddSingleton<DbConnection>(_ => _connection);
-
-		using var sp = services.BuildServiceProvider();
-		using var scope = sp.CreateScope();
 		var dbOptions = new DbContextOptionsBuilder<ShikshaMitraDbContext>()
-			.UseSqlite(_connection)
+			.UseSqlite(_keepAliveConnection)
 			.Options;
 
 		using var context = new ShikshaMitraDbContext(dbOptions);
@@ -118,6 +123,11 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	private static void DisableBackgroundJobs(IServiceCollection services)
 	{
 		services.Configure<AbpBackgroundJobOptions>(o => o.IsJobExecutionEnabled = false);
+	}
+
+	private static void DisableAuditing(IServiceCollection services)
+	{
+		services.Configure<AbpAuditingOptions>(o => o.IsEnabled = false);
 	}
 
 	private static void DisableDynamicStores(IServiceCollection services)
@@ -171,10 +181,10 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 
 	protected override void Dispose(bool disposing)
 	{
+		base.Dispose(disposing);
 		if (disposing)
 		{
-			_connection?.Dispose();
+			_keepAliveConnection?.Dispose();
 		}
-		base.Dispose(disposing);
 	}
 }

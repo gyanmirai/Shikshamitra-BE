@@ -75,8 +75,7 @@ public class EventTypeAppService_Tests : ShikshaMitraApplicationTestBase<Shiksha
             Color = "#FF0000"
         };
 
-        // Act & Assert — domain constructor throws ArgumentNullException for null name
-        await Should.ThrowAsync<ArgumentNullException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _eventTypeAppService.CreateAsync(input);
         });

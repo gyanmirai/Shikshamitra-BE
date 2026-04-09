@@ -134,8 +134,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Amount = 10000m
         };
 
-        // Act & Assert — domain guard Check.NotNullOrWhiteSpace throws ArgumentException
-        await Should.ThrowAsync<ArgumentException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _earningComponentAppService.CreateAsync(input);
         });

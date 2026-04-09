@@ -1,11 +1,11 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Volo.Abp;
 using Volo.Abp.Authorization;
 using Volo.Abp.Autofac;
 using Volo.Abp.BackgroundJobs;
 using Volo.Abp.Data;
 using Volo.Abp.Modularity;
-using Volo.Abp.Threading;
 
 namespace ShikshaMitra;
 
@@ -27,20 +27,10 @@ public class ShikshaMitraTestBaseModule : AbpModule
         context.Services.AddAlwaysAllowAuthorization();
     }
 
-    public override void OnApplicationInitialization(ApplicationInitializationContext context)
+    public override async Task OnApplicationInitializationAsync(ApplicationInitializationContext context)
     {
-        SeedTestData(context);
-    }
-
-    private static void SeedTestData(ApplicationInitializationContext context)
-    {
-        AsyncHelper.RunSync(async () =>
-        {
-            using (var scope = context.ServiceProvider.CreateScope())
-            {
-                var dataSeeder = scope.ServiceProvider.GetRequiredService<IDataSeeder>();
-                await dataSeeder.SeedAsync(new DataSeedContext());
-            }
-        });
+        using var scope = context.ServiceProvider.CreateScope();
+        var dataSeeder = scope.ServiceProvider.GetRequiredService<IDataSeeder>();
+        await dataSeeder.SeedAsync(new DataSeedContext());
     }
 }

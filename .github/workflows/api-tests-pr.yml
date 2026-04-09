@@ -39,12 +39,16 @@ jobs:
           --logger "trx;LogFileName=critical-results.trx"
           --results-directory ./test-results
 
+      # Upload TRX only on failure to avoid GitHub artifact storage quota exhaustion.
+      # Successful runs still have full logs in the job output.
       - name: Upload test results
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: critical-test-results
+          name: critical-test-results-${{ github.run_id }}
           path: ./test-results/*.trx
+          retention-days: 3
+          if-no-files-found: ignore
 
   important-tests:
     name: Important API Tests (Tier 1)
@@ -76,8 +80,10 @@ jobs:
           --results-directory ./test-results
 
       - name: Upload test results
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: important-test-results
+          name: important-test-results-${{ github.run_id }}
           path: ./test-results/*.trx
+          retention-days: 3
+          if-no-files-found: ignore

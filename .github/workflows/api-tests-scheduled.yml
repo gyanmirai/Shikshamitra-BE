@@ -76,8 +76,10 @@ jobs:
           --results-directory ./test-results
 
       - name: Upload test results
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: full-suite-test-results
+          name: full-suite-test-results-${{ github.run_id }}
           path: ./test-results/*.trx
+          retention-days: 3
+          if-no-files-found: ignore

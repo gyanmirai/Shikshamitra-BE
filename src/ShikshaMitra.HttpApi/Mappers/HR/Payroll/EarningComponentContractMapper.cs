@@ -84,10 +84,10 @@ public static class EarningComponentContractMapper
                 ? new CustomComponentDto
                 {
                     Id = dto.SelectedEarningComponentId.Value,
-                    ComponentName = string.Empty,
+                    ComponentName = dto.SelectedEarningComponentName ?? string.Empty,
                     ComponentOf = dto.DependOn.ToString().ToUpperInvariant(),
-                    Description = null,
-                    VisibleInPayslip = dto.VisibleInPayslip
+                    Description = dto.SelectedEarningComponentDescription,
+                    VisibleInPayslip = dto.SelectedEarningComponentVisibleInPayslip ?? dto.VisibleInPayslip
                 }
                 : null
         };

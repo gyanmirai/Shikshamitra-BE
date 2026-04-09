@@ -53,7 +53,8 @@ public class EarningComponentConfiguration : IEntityTypeConfiguration<EarningCom
 
 		builder.HasIndex(x => new { x.TenantId, x.Name })
 			.IsUnique()
-			.HasDatabaseName("IX_EarningComponents_TenantId_Name");
+			.HasDatabaseName("IX_EarningComponents_TenantId_Name")
+			.HasFilter("\"IsDeleted\" = false");
 
 		builder.HasIndex(x => new { x.TenantId, x.IsActive })
 			.HasDatabaseName("IX_EarningComponents_TenantId_IsActive");

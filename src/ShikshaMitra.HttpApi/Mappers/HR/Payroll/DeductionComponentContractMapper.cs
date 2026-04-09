@@ -84,10 +84,10 @@ public static class DeductionComponentContractMapper
                 ? new CustomComponentDto
                 {
                     Id = dto.SelectedDeductionComponentId.Value,
-                    ComponentName = string.Empty,
+                    ComponentName = dto.SelectedDeductionComponentName ?? string.Empty,
                     ComponentOf = dto.DependOn.ToString().ToUpperInvariant(),
-                    Description = null,
-                    VisibleInPayslip = dto.VisibleInPayslip
+                    Description = dto.SelectedDeductionComponentDescription,
+                    VisibleInPayslip = dto.SelectedDeductionComponentVisibleInPayslip ?? dto.VisibleInPayslip
                 }
                 : null
         };

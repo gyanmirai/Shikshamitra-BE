@@ -118,6 +118,12 @@ public class EarningComponentAppService : CrudAppService<
 		return await GetFilteredListAsync(input.SkipCount, input.MaxResultCount, null);
 	}
 
+	public override async Task<EarningComponentDto> GetAsync(Guid id)
+	{
+		var dto = await base.GetAsync(id);
+		return await PopulateSelectedComponentDataAsync(dto);
+	}
+
 	public async Task<PagedResultDto<EarningComponentDto>> GetFilteredListAsync(int skipCount, int maxResultCount, string? search)
 	{
 		var queryable = await Repository.GetQueryableAsync();
@@ -138,10 +144,10 @@ public class EarningComponentAppService : CrudAppService<
 				.Take(maxResultCount)
 		);
 
-		return new PagedResultDto<EarningComponentDto>(
-			totalCount,
-			ObjectMapper.Map<List<EarningComponent>, List<EarningComponentDto>>(items)
-		);
+		var mappedItems = ObjectMapper.Map<List<EarningComponent>, List<EarningComponentDto>>(items);
+		await PopulateSelectedComponentDataAsync(mappedItems);
+
+		return new PagedResultDto<EarningComponentDto>(totalCount, mappedItems);
 	}
 
 	public async Task<PagedResultDto<EarningComponentDto>> GetAllActiveAsync(PagedResultRequestDto input)
@@ -168,6 +174,8 @@ public class EarningComponentAppService : CrudAppService<
 			totalCount,
 			ObjectMapper.Map<List<EarningComponent>, List<EarningComponentDto>>(items)
 		);
+
+		await PopulateSelectedComponentDataAsync(result.Items);
 
 		await _cache.SetAsync(
 			activeCacheKey,
@@ -323,5 +331,62 @@ public class EarningComponentAppService : CrudAppService<
 		}
 
 		return orderedQueryable ?? queryable.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name);
+	}
+
+	private async Task<EarningComponentDto> PopulateSelectedComponentDataAsync(EarningComponentDto dto)
+	{
+		if (!dto.SelectedEarningComponentId.HasValue)
+		{
+			return dto;
+		}
+
+		var selected = await Repository.FindAsync(dto.SelectedEarningComponentId.Value);
+		if (selected is null)
+		{
+			return dto;
+		}
+
+		dto.SelectedEarningComponentName = selected.Name;
+		dto.SelectedEarningComponentDescription = selected.Description;
+		dto.SelectedEarningComponentVisibleInPayslip = selected.VisibleInPayslip;
+
+		return dto;
+	}
+
+	private async Task PopulateSelectedComponentDataAsync(IReadOnlyList<EarningComponentDto> items)
+	{
+		var selectedIds = items
+			.Where(x => x.SelectedEarningComponentId.HasValue)
+			.Select(x => x.SelectedEarningComponentId!.Value)
+			.Distinct()
+			.ToList();
+
+		if (selectedIds.Count == 0)
+		{
+			return;
+		}
+
+		var queryable = await Repository.GetQueryableAsync();
+		var selectedComponents = await AsyncExecuter.ToListAsync(
+			queryable.Where(x => selectedIds.Contains(x.Id)));
+
+		var selectedById = selectedComponents.ToDictionary(x => x.Id);
+
+		foreach (var item in items)
+		{
+			if (!item.SelectedEarningComponentId.HasValue)
+			{
+				continue;
+			}
+
+			if (!selectedById.TryGetValue(item.SelectedEarningComponentId.Value, out var selected))
+			{
+				continue;
+			}
+
+			item.SelectedEarningComponentName = selected.Name;
+			item.SelectedEarningComponentDescription = selected.Description;
+			item.SelectedEarningComponentVisibleInPayslip = selected.VisibleInPayslip;
+		}
 	}
 }

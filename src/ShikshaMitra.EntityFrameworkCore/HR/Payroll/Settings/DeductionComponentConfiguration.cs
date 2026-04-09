@@ -53,7 +53,8 @@ public class DeductionComponentConfiguration : IEntityTypeConfiguration<Deductio
 
 		builder.HasIndex(x => new { x.TenantId, x.Name })
 			.IsUnique()
-			.HasDatabaseName("IX_DeductionComponents_TenantId_Name");
+			.HasDatabaseName("IX_DeductionComponents_TenantId_Name")
+			.HasFilter("\"IsDeleted\" = false");
 
 		builder.HasIndex(x => new { x.TenantId, x.IsActive })
 			.HasDatabaseName("IX_DeductionComponents_TenantId_IsActive");

@@ -202,6 +202,8 @@ public class StudentInquiryAppService(
 		IssueRegistrationFormDto issueFormDto
 	)
 	{
+		// TODO: Form number should be unique in a year across all boards
+
 		// Load the complete aggregate
 		var student = await studentRepository.GetAsync(studentId);
 

@@ -16,7 +16,7 @@ public class CreateDirectRegistrationDto : UpdateGeneralInfoDto
 	/// <summary>
 	/// Optional standard/class identifier if known at registration time
 	/// </summary>
-	public Guid? StandardId { get; set; }
+	public required Guid StandardId { get; set; }
 
 	/// <summary>
 	/// Optional division identifier if known at registration time

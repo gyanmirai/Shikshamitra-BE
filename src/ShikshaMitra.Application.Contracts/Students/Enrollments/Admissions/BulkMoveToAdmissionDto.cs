@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.Students.Enrollments.Admissions;
 
@@ -9,8 +8,6 @@ namespace ShikshaMitra.Students.Enrollments.Admissions;
 /// </summary>
 public class BulkMoveToAdmissionDto
 {
-	[Required]
-	[MinLength(1, ErrorMessage = "At least one student ID is required")]
 	public List<Guid> StudentIds { get; set; }
 
 	/// <summary>

@@ -1,5 +1,6 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Common.Responses;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.Enrollments.Admissions;
 using ShikshaMitra.Students.Enrollments.EntranceExams;
@@ -16,83 +17,61 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments;
 [ApiController]
 [Authorize]
 [Route("api/student-enrollment/entrance-exam")]
-public class EntranceExamController : AbpControllerBase
+public class EntranceExamController(
+	IStudentEnrollmentEntranceExamAppService entranceExamAppService) : AbpControllerBase
 {
-	private readonly IStudentEnrollmentEntranceExamAppService entranceExamAppService;
-
-	public EntranceExamController(IStudentEnrollmentEntranceExamAppService entranceExamAppService)
-	{
-		this.entranceExamAppService = entranceExamAppService;
-	}
-
-	/// <summary>
-	/// Gets a paginated list of students in entrance exam stage
-	/// </summary>
-	/// <param name="input">Filter and pagination parameters</param>
-	/// <returns>Paginated list of students in entrance exam stage</returns>
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.View)]
-	public async Task<PagedResultDto<EntranceExamStudentDto>> GetListAsync([FromQuery] GetEntranceExamStudentsInput input)
+	public async Task<Result<PagedResultDto<EntranceExamStudentDto>>> GetListAsync(
+		[FromQuery] GetEntranceExamStudentsInput input)
 	{
-		return await entranceExamAppService.GetListAsync(input);
+		var result = await entranceExamAppService.GetListAsync(input);
+		return Result.Success(result);
 	}
 
-	/// <summary>
-	/// Gets detailed entrance exam information for a specific student
-	/// </summary>
-	/// <param name="studentId">The student identifier</param>
-	/// <returns>Entrance exam details for the student</returns>
 	[HttpGet("{studentId}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.View)]
-	public async Task<EntranceExamDetailDto> GetAsync(Guid studentId)
+	public async Task<Result<EntranceExamDetailDto>> GetAsync(Guid studentId)
 	{
-		return await entranceExamAppService.GetAsync(studentId);
+		var result = await entranceExamAppService.GetAsync(studentId);
+		return Result.Success(result);
 	}
 
-	/// <summary>
-	/// Schedules a student for an entrance exam slot
-	/// </summary>
-	/// <param name="studentId">The student identifier</param>
-	/// <param name="input">Exam scheduling data</param>
 	[HttpPost("{studentId}/schedule")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.Add)]
-	public async Task ScheduleExamAsync(Guid studentId, [FromBody] ScheduleEntranceExamDto input)
+	public async Task<Result> ScheduleExamAsync(Guid studentId, [FromBody] ScheduleEntranceExamDto input)
 	{
 		await entranceExamAppService.ScheduleExamAsync(studentId, input);
+		return Result.Success();
 	}
 
-	/// <summary>
-	/// Uploads entrance exam result for a student
-	/// </summary>
-	/// <param name="studentId">The student identifier</param>
-	/// <param name="input">Exam result data</param>
-	/// <returns>Result summary with status</returns>
 	[HttpPost("{studentId}/result")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.Add)]
-	public async Task<EntranceExamResultResponseDto> UploadResultAsync(Guid studentId, [FromBody] UploadEntranceExamResultDto input)
+	public async Task<Result<EntranceExamResultResponseDto>> UploadResultAsync(
+		Guid studentId, [FromBody] UploadEntranceExamResultDto input)
 	{
-		return await entranceExamAppService.UploadResultAsync(studentId, input);
+		var result = await entranceExamAppService.UploadResultAsync(studentId, input);
+		return Result.Success(result);
 	}
 
 	/// <summary>
-	/// Moves a student who passed the entrance exam to admission stage
+	/// Moves a student to admission stage.
+	/// Requires either Enrollment_EntranceExam.Add or Enrollment_RegistrationFormIssued.Add permission.
+	/// The OR-logic is enforced inside the application service until a combined ABP policy is defined.
 	/// </summary>
-	/// <param name="studentId">The student identifier</param>
 	[HttpPost("{studentId}/move-to-admission")]
-	public async Task MoveToAdmissionAsync(Guid studentId)
+	[Authorize]
+	public async Task<Result> MoveToAdmissionAsync(Guid studentId, [FromQuery] Guid? academicYearId = null)
 	{
-		await entranceExamAppService.MoveToAdmissionAsync(studentId);
+		await entranceExamAppService.MoveToAdmissionAsync(studentId, academicYearId);
+		return Result.Success();
 	}
 
-	/// <summary>
-	/// Moves multiple students to admission stage in bulk
-	/// </summary>
-	/// <param name="input">List of student IDs to move</param>
-	/// <returns>Bulk operation result with success and failure details</returns>
 	[HttpPost("bulk-move-to-admission")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.Add)]
-	public async Task<BulkMoveResultDto> BulkMoveToAdmissionAsync([FromBody] BulkMoveToAdmissionDto input)
+	public async Task<Result<BulkMoveResultDto>> BulkMoveToAdmissionAsync([FromBody] BulkMoveToAdmissionDto input)
 	{
-		return await entranceExamAppService.BulkMoveToAdmissionAsync(input);
+		var result = await entranceExamAppService.BulkMoveToAdmissionAsync(input);
+		return Result.Success(result);
 	}
 }

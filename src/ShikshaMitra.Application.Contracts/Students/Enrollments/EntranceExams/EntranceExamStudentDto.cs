@@ -26,10 +26,4 @@ public class EntranceExamStudentDto
 	public EntranceExamStatusEnum? ExamStatus { get; set; }
     public string ExamStatusDisplay { get; set; }
 	public StudentLifeCycleStatusEnum EnrollmentState { get; set; }
-
-    // Helper to safely construct and assign StudentName from first/last names
-    public void SetStudentName(string? firstName, string? lastName)
-    {
-        StudentName = ($"{firstName ?? string.Empty} {lastName ?? string.Empty}").Trim();
-    }
 }

@@ -3,6 +3,7 @@ using Volo.Abp;
 using Volo.Abp.Authorization;
 using Volo.Abp.Autofac;
 using Volo.Abp.BackgroundJobs;
+using Volo.Abp.Data;
 using Volo.Abp.Modularity;
 using Volo.Abp.Threading;
 
@@ -37,9 +38,8 @@ public class ShikshaMitraTestBaseModule : AbpModule
         {
             using (var scope = context.ServiceProvider.CreateScope())
             {
-                await scope.ServiceProvider
-                    .GetRequiredService<ShikshaMitraTestDataSeedContributor>()
-                    .SeedAsync(new Volo.Abp.Data.DataSeedContext());
+                var dataSeeder = scope.ServiceProvider.GetRequiredService<IDataSeeder>();
+                await dataSeeder.SeedAsync(new DataSeedContext());
             }
         });
     }

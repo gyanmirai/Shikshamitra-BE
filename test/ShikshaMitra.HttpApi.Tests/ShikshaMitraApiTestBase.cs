@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.Employees;
 using Xunit;
 
 namespace ShikshaMitra;
@@ -22,6 +23,9 @@ public abstract class ShikshaMitraApiTestBase : IClassFixture<ShikshaMitraApiTes
 	{
 		Factory = factory;
 		Client = factory.CreateClient();
+
+		EmployeeTestHelper.DefaultRoleId = factory.SeededRoleId;
+		EmployeeTestHelper.DefaultShiftId = factory.SeededShiftId;
 	}
 
 	/// <summary>

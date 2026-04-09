@@ -19,6 +19,9 @@ public static class EmployeeTestHelper
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+	public static Guid DefaultRoleId { get; set; }
+	public static Guid DefaultShiftId { get; set; }
+
 	/// <summary>
 	/// Creates an employee via POST /api/employees/personal-info (multipart/form-data)
 	/// and returns the response containing the employee ID.
@@ -105,8 +108,8 @@ public static class EmployeeTestHelper
 			MobileNo = TestDataHelper.UniquePhone(),
 			Doj = DateTime.UtcNow.AddMonths(-6),
 			IsTeaching = true,
-			RoleId = Guid.NewGuid(),
-			ShiftId = Guid.NewGuid(),
+			RoleId = DefaultRoleId,
+			ShiftId = DefaultShiftId,
 			Email = TestDataHelper.UniqueEmail("emp"),
 			Gender = 1,
 		};
@@ -133,8 +136,8 @@ public static class EmployeeTestHelper
 			Doj = DateTime.UtcNow.AddMonths(-12),
 			IsTeaching = true,
 			Department = "Science",
-			RoleId = Guid.NewGuid(),
-			ShiftId = Guid.NewGuid(),
+			RoleId = DefaultRoleId,
+			ShiftId = DefaultShiftId,
 			Address1 = "123 Test Street",
 			Address2 = "Block A",
 			Address3 = "Near Park",

@@ -427,8 +427,7 @@ public class LeaveTypeAppService_Tests : ShikshaMitraApplicationTestBase<Shiksha
             Color = "" // Empty
         };
 
-        // Act & Assert — domain SetColor calls Check.NotNullOrWhiteSpace
-        await Should.ThrowAsync<ArgumentException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _leaveTypeAppService.UpdateAsync(created.Id, updateInput);
         });

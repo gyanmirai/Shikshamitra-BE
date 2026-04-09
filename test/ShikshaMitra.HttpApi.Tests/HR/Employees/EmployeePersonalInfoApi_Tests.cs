@@ -87,8 +87,8 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 			MobileNo = TestDataHelper.UniquePhone(),
 			Doj = DateTime.UtcNow.AddMonths(-3),
 			IsTeaching = false,
-			RoleId = Guid.NewGuid(),
-			ShiftId = Guid.NewGuid(),
+			RoleId = EmployeeTestHelper.DefaultRoleId,
+			ShiftId = EmployeeTestHelper.DefaultShiftId,
 			Email = TestDataHelper.UniqueEmail("upd"),
 			Gender = 2,
 		};

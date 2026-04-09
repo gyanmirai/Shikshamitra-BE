@@ -44,7 +44,6 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public StudentBankDetail? BankDetail { get; private set; }
 
 	// Navigation for inquiry preference
-	public InquiryPreference? InquiryPreference { get; private set; }
 	public AcademicYear? AcademicYear { get; private set; }
 	public EducationMedium? AcademicMedium { get; private set; }
 	public EducationBoard? AcademicBoard { get; private set; }

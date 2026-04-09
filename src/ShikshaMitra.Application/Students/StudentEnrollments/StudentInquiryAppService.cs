@@ -19,7 +19,6 @@ public class StudentInquiryAppService(
 	IRepository<Standard, Guid> standardRepository,
 	IGuidGenerator guidGenerator,
 	StudentEnrollmentManager studentEnrollmentManager,
-	StudentEnrollmentDtoEnricher dtoEnricher,
 	EntityValidationService validationService
 ) : ApplicationService, IStudentInquiryAppService
 {

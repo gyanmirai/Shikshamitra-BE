@@ -1,7 +1,8 @@
-﻿using System;
-using ShikshaMitra.Students.Records.Settings;
+﻿using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
+using System;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -66,6 +67,8 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public HouseSettings? House { get; private set; }
 	public bool? IsGlobalHouseLeader { get; private set; }
 	public bool? IsDivisionHouseLeader { get; private set; }
+
+	public InquiryPreference? InquiryPreference { get; private set; }
 
 	public StudentRegistrationStateEnum StudentRegistrationState { get; private set; }
 

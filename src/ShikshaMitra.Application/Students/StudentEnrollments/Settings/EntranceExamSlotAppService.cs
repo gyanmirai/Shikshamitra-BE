@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Dynamic.Core;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.StudentEnrollments.Settings;
 
 [Authorize]
+[RemoteService(false)]
 public class EntranceExamSlotAppService : ShikshaMitraAppService, IEntranceExamSlotAppService
 {
 	private readonly IRepository<EntranceExamSlot, Guid> _slotRepository;
@@ -30,10 +32,8 @@ public class EntranceExamSlotAppService : ShikshaMitraAppService, IEntranceExamS
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsEntranceExamSlots.View)]
 	public async Task<PagedResultDto<EntranceExamSlotDto>> GetListAsync(GetEntranceExamSlotsInput input)
 	{
-		// Get queryable
 		var queryable = await _slotRepository.GetQueryableAsync();
 
-		// Apply filters
 		if (input.AcademicYearId.HasValue)
 		{
 			queryable = queryable.Where(x => x.AcademicYearId == input.AcademicYearId.Value);
@@ -58,10 +58,8 @@ public class EntranceExamSlotAppService : ShikshaMitraAppService, IEntranceExamS
 			queryable = queryable.Where(x => x.StartDate.Date < endOfDay);
 		}
 
-		// Get total count
 		var totalCount = await AsyncExecuter.CountAsync(queryable);
 
-		// Apply sorting
 		if (!input.Sorting.IsNullOrWhiteSpace())
 		{
 			queryable = queryable.OrderBy(input.Sorting);
@@ -71,24 +69,22 @@ public class EntranceExamSlotAppService : ShikshaMitraAppService, IEntranceExamS
 			queryable = queryable.OrderBy(x => x.StartDate);
 		}
 
-		// Apply paging
-		queryable = queryable
-			.Skip(input.SkipCount)
-			.Take(input.MaxResultCount);
+		queryable = queryable.Skip(input.SkipCount).Take(input.MaxResultCount);
 
-		// Execute query and map to DTOs
 		var slots = await AsyncExecuter.ToListAsync(queryable);
-		var items = new System.Collections.Generic.List<EntranceExamSlotDto>();
 
-		foreach (var slot in slots)
+		// Batch-load enrolled counts in a single query instead of N+1 round-trips
+		var slotIds = slots.Select(s => s.Id).ToList();
+		var enrolledCountMap = await GetEnrolledCountsForSlotsAsync(slotIds);
+
+		var items = slots.Select(slot =>
 		{
-			var enrolledCount = await GetEnrolledStudentsCountAsync(slot.Id);
-
+			var enrolledCount = enrolledCountMap.GetValueOrDefault(slot.Id, 0);
 			var dto = ObjectMapper.Map<EntranceExamSlot, EntranceExamSlotDto>(slot);
 			dto.EnrolledStudents = enrolledCount;
 			dto.AvailableSeats = slot.StudentLimit - enrolledCount;
-			items.Add(dto);
-		}
+			return dto;
+		}).ToList();
 
 		return new PagedResultDto<EntranceExamSlotDto>(totalCount, items);
 	}
@@ -97,7 +93,7 @@ public class EntranceExamSlotAppService : ShikshaMitraAppService, IEntranceExamS
 	public async Task<EntranceExamSlotDetailDto> GetAsync(Guid id)
 	{
 		var slot = await _slotRepository.GetAsync(id);
-		var enrolledCount = await GetEnrolledStudentsCountAsync(id);
+		var enrolledCount = await GetEnrolledCountForSlotAsync(id);
 
 		var dto = ObjectMapper.Map<EntranceExamSlot, EntranceExamSlotDetailDto>(slot);
 		dto.EnrolledStudents = enrolledCount;
@@ -109,19 +105,13 @@ public class EntranceExamSlotAppService : ShikshaMitraAppService, IEntranceExamS
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsEntranceExamSlots.Add)]
 	public async Task<EntranceExamSlotDto> CreateAsync(CreateEntranceExamSlotDto input)
 	{
-		// Combine date with times to create DateTimeOffset
-		var startDateTime = input.Date.Date.Add(input.StartTime);
-		var endDateTime = input.Date.Date.Add(input.EndTime);
-
-		// Use manager to create with validation
 		var slot = await _slotManager.CreateAsync(
 			input.AcademicYearId,
 			input.SlotName,
-			new DateTimeOffset(startDateTime, TimeSpan.Zero),
-			new DateTimeOffset(endDateTime, TimeSpan.Zero),
+			input.StartTimeDate,
+			input.EndTimeDate,
 			input.StudentLimit,
-			input.RoomNo
-		);
+			input.RoomNo);
 
 		await _slotRepository.InsertAsync(slot, autoSave: true);
 
@@ -137,8 +127,7 @@ public class EntranceExamSlotAppService : ShikshaMitraAppService, IEntranceExamS
 	{
 		var slot = await _slotRepository.GetAsync(id);
 
-		// Check enrolled students count
-		var enrolledCount = await GetEnrolledStudentsCountAsync(id);
+		var enrolledCount = await GetEnrolledCountForSlotAsync(id);
 		if (input.StudentLimit < enrolledCount)
 		{
 			throw new BusinessException("SM:EntranceExamSlot:005")
@@ -146,19 +135,16 @@ public class EntranceExamSlotAppService : ShikshaMitraAppService, IEntranceExamS
 				.WithData("enrolledCount", enrolledCount);
 		}
 
-		// Combine date with times
 		var startDateTime = input.Date.Date.Add(input.StartTime);
 		var endDateTime = input.Date.Date.Add(input.EndTime);
 
-		// Use manager to update with validation
 		await _slotManager.UpdateAsync(
 			slot,
 			input.SlotName,
 			new DateTimeOffset(startDateTime, TimeSpan.Zero),
 			new DateTimeOffset(endDateTime, TimeSpan.Zero),
 			input.StudentLimit,
-			input.RoomNo
-		);
+			input.RoomNo);
 
 		await _slotRepository.UpdateAsync(slot, autoSave: true);
 
@@ -172,8 +158,7 @@ public class EntranceExamSlotAppService : ShikshaMitraAppService, IEntranceExamS
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsEntranceExamSlots.Delete)]
 	public async Task DeleteAsync(Guid id)
 	{
-		// Check if any students are enrolled
-		var enrolledCount = await GetEnrolledStudentsCountAsync(id);
+		var enrolledCount = await GetEnrolledCountForSlotAsync(id);
 		if (enrolledCount > 0)
 		{
 			throw new BusinessException("SM:EntranceExamSlot:006")
@@ -186,66 +171,87 @@ public class EntranceExamSlotAppService : ShikshaMitraAppService, IEntranceExamS
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsEntranceExamSlots.View)]
 	public async Task<PagedResultDto<AvailableExamSlotDto>> GetAvailableSlotsAsync(GetAvailableExamSlotsInput input)
 	{
-		var queryable = await _slotRepository.GetQueryableAsync();
+		var slotQueryable = await _slotRepository.GetQueryableAsync();
+		var detailQueryable = await _studentAdditionalDetailRepository.GetQueryableAsync();
 
-		// Apply filters
+		// Compute enrolled count per slot as a DB-side subquery — avoids N+1 and in-memory paging
+		var enrolledPerSlot = detailQueryable
+			.Where(sd => sd.EntranceExamSlotId != null)
+			.GroupBy(sd => sd.EntranceExamSlotId!.Value)
+			.Select(g => new { SlotId = g.Key, Count = g.Count() });
+
+		var availableQuery =
+			from slot in slotQueryable
+			join e in enrolledPerSlot on slot.Id equals e.SlotId into eGroup
+			from e in eGroup.DefaultIfEmpty()
+			let enrolled = e == null ? 0 : e.Count
+			let available = slot.StudentLimit - enrolled
+			where available > 0
+			select new { slot, enrolled, available };
+
 		if (input.AcademicYearId.HasValue)
 		{
-			queryable = queryable.Where(x => x.AcademicYearId == input.AcademicYearId.Value);
+			availableQuery = availableQuery.Where(x => x.slot.AcademicYearId == input.AcademicYearId.Value);
 		}
 
 		if (input.Date.HasValue)
 		{
 			var targetDate = input.Date.Value.Date;
-			queryable = queryable.Where(x => x.StartDate.Date == targetDate);
+			availableQuery = availableQuery.Where(x => x.slot.StartDate.Date == targetDate);
 		}
 
-		// Get slots with their enrolled counts
-		var slots = await AsyncExecuter.ToListAsync(queryable);
-		var availableSlots = new System.Collections.Generic.List<AvailableExamSlotDto>();
-
-		foreach (var slot in slots)
+		if (input.MinAvailableSeats.HasValue)
 		{
-			var enrolledCount = await GetEnrolledStudentsCountAsync(slot.Id);
-			var availableSeats = slot.StudentLimit - enrolledCount;
-
-			// Only include slots with available capacity
-			if (availableSeats > 0 &&
-			    (!input.MinAvailableSeats.HasValue || availableSeats >= input.MinAvailableSeats.Value))
-			{
-				var dto = ObjectMapper.Map<EntranceExamSlot, AvailableExamSlotDto>(slot);
-				dto.AvailableSeats = availableSeats;
-
-				// Format display text
-				var slotNamePart = !string.IsNullOrWhiteSpace(slot.SlotName) ? $"{slot.SlotName} - " : "";
-				var datePart = slot.StartDate.ToString("MMM dd, yyyy");
-				var timePart = $"({slot.GetStartTime():hh\\:mm} - {slot.GetEndTime():hh\\:mm})";
-				dto.DisplayText = $"{slotNamePart}{datePart} {timePart} - Room {slot.RoomNo} - {availableSeats} seats available";
-
-				availableSlots.Add(dto);
-			}
+			availableQuery = availableQuery.Where(x => x.available >= input.MinAvailableSeats.Value);
 		}
 
-		// Sort by date and time
-		availableSlots = availableSlots
-			.OrderBy(x => x.Date)
-			.ThenBy(x => x.StartTime)
-			.ToList();
+		var totalCount = await AsyncExecuter.CountAsync(availableQuery);
 
-		// Apply paging
-		var totalCount = availableSlots.Count;
-		var pagedItems = availableSlots
+		availableQuery = availableQuery
+			.OrderBy(x => x.slot.StartDate)
 			.Skip(input.SkipCount)
-			.Take(input.MaxResultCount)
-			.ToList();
+			.Take(input.MaxResultCount);
 
-		return new PagedResultDto<AvailableExamSlotDto>(totalCount, pagedItems);
+		var results = await AsyncExecuter.ToListAsync(availableQuery);
+
+		var items = results.Select(r =>
+		{
+			var dto = ObjectMapper.Map<EntranceExamSlot, AvailableExamSlotDto>(r.slot);
+			dto.AvailableSeats = r.available;
+
+			var slotNamePart = !string.IsNullOrWhiteSpace(r.slot.SlotName) ? $"{r.slot.SlotName} - " : string.Empty;
+			var datePart = r.slot.StartDate.ToString("MMM dd, yyyy");
+			var timePart = $"({r.slot.GetStartTime():hh\\:mm} - {r.slot.GetEndTime():hh\\:mm})";
+			dto.DisplayText = $"{slotNamePart}{datePart} {timePart} - Room {r.slot.RoomNo} - {r.available} seats available";
+
+			return dto;
+		}).ToList();
+
+		return new PagedResultDto<AvailableExamSlotDto>(totalCount, items);
 	}
 
-	private async Task<int> GetEnrolledStudentsCountAsync(Guid slotId)
+	// Single slot count — used for mutating operations (update, delete) where one call is fine
+	private async Task<int> GetEnrolledCountForSlotAsync(Guid slotId)
 	{
 		var queryable = await _studentAdditionalDetailRepository.GetQueryableAsync();
-		return await AsyncExecuter.CountAsync(
-			queryable.Where(sd => sd.EntranceExamSlotId == slotId));
+		return await AsyncExecuter.CountAsync(queryable.Where(sd => sd.EntranceExamSlotId == slotId));
+	}
+
+	// Batch count for a set of slot IDs — eliminates N+1 in list queries
+	private async Task<Dictionary<Guid, int>> GetEnrolledCountsForSlotsAsync(List<Guid> slotIds)
+	{
+		if (slotIds.Count == 0)
+		{
+			return [];
+		}
+
+		var queryable = await _studentAdditionalDetailRepository.GetQueryableAsync();
+		var counts = await AsyncExecuter.ToListAsync(
+			queryable
+				.Where(sd => sd.EntranceExamSlotId != null && slotIds.Contains(sd.EntranceExamSlotId!.Value))
+				.GroupBy(sd => sd.EntranceExamSlotId!.Value)
+				.Select(g => new { SlotId = g.Key, Count = g.Count() }));
+
+		return counts.ToDictionary(x => x.SlotId, x => x.Count);
 	}
 }

@@ -9,8 +9,8 @@ namespace ShikshaMitra.Students.Enrollments.EntranceExams;
 /// </summary>
 public class GetEntranceExamStudentsInput : PagedAndSortedResultRequestDto
 {
-	public DateTime? StartDate { get; set; }
-	public DateTime? EndDate { get; set; }
+	public DateTimeOffset? StartDate { get; set; }
+	public DateTimeOffset? EndDate { get; set; }
 	public Guid? StandardId { get; set; }
 	public Guid? EducationMediumId { get; set; }
 	public EntranceExamStatusEnum? ExamStatus { get; set; }

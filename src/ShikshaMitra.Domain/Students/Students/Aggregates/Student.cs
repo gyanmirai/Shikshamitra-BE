@@ -399,7 +399,9 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	/// <summary>
-	/// Schedules the student for entrance exam using a slot
+	/// Schedules the student for entrance exam using a slot.
+	/// Allowed from <see cref="StudentLifeCycleStatusEnum.RegistrationFormIssued"/> (inquiry path)
+	/// and <see cref="StudentLifeCycleStatusEnum.Registation"/> (direct registration path).
 	/// </summary>
 	public void ScheduleEntranceExam(
 		Guid entranceExamSlotId,
@@ -407,17 +409,17 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DateTimeOffset slotEndDate,
 		int slotRoomNo)
 	{
-		if (Status != StudentLifeCycleStatusEnum.Registation)
+		if (Status != StudentLifeCycleStatusEnum.RegistrationFormIssued &&
+		    Status != StudentLifeCycleStatusEnum.Registation)
 		{
 			throw new InvalidOperationException(
-				$"Cannot schedule entrance exam. Student must be in RegistrationFormIssued status. Current status: {Status}");
+				$"Cannot schedule entrance exam. Student must be in RegistrationFormIssued or Registration status. Current status: {Status}");
 		}
 
 		AdditionalDetail?.ScheduleEntranceExam(
 			entranceExamSlotId,
 			slotStartDate,
-			slotStartDate.TimeOfDay,
-			slotEndDate.TimeOfDay,
+			slotEndDate,
 			slotRoomNo);
 
 		ChangeStatus(StudentLifeCycleStatusEnum.EntranceExam);
@@ -428,18 +430,6 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// </summary>
 	public void MoveToAdmission()
 	{
-		if (Status != StudentLifeCycleStatusEnum.Registation && Status != StudentLifeCycleStatusEnum.EntranceExam)
-		{
-			throw new InvalidOperationException(
-				$"Cannot move to admission. Student must be in EntranceExam status. Current status: {Status}");
-		}
-
-		if (Status == StudentLifeCycleStatusEnum.EntranceExam && AdditionalDetail?.ExamStatus != EntranceExamStatusEnum.Pass)
-		{
-			throw new InvalidOperationException(
-				"Cannot move to admission. Student must have passed the entrance exam.");
-		}
-
 		ChangeStatus(StudentLifeCycleStatusEnum.Admission);
 		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Pending;
 	}

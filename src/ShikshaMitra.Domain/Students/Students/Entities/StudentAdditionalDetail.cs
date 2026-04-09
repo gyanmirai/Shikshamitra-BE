@@ -23,18 +23,17 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 
 	// Entrance Exam Information
 	public Guid? EntranceExamSlotId { get; private set; }
-	public DateTimeOffset? ExamDate { get; private set; }
-	public TimeSpan? ExamStartTime { get; private set; }
-	public TimeSpan? ExamEndTime { get; private set; }
-	public int? ExamRoomNo { get; private set; }
+	public DateTimeOffset? EntranceExamStartDateTime { get; private set; }
+	public DateTimeOffset? EntranceExamEndDateTime { get; private set; }
+	public int? EntranceExamRoomNo { get; private set; }
 
 	// Exam Results
-	public decimal? ExamTotalMarks { get; private set; }
-	public decimal? ExamPassingMarks { get; private set; }
-	public decimal? ExamObtainedMarks { get; private set; }
-	public decimal? ExamPercentage { get; private set; }
-	public EntranceExamStatusEnum? ExamStatus { get; private set; }
-	public DateTimeOffset? ExamResultDate { get; private set; }
+	public decimal? EntranceExamTotalMarks { get; private set; }
+	public decimal? EntranceExamPassingMarks { get; private set; }
+	public decimal? EntranceExamObtainedMarks { get; private set; }
+	public decimal? EntranceExamPercentage { get; private set; }
+	public EntranceExamStatusEnum? EntranceExamStatus { get; private set; }
+	public DateTimeOffset? EntranceExamResultDate { get; private set; }
 
 	public string? AdharNo { get; private set; }
 	public string? ApparId { get; private set; }
@@ -208,17 +207,15 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	/// </summary>
 	public void ScheduleEntranceExam(
 		Guid entranceExamSlotId,
-		DateTimeOffset examDate,
-		TimeSpan examStartTime,
-		TimeSpan examEndTime,
+		DateTimeOffset examStartTime,
+		DateTimeOffset examEndTime,
 		int examRoomNo)
 	{
 		EntranceExamSlotId = entranceExamSlotId;
-		ExamDate = examDate;
-		ExamStartTime = examStartTime;
-		ExamEndTime = examEndTime;
-		ExamRoomNo = examRoomNo;
-		ExamStatus = EntranceExamStatusEnum.Pending;
+		EntranceExamStartDateTime = examStartTime;
+		EntranceExamEndDateTime = examEndTime;
+		EntranceExamRoomNo = examRoomNo;
+		EntranceExamStatus = EntranceExamStatusEnum.Pending;
 	}
 
 	/// <summary>
@@ -255,15 +252,15 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 			throw new ArgumentException("Passing marks cannot exceed total marks.");
 		}
 
-		ExamTotalMarks = totalMarks;
-		ExamPassingMarks = passingMarks;
-		ExamObtainedMarks = obtainedMarks;
+		EntranceExamTotalMarks = totalMarks;
+		EntranceExamPassingMarks = passingMarks;
+		EntranceExamObtainedMarks = obtainedMarks;
         // Safe percentage calculation since totalMarks > 0 is validated
-        ExamPercentage = (obtainedMarks / totalMarks) * 100;
-		ExamStatus = obtainedMarks >= passingMarks
+        EntranceExamPercentage = (obtainedMarks / totalMarks) * 100;
+		EntranceExamStatus = obtainedMarks >= passingMarks
 			? EntranceExamStatusEnum.Pass
 			: EntranceExamStatusEnum.Fail;
-		ExamResultDate = DateTimeOffset.UtcNow;
+		EntranceExamResultDate = DateTimeOffset.UtcNow;
 	}
 
 	public void AssignHouse(Guid houseId)

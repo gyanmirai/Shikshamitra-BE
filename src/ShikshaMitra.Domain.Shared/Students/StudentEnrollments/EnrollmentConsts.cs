@@ -16,4 +16,6 @@ public static class EnrollmentConsts
 
     /// <summary>Maximum length for rejection remarks.</summary>
     public const int MaxRejectionRemarksLength = 1000;
+
+	public const double MoveToAdmissionThreasold = 50.0;
 }

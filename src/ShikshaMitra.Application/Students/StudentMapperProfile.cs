@@ -3,7 +3,6 @@ using ShikshaMitra.Common;
 using ShikshaMitra.Students.Attendance.Settings;
 using ShikshaMitra.Students.Records;
 using ShikshaMitra.Students.StudentRecords;
-using ShikshaMitra.Students.Attendance.Settings;
 using ShikshaMitra.Students.Enrollments.Notes;
 using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.Records.Settings;
@@ -11,7 +10,6 @@ using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace ShikshaMitra.Students;

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.HR.Calendar.EventTypes;
 using Shouldly;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Validation;
 using Xunit;
 
 namespace ShikshaMitra.HR.Calendar;
@@ -74,8 +75,7 @@ public class EventTypeAppService_Tests : ShikshaMitraApplicationTestBase<Shiksha
             Color = "#FF0000"
         };
 
-        // Act & Assert — domain constructor throws ArgumentNullException for null name
-        await Should.ThrowAsync<ArgumentNullException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _eventTypeAppService.CreateAsync(input);
         });
@@ -91,8 +91,7 @@ public class EventTypeAppService_Tests : ShikshaMitraApplicationTestBase<Shiksha
             Color = null!
         };
 
-        // Act & Assert — domain constructor throws ArgumentNullException for null color
-        await Should.ThrowAsync<ArgumentNullException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _eventTypeAppService.CreateAsync(input);
         });
@@ -220,24 +219,22 @@ public class EventTypeAppService_Tests : ShikshaMitraApplicationTestBase<Shiksha
     }
 
     [Fact]
-    public async Task Should_Preserve_Name_When_Update_Has_Empty_Name()
+    public async Task Should_Reject_Empty_Name_On_Update()
     {
         // Arrange
         var created = await CreateTestEventTypeAsync("Preserved Name");
 
         var updateInput = new CreateUpdateEventTypeDto
         {
-            Name = "", // Empty — domain Update method preserves existing when empty
+            Name = "",
             Color = "#0000FF",
             Description = "New description"
         };
 
-        // Act
-        var result = await _eventTypeAppService.UpdateAsync(created.Id, updateInput);
-
-        // Assert — domain Update skips empty name
-        result.Name.ShouldBe("Preserved Name");
-        result.Color.ShouldBe("#0000FF");
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _eventTypeAppService.UpdateAsync(created.Id, updateInput);
+        });
     }
 
     #endregion

@@ -98,5 +98,55 @@ public class ReportingManagerApi_Tests : ShikshaMitraApiTestBase
 		body.ReportingManager.Id.ShouldBe(managerId);
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Reassign_Manager_From_A_To_B()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMReassignE");
+		var managerA = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMReassignA");
+		var managerB = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMReassignB");
+
+		await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{empId}/reporting-manager",
+			new ReportingManagerRequest { ReportingManagerId = managerA },
+			JsonOptions);
+
+		await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{empId}/reporting-manager",
+			new ReportingManagerRequest { ReportingManagerId = managerB },
+			JsonOptions);
+
+		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/reporting-manager");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await getResponse.Content.ReadFromJsonAsync<ReportingManagerResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.ReportingManager.ShouldNotBeNull();
+		body.ReportingManager.Id.ShouldBe(managerB);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Return_Correct_Count_Of_Employees_Under_Manager()
+	{
+		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMCountMgr");
+		var emp1 = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMCountE1");
+		var emp2 = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMCountE2");
+
+		await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{emp1}/reporting-manager",
+			new ReportingManagerRequest { ReportingManagerId = managerId },
+			JsonOptions);
+		await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{emp2}/reporting-manager",
+			new ReportingManagerRequest { ReportingManagerId = managerId },
+			JsonOptions);
+
+		var response = await Client.GetAsync($"{BaseUrl}/reporting-manager/{managerId}/employees");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<EmployeesUnderManagerResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Employees.Count.ShouldBeGreaterThanOrEqualTo(2);
+	}
+
 	#endregion
 }

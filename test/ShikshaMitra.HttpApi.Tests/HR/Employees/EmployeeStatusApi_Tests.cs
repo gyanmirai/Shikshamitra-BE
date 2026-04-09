@@ -101,5 +101,40 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 		body.PreviousStatus.ShouldBe(1);
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Set_Left_And_Retired_Statuses()
+	{
+		var empLeft = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusLeft");
+		var leftReq = new EmployeeStatusUpdateRequest { EmployeeStatusType = 2, Remarks = "Employee left" };
+		var leftResp = await Client.PutAsJsonAsync($"{BaseUrl}/{empLeft}/status", leftReq, JsonOptions);
+		leftResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var leftBody = await leftResp.Content.ReadFromJsonAsync<EmployeeStatusUpdateResponse>(JsonOptions);
+		leftBody.ShouldNotBeNull();
+		leftBody.CurrentStatus.ShouldBe(2);
+
+		var empRetired = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusRetired");
+		var retiredReq = new EmployeeStatusUpdateRequest { EmployeeStatusType = 3, Remarks = "Employee retired" };
+		var retiredResp = await Client.PutAsJsonAsync($"{BaseUrl}/{empRetired}/status", retiredReq, JsonOptions);
+		retiredResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var retiredBody = await retiredResp.Content.ReadFromJsonAsync<EmployeeStatusUpdateResponse>(JsonOptions);
+		retiredBody.ShouldNotBeNull();
+		retiredBody.CurrentStatus.ShouldBe(3);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Reject_Invalid_Status_Value()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusBad");
+
+		var request = new EmployeeStatusUpdateRequest { EmployeeStatusType = 99, Remarks = "Invalid" };
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", request, JsonOptions);
+
+		response.StatusCode.ShouldBeOneOf(
+			HttpStatusCode.BadRequest,
+			HttpStatusCode.InternalServerError);
+	}
+
 	#endregion
 }

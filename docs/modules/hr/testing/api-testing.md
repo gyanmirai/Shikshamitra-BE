@@ -2,24 +2,24 @@
 
 API-level tests for the HR module endpoints. These validate the full HTTP pipeline including routing, serialization, authentication, and response contracts.
 
-**Total test coverage: 155 tests across 31 controllers (all HR endpoints covered)**
+**Total test coverage: ~191 tests across 31 controllers (all HR endpoints covered)**
 
 ## Test Inventory
 
-### HR/Employees -- 10 controllers, ~40 tests
+### HR/Employees -- 10 controllers, ~76 tests
 
 | Controller | Test Class | Tests | Tiers |
 |-----------|-----------|-------|-------|
-| EmployeesController | `EmployeeListApi_Tests` | GET list, GET by ID, filter status, pagination | Critical, Important, Extended |
-| PersonalInfoController | `EmployeePersonalInfoApi_Tests` | POST create (multipart), GET, PUT update, 404 | Critical, Important |
-| AdditionalInfoController | `AdditionalInfoApi_Tests` | GET, PUT update, 404, update+verify | Critical, Important, Extended |
-| FamilyInfoController | `FamilyInfoApi_Tests` | GET, PUT update, 404, update+verify | Critical, Important, Extended |
-| WorkExperienceController | `WorkExperienceApi_Tests` | GET, PUT update, 404, multiple experiences | Critical, Important, Extended |
-| ReportingManagerController | `ReportingManagerApi_Tests` | GET, PUT assign, 404, employees under manager, assign+verify | Critical, Important, Extended |
-| PayrollController | `EmployeePayrollApi_Tests` | GET, PUT update, 404 | Critical, Important |
-| EmployeeStatusController | `EmployeeStatusApi_Tests` | PUT status change, 404, idempotent, multi-status transitions | Critical, Important, Extended |
-| DocumentConfigController | `DocumentConfigApi_Tests` | POST create, GET list, GET by ID, PUT, DELETE, 404 | Critical, Important |
-| EmployeeDocumentController | `EmployeeDocumentApi_Tests` | POST upload, GET list, DELETE, 404 | Critical, Important |
+| EmployeesController | `EmployeeListApi_Tests` | GET list, GET by ID, 404, filter status, filter isTeaching, filter roleId, search by name, pagination, verify response contract | Critical, Important, Extended |
+| PersonalInfoController | `EmployeePersonalInfoApi_Tests` | POST create (multipart), POST with profile picture (image upload), POST with all optional fields, GET after create, PUT update, 404, not-401 check, invalid JSON, missing required fields, invalid phone format, duplicate secondary mobile, PUT+GET round-trip verify | Critical, Important, Extended |
+| AdditionalInfoController | `AdditionalInfoApi_Tests` | GET, PUT update, 404, update+verify, clear all fields, round-trip all boolean fields | Critical, Important, Extended |
+| FamilyInfoController | `FamilyInfoApi_Tests` | GET, PUT update, 404, update+verify, all three members with full address, clear with empty request, address fields round-trip | Critical, Important, Extended |
+| WorkExperienceController | `WorkExperienceApi_Tests` | GET, PUT update, 404, multiple experiences, clear with empty list, country/state info, update then verify count and fields | Critical, Important, Extended |
+| ReportingManagerController | `ReportingManagerApi_Tests` | GET, PUT assign, 404, employees under manager, assign+verify, reassign manager A to B, verify employee count under manager | Critical, Important, Extended |
+| PayrollController | `EmployeePayrollApi_Tests` | GET, PUT with bank details, 404, full payroll with components, update then verify bank details, TDS boundary values (0%, 100%) | Critical, Important, Extended |
+| EmployeeStatusController | `EmployeeStatusApi_Tests` | PUT status to inactive, 404, idempotent same status, multi-status transitions, Left and Retired statuses, reject invalid status value | Critical, Important, Extended |
+| DocumentConfigController | `DocumentConfigApi_Tests` | POST create, GET list, GET by ID, PUT, DELETE, 404, reject invalid title, reject out-of-range size, full CRUD lifecycle | Critical, Important, Extended |
+| EmployeeDocumentController | `EmployeeDocumentApi_Tests` | Upload with valid doc config, upload image file (JPEG), GET list, 404, DELETE, download document, fail upload without file, upload PDF, update existing document, search by filename | Critical, Important, Extended |
 
 ### HR/Payroll -- 8 controllers, ~40 tests
 
@@ -74,7 +74,7 @@ API-level tests for the HR module endpoints. These validate the full HTTP pipeli
 
 | Helper | Location | Purpose |
 |--------|----------|---------|
-| `EmployeeTestHelper` | `HR/Employees/EmployeeTestHelper.cs` | Creates employee via POST personal-info, returns ID |
+| `EmployeeTestHelper` | `HR/Employees/EmployeeTestHelper.cs` | Creates employee (with/without picture), creates document configs, builds full/minimal personal info requests, builds synthetic JPEG |
 | `PayrollTestHelper` | `HR/Payroll/PayrollTestHelper.cs` | Creates earning/deduction components, PF rules |
 | `CalendarTestHelper` | `HR/Calendar/CalendarTestHelper.cs` | Creates event types and holiday types |
 
@@ -102,6 +102,8 @@ dotnet test test/ShikshaMitra.HttpApi.Tests --filter "Module=HR&Tier=Critical"
 # HR smoke (requires running host)
 dotnet test test/ShikshaMitra.HttpApi.Tests --filter "Module=HR&Tier=Smoke"
 ```
+
+> Smoke tests are opt-in by default. Set `APITEST_ENABLE_SMOKE=true` before running Tier=Smoke.
 
 ## Blueprint for Other Modules
 

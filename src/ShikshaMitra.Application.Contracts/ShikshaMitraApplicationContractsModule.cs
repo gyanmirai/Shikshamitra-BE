@@ -1,5 +1,6 @@
 ﻿using Volo.Abp.Account;
 using Volo.Abp.FeatureManagement;
+using Volo.Abp.FluentValidation;
 using Volo.Abp.Identity;
 using Volo.Abp.Modularity;
 using Volo.Abp.ObjectExtending;
@@ -13,6 +14,7 @@ namespace ShikshaMitra;
 	typeof(ShikshaMitraDomainSharedModule),
 	typeof(AbpAccountApplicationContractsModule),
 	typeof(AbpFeatureManagementApplicationContractsModule),
+	typeof(AbpFluentValidationModule),
 	typeof(AbpIdentityApplicationContractsModule),
 	typeof(AbpPermissionManagementApplicationContractsModule),
 	typeof(AbpSettingManagementApplicationContractsModule),

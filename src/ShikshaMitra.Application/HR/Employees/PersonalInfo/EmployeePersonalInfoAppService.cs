@@ -274,6 +274,7 @@ public class EmployeePersonalInfoAppService(
 			Qualification = employee.Qualification,
 			RoleId = employee.RoleId,
 			RoleName = employee.Role?.Name,
+			ProfilePictureBlobName = employee.ProfilePictureBlobName,
 			IdentificationMark1 = employee.IdentificationMark1,
 			Address1 = employee.Address1,
 			Address2 = employee.Address2,

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
@@ -77,6 +78,50 @@ public class EmployeeListApi_Tests : ShikshaMitraApiTestBase
 		body.Items.ShouldNotBeNull();
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Filter_By_IsTeaching()
+	{
+		await EmployeeTestHelper.CreateEmployeeAsync(Client, "TeachFilter");
+
+		var response = await Client.GetAsync($"{BaseUrl}?isTeaching=true&page=1&pageSize=10");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<EmployeeListResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Items.ShouldNotBeNull();
+		body.Items.ShouldAllBe(e => e.IsTeaching);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Filter_By_RoleId()
+	{
+		var randomRoleId = Guid.NewGuid();
+
+		var response = await Client.GetAsync($"{BaseUrl}?roleId={randomRoleId}&page=1&pageSize=10");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<EmployeeListResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Items.ShouldNotBeNull();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Search_By_Employee_Name()
+	{
+		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "SearchUnique");
+
+		var searchTerm = created.FirstName;
+		var response = await Client.GetAsync($"{BaseUrl}?search={searchTerm}&page=1&pageSize=10");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<EmployeeListResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Items.ShouldNotBeNull();
+	}
+
 	#endregion
 
 	#region Tier 2 — Extended
@@ -99,6 +144,23 @@ public class EmployeeListApi_Tests : ShikshaMitraApiTestBase
 		var body2 = await page2.Content.ReadFromJsonAsync<EmployeeListResponse>(JsonOptions);
 		body2.ShouldNotBeNull();
 		body2.Items.ShouldNotBeNull();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Verify_Response_Contract_Fields()
+	{
+		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "ContractVerify");
+
+		var response = await Client.GetAsync($"{BaseUrl}/{created.Id}");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<EmployeeDetails>(JsonOptions);
+
+		body.ShouldNotBeNull();
+		body.Id.ShouldNotBe(Guid.Empty);
+		body.FullName.ShouldNotBeNullOrWhiteSpace();
+		body.EmployeeIdentifier.ShouldNotBeNullOrWhiteSpace();
+		body.MobileNo.ShouldNotBeNullOrWhiteSpace();
 	}
 
 	#endregion

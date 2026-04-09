@@ -99,8 +99,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             RoleId = roleId
         };
 
-        // Act & Assert
-        await Should.ThrowAsync<UserFriendlyException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
         });
@@ -121,7 +120,6 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             RoleId = roleId
         };
 
-        // Act & Assert
         await Should.ThrowAsync<UserFriendlyException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
@@ -144,8 +142,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             RoleId = roleId
         };
 
-        // Act & Assert
-        await Should.ThrowAsync<UserFriendlyException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
         });
@@ -188,9 +185,12 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     public async Task Should_Get_Paginated_Employee_List()
     {
         // Arrange
-        for (int i = 1; i <= 15; i++)
+        var suffixes = new[] { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O" };
+        for (int i = 0; i < 15; i++)
         {
-            await CreateTestEmployeeAsync($"Employee{i}", "Test");
+            await CreateTestEmployeeAsync($"Employee{suffixes[i]}", "Test",
+                email: $"employee{suffixes[i].ToLower()}.test@test.com",
+                mobileNo: $"98765{i:D5}00");
         }
 
         var input = new PagedAndSortedResultRequestDto
@@ -630,6 +630,8 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         // Arrange
         var created = await CreateTestEmployeeAsync("Test", "Employee");
 
+        var stubDeduction = new PayrollComponentDto { Name = "PF", ComponentType = SalaryComponentType.Fixed, Amount = 1000, IsFixed = true, IsTemp = false };
+
         // First update with 2 earnings
         var firstUpdate = new UpdateEmployeePayrollDetailsDto
         {
@@ -642,7 +644,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
                 new PayrollComponentDto { Name = "HRA", ComponentType = SalaryComponentType.Fixed, Amount = 10000, IsFixed = false, IsTemp = false },
                 new PayrollComponentDto { Name = "DA", ComponentType = SalaryComponentType.Fixed, Amount = 5000, IsFixed = false, IsTemp = false }
             },
-            Deductions = new List<PayrollComponentDto>()
+            Deductions = new List<PayrollComponentDto> { stubDeduction }
         };
 
         await _employeeAppService.UpdatePayrollDetailsAsync(created.Id, firstUpdate);
@@ -658,7 +660,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             {
                 new PayrollComponentDto { Name = "HRA", ComponentType = SalaryComponentType.Fixed, Amount = 15000, IsFixed = false, IsTemp = false }
             },
-            Deductions = new List<PayrollComponentDto>()
+            Deductions = new List<PayrollComponentDto> { stubDeduction }
         };
 
         // Act
@@ -996,8 +998,14 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             {
                 BasicSalary = 0
             },
-            Earnings = new List<PayrollComponentDto>(),
-            Deductions = new List<PayrollComponentDto>()
+            Earnings = new List<PayrollComponentDto>
+            {
+                new PayrollComponentDto { Name = "Placeholder", ComponentType = SalaryComponentType.Fixed, Amount = 0, IsFixed = false, IsTemp = false }
+            },
+            Deductions = new List<PayrollComponentDto>
+            {
+                new PayrollComponentDto { Name = "Placeholder", ComponentType = SalaryComponentType.Fixed, Amount = 0, IsFixed = false, IsTemp = false }
+            }
         };
 
         // Act
@@ -1112,8 +1120,14 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
                 BasicSalary = 50000,
                 TdsPercentage = 0
             },
-            Earnings = new List<PayrollComponentDto>(),
-            Deductions = new List<PayrollComponentDto>()
+            Earnings = new List<PayrollComponentDto>
+            {
+                new PayrollComponentDto { Name = "HRA", ComponentType = SalaryComponentType.Fixed, Amount = 5000, IsFixed = false, IsTemp = false }
+            },
+            Deductions = new List<PayrollComponentDto>
+            {
+                new PayrollComponentDto { Name = "PF", ComponentType = SalaryComponentType.Fixed, Amount = 1000, IsFixed = false, IsTemp = false }
+            }
         };
 
         // Act
@@ -1181,8 +1195,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             RoleId = roleId
         };
 
-        // Act & Assert — app service checks IsNullOrWhiteSpace for email
-        await Should.ThrowAsync<UserFriendlyException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
         });
@@ -1328,7 +1341,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         after1.Earnings.Count.ShouldBe(3);
         after1.Deductions.Count.ShouldBe(2);
 
-        // Update 2: Reduce to 1 earning, 0 deductions — complete replacement
+        // Update 2: Reduce to 1 earning, 1 minimal deduction — complete replacement
         var update2 = new UpdateEmployeePayrollDetailsDto
         {
             PayrollDetails = new PayrollDetailsDto { BasicSalary = 50000 },
@@ -1336,13 +1349,16 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             {
                 new PayrollComponentDto { Name = "Consolidated", ComponentType = SalaryComponentType.Fixed, Amount = 50000, IsFixed = true, IsTemp = false }
             },
-            Deductions = new List<PayrollComponentDto>()
+            Deductions = new List<PayrollComponentDto>
+            {
+                new PayrollComponentDto { Name = "MinPF", ComponentType = SalaryComponentType.Fixed, Amount = 100, IsFixed = true, IsTemp = false }
+            }
         };
         await _employeeAppService.UpdatePayrollDetailsAsync(created.Id, update2);
         var after2 = await _employeeAppService.GetPayrollDetailsAsync(created.Id);
         after2.Earnings.Count.ShouldBe(1);
         after2.Earnings[0].Name.ShouldBe("Consolidated");
-        after2.Deductions.Count.ShouldBe(0);
+        after2.Deductions.Count.ShouldBe(1);
         after2.PayrollDetails.BasicSalary.ShouldBe(50000);
 
         // Update 3: Back to multiple — previous components should be gone
@@ -1435,10 +1451,10 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     public async Task Should_Filter_Employees_By_Status_After_Status_Change()
     {
         // Arrange — create employees and change some statuses
-        var active1 = await CreateTestEmployeeAsync("StatusFilter", "Active1",
-            email: "statusfilter.active1@test.com", mobileNo: "9876543257");
-        var active2 = await CreateTestEmployeeAsync("StatusFilter", "Active2",
-            email: "statusfilter.active2@test.com", mobileNo: "9876543258");
+        var active1 = await CreateTestEmployeeAsync("StatusFilter", "ActiveOne",
+            email: "statusfilter.activeone@test.com", mobileNo: "9876543257");
+        var active2 = await CreateTestEmployeeAsync("StatusFilter", "ActiveTwo",
+            email: "statusfilter.activetwo@test.com", mobileNo: "9876543258");
         var willLeave = await CreateTestEmployeeAsync("StatusFilter", "WillLeave",
             email: "statusfilter.willleave@test.com", mobileNo: "9876543259");
 
@@ -1538,7 +1554,10 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             {
                 new PayrollComponentDto { Name = "HRA", ComponentType = SalaryComponentType.Fixed, Amount = 12000, IsFixed = true, IsTemp = false }
             },
-            Deductions = new List<PayrollComponentDto>()
+            Deductions = new List<PayrollComponentDto>
+            {
+                new PayrollComponentDto { Name = "PF", ComponentType = SalaryComponentType.Fixed, Amount = 5400, IsFixed = true, IsTemp = false }
+            }
         };
         await _employeeAppService.UpdatePayrollDetailsAsync(created.Id, payrollInput);
 

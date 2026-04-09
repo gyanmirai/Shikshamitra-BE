@@ -23,7 +23,7 @@ public class HRPayrollSmokeTests : ShikshaMitraSmokeTestBase
 	private const string EarningComponentsUrl = "/api/payroll/earning-components";
 	private const string DeductionComponentsUrl = "/api/payroll/deduction-components";
 
-	[Fact]
+	[SmokeFact]
 	public async Task Smoke_Earning_Components_List_Should_Return_200()
 	{
 		await AuthenticateAsync();
@@ -35,7 +35,7 @@ public class HRPayrollSmokeTests : ShikshaMitraSmokeTestBase
 		body.ShouldNotBeNull();
 	}
 
-	[Fact]
+	[SmokeFact]
 	public async Task Smoke_Deduction_Components_List_Should_Return_200()
 	{
 		await AuthenticateAsync();
@@ -47,7 +47,7 @@ public class HRPayrollSmokeTests : ShikshaMitraSmokeTestBase
 		body.ShouldNotBeNull();
 	}
 
-	[Fact]
+	[SmokeFact]
 	public async Task Smoke_Unauthenticated_Request_Should_Return_401()
 	{
 		var plainClient = new System.Net.Http.HttpClient(

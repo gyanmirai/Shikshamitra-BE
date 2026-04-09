@@ -92,6 +92,7 @@ public static class PersonalInfoContractMapper
 			Id = dto.Id,
 			EmployeeCode = dto.EmployeeCode,
 			FullName = dto.FullName,
+			HasProfilePicture = !string.IsNullOrEmpty(dto.ProfilePictureBlobName),
 			FirstName = dto.FirstName,
 			MiddleName = dto.MiddleName,
 			LastName = dto.LastName,

@@ -55,6 +55,8 @@ dotnet test test/ShikshaMitra.HttpApi.Tests --filter "Tier=Extended"
 dotnet test test/ShikshaMitra.HttpApi.Tests --filter "Tier=Smoke"
 ```
 
+> Smoke tests are opt-in by default. Set `APITEST_ENABLE_SMOKE=true` before running Tier=Smoke.
+
 ### By module
 
 ```bash
@@ -148,6 +150,7 @@ Smoke tests use `PasswordGrantTokenProvider` to obtain real OpenIddict tokens. C
 | `APITEST_PASSWORD` | Test user password |
 | `APITEST_CLIENT_ID` | OAuth client ID |
 | `APITEST_CLIENT_SECRET` | OAuth client secret (for client credentials) |
+| `APITEST_ENABLE_SMOKE` | Set to `true` (or `1`) to enable smoke tests |
 
 ## Data Conventions
 

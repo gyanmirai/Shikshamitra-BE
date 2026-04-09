@@ -5,6 +5,7 @@ using ShikshaMitra.HR.Payroll.Settings;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Validation;
 using Xunit;
 
 namespace ShikshaMitra.HR.Payroll;
@@ -133,8 +134,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Amount = 10000m
         };
 
-        // Act & Assert — domain guard Check.NotNullOrWhiteSpace throws ArgumentException
-        await Should.ThrowAsync<ArgumentException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _earningComponentAppService.CreateAsync(input);
         });
@@ -538,8 +538,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Amount = -100m
         };
 
-        // Act & Assert — domain SetCalculationFields rejects negative amounts
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _earningComponentAppService.CreateAsync(input);
         });
@@ -578,8 +577,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Amount = null
         };
 
-        // Act & Assert — domain SetCalculationFields rejects null amount
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _earningComponentAppService.CreateAsync(input);
         });
@@ -601,8 +599,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             SelectedEarningComponentId = baseComponent.Id
         };
 
-        // Act & Assert — domain SetCalculationFields rejects percentage > 100
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _earningComponentAppService.CreateAsync(input);
         });
@@ -670,8 +667,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             SelectedEarningComponentId = baseComponent.Id
         };
 
-        // Act & Assert
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _earningComponentAppService.CreateAsync(input);
         });
@@ -691,8 +687,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             SelectedEarningComponentId = null
         };
 
-        // Act & Assert — domain requires selectedEarningComponentId for percentage mode
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _earningComponentAppService.CreateAsync(input);
         });
@@ -714,8 +709,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             SelectedEarningComponentId = baseComponent.Id
         };
 
-        // Act & Assert — domain rejects null percentage
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _earningComponentAppService.CreateAsync(input);
         });

@@ -127,6 +127,12 @@ public class PersonalInfoResponse : PersonalInfoRequest
 
 	[Required]
 	public string FullName { get; set; } = string.Empty;
+
+	/// <summary>
+	/// True when the employee has a profile picture stored in blob storage.
+	/// Use GET /api/employees/{id}/profile-picture to download.
+	/// </summary>
+	public bool HasProfilePicture { get; set; }
 }
 
 /// <summary>

@@ -115,7 +115,7 @@ public class EarningComponentApi_Tests : ShikshaMitraApiTestBase
 	{
 		var response = await Client.GetAsync($"{BaseUrl}/{Guid.NewGuid()}");
 
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.NotFound, HttpStatusCode.InternalServerError);
+		response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 	}
 
 	[Fact]

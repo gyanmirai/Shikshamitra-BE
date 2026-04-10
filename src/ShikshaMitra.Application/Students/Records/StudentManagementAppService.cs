@@ -31,7 +31,7 @@ public class StudentManagementAppService(
 		try
 		{
 			// Get students with their additional details
-			var students = await studentRepository.GetListAsync(s => s.DivisionId == divisionId, includeDetails: true);
+			var students = await studentRepository.GetListAsync(s => s.DivisionId == divisionId && s.Status == StudentLifeCycleStatusEnum.Enrolled, includeDetails: true);
 
 			// Get arrangement settings for the division
 			var settings = await studentManagementSettingsRepository.FirstOrDefaultAsync(s => s.DivisionId == divisionId);

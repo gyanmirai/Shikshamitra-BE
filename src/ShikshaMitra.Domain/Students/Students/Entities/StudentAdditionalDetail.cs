@@ -28,10 +28,10 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public int? EntranceExamRoomNo { get; private set; }
 
 	// Exam Results
-	public decimal? EntranceExamTotalMarks { get; private set; }
-	public decimal? EntranceExamPassingMarks { get; private set; }
-	public decimal? EntranceExamObtainedMarks { get; private set; }
-	public decimal? EntranceExamPercentage { get; private set; }
+	public double? EntranceExamTotalMarks { get; private set; }
+	public double? EntranceExamPassingMarks { get; private set; }
+	public double? EntranceExamObtainedMarks { get; private set; }
+	public double? EntranceExamPercentage { get; private set; }
 	public EntranceExamStatusEnum? EntranceExamStatus { get; private set; }
 	public DateTimeOffset? EntranceExamResultDate { get; private set; }
 
@@ -222,36 +222,10 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	/// Records entrance exam result
 	/// </summary>
 	public void RecordExamResult(
-		decimal totalMarks,
-		decimal passingMarks,
-		decimal obtainedMarks)
+		double totalMarks,
+		double passingMarks,
+		double obtainedMarks)
 	{
-        // Validate inputs to guard against division by zero and negative values
-        if (totalMarks <= 0)
-        {
-            throw new ArgumentException("Total marks must be greater than zero.", nameof(totalMarks));
-        }
-
-        if (passingMarks < 0)
-        {
-            throw new ArgumentException("Passing marks cannot be negative.", nameof(passingMarks));
-        }
-
-        if (obtainedMarks < 0)
-        {
-            throw new ArgumentException("Obtained marks cannot be negative.", nameof(obtainedMarks));
-        }
-
-		if (obtainedMarks > totalMarks)
-		{
-			throw new ArgumentException("Obtained marks cannot exceed total marks.");
-		}
-
-		if (passingMarks > totalMarks)
-		{
-			throw new ArgumentException("Passing marks cannot exceed total marks.");
-		}
-
 		EntranceExamTotalMarks = totalMarks;
 		EntranceExamPassingMarks = passingMarks;
 		EntranceExamObtainedMarks = obtainedMarks;

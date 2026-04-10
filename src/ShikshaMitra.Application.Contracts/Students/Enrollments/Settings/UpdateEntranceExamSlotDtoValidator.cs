@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using System;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Settings;
@@ -11,15 +11,12 @@ public class UpdateEntranceExamSlotDtoValidator : AbstractValidator<UpdateEntran
 			.MaximumLength(100)
 			.When(x => x.SlotName != null);
 
-		RuleFor(x => x.Date)
-			.NotEmpty();
+		RuleFor(x => x.StartDateTime)
+			.NotEqual(DateTimeOffset.MinValue);
 
-		RuleFor(x => x.StartTime)
-			.NotEqual(TimeSpan.Zero);
-
-		RuleFor(x => x.EndTime)
-			.NotEqual(TimeSpan.Zero)
-			.GreaterThan(x => x.StartTime)
+		RuleFor(x => x.EndDateTime)
+			.NotEqual(DateTimeOffset.MinValue)
+			.GreaterThan(x => x.StartDateTime)
 			.WithMessage("End time must be after start time.");
 
 		RuleFor(x => x.StudentLimit)

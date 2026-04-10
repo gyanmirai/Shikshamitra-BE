@@ -2,7 +2,7 @@
 
 public class UploadEntranceExamResultDto
 {
-	public decimal TotalMarks { get; set; }
-	public decimal PassingMarks { get; set; }
-	public decimal ObtainedMarks { get; set; }
+	public double TotalMarks { get; set; }
+	public double PassingMarks { get; set; }
+	public double ObtainedMarks { get; set; }
 }

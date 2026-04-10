@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.Enrollments.Admissions;
 using ShikshaMitra.Students.Enrollments.EntranceExams;
+using ShikshaMitra.Students.StudentEnrollments.Managers;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -30,7 +31,8 @@ public class StudentEnrollmentEntranceExamAppService(
 	IRepository<EntranceExamSlot, Guid> entranceExamSlotRepository,
 	IRepository<EducationMedium, Guid> educationMediumRepository,
 	IRepository<Standard, Guid> standardRepository,
-	IRepository<EducationBoard, Guid> educationBoardRepository) : ShikshaMitraAppService, IStudentEnrollmentEntranceExamAppService
+	IRepository<EducationBoard, Guid> educationBoardRepository,
+	EntranceExamManager entranceExamManager) : ShikshaMitraAppService, IStudentEnrollmentEntranceExamAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.View)]
 	public async Task<PagedResultDto<EntranceExamStudentDto>> GetListAsync(GetEntranceExamStudentsInput input)
@@ -60,37 +62,27 @@ public class StudentEnrollmentEntranceExamAppService(
 
 		studentQueryable = studentQueryable.Skip(input.SkipCount).Take(input.MaxResultCount);
 
-		var results = await AsyncExecuter.ToListAsync(studentQueryable);
-		var items = results.Select(result =>
+		var results = await AsyncExecuter.ToListAsync(studentQueryable.Select(x => new EntranceExamStudentDto
 		{
-			var startTime = result.AdditionalDetail.EntranceExamStartDateTime?.TimeOfDay;
-			var endTime = result.AdditionalDetail.EntranceExamEndDateTime?.TimeOfDay;
-			return new EntranceExamStudentDto
-			{
-				StudentId = result.Id,
-				StudentName = BuildStudentName(result.FirstName, result.MiddleName, result.LastName),
-				EducationBoard = result.AcademicBoard.Type.ToString(),
-				EducationMedium = result.AcademicMedium.Name,
-				Standard = result.Standard?.Name ?? string.Empty,
-				ExamDate = result.AdditionalDetail.EntranceExamStartDateTime?.DateTime,
-				ExamStartTime = startTime,
-				ExamEndTime = endTime,
-				ExamTime = startTime.HasValue && endTime.HasValue
-					? $"{startTime.Value:hh\\:mm} to {endTime.Value:hh\\:mm}"
-					: null,
-				ExamRoomNo = result.AdditionalDetail.EntranceExamRoomNo,
-				TotalMarks = result.AdditionalDetail.EntranceExamTotalMarks,
-				PassingMarks = result.AdditionalDetail.EntranceExamPassingMarks,
-				ObtainedMarks = result.AdditionalDetail.EntranceExamObtainedMarks,
-				Percentage = result.AdditionalDetail.EntranceExamPercentage,
-				ExamStatus = result.AdditionalDetail.EntranceExamStatus,
-				ExamStatusDisplay = result.AdditionalDetail.EntranceExamStatus?.ToString() ?? "Not Scheduled",
-				EnrollmentState = result.Status,
-				Progress = CalculateRegistrationProgressPercentage(result.AdditionalDetail.StudentRegistrationState)
-			};
-		}).ToList();
+			StudentId = x.Id,
+			StudentName = x.FirstName + " " + x.MiddleName + " " + x.LastName,
+			EducationBoard = x.AcademicBoard.Type.ToString(),
+			EducationMedium = x.AcademicMedium.Name,
+			Standard = x.Standard != null ? x.Standard.Name : string.Empty,
+			ExamStartTime = x.AdditionalDetail.EntranceExamStartDateTime,
+			ExamEndTime = x.AdditionalDetail.EntranceExamEndDateTime,
+			ExamRoomNo = x.AdditionalDetail.EntranceExamRoomNo,
+			TotalMarks = x.AdditionalDetail.EntranceExamTotalMarks,
+			PassingMarks = x.AdditionalDetail.EntranceExamPassingMarks,
+			ObtainedMarks = x.AdditionalDetail.EntranceExamObtainedMarks,
+			Percentage = x.AdditionalDetail.EntranceExamPercentage,
+			ExamStatus = x.AdditionalDetail.EntranceExamStatus,
+			Progress = CalculateRegistrationProgressPercentage(x.AdditionalDetail.StudentRegistrationState),
+			ExamStatusDisplay = x.AdditionalDetail.EntranceExamStatus != null ? x.AdditionalDetail.EntranceExamStatus.ToString() : "Not Scheduled",
+			EnrollmentState = x.Status
+		}));
 
-		return new PagedResultDto<EntranceExamStudentDto>(totalCount, items);
+		return new PagedResultDto<EntranceExamStudentDto>(totalCount, results);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.View)]
@@ -129,29 +121,9 @@ public class StudentEnrollmentEntranceExamAppService(
 	{
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true) ?? throw new EntityNotFoundException(typeof(Student), studentId);
 
-		if (student.Status != StudentLifeCycleStatusEnum.RegistrationFormIssued &&
-		    student.Status != StudentLifeCycleStatusEnum.Registation)
-		{
-			throw new BusinessException("SM:EntranceExam:001")
-				.WithData("currentStatus", student.Status.ToString())
-				.WithData("requiredStatus", StudentLifeCycleStatusEnum.RegistrationFormIssued.ToString());
-		}
-
 		var slot = await entranceExamSlotRepository.GetAsync(input.EntranceExamSlotId);
 
-		var enrolledCount = await GetEnrolledStudentsCountInSlotAsync(input.EntranceExamSlotId);
-		if (enrolledCount >= slot.StudentLimit)
-		{
-			throw new BusinessException("SM:EntranceExam:002")
-				.WithData("slotId", input.EntranceExamSlotId)
-				.WithData("capacity", slot.StudentLimit);
-		}
-
-		if (student.AdditionalDetail?.EntranceExamSlotId.HasValue == true)
-		{
-			throw new BusinessException("SM:EntranceExam:003")
-				.WithData("existingSlotId", student.AdditionalDetail.EntranceExamSlotId.Value);
-		}
+		await entranceExamManager.ValidateScheduling(student.Id, slot.Id);
 
 		student.ScheduleEntranceExam(slot.Id, slot.StartDate, slot.EndDate, slot.RoomNo);
 		await studentRepository.UpdateAsync(student, autoSave: true);
@@ -160,34 +132,8 @@ public class StudentEnrollmentEntranceExamAppService(
 	public async Task<EntranceExamResultResponseDto> UploadResultAsync(Guid studentId, UploadEntranceExamResultDto input)
 	{
 		var student = await studentRepository.GetAsync(studentId) ?? throw new EntityNotFoundException(typeof(Student), studentId);
-		var additionalDetail = await studentAdditionalDetailRepository.GetAsync(studentId) ?? throw new EntityNotFoundException(typeof(StudentAdditionalDetail), studentId);
 
-		if (student.Status != StudentLifeCycleStatusEnum.EntranceExam)
-		{
-			throw new BusinessException("SM:EntranceExam:004")
-				.WithData("currentStatus", student.Status.ToString())
-				.WithData("requiredStatus", StudentLifeCycleStatusEnum.EntranceExam.ToString());
-		}
-
-		if (!additionalDetail.EntranceExamStartDateTime.HasValue)
-		{
-			throw new BusinessException("SM:EntranceExam:005")
-				.WithData("studentId", studentId);
-		}
-
-		if (input.ObtainedMarks > input.TotalMarks)
-		{
-			throw new BusinessException("SM:EntranceExam:006")
-				.WithData("obtainedMarks", input.ObtainedMarks)
-				.WithData("totalMarks", input.TotalMarks);
-		}
-
-		if (input.PassingMarks > input.TotalMarks)
-		{
-			throw new BusinessException("SM:EntranceExam:007")
-				.WithData("passingMarks", input.PassingMarks)
-				.WithData("totalMarks", input.TotalMarks);
-		}
+		await entranceExamManager.ValidateResultUpload(student.Id, input.TotalMarks, input.PassingMarks, input.ObtainedMarks);
 
 		student.AdditionalDetail.RecordExamResult(input.TotalMarks, input.PassingMarks, input.ObtainedMarks);
 		await studentRepository.UpdateAsync(student, autoSave: true);
@@ -199,9 +145,9 @@ public class StudentEnrollmentEntranceExamAppService(
 			TotalMarks = input.TotalMarks,
 			PassingMarks = input.PassingMarks,
 			ObtainedMarks = input.ObtainedMarks,
-			Percentage = additionalDetail.EntranceExamPercentage!.Value,
-			ExamStatus = additionalDetail.EntranceExamStatus!.Value,
-			ResultDate = additionalDetail.EntranceExamResultDate!.Value.DateTime
+			Percentage = student.AdditionalDetail.EntranceExamPercentage!.Value,
+			ExamStatus = student.AdditionalDetail.EntranceExamStatus!.Value,
+			ResultDate = student.AdditionalDetail.EntranceExamResultDate!.Value.DateTime
 		};
 	}
 
@@ -224,8 +170,7 @@ public class StudentEnrollmentEntranceExamAppService(
 
 		if (!IsStudentAllowedToMoveToAdmission(student))
 		{
-			throw new BusinessException("SM:EntranceExam:008")
-				.WithData("currentStatus", student.Status.ToString());
+			throw new UserFriendlyException("Student is not in a valid state to move to admission.");
 		}
 
 		student.MoveToAdmission();
@@ -274,7 +219,7 @@ public class StudentEnrollmentEntranceExamAppService(
 	{
 		var progress = CalculateRegistrationProgressPercentage(student.AdditionalDetail!.StudentRegistrationState);
 
-		if (student.Status == StudentLifeCycleStatusEnum.Registation &&
+		if (student.Status == StudentLifeCycleStatusEnum.Registration &&
 		    progress >= EnrollmentConsts.MoveToAdmissionThreasold)
 		{
 			return true;
@@ -288,12 +233,6 @@ public class StudentEnrollmentEntranceExamAppService(
 		}
 
 		return false;
-	}
-
-	private async Task<int> GetEnrolledStudentsCountInSlotAsync(Guid slotId)
-	{
-		var queryable = await studentAdditionalDetailRepository.GetQueryableAsync();
-		return await AsyncExecuter.CountAsync(queryable.Where(sd => sd.EntranceExamSlotId == slotId));
 	}
 
 	private static string BuildStudentName(string? firstName, string? middleName, string? lastName)

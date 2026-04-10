@@ -60,7 +60,6 @@
     <Folder Include="Students\Attendance\Entities\" />
     <Folder Include="Students\Attendance\Managers\" />
     <Folder Include="Students\Attendance\Repositories\" />
-    <Folder Include="Students\StudentEnrollments\Managers\" />
     <Folder Include="Students\StudentEnrollments\Repositories\" />
     <Folder Include="Students\StudentEnrollments\StudentInquiries\" />
     <Folder Include="Students\Fees\Aggregates\" />

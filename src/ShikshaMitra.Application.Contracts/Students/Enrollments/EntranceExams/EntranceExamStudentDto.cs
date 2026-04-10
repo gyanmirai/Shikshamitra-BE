@@ -13,15 +13,13 @@ public class EntranceExamStudentDto
 	public string EducationBoard { get; set; }
 	public string EducationMedium { get; set; }
 	public string Standard { get; set; }
-	public DateTime? ExamDate { get; set; }
-	public string ExamTime { get; set; }
-	public TimeSpan? ExamStartTime { get; set; }
-	public TimeSpan? ExamEndTime { get; set; }
+	public DateTimeOffset? ExamStartTime { get; set; }
+	public DateTimeOffset? ExamEndTime { get; set; }
 	public int? ExamRoomNo { get; set; }
-	public decimal? TotalMarks { get; set; }
-	public decimal? PassingMarks { get; set; }
-	public decimal? ObtainedMarks { get; set; }
-	public decimal? Percentage { get; set; }
+	public double? TotalMarks { get; set; }
+	public double? PassingMarks { get; set; }
+	public double? ObtainedMarks { get; set; }
+	public double? Percentage { get; set; }
 	public double Progress { get; set; } // Enrollment progress percentage
 	public EntranceExamStatusEnum? ExamStatus { get; set; }
     public string ExamStatusDisplay { get; set; }

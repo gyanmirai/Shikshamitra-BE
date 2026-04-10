@@ -14,7 +14,7 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20260410050920_v5")]
+    [Migration("20260410083626_v5")]
     partial class v5
     {
         /// <inheritdoc />
@@ -11035,7 +11035,6 @@ namespace ShikshaMitra.Migrations
                     b.OwnsMany("ShikshaMitra.HR.Employees.EmployeeDocument", "Documents", b1 =>
                         {
                             b1.Property<Guid>("Id")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("uuid");
 
                             b1.Property<string>("BlobName")

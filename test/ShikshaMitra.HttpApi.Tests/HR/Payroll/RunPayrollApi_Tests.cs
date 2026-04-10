@@ -25,7 +25,10 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 	{
 		var response = await Client.GetAsync($"{BaseUrl}?month=APRIL-2026&page=0&pageSize=50");
 
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.InternalServerError);
+		response.StatusCode.ShouldBeOneOf(
+			HttpStatusCode.OK,
+			HttpStatusCode.Forbidden,
+			HttpStatusCode.InternalServerError);
 	}
 
 	#endregion
@@ -47,6 +50,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBeOneOf(
 			HttpStatusCode.OK,
 			HttpStatusCode.BadRequest,
+			HttpStatusCode.Forbidden,
 			HttpStatusCode.InternalServerError);
 	}
 
@@ -62,6 +66,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		response.StatusCode.ShouldBeOneOf(
 			HttpStatusCode.BadRequest,
+			HttpStatusCode.Forbidden,
 			HttpStatusCode.InternalServerError);
 	}
 

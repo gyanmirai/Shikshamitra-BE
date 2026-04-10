@@ -28,7 +28,7 @@ public class HolidayApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Create_Holiday()
 	{
 		var holidayType = await CalendarTestHelper.CreateHolidayTypeAsync(Client, "HolCreate");
-		var academicYearId = Guid.NewGuid();
+		var academicYearId = Factory.SeededAcademicYearId;
 
 		var input = new CreateUpdateHolidayDto
 		{
@@ -152,7 +152,7 @@ public class HolidayApi_Tests : ShikshaMitraApiTestBase
 	private async Task<HolidayDto> CreateHolidayAsync(string suffix)
 	{
 		var holidayType = await CalendarTestHelper.CreateHolidayTypeAsync(Client, suffix);
-		var academicYearId = Guid.NewGuid();
+		var academicYearId = Factory.SeededAcademicYearId;
 
 		var input = new CreateUpdateHolidayDto
 		{

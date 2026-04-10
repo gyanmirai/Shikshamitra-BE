@@ -11032,7 +11032,6 @@ namespace ShikshaMitra.Migrations
                     b.OwnsMany("ShikshaMitra.HR.Employees.EmployeeDocument", "Documents", b1 =>
                         {
                             b1.Property<Guid>("Id")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("uuid");
 
                             b1.Property<string>("BlobName")

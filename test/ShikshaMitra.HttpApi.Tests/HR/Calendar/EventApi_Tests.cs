@@ -29,7 +29,7 @@ public class EventApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Create_Event()
 	{
 		var eventType = await CalendarTestHelper.CreateEventTypeAsync(Client, "EvtCreate");
-		var academicYearId = Guid.NewGuid();
+		var academicYearId = Factory.SeededAcademicYearId;
 
 		var input = new CreateUpdateEventDto
 		{
@@ -157,7 +157,7 @@ public class EventApi_Tests : ShikshaMitraApiTestBase
 	private async Task<EventDto> CreateEventAsync(string suffix)
 	{
 		var eventType = await CalendarTestHelper.CreateEventTypeAsync(Client, suffix);
-		var academicYearId = Guid.NewGuid();
+		var academicYearId = Factory.SeededAcademicYearId;
 
 		var input = new CreateUpdateEventDto
 		{

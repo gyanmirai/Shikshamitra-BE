@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -86,9 +87,12 @@ public static class EmployeeTestHelper
 	/// </summary>
 	public static async Task<DocumentCreateResponse> CreateDocumentConfigAsync(HttpClient client)
 	{
+		// Title must match ^[A-Za-z ]+; suffix must stay alphabetic (shared in-memory DB across tests).
+		var suffix = Guid.NewGuid().ToString("N")[..6]
+			.Aggregate("", (s, c) => s + (char.IsDigit(c) ? (char)('a' + (c - '0')) : c));
 		var request = new DocumentRequest
 		{
-			Title = "Test Document",
+			Title = $"Test Document {suffix}",
 			DocumentSize = 5,
 			DocumentTypes = new List<int> { 1, 2, 4 },
 		};

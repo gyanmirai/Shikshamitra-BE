@@ -65,7 +65,7 @@ public partial class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContex
 		builder.ConfigureFeatureManagement();
 		builder.ConfigureTenantManagement();
 
-		// Ignore owned entities BEFORE ApplyConfigurationsFromAssembly
+		// Ignore owned types before ApplyConfigurations so they are not also discovered as root entities.
 		builder.Ignore<EmployeeDocument>();
 		builder.Ignore<AllocatedTeacher>();
 

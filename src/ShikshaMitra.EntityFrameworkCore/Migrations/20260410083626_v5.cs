@@ -126,27 +126,6 @@ namespace ShikshaMitra.Migrations
                 table: "AppStudentAdditionalDetails",
                 column: "InquiryPreferenceId");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_ProvidentFunds_TenantId_Code",
-                table: "AppProvidentFunds",
-                columns: new[] { "TenantId", "Code" },
-                unique: true,
-                filter: "\"IsDeleted\" = false");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_EarningComponents_TenantId_Name",
-                table: "AppEarningComponents",
-                columns: new[] { "TenantId", "Name" },
-                unique: true,
-                filter: "\"IsDeleted\" = false");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_DeductionComponents_TenantId_Name",
-                table: "AppDeductionComponents",
-                columns: new[] { "TenantId", "Name" },
-                unique: true,
-                filter: "\"IsDeleted\" = false");
-
             migrationBuilder.AddForeignKey(
                 name: "FK_AppStudentAdditionalDetails_AppInquiryPreferences_InquiryPr~",
                 table: "AppStudentAdditionalDetails",

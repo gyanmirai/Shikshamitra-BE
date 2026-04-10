@@ -36,12 +36,12 @@ jobs:
       run: dotnet build --configuration Release
 
     # ⭐ Run Critical API Tests before deployment
-    # - name: Run Critical API Tests
-    #   run: >
-    #     dotnet test test/ShikshaMitra.HttpApi.Tests
-    #     --configuration Release
-    #     --no-build
-    #     --filter "Tier=Critical"
+    - name: Run Critical API Tests
+      run: >
+        dotnet test test/ShikshaMitra.HttpApi.Tests
+        --configuration Release
+        --no-build
+        --filter "Tier=Critical"
 
     # ⭐ Run ABP DbMigrator
     - name: Run DbMigrator

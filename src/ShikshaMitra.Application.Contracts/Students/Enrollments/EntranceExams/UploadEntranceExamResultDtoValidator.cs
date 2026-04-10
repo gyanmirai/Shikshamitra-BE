@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 
 namespace ShikshaMitra.Students.Enrollments.EntranceExams;
 
@@ -7,15 +7,15 @@ public class UploadEntranceExamResultDtoValidator : AbstractValidator<UploadEntr
 	public UploadEntranceExamResultDtoValidator()
 	{
 		RuleFor(x => x.TotalMarks)
-			.InclusiveBetween(1m, 1000m);
+			.InclusiveBetween(1.0, 2000.0);
 
 		RuleFor(x => x.PassingMarks)
-			.InclusiveBetween(0m, 1000m)
+			.InclusiveBetween(0.0, 2000.0)
 			.LessThanOrEqualTo(x => x.TotalMarks)
 			.WithMessage("Passing marks must not exceed total marks.");
 
 		RuleFor(x => x.ObtainedMarks)
-			.InclusiveBetween(0m, 1000m)
+			.InclusiveBetween(0.0, 2000.0)
 			.LessThanOrEqualTo(x => x.TotalMarks)
 			.WithMessage("Obtained marks must not exceed total marks.");
 	}

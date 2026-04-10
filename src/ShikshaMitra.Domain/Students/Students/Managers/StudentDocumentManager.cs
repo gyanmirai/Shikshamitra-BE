@@ -230,7 +230,7 @@ public class StudentDocumentManager : DomainService
 		var validStatuses = new[]
 		{
 			StudentLifeCycleStatusEnum.RegistrationFormIssued,
-			StudentLifeCycleStatusEnum.Registation
+			StudentLifeCycleStatusEnum.Registration
 		};
 
 		if (!validStatuses.Contains(student.Status))

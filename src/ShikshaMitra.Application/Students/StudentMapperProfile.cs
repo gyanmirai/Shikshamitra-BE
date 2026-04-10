@@ -20,12 +20,10 @@ public class StudentMapperProfile : Profile
 	{
 		// Entrance Exam Slot mappings
 		CreateMap<EntranceExamSlot, EntranceExamSlotDto>()
-			.ForMember(dest => dest.Date,
-				opt => opt.MapFrom(src => src.StartDate.Date))
-			.ForMember(dest => dest.StartTime,
-				opt => opt.MapFrom(src => src.StartDate.TimeOfDay))
-			.ForMember(dest => dest.EndTime,
-				opt => opt.MapFrom(src => src.EndDate.TimeOfDay))
+			.ForMember(dest => dest.StartDateTime,
+				opt => opt.MapFrom(src => src.StartDate))
+			.ForMember(dest => dest.EndDateTime,
+				opt => opt.MapFrom(src => src.EndDate))
 			.ForMember(dest => dest.Duration,
 				opt => opt.MapFrom(src => (int)(src.EndDate - src.StartDate).TotalMinutes))
 			.ForMember(dest => dest.EnrolledStudents,
@@ -113,7 +111,7 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.StudentId, opt => opt.MapFrom(src => src.Id))
 			.ForMember(dest => dest.FormNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.RegistrationFormNo : null))
 			.ForMember(dest => dest.AcademicMediumId, opt => opt.MapFrom(src => src.AcademicMediumId))
-			.ForMember(dest => dest.AcademicBoardId, opt => opt.Ignore())
+			.ForMember(dest => dest.AcademicBoardId, opt => opt.MapFrom(src => src.AcademicBoardId))
 			.ForMember(dest => dest.AcademicYearId, opt => opt.MapFrom(src => src.AcademicYearId))
 			.ForMember(dest => dest.StandardId, opt => opt.MapFrom(src => src.StandardId))
 			.ForMember(dest => dest.DateOfBirth, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.DateOfBirth : null))

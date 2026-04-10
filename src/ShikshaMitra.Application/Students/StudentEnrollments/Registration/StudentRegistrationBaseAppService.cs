@@ -22,7 +22,7 @@ public abstract class StudentRegistrationBaseAppService(
     protected static readonly StudentLifeCycleStatusEnum[] RegistrationStatuses =
     [
         StudentLifeCycleStatusEnum.RegistrationFormIssued,
-        StudentLifeCycleStatusEnum.Registation
+        StudentLifeCycleStatusEnum.Registration
     ];
 
     /// <summary>

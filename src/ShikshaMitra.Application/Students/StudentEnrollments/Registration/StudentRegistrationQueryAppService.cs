@@ -68,7 +68,7 @@ public class StudentRegistrationQueryAppService(
 		);
 
 		var query = queryable
-            .Where(s => s.Status == StudentLifeCycleStatusEnum.Registation
+            .Where(s => s.Status == StudentLifeCycleStatusEnum.Registration
                 && s.AcademicMediumId == academicMediumId
                 && s.TenantId == CurrentTenant.Id);
 

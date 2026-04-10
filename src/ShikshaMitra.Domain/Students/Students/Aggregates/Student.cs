@@ -218,7 +218,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			educationMediumStageId,
 			standardId,
 			divisionId,
-			status: StudentLifeCycleStatusEnum.Registation
+			status: StudentLifeCycleStatusEnum.Registration
 		);
 
 		// Create aggregate parts - they share the same ID as the root
@@ -401,7 +401,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Schedules the student for entrance exam using a slot.
 	/// Allowed from <see cref="StudentLifeCycleStatusEnum.RegistrationFormIssued"/> (inquiry path)
-	/// and <see cref="StudentLifeCycleStatusEnum.Registation"/> (direct registration path).
+	/// and <see cref="StudentLifeCycleStatusEnum.Registration"/> (direct registration path).
 	/// </summary>
 	public void ScheduleEntranceExam(
 		Guid entranceExamSlotId,
@@ -410,7 +410,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		int slotRoomNo)
 	{
 		if (Status != StudentLifeCycleStatusEnum.RegistrationFormIssued &&
-		    Status != StudentLifeCycleStatusEnum.Registation)
+		    Status != StudentLifeCycleStatusEnum.Registration)
 		{
 			throw new InvalidOperationException(
 				$"Cannot schedule entrance exam. Student must be in RegistrationFormIssued or Registration status. Current status: {Status}");
@@ -439,12 +439,6 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// </summary>
 	public void AssignDivision(Guid divisionId)
 	{
-		if (Status != StudentLifeCycleStatusEnum.Admission)
-		{
-			throw new InvalidOperationException(
-				$"Cannot assign division. Student must be in Admission status. Current status: {Status}");
-		}
-
 		DivisionId = divisionId;
 	}
 
@@ -457,11 +451,6 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		{
 			throw new InvalidOperationException(
 				$"Cannot approve admission. Student must be in Admission status. Current status: {Status}");
-		}
-
-		if (AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved)
-		{
-			throw new InvalidOperationException("Student admission is already approved.");
 		}
 
 		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Approved;
@@ -479,17 +468,18 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				$"Cannot reject admission. Student must be in Admission status. Current status: {Status}");
 		}
 
-		if (string.IsNullOrWhiteSpace(remarks))
-		{
-			throw new ArgumentException("Remarks are required when rejecting admission.", nameof(remarks));
-		}
-
-		if (AdmissionApprovalStatus == StudentEnrollmentApprovalState.Rejected)
-		{
-			throw new InvalidOperationException("Student admission is already rejected.");
-		}
-
 		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Rejected;
+		AdmissionApprovalRemarks = remarks;
+	}
+
+	public void MoveToPendingAdmission(string remarks)
+	{
+		if (Status != StudentLifeCycleStatusEnum.Admission)
+		{
+			throw new InvalidOperationException(
+				$"Cannot move to pending admission. Student must be in Admission status. Current status: {Status}");
+		}
+		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Pending;
 		AdmissionApprovalRemarks = remarks;
 	}
 

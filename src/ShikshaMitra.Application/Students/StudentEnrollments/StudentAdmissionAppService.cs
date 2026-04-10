@@ -13,11 +13,11 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
-using Volo.Abp.ObjectMapping;
 using Volo.Abp.Identity;
 using Volo.Abp.Guids;
 using Volo.Abp.Domain.Entities;
 using ShikshaMitra.Students.ValueObjects;
+using ShikshaMitra.Students.StudentEnrollments.Managers;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
@@ -26,28 +26,14 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 /// </summary>
 [Authorize]
 [RemoteService(false)]
-public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionAppService
+public class StudentAdmissionAppService(
+	IRepository<Student, Guid> studentRepository,
+	IRepository<Division, Guid> divisionRepository,
+	IdentityUserManager userManager,
+	IGuidGenerator guidGenerator,
+	IStudentEmailService studentEmailService,
+	AdmissionManager admissionManager) : ApplicationService, IStudentAdmissionAppService
 {
-	private readonly IRepository<Student, Guid> studentRepository;
-	private readonly IRepository<Division, Guid> divisionRepository;
-	private readonly IdentityUserManager userManager;
-	private readonly IGuidGenerator guidGenerator;
-	private readonly IStudentEmailService studentEmailService;
-
-	public StudentAdmissionAppService(
-		IRepository<Student, Guid> studentRepository,
-		IRepository<Division, Guid> divisionRepository,
-		IdentityUserManager userManager,
-		IGuidGenerator guidGenerator,
-		IStudentEmailService studentEmailService)
-	{
-		this.studentRepository = studentRepository;
-		this.divisionRepository = divisionRepository;
-		this.userManager = userManager;
-		this.guidGenerator = guidGenerator;
-		this.studentEmailService = studentEmailService;
-	}
-
 	/// <summary>
 	/// Gets a paginated list of students in admission stage with filters
 	/// </summary>
@@ -75,11 +61,10 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 
 		// Apply sorting and paging
 		query = query.OrderByDescending(s => s.CreationTime)
-			.Skip(input.SkipCount)
-			.Take(input.MaxResultCount);
+			.PageBy(input.SkipCount, input.MaxResultCount);
 
 		// Execute query and project to DTO
-		var students = await studentRepository.AsyncExecuter.ToListAsync(
+		var students = await AsyncExecuter.ToListAsync(
 			query
 		);
 
@@ -94,16 +79,10 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.Add)]
 	public async Task AssignDivisionAsync(Guid studentId, AssignDivisionDto input)
 	{
-		// Validate division exists
-		var divisionExists = await divisionRepository.AnyAsync(d => d.Id == input.DivisionId);
-		if (!divisionExists)
-		{
-			throw new BusinessException("StudentAdmission:DivisionNotFound")
-				.WithData("DivisionId", input.DivisionId);
-		}
+		await admissionManager.CanAssignDivisionAsync(studentId, input.DivisionId);
 
 		// Get student
-		var student = await studentRepository.GetAsync(studentId);
+		var student = await studentRepository.GetAsync(studentId) ?? throw new Exception($"Student with ID {studentId} does not exist.");
 
 		// Assign division using domain method
 		student.AssignDivision(input.DivisionId);
@@ -135,7 +114,7 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 
 				if (student == null)
 				{
-					throw new EntityNotFoundException(typeof(Student), item.StudentId);
+					throw new Exception($"Student with ID {item.StudentId} does not exist.");
 				}
 
 				// Apply action
@@ -154,22 +133,15 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 				}
 				else if (item.Action == AdmissionAction.Reject)
 				{
-					if (string.IsNullOrWhiteSpace(item.Remarks))
-					{
-						throw new BusinessException("StudentAdmission:RemarksRequired")
-							.WithData("StudentId", item.StudentId);
-					}
-
 					student.RejectAdmission(item.Remarks);
 					itemResult.NewStatus = StudentEnrollmentApprovalState.Rejected.ToString();
 					itemResult.Message = "Admission rejected successfully";
 				}
 				else
 				{
-					// Explicitly handle invalid/unsupported actions
-					throw new BusinessException("StudentAdmission:InvalidAction")
-						.WithData("StudentId", item.StudentId)
-						.WithData("Action", item.Action);
+					student.MoveToPendingAdmission(item.Remarks);
+					itemResult.NewStatus = StudentEnrollmentApprovalState.Pending.ToString();
+					itemResult.Message = "Admission moved to pending successfully";
 				}
 
 				// Save changes

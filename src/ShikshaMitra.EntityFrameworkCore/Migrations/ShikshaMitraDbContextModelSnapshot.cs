@@ -6699,14 +6699,14 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTimeOffset?>("EntranceExamEndDateTime")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<decimal?>("EntranceExamObtainedMarks")
-                        .HasColumnType("numeric");
+                    b.Property<double?>("EntranceExamObtainedMarks")
+                        .HasColumnType("double precision");
 
-                    b.Property<decimal?>("EntranceExamPassingMarks")
-                        .HasColumnType("numeric");
+                    b.Property<double?>("EntranceExamPassingMarks")
+                        .HasColumnType("double precision");
 
-                    b.Property<decimal?>("EntranceExamPercentage")
-                        .HasColumnType("numeric");
+                    b.Property<double?>("EntranceExamPercentage")
+                        .HasColumnType("double precision");
 
                     b.Property<DateTimeOffset?>("EntranceExamResultDate")
                         .HasColumnType("timestamp with time zone");
@@ -6723,8 +6723,8 @@ namespace ShikshaMitra.Migrations
                     b.Property<int?>("EntranceExamStatus")
                         .HasColumnType("integer");
 
-                    b.Property<decimal?>("EntranceExamTotalMarks")
-                        .HasColumnType("numeric");
+                    b.Property<double?>("EntranceExamTotalMarks")
+                        .HasColumnType("double precision");
 
                     b.Property<string>("FamilyCast")
                         .IsRequired()

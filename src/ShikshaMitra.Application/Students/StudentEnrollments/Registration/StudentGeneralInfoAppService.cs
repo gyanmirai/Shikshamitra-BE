@@ -78,9 +78,9 @@ public class StudentGeneralInfoAppService(
             input.Pincode
         );
 
-        if (student.Status != StudentLifeCycleStatusEnum.Registation)
+        if (student.Status != StudentLifeCycleStatusEnum.Registration)
         {
-            student.ChangeStatus(StudentLifeCycleStatusEnum.Registation);
+            student.ChangeStatus(StudentLifeCycleStatusEnum.Registration);
         }
 
         await studentRepository.UpdateAsync(student, autoSave: true);
@@ -154,7 +154,7 @@ public class StudentGeneralInfoAppService(
             );
         }
 
-		student.ChangeStatus(StudentLifeCycleStatusEnum.Registation);
+		student.ChangeStatus(StudentLifeCycleStatusEnum.Registration);
 
 		await studentRepository.InsertAsync(student, autoSave: true);
 

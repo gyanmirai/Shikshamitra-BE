@@ -1,13 +1,12 @@
-﻿using System;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using ShikshaMitra.Constants.Permissions;
 using Volo.Abp.AspNetCore.Mvc;
+using ShikshaMitra.Students.Attendance;
 
-namespace ShikshaMitra.Students.Attendance;
+namespace ShikshaMitra.HttpApi.Controllers.Student.Attendance;
 
 /// <summary>
 /// REST API Controller for Student Leave management
@@ -17,7 +16,7 @@ namespace ShikshaMitra.Students.Attendance;
 [Route("api/students/attendance/leaves")]
 public class StudentLeaveController(
 	IStudentLeaveAppService studentLeaveAppService
-) : AbpControllerBase, IStudentLeaveAppService
+) : AbpControllerBase
 {
 	/// <summary>
 	/// Gets a paginated list of student leave requests

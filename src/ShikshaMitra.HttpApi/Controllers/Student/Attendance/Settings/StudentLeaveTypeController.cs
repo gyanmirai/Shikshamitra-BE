@@ -1,11 +1,12 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Students.Attendance.Settings;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
-namespace ShikshaMitra.Students.Attendance.Settings;
+namespace ShikshaMitra.HttpApi.Controllers.Student.Attendance.Settings;
 
 /// <summary>
 /// REST API Controller for Student Leave Type management
@@ -13,15 +14,8 @@ namespace ShikshaMitra.Students.Attendance.Settings;
 [RemoteService(Name = "Students")]
 [Area("students")]
 [Route("api/students/attendance/settings/leave-types")]
-public class StudentLeaveTypeController : AbpControllerBase, IStudentLeaveTypeAppService
+public class StudentLeaveTypeController(IStudentLeaveTypeAppService studentLeaveTypeAppService) : AbpControllerBase
 {
-	private readonly IStudentLeaveTypeAppService _studentLeaveTypeAppService;
-
-	public StudentLeaveTypeController(IStudentLeaveTypeAppService studentLeaveTypeAppService)
-	{
-		_studentLeaveTypeAppService = studentLeaveTypeAppService;
-	}
-
 	/// <summary>
 	/// Gets a paginated list of student leave types
 	/// GET: api/students/attendance/settings/leave-types
@@ -29,7 +23,7 @@ public class StudentLeaveTypeController : AbpControllerBase, IStudentLeaveTypeAp
 	[HttpGet]
 	public Task<PagedResultDto<StudentLeaveTypeDto>> GetListAsync([FromQuery] GetStudentLeaveTypeListInput input)
 	{
-		return _studentLeaveTypeAppService.GetListAsync(input);
+		return studentLeaveTypeAppService.GetListAsync(input);
 	}
 
 	/// <summary>
@@ -39,7 +33,7 @@ public class StudentLeaveTypeController : AbpControllerBase, IStudentLeaveTypeAp
 	[HttpGet("{id}")]
 	public Task<StudentLeaveTypeDto> GetAsync(Guid id)
 	{
-		return _studentLeaveTypeAppService.GetAsync(id);
+		return studentLeaveTypeAppService.GetAsync(id);
 	}
 
 	/// <summary>
@@ -49,7 +43,7 @@ public class StudentLeaveTypeController : AbpControllerBase, IStudentLeaveTypeAp
 	[HttpPost]
 	public Task<StudentLeaveTypeDto> CreateAsync([FromBody] CreateUpdateStudentLeaveTypeDto input)
 	{
-		return _studentLeaveTypeAppService.CreateAsync(input);
+		return studentLeaveTypeAppService.CreateAsync(input);
 	}
 
 	/// <summary>
@@ -59,7 +53,7 @@ public class StudentLeaveTypeController : AbpControllerBase, IStudentLeaveTypeAp
 	[HttpPut("{id}")]
 	public Task<StudentLeaveTypeDto> UpdateAsync(Guid id, [FromBody] CreateUpdateStudentLeaveTypeDto input)
 	{
-		return _studentLeaveTypeAppService.UpdateAsync(id, input);
+		return studentLeaveTypeAppService.UpdateAsync(id, input);
 	}
 
 	/// <summary>
@@ -69,7 +63,7 @@ public class StudentLeaveTypeController : AbpControllerBase, IStudentLeaveTypeAp
 	[HttpDelete("{id}")]
 	public Task DeleteAsync(Guid id)
 	{
-		return _studentLeaveTypeAppService.DeleteAsync(id);
+		return studentLeaveTypeAppService.DeleteAsync(id);
 	}
 
 	/// <summary>
@@ -79,6 +73,6 @@ public class StudentLeaveTypeController : AbpControllerBase, IStudentLeaveTypeAp
 	[HttpGet("active")]
 	public Task<ListResultDto<StudentLeaveTypeDto>> GetActiveListAsync()
 	{
-		return _studentLeaveTypeAppService.GetActiveListAsync();
+		return studentLeaveTypeAppService.GetActiveListAsync();
 	}
 }

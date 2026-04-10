@@ -16,7 +16,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 {
 	private const string BaseUrl = "/api/leave-policies";
-	private static readonly Guid TestMediumStageId = Guid.NewGuid();
+	private Guid TestMediumStageId => Factory.SeededMediumStageId;
 
 	public LeavePolicyApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
 

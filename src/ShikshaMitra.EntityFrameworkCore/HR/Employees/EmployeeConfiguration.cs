@@ -26,7 +26,7 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 		{
 			doc.ToTable(ShikshaMitraConsts.DbTablePrefix + "EmployeeDocuments", ShikshaMitraConsts.DbSchema);
 			doc.WithOwner().HasForeignKey("EmployeeId");
-			doc.Property<Guid>("Id");
+			doc.Property<Guid>("Id").ValueGeneratedNever();
 			doc.HasKey("Id");
 			doc.Property(d => d.DocumentNameId);
 			doc.HasIndex("EmployeeId", "DocumentNameId")

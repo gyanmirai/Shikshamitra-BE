@@ -26,6 +26,9 @@ public class AdditionalInfoApi_Tests : ShikshaMitraApiTestBase
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "AddInfoGet");
 
+		var seed = new AdditionalInfoContract { SecondLanguage = "Hindi" };
+		await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/additional-info", seed, JsonOptions);
+
 		var response = await Client.GetAsync($"{BaseUrl}/{empId}/additional-info");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);

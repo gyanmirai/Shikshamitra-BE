@@ -39,6 +39,8 @@ public class TestAuthHandler(
 			new(AbpClaimTypes.Email, TestEmail),
 			new(ClaimTypes.Name, TestUserName),
 			new(ClaimTypes.NameIdentifier, TestUserId),
+			new(AbpClaimTypes.Role, "admin"),
+			new(ClaimTypes.Role, "admin"),
 		};
 
 		if (!string.IsNullOrEmpty(TestTenantId))

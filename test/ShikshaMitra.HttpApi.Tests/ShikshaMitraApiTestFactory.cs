@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -19,7 +20,10 @@ using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Seeders;
 using ShikshaMitra.TenantSettings;
+using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using Volo.Abp.Auditing;
+using Volo.Abp.Security.Claims;
 using Volo.Abp.Authorization;
 using Volo.Abp.BackgroundJobs;
 using Volo.Abp.Data;
@@ -30,6 +34,7 @@ using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.PermissionManagement;
 using Volo.Abp.SettingManagement;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra;
 
@@ -44,6 +49,8 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 
 	public Guid SeededRoleId { get; private set; }
 	public Guid SeededShiftId { get; private set; }
+	public Guid SeededAcademicYearId { get; private set; }
+	public Guid SeededMediumStageId { get; private set; }
 
 	protected override IHost CreateHost(IHostBuilder builder)
 	{
@@ -51,11 +58,15 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 
 		Task.Run(async () =>
 		{
-			using var scope = host.Services.CreateScope();
-			var dataSeeder = scope.ServiceProvider.GetRequiredService<IDataSeeder>();
-			await dataSeeder.SeedAsync(new DataSeedContext());
+			// Seeding completes UoWs that dispose the scoped DbContext; resolve lookups in a new scope.
+			using (var seedScope = host.Services.CreateScope())
+			{
+				var dataSeeder = seedScope.ServiceProvider.GetRequiredService<IDataSeeder>();
+				await dataSeeder.SeedAsync(new DataSeedContext()).ConfigureAwait(false);
+			}
 
-			await ResolveSeededLookupsAsync(scope.ServiceProvider);
+			using var lookupScope = host.Services.CreateScope();
+			await ResolveSeededLookupsAsync(lookupScope.ServiceProvider).ConfigureAwait(false);
 		}).GetAwaiter().GetResult();
 
 		return host;
@@ -65,18 +76,36 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	{
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 		var currentTenant = services.GetRequiredService<ICurrentTenant>();
+		var uowManager = services.GetRequiredService<IUnitOfWorkManager>();
 
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 		using (currentTenant.Change(tenantId))
 		{
+			// Avoid GetListAsync on IIdentityRoleRepository: implementation can materialize heavy graphs
+			// and stall SQLite in-memory for many minutes.
 			var roleRepo = services.GetRequiredService<IIdentityRoleRepository>();
-			var roles = await roleRepo.GetListAsync();
-			var teacherRole = roles.FirstOrDefault(r => r.Name == "Teacher");
+			var lookupNormalizer = services.GetRequiredService<ILookupNormalizer>();
+			var teacherRole = await roleRepo.FindByNormalizedNameAsync(lookupNormalizer.NormalizeName("Teacher"));
 			SeededRoleId = teacherRole?.Id ?? Guid.Empty;
 
 			var shiftRepo = services.GetRequiredService<IRepository<ShiftManagement, Guid>>();
-			var shifts = await shiftRepo.GetListAsync();
-			var fullDayShift = shifts.FirstOrDefault(s => s.ShiftName == "Full Day Shift");
+			var fullDayShift = await (await shiftRepo.GetQueryableAsync()).AsNoTracking()
+				.FirstOrDefaultAsync(s => s.ShiftName == "Full Day Shift");
 			SeededShiftId = fullDayShift?.Id ?? Guid.Empty;
+
+			var academicYearRepo = services.GetRequiredService<IAcademicYearRepository>();
+			var firstYear = await (await academicYearRepo.GetQueryableAsync()).AsNoTracking()
+				.OrderBy(y => y.Id)
+				.FirstOrDefaultAsync();
+			SeededAcademicYearId = firstYear?.Id ?? Guid.Empty;
+
+			var mediumStageRepo = services.GetRequiredService<IEducationMediumStageRepository>();
+			var firstStage = await (await mediumStageRepo.GetQueryableAsync()).AsNoTracking()
+				.OrderBy(s => s.Id)
+				.FirstOrDefaultAsync();
+			SeededMediumStageId = firstStage?.Id ?? Guid.Empty;
+
+			await uow.CompleteAsync();
 		}
 	}
 
@@ -90,6 +119,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			DisableBackgroundJobs(services);
 			DisableDynamicStores(services);
 			DisableAuditing(services);
+			DisableDynamicClaims(services);
 		});
 
 		builder.ConfigureTestServices(services =>
@@ -128,6 +158,11 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	private static void DisableAuditing(IServiceCollection services)
 	{
 		services.Configure<AbpAuditingOptions>(o => o.IsEnabled = false);
+	}
+
+	private static void DisableDynamicClaims(IServiceCollection services)
+	{
+		services.Configure<AbpClaimsPrincipalFactoryOptions>(o => o.IsDynamicClaimsEnabled = false);
 	}
 
 	private static void DisableDynamicStores(IServiceCollection services)

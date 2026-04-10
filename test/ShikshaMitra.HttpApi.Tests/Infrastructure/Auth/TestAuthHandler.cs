@@ -23,7 +23,7 @@ public class TestAuthHandler(
 	public const string TestUserId = "2e701e62-0953-4dd3-910b-dc6cc93ccb0d";
 	public const string TestUserName = "admin";
 	public const string TestEmail = "admin@abp.io";
-	public const string TestTenantId = "";
+	public const string TestTenantId = "11111111-1111-1111-1111-111111111111";
 
 	protected override Task<AuthenticateResult> HandleAuthenticateAsync()
 	{

@@ -2,6 +2,7 @@
 using ShikshaMitra.HR.Payroll.Settings;
 using Shouldly;
 using Volo.Abp;
+using Volo.Abp.Validation;
 using Xunit;
 
 namespace ShikshaMitra.HR.Payroll;
@@ -120,8 +121,7 @@ public class DayCalculationSettingAppService_Tests : ShikshaMitraApplicationTest
             ManualDays = 0
         };
 
-        // Act & Assert — domain SetFields rejects ManualDays outside 1-31
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _dayCalculationSettingAppService.SaveAsync(input);
         });
@@ -137,8 +137,7 @@ public class DayCalculationSettingAppService_Tests : ShikshaMitraApplicationTest
             ManualDays = 32
         };
 
-        // Act & Assert — domain SetFields rejects ManualDays > 31
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _dayCalculationSettingAppService.SaveAsync(input);
         });
@@ -154,8 +153,7 @@ public class DayCalculationSettingAppService_Tests : ShikshaMitraApplicationTest
             ManualDays = null
         };
 
-        // Act & Assert — domain SetFields rejects null ManualDays for manual-days type
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _dayCalculationSettingAppService.SaveAsync(input);
         });
@@ -174,8 +172,7 @@ public class DayCalculationSettingAppService_Tests : ShikshaMitraApplicationTest
             DayCalculationType = "invalid-type"
         };
 
-        // Act & Assert — ParseDayCalculationType throws BusinessException for unrecognized type
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _dayCalculationSettingAppService.SaveAsync(input);
         });
@@ -190,8 +187,7 @@ public class DayCalculationSettingAppService_Tests : ShikshaMitraApplicationTest
             DayCalculationType = ""
         };
 
-        // Act & Assert — ParseDayCalculationType throws BusinessException for empty string
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _dayCalculationSettingAppService.SaveAsync(input);
         });

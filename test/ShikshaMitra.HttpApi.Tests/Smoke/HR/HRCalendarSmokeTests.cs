@@ -10,7 +10,7 @@ namespace ShikshaMitra.Smoke.HR;
 [TestTier(TestTraits.Tiers.Smoke)]
 public class HRCalendarSmokeTests : ShikshaMitraSmokeTestBase
 {
-	[Fact]
+	[SmokeFact]
 	public async Task Smoke_Event_Types_List_Should_Return_200()
 	{
 		await AuthenticateAsync();
@@ -20,7 +20,7 @@ public class HRCalendarSmokeTests : ShikshaMitraSmokeTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
 
-	[Fact]
+	[SmokeFact]
 	public async Task Smoke_Holiday_Types_List_Should_Return_200()
 	{
 		await AuthenticateAsync();
@@ -30,7 +30,7 @@ public class HRCalendarSmokeTests : ShikshaMitraSmokeTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
 
-	[Fact]
+	[SmokeFact]
 	public async Task Smoke_Holidays_List_Should_Return_200()
 	{
 		await AuthenticateAsync();

@@ -3,15 +3,14 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Xunit;
-
+using ShikshaMitra.HR.Employees;
 namespace ShikshaMitra;
 
 /// <summary>
 /// Base class for in-process API tests. Provides a pre-configured <see cref="HttpClient"/>
 /// that targets the test server with test authentication enabled.
 /// </summary>
-public abstract class ShikshaMitraApiTestBase : IClassFixture<ShikshaMitraApiTestFactory>
+public abstract class ShikshaMitraApiTestBase
 {
 	protected static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -22,6 +21,9 @@ public abstract class ShikshaMitraApiTestBase : IClassFixture<ShikshaMitraApiTes
 	{
 		Factory = factory;
 		Client = factory.CreateClient();
+
+		EmployeeTestHelper.DefaultRoleId = factory.SeededRoleId;
+		EmployeeTestHelper.DefaultShiftId = factory.SeededShiftId;
 	}
 
 	/// <summary>

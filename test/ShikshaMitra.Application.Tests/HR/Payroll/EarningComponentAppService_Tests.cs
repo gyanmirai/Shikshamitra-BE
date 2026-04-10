@@ -5,6 +5,7 @@ using ShikshaMitra.HR.Payroll.Settings;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Validation;
 using Xunit;
 
 namespace ShikshaMitra.HR.Payroll;
@@ -15,10 +16,12 @@ namespace ShikshaMitra.HR.Payroll;
 public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
     private readonly IEarningComponentAppService _earningComponentAppService;
+    private readonly IDeductionComponentAppService _deductionComponentAppService;
 
     public EarningComponentAppService_Tests()
     {
         _earningComponentAppService = GetRequiredService<IEarningComponentAppService>();
+        _deductionComponentAppService = GetRequiredService<IDeductionComponentAppService>();
     }
 
     #region Create Tests
@@ -121,6 +124,59 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
     }
 
     [Fact]
+    public async Task Should_Allow_Creating_Same_Name_After_Delete()
+    {
+        // Arrange
+        var input = new CreateEarningComponentDto
+        {
+            Name = "Reusable Deleted Name",
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 1200m
+        };
+
+        var created = await _earningComponentAppService.CreateAsync(input);
+        await _earningComponentAppService.DeleteAsync(created.Id);
+
+        // Act
+        var recreated = await _earningComponentAppService.CreateAsync(input);
+
+        // Assert
+        recreated.Id.ShouldNotBe(created.Id);
+        recreated.Name.ShouldBe(input.Name);
+    }
+
+    [Fact]
+    public async Task Should_Allow_Same_Name_As_Deduction_Component()
+    {
+        // Arrange
+        const string sharedName = "Shared Name Across Modules";
+
+        await _deductionComponentAppService.CreateAsync(new CreateDeductionComponentDto
+        {
+            Name = sharedName,
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 250m
+        });
+
+        // Act
+        var createdEarning = await _earningComponentAppService.CreateAsync(new CreateEarningComponentDto
+        {
+            Name = sharedName,
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 1250m
+        });
+
+        // Assert
+        createdEarning.Name.ShouldBe(sharedName);
+    }
+
+    [Fact]
     public async Task Should_Not_Create_Without_Required_Fields()
     {
         // Arrange
@@ -133,8 +189,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Amount = 10000m
         };
 
-        // Act & Assert — domain guard Check.NotNullOrWhiteSpace throws ArgumentException
-        await Should.ThrowAsync<ArgumentException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _earningComponentAppService.CreateAsync(input);
         });
@@ -538,8 +593,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Amount = -100m
         };
 
-        // Act & Assert — domain SetCalculationFields rejects negative amounts
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _earningComponentAppService.CreateAsync(input);
         });
@@ -578,8 +632,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Amount = null
         };
 
-        // Act & Assert — domain SetCalculationFields rejects null amount
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _earningComponentAppService.CreateAsync(input);
         });
@@ -601,8 +654,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             SelectedEarningComponentId = baseComponent.Id
         };
 
-        // Act & Assert — domain SetCalculationFields rejects percentage > 100
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _earningComponentAppService.CreateAsync(input);
         });
@@ -670,8 +722,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             SelectedEarningComponentId = baseComponent.Id
         };
 
-        // Act & Assert
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _earningComponentAppService.CreateAsync(input);
         });
@@ -691,8 +742,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             SelectedEarningComponentId = null
         };
 
-        // Act & Assert — domain requires selectedEarningComponentId for percentage mode
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _earningComponentAppService.CreateAsync(input);
         });
@@ -714,8 +764,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             SelectedEarningComponentId = baseComponent.Id
         };
 
-        // Act & Assert — domain rejects null percentage
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _earningComponentAppService.CreateAsync(input);
         });

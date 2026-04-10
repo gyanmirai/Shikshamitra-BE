@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Common.Responses;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Documents;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.Models;
 using Volo.Abp;
@@ -28,13 +29,16 @@ public class PersonalInfoController : AbpControllerBase
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
+	private readonly IEmployeeDocumentAppService _documentAppService;
 	private readonly IEmployeeAuthorizationService _authorizationService;
 
 	public PersonalInfoController(
 		IEmployeePersonalInfoAppService personalInfoAppService,
+		IEmployeeDocumentAppService documentAppService,
 		IEmployeeAuthorizationService authorizationService)
 	{
 		_personalInfoAppService = personalInfoAppService;
+		_documentAppService = documentAppService;
 		_authorizationService = authorizationService;
 	}
 
@@ -122,5 +126,23 @@ public class PersonalInfoController : AbpControllerBase
 		var updateDto = PersonalInfoContractMapper.ToUpdateDto(request);
 		var result = await _personalInfoAppService.UpdateAsync(employeeId, updateDto);
 		return PersonalInfoContractMapper.ToResponse(result);
+	}
+
+	/// <summary>
+	/// Download employee profile picture
+	/// </summary>
+	[HttpGet("{employeeId}/profile-picture")]
+	[ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public virtual async Task<IActionResult> GetProfilePictureAsync(
+		[FromRoute, Required] Guid employeeId)
+	{
+		await _authorizationService.CheckEmployeeAccessAsync(employeeId);
+
+		var document = await _documentAppService.GetProfilePictureAsync(employeeId);
+		if (document is null)
+			return NotFound();
+
+		return File(document.Content, document.ContentType, document.FileName);
 	}
 }

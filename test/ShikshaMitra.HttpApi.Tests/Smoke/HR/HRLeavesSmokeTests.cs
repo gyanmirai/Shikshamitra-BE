@@ -11,7 +11,7 @@ namespace ShikshaMitra.Smoke.HR;
 [TestTier(TestTraits.Tiers.Smoke)]
 public class HRLeavesSmokeTests : ShikshaMitraSmokeTestBase
 {
-	[Fact]
+	[SmokeFact]
 	public async Task Smoke_Leave_Types_List_Should_Return_200()
 	{
 		await AuthenticateAsync();
@@ -23,7 +23,7 @@ public class HRLeavesSmokeTests : ShikshaMitraSmokeTestBase
 		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.InternalServerError);
 	}
 
-	[Fact]
+	[SmokeFact]
 	public async Task Smoke_Leave_Policies_List_Should_Return_200()
 	{
 		await AuthenticateAsync();
@@ -35,7 +35,7 @@ public class HRLeavesSmokeTests : ShikshaMitraSmokeTestBase
 		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.InternalServerError);
 	}
 
-	[Fact]
+	[SmokeFact]
 	public async Task Smoke_Automated_Notifications_List_Should_Return_200()
 	{
 		await AuthenticateAsync();

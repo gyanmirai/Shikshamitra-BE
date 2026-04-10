@@ -5,6 +5,7 @@ using ShikshaMitra.HR.Payroll.Settings;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Validation;
 using Xunit;
 
 namespace ShikshaMitra.HR.Payroll;
@@ -129,8 +130,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             DependOn = ComponentDependency.None
         };
 
-        // Act & Assert — domain guard Check.NotNullOrWhiteSpace throws ArgumentException
-        await Should.ThrowAsync<ArgumentException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _deductionComponentAppService.CreateAsync(input);
         });
@@ -522,8 +522,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             Amount = -100m
         };
 
-        // Act & Assert — domain SetCalculationFields rejects negative amounts
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _deductionComponentAppService.CreateAsync(input);
         });
@@ -562,8 +561,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             Amount = null
         };
 
-        // Act & Assert — domain SetCalculationFields rejects null amount
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _deductionComponentAppService.CreateAsync(input);
         });
@@ -583,8 +581,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             SelectedDeductionComponentId = Guid.NewGuid()
         };
 
-        // Act & Assert — domain SetCalculationFields rejects percentage > 100
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _deductionComponentAppService.CreateAsync(input);
         });
@@ -646,8 +643,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             SelectedDeductionComponentId = Guid.NewGuid()
         };
 
-        // Act & Assert
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _deductionComponentAppService.CreateAsync(input);
         });
@@ -667,8 +663,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             SelectedDeductionComponentId = null
         };
 
-        // Act & Assert — domain requires selectedDeductionComponentId for percentage mode
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _deductionComponentAppService.CreateAsync(input);
         });
@@ -688,8 +683,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             SelectedDeductionComponentId = Guid.NewGuid()
         };
 
-        // Act & Assert — domain rejects null percentage
-        await Should.ThrowAsync<BusinessException>(async () =>
+        await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _deductionComponentAppService.CreateAsync(input);
         });

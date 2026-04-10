@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -115,7 +116,7 @@ public class DeductionComponentApi_Tests : ShikshaMitraApiTestBase
 	{
 		var response = await Client.GetAsync($"{BaseUrl}/{Guid.NewGuid()}");
 
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.NotFound, HttpStatusCode.InternalServerError);
+		response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 	}
 
 	[Fact]
@@ -157,6 +158,37 @@ public class DeductionComponentApi_Tests : ShikshaMitraApiTestBase
 		var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.Created);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Custom_Component_Name_In_List_Response()
+	{
+		var baseComponent = await CreateComponentAsync("BaseForNestedName");
+		var dependentName = TestDataHelper.UniqueName("DependsOnBase");
+
+		var createDependent = new DeductionComponentCreateRequestDto
+		{
+			DeductionComponentName = dependentName,
+			DeductionType = "FIXED",
+			CalculationType = "PERCENTAGE",
+			Percentage = 8m,
+			SelectedDeductionComponentId = baseComponent.Id,
+			VisibleInPayslip = true
+		};
+
+		var createResponse = await Client.PostAsJsonAsync(BaseUrl, createDependent, JsonOptions);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+		var listResponse = await Client.GetAsync($"{BaseUrl}?search={dependentName}");
+		listResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var body = await listResponse.Content.ReadFromJsonAsync<DeductionComponentPaginatedResponseDto>(JsonOptions);
+		body.ShouldNotBeNull();
+		var dependent = body.Items.FirstOrDefault(x => x.DeductionComponentName == dependentName);
+		dependent.ShouldNotBeNull();
+		dependent.CustomComponent.ShouldNotBeNull();
+		dependent.CustomComponent!.ComponentName.ShouldNotBeNullOrWhiteSpace();
 	}
 
 	#endregion

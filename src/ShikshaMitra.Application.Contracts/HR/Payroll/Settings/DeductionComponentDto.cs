@@ -12,6 +12,9 @@ public class DeductionComponentDto : FullAuditedEntityDto<Guid>
 	public decimal? Amount { get; set; }
 	public decimal? Percentage { get; set; }
 	public Guid? SelectedDeductionComponentId { get; set; }
+	public string? SelectedDeductionComponentName { get; set; }
+	public string? SelectedDeductionComponentDescription { get; set; }
+	public bool? SelectedDeductionComponentVisibleInPayslip { get; set; }
 	public ComponentDependency DependOn { get; set; }
 	public bool VisibleInPayslip { get; set; }
 	public int DisplayOrder { get; set; }

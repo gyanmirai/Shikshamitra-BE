@@ -12,7 +12,7 @@ namespace ShikshaMitra.Smoke.HR;
 [TestTier(TestTraits.Tiers.Smoke)]
 public class HREmployeeSmokeTests : ShikshaMitraSmokeTestBase
 {
-	[Fact]
+	[SmokeFact]
 	public async Task Smoke_Employee_List_Should_Return_200()
 	{
 		await AuthenticateAsync();
@@ -25,7 +25,7 @@ public class HREmployeeSmokeTests : ShikshaMitraSmokeTestBase
 		body.Items.ShouldNotBeNull();
 	}
 
-	[Fact]
+	[SmokeFact]
 	public async Task Smoke_Document_Config_List_Should_Return_200()
 	{
 		await AuthenticateAsync();

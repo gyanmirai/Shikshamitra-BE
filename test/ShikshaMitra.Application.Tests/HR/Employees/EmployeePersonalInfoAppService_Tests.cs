@@ -1,8 +1,11 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.PersonalInfo;
+using ShikshaMitra.TenantSettings;
 using Shouldly;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
@@ -14,6 +17,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 {
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
 	private readonly IIdentityRoleRepository _roleRepository;
+	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
 	private readonly ICurrentTenant _currentTenant;
 	private readonly IGuidGenerator _guidGenerator;
 
@@ -21,6 +25,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 	{
 		_personalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
+		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
 	}
@@ -75,6 +80,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 	private async Task<CreateEmployeePersonalInfoDto> BuildCreateDtoAsync(string? email = null)
 	{
 		var roleId = await EnsureRoleExistsAsync();
+		var shiftId = await EnsureShiftExistsAsync();
 		return new CreateEmployeePersonalInfoDto
 		{
 			FirstName = "Test",
@@ -85,16 +91,37 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			GenderType = GenderType.Male,
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
 			EmployeeStatusType = EmployeeStatusType.Active,
-			RoleId = roleId
+			RoleId = roleId,
+			ShiftId = shiftId
 		};
 	}
 
 	private async Task<Guid> EnsureRoleExistsAsync()
 	{
+		var roles = await _roleRepository.GetListAsync();
+		var existing = roles.FirstOrDefault();
+		if (existing != null) return existing.Id;
+
 		var id = _guidGenerator.Create();
 		var role = new IdentityRole(id, $"TestRole-{id:N}", _currentTenant.Id);
 		await _roleRepository.InsertAsync(role, autoSave: true);
 		return id;
+	}
+
+	private async Task<Guid> EnsureShiftExistsAsync()
+	{
+		var shifts = await _shiftRepository.GetListAsync();
+		var existing = shifts.FirstOrDefault();
+		if (existing != null) return existing.Id;
+
+		var shift = new ShiftManagement
+		{
+			ShiftName = "Test Shift",
+			StartTime = new TimeOnly(8, 0),
+			EndTime = new TimeOnly(16, 0)
+		};
+		await _shiftRepository.InsertAsync(shift, autoSave: true);
+		return shift.Id;
 	}
 
 	/// <summary>

@@ -13,6 +13,46 @@ public class ProvidentFundAppService(IProvidentFundRepository providentFundRepos
 	: CrudAppService<HR.Payroll.Settings.ProvidentFund, ProvidentFundDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateProvidentFundDto>(providentFundRepository),
 		IProvidentFundAppService
 {
+	private readonly IProvidentFundRepository _providentFundRepository = providentFundRepository;
+
+	public override async Task<ProvidentFundDto> CreateAsync(CreateUpdateProvidentFundDto input)
+	{
+		ArgumentNullException.ThrowIfNull(input);
+
+		await EnsureCodeAvailableAsync(input.Code);
+
+		try
+		{
+			return await base.CreateAsync(input);
+		}
+		catch (Exception ex) when (IsProvidentFundCodeUniqueViolation(ex))
+		{
+			throw new BusinessException("ShikshaMitra:ProvidentFundCodeAlreadyExists")
+				.WithData("code", input.Code);
+		}
+	}
+
+	public override async Task<ProvidentFundDto> UpdateAsync(Guid id, CreateUpdateProvidentFundDto input)
+	{
+		ArgumentNullException.ThrowIfNull(input);
+
+		var existing = await Repository.GetAsync(id);
+		if (!existing.Code.Equals(input.Code, StringComparison.OrdinalIgnoreCase))
+		{
+			await EnsureCodeAvailableAsync(input.Code, id);
+		}
+
+		try
+		{
+			return await base.UpdateAsync(id, input);
+		}
+		catch (Exception ex) when (IsProvidentFundCodeUniqueViolation(ex))
+		{
+			throw new BusinessException("ShikshaMitra:ProvidentFundCodeAlreadyExists")
+				.WithData("code", input.Code);
+		}
+	}
+
 	public async Task<PagedResultDto<ProvidentFundDto>> GetFilteredListAsync(int skipCount, int maxResultCount, string? search)
 	{
 		var queryable = await Repository.GetQueryableAsync();
@@ -38,5 +78,49 @@ public class ProvidentFundAppService(IProvidentFundRepository providentFundRepos
 			totalCount,
 			ObjectMapper.Map<List<ProvidentFund>, List<ProvidentFundDto>>(items)
 		);
+	}
+
+	private async Task EnsureCodeAvailableAsync(string code, Guid? excludeId = null)
+	{
+		if (await _providentFundRepository.IsCodeExistsAsync(code, excludeId))
+		{
+			throw new BusinessException("ShikshaMitra:ProvidentFundCodeAlreadyExists")
+				.WithData("code", code);
+		}
+	}
+
+	private static bool IsProvidentFundCodeUniqueViolation(Exception exception)
+	{
+		const string indexName = "IX_ProvidentFunds_TenantId_Code";
+		const string tableHint = "AppProvidentFunds";
+
+		for (var ex = exception; ex != null; ex = ex.InnerException!)
+		{
+			var message = ex.Message;
+			if (string.IsNullOrEmpty(message))
+			{
+				continue;
+			}
+
+			if (message.Contains(indexName, StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			if (message.Contains(tableHint, StringComparison.OrdinalIgnoreCase)
+			    && message.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			if (message.Contains("23505", StringComparison.Ordinal)
+			    && (message.Contains(tableHint, StringComparison.OrdinalIgnoreCase)
+			        || message.Contains(indexName, StringComparison.OrdinalIgnoreCase)))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

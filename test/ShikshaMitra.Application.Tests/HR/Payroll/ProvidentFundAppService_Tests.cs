@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Payroll.Settings;
 using Shouldly;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Xunit;
 
@@ -43,6 +44,34 @@ public class ProvidentFundAppService_Tests : ShikshaMitraApplicationTestBase<Shi
         result.Code.ShouldBe("STD_PF");
         result.EmployeePercentage.ShouldBe(12);
         result.EmployerPercentage.ShouldBe(12);
+    }
+
+    [Fact]
+    public async Task Should_Not_Create_Duplicate_PF_Code()
+    {
+        // Arrange
+        const string code = "PF_DUPLICATE";
+        await _providentFundAppService.CreateAsync(new CreateUpdateProvidentFundDto
+        {
+            Name = "First PF Rule",
+            Code = code,
+            EmployeePercentage = 10,
+            EmployerPercentage = 10
+        });
+
+        // Act + Assert
+        var exception = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _providentFundAppService.CreateAsync(new CreateUpdateProvidentFundDto
+            {
+                Name = "Second PF Rule",
+                Code = code,
+                EmployeePercentage = 12,
+                EmployerPercentage = 12
+            });
+        });
+
+        exception.Code.ShouldBe("ShikshaMitra:ProvidentFundCodeAlreadyExists");
     }
 
     [Fact]
@@ -119,9 +148,10 @@ public class ProvidentFundAppService_Tests : ShikshaMitraApplicationTestBase<Shi
     public async Task Should_Get_Paginated_List()
     {
         // Arrange
-        for (int i = 1; i <= 15; i++)
+        var suffixes = new[] { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O" };
+        for (int i = 0; i < 15; i++)
         {
-            await CreateTestProvidentFundAsync($"Paginated PF {i}", $"PG_PF_{i}");
+            await CreateTestProvidentFundAsync($"Paginated PF {i + 1}", $"PG_PF_{suffixes[i]}");
         }
 
         var input = new PagedAndSortedResultRequestDto
@@ -172,8 +202,8 @@ public class ProvidentFundAppService_Tests : ShikshaMitraApplicationTestBase<Shi
     public async Task Should_Return_All_When_Search_Is_Null()
     {
         // Arrange
-        await CreateTestProvidentFundAsync("Null Search PF 1", "NS_PF_1");
-        await CreateTestProvidentFundAsync("Null Search PF 2", "NS_PF_2");
+        await CreateTestProvidentFundAsync("Null Search PF A", "NS_PF_A");
+        await CreateTestProvidentFundAsync("Null Search PF B", "NS_PF_B");
 
         // Act
         var result = await _providentFundAppService.GetFilteredListAsync(0, 100, null);

@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.Settings;
-using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -202,9 +202,11 @@ public class DocumentConfigApi_Tests : ShikshaMitraApiTestBase
 
 	private static DocumentRequest BuildDocumentRequest()
 	{
+		var suffix = Guid.NewGuid().ToString("N")[..6]
+			.Aggregate("", (s, c) => s + (char.IsDigit(c) ? (char)('a' + (c - '0')) : c));
 		return new DocumentRequest
 		{
-			Title = TestDataHelper.UniqueName("AadhaarCard").Replace("_", " ").Replace(".", "")[..30],
+			Title = $"Test Document {suffix}",
 			DocumentSize = 5,
 			DocumentTypes = new List<int> { 1, 2 },
 		};

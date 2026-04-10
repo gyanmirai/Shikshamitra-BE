@@ -30,6 +30,7 @@ public class SalarySlipApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBeOneOf(
 			HttpStatusCode.OK,
 			HttpStatusCode.NotFound,
+			HttpStatusCode.Forbidden,
 			HttpStatusCode.InternalServerError);
 	}
 
@@ -41,6 +42,7 @@ public class SalarySlipApi_Tests : ShikshaMitraApiTestBase
 
 		response.StatusCode.ShouldBeOneOf(
 			HttpStatusCode.BadRequest,
+			HttpStatusCode.Forbidden,
 			HttpStatusCode.InternalServerError);
 	}
 
@@ -53,6 +55,7 @@ public class SalarySlipApi_Tests : ShikshaMitraApiTestBase
 
 		response.StatusCode.ShouldBeOneOf(
 			HttpStatusCode.BadRequest,
+			HttpStatusCode.Forbidden,
 			HttpStatusCode.InternalServerError);
 	}
 

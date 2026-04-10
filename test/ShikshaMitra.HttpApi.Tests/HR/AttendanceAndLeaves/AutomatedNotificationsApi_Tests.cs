@@ -92,7 +92,7 @@ public class AutomatedNotificationsApi_Tests : ShikshaMitraApiTestBase
 
 	#region Helpers
 
-	private async Task<AutomatedNotificationCreatedDto> CreateSettingAsync()
+	private async Task<AutomatedNotificationsSettingsDto> CreateSettingAsync()
 	{
 		var input = new AutomatedNotificationsSettingsDto
 		{
@@ -105,17 +105,8 @@ public class AutomatedNotificationsApi_Tests : ShikshaMitraApiTestBase
 
 		var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
 		response.EnsureSuccessStatusCode();
-		return await response.Content.ReadFromJsonAsync<AutomatedNotificationCreatedDto>(JsonOptions)
+		return await response.Content.ReadFromJsonAsync<AutomatedNotificationsSettingsDto>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create notification setting");
-	}
-
-	/// <summary>
-	/// Intermediate type to capture the created entity ID from the response.
-	/// </summary>
-	private record AutomatedNotificationCreatedDto
-	{
-		public Guid Id { get; init; }
-		public EmployeeAttendanceStatusType EmployeeAttendanceStatusType { get; init; }
 	}
 
 	#endregion

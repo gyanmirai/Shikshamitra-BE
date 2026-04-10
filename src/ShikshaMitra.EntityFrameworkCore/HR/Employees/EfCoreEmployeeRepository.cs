@@ -31,7 +31,7 @@ public class EfCoreEmployeeRepository(
 			async () =>
 			{
 				var dbSet = await GetDbSetAsync();
-				return await dbSet.FirstOrDefaultAsync(e => e.UserId == userId, cancellationToken);
+				return await dbSet.AsNoTracking().FirstOrDefaultAsync(e => e.UserId == userId, cancellationToken);
 			},
 			cancellationToken
 		);
@@ -97,7 +97,8 @@ public class EfCoreEmployeeRepository(
 			async () =>
 			{
 				var dbSet = await GetDbSetAsync();
-				return await dbSet.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+				// No-tracking so the follow-up Include query is the sole tracked load (avoids concurrency desync on SQLite).
+				return await dbSet.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 			},
 			cancellationToken
 		);

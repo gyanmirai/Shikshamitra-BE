@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using System;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -10,6 +11,18 @@ namespace ShikshaMitra.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.AddColumn<DateTime>(
+                name: "ApplicableMonth",
+                table: "AppEmployeePayrollComponents",
+                type: "timestamp with time zone",
+                nullable: true);
+
+            migrationBuilder.AddColumn<Guid>(
+                name: "ComponentId",
+                table: "AppEmployeePayrollComponents",
+                type: "uuid",
+                nullable: true);
+
             migrationBuilder.AlterColumn<double>(
                 name: "EntranceExamTotalMarks",
                 table: "AppStudentAdditionalDetails",
@@ -50,6 +63,14 @@ namespace ShikshaMitra.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropColumn(
+                name: "ApplicableMonth",
+                table: "AppEmployeePayrollComponents");
+
+            migrationBuilder.DropColumn(
+                name: "ComponentId",
+                table: "AppEmployeePayrollComponents");
+
             migrationBuilder.AlterColumn<decimal>(
                 name: "EntranceExamTotalMarks",
                 table: "AppStudentAdditionalDetails",
@@ -88,3 +109,4 @@ namespace ShikshaMitra.Migrations
         }
     }
 }
+

@@ -7,7 +7,8 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
 public class AutomatedNotificationsSettings : AggregateRoot<Guid>, IMultiTenant
 {
-	public Guid? TenantId { get; }
+	// Private setter: required so ABP can set the current tenant after mapping on create (get-only skips that step).
+	public Guid? TenantId { get; private set; }
 	public EmployeeAttendanceStatusType EmployeeAttendanceStatusType { get; set; }
 	public List<NotificationMethodType> NotificationMethods { get; set; }
 

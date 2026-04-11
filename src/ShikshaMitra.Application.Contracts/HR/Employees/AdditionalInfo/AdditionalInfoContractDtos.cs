@@ -13,7 +13,7 @@ public class AdditionalInfoContract
 
 	public bool PersonWithDisability { get; set; }
 
-	[MaxLength(100)]
+	[MaxLength(50)]
 	public string? SecondLanguage { get; set; }
 
 	public bool IsLibraryMember { get; set; }

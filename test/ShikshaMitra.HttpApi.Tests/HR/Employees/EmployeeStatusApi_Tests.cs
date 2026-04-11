@@ -40,6 +40,23 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 		body.CurrentStatus.ShouldBe(1);
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Update_Employee_Status_With_Empty_Remarks_String()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusEmptyRemarks");
+
+		var request = new EmployeeStatusUpdateRequest
+		{
+			EmployeeStatusType = 1,
+			Remarks = string.Empty,
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", request, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
 	#endregion
 
 	#region Tier 1 — Important

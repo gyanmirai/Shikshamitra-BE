@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Payroll;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -81,6 +82,9 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Update_Full_Payroll_With_Components()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayFull");
+		var earningComponent1 = await PayrollTestHelper.CreateEarningComponentAsync(Client, "PayFullE1");
+		var earningComponent2 = await PayrollTestHelper.CreateEarningComponentAsync(Client, "PayFullE2");
+		var deductionComponent = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "PayFullD1");
 
 		var request = new PayrollContract
 		{
@@ -102,18 +106,91 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 			},
 			EarningComponents = new List<ComponentAmountContract>
 			{
-				new() { ComponentId = Guid.NewGuid(), Amount = 5000m },
-				new() { ComponentId = Guid.NewGuid(), Amount = 3000m },
+				new() { ComponentId = earningComponent1.Id, Amount = 5000m },
+				new() { ComponentId = earningComponent2.Id, Amount = 3000m },
 			},
 			DeductionComponents = new List<ComponentAmountContract>
 			{
-				new() { ComponentId = Guid.NewGuid(), Amount = 1500m },
+				new() { ComponentId = deductionComponent.Id, Amount = 1500m },
 			},
 		};
 
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
 
 		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.InternalServerError);
+
+		if (response.StatusCode == HttpStatusCode.OK)
+		{
+			var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
+			getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+			var body = await getResponse.Content.ReadFromJsonAsync<PayrollContract>(JsonOptions);
+			body.ShouldNotBeNull();
+			body.EarningComponents.ShouldNotBeNull();
+			body.DeductionComponents.ShouldNotBeNull();
+			body.EarningComponents.Count.ShouldBe(2);
+			body.DeductionComponents.Count.ShouldBe(1);
+		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Invalid_ComponentIds_Without_Deleting_Existing_Payroll()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayGuard");
+		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, "PayGuardE1");
+		var deductionComponent = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "PayGuardD1");
+
+		var baseline = new PayrollContract
+		{
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = 42000m,
+				PunchId = "PAY-GUARD-1",
+			},
+			EarningComponents = new List<ComponentAmountContract>
+			{
+				new() { ComponentId = earningComponent.Id, Amount = 4200m },
+			},
+			DeductionComponents = new List<ComponentAmountContract>
+			{
+				new() { ComponentId = deductionComponent.Id, Amount = 1200m },
+			},
+		};
+
+		var baselineResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", baseline, JsonOptions);
+		baselineResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var invalidUpdate = new PayrollContract
+		{
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = 45000m,
+				PunchId = "PAY-GUARD-2",
+			},
+			EarningComponents = new List<ComponentAmountContract>
+			{
+				new() { ComponentId = Guid.NewGuid(), Amount = 5000m },
+			},
+			DeductionComponents = new List<ComponentAmountContract>
+			{
+				new() { ComponentId = deductionComponent.Id, Amount = 1500m },
+			},
+		};
+
+		var invalidResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", invalidUpdate, JsonOptions);
+		invalidResponse.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+
+		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var payload = await getResponse.Content.ReadFromJsonAsync<PayrollContract>(JsonOptions);
+		payload.ShouldNotBeNull();
+		payload.EarningComponents.ShouldNotBeNull();
+		payload.DeductionComponents.ShouldNotBeNull();
+		payload.EarningComponents.Count.ShouldBe(1);
+		payload.DeductionComponents.Count.ShouldBe(1);
+		payload.EarningComponents[0].ComponentId.ShouldBe(earningComponent.Id);
+		payload.EarningComponents[0].Amount.ShouldBe(4200m);
 	}
 
 	#endregion

@@ -266,6 +266,124 @@ public class ProvidentFundAppService_Tests : ShikshaMitraApplicationTestBase<Shi
     #region Edge Cases
 
     [Fact]
+    public async Task Should_Not_Create_Duplicate_PF_Name()
+    {
+        // Arrange
+        const string name = "Duplicate Name PF";
+        await _providentFundAppService.CreateAsync(new CreateUpdateProvidentFundDto
+        {
+            Name = name,
+            Code = "DUP_NAME_A",
+            EmployeePercentage = 12,
+            EmployerPercentage = 12
+        });
+
+        // Act + Assert — same name, different code should be rejected
+        var exception = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _providentFundAppService.CreateAsync(new CreateUpdateProvidentFundDto
+            {
+                Name = name,
+                Code = "DUP_NAME_B",
+                EmployeePercentage = 10,
+                EmployerPercentage = 10
+            });
+        });
+
+        exception.Code.ShouldBe("ShikshaMitra:ProvidentFundNameAlreadyExists");
+    }
+
+    [Fact]
+    public async Task Should_Not_Create_Duplicate_PF_Name_Case_Insensitive()
+    {
+        // Arrange
+        await _providentFundAppService.CreateAsync(new CreateUpdateProvidentFundDto
+        {
+            Name = "Basic PF Rule",
+            Code = "CASE_INS_A",
+            EmployeePercentage = 12,
+            EmployerPercentage = 12
+        });
+
+        // Act + Assert — different casing of the same name should still be rejected
+        var exception = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _providentFundAppService.CreateAsync(new CreateUpdateProvidentFundDto
+            {
+                Name = "basic pf rule",
+                Code = "CASE_INS_B",
+                EmployeePercentage = 12,
+                EmployerPercentage = 12
+            });
+        });
+
+        exception.Code.ShouldBe("ShikshaMitra:ProvidentFundNameAlreadyExists");
+    }
+
+    [Fact]
+    public async Task Should_Not_Update_To_Duplicate_Name()
+    {
+        // Arrange
+        await CreateTestProvidentFundAsync("Existing PF Name", "EXIST_NM");
+        var second = await CreateTestProvidentFundAsync("Second PF Name", "SECOND_NM");
+
+        // Act + Assert — renaming second to the first's name should fail
+        var exception = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _providentFundAppService.UpdateAsync(second.Id, new CreateUpdateProvidentFundDto
+            {
+                Name = "Existing PF Name",
+                Code = "SECOND_NM",
+                EmployeePercentage = 12,
+                EmployerPercentage = 12
+            });
+        });
+
+        exception.Code.ShouldBe("ShikshaMitra:ProvidentFundNameAlreadyExists");
+    }
+
+    [Fact]
+    public async Task Should_Allow_Update_With_Same_Name()
+    {
+        // Arrange
+        var created = await CreateTestProvidentFundAsync("Same Name PF", "SAME_NM");
+
+        // Act — updating with the same name should succeed
+        var result = await _providentFundAppService.UpdateAsync(created.Id, new CreateUpdateProvidentFundDto
+        {
+            Name = "Same Name PF",
+            Code = "SAME_NM",
+            EmployeePercentage = 15,
+            EmployerPercentage = 15
+        });
+
+        // Assert
+        result.Name.ShouldBe("Same Name PF");
+        result.EmployeePercentage.ShouldBe(15);
+    }
+
+    [Fact]
+    public async Task Should_Allow_Reuse_Name_After_Delete()
+    {
+        // Arrange — create and delete
+        var created = await CreateTestProvidentFundAsync("Reusable PF Name", "REUSE_NM");
+        await _providentFundAppService.DeleteAsync(created.Id);
+
+        // Act — same name should be allowed after soft-delete
+        var recreated = await _providentFundAppService.CreateAsync(new CreateUpdateProvidentFundDto
+        {
+            Name = "Reusable PF Name",
+            Code = "REUSE_NM_B",
+            EmployeePercentage = 12,
+            EmployerPercentage = 12
+        });
+
+        // Assert
+        recreated.ShouldNotBeNull();
+        recreated.Name.ShouldBe("Reusable PF Name");
+    }
+
+    [Fact]
     public async Task Should_Handle_Special_Characters_In_Name()
     {
         // Arrange

@@ -220,6 +220,36 @@ public class EarningComponentApi_Tests : ShikshaMitraApiTestBase
 		secondCreate.StatusCode.ShouldBe(HttpStatusCode.Created);
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Duplicate_When_Name_Is_Logically_Same_After_Trim()
+	{
+		var baseName = TestDataHelper.UniqueName("PadDup");
+		var firstInput = new EarningComponentCreateRequestDto
+		{
+			EarningComponentName = baseName,
+			EarningType = "FIXED",
+			CalculationType = "AMOUNT",
+			Amount = 1000m,
+			VisibleInPayslip = true
+		};
+
+		var first = await Client.PostAsJsonAsync(BaseUrl, firstInput, JsonOptions);
+		first.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+		var paddedDuplicate = new EarningComponentCreateRequestDto
+		{
+			EarningComponentName = $"  {baseName}  ",
+			EarningType = "FIXED",
+			CalculationType = "AMOUNT",
+			Amount = 2000m,
+			VisibleInPayslip = true
+		};
+
+		var second = await Client.PostAsJsonAsync(BaseUrl, paddedDuplicate, JsonOptions);
+		second.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+	}
+
 	#endregion
 
 	#region Tier 2 — Extended

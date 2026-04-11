@@ -40,8 +40,7 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 	/// <inheritdoc />
 	public async Task<SalaryStructureResponseDto> GetAsync(Guid employeeId)
 	{
-		// Validate employee exists (Repository.GetAsync throws if not found)
-		_ = await _employeeRepository.GetAsync(employeeId);
+		await EnsureEmployeeExistsAsync(employeeId);
 
 		var earnings = await _payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
 		var deductions = await _payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);
@@ -56,8 +55,7 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 	/// <inheritdoc />
 	public async Task UpdateAsync(Guid employeeId, UpdateSalaryStructureDto input)
 	{
-		// Validate employee exists (Repository.GetAsync throws if not found)
-		_ = await _employeeRepository.GetAsync(employeeId);
+		await EnsureEmployeeExistsAsync(employeeId);
 
 		var existingEarnings = await _payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
 		var existingDeductions = await _payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);
@@ -152,6 +150,16 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 		if (componentsToInsert.Count > 0)
 		{
 			await _payrollComponentRepository.InsertManyAsync(componentsToInsert);
+		}
+	}
+
+	private async Task EnsureEmployeeExistsAsync(Guid employeeId)
+	{
+		// Salary structure endpoints only need existence check; avoid loading full employee graph.
+		var employee = await _employeeRepository.FindAsync(employeeId, includeDetails: false);
+		if (employee == null)
+		{
+			throw new BusinessException(HRErrorCodes.EmployeeNotFound);
 		}
 	}
 

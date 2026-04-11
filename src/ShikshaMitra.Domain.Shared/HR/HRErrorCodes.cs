@@ -1,4 +1,4 @@
-namespace ShikshaMitra.HR;
+﻿namespace ShikshaMitra.HR;
 
 /// <summary>
 /// Centralized error code catalog for all HR module BusinessExceptions.
@@ -46,6 +46,18 @@ public static class HRErrorCodes
 	public const string EmployeePayrollDetailsRequired = "HR:Employee:010202";
 	public const string EmployeePayrollInvalidEarningComponent = "HR:Employee:010203";
 	public const string EmployeePayrollInvalidDeductionComponent = "HR:Employee:010204";
+	public const string EmployeePayrollDuplicateEarningComponent = "HR:Employee:010205";
+	public const string EmployeePayrollDuplicateDeductionComponent = "HR:Employee:010206";
+	public const string EmployeePayrollComponentInBothLists = "HR:Employee:010207";
+	public const string EmployeePayrollNegativeSalary = "HR:Employee:010208";
+	public const string EmployeePayrollInvalidTdsPercentage = "HR:Employee:010209";
+	public const string EmployeePayrollNegativeTdsAmount = "HR:Employee:010210";
+	public const string EmployeePayrollInvalidIfscCode = "HR:Employee:010211";
+	public const string EmployeePayrollInvalidAccountNumber = "HR:Employee:010212";
+	public const string EmployeePayrollBankNameRequired = "HR:Employee:010213";
+	public const string EmployeePayrollAccountHolderRequired = "HR:Employee:010214";
+	public const string EmployeePayrollComponentAmountInvalid = "HR:Employee:010215";
+	public const string EmployeePayrollEmptyComponentId = "HR:Employee:010216";
 
 	// ── Attendance & Leave: 02xxxx ────────────────────────────────
 

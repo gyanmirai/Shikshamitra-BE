@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net;
 using System.Threading.Tasks;
 using ShikshaMitra.Infrastructure.Traits;
@@ -26,7 +26,7 @@ public class CalendarViewApi_Tests : ShikshaMitraApiTestBase
 		var response = await Client.GetAsync(
 			$"{BaseUrl}/view?academicYearId={academicYearId}&page=1&pageSize=10");
 
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.InternalServerError);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
 
 	#endregion

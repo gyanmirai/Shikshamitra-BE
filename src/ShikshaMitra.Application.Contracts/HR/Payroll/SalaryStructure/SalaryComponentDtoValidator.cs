@@ -1,4 +1,5 @@
 using FluentValidation;
+using System;
 
 namespace ShikshaMitra.HR.Payroll.SalaryStructure;
 
@@ -11,10 +12,12 @@ public class SalaryComponentDtoValidator : AbstractValidator<SalaryComponentDto>
 			.MinimumLength(2)
 			.MaximumLength(100);
 
-		RuleFor(x => x.Description).MaximumLength(255);
+		RuleFor(x => x.Amount)
+			.GreaterThanOrEqualTo(0m)
+			.When(x => x.Amount.HasValue);
 
-		RuleFor(x => x.Amount).GreaterThanOrEqualTo(0m);
-
-		RuleFor(x => x.ComponentType).IsInEnum();
+		RuleFor(x => x.ApplicableMonth)
+			.Must(x => !x.HasValue || x.Value != default)
+			.WithMessage("ApplicableMonth must be a valid date when provided.");
 	}
 }

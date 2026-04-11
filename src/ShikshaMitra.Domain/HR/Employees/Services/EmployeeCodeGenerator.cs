@@ -31,7 +31,6 @@ public class EmployeeCodeGenerator(
 	{
 		var year = dateOfJoining.Year;
 		var tenantId = CurrentTenant.Id ?? Guid.Empty;
-
 		var existingCount = await GetCountForTenantAndYearAsync(tenantId, year);
 
 		string roleCode = GetRoleCode(role);
@@ -52,13 +51,8 @@ public class EmployeeCodeGenerator(
 		);
 	}
 
-	/// <summary>
-	/// Converts <paramref name="count"/> into a deterministic 4-character base-36 suffix.
-	/// base-36^4 = 1,679,616 unique codes per role/year/tenant.
-	/// </summary>
 	private static string GenerateUniqueHash(int count)
 	{
-		// Encode (count + 1) so the very first employee gets "0001" rather than "0000".
 		var sequence = ToBase36(count + 1);
 		return sequence.PadLeft(4, '0')[^4..].ToUpperInvariant();
 	}

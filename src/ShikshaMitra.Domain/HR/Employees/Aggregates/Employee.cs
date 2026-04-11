@@ -251,7 +251,15 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	internal Employee UpdateWorkExperiences(List<WorkExperience> workExperiences)
 	{
-		this.WorkExperiences = workExperiences;
+		ArgumentNullException.ThrowIfNull(workExperiences);
+
+		// Mutate the existing collection so EF Core keeps tracking the same OwnsMany(ToJson) instance.
+		// Replacing the list reference can cause the JSON column not to persist (empty after SaveChanges).
+		WorkExperiences.Clear();
+		foreach (var item in workExperiences)
+		{
+			WorkExperiences.Add(item);
+		}
 
 		return this;
 	}

@@ -23,5 +23,10 @@ public class ProvidentFundConfiguration : IEntityTypeConfiguration<ProvidentFund
 			.IsUnique()
 			.HasDatabaseName("IX_ProvidentFunds_TenantId_Code")
 			.HasFilter("\"IsDeleted\" = false");
+
+		builder.HasIndex(x => new { x.TenantId, x.Name })
+			.IsUnique()
+			.HasDatabaseName("IX_ProvidentFunds_TenantId_Name")
+			.HasFilter("\"IsDeleted\" = false");
 	}
 }

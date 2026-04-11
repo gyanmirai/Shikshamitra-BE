@@ -1,4 +1,4 @@
-using ShikshaMitra.HR.Employees.Payroll;
+using System;
 
 namespace ShikshaMitra.HR.Payroll.SalaryStructure;
 
@@ -8,19 +8,24 @@ namespace ShikshaMitra.HR.Payroll.SalaryStructure;
 public class SalaryComponentDto
 {
 	/// <summary>
+	/// Salary component row ID (employee-specific).
+	/// </summary>
+	public Guid? Id { get; set; }
+
+	/// <summary>
+	/// Master component ID (earning/deduction setting ID).
+	/// </summary>
+	public Guid? ComponentId { get; set; }
+
+	/// <summary>
 	/// Component name (e.g., Basic, PF, Tax).
 	/// </summary>
 	public string Name { get; set; } = string.Empty;
 
 	/// <summary>
-	/// Optional explanation of the component.
-	/// </summary>
-	public string? Description { get; set; }
-
-	/// <summary>
 	/// Final calculated amount.
 	/// </summary>
-	public decimal Amount { get; set; }
+	public decimal? Amount { get; set; }
 
 	/// <summary>
 	/// Fixed for all employees or employee-specific.
@@ -33,13 +38,7 @@ public class SalaryComponentDto
 	public bool IsTemp { get; set; }
 
 	/// <summary>
-	/// Calculation strategy (FIXED or PERCENTAGE).
+	/// Month from which this component is applicable.
 	/// </summary>
-	public SalaryComponentType ComponentType { get; set; }
-
-	/// <summary>
-	/// Required only when componentType is PERCENTAGE.
-	/// Indicates what the percentage is based on (BASIC or GROSS).
-	/// </summary>
-	public SalaryComponentDependency? DependOn { get; set; }
+	public DateTime? ApplicableMonth { get; set; }
 }

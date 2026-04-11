@@ -16,6 +16,11 @@ public class EmployeePayrollComponent : Entity<Guid>
 	public string Name { get; set; } = string.Empty;
 
 	/// <summary>
+	/// Optional reference to the master earning/deduction component.
+	/// </summary>
+	public Guid? ComponentId { get; set; }
+
+	/// <summary>
 	/// Optional description/explanation of the component.
 	/// </summary>
 	public string? Description { get; set; }
@@ -34,6 +39,11 @@ public class EmployeePayrollComponent : Entity<Guid>
 	/// Whether this is a temporary or one-time component.
 	/// </summary>
 	public bool IsTemp { get; set; }
+
+	/// <summary>
+	/// Month from which this component is applicable.
+	/// </summary>
+	public DateTime? ApplicableMonth { get; set; }
 
 	/// <summary>
 	/// Calculation strategy (Fixed amount or Percentage-based).
@@ -62,20 +72,24 @@ public class EmployeePayrollComponent : Entity<Guid>
 		Guid id,
 		Guid employeeId,
 		string name,
+		Guid? componentId,
 		string? description,
 		decimal amount,
 		bool isFixed,
 		bool isTemp,
+		DateTime? applicableMonth,
 		SalaryComponentType componentType,
 		SalaryComponentDependency? dependOn,
 		bool isEarning) : base(id)
 	{
 		EmployeeId = employeeId;
 		Name = name;
+		ComponentId = componentId;
 		Description = description;
 		Amount = amount;
 		IsFixed = isFixed;
 		IsTemp = isTemp;
+		ApplicableMonth = applicableMonth;
 		ComponentType = componentType;
 		DependOn = dependOn;
 		IsEarning = isEarning;

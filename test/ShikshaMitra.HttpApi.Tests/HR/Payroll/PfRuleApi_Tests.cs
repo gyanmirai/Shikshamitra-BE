@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -160,6 +160,81 @@ public class PfRuleApi_Tests : ShikshaMitraApiTestBase
 
 		var errorBody = await duplicateResponse.Content.ReadAsStringAsync();
 		errorBody.ShouldContain("ShikshaMitra:ProvidentFundCodeAlreadyExists");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Error_For_Duplicate_PF_Name()
+	{
+		var sharedName = TestDataHelper.UniqueName("DuplicatePFName");
+
+		var first = new CreateUpdateProvidentFundDto
+		{
+			Name = sharedName,
+			Code = BuildValidPfCode("DNMA"),
+			EmployeePercentage = 12m,
+			EmployerPercentage = 12m
+		};
+
+		var second = new CreateUpdateProvidentFundDto
+		{
+			Name = sharedName,
+			Code = BuildValidPfCode("DNMB"),
+			EmployeePercentage = 10m,
+			EmployerPercentage = 10m
+		};
+
+		(await Client.PostAsJsonAsync(BaseUrl, first, JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+		var duplicateResponse = await Client.PostAsJsonAsync(BaseUrl, second, JsonOptions);
+
+		duplicateResponse.IsSuccessStatusCode.ShouldBeFalse();
+		duplicateResponse.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+
+		var errorBody = await duplicateResponse.Content.ReadAsStringAsync();
+		errorBody.ShouldContain("ShikshaMitra:ProvidentFundNameAlreadyExists");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Duplicate_Name_On_Update()
+	{
+		var existingName = TestDataHelper.UniqueName("ExistingPF");
+		var first = new CreateUpdateProvidentFundDto
+		{
+			Name = existingName,
+			Code = BuildValidPfCode("UPDA"),
+			EmployeePercentage = 12m,
+			EmployerPercentage = 12m
+		};
+		(await Client.PostAsJsonAsync(BaseUrl, first, JsonOptions)).EnsureSuccessStatusCode();
+
+		var secondDto = new CreateUpdateProvidentFundDto
+		{
+			Name = TestDataHelper.UniqueName("SecondForUpd"),
+			Code = BuildValidPfCode("UPDB"),
+			EmployeePercentage = 10m,
+			EmployerPercentage = 10m
+		};
+		var secondResponse = await Client.PostAsJsonAsync(BaseUrl, secondDto, JsonOptions);
+		secondResponse.EnsureSuccessStatusCode();
+		var secondCreated = await secondResponse.Content.ReadFromJsonAsync<PfRuleCreateResponseDto>(JsonOptions);
+		secondCreated.ShouldNotBeNull();
+
+		// Try to rename the second to the first's name
+		var updateDto = new CreateUpdateProvidentFundDto
+		{
+			Name = existingName,
+			Code = BuildValidPfCode("UPDB"),
+			EmployeePercentage = 10m,
+			EmployerPercentage = 10m
+		};
+
+		var updateResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{secondCreated.Id}", updateDto, JsonOptions);
+
+		updateResponse.IsSuccessStatusCode.ShouldBeFalse();
+		var errorBody = await updateResponse.Content.ReadAsStringAsync();
+		errorBody.ShouldContain("ShikshaMitra:ProvidentFundNameAlreadyExists");
 	}
 
 	#endregion

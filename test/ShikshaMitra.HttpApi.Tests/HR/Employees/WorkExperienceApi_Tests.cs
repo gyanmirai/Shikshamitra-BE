@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.WorkExperienceContracts;
 using ShikshaMitra.Infrastructure.Traits;
@@ -54,6 +55,67 @@ public class WorkExperienceApi_Tests : ShikshaMitraApiTestBase
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/work-experience", request, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	/// <summary>
+	/// Mirrors staging client payloads: camelCase, nested geo, DateTime with timezone offset.
+	/// Regression: PUT appeared to succeed but GET returned [] when JSON owned collection was not persisted.
+	/// </summary>
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Persist_Work_Experience_When_Json_Uses_CamelCase_And_Offset_Dates()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "WExpStgJson");
+
+		const string json =
+			"""
+			[{"mediumStageName":"La Net Solution","designation":"Software engineer trainee","department":"Frontend","country":{"name":"India","isoCode":"IN"},"state":{"name":"Gujarat","isoCode":"GJ"},"city":"Surat","startDate":"2026-04-01T00:00:00+05:30","endDate":"2026-04-10T00:00:00+05:30"}]
+			""";
+
+		var putResponse = await Client.PutAsync(
+			$"{BaseUrl}/{empId}/work-experience",
+			new StringContent(json.Trim(), Encoding.UTF8, "application/json"));
+		putResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var body = await GetAndReadAsync<List<WorkExperienceContract>>($"{BaseUrl}/{empId}/work-experience");
+		body.Count.ShouldBe(1);
+		body[0].MediumStageName.ShouldBe("La Net Solution");
+		body[0].Designation.ShouldBe("Software engineer trainee");
+		body[0].Department.ShouldBe("Frontend");
+		body[0].City.ShouldBe("Surat");
+		body[0].Country.ShouldNotBeNull();
+		body[0].Country!.IsoCode.ShouldBe("IN");
+		body[0].State.ShouldNotBeNull();
+		body[0].State!.IsoCode.ShouldBe("GJ");
+		body[0].StartDate.ShouldNotBeNull();
+		body[0].EndDate.ShouldNotBeNull();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Return_Data_On_Get_Immediately_After_Put()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "WExpImmediate");
+
+		var request = new List<WorkExperienceContract>
+		{
+			new()
+			{
+				MediumStageName = "Immediate Co",
+				Designation = "Engineer",
+				StartDate = new DateTime(2025, 6, 1, 12, 0, 0, DateTimeKind.Utc),
+			}
+		};
+
+		var put = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/work-experience", request, JsonOptions);
+		put.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var get = await Client.GetAsync($"{BaseUrl}/{empId}/work-experience");
+		get.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await get.Content.ReadFromJsonAsync<List<WorkExperienceContract>>(JsonOptions);
+		body.ShouldNotBeNull();
+		body!.Count.ShouldBe(1);
+		body[0].MediumStageName.ShouldBe("Immediate Co");
 	}
 
 	#endregion

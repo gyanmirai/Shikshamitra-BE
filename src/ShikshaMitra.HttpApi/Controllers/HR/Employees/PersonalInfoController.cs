@@ -14,6 +14,7 @@ using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.Models;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.Validation;
 
 namespace ShikshaMitra.Controllers.HR.Employees;
 
@@ -62,17 +63,32 @@ public class PersonalInfoController : AbpControllerBase
 		}
 		catch (JsonException)
 		{
-			throw new UserFriendlyException("The 'data' field does not contain valid PersonalInfoRequest JSON.");
+			throw new AbpValidationException(
+				"The 'data' field does not contain valid PersonalInfoRequest JSON.",
+				[
+					new ValidationResult(
+						"The 'data' field does not contain valid PersonalInfoRequest JSON.",
+						[nameof(request.Data)])
+				]);
 		}
 
 		if (personalInfo is null)
-			throw new UserFriendlyException("The 'data' field does not contain valid PersonalInfoRequest JSON.");
+		{
+			throw new AbpValidationException(
+				"The 'data' field does not contain valid PersonalInfoRequest JSON.",
+				[
+					new ValidationResult(
+						"The 'data' field does not contain valid PersonalInfoRequest JSON.",
+						[nameof(request.Data)])
+				]);
+		}
 
 		var validationResults = new List<ValidationResult>();
 		if (!Validator.TryValidateObject(personalInfo, new ValidationContext(personalInfo), validationResults, true))
 		{
-			var errors = string.Join("; ", validationResults.ConvertAll(r => r.ErrorMessage));
-			throw new UserFriendlyException(errors);
+			throw new AbpValidationException(
+				"Personal info validation failed.",
+				validationResults);
 		}
 
 		var createDto = PersonalInfoContractMapper.ToCreateDto(personalInfo);

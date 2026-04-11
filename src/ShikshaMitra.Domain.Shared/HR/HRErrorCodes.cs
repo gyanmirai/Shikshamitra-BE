@@ -44,6 +44,8 @@ public static class HRErrorCodes
 	// Employee — Payroll
 	public const string EmployeePayrollStructureRequired = "HR:Employee:010201";
 	public const string EmployeePayrollDetailsRequired = "HR:Employee:010202";
+	public const string EmployeePayrollInvalidEarningComponent = "HR:Employee:010203";
+	public const string EmployeePayrollInvalidDeductionComponent = "HR:Employee:010204";
 
 	// ── Attendance & Leave: 02xxxx ────────────────────────────────
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Linq;
@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.HR;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
@@ -31,12 +32,6 @@ public class SalarySlipController : AbpControllerBase
 	/// <summary>
 	/// Retrieves employee salary slip for a specific month (OpenAPI contract)
 	/// </summary>
-	/// <param name="employeeId">Unique employee identifier (required)</param>
-	/// <param name="monthYear">Salary period in MMMM-YYYY format (required, e.g., "JANUARY-2025")</param>
-	/// <returns>Salary slip with earnings and deductions breakdown</returns>
-	/// <response code="200">Salary slip retrieved successfully</response>
-	/// <response code="400">Invalid or missing query parameters</response>
-	/// <response code="404">Employee or salary slip not found</response>
 	[HttpGet]
 	[ProducesResponseType(typeof(SalarySlipResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -45,58 +40,34 @@ public class SalarySlipController : AbpControllerBase
 		[FromQuery, Required] Guid employeeId,
 		[FromQuery, Required] string monthYear)
 	{
-		// Validate monthYear format (MMMM-YYYY)
 		if (!System.Text.RegularExpressions.Regex.IsMatch(monthYear, @"^[A-Z]+-\d{4}$"))
 		{
-			throw new UserFriendlyException(
-				"Invalid monthYear format. Expected format: MMMM-YYYY (e.g., JANUARY-2025)");
+			throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat);
 		}
 
-		// Convert from OpenAPI format (JANUARY-2025) to internal format (2025-01)
 		var internalMonthYear = ConvertToInternalFormat(monthYear);
-
-		// Fetch salary slip using internal format
 		var salarySlipDto = await _salarySlipAppService.GetSalarySlipAsync(employeeId, internalMonthYear);
-
-		// Convert to OpenAPI contract format
 		return MapToSalarySlipResponse(salarySlipDto, monthYear);
 	}
 
-	/// <summary>
-	/// Converts MMMM-YYYY format to YYYY-MM format for internal use
-	/// </summary>
-	private string ConvertToInternalFormat(string monthYear)
+	private static string ConvertToInternalFormat(string monthYear)
 	{
-		try
+		var parts = monthYear.Split('-');
+		if (parts.Length != 2)
 		{
-			var parts = monthYear.Split('-');
-			if (parts.Length != 2)
-			{
-				throw new UserFriendlyException("Invalid monthYear format");
-			}
-
-			var monthName = parts[0];
-			var year = parts[1];
-
-			if (DateTime.TryParseExact(monthName, "MMMM", CultureInfo.InvariantCulture, 
-				DateTimeStyles.None, out var date))
-			{
-				return $"{year}-{date.Month:D2}";
-			}
-
-			throw new UserFriendlyException("Invalid month name in monthYear");
+			throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat);
 		}
-		catch
+
+		if (DateTime.TryParseExact(parts[0], "MMMM", CultureInfo.InvariantCulture,
+			DateTimeStyles.None, out var date))
 		{
-			throw new UserFriendlyException(
-				"Invalid monthYear format. Expected format: MMMM-YYYY (e.g., JANUARY-2025)");
+			return $"{parts[1]}-{date.Month:D2}";
 		}
+
+		throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat);
 	}
 
-	/// <summary>
-	/// Maps internal SalarySlipDto to OpenAPI contract SalarySlipResponse
-	/// </summary>
-	private SalarySlipResponse MapToSalarySlipResponse(SalarySlipDto dto, string contractMonthYear)
+	private static SalarySlipResponse MapToSalarySlipResponse(SalarySlipDto dto, string contractMonthYear)
 	{
 		return new SalarySlipResponse
 		{

@@ -1,81 +1,88 @@
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
-using Volo.Abp.Domain.Entities;
 
 namespace ShikshaMitra.HR.Employees.FamilyInfo;
 
-/// <summary>
-/// Application service for managing employee family information.
-/// </summary>
+[RemoteService(false)]
+[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 public class EmployeeFamilyInfoAppService(
 	IEmployeeRepository employeeRepository,
+	IEmployeeFamilyMemberRepository familyMemberRepository,
 	EmployeeManager employeeManager)
 	: ApplicationService, IEmployeeFamilyInfoAppService
 {
 	/// <inheritdoc />
 	public async Task<FamilyInfoResponse> GetAsync(Guid employeeId)
 	{
-		// Repository.GetAsync throws EntityNotFoundException if not found
+		// Validate employee exists
 		var employee = await employeeRepository.GetAsync(employeeId);
+
+		// Get family members from new table
+		var familyMembers = await familyMemberRepository.GetByEmployeeIdAsync(employeeId);
+
+		var father = familyMembers.FirstOrDefault(fm => fm.RelationType == FamilyRelationType.Father);
+		var mother = familyMembers.FirstOrDefault(fm => fm.RelationType == FamilyRelationType.Mother);
+		var spouse = familyMembers.FirstOrDefault(fm => fm.RelationType == FamilyRelationType.Spouse);
 
 		return new FamilyInfoResponse
 		{
 			Id = employee.Id,
-			FatherDetails = MapContactDetailsToFamilyMemberInfo(employee.FatherDetails),
-			MotherDetails = MapContactDetailsToFamilyMemberInfo(employee.MotherDetails),
-			SpouseDetails = MapContactDetailsToFamilyMemberInfo(employee.SpouseDetails)
+			FatherDetails = MapFamilyMemberToFamilyMemberInfo(father),
+			MotherDetails = MapFamilyMemberToFamilyMemberInfo(mother),
+			SpouseDetails = MapFamilyMemberToFamilyMemberInfo(spouse)
 		};
 	}
 
 	/// <inheritdoc />
 	public async Task UpsertAsync(Guid employeeId, FamilyInfoRequest input)
 	{
-		// Map DTOs to domain value objects
+		// Map DTOs to domain value objects (for backward compatibility)
 		var fatherDetails = MapFamilyMemberInfoToContactDetails(input.FatherDetails);
 		var motherDetails = MapFamilyMemberInfoToContactDetails(input.MotherDetails);
 		var spouseDetails = MapFamilyMemberInfoToContactDetails(input.SpouseDetails);
 
-		// Update family info using EmployeeManager
-		var employee = await employeeManager.UpdateFamilyInfoByEmployeeIdAsync(
+		// Update family info using EmployeeManager (now updates separate table)
+		await employeeManager.UpdateFamilyInfoByEmployeeIdAsync(
 			employeeId,
 			fatherDetails,
 			motherDetails,
 			spouseDetails);
-
-		// Persist changes
-		await employeeRepository.UpdateAsync(employee);
 	}
 
-	private static FamilyMemberInfo? MapContactDetailsToFamilyMemberInfo(ContactDetails? details)
+	private static FamilyMemberInfo? MapFamilyMemberToFamilyMemberInfo(EmployeeFamilyMember? member)
 	{
-		if (details == null)
+		if (member == null)
 		{
 			return null;
 		}
 
 		return new FamilyMemberInfo
 		{
-			Name = details.Name,
-			Occupation = details.Occupation,
-			MobileNo = details.ContactNo,
-			Address1 = details.Address1,
-			Address2 = details.Address2,
-			Address3 = details.Address3,
-			City = details.City,
-			Pincode = details.PinCode,
-			Country = !string.IsNullOrEmpty(details.CountryName) || !string.IsNullOrEmpty(details.CountryIsoCode)
+			Name = member.Name,
+			Occupation = member.Occupation,
+			MobileNo = member.ContactNo,
+			Address1 = member.Address1,
+			Address2 = member.Address2,
+			Address3 = member.Address3,
+			City = member.City,
+			Pincode = member.PinCode,
+			Country = !string.IsNullOrEmpty(member.CountryName) || !string.IsNullOrEmpty(member.CountryIsoCode)
 				? new CountryInfo
 				{
-					Name = details.CountryName ?? string.Empty,
-					IsoCode = details.CountryIsoCode ?? string.Empty
+					Name = member.CountryName ?? string.Empty,
+					IsoCode = member.CountryIsoCode ?? string.Empty
 				}
 				: null,
-			State = !string.IsNullOrEmpty(details.StateName) || !string.IsNullOrEmpty(details.StateIsoCode)
+			State = !string.IsNullOrEmpty(member.StateName) || !string.IsNullOrEmpty(member.StateIsoCode)
 				? new StateInfo
 				{
-					Name = details.StateName ?? string.Empty,
-					IsoCode = details.StateIsoCode ?? string.Empty
+					Name = member.StateName ?? string.Empty,
+					IsoCode = member.StateIsoCode ?? string.Empty
 				}
 				: null
 		};

@@ -2,6 +2,6 @@
 
 public enum ArrangementByEnum
 {
-	FirstName,
-	LastName
+	FirstName = 0,
+	LastName = 1
 }

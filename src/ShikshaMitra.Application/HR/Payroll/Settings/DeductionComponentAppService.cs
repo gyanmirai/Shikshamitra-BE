@@ -1,8 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Caching;
@@ -10,9 +12,7 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.Payroll.Settings;
 
-/// <summary>
-/// Application service for managing deduction components
-/// </summary>
+[RemoteService(false)]
 public class DeductionComponentAppService : CrudAppService<
 	DeductionComponent,
 	DeductionComponentDto,
@@ -23,13 +23,11 @@ public class DeductionComponentAppService : CrudAppService<
 {
 	private readonly DeductionComponentManager _deductionComponentManager;
 	private readonly IDistributedCache<PagedResultDto<DeductionComponentDto>> _cache;
-	
-	// Base cache key for all active deduction components
-	private string GetBaseCacheKey() => 
+
+	private string GetBaseCacheKey() =>
 		$"DeductionComponents:Active:Tenant:{CurrentTenant?.Id ?? Guid.Empty}";
-	
-	// Paginated cache key
-	private string GetActiveCacheKey(int skipCount, int maxResultCount) => 
+
+	private string GetActiveCacheKey(int skipCount, int maxResultCount) =>
 		$"{GetBaseCacheKey()}:Skip:{skipCount}:Take:{maxResultCount}";
 
 	public DeductionComponentAppService(
@@ -44,20 +42,31 @@ public class DeductionComponentAppService : CrudAppService<
 
 	public override async Task<DeductionComponentDto> CreateAsync(CreateDeductionComponentDto input)
 	{
+		ArgumentNullException.ThrowIfNull(input);
+
 		var deductionComponent = await _deductionComponentManager.CreateAsync(
 			input.Name,
 			input.Description,
 			input.ComponentType,
-			input.DependOn,
-			input.CustomComponentId,
+			input.CalculationType,
 			input.Amount,
+			input.Percentage,
+			input.SelectedDeductionComponentId,
+			input.DependOn,
 			input.VisibleInPayslip,
 			input.DisplayOrder
 		);
 
-		await Repository.InsertAsync(deductionComponent, autoSave: true);
+		try
+		{
+			await Repository.InsertAsync(deductionComponent, autoSave: true);
+		}
+		catch (Exception ex) when (IsDeductionComponentNameUniqueViolation(ex))
+		{
+			throw new BusinessException("ShikshaMitra:DeductionComponentNameAlreadyExists")
+				.WithData("name", input.Name);
+		}
 
-		// Clear cache
 		await ClearCacheAsync();
 
 		return ObjectMapper.Map<DeductionComponent, DeductionComponentDto>(deductionComponent);
@@ -65,6 +74,8 @@ public class DeductionComponentAppService : CrudAppService<
 
 	public override async Task<DeductionComponentDto> UpdateAsync(Guid id, UpdateDeductionComponentDto input)
 	{
+		ArgumentNullException.ThrowIfNull(input);
+
 		var deductionComponent = await Repository.GetAsync(id);
 
 		await _deductionComponentManager.UpdateAsync(
@@ -72,16 +83,25 @@ public class DeductionComponentAppService : CrudAppService<
 			input.Name,
 			input.Description,
 			input.ComponentType,
-			input.DependOn,
-			input.CustomComponentId,
+			input.CalculationType,
 			input.Amount,
+			input.Percentage,
+			input.SelectedDeductionComponentId,
+			input.DependOn,
 			input.VisibleInPayslip,
 			input.DisplayOrder
 		);
 
-		await Repository.UpdateAsync(deductionComponent, autoSave: true);
+		try
+		{
+			await Repository.UpdateAsync(deductionComponent, autoSave: true);
+		}
+		catch (Exception ex) when (IsDeductionComponentNameUniqueViolation(ex))
+		{
+			throw new BusinessException("ShikshaMitra:DeductionComponentNameAlreadyExists")
+				.WithData("name", input.Name);
+		}
 
-		// Clear cache
 		await ClearCacheAsync();
 
 		return ObjectMapper.Map<DeductionComponent, DeductionComponentDto>(deductionComponent);
@@ -90,38 +110,48 @@ public class DeductionComponentAppService : CrudAppService<
 	public override async Task DeleteAsync(Guid id)
 	{
 		await Repository.DeleteAsync(id);
-		
-		// Clear cache
 		await ClearCacheAsync();
 	}
 
 	public override async Task<PagedResultDto<DeductionComponentDto>> GetListAsync(PagedAndSortedResultRequestDto input)
 	{
-		var queryable = await Repository.GetQueryableAsync();
-		
-		// Apply sorting
-		var sorting = input.Sorting ?? "DisplayOrder ASC, Name ASC";
-		queryable = ApplySorting(queryable, sorting);
+		return await GetFilteredListAsync(input.SkipCount, input.MaxResultCount, null);
+	}
 
-		// Get total count
+	public override async Task<DeductionComponentDto> GetAsync(Guid id)
+	{
+		var dto = await base.GetAsync(id);
+		return await PopulateSelectedComponentDataAsync(dto);
+	}
+
+	public async Task<PagedResultDto<DeductionComponentDto>> GetFilteredListAsync(int skipCount, int maxResultCount, string? search)
+	{
+		var queryable = await Repository.GetQueryableAsync();
+
+		if (!string.IsNullOrWhiteSpace(search))
+		{
+			var term = search.Trim().ToLower();
+			queryable = queryable.Where(x => x.Name.ToLower().Contains(term));
+		}
+
+		queryable = queryable.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name);
+
 		var totalCount = await AsyncExecuter.CountAsync(queryable);
 
-		// Get items
 		var items = await AsyncExecuter.ToListAsync(
 			queryable
-				.Skip(input.SkipCount)
-				.Take(input.MaxResultCount)
+				.Skip(skipCount)
+				.Take(maxResultCount)
 		);
 
-		return new PagedResultDto<DeductionComponentDto>(
-			totalCount,
-			ObjectMapper.Map<List<DeductionComponent>, List<DeductionComponentDto>>(items)
-		);
+		var mappedItems = ObjectMapper.Map<List<DeductionComponent>, List<DeductionComponentDto>>(items);
+		await PopulateSelectedComponentDataAsync(mappedItems);
+
+		return new PagedResultDto<DeductionComponentDto>(totalCount, mappedItems);
 	}
 
 	public async Task<PagedResultDto<DeductionComponentDto>> GetAllActiveAsync(PagedResultRequestDto input)
 	{
-		// Try to get from cache
 		var activeCacheKey = GetActiveCacheKey(input.SkipCount, input.MaxResultCount);
 		var cached = await _cache.GetAsync(activeCacheKey);
 		if (cached != null)
@@ -129,7 +159,6 @@ public class DeductionComponentAppService : CrudAppService<
 			return cached;
 		}
 
-		// Fetch from database
 		var queryable = await Repository.GetQueryableAsync();
 		var query = queryable.Where(x => x.IsActive);
 
@@ -146,7 +175,8 @@ public class DeductionComponentAppService : CrudAppService<
 			ObjectMapper.Map<List<DeductionComponent>, List<DeductionComponentDto>>(items)
 		);
 
-		// Cache the result
+		await PopulateSelectedComponentDataAsync(result.Items);
+
 		await _cache.SetAsync(
 			activeCacheKey,
 			result,
@@ -164,8 +194,6 @@ public class DeductionComponentAppService : CrudAppService<
 		var deductionComponent = await Repository.GetAsync(id);
 		deductionComponent.Activate();
 		await Repository.UpdateAsync(deductionComponent, autoSave: true);
-		
-		// Clear cache
 		await ClearCacheAsync();
 	}
 
@@ -174,27 +202,15 @@ public class DeductionComponentAppService : CrudAppService<
 		var deductionComponent = await Repository.GetAsync(id);
 		deductionComponent.Deactivate();
 		await Repository.UpdateAsync(deductionComponent, autoSave: true);
-		
-		// Clear cache
 		await ClearCacheAsync();
 	}
 
 	private async Task ClearCacheAsync()
 	{
-		// Clear cache by removing common pagination combinations
-		// Since IDistributedCache doesn't support pattern-based removal out of the box,
-		// we generate cache keys for common pagination scenarios
-		
-		var baseCacheKey = GetBaseCacheKey();
 		var cacheKeysToRemove = new List<string>();
-		
-		// Common page sizes used in the application
-		int[] commonPageSizes = { 10, 25, 50, 100 };
-		
-		// For each page size, clear first few pages (covers most access patterns)
-		// Adjust maxPages based on your typical data volume
+		int[] commonPageSizes = { 10, 20, 25, 50, 100 };
 		int maxPages = 10;
-		
+
 		foreach (var pageSize in commonPageSizes)
 		{
 			for (int page = 0; page < maxPages; page++)
@@ -203,9 +219,56 @@ public class DeductionComponentAppService : CrudAppService<
 				cacheKeysToRemove.Add(GetActiveCacheKey(skipCount, pageSize));
 			}
 		}
-		
-		// Use RemoveManyAsync for better performance (single operation vs multiple awaits)
-		await _cache.RemoveManyAsync(cacheKeysToRemove);
+
+		try
+		{
+			await _cache.RemoveManyAsync(cacheKeysToRemove);
+		}
+		catch (Exception ex)
+		{
+			Logger.LogWarning(
+				ex,
+				"Failed to invalidate deduction component cache for tenant {TenantId}. List endpoints may be stale until expiration.",
+				CurrentTenant?.Id);
+		}
+	}
+
+	/// <summary>
+	/// Maps DB unique violations on (TenantId, Name) to a handled business error (e.g. race after <see cref="DeductionComponentManager"/> check).
+	/// </summary>
+	private static bool IsDeductionComponentNameUniqueViolation(Exception exception)
+	{
+		const string indexName = "IX_DeductionComponents_TenantId_Name";
+		const string tableHint = "AppDeductionComponents";
+
+		for (var ex = exception; ex != null; ex = ex.InnerException!)
+		{
+			var message = ex.Message;
+			if (string.IsNullOrEmpty(message))
+			{
+				continue;
+			}
+
+			if (message.Contains(indexName, StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			if (message.Contains(tableHint, StringComparison.OrdinalIgnoreCase)
+			    && message.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			if (message.Contains("23505", StringComparison.Ordinal)
+			    && (message.Contains(tableHint, StringComparison.OrdinalIgnoreCase)
+			        || message.Contains(indexName, StringComparison.OrdinalIgnoreCase)))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private IQueryable<DeductionComponent> ApplySorting(IQueryable<DeductionComponent> queryable, string sorting)
@@ -227,11 +290,10 @@ public class DeductionComponentAppService : CrudAppService<
 
 			if (isFirstSort)
 			{
-				// First sort: use OrderBy/OrderByDescending
 				orderedQueryable = property.ToLower() switch
 				{
-					"name" => direction == "DESC" 
-						? queryable.OrderByDescending(x => x.Name) 
+					"name" => direction == "DESC"
+						? queryable.OrderByDescending(x => x.Name)
 						: queryable.OrderBy(x => x.Name),
 					"componenttype" => direction == "DESC"
 						? queryable.OrderByDescending(x => x.ComponentType)
@@ -248,11 +310,10 @@ public class DeductionComponentAppService : CrudAppService<
 			}
 			else
 			{
-				// Subsequent sorts: use ThenBy/ThenByDescending
 				orderedQueryable = property.ToLower() switch
 				{
-					"name" => direction == "DESC" 
-						? orderedQueryable!.ThenByDescending(x => x.Name) 
+					"name" => direction == "DESC"
+						? orderedQueryable!.ThenByDescending(x => x.Name)
 						: orderedQueryable!.ThenBy(x => x.Name),
 					"componenttype" => direction == "DESC"
 						? orderedQueryable!.ThenByDescending(x => x.ComponentType)
@@ -268,7 +329,63 @@ public class DeductionComponentAppService : CrudAppService<
 			}
 		}
 
-		// Apply default fallback if no valid sort was applied
 		return orderedQueryable ?? queryable.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name);
+	}
+
+	private async Task<DeductionComponentDto> PopulateSelectedComponentDataAsync(DeductionComponentDto dto)
+	{
+		if (!dto.SelectedDeductionComponentId.HasValue)
+		{
+			return dto;
+		}
+
+		var selected = await Repository.FindAsync(dto.SelectedDeductionComponentId.Value);
+		if (selected is null)
+		{
+			return dto;
+		}
+
+		dto.SelectedDeductionComponentName = selected.Name;
+		dto.SelectedDeductionComponentDescription = selected.Description;
+		dto.SelectedDeductionComponentVisibleInPayslip = selected.VisibleInPayslip;
+
+		return dto;
+	}
+
+	private async Task PopulateSelectedComponentDataAsync(IReadOnlyList<DeductionComponentDto> items)
+	{
+		var selectedIds = items
+			.Where(x => x.SelectedDeductionComponentId.HasValue)
+			.Select(x => x.SelectedDeductionComponentId!.Value)
+			.Distinct()
+			.ToList();
+
+		if (selectedIds.Count == 0)
+		{
+			return;
+		}
+
+		var queryable = await Repository.GetQueryableAsync();
+		var selectedComponents = await AsyncExecuter.ToListAsync(
+			queryable.Where(x => selectedIds.Contains(x.Id)));
+
+		var selectedById = selectedComponents.ToDictionary(x => x.Id);
+
+		foreach (var item in items)
+		{
+			if (!item.SelectedDeductionComponentId.HasValue)
+			{
+				continue;
+			}
+
+			if (!selectedById.TryGetValue(item.SelectedDeductionComponentId.Value, out var selected))
+			{
+				continue;
+			}
+
+			item.SelectedDeductionComponentName = selected.Name;
+			item.SelectedDeductionComponentDescription = selected.Description;
+			item.SelectedDeductionComponentVisibleInPayslip = selected.VisibleInPayslip;
+		}
 	}
 }

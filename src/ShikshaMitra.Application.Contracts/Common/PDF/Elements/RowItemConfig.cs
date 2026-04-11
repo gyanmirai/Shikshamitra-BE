@@ -15,7 +15,7 @@ public class RowItemConfig
 
 public enum TypeInRow
 {
-	Auto,
-	Constant,
-	Relative,
+	Auto = 0,
+	Constant = 1,
+	Relative = 2,
 }

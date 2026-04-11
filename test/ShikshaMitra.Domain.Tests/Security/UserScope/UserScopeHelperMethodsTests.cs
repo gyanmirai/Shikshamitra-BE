@@ -27,8 +27,8 @@ public class UserScopeHelperMethodsTests
         };
 
         // Act - Simulating what HasAccessToDivisionAsync does
-        var hasAccess = scope.IsAdmin || 
-                       scope.HasWildcardDivision || 
+        var hasAccess = scope.IsAdmin ||
+                       scope.HasWildcardDivision ||
                        scope.DivisionIds.Contains(divisionId);
 
         // Assert
@@ -48,8 +48,8 @@ public class UserScopeHelperMethodsTests
         };
 
         // Act
-        var hasAccess = scope.IsAdmin || 
-                       scope.HasWildcardDivision || 
+        var hasAccess = scope.IsAdmin ||
+                       scope.HasWildcardDivision ||
                        scope.DivisionIds.Contains(divisionId);
 
         // Assert
@@ -69,8 +69,8 @@ public class UserScopeHelperMethodsTests
         };
 
         // Act
-        var hasAccess = scope.IsAdmin || 
-                       scope.HasWildcardDivision || 
+        var hasAccess = scope.IsAdmin ||
+                       scope.HasWildcardDivision ||
                        scope.DivisionIds.Contains(divisionId);
 
         // Assert
@@ -90,8 +90,8 @@ public class UserScopeHelperMethodsTests
         };
 
         // Act
-        var hasAccess = scope.IsAdmin || 
-                       scope.HasWildcardStandard || 
+        var hasAccess = scope.IsAdmin ||
+                       scope.HasWildcardStandard ||
                        scope.StandardIds.Contains(standardId);
 
         // Assert
@@ -111,8 +111,8 @@ public class UserScopeHelperMethodsTests
         };
 
         // Act
-        var hasAccess = scope.IsAdmin || 
-                       scope.HasWildcardStandard || 
+        var hasAccess = scope.IsAdmin ||
+                       scope.HasWildcardStandard ||
                        scope.StandardIds.Contains(standardId);
 
         // Assert
@@ -132,8 +132,8 @@ public class UserScopeHelperMethodsTests
         };
 
         // Act
-        var hasAccess = scope.IsAdmin || 
-                       scope.HasWildcardBoard || 
+        var hasAccess = scope.IsAdmin ||
+                       scope.HasWildcardBoard ||
                        scope.BoardIds.Contains(boardId);
 
         // Assert
@@ -153,8 +153,8 @@ public class UserScopeHelperMethodsTests
         };
 
         // Act
-        var hasAccess = scope.IsAdmin || 
-                       scope.HasWildcardBoard || 
+        var hasAccess = scope.IsAdmin ||
+                       scope.HasWildcardBoard ||
                        scope.BoardIds.Contains(boardId);
 
         // Assert
@@ -175,8 +175,8 @@ public class UserScopeHelperMethodsTests
         };
 
         // Act
-        var hasAccess = scope.IsAdmin || 
-                       scope.HasWildcardBoard || 
+        var hasAccess = scope.IsAdmin ||
+                       scope.HasWildcardBoard ||
                        scope.BoardIds.Contains(boardId);
 
         // Assert

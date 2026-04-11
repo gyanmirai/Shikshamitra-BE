@@ -1,4 +1,4 @@
-using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
+﻿using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
 using ShikshaMitra.HR.Employees;
 using System;
 using System.Collections.Generic;
@@ -15,6 +15,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 /// Application service for attendance tracking (date-wise and employee-wise reports).
 /// Uses DB-side paging/filtering for scalability.
 /// </summary>
+[RemoteService(false)]
 public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrackingAppService
 {
 	private readonly IEmployeeAttendanceRepository _attendanceRepository;
@@ -68,7 +69,7 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		// Get rejected leaves that overlap with the target date
 		var targetDateStart = new DateTimeOffset(targetDate.Date, TimeSpan.Zero);
 		var targetDateEnd = targetDateStart.AddDays(1).AddTicks(-1);
-		
+
 		var rejectedLeaveEmployeeIds = await AsyncExecuter.ToListAsync(
 			leaveQuery
 				.Where(l => l.Status == EmployeeLeaveStatusType.Rejected &&
@@ -83,11 +84,11 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		{
 			attendanceData = input.Status.Value switch
 			{
-				AttendanceTrackingStatus.PRESENT => attendanceData.Where(a => 
+				AttendanceTrackingStatus.PRESENT => attendanceData.Where(a =>
 					a.StatusType == EmployeeAttendanceStatusType.Present),
-				AttendanceTrackingStatus.ABSENT => attendanceData.Where(a => 
+				AttendanceTrackingStatus.ABSENT => attendanceData.Where(a =>
 					a.StatusType == EmployeeAttendanceStatusType.FullDayLeave),
-				AttendanceTrackingStatus.HALF_DAY => attendanceData.Where(a => 
+				AttendanceTrackingStatus.HALF_DAY => attendanceData.Where(a =>
 					a.StatusType == EmployeeAttendanceStatusType.HalfDayLeave),
 				AttendanceTrackingStatus.REJECTED_LEAVE => attendanceData.Where(a =>
 					rejectedLeaveEmployeeIds.Contains(a.EmployeeId)),
@@ -112,7 +113,7 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		var allAttendanceForDate = await AsyncExecuter.ToListAsync(
 			attendanceQuery.Where(a => a.AttendanceDate == targetDateOnly)
 		);
-		
+
 		var summary = new AttendanceSummary
 		{
 			All = allAttendanceForDate.Count,
@@ -187,7 +188,7 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		// Get rejected leaves for this employee in the date range
 		var startDateTime = new DateTimeOffset(startDate.Date, TimeSpan.Zero);
 		var endDateTime = new DateTimeOffset(endDate.Date.AddDays(1).AddTicks(-1), TimeSpan.Zero);
-		
+
 		var rejectedLeaves = await AsyncExecuter.ToListAsync(
 			leaveQuery
 				.Where(l => l.EmployeeId == input.EmployeeId &&

@@ -2,7 +2,7 @@
 
 public enum NotificationMethodType
 {
-	Email,
-	SMS,
-	PushNotification
+	Email = 0,
+	SMS = 1,
+	PushNotification = 2
 }

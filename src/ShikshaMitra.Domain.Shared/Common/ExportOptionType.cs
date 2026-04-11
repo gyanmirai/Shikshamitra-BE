@@ -2,6 +2,6 @@
 
 public enum ExportOptionType
 {
-	PDF,
-	Excel
+	PDF = 0,
+	Excel = 1
 }

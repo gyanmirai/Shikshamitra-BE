@@ -2,6 +2,6 @@
 
 public enum EducationBoardType
 {
-	CBSE,
-	GSEB,
+	CBSE = 0,
+	GSEB = 1,
 }

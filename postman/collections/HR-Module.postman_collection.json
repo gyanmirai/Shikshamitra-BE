@@ -1,0 +1,1293 @@
+{
+  "info": {
+    "_postman_id": "hr-module-api-collection",
+    "name": "ShikshaMitra - HR Module",
+    "description": "Phase 1 HR collection organized by canonical module domains:\n- Shared Authentication\n- HR > Employees\n- HR > Calendar\n- HR > Attendance Leaves\n- HR > Payroll Settings\n- HR > Payroll Operations\n- HR > Reports",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "hr-module"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "{{base_url}}",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('access_token', response.access_token);",
+                  "    pm.environment.set('token_type', response.token_type);",
+                  "    console.log('✅ Token saved to environment');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "__tenant",
+                "value": "{{tenant_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "{{username}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "ShikshaMitra_App",
+                  "type": "text"
+                },
+                {
+                  "key": "scope",
+                  "value": "offline_access ShikshaMitra",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/connect/token",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "connect",
+                "token"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "HR",
+      "item": [
+        {
+          "name": "Employees",
+          "item": [
+            {
+              "name": "Employees",
+              "item": [
+                {
+                  "name": "Get Employees",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/employees?page=1&pageSize=10",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "employees"
+                      ],
+                      "query": [
+                        {
+                          "key": "page",
+                          "value": "1"
+                        },
+                        {
+                          "key": "pageSize",
+                          "value": "10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Search Employees",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/employees/search?search=John",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "employees",
+                        "search"
+                      ],
+                      "query": [
+                        {
+                          "key": "search",
+                          "value": "John"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Get Employee By Id",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/employees/{{employee_id}}",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "employees",
+                        "{{employee_id}}"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Personal Info",
+              "item": [
+                {
+                  "name": "Get Personal Info",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/employees/{{employee_id}}/personal-info",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "employees",
+                        "{{employee_id}}",
+                        "personal-info"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Update Personal Info",
+                  "request": {
+                    "method": "PUT",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"mobileNo\": \"9876543210\",\n  \"email\": \"john.doe@example.com\",\n  \"gender\": 1,\n  \"dob\": \"1990-01-01\",\n  \"doj\": \"2023-01-01\",\n  \"roleId\": \"{{role_id}}\",\n  \"departmentId\": \"{{department_id}}\",\n  \"shiftId\": \"{{shift_id}}\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/employees/{{employee_id}}/personal-info",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "employees",
+                        "{{employee_id}}",
+                        "personal-info"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Family Info",
+              "item": [
+                {
+                  "name": "Get Family Info",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/employees/{{employee_id}}/family-info",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "employees",
+                        "{{employee_id}}",
+                        "family-info"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Update Family Info",
+                  "request": {
+                    "method": "PUT",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"fatherName\": \"Robert Doe\",\n  \"motherName\": \"Mary Doe\",\n  \"spouseName\": \"Jane Doe\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/employees/{{employee_id}}/family-info",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "employees",
+                        "{{employee_id}}",
+                        "family-info"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Work Experience",
+              "item": [
+                {
+                  "name": "Get Work Experience",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/employees/{{employee_id}}/work-experience",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "employees",
+                        "{{employee_id}}",
+                        "work-experience"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Update Work Experience",
+                  "request": {
+                    "method": "PUT",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "[\n  {\n    \"organizationName\": \"Previous Corp\",\n    \"designation\": \"Junior Dev\",\n    \"startDate\": \"2020-01-01\",\n    \"endDate\": \"2022-12-31\",\n    \"isCurrent\": false\n  }\n]",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/employees/{{employee_id}}/work-experience",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "employees",
+                        "{{employee_id}}",
+                        "work-experience"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Reporting Manager",
+              "item": [
+                {
+                  "name": "Get Reporting Manager",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/employees/{{employee_id}}/reporting-manager",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "employees",
+                        "{{employee_id}}",
+                        "reporting-manager"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Assign Reporting Manager",
+                  "request": {
+                    "method": "PUT",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"reportingManagerId\": \"{{manager_id}}\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/employees/{{employee_id}}/reporting-manager",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "employees",
+                        "{{employee_id}}",
+                        "reporting-manager"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Documents",
+              "item": [
+                {
+                  "name": "Get Document Configs",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/employees/documents",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "employees",
+                        "documents"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Create Document Config",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"Aadhar Card\",\n  \"isRequired\": true\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/employees/documents",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "employees",
+                        "documents"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Calendar",
+          "item": [
+            {
+              "name": "Events",
+              "item": [
+                {
+                  "name": "Get Events",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/app/event-and-holiday",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "app",
+                        "event-and-holiday"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Holidays",
+              "item": []
+            },
+            {
+              "name": "Holiday Types",
+              "item": []
+            }
+          ]
+        },
+        {
+          "name": "Attendance Leaves",
+          "item": [
+            {
+              "name": "Leave Types",
+              "item": [
+                {
+                  "name": "Get Leave Types",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/leave-types?mediumStageId={{medium_stage_id}}&page=1&pageSize=10",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "leave-types"
+                      ],
+                      "query": [
+                        {
+                          "key": "mediumStageId",
+                          "value": "{{medium_stage_id}}"
+                        },
+                        {
+                          "key": "page",
+                          "value": "1"
+                        },
+                        {
+                          "key": "pageSize",
+                          "value": "10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Get Leave Type By Id",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/leave-types/{{leave_type_id}}",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "leave-types",
+                        "{{leave_type_id}}"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Create Leave Type",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"name\": \"Sick Leave\",\n    \"shortName\": \"SL\",\n    \"description\": \"Medical Leave\",\n    \"isPaid\": true,\n    \"isActive\": true\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/leave-types?mediumStageId={{medium_stage_id}}",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "leave-types"
+                      ],
+                      "query": [
+                        {
+                          "key": "mediumStageId",
+                          "value": "{{medium_stage_id}}"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Update Leave Type",
+                  "request": {
+                    "method": "PUT",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"name\": \"Sick Leave (Updated)\",\n    \"shortName\": \"SL\",\n    \"description\": \"Updated Medical Leave\",\n    \"isPaid\": true,\n    \"isActive\": true\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/leave-types/{{leave_type_id}}",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "leave-types",
+                        "{{leave_type_id}}"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Delete Leave Type",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/leave-types/{{leave_type_id}}",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "leave-types",
+                        "{{leave_type_id}}"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Leave Policies",
+              "item": [
+                {
+                  "name": "Get Leave Policies",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/leave-policies?mediumStageId={{medium_stage_id}}&page=1&pageSize=10",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "leave-policies"
+                      ],
+                      "query": [
+                        {
+                          "key": "mediumStageId",
+                          "value": "{{medium_stage_id}}"
+                        },
+                        {
+                          "key": "page",
+                          "value": "1"
+                        },
+                        {
+                          "key": "pageSize",
+                          "value": "10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Create Leave Policy",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"Standard Policy\",\n  \"leaveTypeId\": \"{{leave_type_id}}\",\n  \"maxDaysPerYear\": 12,\n  \"carryForwardDays\": 0\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/leave-policies?mediumStageId={{medium_stage_id}}",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "leave-policies"
+                      ],
+                      "query": [
+                        {
+                          "key": "mediumStageId",
+                          "value": "{{medium_stage_id}}"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Attendance",
+              "item": [
+                {
+                  "name": "Get Attendance By Date",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/attendance-tracking/date-wise?attendanceDate={{current_date}}&page=1&pageSize=10",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "attendance-tracking",
+                        "date-wise"
+                      ],
+                      "query": [
+                        {
+                          "key": "attendanceDate",
+                          "value": "{{current_date}}",
+                          "description": "DD-MM-YYYY or ISO"
+                        },
+                        {
+                          "key": "page",
+                          "value": "1"
+                        },
+                        {
+                          "key": "pageSize",
+                          "value": "10"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Get Attendance By Employee",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/attendance-tracking/employee-wise?employeeId={{employee_id}}&startDate={{start_date}}&endDate={{end_date}}",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "attendance-tracking",
+                        "employee-wise"
+                      ],
+                      "query": [
+                        {
+                          "key": "employeeId",
+                          "value": "{{employee_id}}"
+                        },
+                        {
+                          "key": "startDate",
+                          "value": "{{start_date}}",
+                          "description": "DD-MM-YYYY"
+                        },
+                        {
+                          "key": "endDate",
+                          "value": "{{end_date}}",
+                          "description": "DD-MM-YYYY"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Employee Attendance",
+              "item": [
+                {
+                  "name": "Get Employee Attendance By Date",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/attendance/employees?date={{current_date_iso}}&page=0&pageSize=20",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "attendance",
+                        "employees"
+                      ],
+                      "query": [
+                        {
+                          "key": "date",
+                          "value": "{{current_date_iso}}"
+                        },
+                        {
+                          "key": "page",
+                          "value": "0"
+                        },
+                        {
+                          "key": "pageSize",
+                          "value": "20"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Update Employee Attendance",
+                  "request": {
+                    "method": "PUT",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"employeeId\": \"{{employee_id}}\",\n  \"date\": \"{{current_date_iso}}\",\n  \"status\": 1, \n  \"checkInTime\": \"09:00:00\",\n  \"checkOutTime\": \"17:00:00\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/attendance/employees",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "attendance",
+                        "employees"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Import Employee Attendance",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "formdata",
+                      "formdata": [
+                        {
+                          "key": "file",
+                          "type": "file",
+                          "src": []
+                        },
+                        {
+                          "key": "date",
+                          "value": "{{current_date_iso}}",
+                          "type": "text"
+                        }
+                      ]
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/attendance/import",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "attendance",
+                        "import"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Leave Requests",
+              "item": [
+                {
+                  "name": "Get Leave Requests",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/leave-management?mediumStageId={{medium_stage_id}}&page=1&pageSize=10",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "leave-management"
+                      ],
+                      "query": [
+                        {
+                          "key": "mediumStageId",
+                          "value": "{{medium_stage_id}}"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Create Leave Request",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "formdata",
+                      "formdata": [
+                        {
+                          "key": "mediumStageId",
+                          "value": "{{medium_stage_id}}",
+                          "type": "text"
+                        },
+                        {
+                          "key": "leaveTypeId",
+                          "value": "{{leave_type_id}}",
+                          "type": "text"
+                        },
+                        {
+                          "key": "startDate",
+                          "value": "{{start_date_iso}}",
+                          "type": "text"
+                        },
+                        {
+                          "key": "endDate",
+                          "value": "{{end_date_iso}}",
+                          "type": "text"
+                        },
+                        {
+                          "key": "reason",
+                          "value": "Medical emergency",
+                          "type": "text"
+                        }
+                      ]
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/v1/leave-management",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "leave-management"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Update Leave Request Status",
+                  "request": {
+                    "method": "PUT",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"status\": 1, \n  \"remarks\": \"Approved\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/leave-management/{{leave_request_id}}",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "leave-management",
+                        "{{leave_request_id}}"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Payroll Settings",
+          "item": [
+            {
+              "name": "Earning Components",
+              "item": [
+                {
+                  "name": "Get Earning Components",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/payroll/earning-components",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "payroll",
+                        "earning-components"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Create Earning Component",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"Basic\",\n  \"type\": 0\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/payroll/earning-components",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "payroll",
+                        "earning-components"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Deduction Components",
+              "item": [
+                {
+                  "name": "Get Deduction Components",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/payroll/deduction-components",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "payroll",
+                        "deduction-components"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "PF Rules",
+              "item": [
+                {
+                  "name": "Get PF Rules",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/payroll/pf-rules",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "payroll",
+                        "pf-rules"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Create PF Rule",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"Standard PF\",\n  \"employerContribution\": 12,\n  \"employeeContribution\": 12\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/payroll/pf-rules",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "payroll",
+                        "pf-rules"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Other Payroll Masters",
+              "item": []
+            }
+          ]
+        },
+        {
+          "name": "Payroll Operations",
+          "item": [
+            {
+              "name": "Salary Structure",
+              "item": [
+                {
+                  "name": "Get Salary Structure",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/payroll/employees/{{employee_id}}/salary-structure",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "payroll",
+                        "employees",
+                        "{{employee_id}}",
+                        "salary-structure"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Update Salary Structure",
+                  "request": {
+                    "method": "PUT",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"components\": [\n    { \"id\": \"{{component_id}}\", \"amount\": 50000 }\n  ]\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/payroll/employees/{{employee_id}}/salary-structure",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "payroll",
+                        "employees",
+                        "{{employee_id}}",
+                        "salary-structure"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Run Payroll",
+              "item": [
+                {
+                  "name": "Get Payroll Preview",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/payroll/run?month={{month_year}}",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "payroll",
+                        "run"
+                      ],
+                      "query": [
+                        {
+                          "key": "month",
+                          "value": "{{month_year}}",
+                          "description": "MMMM-YYYY"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Lock Payroll",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"month\": \"{{month_year}}\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{base_url}}/api/payroll/run",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "payroll",
+                        "run"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Salary Slips",
+              "item": [
+                {
+                  "name": "Get Salary Slip",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/payroll/salary-slips?employeeId={{employee_id}}&monthYear={{month_year}}",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "payroll",
+                        "salary-slips"
+                      ],
+                      "query": [
+                        {
+                          "key": "employeeId",
+                          "value": "{{employee_id}}"
+                        },
+                        {
+                          "key": "monthYear",
+                          "value": "{{month_year}}"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Reports",
+          "item": [
+            {
+              "name": "Employee Reports",
+              "item": [
+                {
+                  "name": "Get Employee Report",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/app/employee-report/employee-report",
+                      "host": [
+                        "{{base_url}}"
+                      ],
+                      "path": [
+                        "api",
+                        "app",
+                        "employee-report",
+                        "employee-report"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Other HR Reports",
+              "item": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

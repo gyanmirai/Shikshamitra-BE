@@ -14,11 +14,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Employee.EmployeeList";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Employee.EmployeeList";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -34,11 +34,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Employee.ICard";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Employee.ICard";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{

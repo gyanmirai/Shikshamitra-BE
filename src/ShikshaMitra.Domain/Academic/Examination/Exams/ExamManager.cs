@@ -52,7 +52,7 @@ public class ExamManager(
     {
         // Logic to update room assignments
         // NOTE: The requirement mentions 'isRoomAssigned' flag at the request level, check if we need to store it on Exam?
-        // Checking Exam entity, I don't see IsRoomAssigned property. 
+        // Checking Exam entity, I don't see IsRoomAssigned property.
         // Assuming strictly updating the ExamSubjectDivision entities.
 
         foreach (var assignment in assignments)
@@ -62,10 +62,10 @@ public class ExamManager(
 
             // Clear existing assignments if needed or update them?
             // Strategy: Sync assignments. using a similar approach to UpdateSubjects/Divisions but nested.
-            
+
             var incomingDivisionIds = assignment.divisions.Select(d => d.divisionId).ToList();
-            
-            // Remove assignments for divisions not in the payload? 
+
+            // Remove assignments for divisions not in the payload?
             // Or assume payload contains all divisions for the subject?
             // The API is "Assign exam rooms", usually implies full state update for that exam's room assignments.
             // Let's assume we update per subject.
@@ -73,7 +73,7 @@ public class ExamManager(
             foreach (var divAssignment in assignment.divisions)
             {
                 var existingAssignment = subject.RoomAssignments.FirstOrDefault(x => x.DivisionId == divAssignment.divisionId);
-                
+
                 if (existingAssignment != null)
                 {
                     existingAssignment.UpdateRooms(divAssignment.roomIds, divAssignment.capacity);
@@ -91,11 +91,11 @@ public class ExamManager(
             }
 
             // Optional: Remove assignments that are not in the incoming list?
-            // If the user sends a partial list, we might lose data. 
+            // If the user sends a partial list, we might lose data.
             // Given "Assign exam rooms" (PUT), it usually means replace.
             // But doing safe updates for now. To be fully PUT-compliant for the sub-resource, we should probably remove missing ones.
             // Let's implement removal of missing divisions for this subject.
-            
+
             var assignmentsToRemove = subject.RoomAssignments
                 .Where(x => !incomingDivisionIds.Contains(x.DivisionId))
                 .ToList();

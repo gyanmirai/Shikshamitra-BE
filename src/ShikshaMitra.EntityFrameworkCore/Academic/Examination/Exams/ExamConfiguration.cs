@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Academic.Examination.Exams;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -34,7 +34,7 @@ public class ExamDivisionConfiguration : IEntityTypeConfiguration<ExamDivision>
     {
         builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ExamDivisions", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
-        
+
         builder.HasKey(x => x.Id);
         builder.Property(x => x.DivisionId).IsRequired();
     }
@@ -71,13 +71,13 @@ public class ExamSubjectDivisionConfiguration : IEntityTypeConfiguration<ExamSub
 
         builder.Property(x => x.DivisionId).IsRequired();
         builder.Property(x => x.Capacity).IsRequired();
-        
+
         // Storing RoomIds as JSON or simpler structure since it's a list of Guids
         // Assuming standard value conversion or handling elsewhere if specific DB provider supports arrays
         // For compatibility, we'll serialize to JSON string if needed, but here we can rely on provider support or Abp's handling if configured.
         // However, standard EF Core doesn't support primitive collections easily on all providers without conversion.
         // I will use a simple JSON conversion.
-        
+
         builder.Property(e => e.RoomIds)
             .HasConversion(
                 v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions)null),

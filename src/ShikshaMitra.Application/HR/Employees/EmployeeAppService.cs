@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.Payroll;
-using ShikshaMitra.HR.Payroll.PayrollStructures;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -19,11 +18,15 @@ using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Employees;
 
+[Obsolete("Use focused employee services instead. See docs/implementation/hr/application-layer-patterns.md")]
+[RemoteService(false)]
 public class EmployeeAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeeAdditionalDetailsRepository additionalDetailsRepository,
+	IEmployeeFamilyMemberRepository familyMemberRepository,
 	EmployeeManager employeeManager,
-	PayrollStructureManager payrollStructureManager,
+	EmployeeDocumentManager employeeDocumentManager,
+	EmployeeAuthorizationService authorizationService,
 	IBlobContainer blobContainer,
 	IEmployeeCacheManager employeeCacheManager,
 	IEmployeePayrollDetailsRepository payrollDetailsRepository,
@@ -41,7 +44,7 @@ public class EmployeeAppService(
 	public async Task<EmployeeDto> GetEmployeeByUserId(Guid userId)
 	{
 		// Navigation properties (Role, Shift) are auto-loaded
-		Employee employee = await employeeRepository.GetEmployeeByUserIdAsync(userId) 
+		Employee employee = await employeeRepository.GetEmployeeByUserIdAsync(userId)
 			?? throw new EntityNotFoundException(typeof(Employee), userId);
 
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
@@ -49,11 +52,53 @@ public class EmployeeAppService(
 
 	public override async Task<EmployeeDto> GetAsync(Guid id)
 	{
-		// Use GetWithDetailsAsync for complete employee data including PayrollStructure
-		var employee = await employeeRepository.GetWithDetailsAsync(id, includePayrollStructure: true)
+		// Use GetWithDetailsAsync for complete employee data
+		var employee = await employeeRepository.GetWithDetailsAsync(id)
 			?? throw new EntityNotFoundException(typeof(Employee), id);
 
-		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
+		var employeeDto = ObjectMapper.Map<Employee, EmployeeDto>(employee);
+
+		// Load family members from separate table
+		await LoadFamilyMembersAsync(employeeDto, id);
+
+		return employeeDto;
+	}
+
+	private async Task LoadFamilyMembersAsync(EmployeeDto employeeDto, Guid employeeId)
+	{
+		var familyMembers = await familyMemberRepository.GetByEmployeeIdAsync(employeeId);
+
+		var father = familyMembers.FirstOrDefault(fm => fm.RelationType == FamilyRelationType.Father);
+		var mother = familyMembers.FirstOrDefault(fm => fm.RelationType == FamilyRelationType.Mother);
+		var spouse = familyMembers.FirstOrDefault(fm => fm.RelationType == FamilyRelationType.Spouse);
+
+		employeeDto.FatherDetails = MapFamilyMemberToContactDetailsDto(father);
+		employeeDto.MotherDetails = MapFamilyMemberToContactDetailsDto(mother);
+		employeeDto.SpouseDetails = MapFamilyMemberToContactDetailsDto(spouse);
+	}
+
+	private static ContactDetailsDto? MapFamilyMemberToContactDetailsDto(EmployeeFamilyMember? member)
+	{
+		if (member == null)
+		{
+			return null;
+		}
+
+		return new ContactDetailsDto
+		{
+			Name = member.Name,
+			Occupation = member.Occupation,
+			ContactNo = member.ContactNo,
+			Address1 = member.Address1,
+			Address2 = member.Address2,
+			Address3 = member.Address3,
+			City = member.City,
+			StateName = member.StateName,
+			StateIsoCode = member.StateIsoCode,
+			CountryName = member.CountryName,
+			CountryIsoCode = member.CountryIsoCode,
+			PinCode = member.PinCode
+		};
 	}
 
 	public async Task<EmployeeDto> CreateBasicInfoAsync(CreateEmployeeBasicInfoDto input)
@@ -116,9 +161,10 @@ public class EmployeeAppService(
 					input.Email
 				);
 
-				// Step 2: Generate password (username@last4digitsOfMobile)
+				// Step 2: Generate password (Username@last4digitsOfMobile - with uppercase first letter)
 				var last4Digits = input.MobileNo.Substring(input.MobileNo.Length - 4);
-				var password = $"{username}@{last4Digits}";
+				var capitalizedUsername = char.ToUpper(username[0]) + username.Substring(1);
+				var password = $"{capitalizedUsername}@{last4Digits}";
 
 				// Step 3: Create user
 				var userId = guidGenerator.Create();
@@ -285,8 +331,8 @@ public class EmployeeAppService(
 	{
 		// Generate base username: firstInitial + lastName (e.g., jdoe)
 		// Sanitize to remove special characters and non-ASCII characters
-		var firstInitial = !string.IsNullOrWhiteSpace(firstName) 
-			? new string(firstName.Where(char.IsLetterOrDigit).ToArray()).ToLower().FirstOrDefault().ToString() 
+		var firstInitial = !string.IsNullOrWhiteSpace(firstName)
+			? new string(firstName.Where(char.IsLetterOrDigit).ToArray()).ToLower().FirstOrDefault().ToString()
 			: "x";
 
 		if (string.IsNullOrWhiteSpace(firstInitial))
@@ -294,7 +340,7 @@ public class EmployeeAppService(
 			firstInitial = "x";
 		}
 
-		var lastNamePart = !string.IsNullOrWhiteSpace(lastName) 
+		var lastNamePart = !string.IsNullOrWhiteSpace(lastName)
 			? new string(lastName.Where(char.IsLetterOrDigit).ToArray()).ToLower()
 			: "user";
 
@@ -381,18 +427,21 @@ public class EmployeeAppService(
 
 	public async Task<EmployeeDto> UpdateFamilyInfo(Guid employeeId, UpdateEmployeeFamilyDetailsDto input)
 	{
-		// convert the input to domain model and update the employee
+		// SECURITY: Check authorization before update
+		await authorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 
+		// Convert the input to domain model and update the employee family members
 		ContactDetails? fatherDetails = ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input.FatherDetails);
 		ContactDetails? motherDetails = ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input.MotherDetails);
 		ContactDetails? spouseDetails = ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input.SpouseDetails);
 
-		Employee? employee =
-			await employeeManager.UpdateFamilyInfoByEmployeeIdAsync(employeeId, fatherDetails, motherDetails,
-				spouseDetails);
+		await employeeManager.UpdateFamilyInfoByEmployeeIdAsync(employeeId, fatherDetails, motherDetails, spouseDetails);
 
-		// Save the employee (cache invalidation handled in repository)
-		employee = await employeeRepository.UpdateAsync(employee);
+		// Get employee to return (family members are now loaded separately)
+		var employee = await employeeRepository.GetAsync(employeeId);
+
+		// Invalidate cache
+		await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
 
 		// Return the DTO
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
@@ -410,12 +459,12 @@ public class EmployeeAppService(
 		});
 
 		// Call the domain service
-		await employeeManager.AddDocumentsAsync(employeeId, employeeDocuments);
+		await employeeDocumentManager.AddDocumentsAsync(employeeId, employeeDocuments);
 	}
 
 	public async Task<DocumentDto> GetDocumentAsync(Guid employeeId, Guid documentId)
 	{
-		EmployeeDocument document = await employeeManager.GetDocumentAsync(employeeId, documentId);
+		EmployeeDocument document = await employeeDocumentManager.GetDocumentAsync(employeeId, documentId);
 
 		await using var stream = await blobContainer.GetAsync(document.BlobName);
 		await using var memoryStream = new MemoryStream();
@@ -431,7 +480,7 @@ public class EmployeeAppService(
 
 	public async Task<List<DocumentMetadataDto>> GetDocumentMetadataAsync(Guid employeeId)
 	{
-		var documents = await employeeManager.GetDocumentsAsync(employeeId);
+		var documents = await employeeDocumentManager.GetDocumentsAsync(employeeId);
 		return documents.Select(doc => new DocumentMetadataDto
 		{
 			Id = doc.Id,
@@ -443,7 +492,7 @@ public class EmployeeAppService(
 
 	public async Task<DocumentDto> UpdateDocumentAsync(Guid employeeId, Guid documentId, DocumentDto documentDto)
 	{
-		var updatedDocument = await employeeManager.UpdateDocumentAsync(
+		var updatedDocument = await employeeDocumentManager.UpdateDocumentAsync(
 			employeeId,
 			documentId,
 			documentDto.FileName,
@@ -596,44 +645,20 @@ public class EmployeeAppService(
 	}
 
 
-	[RemoteService(false)]
-
-	public async Task SetEmployeePayrollStructure(Guid employeeId, Guid payrollStructureId)
-	{
-		await payrollStructureManager.SetEmployeePayrollStructureAsync(employeeId, payrollStructureId);
-	}
-
-	[RemoteService(false)]
-	public async Task RemoveEmployeePayrollStructure(Guid employeeId)
-	{
-		await payrollStructureManager.RemoveEmployeePayrollStructureAsync(employeeId);
-	}
-
-	public async Task UpdatePayrollStructureAsync(Guid employeeId, CreateUpdateEmployeePayrollStructureDto input)
-	{
-		if (input?.PayrollStructures == null || input.PayrollStructures.Count == 0)
-		{
-			throw new UserFriendlyException("Payroll structure is required.");
-		}
-
-		var payrollStructureId = input.PayrollStructures[0].Id;
-		await payrollStructureManager.SetEmployeePayrollStructureAsync(employeeId, payrollStructureId);
-	}
-
 	public async Task DeleteDocumentAsync(Guid employeeId, Guid documentId)
 	{
-		await employeeManager.DeleteDocumentAsync(employeeId, documentId);
+		await employeeDocumentManager.DeleteDocumentAsync(employeeId, documentId);
 	}
 
 	public async Task<string> UploadProfilePictureAsync(Guid employeeId, string fileName, byte[] fileContent)
 	{
-		return await employeeManager.UploadProfilePictureAsync(employeeId, fileName, fileContent);
+		return await employeeDocumentManager.UploadProfilePictureAsync(employeeId, fileName, fileContent);
 	}
 
 	public async Task<DocumentDto?> GetProfilePictureAsync(Guid employeeId)
 	{
 		var employee = await employeeRepository.GetAsync(employeeId);
-		
+
 		if (string.IsNullOrEmpty(employee.ProfilePictureBlobName))
 		{
 			return null;
@@ -690,7 +715,7 @@ public class EmployeeAppService(
 	private static string GetContentTypeFromFileName(string fileName)
 	{
 		var extension = Path.GetExtension(fileName)?.ToLowerInvariant();
-		
+
 		return extension switch
 		{
 			".jpg" or ".jpeg" => "image/jpeg",
@@ -730,26 +755,26 @@ public class EmployeeAppService(
 				TdsPercentage = payrollDetails.TdsPercentage,
 				TdsAmount = payrollDetails.TdsAmount
 			} : new PayrollDetailsDto(),
-		Earnings = (earnings ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(e => new PayrollComponentDto
-		{
-			Name = e.Name,
-			Description = e.Description,
-			Amount = e.Amount,
-			IsFixed = e.IsFixed,
-			IsTemp = e.IsTemp,
-			ComponentType = e.ComponentType,
-			DependOn = e.DependOn
-		}).ToList(),
-		Deductions = (deductions ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(d => new PayrollComponentDto
-		{
-			Name = d.Name,
-			Description = d.Description,
-			Amount = d.Amount,
-			IsFixed = d.IsFixed,
-			IsTemp = d.IsTemp,
-			ComponentType = d.ComponentType,
-			DependOn = d.DependOn
-		}).ToList()
+			Earnings = (earnings ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(e => new PayrollComponentDto
+			{
+				Name = e.Name,
+				Description = e.Description,
+				Amount = e.Amount,
+				IsFixed = e.IsFixed,
+				IsTemp = e.IsTemp,
+				ComponentType = e.ComponentType,
+				DependOn = e.DependOn
+			}).ToList(),
+			Deductions = (deductions ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(d => new PayrollComponentDto
+			{
+				Name = d.Name,
+				Description = d.Description,
+				Amount = d.Amount,
+				IsFixed = d.IsFixed,
+				IsTemp = d.IsTemp,
+				ComponentType = d.ComponentType,
+				DependOn = d.DependOn
+			}).ToList()
 		};
 
 		return result;
@@ -765,7 +790,7 @@ public class EmployeeAppService(
 
 		// Validate employee exists (throws EntityNotFoundException if not found)
 		await employeeRepository.GetAsync(employeeId);
-		
+
 		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
 
 		if (payrollDetails == null)
@@ -878,6 +903,8 @@ public class EmployeeAppService(
 			queryable = queryable.Where(e => e.RoleId == input.RoleId.Value);
 		}
 
+		queryable = ApplySearchFilter(queryable, input.Search);
+
 		// Get total count before pagination
 		var totalCount = await AsyncExecuter.CountAsync(queryable);
 
@@ -894,7 +921,7 @@ public class EmployeeAppService(
 		// Calculate pagination info
 		var pageSize = input.MaxResultCount > 0 ? input.MaxResultCount : 10;
 		var currentPage = (input.SkipCount / pageSize) + 1;
-		var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+		var totalPages = (int) Math.Ceiling((double) totalCount / pageSize);
 
 		// Map to response DTOs
 		var items = employees.Select(MapToEmployeeSummary).ToList();
@@ -909,19 +936,16 @@ public class EmployeeAppService(
 		};
 	}
 
-	public async Task<EmployeeSearchResponse> SearchAsync(SearchEmployeeInput input)
+	private static IQueryable<Employee> ApplySearchFilter(IQueryable<Employee> queryable, string? search)
 	{
-		// Validate minimum search length
-		if (string.IsNullOrEmpty(input.SearchTerm) || input.SearchTerm.Length < 2)
+		if (string.IsNullOrWhiteSpace(search))
 		{
-			return new EmployeeSearchResponse { Items = new List<EmployeeSearchItem>() };
+			return queryable;
 		}
 
-		var searchTerm = input.SearchTerm.ToLower();
-		var queryable = await Repository.GetQueryableAsync();
+		var searchTerm = search.Trim().ToLower();
 
-		// Search by name, employee identifier, email, or mobile number
-		queryable = queryable.Where(e =>
+		return queryable.Where(e =>
 			(e.FirstName != null && e.FirstName.ToLower().Contains(searchTerm)) ||
 			(e.LastName != null && e.LastName.ToLower().Contains(searchTerm)) ||
 			(e.MiddleName != null && e.MiddleName.ToLower().Contains(searchTerm)) ||
@@ -929,20 +953,6 @@ public class EmployeeAppService(
 			(e.Email != null && e.Email.ToLower().Contains(searchTerm)) ||
 			(e.MobileNo != null && e.MobileNo.Contains(searchTerm))
 		);
-
-		// Apply result limit
-		var maxResults = input.MaxResultCount > 0 ? input.MaxResultCount : 50;
-		var employees = await AsyncExecuter.ToListAsync(
-			queryable
-				.OrderBy(e => e.FirstName)
-				.ThenBy(e => e.LastName)
-				.Take(maxResults)
-		);
-
-		// Map to response DTOs
-		var items = employees.Select(MapToEmployeeSearchItem).ToList();
-
-		return new EmployeeSearchResponse { Items = items };
 	}
 
 	private EmployeeSummary MapToEmployeeSummary(Employee employee)
@@ -967,33 +977,7 @@ public class EmployeeAppService(
 				StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"),
 				EndTime = employee.Shift.EndTime.ToString("HH:mm:ss")
 			} : null,
-			Status = (int)(employee.EmployeeStatusType ?? EmployeeStatusType.Active)
-		};
-	}
-
-	private EmployeeSearchItem MapToEmployeeSearchItem(Employee employee)
-	{
-		return new EmployeeSearchItem
-		{
-			Id = employee.Id,
-			RoleName = employee.Role?.Name ?? string.Empty,
-			FullName = employee.EmployeeName ?? string.Empty,
-			ThumbnailPicture = employee.ProfilePictureBlobName ?? string.Empty,
-			EmployeeIdentifier = employee.EmployeeCode ?? string.Empty,
-			Dob = employee.DateOfBirth?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MinValue,
-			Gender = employee.GenderType?.ToString() ?? string.Empty,
-			Doj = employee.DateOfJoining?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MinValue,
-			Email = employee.Email ?? string.Empty,
-			MobileNo = employee.MobileNo ?? string.Empty,
-			IsTeaching = employee.EmployeeGroup == EmployeeGroupType.Teaching,
-			Shift = employee.Shift != null ? new ShiftInfo
-			{
-				Id = employee.Shift.Id,
-				Name = employee.Shift.ShiftName ?? string.Empty,
-				StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"),
-				EndTime = employee.Shift.EndTime.ToString("HH:mm:ss")
-			} : new ShiftInfo(),
-			Status = (int)(employee.EmployeeStatusType ?? EmployeeStatusType.Active)
+			Status = (int) (employee.EmployeeStatusType ?? EmployeeStatusType.Active)
 		};
 	}
 
@@ -1003,7 +987,7 @@ public class EmployeeAppService(
 	public async Task<PayrollContract> GetPayrollContractAsync(Guid employeeId)
 	{
 		await employeeRepository.GetAsync(employeeId); // Validate employee exists
-		
+
 		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
 		var earnings = await payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
 		var deductions = await payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);

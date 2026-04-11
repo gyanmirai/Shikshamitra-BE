@@ -7,7 +7,7 @@ using Volo.Abp.MultiTenancy;
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
 /// <summary>
-/// Represents an assignment type (e.g., Group Project, Case Study, Research Paper) 
+/// Represents an assignment type (e.g., Group Project, Case Study, Research Paper)
 /// associated with an academic medium
 /// </summary>
 public class AssignmentType : FullAuditedAggregateRoot<Guid>, IMultiTenant

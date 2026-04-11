@@ -13,11 +13,11 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
-using Volo.Abp.ObjectMapping;
 using Volo.Abp.Identity;
 using Volo.Abp.Guids;
 using Volo.Abp.Domain.Entities;
 using ShikshaMitra.Students.ValueObjects;
+using ShikshaMitra.Students.StudentEnrollments.Managers;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
@@ -26,36 +26,23 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 /// </summary>
 [Authorize]
 [RemoteService(false)]
-public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionAppService
+public class StudentAdmissionAppService(
+	IRepository<Student, Guid> studentRepository,
+	IRepository<Division, Guid> divisionRepository,
+	IdentityUserManager userManager,
+	IGuidGenerator guidGenerator,
+	IStudentEmailService studentEmailService,
+	AdmissionManager admissionManager) : ApplicationService, IStudentAdmissionAppService
 {
-	private readonly IRepository<Student, Guid> studentRepository;
-	private readonly IRepository<Division, Guid> divisionRepository;
-	private readonly IdentityUserManager userManager;
-	private readonly IGuidGenerator guidGenerator;
-	private readonly IStudentEmailService studentEmailService;
-
-	public StudentAdmissionAppService(
-		IRepository<Student, Guid> studentRepository,
-		IRepository<Division, Guid> divisionRepository,
-		IdentityUserManager userManager,
-		IGuidGenerator guidGenerator,
-		IStudentEmailService studentEmailService)
-	{
-		this.studentRepository = studentRepository;
-		this.divisionRepository = divisionRepository;
-		this.userManager = userManager;
-		this.guidGenerator = guidGenerator;
-		this.studentEmailService = studentEmailService;
-	}
-
 	/// <summary>
 	/// Gets a paginated list of students in admission stage with filters
 	/// </summary>
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.View)]
-	public async Task<PagedResultDto<StudentEnrollmentListDto>> GetListAsync(GetStudentAdmissionsInput input)
+	public async Task<PagedResultDto<StudentDto>> GetListAsync(GetStudentAdmissionsInput input)
 	{
 		var query = (await studentRepository.GetQueryableAsync())
-			.Where(s => s.Status == StudentLifeCycleStatusEnum.Admission);
+			.Where(s => s.Status == StudentLifeCycleStatusEnum.Admission
+				&& s.AcademicMediumId == input.AcademicMediumId);
 
 		// Apply filters
 		if (!string.IsNullOrWhiteSpace(input.Search))
@@ -74,17 +61,16 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 
 		// Apply sorting and paging
 		query = query.OrderByDescending(s => s.CreationTime)
-			.Skip(input.SkipCount)
-			.Take(input.MaxResultCount);
+			.PageBy(input.SkipCount, input.MaxResultCount);
 
 		// Execute query and project to DTO
-		var students = await studentRepository.AsyncExecuter.ToListAsync(
+		var students = await AsyncExecuter.ToListAsync(
 			query
 		);
 
-		var studentDtos = ObjectMapper.Map<List<Student>, List<StudentEnrollmentListDto>>(students);
+		var studentDtos = ObjectMapper.Map<List<Student>, List<StudentDto>>(students);
 
-		return new PagedResultDto<StudentEnrollmentListDto>(totalCount, studentDtos);
+		return new PagedResultDto<StudentDto>(totalCount, studentDtos);
 	}
 
 	/// <summary>
@@ -93,16 +79,10 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.Add)]
 	public async Task AssignDivisionAsync(Guid studentId, AssignDivisionDto input)
 	{
-		// Validate division exists
-		var divisionExists = await divisionRepository.AnyAsync(d => d.Id == input.DivisionId);
-		if (!divisionExists)
-		{
-			throw new BusinessException("StudentAdmission:DivisionNotFound")
-				.WithData("DivisionId", input.DivisionId);
-		}
+		await admissionManager.CanAssignDivisionAsync(studentId, input.DivisionId);
 
 		// Get student
-		var student = await studentRepository.GetAsync(studentId);
+		var student = await studentRepository.GetAsync(studentId) ?? throw new Exception($"Student with ID {studentId} does not exist.");
 
 		// Assign division using domain method
 		student.AssignDivision(input.DivisionId);
@@ -134,7 +114,7 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 
 				if (student == null)
 				{
-					throw new EntityNotFoundException(typeof(Student), item.StudentId);
+					throw new Exception($"Student with ID {item.StudentId} does not exist.");
 				}
 
 				// Apply action
@@ -153,22 +133,15 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 				}
 				else if (item.Action == AdmissionAction.Reject)
 				{
-					if (string.IsNullOrWhiteSpace(item.Remarks))
-					{
-						throw new BusinessException("StudentAdmission:RemarksRequired")
-							.WithData("StudentId", item.StudentId);
-					}
-
 					student.RejectAdmission(item.Remarks);
 					itemResult.NewStatus = StudentEnrollmentApprovalState.Rejected.ToString();
 					itemResult.Message = "Admission rejected successfully";
 				}
 				else
 				{
-					// Explicitly handle invalid/unsupported actions
-					throw new BusinessException("StudentAdmission:InvalidAction")
-						.WithData("StudentId", item.StudentId)
-						.WithData("Action", item.Action);
+					student.MoveToPendingAdmission(item.Remarks);
+					itemResult.NewStatus = StudentEnrollmentApprovalState.Pending.ToString();
+					itemResult.Message = "Admission moved to pending successfully";
 				}
 
 				// Save changes
@@ -227,9 +200,10 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 			return;
 		}
 
-		// 4. Generate Standard Password (username@last4mobile)
+		// 4. Generate Standard Password (Username@last4mobile - with uppercase first letter)
 		var last4Digits = mobile.Length >= 4 ? mobile.Substring(mobile.Length - 4) : "0000";
-		var password = $"{username}@{last4Digits}";
+		var capitalizedUsername = char.ToUpper(username[0]) + username.Substring(1);
+		var password = $"{capitalizedUsername}@{last4Digits}";
 
 		// 5. Create IdentityUser
 		var user = new IdentityUser(
@@ -336,9 +310,10 @@ public class StudentAdmissionAppService : ApplicationService, IStudentAdmissionA
 			var lastName = nameParts.Length > 1 ? nameParts[^1] : "user";
 			var username = await GenerateUniqueUsernameAsync(firstName, lastName);
 
-			// Generate password
+			// Generate password (with uppercase first letter)
 			var last4Digits = mobile.Length >= 4 ? mobile.Substring(mobile.Length - 4) : "0000";
-			var password = $"{username}@{last4Digits}";
+			var capitalizedUsername = char.ToUpper(username[0]) + username.Substring(1);
+			var password = $"{capitalizedUsername}@{last4Digits}";
 
 			// Create IdentityUser
 			var user = new IdentityUser(

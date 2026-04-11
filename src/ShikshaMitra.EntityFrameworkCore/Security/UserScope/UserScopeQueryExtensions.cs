@@ -136,7 +136,7 @@ public static class UserScopeQueryExtensions
 	/// <code>
 	/// var student = await _studentRepository.GetAsync(studentId);
 	/// var userScope = await _userScopeService.GetUserScopeAsync(userId);
-	/// 
+	///
 	/// if (!UserScopeQueryExtensions.HasAccessToEntity(student, userScope))
 	/// {
 	///     throw new UnauthorizedAccessException("You don't have access to this student");

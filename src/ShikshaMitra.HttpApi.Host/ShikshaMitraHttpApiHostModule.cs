@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -13,7 +14,6 @@ using OpenIddict.Validation.AspNetCore;
 using QuestPDF.Infrastructure;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Extensions;
-using ShikshaMitra.Middleware;
 using ShikshaMitra.MultiTenancy;
 using System;
 using System.Collections.Generic;
@@ -111,10 +111,18 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 	private void ConfigureFormOptions(ServiceConfigurationContext context, IConfiguration configuration)
 	{
+		// Missing or zero config yields 0 for MultipartBodyLengthLimit, which rejects every multipart request
+		// ("Multipart body length limit 0 exceeded"). Default matches ASP.NET Core when FormOptions is not overridden.
+		const long defaultMultipartLimit = 128L * 1024 * 1024;
+		const int defaultMemoryBufferThreshold = 64 * 1024;
+
 		context.Services.Configure<FormOptions>(options =>
 		{
-			options.MultipartBodyLengthLimit = configuration.GetValue<long>("FormOptions:MultipartBodyLengthLimit");
-			options.MemoryBufferThreshold = configuration.GetValue<int>("FormOptions:MemoryBufferThreshold");
+			var multipartLimit = configuration.GetValue<long?>("FormOptions:MultipartBodyLengthLimit");
+			options.MultipartBodyLengthLimit = multipartLimit is > 0 ? multipartLimit.Value : defaultMultipartLimit;
+
+			var memoryThreshold = configuration.GetValue<int?>("FormOptions:MemoryBufferThreshold");
+			options.MemoryBufferThreshold = memoryThreshold is > 0 ? memoryThreshold.Value : defaultMemoryBufferThreshold;
 		});
 	}
 
@@ -207,6 +215,120 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		});
 	}
 
+	private static string GetSwaggerModule(string ns)
+	{
+		if (ns.Contains(".HR.") || ns.Contains(".Controllers.HR")) return "v1-hr";
+		if (ns.Contains(".Controllers.Academic")) return "v1-academic";
+		if (ns.Contains(".Controllers.Students") || ns.StartsWith("ShikshaMitra.Students.")) return "v1-students";
+		if (ns.Contains(".Controllers.Finance")) return "v1-finance";
+		if (ns.Contains(".Controllers.Library")) return "v1-library";
+		return "v1-admin";
+	}
+
+	private static string[] GetSwaggerTags(string ns, string controllerName)
+	{
+		// HR Module — handles both ShikshaMitra.Controllers.HR.* and ShikshaMitra.HttpApi.Controllers.HR.*
+		if (ns.Contains(".Controllers.HR."))
+		{
+			var sub = ns.Split(".Controllers.HR.").Last().Split('.').First();
+			return
+			[
+				sub switch
+				{
+					"Employees" => "HR - Employees",
+					"AttendanceAndLeaves" => "HR - Attendance & Leaves",
+					"Payroll" => "HR - Payroll",
+					"Calendar" => "HR - Calendar",
+					"Reports" => "HR - Reports",
+					_ => $"HR - {sub}"
+				}
+			];
+		}
+
+		// Academic Module
+		if (ns.Contains(".Controllers.Academic."))
+		{
+			var sub = ns.Split(".Controllers.Academic.").Last().Split('.').First();
+			return
+			[
+				sub switch
+				{
+					"HomeworkAssignment" => "Academic - Homework & Assignments",
+					"Syllabus" => "Academic - Syllabus",
+					"ClassManagement" => "Academic - Class Management",
+					"ClassTeacher" => "Academic - Class Teacher",
+					"Curriculum" => "Academic - Curriculum",
+					"Examination" => "Academic - Examination",
+					_ => $"Academic - {sub}"
+				}
+			];
+		}
+
+		// Students Module — handles .Controllers.Students.* and ShikshaMitra.Students.Attendance.*
+		if (ns.Contains(".Controllers.Students."))
+		{
+			var sub = ns.Split(".Controllers.Students.").Last().Split('.').First();
+			return
+			[
+				sub switch
+				{
+					"Enrollments" or "StudentEnrollments" => "Students - Enrollments",
+					"Attendances" => "Students - Attendance",
+					"Records" => "Students - Records",
+					_ => $"Students - {sub}"
+				}
+			];
+		}
+		if (ns.StartsWith("ShikshaMitra.Students.Attendance"))
+			return ["Students - Attendance"];
+
+		// Finance Module — handles .Controllers.Finance.Setting and .Controllers.Finance (root-level)
+		if (ns.Contains(".Controllers.Finance"))
+		{
+			if (ns.Contains(".Controllers.Finance."))
+			{
+				var sub = ns.Split(".Controllers.Finance.").Last().Split('.').First();
+				return
+				[
+					sub switch
+					{
+						"Setting" => "Finance - Settings",
+						"StudentFeeAssignment" => "Finance - Student Fee Assignment",
+						_ => $"Finance - {sub}"
+					}
+				];
+			}
+			return ["Finance - General"];
+		}
+
+		// Library Module — handles .Controllers.Library.Setting and .Controllers.Library (root-level)
+		if (ns.Contains(".Controllers.Library"))
+		{
+			if (ns.Contains(".Controllers.Library."))
+			{
+				var sub = ns.Split(".Controllers.Library.").Last().Split('.').First();
+				return
+				[
+					sub switch
+					{
+						"Setting" => "Library - Settings",
+						"Members" => "Library - Members",
+						_ => $"Library - {sub}"
+					}
+				];
+			}
+			return ["Library - General"];
+		}
+
+		// Admin / everything else
+		if (ns.Contains(".Controllers.TenantSettings")) return ["Admin - Tenant Settings"];
+		if (ns.Contains(".Controllers.Security")) return ["Admin - Security"];
+		if (ns.Contains(".Controllers.Communication")) return ["Admin - Communication"];
+		if (ns.Contains(".Controllers.Groups")) return ["Admin - Groups"];
+
+		return [controllerName];
+	}
+
 	private static void ConfigureSwaggerServices(ServiceConfigurationContext context, IConfiguration configuration)
 	{
 		context.Services.AddAbpSwaggerGenWithOAuth(
@@ -214,9 +336,35 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			new Dictionary<string, string> { { "ShikshaMitra", "ShikshaMitra API" } },
 			options =>
 			{
-				options.SwaggerDoc("v1", new OpenApiInfo { Title = "ShikshaMitra API", Version = "v1" });
-				options.DocInclusionPredicate((docName, description) => true);
+				// Define separate Swagger documents per module
+				options.SwaggerDoc("v1-hr", new OpenApiInfo { Title = "HR Module APIs", Version = "v1" });
+				options.SwaggerDoc("v1-academic", new OpenApiInfo { Title = "Academic Module APIs", Version = "v1" });
+				options.SwaggerDoc("v1-students", new OpenApiInfo { Title = "Students Module APIs", Version = "v1" });
+				options.SwaggerDoc("v1-finance", new OpenApiInfo { Title = "Finance Module APIs", Version = "v1" });
+				options.SwaggerDoc("v1-library", new OpenApiInfo { Title = "Library Module APIs", Version = "v1" });
+				options.SwaggerDoc("v1-admin", new OpenApiInfo { Title = "Admin & Settings APIs", Version = "v1" });
+
+				// Route each API to the correct document based on controller namespace
+				options.DocInclusionPredicate((docName, apiDescription) =>
+				{
+					if (apiDescription.ActionDescriptor is not ControllerActionDescriptor controllerAction)
+						return docName == "v1-admin";
+
+					var ns = controllerAction.ControllerTypeInfo.Namespace ?? string.Empty;
+					return GetSwaggerModule(ns) == docName;
+				});
+
 				options.CustomSchemaIds(type => type.FullName);
+
+				// Sub-group within each document using tags
+				options.TagActionsBy(api =>
+				{
+					if (api.ActionDescriptor is not ControllerActionDescriptor controllerAction)
+						return ["Default"];
+
+					var ns = controllerAction.ControllerTypeInfo.Namespace ?? string.Empty;
+					return GetSwaggerTags(ns, controllerAction.ControllerName);
+				});
 			});
 	}
 
@@ -249,33 +397,31 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 	{
 		var fileName = "encryption-certificate.pfx";
 		var password = config["MyAppCertificate:X590:Password"];
-
 		var file = Path.Combine(environment.ContentRootPath, fileName);
+
 		if (File.Exists(file))
 		{
 			var created = File.GetCreationTime(file);
-			var days = (DateTime.Now - created).TotalDays;
-			if (days > 180)
+			if ((DateTime.Now - created).TotalDays <= 180)
 			{
-				File.Delete(file);
+				// Fix: Added EphemeralKeySet to avoid "Access Denied" on restricted environments
+				return new X509Certificate2(file, password,
+					X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet);
 			}
-			else
-			{
-				return new X509Certificate2(file, password, X509KeyStorageFlags.MachineKeySet);
-			}
+			File.Delete(file);
 		}
 
+		using var algorithm = RSA.Create(2048);
+		var subject = new X500DistinguishedName("CN=ShikshaMitra Encryption");
+		var request = new CertificateRequest(subject, algorithm, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+		request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyEncipherment, true));
 
-		using var algorithm = RSA.Create(keySizeInBits: 2048);
-		var subject = new X500DistinguishedName("CN=Fabrikam Encryption Certificate");
-		var request = new CertificateRequest(subject, algorithm,
-			HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-		request.CertificateExtensions.Add(new X509KeyUsageExtension(
-			X509KeyUsageFlags.KeyEncipherment, critical: true));
-		var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow,
-			DateTimeOffset.UtcNow.AddYears(2));
-		File.WriteAllBytes(file, certificate.Export(X509ContentType.Pfx, password));
-		return new X509Certificate2(file, password, X509KeyStorageFlags.MachineKeySet);
+		var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddYears(2));
+		var pfxData = certificate.Export(X509ContentType.Pfx, password);
+		File.WriteAllBytes(file, pfxData);
+
+		return new X509Certificate2(pfxData, password,
+			X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet);
 	}
 
 	private X509Certificate2 GetSigningCertificate(IWebHostEnvironment environment, IConfiguration config)
@@ -287,27 +433,25 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		if (File.Exists(file))
 		{
 			var created = File.GetCreationTime(file);
-			var days = (DateTime.Now - created).TotalDays;
-			if (days > 180)
+			if ((DateTime.Now - created).TotalDays <= 180)
 			{
-				File.Delete(file);
+				return new X509Certificate2(file, password,
+					X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet);
 			}
-			else
-			{
-				return new X509Certificate2(file, password, X509KeyStorageFlags.MachineKeySet);
-			}
+			File.Delete(file);
 		}
 
-		using var algorithm = RSA.Create(keySizeInBits: 2048);
-		var subject = new X500DistinguishedName("CN=Fabrikam Signing Certificate");
+		using var algorithm = RSA.Create(2048);
+		var subject = new X500DistinguishedName("CN=ShikshaMitra Signing");
 		var request = new CertificateRequest(subject, algorithm, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-		request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature,
-			critical: true));
+		request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
 
 		var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddYears(2));
+		var pfxData = certificate.Export(X509ContentType.Pfx, password);
+		File.WriteAllBytes(file, pfxData);
 
-		File.WriteAllBytes(file, certificate.Export(X509ContentType.Pfx, password));
-		return new X509Certificate2(file, password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet);
+		return new X509Certificate2(pfxData, password,
+			X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet);
 	}
 
 	public override void OnApplicationInitialization(ApplicationInitializationContext context)
@@ -337,7 +481,6 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 		app.UseCorrelationId();
 		app.UseStaticFiles();
-		app.UseCustomHeader();
 		app.UseRouting();
 		app.UseCors();
 		app.UseAuthentication();
@@ -355,7 +498,12 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		app.UseSwagger();
 		app.UseAbpSwaggerUI(c =>
 		{
-			c.SwaggerEndpoint("/swagger/v1/swagger.json", "ShikshaMitra API");
+			c.SwaggerEndpoint("/swagger/v1-hr/swagger.json", "HR Module APIs");
+			c.SwaggerEndpoint("/swagger/v1-academic/swagger.json", "Academic Module APIs");
+			c.SwaggerEndpoint("/swagger/v1-students/swagger.json", "Students Module APIs");
+			c.SwaggerEndpoint("/swagger/v1-finance/swagger.json", "Finance Module APIs");
+			c.SwaggerEndpoint("/swagger/v1-library/swagger.json", "Library Module APIs");
+			c.SwaggerEndpoint("/swagger/v1-admin/swagger.json", "Admin & Settings APIs");
 
 			var configuration = context.ServiceProvider.GetRequiredService<IConfiguration>();
 			c.OAuthClientId(configuration["AuthServer:SwaggerClientId"]);

@@ -31,7 +31,7 @@ public class EfCoreEmployeeRepository(
 			async () =>
 			{
 				var dbSet = await GetDbSetAsync();
-				return await dbSet.FirstOrDefaultAsync(e => e.UserId == userId, cancellationToken);
+				return await dbSet.AsNoTracking().FirstOrDefaultAsync(e => e.UserId == userId, cancellationToken);
 			},
 			cancellationToken
 		);
@@ -67,30 +67,28 @@ public class EfCoreEmployeeRepository(
 	/// Gets an employee with all related data.
 	/// This method provides explicit control over eager loading of PayrollStructure.
 	/// Other navigation properties (Role, EducationMediumStage, Shift) are auto-included.
-	/// 
+	///
 	/// Caching Strategy:
 	/// - Cache stores lightweight EmployeeCacheItem with basic employee data
 	/// - On cache hit: Full Employee with navigation properties is loaded from DB using cached ID
 	/// - On cache miss: Employee is loaded from DB and cached for subsequent requests
 	/// - This approach balances cache size with query performance
-	/// 
+	///
 	/// Performance:
 	/// - Cache hit: ~15-20ms (cache lookup + single DB query by ID with auto-includes)
 	/// - Cache miss: ~25-30ms (full DB query + cache storage)
 	/// - Without cache: ~25-30ms every time
-	/// 
+	///
 	/// Trade-off:
 	/// - Reduces cache storage by 90% (only basic fields vs full object graph)
 	/// - Still provides 40-50% performance improvement on cache hits
 	/// - Auto-included navigations are loaded via EF Core's optimized query
 	/// </summary>
 	/// <param name="id">Employee ID</param>
-	/// <param name="includePayrollStructure">Whether to include PayrollStructure details</param>
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>Employee with requested relations or null if not found</returns>
 	public async Task<Employee?> GetWithDetailsAsync(
 		Guid id,
-		bool includePayrollStructure = false,
 		CancellationToken cancellationToken = default)
 	{
 		// Try cache first to check if employee exists
@@ -99,7 +97,8 @@ public class EfCoreEmployeeRepository(
 			async () =>
 			{
 				var dbSet = await GetDbSetAsync();
-				return await dbSet.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+				// No-tracking so the follow-up Include query is the sole tracked load (avoids concurrency desync on SQLite).
+				return await dbSet.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 			},
 			cancellationToken
 		);
@@ -110,17 +109,8 @@ public class EfCoreEmployeeRepository(
 		}
 
 		// Load full entity from database with auto-included navigation properties
-		// and optionally include PayrollStructure
 		var dbSet = await GetDbSetAsync();
 		var query = dbSet.Where(e => e.Id == id);
-
-		// Explicitly include PayrollStructure if requested
-		// (Role, EducationMediumStage, Shift are auto-included via EmployeeConfiguration)
-		if (includePayrollStructure)
-		{
-			query = query.Include(e => e.PayrollStructure)
-				.ThenInclude(ps => ps.PayElement);
-		}
 
 		// Include Documents collection to prevent null reference when accessed
 		query = query.Include(e => e.Documents);
@@ -143,8 +133,8 @@ public class EfCoreEmployeeRepository(
 		}
 
 		// When includeDetails is true, use cached version with navigation properties
-		var employee = await GetWithDetailsAsync(id, includePayrollStructure: false, cancellationToken);
-		
+		var employee = await GetWithDetailsAsync(id, cancellationToken);
+
 		if (employee == null)
 		{
 			throw new EntityNotFoundException(typeof(Employee), id);
@@ -177,10 +167,10 @@ public class EfCoreEmployeeRepository(
 	{
 		// Load employee first to get user ID for cache invalidation
 		var employee = await base.GetAsync(id, includeDetails: false, cancellationToken);
-		
+
 		await InvalidateCacheAsync(employee, cancellationToken);
 
-		await base.DeleteAsync(id, autoSave, cancellationToken);
+		await base.DeleteAsync(employee, autoSave, cancellationToken);
 	}
 
 	/// <summary>
@@ -224,9 +214,21 @@ public class EfCoreEmployeeRepository(
 			.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 	}
 
-		/// <summary>
-		/// Gets all employees reporting to a specific manager.
-		/// </summary>
+	/// <summary>
+	/// Gets an employee with family members (Father, Mother, Spouse) included.
+	/// Use this when you need employee data along with family information.
+	/// </summary>
+	public async Task<Employee?> GetWithFamilyAsync(Guid id, CancellationToken cancellationToken = default)
+	{
+		var dbSet = await GetDbSetAsync();
+		return await dbSet
+			.Include(e => e.FamilyMembers)
+			.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+	}
+
+	/// <summary>
+	/// Gets all employees reporting to a specific manager.
+	/// </summary>
 		public async Task<List<Employee>> GetEmployeesByManagerAsync(Guid managerId, CancellationToken cancellationToken = default)
 		{
 			var dbSet = await GetDbSetAsync();

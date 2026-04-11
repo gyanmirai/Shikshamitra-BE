@@ -1,8 +1,22 @@
-﻿namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
-// Created enum for the LeavePolicy table and used in Leavepolicy DO and DTO
-public enum AccrualRate {	
-	Yearly,
-	Monthly,
-	Quarterly, 
+/// <summary>
+/// Frequency at which leave balances are accrued under a leave policy.
+/// </summary>
+public enum AccrualRate
+{
+	/// <summary>
+	/// Leaves are credited once per year.
+	/// </summary>
+	Yearly = 0,
+
+	/// <summary>
+	/// Leaves are credited once per month.
+	/// </summary>
+	Monthly = 1,
+
+	/// <summary>
+	/// Leaves are credited once per quarter.
+	/// </summary>
+	Quarterly = 2,
 }

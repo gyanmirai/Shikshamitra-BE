@@ -33,30 +33,30 @@ public class StudentSeederContributor : BaseSeederContributor
 	private readonly IDivisionRepository _divisionRepository;
 
 	// Diverse Indian names (15 boys, 15 girls)
-	private readonly string[] _firstNamesBoys = 
+	private readonly string[] _firstNamesBoys =
 	[
-		"Aarav", "Vivaan", "Aditya", "Vihaan", "Arjun", "Sai", "Arnav", "Ayaan", 
+		"Aarav", "Vivaan", "Aditya", "Vihaan", "Arjun", "Sai", "Arnav", "Ayaan",
 		"Krishna", "Reyansh", "Ishaan", "Shaurya", "Atharv", "Advait", "Kabir"
 	];
-	
-	private readonly string[] _firstNamesGirls = 
+
+	private readonly string[] _firstNamesGirls =
 	[
-		"Ananya", "Aadhya", "Diya", "Saanvi", "Pari", "Aanya", "Sara", "Anvi", 
+		"Ananya", "Aadhya", "Diya", "Saanvi", "Pari", "Aanya", "Sara", "Anvi",
 		"Navya", "Kiara", "Avni", "Mira", "Riya", "Shanaya", "Myra"
 	];
-	
-	private readonly string[] _middleNames = 
+
+	private readonly string[] _middleNames =
 	[
-		"Kumar", "Singh", "Raj", "Mohan", "Dev", "Prasad", "Chandra", "Anil", 
+		"Kumar", "Singh", "Raj", "Mohan", "Dev", "Prasad", "Chandra", "Anil",
 		"Suresh", "Prakash", "Dinesh", "Ramesh", "Vijay", "Rakesh", "Mahesh"
 	];
-	
-	private readonly string[] _lastNames = 
+
+	private readonly string[] _lastNames =
 	[
-		"Patel", "Sharma", "Desai", "Shah", "Mehta", "Reddy", "Gupta", "Verma", 
+		"Patel", "Sharma", "Desai", "Shah", "Mehta", "Reddy", "Gupta", "Verma",
 		"Iyer", "Joshi", "Nair", "Kulkarni", "Thakur", "Pandey", "Rao"
 	];
-	
+
 	private readonly string[] _cities = ["Surat", "Ahmedabad", "Vadodara", "Rajkot", "Bhavnagar"];
 	private readonly string[] _localities = ["Athwa", "Adajan", "Vesu", "Pal", "Rander", "Parvat Patiya"];
 	private readonly string[] _bloodGroups = ["A+", "B+", "O+", "AB+", "A-", "B-", "O-", "AB-"];
@@ -112,7 +112,7 @@ public class StudentSeederContributor : BaseSeederContributor
 			// Get Class 10 standard for this medium directly from repository
 			var allStandards = await _standardRepository.GetListAsync();
 			var class10Standards = allStandards
-				.Where(s => s.EducationMediumStage.EducationMediumId == medium.Id 
+				.Where(s => s.EducationMediumStage.EducationMediumId == medium.Id
 				            && s.Name == "Class 10")
 				.ToList();
 
@@ -125,7 +125,7 @@ public class StudentSeederContributor : BaseSeederContributor
 				{
 					// Create 36 students per division (80% of 45 capacity)
 					var studentsInDivision = 36;
-					
+
 					for (int i = 0; i < studentsInDivision; i++)
 					{
 						await CreateStudentAsync(
@@ -136,7 +136,7 @@ public class StudentSeederContributor : BaseSeederContributor
 							totalStudentsCreated + 1,
 							i + 1 // Roll number within division
 						);
-						
+
 						totalStudentsCreated++;
 					}
 				}
@@ -156,19 +156,19 @@ public class StudentSeederContributor : BaseSeederContributor
 	{
 		var random = new Random(globalCounter);
 		var isGirl = globalCounter % 2 == 0;
-		
+
 		// Select random names
-		var firstName = isGirl 
+		var firstName = isGirl
 			? _firstNamesGirls[globalCounter % _firstNamesGirls.Length]
 			: _firstNamesBoys[globalCounter % _firstNamesBoys.Length];
 		var middleName = _middleNames[globalCounter % _middleNames.Length];
 		var lastName = _lastNames[globalCounter % _lastNames.Length];
-		
+
 		// Gender: 0 = Male, 1 = Female (adjust if your enum is different)
 		var gender = (GenderEnum)(isGirl ? 1 : 0);
 
 		var studentId = GuidGenerator.Create();
-		
+
 		// Age for Class 10 students: 14-16 years
 		var age = 14 + (globalCounter % 3); // Varies between 14, 15, 16
 		var dateOfBirth = DateTimeOffset.Now.AddYears(-age).AddDays(random.Next(-180, 180));
@@ -180,10 +180,12 @@ public class StudentSeederContributor : BaseSeederContributor
 			firstName: firstName,
 			middleName: middleName,
 			lastName: lastName,
+			educationYearId: academicYearId,
+			educationBoardId: Guid.Empty, // Can be set if needed
 			educationMediumId: mediumId,
+			educationMediumStageId: Guid.Empty, // Can be set if needed
 			standardId: standardId,
 			divisionId: divisionId,
-			academicYearId: academicYearId,
 			grNo: 10000 + globalCounter, // GR numbers starting from 10001
 			rollNo: rollNo,
 			status: StudentLifeCycleStatusEnum.Admission
@@ -203,17 +205,17 @@ public class StudentSeederContributor : BaseSeederContributor
 
 		var city = _cities[globalCounter % _cities.Length];
 		var locality = _localities[globalCounter % _localities.Length];
-		
+
 		// Religion: 0=Hindu, 1=Muslim, 2=Jain, 3=Christian, 4=Sikh (adjust if different)
 		var religion = (ReligionEnum)(globalCounter % 5);
-		
+
 		// Cast categories: 0=General, 1=OBC, 2=SC, 3=ST, 4=EWS
 		var castCategory = (CastCategoryEnum)(globalCounter % 5);
 		var castNames = new[] { "General", "OBC", "SC", "ST", "EWS" };
-		
+
 		// Mother tongue: 0=Gujarati, 1=Hindi, 2=English, 3=Marathi (adjust if different)
 		var motherTongue = (MotherTongueEnum)(globalCounter % 4);
-		
+
 		additionalDetail.UpdateGeneralInformation(
 			dateOfBirth,
 			gender,
@@ -221,6 +223,7 @@ public class StudentSeederContributor : BaseSeederContributor
 			GenerateAadharNumber(random),
 			null, // ApparId
 			null, // PanNo
+			null, // PenNo
 			religion,
 			castNames[(int)castCategory],
 			castCategory,
@@ -229,7 +232,9 @@ public class StudentSeederContributor : BaseSeederContributor
 			motherTongue,
 			"ABC Public School", // Previous school
 			"Class 9", // Last class passed
-			StudentRegistrationStateEnum.BankDetails // Complete registration state
+			StudentRegistrationStateEnum.BankDetails, // Complete registration state
+			null,
+			"1234"
 		);
 
 		// Create contact details
@@ -251,7 +256,7 @@ public class StudentSeederContributor : BaseSeederContributor
 		// Create medical record
 		var medicalRecord = new StudentMedicalRecord(studentId, CurrentTenant.Id);
 		var bloodGroup = _bloodGroups[globalCounter % _bloodGroups.Length];
-		
+
 		medicalRecord.UpdateMedicalRecords(
 			weightKg: 45 + random.Next(-10, 15), // 35-60 kg
 			heightCm: 155 + random.Next(-10, 15), // 145-170 cm
@@ -294,7 +299,7 @@ public class StudentSeederContributor : BaseSeederContributor
 
 	private string GenerateLandmark(Random random)
 	{
-		var landmarks = new[] 
+		var landmarks = new[]
 		{
 			"City Hospital", "Central Park", "Bus Stand", "Railway Station",
 			"Shopping Mall", "Temple", "Market", "Police Station", "Post Office",

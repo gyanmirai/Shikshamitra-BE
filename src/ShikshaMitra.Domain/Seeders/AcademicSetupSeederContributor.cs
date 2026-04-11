@@ -79,13 +79,13 @@ public class AcademicSetupSeederContributor : BaseSeederContributor
 
 		// Seed academic data for 3 years: Last year, Current year, Upcoming year
 		var currentYear = DateTime.Now.Year;
-		
+
 		// Last Year (e.g., 2023-2024)
 		await SeedAcademicYearDataAsync(currentYear - 1);
-		
+
 		// Current Year (e.g., 2024-2025)
 		await SeedAcademicYearDataAsync(currentYear);
-		
+
 		// Upcoming Year (e.g., 2025-2026)
 		await SeedAcademicYearDataAsync(currentYear + 1);
 	}
@@ -361,23 +361,23 @@ public class AcademicSetupSeederContributor : BaseSeederContributor
 					divisionNames = new[] { "A", "B" };
 					strength = 25;
 				}
-				else if (standard.Name.StartsWith("Class") && 
+				else if (standard.Name.StartsWith("Class") &&
 				         (standard.Name == "Class 1" || standard.Name == "Class 2"))
 				{
 					// Lower Primary: 3 divisions
 					divisionNames = new[] { "A", "B", "C" };
 					strength = 35;
 				}
-				else if (standard.Name.StartsWith("Class") && 
-				         int.TryParse(standard.Name.Replace("Class ", ""), out int classNum) && 
+				else if (standard.Name.StartsWith("Class") &&
+				         int.TryParse(standard.Name.Replace("Class ", ""), out int classNum) &&
 				         classNum >= 3 && classNum <= 8)
 				{
 					// Middle Primary & Secondary: 4 divisions
 					divisionNames = new[] { "A", "B", "C", "D" };
 					strength = 40;
 				}
-				else if (standard.Name.StartsWith("Class") && 
-				         int.TryParse(standard.Name.Replace("Class ", ""), out int classNum2) && 
+				else if (standard.Name.StartsWith("Class") &&
+				         int.TryParse(standard.Name.Replace("Class ", ""), out int classNum2) &&
 				         classNum2 >= 9 && classNum2 <= 10)
 				{
 					// Classes 9-10: 5 divisions (high enrollment)

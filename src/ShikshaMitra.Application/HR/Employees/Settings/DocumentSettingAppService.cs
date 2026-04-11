@@ -1,5 +1,7 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
+using ShikshaMitra.Constants.Permissions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,19 +14,40 @@ using Volo.Abp.Guids;
 
 namespace ShikshaMitra.HR.Employees.Settings;
 
-public class DocumentSettingAppService(
-	IDocumentSettingRepository repository,
-	IGuidGenerator guidGenerator,
-	ILogger<DocumentSettingAppService> logger)
+[RemoteService(false)]
+[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
+public class DocumentSettingAppService
 	: CrudAppService<DocumentSetting, DocumentSettingDto, Guid, PagedAndSortedResultRequestDto,
-			CreateUpdateDocumentSettingDto>(repository),
+			CreateUpdateDocumentSettingDto>,
 		IDocumentSettingAppService
 {
-	public async override Task<DocumentSettingDto> CreateAsync(CreateUpdateDocumentSettingDto input)
+	private readonly IDocumentSettingRepository _repository;
+	private readonly IGuidGenerator _guidGenerator;
+	private readonly ILogger<DocumentSettingAppService> _logger;
+
+	public DocumentSettingAppService(
+		IDocumentSettingRepository repository,
+		IGuidGenerator guidGenerator,
+		ILogger<DocumentSettingAppService> logger)
+		: base(repository)
+	{
+		_repository = repository;
+		_guidGenerator = guidGenerator;
+		_logger = logger;
+
+		GetPolicyName = ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View;
+		GetListPolicyName = ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View;
+		CreatePolicyName = ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add;
+		UpdatePolicyName = ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add;
+		DeletePolicyName = ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Delete;
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
+	public override async Task<DocumentSettingDto> CreateAsync(CreateUpdateDocumentSettingDto input)
 	{
 		try
 		{
-			var exists = await repository.FindAsync(x => x.DocumentName == input.DocumentName);
+			var exists = await _repository.FindAsync(x => x.DocumentName == input.DocumentName);
 			if (exists != null)
 			{
 				throw new UserFriendlyException($"Document setting with name '{input.DocumentName}' already exists.");
@@ -33,7 +56,7 @@ public class DocumentSettingAppService(
 		}
 		catch (Exception ex)
 		{
-			logger.LogError(ex, "Error creating document setting");
+			_logger.LogError(ex, "Error creating document setting");
 			throw;
 		}
 	}
@@ -91,10 +114,11 @@ public class DocumentSettingAppService(
 	/// <summary>
 	/// Create document configuration (matches OpenAPI contract)
 	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	public async Task<DocumentCreateResponse> CreateDocumentAsync(DocumentRequest input)
 	{
 		// Check for duplicate
-		var exists = await repository.FindAsync(x => x.DocumentName == input.Title);
+		var exists = await _repository.FindAsync(x => x.DocumentName == input.Title);
 		if (exists != null)
 		{
 			throw new UserFriendlyException($"Document setting with name '{input.Title}' already exists.");
@@ -105,7 +129,7 @@ public class DocumentSettingAppService(
 			.ToList();
 
 		var doc = new DocumentSetting(
-			guidGenerator.Create(),
+			_guidGenerator.Create(),
 			CurrentTenant.Id,
 			input.Title,
 			input.DocumentSize,
@@ -124,13 +148,14 @@ public class DocumentSettingAppService(
 	/// <summary>
 	/// Update document configuration (matches OpenAPI contract)
 	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	public async Task UpdateDocumentAsync(Guid documentId, DocumentRequest input)
 	{
 		// Repository.GetAsync throws EntityNotFoundException if not found
 		var doc = await Repository.GetAsync(documentId);
 
 		// Check for duplicate name (excluding current document)
-		var duplicate = await repository.FindAsync(x => x.DocumentName == input.Title && x.Id != documentId);
+		var duplicate = await _repository.FindAsync(x => x.DocumentName == input.Title && x.Id != documentId);
 		if (duplicate != null)
 		{
 			throw new UserFriendlyException($"Document setting with name '{input.Title}' already exists.");
@@ -147,6 +172,7 @@ public class DocumentSettingAppService(
 	/// <summary>
 	/// Delete document configuration (matches OpenAPI contract)
 	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Delete)]
 	public async Task DeleteDocumentAsync(Guid documentId)
 	{
 		// Repository.GetAsync throws EntityNotFoundException if not found

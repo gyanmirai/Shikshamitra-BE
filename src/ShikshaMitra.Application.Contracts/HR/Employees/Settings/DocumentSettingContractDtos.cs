@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -16,14 +16,14 @@ public class DocumentRequest
 	[Required]
 	[RegularExpression(@"^[A-Za-z ]+$", ErrorMessage = "Title must contain only alphabets and spaces")]
 	public string Title { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Maximum file size in MB (1-20)
 	/// </summary>
 	[Required]
 	[Range(1, 20, ErrorMessage = "Document size must be between 1 and 20 MB")]
 	public int DocumentSize { get; set; }
-	
+
 	/// <summary>
 	/// Accepted document formats as integer enum values (0-5)
 	/// 0=Jpg, 1=Jpeg, 2=Png, 3=Docx, 4=Pdf, 5=Xlsx
@@ -39,17 +39,17 @@ public class DocumentRequest
 public class DocumentItem
 {
 	public Guid Id { get; set; }
-	
+
 	/// <summary>
 	/// Document title (maps from DocumentName)
 	/// </summary>
 	public string Title { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Maximum file size in MB
 	/// </summary>
 	public int DocumentSize { get; set; }
-	
+
 	/// <summary>
 	/// Accepted document formats as integer enum values
 	/// </summary>

@@ -10,7 +10,7 @@ public class StandardSubjectAssignmentConfiguration : IEntityTypeConfiguration<A
 	public void Configure(EntityTypeBuilder<AssignedSubject> builder)
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StandardSubjectAssignments", ShikshaMitraConsts.DbSchema);
-		
+
 		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();
 

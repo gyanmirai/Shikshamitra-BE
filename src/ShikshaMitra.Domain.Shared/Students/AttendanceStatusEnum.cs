@@ -2,7 +2,7 @@
 
 public enum AttendanceStatusEnum
 {
-	Unmarked,
-	Present,
-	Absent,
+	Unmarked = 0,
+	Present = 1,
+	Absent = 2,
 }

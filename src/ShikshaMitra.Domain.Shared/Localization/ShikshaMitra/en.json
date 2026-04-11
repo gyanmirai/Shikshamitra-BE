@@ -47,14 +47,11 @@
     "Features:TenantSettings": "Tenant Settings",
     "Features:TenantSettings.Onboarding": "Tenant Onboarding",
     "Features:Security": "Security",
-
     "ShikshaMitra:00001": "The end date '{endDate}' must be greater than the start date '{startDate}'.",
     "ShikshaMitra:00002": "The number should be greater than 0",
     "ShikshaMitra:00004": "An employee cannot report to themselves.",
     "ShikshaMitra:00005": "Circular reporting relationship detected. The proposed manager already reports to this employee directly or indirectly.",
-
     "ShikshaMitra.TenantSettings:00001": "{entityName} with the name '{name}' already exists.",
-
     "SM:EntranceExamSlot:001": "Start time must be before end time. Provided start date: {startDate}, end date: {endDate}.",
     "SM:EntranceExamSlot:002": "Student limit must be greater than zero. Provided value: {studentLimit}.",
     "SM:EntranceExamSlot:003": "Room number must be greater than zero. Provided value: {roomNo}.",
@@ -62,68 +59,55 @@
     "SM:EntranceExamSlot:005": "Cannot reduce student limit to {studentLimit} as there are already {enrolledCount} students enrolled in this slot.",
     "SM:EntranceExamSlot:006": "Cannot delete this entrance exam slot as there are {enrolledCount} students currently enrolled.",
     "SM:EntranceExamSlot:007": "The specified academic year (ID: {academicYearId}) does not exist in the system.",
-    
     "Permission:Student": "Student Management",
     "Permission:Student.IndividualStudentProfile": "Individual Student Profile",
     "Permission:Student.IndividualStudentProfile.Create": "Create Student Profile",
     "Permission:Student.IndividualStudentProfile.Edit": "Edit Student Profile",
     "Permission:Student.IndividualStudentProfile.Delete": "Delete Student Profile",
-
     "Permission:Student.AttendanceTracker": "Attendance Tracker",
     "Permission:Student.AttendanceTracker.Create": "Create Attendance Record",
     "Permission:Student.AttendanceTracker.Edit": "Edit Attendance Record",
     "Permission:Student.AttendanceTracker.Delete": "Delete Attendance Record",
-
     "Permission:Student.AcademicPerformance": "Academic Performance",
     "Permission:Student.AcademicPerformance.Create": "Create Academic Performance Record",
     "Permission:Student.AcademicPerformance.Edit": "Edit Academic Performance Record",
     "Permission:Student.AcademicPerformance.Delete": "Delete Academic Performance Record",
-
     "Permission:Student.BehavioralRecords": "Behavioral Records",
     "Permission:Student.BehavioralRecords.Create": "Create Behavioral Record",
     "Permission:Student.BehavioralRecords.Edit": "Edit Behavioral Record",
     "Permission:Student.BehavioralRecords.Delete": "Delete Behavioral Record",
-
     "Permission:Student.HealthRecords": "Health Records",
     "Permission:Student.HealthRecords.Create": "Create Health Record",
     "Permission:Student.HealthRecords.Edit": "Edit Health Record",
     "Permission:Student.HealthRecords.Delete": "Delete Health Record",
-
     "Permission:Student.FinancialInformation": "Financial Information",
     "Permission:Student.FinancialInformation.Create": "Create Financial Record",
     "Permission:Student.FinancialInformation.Edit": "Edit Financial Record",
     "Permission:Student.FinancialInformation.Delete": "Delete Financial Record",
-
     "Permission:Student.DocumentManagement": "Document Management",
     "Permission:Student.DocumentManagement.Create": "Create Document",
     "Permission:Student.DocumentManagement.Edit": "Edit Document",
     "Permission:Student.DocumentManagement.Delete": "Delete Document",
-
     "Permission:Student.CommunicationLog": "Communication Log",
     "Permission:Student.CommunicationLog.Create": "Create Communication Log",
     "Permission:Student.CommunicationLog.Edit": "Edit Communication Log",
     "Permission:Student.CommunicationLog.Delete": "Delete Communication Log",
-
     "Permission:Student.StudentProgressionPlanner": "Student Progression Planner",
     "Permission:Student.StudentProgressionPlanner.Create": "Create Progression Plan",
     "Permission:Student.StudentProgressionPlanner.Edit": "Edit Progression Plan",
     "Permission:Student.StudentProgressionPlanner.Delete": "Delete Progression Plan",
-
     "Permission:Student.TransportAndLogistics": "Transport and Logistics",
     "Permission:Student.TransportAndLogistics.Create": "Create Transport and Logistics Record",
     "Permission:Student.TransportAndLogistics.Edit": "Edit Transport and Logistics Record",
     "Permission:Student.TransportAndLogistics.Delete": "Delete Transport and Logistics Record",
-
     "Permission:Student.LibraryInteractions": "Library Interactions",
     "Permission:Student.LibraryInteractions.Create": "Create Library Interaction",
     "Permission:Student.LibraryInteractions.Edit": "Edit Library Interaction",
     "Permission:Student.LibraryInteractions.Delete": "Delete Library Interaction",
-
     "Permission:Student.SpecialEducationNeeds": "Special Education Needs",
     "Permission:Student.SpecialEducationNeeds.Create": "Create Special Education Record",
     "Permission:Student.SpecialEducationNeeds.Edit": "Edit Special Education Record",
     "Permission:Student.SpecialEducationNeeds.Delete": "Delete Special Education Record",
-
     "Permission:ShikshaMitra": "ShikshaMitra",
     "Permission:UserScope": "User Scope Management",
     "Permission:UserScope.View": "View User Scopes",
@@ -131,7 +115,12 @@
     "Permission:UserScope.BulkAssign": "Bulk Assign User Scopes",
     "Permission:UserScope.Revoke": "Revoke User Scope",
     "Permission:UserScope.Manage": "Manage User Scopes",
-
+    "Permission:Group": "Group Management",
+    "Permission:Group.List": "List Groups",
+    "Permission:Group.View": "View Group Details",
+    "Permission:Group.Create": "Create Groups",
+    "Permission:Group.Edit": "Edit Groups",
+    "Permission:Group.Delete": "Delete Groups",
     "ShikshaMitra.Homework:FeedbackUpdatedSuccessfully": "Feedback updated successfully",
     "ShikshaMitra.Homework:StatusUpdatedSuccessfully": "Status updated successfully",
     "ShikshaMitra.Homework:NotFound": "Homework not found",
@@ -139,13 +128,11 @@
     "ShikshaMitra.Homework:InvalidMarks": "Marks cannot exceed total marks",
     "ShikshaMitra.Homework:NegativeMarks": "Marks cannot be negative",
     "ShikshaMitra.Homework:NegativeTotalMarks": "Total marks cannot be negative",
-
     "ShikshaMitra.Assignment:FeedbackUpdatedSuccessfully": "Feedback updated successfully",
     "ShikshaMitra.Assignment:StatusUpdatedSuccessfully": "Status updated successfully",
     "ShikshaMitra.Assignment:NotFound": "Assignment not found",
     "ShikshaMitra.Assignment:NotAssignedToDivision": "Assignment not assigned to this division",
     "ShikshaMitra.Assignment:StudentNotInAssignedDivision": "Student is not in any division assigned to this assignment",
-
     "ShikshaMitra.Student:AcademicMediumNotFound": "Academic Medium not found with ID: {academicMediumId}",
     "ShikshaMitra.Student:InvalidStudentStatus": "Student must be in {expectedStatus} status. Current status: {currentStatus}",
     "ShikshaMitra.Student:InvalidStudentStatusForGeneralInfo": "Student must be in RegistrationFormIssued or Registration status to update general information. Current status: {currentStatus}",
@@ -166,7 +153,6 @@
     "ShikshaMitra.Student:InvalidStatusForRegistrationView": "Student must be in Registration or RegistrationFormIssued status. Current status: {currentStatus}",
     "ShikshaMitra.Student:InvalidStatusForRegistrationFormView": "Student must be in RegistrationFormIssued status to view registration form. Current status: {currentStatus}",
     "ShikshaMitra.Student:InvalidStatusForRegistrationListView": "Student must be in Registration status to view registration. Current status: {currentStatus}",
-
     "AttendanceImport:EmployeeCodeRequired": "Employee Code is required",
     "AttendanceImport:ProvideValidEmployeeCode": "Please provide a valid employee code",
     "AttendanceImport:EmployeeNotFoundByCode": "Employee with code '{0}' not found in the system",
@@ -211,12 +197,12 @@
     "AttendanceImport:FileSizeExceeded": "File size ({0}MB) exceeds maximum allowed size ({1}MB).",
     "AttendanceImport:UnsupportedFileFormat": "Unsupported file format: '{0}'. Please upload .xlsx or .csv files.",
     "AttendanceImport:FileReadError": "Error reading file: {0}. Please ensure the file is not corrupted.",
-        "AttendanceImport:ImportStarted": "Starting attendance import for date {0} with file {1}",
-        "AttendanceImport:ImportCompleted": "Completed attendance import. Total: {0}, Success: {1}, Failed: {2}",
-        "AttendanceImport:ImportFailed": "Failed to import attendance for {0}",
-        "AttendanceImport:AllRecordsImportedSuccessfully": "All {0} attendance records imported successfully!",
-        "AttendanceImport:AllRecordsWithWarnings": "All {0} records imported successfully with {1} warning(s). Please review warnings.",
-        "AttendanceImport:PartialSuccess": "Partial success: {0} of {1} records imported. {2} failed. Please review errors and re-import failed records.",
-        "AttendanceImport:CompleteFailure": "Import failed. All {0} records have errors. Please fix the errors and try again."
-      }
-    }
+    "AttendanceImport:ImportStarted": "Starting attendance import for date {0} with file {1}",
+    "AttendanceImport:ImportCompleted": "Completed attendance import. Total: {0}, Success: {1}, Failed: {2}",
+    "AttendanceImport:ImportFailed": "Failed to import attendance for {0}",
+    "AttendanceImport:AllRecordsImportedSuccessfully": "All {0} attendance records imported successfully!",
+    "AttendanceImport:AllRecordsWithWarnings": "All {0} records imported successfully with {1} warning(s). Please review warnings.",
+    "AttendanceImport:PartialSuccess": "Partial success: {0} of {1} records imported. {2} failed. Please review errors and re-import failed records.",
+    "AttendanceImport:CompleteFailure": "Import failed. All {0} records have errors. Please fix the errors and try again."
+  }
+}

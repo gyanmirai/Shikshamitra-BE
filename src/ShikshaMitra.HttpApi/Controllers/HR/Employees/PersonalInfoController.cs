@@ -1,11 +1,17 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.IO;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Common.Responses;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Documents;
 using ShikshaMitra.HR.Employees.PersonalInfo;
+using ShikshaMitra.Models;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -13,7 +19,6 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 
 /// <summary>
 /// Employee personal information management controller
-/// Handles CRUD operations for employee personal data in the school ERP system
 /// </summary>
 [Area("app")]
 [RemoteService(Name = "Default")]
@@ -21,26 +26,72 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 [Authorize]
 public class PersonalInfoController : AbpControllerBase
 {
-	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
+	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-	public PersonalInfoController(IEmployeePersonalInfoAppService personalInfoAppService)
+	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
+	private readonly IEmployeeDocumentAppService _documentAppService;
+	private readonly IEmployeeAuthorizationService _authorizationService;
+
+	public PersonalInfoController(
+		IEmployeePersonalInfoAppService personalInfoAppService,
+		IEmployeeDocumentAppService documentAppService,
+		IEmployeeAuthorizationService authorizationService)
 	{
 		_personalInfoAppService = personalInfoAppService;
+		_documentAppService = documentAppService;
+		_authorizationService = authorizationService;
 	}
 
 	/// <summary>
-	/// Create employee personal information
+	/// Create employee personal information with an optional profile picture.
+	/// Send as multipart/form-data. The <c>data</c> field must contain a JSON string
+	/// matching the PersonalInfoRequest schema. The <c>profilePicture</c> field is optional.
 	/// </summary>
 	[HttpPost("personal-info")]
+	[Consumes("multipart/form-data")]
 	[ProducesResponseType(typeof(PersonalInfoResponse), StatusCodes.Status201Created)]
-	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(typeof(Result), StatusCodes.Status403Forbidden)]
 	public virtual async Task<PersonalInfoResponse> CreateAsync(
-		[FromBody, Required] PersonalInfoRequest request)
+		[FromForm] CreatePersonalInfoWithPictureRequest request)
 	{
-		ValidateRequest(request);
+		PersonalInfoRequest? personalInfo;
+		try
+		{
+			personalInfo = JsonSerializer.Deserialize<PersonalInfoRequest>(request.Data, JsonOptions);
+		}
+		catch (JsonException)
+		{
+			throw new UserFriendlyException("The 'data' field does not contain valid PersonalInfoRequest JSON.");
+		}
 
-		var createDto = PersonalInfoContractMapper.ToCreateDto(request);
-		var result = await _personalInfoAppService.CreateAsync(createDto);
+		if (personalInfo is null)
+			throw new UserFriendlyException("The 'data' field does not contain valid PersonalInfoRequest JSON.");
+
+		var validationResults = new List<ValidationResult>();
+		if (!Validator.TryValidateObject(personalInfo, new ValidationContext(personalInfo), validationResults, true))
+		{
+			var errors = string.Join("; ", validationResults.ConvertAll(r => r.ErrorMessage));
+			throw new UserFriendlyException(errors);
+		}
+
+		var createDto = PersonalInfoContractMapper.ToCreateDto(personalInfo);
+
+		EmployeePersonalInfoDto result;
+		if (request.ProfilePicture is { Length: > 0 })
+		{
+			await using var ms = new MemoryStream();
+			await request.ProfilePicture.CopyToAsync(ms);
+
+			result = await _personalInfoAppService.CreateWithProfilePictureAsync(
+				createDto,
+				request.ProfilePicture.FileName,
+				ms.ToArray());
+		}
+		else
+		{
+			result = await _personalInfoAppService.CreateAsync(createDto);
+		}
 
 		return PersonalInfoContractMapper.ToResponse(result);
 	}
@@ -50,9 +101,11 @@ public class PersonalInfoController : AbpControllerBase
 	/// </summary>
 	[HttpGet("{employeeId}/personal-info")]
 	[ProducesResponseType(typeof(PersonalInfoResponse), StatusCodes.Status200OK)]
-	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	[ProducesResponseType(typeof(Result), StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
 	public virtual async Task<PersonalInfoResponse> GetAsync([FromRoute, Required] Guid employeeId)
 	{
+		await _authorizationService.CheckEmployeeAccessAsync(employeeId);
 		var result = await _personalInfoAppService.GetAsync(employeeId);
 		return PersonalInfoContractMapper.ToResponse(result);
 	}
@@ -62,74 +115,34 @@ public class PersonalInfoController : AbpControllerBase
 	/// </summary>
 	[HttpPut("{employeeId}/personal-info")]
 	[ProducesResponseType(typeof(PersonalInfoResponse), StatusCodes.Status200OK)]
-	[ProducesResponseType(StatusCodes.Status400BadRequest)]
-	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	[ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(typeof(Result), StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
 	public virtual async Task<PersonalInfoResponse> UpdateAsync(
 		[FromRoute, Required] Guid employeeId,
 		[FromBody, Required] PersonalInfoRequest request)
 	{
-		ValidateRequest(request);
-
+		await _authorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 		var updateDto = PersonalInfoContractMapper.ToUpdateDto(request);
 		var result = await _personalInfoAppService.UpdateAsync(employeeId, updateDto);
-
 		return PersonalInfoContractMapper.ToResponse(result);
 	}
 
-	#region Validation
-
-	private void ValidateRequest(PersonalInfoRequest request)
+	/// <summary>
+	/// Download employee profile picture
+	/// </summary>
+	[HttpGet("{employeeId}/profile-picture")]
+	[ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public virtual async Task<IActionResult> GetProfilePictureAsync(
+		[FromRoute, Required] Guid employeeId)
 	{
-		if (string.IsNullOrWhiteSpace(request.FirstName))
-		{
-			throw new UserFriendlyException("First name is required.");
-		}
+		await _authorizationService.CheckEmployeeAccessAsync(employeeId);
 
-		if (string.IsNullOrWhiteSpace(request.LastName))
-		{
-			throw new UserFriendlyException("Last name is required.");
-		}
+		var document = await _documentAppService.GetProfilePictureAsync(employeeId);
+		if (document is null)
+			return NotFound();
 
-		if (string.IsNullOrWhiteSpace(request.MobileNo))
-		{
-			throw new UserFriendlyException("Mobile number is required.");
-		}
-
-		if (request.RoleId == Guid.Empty)
-		{
-			throw new UserFriendlyException("Role ID is required.");
-		}
-
-		if (request.ShiftId == Guid.Empty)
-		{
-			throw new UserFriendlyException("Shift ID is required.");
-		}
-
-		// Validate age >= 18 at joining date
-		if (request.Dob.HasValue)
-		{
-			var age = request.Doj.Year - request.Dob.Value.Year;
-			if (request.Doj < request.Dob.Value.AddYears(age))
-			{
-				age--;
-			}
-
-			if (age < 18)
-			{
-				throw new UserFriendlyException("Employee must be at least 18 years old at the time of joining.");
-			}
-		}
-
-		if (request.Dob.HasValue && request.Dob.Value >= DateTime.UtcNow)
-		{
-			throw new UserFriendlyException("Date of birth cannot be in the future.");
-		}
-
-		if (request.Dob.HasValue && request.Doj < request.Dob.Value)
-		{
-			throw new UserFriendlyException("Date of joining cannot be before date of birth.");
-		}
+		return File(document.Content, document.ContentType, document.FileName);
 	}
-
-	#endregion
 }

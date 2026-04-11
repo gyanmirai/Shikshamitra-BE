@@ -1,8 +1,8 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.ClassTeacher;
-using ShikshaMitra.Extensions;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Academic.ClassTeacher;
@@ -12,21 +12,28 @@ public class ClassTeacherController(IClassTeacherAppService classTeacherAppServi
 {
 	[HttpPut("assign")]
 	public async Task<IActionResult> AssignOrUpdateTeachers(
+		[FromQuery] Guid educationMediumId,
 		[FromBody] List<AssignClassTeacherDto> input
 	)
 	{
-		var headers = this.Headers();
-		await classTeacherAppService.AssignOrUpdateTeachersAsync(input, headers.EducationMediumId);
+		if (educationMediumId == Guid.Empty)
+		{
+			return BadRequest("educationMediumId is required.");
+		}
+
+		await classTeacherAppService.AssignOrUpdateTeachersAsync(input, educationMediumId);
 		return Ok("Assignments processed successfully.");
 	}
 
 	[HttpGet("all")]
-	public async Task<IActionResult> GetAllClassTeachers()
+	public async Task<IActionResult> GetAllClassTeachers([FromQuery] Guid educationMediumId)
 	{
-		var headers = this.Headers();
-		var classTeachers = await classTeacherAppService.GetAllClassTeachersAsync(
-			headers.EducationMediumId
-		);
+		if (educationMediumId == Guid.Empty)
+		{
+			return BadRequest("educationMediumId is required.");
+		}
+
+		var classTeachers = await classTeacherAppService.GetAllClassTeachersAsync(educationMediumId);
 		return Ok(classTeachers);
 	}
 }

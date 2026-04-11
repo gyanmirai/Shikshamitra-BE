@@ -42,12 +42,12 @@ public class TableElement : Element, IElement
 			/// <summary>
 			/// Represents a column with a constant size.
 			/// </summary>
-			Constant,
+			Constant = 0,
 
 			/// <summary>
 			/// Represents a column with a relative size.
 			/// </summary>
-			Relative,
+			Relative = 1,
 		}
 	}
 }
@@ -128,10 +128,10 @@ public class Cell : Element, IElement
 /// </summary>
 public enum CellAlignment
 {
-	Top,
-	Bottom,
-	Center,
-	Middle,
-	Left,
-	Right,
+	Top = 0,
+	Bottom = 1,
+	Center = 2,
+	Middle = 3,
+	Left = 4,
+	Right = 5,
 }

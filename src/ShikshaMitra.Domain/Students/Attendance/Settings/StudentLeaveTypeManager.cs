@@ -100,7 +100,7 @@ public class StudentLeaveTypeManager : DomainService
 		// Additional business rules can be added here
 		// For example, check if there are any attendance entries using this leave type
 		// If needed, we can add a check for related attendance entries in the future
-		
+
 		await Task.CompletedTask;
 	}
 }

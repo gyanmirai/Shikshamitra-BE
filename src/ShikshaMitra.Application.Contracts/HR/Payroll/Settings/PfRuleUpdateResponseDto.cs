@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace ShikshaMitra.HR.Payroll.Settings;
 
@@ -12,7 +12,7 @@ public class PfRuleUpdateResponseDto
 	/// PF rule ID
 	/// </summary>
 	public Guid Id { get; set; }
-	
+
 	/// <summary>
 	/// Last update timestamp
 	/// </summary>

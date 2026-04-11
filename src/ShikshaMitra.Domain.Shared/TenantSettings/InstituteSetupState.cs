@@ -2,8 +2,8 @@
 
 public enum InstituteSetupState
 {
-	WelcomeScreen,
-	TenantDetails,
-	AcademicSetup,
-	SetupCompleted
+	WelcomeScreen = 0,
+	TenantDetails = 1,
+	AcademicSetup = 2,
+	SetupCompleted = 3
 }

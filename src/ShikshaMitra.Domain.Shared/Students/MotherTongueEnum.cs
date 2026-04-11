@@ -1,8 +1,14 @@
 ﻿namespace ShikshaMitra.Students;
+
 public enum MotherTongueEnum
 {
 	English,
+	Hindi,
 	Gujarati,
 	Marathi,
-	Hindi,
+	Tamil,
+	Telugu,
+	Kannada,
+	Malyalam,
+	Other
 }

@@ -7,6 +7,7 @@ using Volo.Abp.Domain.Entities;
 
 namespace ShikshaMitra.HR.Employees.ReportingManager;
 
+[RemoteService(false)]
 public class ReportingManagerAppService(IEmployeeRepository employeeRepository)
 	: ApplicationService, IReportingManagerAppService
 {

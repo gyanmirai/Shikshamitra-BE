@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using Volo.Abp;
@@ -11,11 +11,9 @@ namespace ShikshaMitra.HR.Employees.Payroll;
 public class UpdateEmployeePayrollDetailsDto : IValidatableObject
 {
 	public PayrollDetailsDto PayrollDetails { get; set; } = new();
-	
-	[Required]
+
 	public List<PayrollComponentDto> Earnings { get; set; } = new();
-	
-	[Required]
+
 	public List<PayrollComponentDto> Deductions { get; set; } = new();
 
 	public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)

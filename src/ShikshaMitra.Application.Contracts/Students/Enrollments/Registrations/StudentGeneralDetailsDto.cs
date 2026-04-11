@@ -25,6 +25,7 @@ public class StudentGeneralDetailsDto
 	public string? AdharNo { get; set; }
 	public string? ApparId { get; set; }
 	public string? PanNo { get; set; }
+	public string? PennNo { get; set; }
 	public Guid? InquiryPreferenceId { get; set; }
 	public ReligionEnum? Religion { get; set; }
 	public string FamilyCast { get; set; }

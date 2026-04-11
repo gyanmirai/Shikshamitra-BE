@@ -10,9 +10,9 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Dashboard";
 			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.Dashboard";
-			
+
 			public const string View = $"{SubmoduleName}.View";
-			
+
 			public static readonly string[] All = { View };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -25,11 +25,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.RunPayroll";
 			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.RunPayroll";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -44,11 +44,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.GenerateSalarySlip";
 			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.GenerateSalarySlip";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -63,11 +63,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Settings.EarningComponents";
 			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.Settings.EarningComponents";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -82,11 +82,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Settings.DeductionComponents";
 			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.Settings.DeductionComponents";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -101,11 +101,30 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Settings.PfRule";
 			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.Settings.PfRule";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
+			public static readonly string[] All = { View, Add, Delete };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+			};
+		}
+
+		public static class PayrollManagement_SettingsDayCalculation
+		{
+			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Settings.DayCalculation";
+			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.Settings.DayCalculation";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{

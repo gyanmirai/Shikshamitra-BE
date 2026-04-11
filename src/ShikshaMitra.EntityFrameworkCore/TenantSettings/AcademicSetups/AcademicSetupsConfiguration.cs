@@ -67,6 +67,9 @@ public class AcademicSetupsConfiguration
 		// Define many-to-one relationship:
 		// Many Education can belong to one AcademicYear
 		builder.HasOne(x => x.AcademicYear).WithMany().HasForeignKey(x => x.AcademicYearId);
+
+		// add navigation property to get Academic Year details when fetching Education Board
+		builder.Navigation(x => x.AcademicYear).AutoInclude();
 	}
 
 	// Configure the EducationMedium entity
@@ -85,6 +88,15 @@ public class AcademicSetupsConfiguration
 			.HasMaxLength(EducationMediumConsts.MaxNameLength);
 
 		builder.Navigation(x => x.EducationMediumStages).AutoInclude();
+
+		// add navigation property to get Education Board details when fetching EducationMedium
+		builder
+			.HasOne(x => x.EducationBoard)
+			.WithMany(x => x.EducationMediums)
+			.HasForeignKey(x => x.EducationBoardId);
+
+		builder.Navigation(x => x.EducationBoard).AutoInclude();
+
 	}
 
 	// Configure the EducationBoardStage entity
@@ -110,6 +122,8 @@ public class AcademicSetupsConfiguration
 			.HasForeignKey(x => x.EducationMediumId);
 
 		builder.Navigation(x => x.Standards).AutoInclude();
+
+		builder.Navigation(x => x.EducationMedium).AutoInclude();
 	}
 
 	// Configure the Standard entity
@@ -130,6 +144,8 @@ public class AcademicSetupsConfiguration
 			.HasOne(x => x.EducationMediumStage)
 			.WithMany(x => x.Standards)
 			.HasForeignKey(x => x.EducationMediumStageId);
+
+		builder.Navigation(x => x.EducationMediumStage).AutoInclude();
 
 		builder.Navigation(x => x.Divisions).AutoInclude();
 

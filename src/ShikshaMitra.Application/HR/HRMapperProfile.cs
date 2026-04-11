@@ -2,11 +2,16 @@
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.Application.Contracts.HR.Calendar.Events;
+using ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
+using ShikshaMitra.HR.Calendar.Events;
+using ShikshaMitra.HR.Calendar.EventTypes;
+using ShikshaMitra.HR.Calendar.Holidays;
+using ShikshaMitra.HR.Calendar.HolidayTypes;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.AdditionalDetails;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.Settings;
-using ShikshaMitra.HR.EventAndHolidays;
-using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.SalaryStructure;
 using ShikshaMitra.HR.Payroll.Settings;
@@ -29,11 +34,11 @@ public class HRMapperProfile : Profile
 
 		CreateMap<ContactDetails, ContactDetailsDto>().ReverseMap();
 		CreateMap<BankDetails, BankDetailsDto>().ReverseMap();
-		
+
 		// Employee Payroll Component mappings for Salary Structure API
 		CreateMap<EmployeePayrollComponent, SalaryComponentDto>();
 		CreateMap<SalaryComponentDto, EmployeePayrollComponent>();
-		
+
 		// Also map to the legacy PayrollComponentDto for backward compatibility
 		CreateMap<EmployeePayrollComponent, Employees.Payroll.PayrollComponentDto>();
 		CreateMap<Employees.Payroll.PayrollComponentDto, EmployeePayrollComponent>();
@@ -49,28 +54,19 @@ public class HRMapperProfile : Profile
 
 		#region Attendeance and Leaves
 
-		#region Employee Attendance
-
-		CreateMap<EmployeeAttendance, EmployeeAttendanceDto>()
-			.ForMember(x => x.EmployeeName,
-				opt => opt.MapFrom(x => x.Employee.FirstName + " " + x.Employee.LastName));
-		CreateMap<CreateUpdateEmployeeAttendanceDto, EmployeeAttendance>();
-
-		#endregion
-
 		# region Employee Settings
 
 		CreateMap<AutomatedNotificationsSettings, AutomatedNotificationsSettingsDto>().ReverseMap();
+
+		CreateMap<NotificationInfo, NotificationInfoDto>();
 
 		CreateMap<CustomAttendanceRule, CustomAttendanceRuleDto>();
 		CreateMap<CreateUpdateCustomAttendanceRuleDto, CustomAttendanceRule>();
 
 		#endregion
 
-		# region Employee Leave
+		# region Leave Policy
 
-		CreateMap<EmployeeLeave, EmployeeLeaveDto>();
-		CreateMap<CreateUpdateEmployeeLeaveDto, EmployeeLeave>();
 		CreateMap<LeavePolicy, LeavePolicyDto>();
 		CreateMap<CreateUpdateLeavePolicyDto, LeavePolicy>();
 
@@ -78,21 +74,22 @@ public class HRMapperProfile : Profile
 
 		# endregion
 
-		#region Events & Holidays
-		
-		CreateMap<EventAndHoliday, EventAndHolidayDto>();
-		CreateMap<CreateUpdateEventAndHolidayDto, EventAndHoliday>();
-		
+		#region Calendar — Events, EventTypes, Holidays, HolidayTypes
+
+		CreateMap<Event, Application.Contracts.HR.Calendar.Events.EventDto>();
+		CreateMap<EventType, Calendar.EventTypes.EventTypeDto>();
+		CreateMap<Holiday, Application.Contracts.HR.Calendar.Holidays.HolidayDto>();
+		CreateMap<HolidayType, ShikshaMitra.HR.Calendar.HolidayTypeDto>();
+
+		#endregion
+
+		#region Employee Additional Details
+
+		CreateMap<EmployeeAdditionalDetails, Employees.AdditionalDetails.EmployeeAdditionalDetailsDto>();
+
 		#endregion
 
 		#region Payroll
-
-		#region Payroll Structure
-
-		CreateMap<PayrollStructure, PayrollStructureDto>();
-		CreateMap<CreateUpdatePayrollStructureDto, PayrollStructure>();
-
-		#endregion
 
 		#region Salary Slips
 

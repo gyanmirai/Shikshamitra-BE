@@ -1,0 +1,164 @@
+using System;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Threading.Tasks;
+using ShikshaMitra.HR.Employees.AdditionalInfo;
+using ShikshaMitra.Infrastructure.Traits;
+using Shouldly;
+using Xunit;
+
+namespace ShikshaMitra.HR.Employees;
+
+[Collection(ApiTestCollection.Name)]
+[TestModule(TestTraits.Modules.HR)]
+public class AdditionalInfoApi_Tests : ShikshaMitraApiTestBase
+{
+	private const string BaseUrl = "/api/employees";
+
+	public AdditionalInfoApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
+
+	#region Tier 0 — Critical
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Get_Additional_Info()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "AddInfoGet");
+
+		var seed = new AdditionalInfoContract { SecondLanguage = "Hindi" };
+		await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/additional-info", seed, JsonOptions);
+
+		var response = await Client.GetAsync($"{BaseUrl}/{empId}/additional-info");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Update_Additional_Info()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "AddInfoPut");
+
+		var request = new AdditionalInfoContract
+		{
+			BplCardNo = "BPL-12345",
+			PersonWithDisability = false,
+			SecondLanguage = "Hindi",
+			IsLibraryMember = true,
+			IsTransportMember = false,
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/additional-info", request, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	#endregion
+
+	#region Tier 1 — Important
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Error_For_Nonexistent_Employee()
+	{
+		var response = await Client.GetAsync($"{BaseUrl}/{Guid.NewGuid()}/additional-info");
+
+		response.StatusCode.ShouldBeOneOf(
+			HttpStatusCode.NotFound,
+			HttpStatusCode.InternalServerError,
+			HttpStatusCode.Forbidden);
+	}
+
+	#endregion
+
+	#region Tier 2 — Extended
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Update_Then_Verify_Additional_Info()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "AddInfoVerify");
+
+		var request = new AdditionalInfoContract
+		{
+			BplCardNo = "BPL-VERIFY",
+			PersonWithDisability = true,
+			SecondLanguage = "Sanskrit",
+			IsLibraryMember = false,
+			IsTransportMember = true,
+		};
+
+		await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/additional-info", request, JsonOptions);
+
+		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/additional-info");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await getResponse.Content.ReadFromJsonAsync<AdditionalInfoContract>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.BplCardNo.ShouldBe("BPL-VERIFY");
+		body.PersonWithDisability.ShouldBeTrue();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Clear_All_Fields_With_Null_Values()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "AddInfoClear");
+
+		var populateRequest = new AdditionalInfoContract
+		{
+			BplCardNo = "BPL-CLEAR",
+			PersonWithDisability = true,
+			SecondLanguage = "Marathi",
+			IsLibraryMember = true,
+			IsTransportMember = true,
+		};
+		await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/additional-info", populateRequest, JsonOptions);
+
+		var clearRequest = new AdditionalInfoContract
+		{
+			BplCardNo = null,
+			PersonWithDisability = false,
+			SecondLanguage = null,
+			IsLibraryMember = false,
+			IsTransportMember = false,
+		};
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/additional-info", clearRequest, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/additional-info");
+		var body = await getResponse.Content.ReadFromJsonAsync<AdditionalInfoContract>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.PersonWithDisability.ShouldBeFalse();
+		body.IsLibraryMember.ShouldBeFalse();
+		body.IsTransportMember.ShouldBeFalse();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_RoundTrip_All_Boolean_Fields_As_True()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "AddInfoBools");
+
+		var request = new AdditionalInfoContract
+		{
+			BplCardNo = "BPL-BOOLS",
+			PersonWithDisability = true,
+			SecondLanguage = "French",
+			IsLibraryMember = true,
+			IsTransportMember = true,
+		};
+		await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/additional-info", request, JsonOptions);
+
+		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/additional-info");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await getResponse.Content.ReadFromJsonAsync<AdditionalInfoContract>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.PersonWithDisability.ShouldBeTrue();
+		body.IsLibraryMember.ShouldBeTrue();
+		body.IsTransportMember.ShouldBeTrue();
+		body.SecondLanguage.ShouldBe("French");
+	}
+
+	#endregion
+}

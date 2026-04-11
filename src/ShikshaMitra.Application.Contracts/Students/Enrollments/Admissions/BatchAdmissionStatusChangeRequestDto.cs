@@ -21,10 +21,10 @@ public class AdmissionStatusChangeItemDto
 {
 	[Required]
 	public Guid StudentId { get; set; }
-	
+
 	[Required]
 	public AdmissionAction Action { get; set; }
-	
+
 	public string? Remarks { get; set; }
 }
 
@@ -33,6 +33,6 @@ public class AdmissionStatusChangeItemDto
 /// </summary>
 public enum AdmissionAction
 {
-	Approve = 1,
-	Reject = 2
+	Approve = 0,
+	Reject = 1
 }

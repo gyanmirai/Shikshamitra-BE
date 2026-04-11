@@ -147,7 +147,7 @@ public class GenerateSalarySlipInput
 	/// Month and year in YYYY-MM format (e.g., "2025-01")
 	/// </summary>
 	public string MonthYear { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Force regeneration if salary slip already exists
 	/// </summary>

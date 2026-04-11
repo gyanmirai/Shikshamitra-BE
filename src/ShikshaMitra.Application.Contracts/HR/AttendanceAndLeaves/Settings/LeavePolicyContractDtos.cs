@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -26,42 +26,42 @@ public class LeavePolicyItem
 	/// Sequential row number for display (contract expects int)
 	/// </summary>
 	public int Id { get; set; }
-	
+
 	/// <summary>
 	/// Internal unique identifier
 	/// </summary>
 	public Guid PolicyId { get; set; }
-	
+
 	/// <summary>
 	/// Policy title (maps from PolicyName)
 	/// </summary>
 	public string Title { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Leave type name
 	/// </summary>
 	public string LeaveType { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Maximum days per year
 	/// </summary>
 	public int MaximumPerYear { get; set; }
-	
+
 	/// <summary>
 	/// "Yes" or "No"
 	/// </summary>
 	public string CarryForward { get; set; } = "No";
-	
+
 	/// <summary>
 	/// "Yes" or "No"
 	/// </summary>
 	public string Encashable { get; set; } = "No";
-	
+
 	/// <summary>
 	/// "Paid" or "Unpaid"
 	/// </summary>
 	public string PaidType { get; set; } = "Paid";
-	
+
 	/// <summary>
 	/// "Yes" or "No"
 	/// </summary>
@@ -77,7 +77,7 @@ public class LeavePolicyCreateRequest
 	/// Organization identifier (from query parameter in controller)
 	/// </summary>
 	public Guid MediumStageId { get; set; }
-	
+
 	/// <summary>
 	/// Policy title
 	/// </summary>
@@ -85,45 +85,45 @@ public class LeavePolicyCreateRequest
 	[MinLength(1)]
 	[StringLength(LeavePolicyConsts.MaxPolicyNameLength)]
 	public string PolicyTitle { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Leave type ID (UUID reference)
 	/// </summary>
 	[Required]
 	public Guid LeaveType { get; set; }
-	
+
 	/// <summary>
 	/// Maximum days per year
 	/// </summary>
 	[Required]
 	[Range(0, 365)]
 	public int MaxLeavePerYear { get; set; }
-	
+
 	/// <summary>
 	/// "Paid" or "Unpaid"
 	/// </summary>
 	[Required]
 	[RegularExpression("^(Paid|Unpaid)$", ErrorMessage = "PaidType must be 'Paid' or 'Unpaid'")]
 	public string PaidType { get; set; } = "Paid";
-	
+
 	/// <summary>
 	/// Whether unused leave can be carried forward
 	/// </summary>
 	[Required]
 	public bool CarryForward { get; set; }
-	
+
 	/// <summary>
 	/// Whether leave can be encashed
 	/// </summary>
 	[Required]
 	public bool EncashmentAllowed { get; set; }
-	
+
 	/// <summary>
 	/// Whether leave requires approval
 	/// </summary>
 	[Required]
 	public bool RequiresApproval { get; set; }
-	
+
 	/// <summary>
 	/// Optional description
 	/// </summary>

@@ -30,7 +30,7 @@ public class SubjectManager(
 			}
 
 			// Check for duplicate subject name within the same education medium
-			var existingSubject = await subjectRepository.FindAsync(s => 
+			var existingSubject = await subjectRepository.FindAsync(s =>
 				s.Name == name && s.EducationMediumId == educationMediumId);
 			if (existingSubject != null)
 			{

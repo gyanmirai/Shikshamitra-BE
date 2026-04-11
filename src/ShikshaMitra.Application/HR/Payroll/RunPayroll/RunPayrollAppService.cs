@@ -3,7 +3,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
-using ShikshaMitra.HR.EventAndHolidays;
+using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using System;
 using System.Collections.Generic;
@@ -21,6 +21,7 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 /// <summary>
 /// Application service for running payroll - generates preview and locks payroll for a month
 /// </summary>
+[RemoteService(false)]
 public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 {
 	private readonly IRepository<Employee, Guid> _employeeRepository;
@@ -28,7 +29,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	private readonly IEmployeePayrollDetailsRepository _payrollDetailsRepository;
 	private readonly IEmployeePayrollComponentRepository _payrollComponentRepository;
 	private readonly ISalarySlipRepository _salarySlipRepository;
-	private readonly IRepository<EventAndHoliday, Guid> _holidayRepository;
+	private readonly IRepository<Holiday, Guid> _holidayRepository;
 	private readonly SalarySlipManager _salarySlipManager;
 	private readonly ILogger<RunPayrollAppService> _logger;
 
@@ -42,7 +43,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		IEmployeePayrollDetailsRepository payrollDetailsRepository,
 		IEmployeePayrollComponentRepository payrollComponentRepository,
 		ISalarySlipRepository salarySlipRepository,
-		IRepository<EventAndHoliday, Guid> holidayRepository,
+		IRepository<Holiday, Guid> holidayRepository,
 		SalarySlipManager salarySlipManager,
 		ILogger<RunPayrollAppService> logger)
 	{
@@ -205,7 +206,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		// Get all active employees
 		var employeeQuery = await _employeeRepository.GetQueryableAsync();
-		
+
 		if (CurrentTenant.Id.HasValue)
 		{
 			employeeQuery = employeeQuery.Where(e => e.TenantId == CurrentTenant.Id);
@@ -254,8 +255,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 					// Generate or get existing salary slip
 					var salarySlip = await _salarySlipManager.GenerateOrGetSalarySlipAsync(
-						employee.Id, 
-						internalMonthYear, 
+						employee.Id,
+						internalMonthYear,
 						forceRegenerate: true);
 
 					// Finalize the salary slip if not already finalized
@@ -386,7 +387,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		}
 
 		// Parse month name
-		if (!DateTime.TryParseExact(monthName, "MMMM", CultureInfo.InvariantCulture, 
+		if (!DateTime.TryParseExact(monthName, "MMMM", CultureInfo.InvariantCulture,
 			DateTimeStyles.None, out var date))
 		{
 			throw new BusinessException("HR:InvalidMonthName")
@@ -421,7 +422,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		// Get holidays for this month
 		var holidayQuery = await _holidayRepository.GetQueryableAsync();
-		
+
 		if (CurrentTenant.Id.HasValue)
 		{
 			holidayQuery = holidayQuery.Where(h => h.TenantId == CurrentTenant.Id);
@@ -431,8 +432,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		var endDate = new DateTimeOffset(lastDay.AddDays(1).AddTicks(-1));
 
 		var holidays = await AsyncExecuter.ToListAsync(
-			holidayQuery.Where(h => 
-				h.IsHoliday &&
+			holidayQuery.Where(h =>
 				h.StartDate <= endDate &&
 				h.EndDate >= startDate)
 		);
@@ -461,12 +461,12 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	/// Batch fetch attendance records for multiple employees
 	/// </summary>
 	private async Task<Dictionary<Guid, List<EmployeeAttendance>>> GetAttendanceRecordsAsync(
-		List<Guid> employeeIds, 
-		DateOnly startDate, 
+		List<Guid> employeeIds,
+		DateOnly startDate,
 		DateOnly endDate)
 	{
 		var attendanceQuery = await _attendanceRepository.GetQueryableAsync();
-		
+
 		if (CurrentTenant.Id.HasValue)
 		{
 			attendanceQuery = attendanceQuery.Where(a => a.TenantId == CurrentTenant.Id);
@@ -474,7 +474,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		var attendanceRecords = await AsyncExecuter.ToListAsync(
 			attendanceQuery
-				.Where(a => 
+				.Where(a =>
 					employeeIds.Contains(a.EmployeeId) &&
 					a.AttendanceDate >= startDate &&
 					a.AttendanceDate <= endDate)
@@ -489,7 +489,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	/// Build payroll item for an employee using pre-loaded data (no DB calls)
 	/// </summary>
 	private static RunPayrollItem BuildPayrollItem(
-		Employee employee, 
+		Employee employee,
 		List<EmployeeAttendance> attendanceRecords,
 		EmployeePayrollDetails? payrollDetails,
 		List<EmployeePayrollComponent> components,
@@ -497,17 +497,30 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	{
 		var basicSalary = payrollDetails?.BasicSalary ?? 0m;
 
-		// Single-pass calculation for earnings and deductions (optimized)
+		// Single-pass: compute aggregates and build component line items together
 		var grossSalary = 0m;
 		var totalDeduction = 0m;
+		var earningComponents = new List<RunPayrollComponentItem>(components.Count);
+		var deductionComponents = new List<RunPayrollComponentItem>(components.Count);
 		foreach (var component in components)
 		{
+			var item = new RunPayrollComponentItem
+			{
+				Name = component.Name,
+				Amount = (double)component.Amount
+			};
 			if (component.IsEarning)
+			{
 				grossSalary += component.Amount;
+				earningComponents.Add(item);
+			}
 			else
+			{
 				totalDeduction += component.Amount;
+				deductionComponents.Add(item);
+			}
 		}
-		
+
 		var netPay = grossSalary - totalDeduction;
 
 		// Calculate attendance
@@ -525,7 +538,9 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			NetPay = (double)netPay,
 			PresentDays = presentDays,
 			HalfWorkingDays = halfDays,
-			TotalWorkingDays = totalWorkingDays
+			TotalWorkingDays = totalWorkingDays,
+			EarningComponents = earningComponents,
+			DeductionComponents = deductionComponents
 		};
 	}
 

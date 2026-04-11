@@ -22,12 +22,12 @@ public class EfCoreEarningComponentRepository : EfCoreRepository<ShikshaMitraDbC
 	{
 		var dbSet = await GetDbSetAsync();
 		var query = dbSet.Where(x => x.Name.ToLower() == name.ToLower());
-		
+
 		if (excludeId.HasValue)
 		{
 			query = query.Where(x => x.Id != excludeId.Value);
 		}
-		
+
 		return await query.AnyAsync();
 	}
 

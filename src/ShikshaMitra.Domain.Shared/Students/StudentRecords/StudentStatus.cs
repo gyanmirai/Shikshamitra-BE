@@ -2,7 +2,7 @@ namespace ShikshaMitra.Students.StudentRecords;
 
 public enum StudentStatus
 {
-    Active,
-    Left,
-    Inactive
+    Active = 0,
+    Left = 1,
+    Inactive = 2
 }

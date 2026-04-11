@@ -1,55 +1,80 @@
-﻿using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
-using System;
+using ShikshaMitra.Library.Shared;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 
+namespace ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
+
+[RemoteService(false)]
 public class LibraryTimingAppService(IRepository<LibraryTiming, Guid> _repository)
 	: ApplicationService, ILibraryTimingAppService
 {
-	public async Task<List<LibraryTimingDto>> GetListAsync()
+	public async Task<PaginatedResponse<LibraryTimingDto>> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10)
 	{
-		var items = await _repository.GetListAsync();
-		return ObjectMapper.Map<List<LibraryTiming>, List<LibraryTimingDto>>(items);
-	}
+		var query = await _repository.GetQueryableAsync();
+		query = query.Where(x => x.AcademicYearId == academicYearId);
 
-	public async Task<LibraryTimingDto> CreateAsync(CreateUpdateLibraryTimingDto input)
-	{
-		var newTiming = new LibraryTiming(
-			GuidGenerator.Create(),
-			input.Day,
-			input.OpeningTime,
-			input.ClosingTime
+		var totalCount = await AsyncExecuter.CountAsync(query);
+		var totalPages = (int) Math.Ceiling(totalCount / (double) pageSize);
+
+		var items = await AsyncExecuter.ToListAsync(
+			query
+				.OrderBy(x => x.Day)
+				.Skip((page - 1) * pageSize)
+				.Take(pageSize)
 		);
 
-		var inserted = await _repository.InsertAsync(newTiming);
-		return ObjectMapper.Map<LibraryTiming, LibraryTimingDto>(inserted);
+		return new PaginatedResponse<LibraryTimingDto>
+		{
+			TotalCount = totalCount,
+			CurrentPage = page,
+			PageSize = pageSize,
+			TotalPages = totalPages,
+			Items = ObjectMapper.Map<List<LibraryTiming>, List<LibraryTimingDto>>(items)
+		};
 	}
 
-	public async Task<LibraryTimingDto> UpdateAsync(Guid id, CreateUpdateLibraryTimingDto input)
+	public async Task<GenericUpdatedResponse> UpdateHoursAsync(Guid academicYearId, LibraryHoursUpdateRequest input)
 	{
-		var existing = await _repository.GetAsync(id);
-		existing.OpeningTime = input.OpeningTime;
-		existing.ClosingTime = input.ClosingTime;
+		var query = await _repository.GetQueryableAsync();
+		var existing = await AsyncExecuter.ToListAsync(
+			query.Where(x => x.AcademicYearId == academicYearId)
+		);
 
-		var updated = await _repository.UpdateAsync(existing);
-		return ObjectMapper.Map<LibraryTiming, LibraryTimingDto>(updated);
-	}
-
-	public async Task DeleteAsync(int day)
-	{
-		if (!Enum.IsDefined(typeof(DayOfWeek), day))
+		foreach (var hourItem in input.Hours)
 		{
-			throw new ArgumentException("Invalid day value. It must be between 0 (Sunday) and 6 (Saturday).");
+			var record = existing.FirstOrDefault(x => x.Day == hourItem.Day);
+			if (record != null)
+			{
+				record.StartTime = hourItem.StartTime;
+				record.EndTime = hourItem.EndTime;
+				record.Status = hourItem.Status;
+				await _repository.UpdateAsync(record);
+			}
+			else
+			{
+				var newRecord = new LibraryTiming(
+					GuidGenerator.Create(),
+					hourItem.Day,
+					hourItem.StartTime,
+					hourItem.EndTime,
+					hourItem.Status,
+					academicYearId,
+					CurrentTenant.Id
+				);
+				await _repository.InsertAsync(newRecord);
+			}
 		}
 
-		var dayOfWeek = (DayOfWeek) day;
-		var existing = await _repository.FindAsync(x => x.Day == dayOfWeek);
-		if (existing != null)
+		return new GenericUpdatedResponse
 		{
-			await _repository.DeleteAsync(existing);
-		}
+			Id = academicYearId.ToString(),
+			Message = "Library hours updated successfully."
+		};
 	}
 }

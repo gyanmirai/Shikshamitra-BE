@@ -16,7 +16,7 @@ namespace ShikshaMitra.Controllers.HR.Payroll.SalaryStructure;
 [Area("app")]
 [Route("api/payroll/employees/{employeeId}/salary-structure")]
 [Authorize]
-public class EmployeeSalaryStructureController : AbpController
+public class EmployeeSalaryStructureController : AbpControllerBase
 {
 	private readonly IEmployeeSalaryStructureAppService _salaryStructureAppService;
 
@@ -52,7 +52,7 @@ public class EmployeeSalaryStructureController : AbpController
 		[FromBody] UpdateSalaryStructureDto input)
 	{
 		await _salaryStructureAppService.UpdateAsync(employeeId, input);
-		
+
 		return Ok(new
 		{
 			message = "Salary structure updated successfully"

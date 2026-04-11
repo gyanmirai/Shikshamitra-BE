@@ -172,7 +172,7 @@ public class EfCoreUserScopeAssignmentRepository :
                     // Exact standard match
                     (x.StandardId.HasValue && x.StandardId.Value == standardId) ||
                     // Wildcard standard WITHIN parent medium stage constraint
-                    (!x.StandardId.HasValue && x.EducationMediumStageId.HasValue && 
+                    (!x.StandardId.HasValue && x.EducationMediumStageId.HasValue &&
                      x.EducationMediumStageId.Value == standard.EducationMediumStageId) ||
                     // Wildcard medium stage (implies access to all standards in any stage)
                     (!x.EducationMediumStageId.HasValue && !x.StandardId.HasValue)
@@ -190,7 +190,7 @@ public class EfCoreUserScopeAssignmentRepository :
                     // Exact standard match
                     (x.StandardId.HasValue && x.StandardId.Value == standardId) ||
                     // Wildcard standard WITHIN parent medium stage constraint
-                    (!x.StandardId.HasValue && x.EducationMediumStageId.HasValue && 
+                    (!x.StandardId.HasValue && x.EducationMediumStageId.HasValue &&
                      x.EducationMediumStageId.Value == standard.EducationMediumStageId) ||
                     // Wildcard medium stage (implies access to all standards in any stage)
                     (!x.EducationMediumStageId.HasValue && !x.StandardId.HasValue)

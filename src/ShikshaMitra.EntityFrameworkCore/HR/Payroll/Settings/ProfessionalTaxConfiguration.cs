@@ -10,6 +10,6 @@ public class ProfessionalTaxConfiguration : IEntityTypeConfiguration<Professiona
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ProfessionalTaxes", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
-		
+
 	}
 }

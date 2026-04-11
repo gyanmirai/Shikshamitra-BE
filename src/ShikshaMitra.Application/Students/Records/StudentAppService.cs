@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using ShikshaMitra.Students.StudentEnrollments;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -19,16 +20,6 @@ public class StudentAppService(
 	IAsyncQueryableExecuter asyncExecuter
 ) : ApplicationService, IStudentAppService
 {
-	/// <summary>
-	/// Gets a paginated list of students, optionally filtered by division and search term
-	/// </summary>
-	/// <param name="divisionId">Optional division ID to filter students. If null or empty, returns all students.</param>
-	/// <param name="skipCount">Number of records to skip for pagination. Must be >= 0.</param>
-	/// <param name="maxResultCount">Maximum number of records to return. Must be between 1 and 1000.</param>
-	/// <param name="searchTerm">Optional search term to filter by name or student numbers.</param>
-	/// <returns>Paginated result containing students and total count</returns>
-	/// <exception cref="ArgumentException">Thrown when pagination parameters are invalid</exception>
-	/// <exception cref="BusinessException">Thrown when an unexpected error occurs during retrieval</exception>
 	public async Task<PagedResultDto<StudentDto>> GetStudentsByDivisionAsync(
 		Guid divisionId,
 		int skipCount = 0,

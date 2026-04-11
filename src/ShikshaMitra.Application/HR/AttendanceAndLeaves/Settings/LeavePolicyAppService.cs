@@ -14,6 +14,7 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
+[RemoteService(false)]
 public class LeavePolicyAppService : CrudAppService<
 	LeavePolicy,
 	LeavePolicyDto,
@@ -26,15 +27,15 @@ public class LeavePolicyAppService : CrudAppService<
 	private readonly ILeavePolicyRepository _leavePolicyRepository;
 	private readonly IDistributedCache<PagedResultDto<LeavePolicyDto>> _cache;
 	private readonly IDistributedCache<LeavePolicyListResponse> _contractCache;
-	
+
 	// Base cache key for all active leave policies
-	private string GetBaseCacheKey() => 
+	private string GetBaseCacheKey() =>
 		$"EmployeeLeavePolicies:Active:Tenant:{CurrentTenant?.Id ?? Guid.Empty}";
-	
+
 	// Paginated cache key
-	private string GetActiveCacheKey(int skipCount, int maxResultCount) => 
+	private string GetActiveCacheKey(int skipCount, int maxResultCount) =>
 		$"{GetBaseCacheKey()}:Skip:{skipCount}:Take:{maxResultCount}";
-	
+
 	// Contract-specific cache key by mediumStageId
 	private string GetContractCacheKey(Guid mediumStageId, int page, int pageSize) =>
 		$"EmployeeLeavePolicies:Contract:Tenant:{CurrentTenant?.Id ?? Guid.Empty}:Org:{mediumStageId}:Page:{page}:Size:{pageSize}";
@@ -79,7 +80,7 @@ public class LeavePolicyAppService : CrudAppService<
 	public override async Task<PagedResultDto<LeavePolicyDto>> GetListAsync(PagedAndSortedResultRequestDto input)
 	{
 		var queryable = await Repository.GetQueryableAsync();
-		
+
 		// Apply sorting
 		var sorting = input.Sorting ?? "PolicyName ASC";
 		queryable = ApplySorting(queryable, sorting);
@@ -140,8 +141,8 @@ public class LeavePolicyAppService : CrudAppService<
 	/// Get paginated leave policies for an organization (matches OpenAPI contract)
 	/// </summary>
 	public async Task<LeavePolicyListResponse> GetListByMediumStageIdAsync(
-		Guid mediumStageId, 
-		int page, 
+		Guid mediumStageId,
+		int page,
 		int pageSize,
 		CancellationToken cancellationToken = default)
 	{
@@ -224,7 +225,7 @@ public class LeavePolicyAppService : CrudAppService<
 			}
 			catch (Exception ex)
 			{
-				Logger.LogError(ex, 
+				Logger.LogError(ex,
 					"Failed to fetch leave policies for MediumStageId: {MediumStageId}, Page: {Page}, PageSize: {PageSize}",
 					mediumStageId, page, pageSize);
 				throw;
@@ -275,7 +276,7 @@ public class LeavePolicyAppService : CrudAppService<
 	public async Task<LeavePolicyUpdatedResponse> UpdateLeavePolicyAsync(Guid policyId, LeavePolicyCreateRequest input)
 	{
 		var policy = await _leavePolicyRepository.GetWithLeaveTypeAsync(policyId);
-		
+
 		if (policy == null)
 		{
 			throw new EntityNotFoundException(typeof(LeavePolicy), policyId);
@@ -340,7 +341,7 @@ public class LeavePolicyAppService : CrudAppService<
 		var cacheKeysToRemove = new List<string>();
 		int[] commonPageSizes = { 10, 25, 50, 100 };
 		int maxPages = 10;
-		
+
 		foreach (var pageSize in commonPageSizes)
 		{
 			for (int page = 0; page < maxPages; page++)
@@ -349,7 +350,7 @@ public class LeavePolicyAppService : CrudAppService<
 				cacheKeysToRemove.Add(GetActiveCacheKey(skipCount, pageSize));
 			}
 		}
-		
+
 		await _cache.RemoveManyAsync(cacheKeysToRemove);
 	}
 
@@ -358,7 +359,7 @@ public class LeavePolicyAppService : CrudAppService<
 		var cacheKeysToRemove = new List<string>();
 		int[] commonPageSizes = { 10, 25, 50, 100 };
 		int maxPages = 10;
-		
+
 		foreach (var pageSize in commonPageSizes)
 		{
 			for (int page = 1; page <= maxPages; page++)
@@ -366,7 +367,7 @@ public class LeavePolicyAppService : CrudAppService<
 				cacheKeysToRemove.Add(GetContractCacheKey(mediumStageId, page, pageSize));
 			}
 		}
-		
+
 		await _contractCache.RemoveManyAsync(cacheKeysToRemove);
 	}
 
@@ -391,8 +392,8 @@ public class LeavePolicyAppService : CrudAppService<
 			{
 				orderedQueryable = property.ToLower() switch
 				{
-					"policyname" => direction == "DESC" 
-						? queryable.OrderByDescending(x => x.PolicyName) 
+					"policyname" => direction == "DESC"
+						? queryable.OrderByDescending(x => x.PolicyName)
 						: queryable.OrderBy(x => x.PolicyName),
 					"maximumdaysperyear" => direction == "DESC"
 						? queryable.OrderByDescending(x => x.MaximumDaysPerYear)
@@ -408,8 +409,8 @@ public class LeavePolicyAppService : CrudAppService<
 			{
 				orderedQueryable = property.ToLower() switch
 				{
-					"policyname" => direction == "DESC" 
-						? orderedQueryable!.ThenByDescending(x => x.PolicyName) 
+					"policyname" => direction == "DESC"
+						? orderedQueryable!.ThenByDescending(x => x.PolicyName)
 						: orderedQueryable!.ThenBy(x => x.PolicyName),
 					"maximumdaysperyear" => direction == "DESC"
 						? orderedQueryable!.ThenByDescending(x => x.MaximumDaysPerYear)

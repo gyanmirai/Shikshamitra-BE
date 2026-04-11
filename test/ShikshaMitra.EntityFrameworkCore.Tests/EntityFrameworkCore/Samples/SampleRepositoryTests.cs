@@ -1,44 +1,38 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Shouldly;
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Xunit;
 
 namespace ShikshaMitra.EntityFrameworkCore.Samples;
 
-/* This is just an example test class.
- * Normally, you don't test ABP framework code
- * (like default AppUser repository IRepository<AppUser, Guid> here).
- * Only test your custom repository methods.
- */
 [Collection(ShikshaMitraTestConsts.CollectionDefinitionName)]
 public class SampleRepositoryTests : ShikshaMitraEntityFrameworkCoreTestBase
 {
-    private readonly IRepository<IdentityUser, Guid> _appUserRepository;
+	private readonly IRepository<IdentityUser, Guid> _appUserRepository;
+	private readonly IGuidGenerator _guidGenerator;
 
-    public SampleRepositoryTests()
-    {
-        _appUserRepository = GetRequiredService<IRepository<IdentityUser, Guid>>();
-    }
+	public SampleRepositoryTests()
+	{
+		_appUserRepository = GetRequiredService<IRepository<IdentityUser, Guid>>();
+		_guidGenerator = GetRequiredService<IGuidGenerator>();
+	}
 
-    [Fact]
-    public async Task Should_Query_AppUser()
-    {
-        /* Need to manually start Unit Of Work because
-         * FirstOrDefaultAsync should be executed while db connection / context is available.
-         */
-        await WithUnitOfWorkAsync(async () =>
-        {
-                //Act
-                var adminUser = await (await _appUserRepository.GetQueryableAsync())
-                .Where(u => u.UserName == "admin")
-                .FirstOrDefaultAsync();
+	[Fact]
+	public async Task Should_Query_AppUser()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var user = new IdentityUser(_guidGenerator.Create(), "testuser", "testuser@test.com");
+			await _appUserRepository.InsertAsync(user, autoSave: true);
 
-                //Assert
-                adminUser.ShouldNotBeNull();
-        });
-    }
+			var anyUser = await (await _appUserRepository.GetQueryableAsync())
+				.FirstOrDefaultAsync();
+
+			anyUser.ShouldNotBeNull();
+		});
+	}
 }

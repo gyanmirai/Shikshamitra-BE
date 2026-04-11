@@ -13,14 +13,20 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 	public async Task MigrateAsync()
 	{
 		/* We intentionally resolve the ShikshaMitraDbContext
-         * from IServiceProvider (instead of directly injecting it)
-         * to properly get the connection string of the current tenant in the
-         * current scope.
-         */
+		 * from IServiceProvider (instead of directly injecting it)
+		 * to properly get the connection string of the current tenant in the
+		 * current scope.
+		 */
 
-		await serviceProvider
-			.GetRequiredService<ShikshaMitraDbContext>()
-			.Database
-			.MigrateAsync();
+		var dbContext = serviceProvider
+			.GetRequiredService<ShikshaMitraDbContext>();
+
+		// Ensure the public schema exists before running migrations.
+		// PostgreSQL requires a valid schema in the search_path to create tables
+		// (including the __EFMigrationsHistory table).
+		await dbContext.Database.ExecuteSqlRawAsync(
+			"CREATE SCHEMA IF NOT EXISTS public;");
+
+		await dbContext.Database.MigrateAsync();
 	}
 }

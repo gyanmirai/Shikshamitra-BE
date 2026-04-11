@@ -173,10 +173,10 @@ public class ChapterProgressAppService(
 			// Use culture-invariant, DB-friendly search
 			// Try to parse search as number for ChapterNumber comparison
 			var isNumericSearch = int.TryParse(search, out var searchNumber);
-			
+
 			// Build pattern for case-insensitive LIKE search
 			var searchPattern = $"%{search}%";
-			
+
 			chaptersQuery = chaptersQuery.Where(c =>
 				c.ChapterName.ToLower().Contains(search.ToLower()) ||
 				(isNumericSearch && c.ChapterNumber == searchNumber)
@@ -242,8 +242,8 @@ public class ChapterProgressAppService(
 				try
 				{
 					// Find existing progress record for the chapter and division
-					var progress = await progressRepository.FirstOrDefaultAsync(p => 
-						p.ChapterId == chapterId && 
+					var progress = await progressRepository.FirstOrDefaultAsync(p =>
+						p.ChapterId == chapterId &&
 						p.DivisionId == input.DivisionId
 					);
 
@@ -252,7 +252,7 @@ public class ChapterProgressAppService(
 						// Update existing record
 						progress.UpdateProgress(input.Progress, input.Description);
 						await progressRepository.UpdateAsync(progress);
-						
+
 						logger.LogDebug(
 							"Updated existing progress for chapter {ChapterId}, division {DivisionId}",
 							chapterId, input.DivisionId
@@ -269,7 +269,7 @@ public class ChapterProgressAppService(
 						);
 						newProgress.UpdateProgress(input.Progress, input.Description);
 						await progressRepository.InsertAsync(newProgress);
-						
+
 						logger.LogDebug(
 							"Created new progress for chapter {ChapterId}, division {DivisionId}",
 							chapterId, input.DivisionId
@@ -278,7 +278,7 @@ public class ChapterProgressAppService(
 					}
 				}
 				catch (Exception ex) when (
-					attempt < maxRetries && 
+					attempt < maxRetries &&
 					IsDuplicateKeyException(ex)
 				)
 				{
@@ -289,10 +289,10 @@ public class ChapterProgressAppService(
 						"Concurrent insert detected for chapter {ChapterId}, division {DivisionId}. Retry attempt {Attempt}/{MaxRetries}",
 						chapterId, input.DivisionId, attempt, maxRetries
 					);
-					
+
 					// Brief delay to allow the other transaction to complete
 					await Task.Delay(TimeSpan.FromMilliseconds(50 * attempt));
-					
+
 					// Continue to next iteration - will reload and update existing record
 				}
 			}
@@ -315,7 +315,7 @@ public class ChapterProgressAppService(
 		catch (Exception ex)
 		{
 			logger.LogError(
-				ex, 
+				ex,
 				"Failed to update chapter progress for chapter {ChapterId}, division {DivisionId}",
 				chapterId, input.DivisionId
 			);
@@ -339,7 +339,7 @@ public class ChapterProgressAppService(
 		// Check exception type names for database-specific types
 		var exceptionTypeName = ex.GetType().Name;
 		var innerExceptionTypeName = ex.InnerException?.GetType().Name ?? string.Empty;
-		
+
 		// Common DB exception types that indicate constraint violations
 		if (exceptionTypeName.Contains("DbUpdate", StringComparison.OrdinalIgnoreCase) ||
 		    innerExceptionTypeName.Contains("PostgresException", StringComparison.OrdinalIgnoreCase) ||
@@ -350,7 +350,7 @@ public class ChapterProgressAppService(
 			if (ex.InnerException != null)
 			{
 				var innerEx = ex.InnerException;
-				
+
 				// Try to get SqlState property using reflection
 				var sqlStateProperty = innerEx.GetType().GetProperty("SqlState");
 				if (sqlStateProperty != null)
@@ -361,7 +361,7 @@ public class ChapterProgressAppService(
 						return true;
 					}
 				}
-				
+
 				// Try to get ConstraintName property using reflection
 				var constraintNameProperty = innerEx.GetType().GetProperty("ConstraintName");
 				if (constraintNameProperty != null)
@@ -372,7 +372,7 @@ public class ChapterProgressAppService(
 						return true;
 					}
 				}
-				
+
 				// Check SQL Server error number (2627 = unique constraint, 2601 = unique index)
 				var numberProperty = innerEx.GetType().GetProperty("Number");
 				if (numberProperty != null)
@@ -389,7 +389,7 @@ public class ChapterProgressAppService(
 		// Fallback: Check exception messages using culture-invariant comparison
 		var message = ex.Message ?? string.Empty;
 		var innerMessage = ex.InnerException?.Message ?? string.Empty;
-		
+
 		return message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) ||
 		       message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
 		       message.Contains("unique index", StringComparison.OrdinalIgnoreCase) ||

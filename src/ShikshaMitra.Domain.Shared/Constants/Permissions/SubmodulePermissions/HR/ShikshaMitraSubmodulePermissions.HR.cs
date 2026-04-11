@@ -37,9 +37,9 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Dashboard";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Dashboard";
-			
+
 			public const string View = $"{SubmoduleName}.View";
-			
+
 			public static readonly string[] All = { View };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -53,11 +53,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Reports";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Reports";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -73,11 +73,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Notification";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Notification";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -100,6 +100,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "HR.PayrollManagement.Settings.EarningComponents", new SubmoduleInfo(PayrollManagement_SettingsEarningComponents.All, PayrollManagement_SettingsEarningComponents.DisplayNames) },
 			{ "HR.PayrollManagement.Settings.DeductionComponents", new SubmoduleInfo(PayrollManagement_SettingsDeductionComponents.All, PayrollManagement_SettingsDeductionComponents.DisplayNames) },
 			{ "HR.PayrollManagement.Settings.PfRule", new SubmoduleInfo(PayrollManagement_SettingsPfRule.All, PayrollManagement_SettingsPfRule.DisplayNames) },
+			{ "HR.PayrollManagement.Settings.DayCalculation", new SubmoduleInfo(PayrollManagement_SettingsDayCalculation.All, PayrollManagement_SettingsDayCalculation.DisplayNames) },
 			{ "HR.AttendanceAndLeave.ImportAttendance", new SubmoduleInfo(AttendanceAndLeave_ImportAttendance.All, AttendanceAndLeave_ImportAttendance.DisplayNames) },
 			{ "HR.AttendanceAndLeave.LeaveManagement", new SubmoduleInfo(AttendanceAndLeave_LeaveManagement.All, AttendanceAndLeave_LeaveManagement.DisplayNames) },
 			{ "HR.AttendanceAndLeave.AttendanceTracking", new SubmoduleInfo(AttendanceAndLeave_AttendanceTracking.All, AttendanceAndLeave_AttendanceTracking.DisplayNames) },

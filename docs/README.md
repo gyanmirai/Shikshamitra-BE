@@ -1,110 +1,37 @@
-﻿# ShikshaMitra Documentation
-
-Multi-tenant school management system built with ABP Framework (.NET 9).
-
-## 📁 Structure
-
-```
-docs/
-├── api/                    → API documentation & references
-├── implementation/         → Step-by-step implementation guides
-├── userscope/             → UserScope access control
-└── multi-tenancy/         → Multi-tenant architecture  
-```
-
-## 🚀 Quick Start
-
-### API Testing
-[postman/](../postman/) folder contains everything:
-- `ShikshaMitra.postman_collection.json`
-- `ShikshaMitra.postman_environment.json`
-- [Setup guide](../postman/README.md)
-
-### Development
-```bash
-dotnet restore && dotnet build
-dotnet run --project src/ShikshaMitra.DbMigrator
-dotnet run --project src/ShikshaMitra.HttpApi.Host
-```
-
-## 📚 Core Concepts
-
-### UserScope
-Hierarchical access: Board → Medium → Stage → Class → Division
-- Principle: `NULL = ALL`
-- [Architecture](./UserScope-Usage.md)
-
-### Multi-Tenancy
-Complete tenant isolation
-- [Tenant setup](./multi-tenancy/tenants.md)
-- [Role config](./multi-tenancy/roles.md)
-
-### Authentication
-- Host Admin: Tenant creation
-- Tenant User: All operations
-- [Details](../postman/ARCHITECTURE.md)
-
-## 🎯 Documentation Map
-
-| Topic | Document |
-|-------|----------|
-| **API Reference** | |
-| Employee API | [api/employee/README.md](./api/employee/README.md) |
-| Employee Payroll API | [api/employee/Employee-Payroll-API.md](./api/employee/Employee-Payroll-API.md) |
-| General Endpoints | [api/endpoints.md](./api/endpoints.md) |
-| **Implementation Guides** | |
-| Employee Payroll | [implementation/employee/README.md](./implementation/employee/README.md) |
-| All Implementations | [implementation/README.md](./implementation/README.md) |
-| **Access Control** | |
-| UserScope | [UserScope-Usage.md](./UserScope-Usage.md) |
-| Bulk Assignment | [BulkScopeAssignment-API-Guide.md](./BulkScopeAssignment-API-Guide.md) |
-| **Multi-Tenancy** | |
-| Tenants | [multi-tenancy/tenants.md](./multi-tenancy/tenants.md) |
-| Roles | [multi-tenancy/roles.md](./multi-tenancy/roles.md) |
-| **Testing** | |
-| Postman Setup | [../postman/README.md](../postman/README.md) |
-
-## 📖 Documentation Types
-
-### API Documentation (`docs/api/`)
-Complete API reference with endpoints, request/response examples, and usage guides.
-- **Purpose**: API consumers, frontend developers
-- **Content**: Endpoints, schemas, examples, validation rules
-
-### Implementation Guides (`docs/implementation/`)
-Step-by-step instructions for implementing features from scratch.
-- **Purpose**: Backend developers adding new features
-- **Content**: Code examples, database migrations, testing procedures
-
-### Architecture (`docs/multi-tenancy/`, `docs/UserScope-Usage.md`)
-System design and architectural concepts.
-- **Purpose**: Architects, senior developers, new team members
-- **Content**: Concepts, patterns, best practices
-
-## 🔧 SSVM Tenant
-
-```
-ID: 3a1dc7ba-395f-4af3-7ac7-ad923cc1f20e
-User: admin
-Pass: Temp@123
-```
-
-## 📝 Quick Links
-
-### For Developers
-- [Employee API Quick Reference](./api/employee/Employee-QuickRef.md)
-- [Employee Payroll Implementation](./implementation/employee/Employee-Payroll-QuickStart.md)
-- [API Endpoints](./api/endpoints.md)
-
-### For Architects
-- [Employee Module Complete Summary](./api/employee/Employee-Complete-Optimization-Summary.md)
-- [Multi-Tenancy Architecture](./multi-tenancy/README.md)
-- [UserScope System](./UserScope-Usage.md)
-
-### For Project Managers
-- [Implementation Progress](./implementation/employee/Employee-Payroll-Implementation-Complete.md)
-- [Feature Documentation](./api/employee/README.md)
-
+---
+description: Documentation router for ShikshaMitra backend (developer + AI-agent friendly).
+tags: [docs, backend, api-contracts, modules]
 ---
 
-**.NET 9** | **ABP Framework** | **EF Core** | **PostgreSQL**
+# ShikshaMitra Backend Documentation
+
+This documentation is backend-first, pattern-driven, and contract-centric.
+
+## Start Here
+
+1. [Best Practices](./best-practices.md) - engineering standards and docs contribution rules.
+2. [Modules Index](./modules/README.md) - module-first vertical documentation.
+3. [Architecture](./architecture/README.md) - ADRs and design decisions.
+4. [Common](./common/README.md) - shared platform, tenancy, security, testing, and documentation standards.
+
+## Information Architecture
+
+- `docs/modules/<module>/` is the canonical home for module-owned docs.
+- `docs/modules/<module>/contracts/curated/` is the canonical home for AI/dev contract consumption.
+- `docs/modules/<module>/contracts/raw/` stores downloaded/generated raw contract files.
+- Module contracts live only under `docs/modules/<module>/contracts/`.
+- Shared cross-cutting docs live only under `docs/common/`.
+
+## Quick Links
+
+- [HR Module](./modules/hr/README.md)
+- [Institute Setup Module](./modules/institute-setup/README.md)
+- [HR PRD](./modules/hr/prd/README.md)
+- [HR Curated Contracts](./modules/hr/contracts/curated/README.md)
+- [Common Docs](./common/README.md)
+
+## Legacy and Archive
+
+- Obsolete root HR exports were moved to [meta/legacy/hr-root](./meta/legacy/hr-root/).
+- Historical reorg notes remain under [meta](./meta/README.md).
+- Cleanup decisions are tracked in [meta/legacy-migration-log.md](./meta/legacy-migration-log.md).

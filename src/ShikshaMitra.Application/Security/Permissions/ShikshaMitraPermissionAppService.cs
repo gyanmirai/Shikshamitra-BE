@@ -221,8 +221,8 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IShikshaMitr
 				.Where(x => x.MultiTenancySide.HasFlag(multiTenancySide))
 				.ToList();
 
-			// We only process top-level permissions here (Parent == null) or 
-			// those with a parent that is not in this group. 
+			// We only process top-level permissions here (Parent == null) or
+			// those with a parent that is not in this group.
 			// If you want to strictly nest within each group, we limit the nesting to that group's set.
 			var topLevelPermissions = groupPermissionDefinitions
 				.Where(p => p.Parent == null || !groupPermissionDefinitions.Contains(p.Parent))

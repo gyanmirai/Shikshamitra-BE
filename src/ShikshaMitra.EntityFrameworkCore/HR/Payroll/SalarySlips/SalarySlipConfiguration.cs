@@ -73,18 +73,18 @@ public class SalarySlipConfiguration : IEntityTypeConfiguration<SalarySlip>
 		builder.Property(x => x.Earnings)
 			.HasConversion(
 				v => JsonSerializer.Serialize(v, JsonSerializerOptions.Default),
-				v => string.IsNullOrEmpty(v) 
-					? new System.Collections.Generic.List<SalarySlipLineItem>() 
-					: JsonSerializer.Deserialize<System.Collections.Generic.List<SalarySlipLineItem>>(v, JsonSerializerOptions.Default) 
+				v => string.IsNullOrEmpty(v)
+					? new System.Collections.Generic.List<SalarySlipLineItem>()
+					: JsonSerializer.Deserialize<System.Collections.Generic.List<SalarySlipLineItem>>(v, JsonSerializerOptions.Default)
 						?? new System.Collections.Generic.List<SalarySlipLineItem>())
 			.HasColumnType("jsonb");
 
 		builder.Property(x => x.Deductions)
 			.HasConversion(
 				v => JsonSerializer.Serialize(v, JsonSerializerOptions.Default),
-				v => string.IsNullOrEmpty(v) 
-					? new System.Collections.Generic.List<SalarySlipLineItem>() 
-					: JsonSerializer.Deserialize<System.Collections.Generic.List<SalarySlipLineItem>>(v, JsonSerializerOptions.Default) 
+				v => string.IsNullOrEmpty(v)
+					? new System.Collections.Generic.List<SalarySlipLineItem>()
+					: JsonSerializer.Deserialize<System.Collections.Generic.List<SalarySlipLineItem>>(v, JsonSerializerOptions.Default)
 						?? new System.Collections.Generic.List<SalarySlipLineItem>())
 			.HasColumnType("jsonb");
 

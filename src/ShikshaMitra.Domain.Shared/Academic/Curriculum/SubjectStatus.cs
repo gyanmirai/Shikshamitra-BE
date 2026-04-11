@@ -2,6 +2,6 @@
 
 public enum SubjectStatus
 {
-	Draft,
-	Published
+	Draft = 0,
+	Published = 1
 }

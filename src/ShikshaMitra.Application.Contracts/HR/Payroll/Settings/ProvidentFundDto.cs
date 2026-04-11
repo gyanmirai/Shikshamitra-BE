@@ -12,17 +12,17 @@ public class ProvidentFundDto : AuditedEntityDto<Guid>
 	/// Unique PF rule code
 	/// </summary>
 	public string Code { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Human-readable PF rule name
 	/// </summary>
 	public string Name { get; set; } = string.Empty;
-	
+
 	/// <summary>
 	/// Employee contribution percentage
 	/// </summary>
 	public decimal EmployeePercentage { get; set; }
-	
+
 	/// <summary>
 	/// Employer contribution percentage
 	/// </summary>

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -13,7 +13,6 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 
 /// <summary>
 /// Employee payroll information management controller
-/// Handles operations for managing employee payroll data in the school ERP system
 /// </summary>
 [Area("app")]
 [RemoteService(Name = "Default")]
@@ -21,11 +20,15 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 [Authorize]
 public class PayrollController : AbpControllerBase
 {
-	private readonly IEmployeeAppService _employeeAppService;
+	private readonly IEmployeePayrollAppService _payrollAppService;
+	private readonly IEmployeeAuthorizationService _authorizationService;
 
-	public PayrollController(IEmployeeAppService employeeAppService)
+	public PayrollController(
+		IEmployeePayrollAppService payrollAppService,
+		IEmployeeAuthorizationService authorizationService)
 	{
-		_employeeAppService = employeeAppService;
+		_payrollAppService = payrollAppService;
+		_authorizationService = authorizationService;
 	}
 
 	/// <summary>
@@ -33,10 +36,12 @@ public class PayrollController : AbpControllerBase
 	/// </summary>
 	[HttpGet("{employeeId}/payroll")]
 	[ProducesResponseType(typeof(PayrollContract), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<PayrollContract> GetAsync([FromRoute, Required] Guid employeeId)
 	{
-		return await _employeeAppService.GetPayrollContractAsync(employeeId);
+		await _authorizationService.CheckEmployeeAccessAsync(employeeId, requireOwnership: true);
+		return await _payrollAppService.GetPayrollContractAsync(employeeId);
 	}
 
 	/// <summary>
@@ -44,12 +49,14 @@ public class PayrollController : AbpControllerBase
 	/// </summary>
 	[HttpPut("{employeeId}/payroll")]
 	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<IActionResult> UpdateAsync(
 		[FromRoute, Required] Guid employeeId,
 		[FromBody, Required] PayrollContract request)
 	{
-		await _employeeAppService.UpdatePayrollContractAsync(employeeId, request);
+		await _authorizationService.CheckSensitiveFieldAccessAsync(employeeId);
+		await _payrollAppService.UpdatePayrollContractAsync(employeeId, request);
 		return Ok();
 	}
 }

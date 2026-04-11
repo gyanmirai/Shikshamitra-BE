@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System.Linq;
+using System.Threading.Tasks;
 using Shouldly;
 using Volo.Abp.Identity;
 using Volo.Abp.Modularity;
@@ -24,23 +25,25 @@ public abstract class SampleDomainTests<TStartupModule> : ShikshaMitraDomainTest
     }
 
     [Fact]
-    public async Task Should_Set_Email_Of_A_User()
+    public virtual async Task Should_Set_Email_Of_A_User()
     {
-        IdentityUser adminUser;
+        IdentityUser? targetUser = null;
 
-        /* Need to manually start Unit Of Work because
-         * FirstOrDefaultAsync should be executed while db connection / context is available.
-         */
         await WithUnitOfWorkAsync(async () =>
         {
-            adminUser = await _identityUserRepository
+            targetUser = await _identityUserRepository
                 .FindByNormalizedUserNameAsync("ADMIN");
 
-            await _identityUserManager.SetEmailAsync(adminUser, "newemail@abp.io");
-            await _identityUserRepository.UpdateAsync(adminUser);
+            targetUser ??= (await _identityUserRepository.GetListAsync(maxResultCount: 1)).FirstOrDefault();
+
+            targetUser.ShouldNotBeNull();
+
+            await _identityUserManager.SetEmailAsync(targetUser!, "newemail@abp.io");
+            await _identityUserRepository.UpdateAsync(targetUser!);
         });
 
-        adminUser = await _identityUserRepository.FindByNormalizedUserNameAsync("ADMIN");
-        adminUser.Email.ShouldBe("newemail@abp.io");
+        targetUser = await _identityUserRepository
+            .FindByNormalizedUserNameAsync(targetUser!.NormalizedUserName!);
+        targetUser.Email.ShouldBe("newemail@abp.io");
     }
 }

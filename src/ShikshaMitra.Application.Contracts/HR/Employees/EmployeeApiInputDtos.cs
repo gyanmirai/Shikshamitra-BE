@@ -13,14 +13,6 @@ public class GetEmployeeListInput : PagedAndSortedResultRequestDto
     public bool? IsTeaching { get; set; }
 
     public Guid? RoleId { get; set; }
-}
 
-/// <summary>
-/// Input for searching employees
-/// </summary>
-public class SearchEmployeeInput
-{
-    public string? SearchTerm { get; set; }
-
-    public int MaxResultCount { get; set; } = 50;
+    public string? Search { get; set; }
 }

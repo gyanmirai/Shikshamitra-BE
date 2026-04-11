@@ -10,11 +10,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.ImportAttendance";
 			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.ImportAttendance";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -29,11 +29,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.LeaveManagement";
 			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.LeaveManagement";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -48,11 +48,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.AttendanceTracking";
 			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.AttendanceTracking";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -67,11 +67,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.Setting.ShiftManagement";
 			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.Setting.ShiftManagement";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -86,11 +86,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.Setting.LeaveType";
 			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.Setting.LeaveType";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -105,11 +105,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.Setting.LeavePolicy";
 			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.Setting.LeavePolicy";
-			
+
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			
+
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{

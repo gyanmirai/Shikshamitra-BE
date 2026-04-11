@@ -8,6 +8,14 @@ using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.HR.Employees;
 
+/// <summary>
+/// Deprecated: This interface has been decomposed into focused services.
+/// Use IEmployeePersonalInfoAppService, IEmployeeDocumentAppService,
+/// IEmployeePayrollAppService, IEmployeeSearchAppService,
+/// IEmployeeFamilyInfoAppService, IEmployeeWorkExperienceAppService,
+/// IEmployeeAdditionalDetailsAppService, and IEmployeeStatusAppService instead.
+/// </summary>
+[Obsolete("Use the focused employee service interfaces instead. See docs/implementation/hr/application-layer-patterns.md")]
 public interface
 	IEmployeeAppService : ICrudAppService<EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>
 {
@@ -104,8 +112,6 @@ public interface
 	/// <returns>The updated Employee DTO.</returns>
 	Task<EmployeeDto> UpdateEmployeeStatus(Guid employeeId, EmployeeStatusType employeeStatusType, string? changeReason);
 
-	Task UpdatePayrollStructureAsync(Guid employeeId, CreateUpdateEmployeePayrollStructureDto input);
-
 	/// <summary>
 	/// Gets the complete payroll details for an employee including earnings and deductions.
 	/// </summary>
@@ -142,11 +148,4 @@ public interface
 	/// <param name="input">Filter and pagination parameters.</param>
 	/// <returns>Paginated list of employee summaries.</returns>
 	Task<EmployeeListResponse> GetFilteredListAsync(GetEmployeeListInput input);
-
-	/// <summary>
-	/// Searches employees by name, employee identifier, email, or mobile number.
-	/// </summary>
-	/// <param name="input">Search parameters.</param>
-	/// <returns>Search results with employee details.</returns>
-	Task<EmployeeSearchResponse> SearchAsync(SearchEmployeeInput input);
 }

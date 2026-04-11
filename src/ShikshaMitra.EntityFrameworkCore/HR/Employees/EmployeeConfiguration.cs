@@ -16,11 +16,9 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 		builder.ConfigureByConvention();
 
 		// Configure value objects as complex properties
-		builder.ComplexProperty(e => e.FatherDetails);
-		builder.ComplexProperty(e => e.MotherDetails);
-		builder.ComplexProperty(e => e.SpouseDetails);
 		builder.ComplexProperty(e => e.BankDetails);
 		// Note: AdditionalDetails is now a separate entity with its own table (see EmployeeAdditionalDetailsConfiguration)
+		// Note: FamilyMembers (Father/Mother/Spouse) are now in separate table (see EmployeeFamilyMemberConfiguration)
 
 		// Configure owned collections (stored as JSON)
 		builder.OwnsMany(e => e.WorkExperiences, ew => ew.ToJson());
@@ -28,8 +26,11 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 		{
 			doc.ToTable(ShikshaMitraConsts.DbTablePrefix + "EmployeeDocuments", ShikshaMitraConsts.DbSchema);
 			doc.WithOwner().HasForeignKey("EmployeeId");
-			doc.Property<Guid>("Id");
+			doc.Property<Guid>("Id").ValueGeneratedNever();
 			doc.HasKey("Id");
+			doc.Property(d => d.DocumentNameId);
+			doc.HasIndex("EmployeeId", "DocumentNameId")
+				.HasDatabaseName("IX_EmployeeDocuments_EmployeeId_DocumentNameId");
 		});
 
 		// Configure owned value objects (stored in same table)
@@ -57,12 +58,6 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 			.HasForeignKey(e => e.RoleId)
 			.OnDelete(DeleteBehavior.Restrict)
 			.IsRequired();
-
-		builder.HasOne(e => e.PayrollStructure)
-			.WithMany()
-			.HasForeignKey(e => e.PayrollStructureId)
-			.OnDelete(DeleteBehavior.Restrict)
-			.IsRequired(false);
 
 		builder.HasOne(e => e.Shift)
 			.WithMany()
@@ -101,9 +96,9 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 		builder.HasIndex(e => e.UserId)
 			.HasDatabaseName("IX_Employees_UserId");
 
-		builder.HasIndex(e => e.EmployeeCode)
+		builder.HasIndex(e => new { e.TenantId, e.EmployeeCode })
 			.IsUnique()
-			.HasDatabaseName("IX_Employees_EmployeeCode_Unique");
+			.HasDatabaseName("IX_Employees_TenantId_EmployeeCode_Unique");
 
 		builder.HasIndex(e => e.Email)
 			.HasDatabaseName("IX_Employees_Email");

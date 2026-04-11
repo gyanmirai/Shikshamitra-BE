@@ -16,10 +16,12 @@ namespace ShikshaMitra.HR.Payroll;
 public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
     private readonly IEarningComponentAppService _earningComponentAppService;
+    private readonly IDeductionComponentAppService _deductionComponentAppService;
 
     public EarningComponentAppService_Tests()
     {
         _earningComponentAppService = GetRequiredService<IEarningComponentAppService>();
+        _deductionComponentAppService = GetRequiredService<IDeductionComponentAppService>();
     }
 
     #region Create Tests
@@ -33,8 +35,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Name = "Test Basic Salary",
             Description = "Monthly basic salary component",
             ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "50000",
+            Amount = 50000m,
             VisibleInPayslip = true,
             DisplayOrder = 1
         };
@@ -58,14 +61,19 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
     [Fact]
     public async Task Should_Create_Variable_Earning_Component()
     {
-        // Arrange
+        // Arrange - create a base component first to reference
+        var baseComponent = await CreateTestEarningComponentAsync("Base Salary For Variable");
+
         var input = new CreateEarningComponentDto
         {
             Name = "Test Performance Bonus",
             Description = "Quarterly performance bonus",
             ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
             DependOn = ComponentDependency.Basic,
-            Amount = "10%",
+            Amount = null,
+            Percentage = 10m,
+            SelectedEarningComponentId = baseComponent.Id,
             VisibleInPayslip = true,
             DisplayOrder = 5
         };
@@ -77,7 +85,10 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         result.ShouldNotBeNull();
         result.ComponentType.ShouldBe(EarningComponentType.Variable);
         result.DependOn.ShouldBe(ComponentDependency.Basic);
-        result.Amount.ShouldBe("10%");
+        result.CalculationType.ShouldBe(CalculationType.Percentage);
+        result.Percentage.ShouldBe(10m);
+        result.Amount.ShouldBeNull();
+        result.SelectedEarningComponentId.ShouldBe(baseComponent.Id);
     }
 
     [Fact]
@@ -89,8 +100,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         {
             Name = componentName,
             ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "10000"
+            Amount = 10000m
         };
 
         await _earningComponentAppService.CreateAsync(input1);
@@ -99,8 +111,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         {
             Name = componentName,
             ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "5000"
+            Amount = 5000m
         };
 
         // Act & Assert
@@ -111,6 +124,59 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
     }
 
     [Fact]
+    public async Task Should_Allow_Creating_Same_Name_After_Delete()
+    {
+        // Arrange
+        var input = new CreateEarningComponentDto
+        {
+            Name = "Reusable Deleted Name",
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 1200m
+        };
+
+        var created = await _earningComponentAppService.CreateAsync(input);
+        await _earningComponentAppService.DeleteAsync(created.Id);
+
+        // Act
+        var recreated = await _earningComponentAppService.CreateAsync(input);
+
+        // Assert
+        recreated.Id.ShouldNotBe(created.Id);
+        recreated.Name.ShouldBe(input.Name);
+    }
+
+    [Fact]
+    public async Task Should_Allow_Same_Name_As_Deduction_Component()
+    {
+        // Arrange
+        const string sharedName = "Shared Name Across Modules";
+
+        await _deductionComponentAppService.CreateAsync(new CreateDeductionComponentDto
+        {
+            Name = sharedName,
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 250m
+        });
+
+        // Act
+        var createdEarning = await _earningComponentAppService.CreateAsync(new CreateEarningComponentDto
+        {
+            Name = sharedName,
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 1250m
+        });
+
+        // Assert
+        createdEarning.Name.ShouldBe(sharedName);
+    }
+
+    [Fact]
     public async Task Should_Not_Create_Without_Required_Fields()
     {
         // Arrange
@@ -118,11 +184,11 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         {
             Name = "", // Empty name
             ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "10000"
+            Amount = 10000m
         };
 
-        // Act & Assert
         await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _earningComponentAppService.CreateAsync(input);
@@ -137,8 +203,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         {
             Name = "  Test Component With Spaces  ",
             ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "10000"
+            Amount = 10000m
         };
 
         // Act
@@ -257,14 +324,18 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
     {
         // Arrange
         var created = await CreateTestEarningComponentAsync("Original Name");
+        var baseComponent = await CreateTestEarningComponentAsync("Base For Percentage Update");
 
         var updateInput = new UpdateEarningComponentDto
         {
             Name = "Updated Name",
             Description = "Updated description",
             ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
             DependOn = ComponentDependency.Gross,
-            Amount = "15%",
+            Amount = null,
+            Percentage = 15m,
+            SelectedEarningComponentId = baseComponent.Id,
             VisibleInPayslip = false,
             DisplayOrder = 10
         };
@@ -279,7 +350,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         result.Description.ShouldBe("Updated description");
         result.ComponentType.ShouldBe(EarningComponentType.Variable);
         result.DependOn.ShouldBe(ComponentDependency.Gross);
-        result.Amount.ShouldBe("15%");
+        result.CalculationType.ShouldBe(CalculationType.Percentage);
+        result.Percentage.ShouldBe(15m);
+        result.Amount.ShouldBeNull();
         result.VisibleInPayslip.ShouldBeFalse();
         result.DisplayOrder.ShouldBe(10);
     }
@@ -295,8 +368,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         {
             Name = "Component 1", // Trying to use existing name
             ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "10000"
+            Amount = 10000m
         };
 
         // Act & Assert
@@ -317,8 +391,11 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Name = "Same Name Component", // Same name
             Description = "Updated description only",
             ComponentType = created.ComponentType,
+            CalculationType = created.CalculationType,
             DependOn = created.DependOn,
-            Amount = created.Amount
+            Amount = created.Amount,
+            Percentage = created.Percentage,
+            SelectedEarningComponentId = created.SelectedEarningComponentId
         };
 
         // Act
@@ -420,8 +497,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         {
             Name = "Component & Bonus (50%) - Test",
             ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "5000"
+            Amount = 5000m
         };
 
         // Act
@@ -434,20 +512,27 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
     [Fact]
     public async Task Should_Handle_Percentage_Amount()
     {
-        // Arrange
+        // Arrange - create a base component first to reference
+        var baseComponent = await CreateTestEarningComponentAsync("Base For Percentage Test");
+
         var input = new CreateEarningComponentDto
         {
             Name = "Percentage Component",
             ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
             DependOn = ComponentDependency.Basic,
-            Amount = "10.5%"
+            Amount = null,
+            Percentage = 10.5m,
+            SelectedEarningComponentId = baseComponent.Id
         };
 
         // Act
         var result = await _earningComponentAppService.CreateAsync(input);
 
         // Assert
-        result.Amount.ShouldBe("10.5%");
+        result.CalculationType.ShouldBe(CalculationType.Percentage);
+        result.Percentage.ShouldBe(10.5m);
+        result.Amount.ShouldBeNull();
     }
 
     [Fact]
@@ -458,15 +543,16 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         {
             Name = "Large Amount Component",
             ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "999999999"
+            Amount = 999999999m
         };
 
         // Act
         var result = await _earningComponentAppService.CreateAsync(input);
 
         // Assert
-        result.Amount.ShouldBe("999999999");
+        result.Amount.ShouldBe(999999999m);
     }
 
     [Fact]
@@ -478,8 +564,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Name = "No Description Component",
             Description = null,
             ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "10000"
+            Amount = 10000m
         };
 
         // Act
@@ -487,6 +574,482 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
 
         // Assert
         result.Description.ShouldBeNull();
+    }
+
+    #endregion
+
+    #region Tier 2 — Calculation Field Validation
+
+    [Fact]
+    public async Task Should_Reject_Negative_Amount()
+    {
+        // Arrange
+        var input = new CreateEarningComponentDto
+        {
+            Name = "Negative Amount Component",
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = -100m
+        };
+
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _earningComponentAppService.CreateAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Accept_Zero_Amount()
+    {
+        // Arrange
+        var input = new CreateEarningComponentDto
+        {
+            Name = "Zero Amount Component",
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 0m
+        };
+
+        // Act
+        var result = await _earningComponentAppService.CreateAsync(input);
+
+        // Assert
+        result.Amount.ShouldBe(0m);
+    }
+
+    [Fact]
+    public async Task Should_Reject_Null_Amount_In_Amount_Mode()
+    {
+        // Arrange
+        var input = new CreateEarningComponentDto
+        {
+            Name = "Null Amount Component",
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = null
+        };
+
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _earningComponentAppService.CreateAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Reject_Percentage_Over_100()
+    {
+        // Arrange
+        var baseComponent = await CreateTestEarningComponentAsync("Base For Over 100");
+
+        var input = new CreateEarningComponentDto
+        {
+            Name = "Over 100 Percent Component",
+            ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 101m,
+            SelectedEarningComponentId = baseComponent.Id
+        };
+
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _earningComponentAppService.CreateAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Accept_Percentage_At_Zero_Boundary()
+    {
+        // Arrange
+        var baseComponent = await CreateTestEarningComponentAsync("Base For Zero Pct");
+
+        var input = new CreateEarningComponentDto
+        {
+            Name = "Zero Percent Component",
+            ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 0m,
+            SelectedEarningComponentId = baseComponent.Id
+        };
+
+        // Act
+        var result = await _earningComponentAppService.CreateAsync(input);
+
+        // Assert
+        result.Percentage.ShouldBe(0m);
+    }
+
+    [Fact]
+    public async Task Should_Accept_Percentage_At_100_Boundary()
+    {
+        // Arrange
+        var baseComponent = await CreateTestEarningComponentAsync("Base For 100 Pct");
+
+        var input = new CreateEarningComponentDto
+        {
+            Name = "Hundred Percent Component",
+            ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 100m,
+            SelectedEarningComponentId = baseComponent.Id
+        };
+
+        // Act
+        var result = await _earningComponentAppService.CreateAsync(input);
+
+        // Assert
+        result.Percentage.ShouldBe(100m);
+    }
+
+    [Fact]
+    public async Task Should_Reject_Negative_Percentage()
+    {
+        // Arrange
+        var baseComponent = await CreateTestEarningComponentAsync("Base For Neg Pct");
+
+        var input = new CreateEarningComponentDto
+        {
+            Name = "Negative Percent Component",
+            ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = -5m,
+            SelectedEarningComponentId = baseComponent.Id
+        };
+
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _earningComponentAppService.CreateAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Reject_Percentage_Without_SelectedComponentId()
+    {
+        // Arrange
+        var input = new CreateEarningComponentDto
+        {
+            Name = "No Selected Component",
+            ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 10m,
+            SelectedEarningComponentId = null
+        };
+
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _earningComponentAppService.CreateAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Reject_Null_Percentage_In_Percentage_Mode()
+    {
+        // Arrange
+        var baseComponent = await CreateTestEarningComponentAsync("Base For Null Pct");
+
+        var input = new CreateEarningComponentDto
+        {
+            Name = "Null Percentage Component",
+            ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = null,
+            SelectedEarningComponentId = baseComponent.Id
+        };
+
+        await Should.ThrowAsync<AbpValidationException>(async () =>
+        {
+            await _earningComponentAppService.CreateAsync(input);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Clear_Amount_When_Switching_To_Percentage_On_Update()
+    {
+        // Arrange — create with Amount mode
+        var created = await CreateTestEarningComponentAsync("Switch To Pct");
+        created.Amount.ShouldBe(10000m);
+
+        var baseComponent = await CreateTestEarningComponentAsync("Base For Switch");
+
+        var updateInput = new UpdateEarningComponentDto
+        {
+            Name = "Switch To Pct",
+            ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 25m,
+            SelectedEarningComponentId = baseComponent.Id
+        };
+
+        // Act
+        var result = await _earningComponentAppService.UpdateAsync(created.Id, updateInput);
+
+        // Assert — Amount should be cleared, Percentage should be set
+        result.CalculationType.ShouldBe(CalculationType.Percentage);
+        result.Percentage.ShouldBe(25m);
+        result.Amount.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Should_Clear_Percentage_When_Switching_To_Amount_On_Update()
+    {
+        // Arrange — create with Percentage mode
+        var baseComponent = await CreateTestEarningComponentAsync("Base For Reverse Switch");
+
+        var createInput = new CreateEarningComponentDto
+        {
+            Name = "Switch To Amount",
+            ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 20m,
+            SelectedEarningComponentId = baseComponent.Id
+        };
+        var created = await _earningComponentAppService.CreateAsync(createInput);
+        created.Percentage.ShouldBe(20m);
+
+        var updateInput = new UpdateEarningComponentDto
+        {
+            Name = "Switch To Amount",
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 50000m
+        };
+
+        // Act
+        var result = await _earningComponentAppService.UpdateAsync(created.Id, updateInput);
+
+        // Assert — Percentage should be cleared, Amount should be set
+        result.CalculationType.ShouldBe(CalculationType.Amount);
+        result.Amount.ShouldBe(50000m);
+        result.Percentage.ShouldBeNull();
+        result.SelectedEarningComponentId.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Should_Create_With_Gross_Dependency()
+    {
+        // Arrange
+        var baseComponent = await CreateTestEarningComponentAsync("Base For Gross Dep");
+
+        var input = new CreateEarningComponentDto
+        {
+            Name = "Gross Dependent Component",
+            ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Gross,
+            Percentage = 5m,
+            SelectedEarningComponentId = baseComponent.Id
+        };
+
+        // Act
+        var result = await _earningComponentAppService.CreateAsync(input);
+
+        // Assert
+        result.DependOn.ShouldBe(ComponentDependency.Gross);
+    }
+
+    [Fact]
+    public async Task Should_Create_With_CustomComponent_Dependency()
+    {
+        // Arrange
+        var baseComponent = await CreateTestEarningComponentAsync("Base For Custom Dep");
+
+        var input = new CreateEarningComponentDto
+        {
+            Name = "Custom Dependent Component",
+            ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.CustomComponent,
+            Percentage = 8m,
+            SelectedEarningComponentId = baseComponent.Id
+        };
+
+        // Act
+        var result = await _earningComponentAppService.CreateAsync(input);
+
+        // Assert
+        result.DependOn.ShouldBe(ComponentDependency.CustomComponent);
+    }
+
+    [Fact]
+    public async Task Should_Toggle_VisibleInPayslip()
+    {
+        // Arrange — create with VisibleInPayslip = true
+        var created = await CreateTestEarningComponentAsync("Payslip Toggle");
+        created.VisibleInPayslip.ShouldBeTrue();
+
+        var updateInput = new UpdateEarningComponentDto
+        {
+            Name = "Payslip Toggle",
+            ComponentType = created.ComponentType,
+            CalculationType = created.CalculationType,
+            DependOn = created.DependOn,
+            Amount = created.Amount,
+            VisibleInPayslip = false
+        };
+
+        // Act
+        var result = await _earningComponentAppService.UpdateAsync(created.Id, updateInput);
+
+        // Assert
+        result.VisibleInPayslip.ShouldBeFalse();
+    }
+
+    #endregion
+
+    #region Tier 4 — Activate/Deactivate Lifecycle
+
+    [Fact]
+    public async Task Should_Deactivate_And_Exclude_From_Active_List()
+    {
+        // Arrange
+        var component = await CreateTestEarningComponentAsync("Deactivate Active List");
+        component.IsActive.ShouldBeTrue();
+
+        // Act — deactivate
+        await _earningComponentAppService.DeactivateAsync(component.Id);
+
+        // Assert — should not appear in active list
+        var activeList = await _earningComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+        activeList.Items.ShouldNotContain(x => x.Id == component.Id);
+    }
+
+    [Fact]
+    public async Task Should_Reactivate_And_Include_In_Active_List()
+    {
+        // Arrange — create and deactivate
+        var component = await CreateTestEarningComponentAsync("Reactivate Lifecycle");
+        await _earningComponentAppService.DeactivateAsync(component.Id);
+
+        // Verify excluded from active list
+        var beforeReactivation = await _earningComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+        beforeReactivation.Items.ShouldNotContain(x => x.Id == component.Id);
+
+        // Act — reactivate
+        await _earningComponentAppService.ActivateAsync(component.Id);
+
+        // Assert — should appear in active list again
+        var afterReactivation = await _earningComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+        afterReactivation.Items.ShouldContain(x => x.Id == component.Id);
+    }
+
+    [Fact]
+    public async Task Should_Retain_Data_After_Deactivate_Reactivate_Cycle()
+    {
+        // Arrange
+        var component = await CreateTestEarningComponentAsync("Data Retention");
+
+        // Act — deactivate then reactivate
+        await _earningComponentAppService.DeactivateAsync(component.Id);
+        await _earningComponentAppService.ActivateAsync(component.Id);
+
+        // Assert — all original data should be preserved
+        var retrieved = await _earningComponentAppService.GetAsync(component.Id);
+        retrieved.Name.ShouldBe("Data Retention");
+        retrieved.Amount.ShouldBe(10000m);
+        retrieved.IsActive.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Should_Handle_Full_Component_Lifecycle()
+    {
+        // Step 1: Create
+        var created = await CreateTestEarningComponentAsync("Full Lifecycle Earning", EarningComponentType.Fixed, 1);
+        created.IsActive.ShouldBeTrue();
+
+        // Step 2: Update
+        var updateInput = new UpdateEarningComponentDto
+        {
+            Name = "Full Lifecycle Earning Updated",
+            Description = "Updated description",
+            ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 25000m,
+            VisibleInPayslip = false,
+            DisplayOrder = 2
+        };
+        var updated = await _earningComponentAppService.UpdateAsync(created.Id, updateInput);
+        updated.Name.ShouldBe("Full Lifecycle Earning Updated");
+        updated.Amount.ShouldBe(25000m);
+        updated.VisibleInPayslip.ShouldBeFalse();
+
+        // Step 3: Deactivate
+        await _earningComponentAppService.DeactivateAsync(created.Id);
+        var deactivated = await _earningComponentAppService.GetAsync(created.Id);
+        deactivated.IsActive.ShouldBeFalse();
+
+        // Step 4: Reactivate
+        await _earningComponentAppService.ActivateAsync(created.Id);
+        var reactivated = await _earningComponentAppService.GetAsync(created.Id);
+        reactivated.IsActive.ShouldBeTrue();
+        reactivated.Name.ShouldBe("Full Lifecycle Earning Updated"); // Data preserved
+
+        // Step 5: Delete
+        await _earningComponentAppService.DeleteAsync(created.Id);
+        await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(async () =>
+        {
+            await _earningComponentAppService.GetAsync(created.Id);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Search_Only_Returns_Matching_Components()
+    {
+        // Arrange — create components with distinct names
+        await CreateTestEarningComponentAsync("SearchAlpha Earning One");
+        await CreateTestEarningComponentAsync("SearchAlpha Earning Two");
+        await CreateTestEarningComponentAsync("SearchBeta Earning Three");
+
+        // Act — search for "SearchAlpha"
+        var result = await _earningComponentAppService.GetFilteredListAsync(0, 100, "SearchAlpha");
+
+        // Assert — should only return the two Alpha matches
+        result.Items.Count.ShouldBeGreaterThanOrEqualTo(2);
+        result.Items.ShouldAllBe(x => x.Name.Contains("SearchAlpha"));
+        result.Items.ShouldNotContain(x => x.Name.Contains("SearchBeta"));
+    }
+
+    [Fact]
+    public async Task Should_Include_Deactivated_Components_In_GetListAsync()
+    {
+        // Arrange — create and deactivate a component
+        var component = await CreateTestEarningComponentAsync("Deactivated In Full List");
+        await _earningComponentAppService.DeactivateAsync(component.Id);
+
+        // Act — GetListAsync should return all (including deactivated)
+        var allList = await _earningComponentAppService.GetListAsync(new PagedAndSortedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+
+        // Assert
+        allList.Items.ShouldContain(x => x.Id == component.Id);
+        var found = allList.Items.First(x => x.Id == component.Id);
+        found.IsActive.ShouldBeFalse();
     }
 
     #endregion
@@ -503,8 +1066,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Name = name,
             Description = $"Test description for {name}",
             ComponentType = type,
+            CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
-            Amount = "10000",
+            Amount = 10000m,
             VisibleInPayslip = true,
             DisplayOrder = displayOrder
         };

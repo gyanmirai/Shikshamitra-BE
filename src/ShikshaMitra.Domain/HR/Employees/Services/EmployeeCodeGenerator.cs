@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Services;
@@ -24,6 +25,8 @@ public class EmployeeCodeGenerator(
 	IEmployeeRepository employeeRepository
 ) : DomainService
 {
+	private static readonly ConcurrentDictionary<string, int> SequenceByScope = new();
+
 	/// <summary>
 	/// Generates a unique employee code for the given joining date and role.
 	/// </summary>
@@ -31,30 +34,37 @@ public class EmployeeCodeGenerator(
 	{
 		var year = dateOfJoining.Year;
 		var tenantId = CurrentTenant.Id ?? Guid.Empty;
-		var existingCount = await GetCountForTenantAndYearAsync(tenantId, year);
-
 		string roleCode = GetRoleCode(role);
+		var existingCount = await GetCountForTenantRoleAndYearAsync(tenantId, year, roleCode);
+		var scopeKey = $"{tenantId:N}:{year}:{roleCode}";
+		var nextSequence = SequenceByScope.AddOrUpdate(
+			scopeKey,
+			_ => existingCount + 1,
+			(_, currentSequence) => Math.Max(currentSequence + 1, existingCount + 1));
+
 		string yearCode = (year % 100).ToString("D2");
-		string uniqueHash = GenerateUniqueHash(existingCount);
+		string uniqueHash = GenerateUniqueHashFromSequence(nextSequence);
 
 		return $"{roleCode}{yearCode}{uniqueHash}";
 	}
 
-	private async Task<int> GetCountForTenantAndYearAsync(Guid tenantId, int year)
+	private async Task<int> GetCountForTenantRoleAndYearAsync(Guid tenantId, int year, string roleCode)
 	{
 		var queryable = await employeeRepository.GetQueryableAsync();
+		var yearCode = (year % 100).ToString("D2");
+		var codePrefix = $"{roleCode}{yearCode}";
 
 		return await AsyncExecuter.CountAsync(
 			queryable
 				.Where(e => e.TenantId == (tenantId == Guid.Empty ? null : tenantId))
-				.Where(e => e.DateOfJoining.HasValue && e.DateOfJoining.Value.Year == year)
+				.Where(e => e.EmployeeCode.StartsWith(codePrefix))
 		);
 	}
 
-	private static string GenerateUniqueHash(int count)
+	private static string GenerateUniqueHashFromSequence(int sequence)
 	{
-		var sequence = ToBase36(count + 1);
-		return sequence.PadLeft(4, '0')[^4..].ToUpperInvariant();
+		var sequenceCode = ToBase36(sequence);
+		return sequenceCode.PadLeft(4, '0')[^4..].ToUpperInvariant();
 	}
 
 	/// <summary>

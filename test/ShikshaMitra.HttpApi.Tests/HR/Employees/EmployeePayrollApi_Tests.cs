@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
@@ -58,7 +58,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
 
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.InternalServerError);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
 
 	#endregion
@@ -117,20 +117,17 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
 
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.InternalServerError);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-		if (response.StatusCode == HttpStatusCode.OK)
-		{
-			var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
-			getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-			var body = await getResponse.Content.ReadFromJsonAsync<PayrollContract>(JsonOptions);
-			body.ShouldNotBeNull();
-			body.EarningComponents.ShouldNotBeNull();
-			body.DeductionComponents.ShouldNotBeNull();
-			body.EarningComponents.Count.ShouldBe(2);
-			body.DeductionComponents.Count.ShouldBe(1);
-		}
+		var body = await getResponse.Content.ReadFromJsonAsync<PayrollContract>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.EarningComponents.ShouldNotBeNull();
+		body.DeductionComponents.ShouldNotBeNull();
+		body.EarningComponents.Count.ShouldBe(2);
+		body.DeductionComponents.Count.ShouldBe(1);
 	}
 
 	[Fact]
@@ -195,6 +192,357 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	#endregion
 
+	#region Tier 1.5 — Validation Edge Cases
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Negative_BasicSalary()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayNegSal");
+
+		var request = new PayrollContract
+		{
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = -5000m,
+				PunchId = "NEG01",
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_TdsPercentage_Above_100()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayTdsHi");
+
+		var request = new PayrollContract
+		{
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = 25000m,
+				PunchId = "TDSHI",
+				TdsPercentage = 150m,
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Negative_TdsPercentage()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayTdsNeg");
+
+		var request = new PayrollContract
+		{
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = 25000m,
+				PunchId = "TDSNEG",
+				TdsPercentage = -10m,
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Negative_TdsAmount()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayTdsAmtNeg");
+
+		var request = new PayrollContract
+		{
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = 25000m,
+				PunchId = "TDSAMN",
+				TdsAmount = -500m,
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_BankDetails_Without_BankName()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayNoBnk");
+
+		var request = new PayrollContract
+		{
+			BankDetails = new BankDetailsContract
+			{
+				BranchName = "Some Branch",
+				AccountHolderName = "Test Employee",
+				AccountNumber = "1234567890",
+				IfscCode = "SBIN0001234",
+			},
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = 25000m,
+				PunchId = "NOBNK",
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_BankDetails_Without_AccountHolderName()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayNoAccH");
+
+		var request = new PayrollContract
+		{
+			BankDetails = new BankDetailsContract
+			{
+				BankName = "SBI",
+				BranchName = "Some Branch",
+				AccountNumber = "1234567890",
+				IfscCode = "SBIN0001234",
+			},
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = 25000m,
+				PunchId = "NOACC",
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Invalid_IfscCode()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayBadIfsc");
+
+		var request = new PayrollContract
+		{
+			BankDetails = new BankDetailsContract
+			{
+				BankName = "SBI",
+				BranchName = "Main Branch",
+				AccountHolderName = "Test Employee",
+				AccountNumber = "1234567890",
+				IfscCode = "INVALID",
+			},
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = 25000m,
+				PunchId = "BADIF",
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_NonNumeric_AccountNumber()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayBadAcc");
+
+		var request = new PayrollContract
+		{
+			BankDetails = new BankDetailsContract
+			{
+				BankName = "SBI",
+				BranchName = "Main Branch",
+				AccountHolderName = "Test Employee",
+				AccountNumber = "ABCD1234XYZ",
+				IfscCode = "SBIN0001234",
+			},
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = 25000m,
+				PunchId = "BADAC",
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Duplicate_EarningComponentIds()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayDupE");
+		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, "PayDupE1");
+
+		var request = new PayrollContract
+		{
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = 30000m,
+				PunchId = "DUPE",
+			},
+			EarningComponents = new List<ComponentAmountContract>
+			{
+				new() { ComponentId = earningComponent.Id, Amount = 5000m },
+				new() { ComponentId = earningComponent.Id, Amount = 3000m },
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Duplicate_DeductionComponentIds()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayDupD");
+		var deductionComponent = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "PayDupD1");
+
+		var request = new PayrollContract
+		{
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = 30000m,
+				PunchId = "DUPD",
+			},
+			DeductionComponents = new List<ComponentAmountContract>
+			{
+				new() { ComponentId = deductionComponent.Id, Amount = 1500m },
+				new() { ComponentId = deductionComponent.Id, Amount = 2000m },
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Empty_ComponentId()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayEmptyC");
+
+		var request = new PayrollContract
+		{
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = 30000m,
+				PunchId = "EMPTYC",
+			},
+			EarningComponents = new List<ComponentAmountContract>
+			{
+				new() { ComponentId = Guid.Empty, Amount = 5000m },
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Zero_ComponentAmount()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayZeroAmt");
+		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, "PayZeroA1");
+
+		var request = new PayrollContract
+		{
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = 30000m,
+				PunchId = "ZEROAM",
+			},
+			EarningComponents = new List<ComponentAmountContract>
+			{
+				new() { ComponentId = earningComponent.Id, Amount = 0m },
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Accept_BasicSalary_Zero()
+	{
+		// BasicSalary = 0 is valid (e.g., volunteer or unpaid role)
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayZeroSal");
+
+		var request = new PayrollContract
+		{
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = 0m,
+				PunchId = "ZEROS",
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Accept_TdsPercentage_Boundary_Values()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayTdsBnd");
+
+		// TDS = 0 should be valid
+		var zeroTds = new PayrollContract
+		{
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = 25000m,
+				PunchId = "TDSB0",
+				TdsPercentage = 0m,
+			},
+		};
+		var r1 = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", zeroTds, JsonOptions);
+		r1.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		// TDS = 100 should be valid
+		var maxTds = new PayrollContract
+		{
+			SalaryDetails = new SalaryDetailsContract
+			{
+				BasicSalary = 25000m,
+				PunchId = "TDSB100",
+				TdsPercentage = 100m,
+			},
+		};
+		var r2 = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", maxTds, JsonOptions);
+		r2.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	#endregion
+
 	#region Tier 2 — Extended
 
 	[Fact]
@@ -249,7 +597,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 			},
 		};
 		var r1 = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", zeroTds, JsonOptions);
-		r1.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.InternalServerError);
+		r1.StatusCode.ShouldBe(HttpStatusCode.OK);
 
 		var maxTds = new PayrollContract
 		{
@@ -261,7 +609,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 			},
 		};
 		var r2 = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", maxTds, JsonOptions);
-		r2.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.InternalServerError);
+		r2.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
 
 	#endregion

@@ -183,6 +183,8 @@ public class EmployeePayrollAppService(
 
 	public async Task UpdatePayrollContractAsync(Guid employeeId, PayrollContract input)
 	{
+		ValidatePayrollContract(input);
+
 		await employeeRepository.GetAsync(employeeId);
 
 		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
@@ -430,6 +432,136 @@ public class EmployeePayrollAppService(
 		return masters
 			.GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
 			.ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+	}
+
+	/// <summary>
+	/// Performs domain-level validation of the PayrollContract before persisting.
+	/// FluentValidation on the DTO handles structural/format rules; this method
+	/// catches business-rule violations that require cross-field or collection checks.
+	/// </summary>
+	private static void ValidatePayrollContract(PayrollContract input)
+	{
+		// ── Salary / TDS sanity ─────────────────────────────────
+		if (input.SalaryDetails?.BasicSalary is < 0)
+		{
+			throw new BusinessException(HRErrorCodes.EmployeePayrollNegativeSalary)
+				.WithData("basicSalary", input.SalaryDetails.BasicSalary);
+		}
+
+		if (input.SalaryDetails?.TdsPercentage is < 0 or > 100)
+		{
+			throw new BusinessException(HRErrorCodes.EmployeePayrollInvalidTdsPercentage)
+				.WithData("tdsPercentage", input.SalaryDetails.TdsPercentage);
+		}
+
+		if (input.SalaryDetails?.TdsAmount is < 0)
+		{
+			throw new BusinessException(HRErrorCodes.EmployeePayrollNegativeTdsAmount)
+				.WithData("tdsAmount", input.SalaryDetails.TdsAmount);
+		}
+
+		// ── Bank details completeness ───────────────────────────
+		if (input.BankDetails != null)
+		{
+			if (string.IsNullOrWhiteSpace(input.BankDetails.BankName))
+			{
+				throw new BusinessException(HRErrorCodes.EmployeePayrollBankNameRequired);
+			}
+
+			if (string.IsNullOrWhiteSpace(input.BankDetails.AccountHolderName))
+			{
+				throw new BusinessException(HRErrorCodes.EmployeePayrollAccountHolderRequired);
+			}
+
+			if (!string.IsNullOrWhiteSpace(input.BankDetails.AccountNumber) &&
+				!System.Text.RegularExpressions.Regex.IsMatch(input.BankDetails.AccountNumber, @"^\d{8,20}$"))
+			{
+				throw new BusinessException(HRErrorCodes.EmployeePayrollInvalidAccountNumber)
+					.WithData("accountNumber", input.BankDetails.AccountNumber);
+			}
+
+			if (!string.IsNullOrWhiteSpace(input.BankDetails.IfscCode) &&
+				!System.Text.RegularExpressions.Regex.IsMatch(input.BankDetails.IfscCode, @"^[A-Z]{4}0[A-Z0-9]{6}$"))
+			{
+				throw new BusinessException(HRErrorCodes.EmployeePayrollInvalidIfscCode)
+					.WithData("ifscCode", input.BankDetails.IfscCode);
+			}
+		}
+
+		// ── Earning components ──────────────────────────────────
+		ValidateComponentList(
+			input.EarningComponents,
+			HRErrorCodes.EmployeePayrollEmptyComponentId,
+			HRErrorCodes.EmployeePayrollComponentAmountInvalid,
+			HRErrorCodes.EmployeePayrollDuplicateEarningComponent,
+			"earning");
+
+		// ── Deduction components ────────────────────────────────
+		ValidateComponentList(
+			input.DeductionComponents,
+			HRErrorCodes.EmployeePayrollEmptyComponentId,
+			HRErrorCodes.EmployeePayrollComponentAmountInvalid,
+			HRErrorCodes.EmployeePayrollDuplicateDeductionComponent,
+			"deduction");
+
+		// ── No component ID in both lists ───────────────────────
+		if (input.EarningComponents is { Count: > 0 } && input.DeductionComponents is { Count: > 0 })
+		{
+			var earningIds = input.EarningComponents.Select(c => c.ComponentId).ToHashSet();
+			var overlapping = input.DeductionComponents
+				.Where(c => earningIds.Contains(c.ComponentId))
+				.Select(c => c.ComponentId)
+				.ToList();
+
+			if (overlapping.Count > 0)
+			{
+				throw new BusinessException(HRErrorCodes.EmployeePayrollComponentInBothLists)
+					.WithData("overlappingComponentIds", string.Join(",", overlapping));
+			}
+		}
+	}
+
+	private static void ValidateComponentList(
+		List<ComponentAmountContract>? components,
+		string emptyIdErrorCode,
+		string amountErrorCode,
+		string duplicateErrorCode,
+		string listName)
+	{
+		if (components == null || components.Count == 0)
+		{
+			return;
+		}
+
+		foreach (var component in components)
+		{
+			if (component.ComponentId == Guid.Empty)
+			{
+				throw new BusinessException(emptyIdErrorCode)
+					.WithData("list", listName);
+			}
+
+			if (component.Amount <= 0)
+			{
+				throw new BusinessException(amountErrorCode)
+					.WithData("componentId", component.ComponentId)
+					.WithData("amount", component.Amount)
+					.WithData("list", listName);
+			}
+		}
+
+		var duplicateIds = components
+			.GroupBy(c => c.ComponentId)
+			.Where(g => g.Count() > 1)
+			.Select(g => g.Key)
+			.ToList();
+
+		if (duplicateIds.Count > 0)
+		{
+			throw new BusinessException(duplicateErrorCode)
+				.WithData("duplicateComponentIds", string.Join(",", duplicateIds))
+				.WithData("list", listName);
+		}
 	}
 
 }

@@ -9,7 +9,7 @@ using Volo.Abp.Domain.Entities;
 namespace ShikshaMitra.HR.Employees.AdditionalDetails;
 
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_AdditionalDetails.View)]
+[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 public class EmployeeAdditionalDetailsAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeeAdditionalDetailsRepository additionalDetailsRepository)
@@ -36,6 +36,7 @@ public class EmployeeAdditionalDetailsAppService(
 	}
 
 	/// <inheritdoc />
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	public async Task<(EmployeeAdditionalDetailsDto Result, bool IsCreated)> UpsertAsync(
 		Guid employeeId,
 		EmployeeAdditionalDetailsUpsertDto input)
@@ -88,6 +89,7 @@ public class EmployeeAdditionalDetailsAppService(
 	}
 
 	/// <inheritdoc />
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	public async Task<EmployeeAdditionalDetailsDto> PatchAsync(
 		Guid employeeId,
 		EmployeeAdditionalDetailsPatchDto input)

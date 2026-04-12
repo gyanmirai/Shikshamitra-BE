@@ -8,7 +8,8 @@ Tracks employee attendance (daily in/out, status) and manages the full leave lif
 
 | Actor | Description |
 |-------|-------------|
-| Admin | Manages leave types, policies, custom rules, notification settings; approves/rejects leave requests; views attendance |
+| Admin | Manages leave types, policies, custom rules, notification settings; views attendance and leave data where permitted |
+| Manager (approver) | Any employee in the **reporting chain above** the leave requester who may approve or reject that request (see §1a) |
 | Employee | Creates leave requests, views own attendance and leave history |
 | System | Validates leave requests against policies, computes attendance summaries, sends automated notifications |
 
@@ -29,10 +30,17 @@ Tracks employee attendance (daily in/out, status) and manages the full leave lif
    - Minimum 2 days advance notice (`LeaveNoticePeriod`)
    - Policy must be active if it requires approval (`LeavePolicyInactive`)
 3. Business days calculation excludes Saturday and Sunday.
-4. Admin can update leave status: Pending -> Reviewed -> Approved / Rejected. Rejection requires a `remarks` field.
+4. See **§1a Leave approval (reporting chain)** for who may change status. Valid transitions remain Pending -> Reviewed -> Approved / Rejected. Rejection requires a `remarks` field.
 5. Employee can cancel (delete) only their own pending leave requests. Cannot cancel approved (`LeaveCancelApproved`) or rejected (`LeaveCancelRejected`) leaves.
 6. Leave requests use a public sequential integer ID (`PublicId`) for display, not the internal Guid.
 7. System publishes `LeaveStatusChangedEto` on status transitions.
+
+#### 1a. Leave approval (reporting chain)
+
+1. **Reporting chain:** Starting from the leave request’s `EmployeeId`, walk `Employee.ReportingManagerId` repeatedly until `null`. The set of employees on that walk (excluding the requester) is the **approver set** for that leave. Data model: see [Employees PRD](../employees/prd.md) — `ReportingManagerId` on `Employee`.
+2. **Who may approve or reject:** The signed-in user must map to an `Employee` who is a member of the **approver set**. The **direct reporting manager** is the usual approver; if they are unavailable, **any higher-level manager** in the same chain (the direct manager’s manager, and so on) may act instead. The requester must **not** approve their own leave.
+3. **Single decision:** **One** approval or rejection from any eligible approver is sufficient to reach `Approved` or `Rejected` per existing status rules (no multi-step sign-off chain in v1).
+4. **Authorization failure:** If the caller is not in the approver set (and no separate product rule grants override, e.g. global HR), reject the update with `HR:Leave:020020` *LeaveApproverNotInReportingChain*. Corrupt / cyclic reporting lines use `HR:Leave:020021` *LeaveReportingManagerCycle*.
 
 ### 2. Leave Types (Settings)
 
@@ -75,6 +83,7 @@ Tracks employee attendance (daily in/out, status) and manages the full leave lif
 - Minimum 2 days advance notice required.
 - Only pending leaves can be cancelled; only by the owning employee.
 - Status transitions: Pending -> Reviewed -> Approved/Rejected. No backward transitions.
+- Leave status updates (approve/reject/review): only an employee in the requester’s **reporting-manager chain** above the requester (see §1a); one such action is final for approve/reject.
 - Attachment upload validates: file size, extension, content type match, filename length/characters.
 - Leave types and policies are scoped to `mediumStageId` (education medium/stage).
 - Multi-tenancy: all data is tenant-isolated.
@@ -129,6 +138,8 @@ Tracks employee attendance (daily in/out, status) and manages the full leave lif
 | `HR:Leave:020017` | LeaveInsufficientBalance | Insufficient annual leave balance |
 | `HR:Leave:020018` | LeaveNoticePeriod | Minimum 2-day advance notice required |
 | `HR:Leave:020019` | LeavePolicyInactive | Referenced leave policy is inactive |
+| `HR:Leave:020020` | LeaveApproverNotInReportingChain | Approver is not in the requester’s reporting chain above the requester (includes self-approval) |
+| `HR:Leave:020021` | LeaveReportingManagerCycle | Reporting-manager chain has a cycle or exceeds maximum depth |
 | `HR:Leave:020101` | LeaveFileTooLarge | Attachment file too large |
 | `HR:Leave:020102` | LeaveFileEmpty | Attachment file is empty |
 | `HR:Leave:020103` | LeaveFileInvalidExtension | Invalid file extension |

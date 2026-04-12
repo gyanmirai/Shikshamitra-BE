@@ -1,17 +1,17 @@
-using FluentValidation;
+﻿using FluentValidation;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
 
 public class LeaveRequestUpdateRequestValidator : AbstractValidator<LeaveRequestUpdateRequest>
 {
-	private static readonly string[] ValidStatuses = { "Pending", "Reviewed", "Approved", "Rejected" };
+	private static readonly string[] ValidStatuses = { "Pending", "Reviewed", "Approved", "Rejected", "Cancelled" };
 
 	public LeaveRequestUpdateRequestValidator()
 	{
 		RuleFor(x => x.Status)
 			.NotEmpty().WithMessage("Status is required.")
 			.Must(s => System.Array.Exists(ValidStatuses, v => v.Equals(s, System.StringComparison.OrdinalIgnoreCase)))
-			.WithMessage("Status must be one of: Pending, Reviewed, Approved, Rejected.");
+			.WithMessage("Status must be one of: Pending, Reviewed, Approved, Rejected, Cancelled.");
 
 		RuleFor(x => x.Remarks)
 			.NotEmpty()

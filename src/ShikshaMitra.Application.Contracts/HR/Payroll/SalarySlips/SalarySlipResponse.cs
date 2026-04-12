@@ -61,6 +61,26 @@ public class SalarySlipResponse
     /// </summary>
     [Required]
     public DateTime GeneratedAt { get; set; }
+
+    /// <summary>
+    /// Payroll basis days (denominator) when the slip was computed.
+    /// </summary>
+    public int? PayrollBasisDays { get; set; }
+
+    /// <summary>
+    /// Payable days from attendance at computation time.
+    /// </summary>
+    public double? PayableDays { get; set; }
+
+    /// <summary>
+    /// LOP proration factor (capped at 1).
+    /// </summary>
+    public double? ProrationFactor { get; set; }
+
+    /// <summary>
+    /// Day calculation mode: working-days, total-month-days, or manual-days.
+    /// </summary>
+    public string? PayrollDayCalculationMode { get; set; }
 }
 
 /// <summary>

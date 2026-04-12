@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Payroll.Services;
 using System;
 using System.Diagnostics;
 using System.Linq;
@@ -272,6 +273,12 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 			Status = salarySlip.Status.ToString(),
 			Remarks = salarySlip.Remarks,
 			ProcessedDate = salarySlip.ProcessedDate,
+			PayrollBasisDays = salarySlip.PayrollBasisDays,
+			PayableDays = salarySlip.PayableDays,
+			ProrationFactor = salarySlip.ProrationFactor,
+			PayrollDayCalculationMode = salarySlip.PayrollDayCalculationMode.HasValue
+				? PayrollDayCalculationApiLabels.ToApiString(salarySlip.PayrollDayCalculationMode.Value)
+				: null,
 			Earnings = salarySlip.Earnings.Select(e => new SalarySlipLineItemDto
 			{
 				Name = e.Name,

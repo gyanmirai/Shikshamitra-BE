@@ -136,6 +136,8 @@ LeaveRequestDetailsResponse {
 
 ### PUT /api/leave-management/{leaveRequestId}
 
+**Authorization (business rule):** The authenticated user must resolve to an `Employee` who appears in the leave requester’s **reporting-manager chain** (walk `ReportingManagerId` from the requester upward until null). The direct reporting manager may approve; if they are unavailable, **any ancestor manager** in that same chain may approve or reject instead. The requester must not approve their own request. **One** successful approve or reject from any eligible approver is sufficient (no sequential multi-step workflow in v1). Full spec: [prd.md §1a](./prd.md#1a-leave-approval-reporting-chain).
+
 **Request body:**
 
 | Field | Type | Required | Constraints |
@@ -144,6 +146,8 @@ LeaveRequestDetailsResponse {
 | remarks | string | conditional | Required when status = "Rejected" |
 
 **Response (200):** `LeaveRequestDetailsResponse`
+
+**Errors:** `HR:Leave:020020` *LeaveApproverNotInReportingChain* — caller is not an approver in the requester’s chain above the requester (includes self-approval). `HR:Leave:020021` *LeaveReportingManagerCycle* — invalid/cyclic reporting hierarchy.
 
 ---
 

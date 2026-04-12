@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using ShikshaMitra.HR;
 using Volo.Abp;
@@ -48,6 +48,15 @@ public class EmployeeLeaveManager(IEmployeeLeaveRepository employeeLeaveReposito
 		EmployeeLeaveStatusType status, string? rejectionReason)
 	{
 		employeeLeave.UpdateLeaveStatus(status, rejectionReason);
+		return await employeeLeaveRepository.UpdateAsync(employeeLeave);
+	}
+
+	/// <summary>
+	/// Soft-cancel a leave request: transitions to Cancelled status with audit retention.
+	/// </summary>
+	public async Task<EmployeeLeave> CancelAsync(EmployeeLeave employeeLeave)
+	{
+		employeeLeave.Cancel();
 		return await employeeLeaveRepository.UpdateAsync(employeeLeave);
 	}
 }

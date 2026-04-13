@@ -9,7 +9,7 @@ namespace ShikshaMitra.Controllers.Finance;
 
 [Authorize]
 [Route("api/app/finance/concession-requests")]
-public class ConcessionRequestController : AbpController, IConcessionRequestAppService
+public class ConcessionRequestController : AbpController
 {
     private readonly IConcessionRequestAppService _appService;
 

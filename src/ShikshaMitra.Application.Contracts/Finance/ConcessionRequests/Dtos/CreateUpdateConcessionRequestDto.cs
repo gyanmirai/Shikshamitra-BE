@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -12,15 +12,8 @@ public class CreateConcessionRequestDto
     [Required]
     public Guid StudentId { get; set; }
 
-    [Required]
-    public Guid ConcessionTypeId { get; set; }
-
-    [StringLength(2000)]
-    public string? Remarks { get; set; }
-
-    [Required]
-    [MinLength(1, ErrorMessage = "At least one fee head mapping is required.")]
-    public List<CreateConcessionFeeHeadMappingDto> FeeHeadMappings { get; set; } = new();
+	[Required]
+	public List<Guid> ConcessionTypeIds { get; set; } = new List<Guid>();
 }
 
 /// <summary>

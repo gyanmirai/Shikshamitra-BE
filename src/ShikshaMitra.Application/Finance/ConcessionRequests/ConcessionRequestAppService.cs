@@ -55,19 +55,7 @@ public class ConcessionRequestAppService : ShikshaMitraAppService, IConcessionRe
 
     public virtual async Task<ConcessionRequestDto> CreateAsync(CreateConcessionRequestDto input)
     {
-        var mappingInputs = input.FeeHeadMappings.Select(m => new ConcessionFeeHeadMappingInput(
-            m.FeeHeadId,
-            m.PreConcessionFeeHeadAmount,
-            m.UserSpecifiedConcessionAmountValue,
-            m.UserSpecifiedConcessionAmountType)).ToList();
-
-        var entity = await _concessionRequestManager.CreateAsync(
-            input.StudentId,
-            input.ConcessionTypeId,
-            mappingInputs,
-            input.Remarks);
-
-        return ObjectMapper.Map<ConcessionRequest, ConcessionRequestDto>(entity);
+		// implement 
     }
 
     public virtual async Task<ConcessionRequestDto> UpdateAsync(Guid id, UpdateConcessionRequestDto input)

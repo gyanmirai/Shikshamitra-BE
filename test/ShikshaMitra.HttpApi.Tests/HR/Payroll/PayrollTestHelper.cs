@@ -15,12 +15,15 @@ public static class PayrollTestHelper
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-	public static async Task<ComponentCreateResponseDto> CreateEarningComponentAsync(
+	public sealed record PayrollComponentSeed(Guid Id, string Name);
+
+	public static async Task<PayrollComponentSeed> CreateEarningComponentAsync(
 		HttpClient client, string? nameSuffix = null)
 	{
+		var name = TestDataHelper.UniqueName(nameSuffix ?? "EarnHelper");
 		var input = new EarningComponentCreateRequestDto
 		{
-			EarningComponentName = TestDataHelper.UniqueName(nameSuffix ?? "EarnHelper"),
+			EarningComponentName = name,
 			EarningType = "FIXED",
 			CalculationType = "AMOUNT",
 			Amount = 30000m,
@@ -29,16 +32,18 @@ public static class PayrollTestHelper
 
 		var response = await client.PostAsJsonAsync("/api/payroll/earning-components", input, JsonOptions);
 		response.EnsureSuccessStatusCode();
-		return await response.Content.ReadFromJsonAsync<ComponentCreateResponseDto>(JsonOptions)
+		var dto = await response.Content.ReadFromJsonAsync<ComponentCreateResponseDto>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create earning component");
+		return new PayrollComponentSeed(dto.Id, name);
 	}
 
-	public static async Task<ComponentCreateResponseDto> CreateDeductionComponentAsync(
+	public static async Task<PayrollComponentSeed> CreateDeductionComponentAsync(
 		HttpClient client, string? nameSuffix = null)
 	{
+		var name = TestDataHelper.UniqueName(nameSuffix ?? "DeductHelper");
 		var input = new DeductionComponentCreateRequestDto
 		{
-			DeductionComponentName = TestDataHelper.UniqueName(nameSuffix ?? "DeductHelper"),
+			DeductionComponentName = name,
 			DeductionType = "FIXED",
 			CalculationType = "AMOUNT",
 			Amount = 3000m,
@@ -47,8 +52,9 @@ public static class PayrollTestHelper
 
 		var response = await client.PostAsJsonAsync("/api/payroll/deduction-components", input, JsonOptions);
 		response.EnsureSuccessStatusCode();
-		return await response.Content.ReadFromJsonAsync<ComponentCreateResponseDto>(JsonOptions)
+		var dto = await response.Content.ReadFromJsonAsync<ComponentCreateResponseDto>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create deduction component");
+		return new PayrollComponentSeed(dto.Id, name);
 	}
 
 	public static async Task<PfRuleCreateResponseDto> CreatePfRuleAsync(

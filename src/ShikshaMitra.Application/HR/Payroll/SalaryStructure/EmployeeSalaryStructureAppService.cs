@@ -7,6 +7,7 @@ using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Guids;
 
 namespace ShikshaMitra.HR.Payroll.SalaryStructure;
@@ -159,7 +160,8 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 		var employee = await _employeeRepository.FindAsync(employeeId, includeDetails: false);
 		if (employee == null)
 		{
-			throw new BusinessException(HRErrorCodes.EmployeeNotFound);
+			// Surface a proper 404 response instead of generic 500 when employee does not exist.
+			throw new EntityNotFoundException(typeof(Employee), employeeId);
 		}
 	}
 

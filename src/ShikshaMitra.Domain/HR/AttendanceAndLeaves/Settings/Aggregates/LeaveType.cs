@@ -1,6 +1,6 @@
-﻿using System;
+using System;
 using System.Text.RegularExpressions;
-using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -15,9 +15,9 @@ public class LeaveType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; protected set; }
 
 	/// <summary>
-	/// Organization/School identifier this leave type belongs to
+	/// Academic year identifier this leave type belongs to.
 	/// </summary>
-	public Guid EducationMediumStageId { get; protected set; }
+	public Guid AcademicYearId { get; protected set; }
 
 	/// <summary>
 	/// Type/Name of the leave (e.g., "Paid Leave", "Sick Leave")
@@ -39,12 +39,8 @@ public class LeaveType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// </summary>
 	public bool IsActive { get; protected set; }
 
-	/// <summary>
-	/// Navigation property for EducationMediumStage
-	/// </summary>
-	public virtual EducationMediumStage? EducationMediumStage { get; protected set; }
+	public virtual AcademicYear? AcademicYear { get; protected set; }
 
-	// For EF Core
 	protected LeaveType()
 	{
 	}
@@ -52,13 +48,13 @@ public class LeaveType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public LeaveType(
 		Guid id,
 		Guid? tenantId,
-		Guid educationMediumStageId,
+		Guid academicYearId,
 		string type,
 		string color,
 		string? description = null) : base(id)
 	{
 		TenantId = tenantId;
-		EducationMediumStageId = educationMediumStageId;
+		AcademicYearId = academicYearId;
 		SetType(type);
 		SetColor(color);
 		Description = description;
@@ -72,15 +68,9 @@ public class LeaveType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Description = description;
 	}
 
-	public void Activate()
-	{
-		IsActive = true;
-	}
+	public void Activate() => IsActive = true;
 
-	public void Deactivate()
-	{
-		IsActive = false;
-	}
+	public void Deactivate() => IsActive = false;
 
 	private void SetType(string type)
 	{
@@ -95,19 +85,17 @@ public class LeaveType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Check.NotNullOrWhiteSpace(color, nameof(color));
 		Check.Length(color, nameof(color), LeaveTypeConsts.MaxColorLength);
 
-		// Validate HEX color format (#RRGGBB)
 		if (!IsValidHexColor(color))
 		{
 			throw new BusinessException("ShikshaMitra:InvalidColorCode")
 				.WithData("message", "Color code must be a valid HEX value (e.g., #FF5733)");
 		}
 
-		Color = color.ToUpperInvariant(); // Normalize to uppercase
+		Color = color.ToUpperInvariant();
 	}
 
 	private static bool IsValidHexColor(string color)
 	{
-		// Regex pattern for HEX color: #RRGGBB
 		var hexPattern = @"^#([A-Fa-f0-9]{6})$";
 		return Regex.IsMatch(color, hexPattern);
 	}

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Dynamic.Core;
@@ -11,9 +11,6 @@ using Volo.Abp.EntityFrameworkCore;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
-/// <summary>
-/// EF Core repository implementation for LeaveType
-/// </summary>
 public class EfCoreLeaveTypeRepository : EfCoreRepository<ShikshaMitraDbContext, LeaveType, Guid>, ILeaveTypeRepository
 {
 	public EfCoreLeaveTypeRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
@@ -21,11 +18,11 @@ public class EfCoreLeaveTypeRepository : EfCoreRepository<ShikshaMitraDbContext,
 	{
 	}
 
-	public async Task<bool> IsTypeExistsAsync(Guid educationMediumStageId, string type, Guid? excludeId = null)
+	public async Task<bool> IsTypeExistsAsync(Guid academicYearId, string type, Guid? excludeId = null)
 	{
 		var dbSet = await GetDbSetAsync();
 		var query = dbSet.Where(x =>
-			x.EducationMediumStageId == educationMediumStageId &&
+			x.AcademicYearId == academicYearId &&
 			x.Type.ToLower() == type.ToLower());
 
 		if (excludeId.HasValue)
@@ -36,70 +33,66 @@ public class EfCoreLeaveTypeRepository : EfCoreRepository<ShikshaMitraDbContext,
 		return await query.AnyAsync();
 	}
 
-	public async Task<LeaveType?> FindByTypeAsync(Guid educationMediumStageId, string type)
+	public async Task<LeaveType?> FindByTypeAsync(Guid academicYearId, string type)
 	{
 		var dbSet = await GetDbSetAsync();
 		return await dbSet
 			.Where(x =>
-				x.EducationMediumStageId == educationMediumStageId &&
+				x.AcademicYearId == academicYearId &&
 				x.Type.ToLower() == type.ToLower())
 			.FirstOrDefaultAsync();
 	}
 
-	public async Task<List<LeaveType>> GetListByMediumStageIdAsync(
-		Guid educationMediumStageId,
+	public async Task<List<LeaveType>> GetListByAcademicYearIdAsync(
+		Guid academicYearId,
 		int skipCount = 0,
 		int maxResultCount = int.MaxValue,
 		string? sorting = null,
+		string? search = null,
 		bool includeInactive = false,
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
-
-		// Build query with tenant filtering
 		var query = dbSet
 			.AsNoTracking()
-			.Where(x => x.EducationMediumStageId == educationMediumStageId);
+			.Where(x => x.AcademicYearId == academicYearId);
 
-		// Apply active filter
 		if (!includeInactive)
 		{
 			query = query.Where(x => x.IsActive);
 		}
 
-		// Apply sorting
-		if (!string.IsNullOrWhiteSpace(sorting))
+		if (!string.IsNullOrWhiteSpace(search))
 		{
-			query = query.OrderBy(sorting);
-		}
-		else
-		{
-			query = query.OrderBy(x => x.Type);
+			var normalizedSearch = search.Trim().ToLower();
+			query = query.Where(x => x.Type.ToLower().Contains(normalizedSearch));
 		}
 
-		// Apply pagination and execute
-		return await query
-			.Skip(skipCount)
-			.Take(maxResultCount)
-			.ToListAsync(cancellationToken);
+		query = !string.IsNullOrWhiteSpace(sorting)
+			? query.OrderBy(sorting)
+			: query.OrderBy(x => x.Type);
+
+		return await query.Skip(skipCount).Take(maxResultCount).ToListAsync(cancellationToken);
 	}
 
-	public async Task<long> GetCountByMediumStageIdAsync(
-		Guid educationMediumStageId,
+	public async Task<long> GetCountByAcademicYearIdAsync(
+		Guid academicYearId,
+		string? search = null,
 		bool includeInactive = false,
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
+		var query = dbSet.AsNoTracking().Where(x => x.AcademicYearId == academicYearId);
 
-		// Build query with filtering
-		var query = dbSet
-			.AsNoTracking()
-			.Where(x => x.EducationMediumStageId == educationMediumStageId);
-
-		// Apply active filter
 		if (!includeInactive)
 		{
 			query = query.Where(x => x.IsActive);
+		}
+
+		if (!string.IsNullOrWhiteSpace(search))
+		{
+			var normalizedSearch = search.Trim().ToLower();
+			query = query.Where(x => x.Type.ToLower().Contains(normalizedSearch));
 		}
 
 		return await query.LongCountAsync(cancellationToken);

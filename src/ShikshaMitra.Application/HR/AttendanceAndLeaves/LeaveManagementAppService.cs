@@ -3,6 +3,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using System;
 using System.IO;
 using System.Linq;
@@ -19,99 +20,108 @@ public class LeaveManagementAppService(
 	IEmployeeLeaveRepository employeeLeaveRepository,
 	IEmployeeRepository employeeRepository,
 	EmployeeLeaveManager employeeLeaveManager,
-	LeaveValidationService leaveValidationService)
+	LeaveValidationService leaveValidationService,
+	IAcademicYearRepository academicYearRepository)
 	: ApplicationService, ILeaveManagementAppService
 {
-	public async Task<PagedLeaveManagementResultDto> GetListAsync(Guid mediumStageId, int? month, int? year, int page, int pageSize)
+	public async Task<PagedLeaveManagementResultDto> GetListAsync(
+		Guid academicYearId,
+		DateTime monthYearAnchor,
+		string? search,
+		int page,
+		int pageSize)
 	{
-		if (month.HasValue && (month < 1 || month > 12))
-			throw new BusinessException(HRErrorCodes.LeaveInvalidMonth);
-
-		if (year.HasValue && (year < 1900 || year > 2100))
-			throw new BusinessException(HRErrorCodes.LeaveInvalidYear);
-
 		if (page < 1)
 			throw new BusinessException(HRErrorCodes.LeaveInvalidPage);
 
 		if (pageSize < 10 || pageSize > 100)
 			throw new BusinessException(HRErrorCodes.LeaveInvalidPageSize);
 
+		var year = monthYearAnchor.Year;
+		var month = monthYearAnchor.Month;
+		if (month is < 1 or > 12)
+			throw new BusinessException(HRErrorCodes.LeaveInvalidMonth);
+
+		if (year is < 1900 or > 2100)
+			throw new BusinessException(HRErrorCodes.LeaveInvalidYear);
+
+		var academicYear = await academicYearRepository.FindAsync(academicYearId)
+			?? throw new EntityNotFoundException(typeof(AcademicYear), academicYearId);
+
+		var monthStart = new DateTime(year, month, 1).Date;
+		var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+		var ayStart = academicYear.StartDate.Date;
+		var ayEnd = academicYear.EndDate.Date;
+		var rangeStart = monthStart > ayStart ? monthStart : ayStart;
+		var rangeEnd = monthEnd < ayEnd ? monthEnd : ayEnd;
+		if (rangeStart > rangeEnd)
+			throw new BusinessException(HRErrorCodes.LeaveInvalidMonthForAcademicYear);
+
 		var skipCount = (page - 1) * pageSize;
 
-		var query = await employeeLeaveRepository.WithDetailsAsync(
+		var (totalCount, pageIds) = await employeeLeaveRepository.GetPagedIdsForManagementListAsync(
+			rangeStart,
+			rangeEnd,
+			search,
+			skipCount,
+			pageSize);
+
+		var detailQuery = await employeeLeaveRepository.WithDetailsAsync(
 			x => x.Employee,
-			x => x.LeavePolicy);
-
-		if (month.HasValue && year.HasValue)
-		{
-			var startOfMonth = new DateTimeOffset(new DateTime(year.Value, month.Value, 1));
-			var endOfMonth = new DateTimeOffset(startOfMonth.DateTime.AddMonths(1).AddDays(-1));
-			query = query.Where(x => x.StartDate >= startOfMonth && x.StartDate <= endOfMonth);
-		}
-		else if (year.HasValue)
-		{
-			var startOfYear = new DateTimeOffset(new DateTime(year.Value, 1, 1));
-			var endOfYear = new DateTimeOffset(new DateTime(year.Value, 12, 31));
-			query = query.Where(x => x.StartDate >= startOfYear && x.StartDate <= endOfYear);
-		}
-
-		var totalCount = await AsyncExecuter.CountAsync(query);
+			x => x.LeavePolicy,
+			x => x.LeavePolicy!.AcademicYear);
 
 		var leaveRequests = await AsyncExecuter.ToListAsync(
-			query.OrderByDescending(x => x.CreationTime).Skip(skipCount).Take(pageSize));
+			detailQuery.Where(x => pageIds.Contains(x.Id)));
+
+		var idOrder = pageIds.Select((id, index) => (id, index)).ToDictionary(t => t.id, t => t.index);
+		leaveRequests = leaveRequests.OrderBy(l => idOrder[l.Id]).ToList();
 
 		var items = leaveRequests.Select(leave => new LeaveManagementDto
 		{
-			Id = leave.PublicId,
+			Id = leave.Id,
 			Name = leave.Employee?.EmployeeNameWithFather ?? "Unknown",
-			EmployeeCode = leave.Employee?.EmployeeCode ?? "Unknown",
+			EmployeeIdentifier = leave.Employee?.EmployeeCode ?? "Unknown",
 			LeaveType = leave.LeavePolicy?.LeaveType?.Type ?? "Unknown",
 			StartDate = leave.StartDate.DateTime,
 			EndDate = leave.EndDate.DateTime,
 			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
-			Organization = "N/A",
+			MediumStageName = leave.LeavePolicy?.AcademicYear?.Name ?? "",
 			Description = leave.Description ?? "",
 			Remarks = leave.RejectionReason,
-			Status = leave.Status.ToString().ToUpper()
+			Status = leave.Status.ToString().ToUpperInvariant()
 		}).ToList();
 
 		return new PagedLeaveManagementResultDto { TotalCount = totalCount, Items = items };
 	}
 
-	public async Task<LeaveRequestDetailsDto> GetAsync(int leaveRequestId)
+	public async Task<LeaveRequestDetailsDto> GetAsync(Guid leaveRequestId)
 	{
 		var query = await employeeLeaveRepository.WithDetailsAsync(
 			x => x.Employee,
 			x => x.LeavePolicy);
 
 		var leave = await AsyncExecuter.FirstOrDefaultAsync(
-			query.Where(x => x.PublicId == leaveRequestId))
+			query.Where(x => x.Id == leaveRequestId))
 			?? throw new EntityNotFoundException(typeof(EmployeeLeave), leaveRequestId);
 
-		return new LeaveRequestDetailsDto
-		{
-			Id = leave.PublicId,
-			MediumStageId = Guid.Empty,
-			EmployeeId = leave.EmployeeId,
-			EmployeeName = leave.Employee?.EmployeeNameWithFather ?? "Unknown",
-			EmployeeCode = leave.Employee?.EmployeeCode ?? "Unknown",
-			LeaveTypeId = leave.LeaveTypeId,
-			LeaveType = leave.LeavePolicy?.LeaveType?.Type ?? "Unknown",
-			StartDate = leave.StartDate.DateTime,
-			EndDate = leave.EndDate.DateTime,
-			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
-			Description = leave.Description ?? "",
-			AttachmentUrl = leave.Attachment != null ? $"/api/leave-management/{leave.Id}/attachment" : null,
-			Remarks = leave.RejectionReason,
-			Status = leave.Status.ToString().ToUpper(),
-			CreatedAt = leave.CreationTime,
-			UpdatedAt = leave.LastModificationTime ?? leave.CreationTime
-		};
+		return MapToDetailsDto(leave);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_LeaveManagement.Add)]
-	public async Task<LeaveRequestCreatedDto> CreateAsync(LeaveRequestCreateDto input, object attachment)
+	public async Task<LeaveRequestCreatedDto> CreateAsync(
+		Guid academicYearId,
+		LeaveRequestCreateDto input,
+		object? attachment)
 	{
+		var academicYear = await academicYearRepository.FindAsync(academicYearId)
+			?? throw new EntityNotFoundException(typeof(AcademicYear), academicYearId);
+
+		var start = input.StartDate.Date;
+		var end = input.EndDate.Date;
+		if (start < academicYear.StartDate.Date || end > academicYear.EndDate.Date)
+			throw new BusinessException(HRErrorCodes.LeaveDatesOutsideAcademicYear);
+
 		var currentUserId = CurrentUser.Id
 			?? throw new BusinessException(HRErrorCodes.LeaveUserNotAuthenticated);
 
@@ -138,25 +148,23 @@ public class LeaveManagementAppService(
 		return new LeaveRequestCreatedDto
 		{
 			Id = leave.Id,
-			Status = "PENDING",
-			AppliedAt = DateTime.UtcNow
+			Status = "PENDING"
 		};
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_LeaveManagement.Add)]
-	public async Task<LeaveRequestDetailsDto> UpdateAsync(int leaveRequestId, LeaveRequestUpdateRequest input)
+	public async Task<LeaveActionResultDto> ApproveAsync(Guid leaveRequestId, LeaveApprovalRequestDto? input)
 	{
 		var query = await employeeLeaveRepository.WithDetailsAsync(x => x.Employee);
 
 		var leave = await AsyncExecuter.FirstOrDefaultAsync(
-			query.Where(x => x.PublicId == leaveRequestId))
+			query.Where(x => x.Id == leaveRequestId))
 			?? throw new EntityNotFoundException(typeof(EmployeeLeave), leaveRequestId);
 
-		if (!Enum.TryParse<EmployeeLeaveStatusType>(input.Status, true, out var status))
-			throw new BusinessException(HRErrorCodes.LeaveInvalidStatus);
+		EnsureNotTerminalForApproverAction(leave.Status);
 
-		if (!IsValidStatusTransition(leave.Status, status))
-			throw new BusinessException(HRErrorCodes.LeaveInvalidStatusTransition);
+		if (!IsValidStatusTransition(leave.Status, EmployeeLeaveStatusType.Approved))
+			throw new BusinessException(HRErrorCodes.LeaveCannotActOnLeaveState);
 
 		var currentUserId = CurrentUser.Id
 			?? throw new BusinessException(HRErrorCodes.LeaveUserNotAuthenticated);
@@ -168,18 +176,63 @@ public class LeaveManagementAppService(
 			leave.EmployeeId,
 			actorEmployee.Id);
 
-		await employeeLeaveManager.UpdateLeaveRequestStatusAsync(leave, status, input.Remarks);
+		await employeeLeaveManager.UpdateLeaveRequestStatusAsync(
+			leave,
+			EmployeeLeaveStatusType.Approved,
+			rejectionReason: null);
 
-		return await GetAsync(leaveRequestId);
+		return new LeaveActionResultDto
+		{
+			Id = leave.Id,
+			Status = EmployeeLeaveStatusType.Approved.ToString().ToUpperInvariant(),
+			Message = "Leave request approved successfully"
+		};
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_LeaveManagement.Add)]
+	public async Task<LeaveActionResultDto> RejectAsync(Guid leaveRequestId, LeaveRejectionRequestDto input)
+	{
+		var query = await employeeLeaveRepository.WithDetailsAsync(x => x.Employee);
+
+		var leave = await AsyncExecuter.FirstOrDefaultAsync(
+			query.Where(x => x.Id == leaveRequestId))
+			?? throw new EntityNotFoundException(typeof(EmployeeLeave), leaveRequestId);
+
+		EnsureNotTerminalForApproverAction(leave.Status);
+
+		if (!IsValidStatusTransition(leave.Status, EmployeeLeaveStatusType.Rejected))
+			throw new BusinessException(HRErrorCodes.LeaveCannotActOnLeaveState);
+
+		var currentUserId = CurrentUser.Id
+			?? throw new BusinessException(HRErrorCodes.LeaveUserNotAuthenticated);
+
+		var actorEmployee = await employeeRepository.GetEmployeeByUserIdAsync(currentUserId)
+			?? throw new BusinessException(HRErrorCodes.LeaveEmployeeNotFound);
+
+		await leaveValidationService.EnsureActorMayChangeLeaveStatusAsync(
+			leave.EmployeeId,
+			actorEmployee.Id);
+
+		await employeeLeaveManager.UpdateLeaveRequestStatusAsync(
+			leave,
+			EmployeeLeaveStatusType.Rejected,
+			rejectionReason: input.Remarks);
+
+		return new LeaveActionResultDto
+		{
+			Id = leave.Id,
+			Status = EmployeeLeaveStatusType.Rejected.ToString().ToUpperInvariant(),
+			Message = "Leave request rejected successfully"
+		};
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_LeaveManagement.Delete)]
-	public async Task<LeaveRequestDeleteDto> DeleteAsync(int leaveRequestId)
+	public async Task<LeaveRequestDeleteDto> DeleteAsync(Guid leaveRequestId)
 	{
 		var query = await employeeLeaveRepository.GetQueryableAsync();
 
 		var leave = await AsyncExecuter.FirstOrDefaultAsync(
-			query.Where(x => x.PublicId == leaveRequestId))
+			query.Where(x => x.Id == leaveRequestId))
 			?? throw new EntityNotFoundException(typeof(EmployeeLeave), leaveRequestId);
 
 		if (leave.Status == EmployeeLeaveStatusType.Cancelled)
@@ -194,10 +247,61 @@ public class LeaveManagementAppService(
 		if (leave.EmployeeId != actingEmployee.Id)
 			throw new BusinessException(HRErrorCodes.LeaveDeleteOwnOnly);
 
-		// Soft-cancel: transitions to Cancelled status (domain invariant enforces valid source states)
 		await employeeLeaveManager.CancelAsync(leave);
 
-		return new LeaveRequestDeleteDto { Id = leave.PublicId };
+		return new LeaveRequestDeleteDto { Id = leave.Id };
+	}
+
+	public async Task<LeaveAttachmentDto> GetAttachmentAsync(Guid leaveRequestId)
+	{
+		var query = await employeeLeaveRepository.GetQueryableAsync();
+
+		var leave = await AsyncExecuter.FirstOrDefaultAsync(
+			query.Where(x => x.Id == leaveRequestId))
+			?? throw new EntityNotFoundException(typeof(EmployeeLeave), leaveRequestId);
+
+		if (leave.Attachment is not { Length: > 0 })
+			throw new BusinessException(HRErrorCodes.LeaveAttachmentNotFound);
+
+		var (contentType, extension) = DetectContentType(leave.Attachment);
+		return new LeaveAttachmentDto
+		{
+			FileContent = leave.Attachment,
+			ContentType = contentType,
+			FileName = $"leave-attachment-{leaveRequestId:N}{extension}"
+		};
+	}
+
+	private static LeaveRequestDetailsDto MapToDetailsDto(EmployeeLeave leave)
+	{
+		return new LeaveRequestDetailsDto
+		{
+			Id = leave.Id,
+			MediumStageId = leave.LeavePolicy?.AcademicYearId ?? Guid.Empty,
+			MediumStageName = leave.LeavePolicy?.AcademicYear?.Name ?? "",
+			EmployeeId = leave.EmployeeId,
+			EmployeeName = leave.Employee?.EmployeeNameWithFather ?? "Unknown",
+			EmployeeCode = leave.Employee?.EmployeeCode ?? "Unknown",
+			LeaveTypeId = leave.LeavePolicy?.LeaveTypeId ?? Guid.Empty,
+			LeaveType = leave.LeavePolicy?.LeaveType?.Type ?? "Unknown",
+			StartDate = leave.StartDate.DateTime,
+			EndDate = leave.EndDate.DateTime,
+			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
+			Description = leave.Description ?? "",
+			AttachmentUrl = leave.Attachment != null ? $"/api/leave-management/{leave.Id}/attachment" : null,
+			Remarks = leave.RejectionReason,
+			Status = leave.Status.ToString().ToUpperInvariant()
+		};
+	}
+
+	private static void EnsureNotTerminalForApproverAction(EmployeeLeaveStatusType status)
+	{
+		if (status is EmployeeLeaveStatusType.Approved
+		    or EmployeeLeaveStatusType.Rejected
+		    or EmployeeLeaveStatusType.Cancelled)
+		{
+			throw new BusinessException(HRErrorCodes.LeaveConflictTerminalState);
+		}
 	}
 
 	private static bool IsValidStatusTransition(EmployeeLeaveStatusType from, EmployeeLeaveStatusType to)
@@ -215,10 +319,6 @@ public class LeaveManagementAppService(
 		};
 	}
 
-	/// <summary>
-	/// Extracts byte[] from an attachment object. Accepts byte[], Stream, or IFormFile-like objects.
-	/// File validation (size, type, magic bytes) is applied when content is present.
-	/// </summary>
 	private static async Task<byte[]?> ExtractAttachmentBytesAsync(object? attachment)
 	{
 		if (attachment == null) return null;
@@ -297,6 +397,19 @@ public class LeaveManagementAppService(
 
 		if (!isValid)
 			throw new BusinessException(HRErrorCodes.LeaveFileContentMismatch);
+	}
+
+	private static (string ContentType, string Extension) DetectContentType(byte[] fileBytes)
+	{
+		if (fileBytes.Length >= 4 &&
+		    fileBytes[0] == 0x25 && fileBytes[1] == 0x50 && fileBytes[2] == 0x44 && fileBytes[3] == 0x46)
+			return ("application/pdf", ".pdf");
+		if (fileBytes.Length >= 3 && fileBytes[0] == 0xFF && fileBytes[1] == 0xD8 && fileBytes[2] == 0xFF)
+			return ("image/jpeg", ".jpg");
+		if (fileBytes.Length >= 4 &&
+		    fileBytes[0] == 0x89 && fileBytes[1] == 0x50 && fileBytes[2] == 0x4E && fileBytes[3] == 0x47)
+			return ("image/png", ".png");
+		return ("application/octet-stream", ".bin");
 	}
 
 	private static int CalculateDays(DateTime startDate, DateTime endDate, bool isHalfDay)

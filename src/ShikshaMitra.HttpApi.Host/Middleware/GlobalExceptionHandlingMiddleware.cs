@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common.Responses;
+using ShikshaMitra.HR;
 using ShikshaMitra.Localization;
 using System;
 using System.Collections.Generic;
@@ -37,6 +38,13 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 
 	public async Task InvokeAsync(HttpContext context)
 	{
+		// Only intercept API requests; let MVC/Razor pages flow through normally
+		if (!context.Request.Path.StartsWithSegments("/api"))
+		{
+			await _next(context);
+			return;
+		}
+
 		var originalResponseStream = context.Response.Body;
 
 		try
@@ -91,8 +99,9 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 			400 => Error.Create("VALIDATION_ERROR", localizedMessage, validationFields),
 			401 => Error.Create("UNAUTHORIZED", localizedMessage ?? "Authentication required. Please provide valid credentials."),
 			403 => Error.Create("FORBIDDEN", localizedMessage ?? "You don't have permission to access this resource."),
-			404 => Error.Create("NOT_FOUND", localizedMessage),
-			_ => Error.Create("ERROR", localizedMessage)
+			404 => Error.Create("RESOURCE_NOT_FOUND", localizedMessage),
+			409 => Error.Create("DUPLICATE_RESOURCE", localizedMessage ?? "Resource conflict."),
+			_ => Error.Create("INTERNAL_SERVER_ERROR", localizedMessage)
 		};
 
 		var result = Result.Failure(error);
@@ -292,29 +301,57 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 			),
 			AbpAuthorizationException => (
 				(int) HttpStatusCode.Forbidden,
-				Error.Create("AUTHORIZATION_ERROR", "You don't have permission to access this resource")
+				Error.Create("FORBIDDEN", "You don't have permission to access this resource")
 			),
 			EntityNotFoundException entityNotFoundEx => (
 				(int) HttpStatusCode.NotFound,
-				Error.Create("NOT_FOUND", entityNotFoundEx.Message)
+				Error.Create("RESOURCE_NOT_FOUND", entityNotFoundEx.Message)
 			),
-			BusinessException businessEx => (
-				(int) HttpStatusCode.BadRequest,
-				Error.Create(businessEx.Code ?? "BUSINESS_ERROR", GetLocalizedBusinessExceptionMessage(businessEx))
-			),
+			BusinessException businessEx => BuildBusinessExceptionResponse(businessEx),
 			ArgumentException argEx => (
 				(int) HttpStatusCode.BadRequest,
-				Error.Create("INVALID_ARGUMENT", argEx.Message)
+				Error.Create("INVALID_REQUEST", argEx.Message)
 			),
 			InvalidOperationException invalidOpEx => (
 				(int) HttpStatusCode.BadRequest,
-				Error.Create("INVALID_OPERATION", invalidOpEx.Message)
+				Error.Create("INVALID_STATE_TRANSITION", invalidOpEx.Message)
 			),
 			_ => (
 				(int) HttpStatusCode.InternalServerError,
-				Error.Create("INTERNAL_ERROR", exception.Message ?? "An internal server error occurred")
+				Error.Create("INTERNAL_SERVER_ERROR", exception.Message ?? "An internal server error occurred")
 			)
 		};
+	}
+
+	private (int StatusCode, Error Error) BuildBusinessExceptionResponse(BusinessException businessEx)
+	{
+		var localizedMessage = GetLocalizedBusinessExceptionMessage(businessEx);
+		var code = businessEx.Code ?? "BUSINESS_ERROR";
+
+		if (code is HRErrorCodes.LeaveAlreadyCancelled or HRErrorCodes.LeaveConflictTerminalState)
+		{
+			return (
+				(int)HttpStatusCode.Conflict,
+				Error.Create("DUPLICATE_RESOURCE", localizedMessage));
+		}
+
+		if (code == HRErrorCodes.LeaveAttachmentNotFound)
+		{
+			return (
+				(int)HttpStatusCode.NotFound,
+				Error.Create("RESOURCE_NOT_FOUND", localizedMessage));
+		}
+
+		if (code == HRErrorCodes.LeaveFileTooLarge)
+		{
+			return (
+				(int)HttpStatusCode.RequestEntityTooLarge,
+				Error.Create("VALIDATION_ERROR", localizedMessage));
+		}
+
+		return (
+			(int)HttpStatusCode.BadRequest,
+			Error.Create(code, localizedMessage));
 	}
 
 	private static (int StatusCode, Error Error) BuildValidationErrorResponse(AbpValidationException validationException)
@@ -400,3 +437,4 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 		}
 	}
 }
+

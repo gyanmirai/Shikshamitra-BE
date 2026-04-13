@@ -35,6 +35,22 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Get_Employee_Payroll_Legacy_Route_Returns_Same_Shape()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayLegacy");
+
+		var response = await Client.GetAsync($"{BaseUrl}/{empId}/get-payroll");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var body = await response.Content.ReadFromJsonAsync<EmployeePayrollResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Id.ShouldBe(empId);
+		body.BankDetails.ShouldNotBeNull();
+		body.SalaryDetails.ShouldNotBeNull();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Update_Employee_Payroll()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayPut");
@@ -51,7 +67,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 			},
 			SalaryDetails = new SalaryDetailsContract
 			{
-				BasicSalary = 25000m,
+				TotalWorkingHourPerMonth = 160m,
 				PunchId = "EMP001",
 			},
 		};
@@ -98,20 +114,19 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 			},
 			SalaryDetails = new SalaryDetailsContract
 			{
-				BasicSalary = 50000m,
+				TotalWorkingHourPerMonth = 180m,
 				PunchId = "FULL001",
 				EpfNumber = "AP/12345/1234567",
 				UanNumber = "123456789012",
-				TdsPercentage = 10m,
 			},
-			EarningComponents = new List<ComponentAmountContract>
+			EarningComponents = new List<SalaryComponentContract>
 			{
-				new() { ComponentId = earningComponent1.Id, Amount = 5000m },
-				new() { ComponentId = earningComponent2.Id, Amount = 3000m },
+				new() { ComponentId = earningComponent1.Id, Name = earningComponent1.Name, Amount = 5000m },
+				new() { ComponentId = earningComponent2.Id, Name = earningComponent2.Name, Amount = 3000m },
 			},
-			DeductionComponents = new List<ComponentAmountContract>
+			DeductionComponents = new List<SalaryComponentContract>
 			{
-				new() { ComponentId = deductionComponent.Id, Amount = 1500m },
+				new() { ComponentId = deductionComponent.Id, Name = deductionComponent.Name, Amount = 1500m },
 			},
 		};
 
@@ -122,12 +137,41 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
 		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-		var body = await getResponse.Content.ReadFromJsonAsync<PayrollContract>(JsonOptions);
+		var body = await getResponse.Content.ReadFromJsonAsync<EmployeePayrollResponse>(JsonOptions);
 		body.ShouldNotBeNull();
+		body.Id.ShouldBe(empId);
 		body.EarningComponents.ShouldNotBeNull();
 		body.DeductionComponents.ShouldNotBeNull();
 		body.EarningComponents.Count.ShouldBe(2);
 		body.DeductionComponents.Count.ShouldBe(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Update_Components_Using_Name_Only_When_Master_Unique()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayNameOnly");
+		var earning = await PayrollTestHelper.CreateEarningComponentAsync(Client, "PayNameE");
+
+		var request = new PayrollContract
+		{
+			SalaryDetails = new SalaryDetailsContract { PunchId = "NAME1" },
+			EarningComponents = new List<SalaryComponentContract>
+			{
+				new() { Name = earning.Name, Amount = 4000m },
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
+		var body = await getResponse.Content.ReadFromJsonAsync<EmployeePayrollResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.EarningComponents.ShouldNotBeNull();
+		body.EarningComponents.Count.ShouldBe(1);
+		body.EarningComponents[0].ComponentId.ShouldBe(earning.Id);
+		body.EarningComponents[0].Amount.ShouldBe(4000m);
 	}
 
 	[Fact]
@@ -142,16 +186,16 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			SalaryDetails = new SalaryDetailsContract
 			{
-				BasicSalary = 42000m,
+				TotalWorkingHourPerMonth = 160m,
 				PunchId = "PAY-GUARD-1",
 			},
-			EarningComponents = new List<ComponentAmountContract>
+			EarningComponents = new List<SalaryComponentContract>
 			{
-				new() { ComponentId = earningComponent.Id, Amount = 4200m },
+				new() { ComponentId = earningComponent.Id, Name = earningComponent.Name, Amount = 4200m },
 			},
-			DeductionComponents = new List<ComponentAmountContract>
+			DeductionComponents = new List<SalaryComponentContract>
 			{
-				new() { ComponentId = deductionComponent.Id, Amount = 1200m },
+				new() { ComponentId = deductionComponent.Id, Name = deductionComponent.Name, Amount = 1200m },
 			},
 		};
 
@@ -162,16 +206,16 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			SalaryDetails = new SalaryDetailsContract
 			{
-				BasicSalary = 45000m,
+				TotalWorkingHourPerMonth = 168m,
 				PunchId = "PAY-GUARD-2",
 			},
-			EarningComponents = new List<ComponentAmountContract>
+			EarningComponents = new List<SalaryComponentContract>
 			{
-				new() { ComponentId = Guid.NewGuid(), Amount = 5000m },
+				new() { ComponentId = Guid.NewGuid(), Name = "Bad", Amount = 5000m },
 			},
-			DeductionComponents = new List<ComponentAmountContract>
+			DeductionComponents = new List<SalaryComponentContract>
 			{
-				new() { ComponentId = deductionComponent.Id, Amount = 1500m },
+				new() { ComponentId = deductionComponent.Id, Name = deductionComponent.Name, Amount = 1500m },
 			},
 		};
 
@@ -180,7 +224,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
 		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-		var payload = await getResponse.Content.ReadFromJsonAsync<PayrollContract>(JsonOptions);
+		var payload = await getResponse.Content.ReadFromJsonAsync<EmployeePayrollResponse>(JsonOptions);
 		payload.ShouldNotBeNull();
 		payload.EarningComponents.ShouldNotBeNull();
 		payload.DeductionComponents.ShouldNotBeNull();
@@ -196,79 +240,16 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Reject_Negative_BasicSalary()
+	public async Task Should_Reject_Negative_TotalWorkingHourPerMonth()
 	{
-		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayNegSal");
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayNegHrs");
 
 		var request = new PayrollContract
 		{
 			SalaryDetails = new SalaryDetailsContract
 			{
-				BasicSalary = -5000m,
-				PunchId = "NEG01",
-			},
-		};
-
-		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
-		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Reject_TdsPercentage_Above_100()
-	{
-		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayTdsHi");
-
-		var request = new PayrollContract
-		{
-			SalaryDetails = new SalaryDetailsContract
-			{
-				BasicSalary = 25000m,
-				PunchId = "TDSHI",
-				TdsPercentage = 150m,
-			},
-		};
-
-		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
-		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Reject_Negative_TdsPercentage()
-	{
-		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayTdsNeg");
-
-		var request = new PayrollContract
-		{
-			SalaryDetails = new SalaryDetailsContract
-			{
-				BasicSalary = 25000m,
-				PunchId = "TDSNEG",
-				TdsPercentage = -10m,
-			},
-		};
-
-		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
-		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Reject_Negative_TdsAmount()
-	{
-		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayTdsAmtNeg");
-
-		var request = new PayrollContract
-		{
-			SalaryDetails = new SalaryDetailsContract
-			{
-				BasicSalary = 25000m,
-				PunchId = "TDSAMN",
-				TdsAmount = -500m,
+				TotalWorkingHourPerMonth = -10m,
+				PunchId = "NEGH",
 			},
 		};
 
@@ -294,7 +275,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 			},
 			SalaryDetails = new SalaryDetailsContract
 			{
-				BasicSalary = 25000m,
+				TotalWorkingHourPerMonth = 160m,
 				PunchId = "NOBNK",
 			},
 		};
@@ -321,7 +302,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 			},
 			SalaryDetails = new SalaryDetailsContract
 			{
-				BasicSalary = 25000m,
+				TotalWorkingHourPerMonth = 160m,
 				PunchId = "NOACC",
 			},
 		};
@@ -349,7 +330,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 			},
 			SalaryDetails = new SalaryDetailsContract
 			{
-				BasicSalary = 25000m,
+				TotalWorkingHourPerMonth = 160m,
 				PunchId = "BADIF",
 			},
 		};
@@ -377,7 +358,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 			},
 			SalaryDetails = new SalaryDetailsContract
 			{
-				BasicSalary = 25000m,
+				TotalWorkingHourPerMonth = 160m,
 				PunchId = "BADAC",
 			},
 		};
@@ -398,13 +379,13 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			SalaryDetails = new SalaryDetailsContract
 			{
-				BasicSalary = 30000m,
+				TotalWorkingHourPerMonth = 160m,
 				PunchId = "DUPE",
 			},
-			EarningComponents = new List<ComponentAmountContract>
+			EarningComponents = new List<SalaryComponentContract>
 			{
-				new() { ComponentId = earningComponent.Id, Amount = 5000m },
-				new() { ComponentId = earningComponent.Id, Amount = 3000m },
+				new() { ComponentId = earningComponent.Id, Name = earningComponent.Name, Amount = 5000m },
+				new() { ComponentId = earningComponent.Id, Name = earningComponent.Name, Amount = 3000m },
 			},
 		};
 
@@ -424,13 +405,13 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			SalaryDetails = new SalaryDetailsContract
 			{
-				BasicSalary = 30000m,
+				TotalWorkingHourPerMonth = 160m,
 				PunchId = "DUPD",
 			},
-			DeductionComponents = new List<ComponentAmountContract>
+			DeductionComponents = new List<SalaryComponentContract>
 			{
-				new() { ComponentId = deductionComponent.Id, Amount = 1500m },
-				new() { ComponentId = deductionComponent.Id, Amount = 2000m },
+				new() { ComponentId = deductionComponent.Id, Name = deductionComponent.Name, Amount = 1500m },
+				new() { ComponentId = deductionComponent.Id, Name = deductionComponent.Name, Amount = 2000m },
 			},
 		};
 
@@ -441,7 +422,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Reject_Empty_ComponentId()
+	public async Task Should_Reject_Empty_ComponentId_When_Supplied_As_Empty_Guid()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayEmptyC");
 
@@ -449,12 +430,12 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			SalaryDetails = new SalaryDetailsContract
 			{
-				BasicSalary = 30000m,
+				TotalWorkingHourPerMonth = 160m,
 				PunchId = "EMPTYC",
 			},
-			EarningComponents = new List<ComponentAmountContract>
+			EarningComponents = new List<SalaryComponentContract>
 			{
-				new() { ComponentId = Guid.Empty, Amount = 5000m },
+				new() { ComponentId = Guid.Empty, Name = "X", Amount = 5000m },
 			},
 		};
 
@@ -474,12 +455,12 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			SalaryDetails = new SalaryDetailsContract
 			{
-				BasicSalary = 30000m,
+				TotalWorkingHourPerMonth = 160m,
 				PunchId = "ZEROAM",
 			},
-			EarningComponents = new List<ComponentAmountContract>
+			EarningComponents = new List<SalaryComponentContract>
 			{
-				new() { ComponentId = earningComponent.Id, Amount = 0m },
+				new() { ComponentId = earningComponent.Id, Name = earningComponent.Name, Amount = 0m },
 			},
 		};
 
@@ -490,55 +471,21 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Accept_BasicSalary_Zero()
+	public async Task Should_Accept_TotalWorkingHourPerMonth_Zero()
 	{
-		// BasicSalary = 0 is valid (e.g., volunteer or unpaid role)
-		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayZeroSal");
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayZeroHrs");
 
 		var request = new PayrollContract
 		{
 			SalaryDetails = new SalaryDetailsContract
 			{
-				BasicSalary = 0m,
+				TotalWorkingHourPerMonth = 0m,
 				PunchId = "ZEROS",
 			},
 		};
 
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Accept_TdsPercentage_Boundary_Values()
-	{
-		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayTdsBnd");
-
-		// TDS = 0 should be valid
-		var zeroTds = new PayrollContract
-		{
-			SalaryDetails = new SalaryDetailsContract
-			{
-				BasicSalary = 25000m,
-				PunchId = "TDSB0",
-				TdsPercentage = 0m,
-			},
-		};
-		var r1 = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", zeroTds, JsonOptions);
-		r1.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-		// TDS = 100 should be valid
-		var maxTds = new PayrollContract
-		{
-			SalaryDetails = new SalaryDetailsContract
-			{
-				BasicSalary = 25000m,
-				PunchId = "TDSB100",
-				TdsPercentage = 100m,
-			},
-		};
-		var r2 = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", maxTds, JsonOptions);
-		r2.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
 
 	#endregion
@@ -563,7 +510,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 			},
 			SalaryDetails = new SalaryDetailsContract
 			{
-				BasicSalary = 35000m,
+				TotalWorkingHourPerMonth = 172m,
 				PunchId = "VFY001",
 			},
 		};
@@ -573,43 +520,14 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
 			getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-			var body = await getResponse.Content.ReadFromJsonAsync<PayrollContract>(JsonOptions);
+			var body = await getResponse.Content.ReadFromJsonAsync<EmployeePayrollResponse>(JsonOptions);
 			body.ShouldNotBeNull();
 			body.BankDetails.ShouldNotBeNull();
 			body.BankDetails.BankName.ShouldBe("ICICI Bank");
 			body.BankDetails.AccountNumber.ShouldBe("5555666677778888");
+			body.SalaryDetails.ShouldNotBeNull();
+			body.SalaryDetails.TotalWorkingHourPerMonth.ShouldBe(172m);
 		}
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Extended)]
-	public async Task Should_Update_TDS_Boundary_Values()
-	{
-		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayTDS");
-
-		var zeroTds = new PayrollContract
-		{
-			SalaryDetails = new SalaryDetailsContract
-			{
-				BasicSalary = 20000m,
-				PunchId = "TDS0",
-				TdsPercentage = 0m,
-			},
-		};
-		var r1 = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", zeroTds, JsonOptions);
-		r1.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-		var maxTds = new PayrollContract
-		{
-			SalaryDetails = new SalaryDetailsContract
-			{
-				BasicSalary = 20000m,
-				PunchId = "TDS100",
-				TdsPercentage = 100m,
-			},
-		};
-		var r2 = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", maxTds, JsonOptions);
-		r2.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
 
 	#endregion

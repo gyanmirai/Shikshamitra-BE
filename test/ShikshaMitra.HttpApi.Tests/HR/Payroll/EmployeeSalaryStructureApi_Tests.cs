@@ -35,6 +35,14 @@ public class EmployeeSalaryStructureApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Return_NotFound_When_Getting_Salary_Structure_For_NonExistent_Employee()
+	{
+		var response = await Client.GetAsync(Url(Guid.NewGuid()));
+		response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Update_Salary_Structure()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "SalPut");
@@ -102,6 +110,42 @@ public class EmployeeSalaryStructureApi_Tests : ShikshaMitraApiTestBase
 		payload.DeductionComponents[0].IsFixed.ShouldBeTrue();
 		payload.DeductionComponents[0].IsTemp.ShouldBeFalse();
 		payload.DeductionComponents[0].ApplicableMonth.ShouldBe(applicableMonth);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Return_NotFound_When_Updating_Salary_Structure_For_NonExistent_Employee()
+	{
+		var updateDto = new UpdateSalaryStructureDto
+		{
+			EarningComponents = new List<SalaryComponentDto>
+			{
+				new()
+				{
+					Id = Guid.NewGuid(),
+					Name = "Basic Salary",
+					Amount = 10000m,
+					IsFixed = true,
+					IsTemp = false,
+					ApplicableMonth = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+				}
+			},
+			DeductionComponents = new List<SalaryComponentDto>
+			{
+				new()
+				{
+					Id = Guid.NewGuid(),
+					Name = "PF",
+					Amount = 1200m,
+					IsFixed = true,
+					IsTemp = false,
+					ApplicableMonth = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+				}
+			}
+		};
+
+		var response = await Client.PutAsJsonAsync(Url(Guid.NewGuid()), updateDto, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 	}
 
 	[Fact]

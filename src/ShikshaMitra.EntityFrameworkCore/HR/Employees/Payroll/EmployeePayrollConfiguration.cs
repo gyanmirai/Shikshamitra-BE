@@ -34,9 +34,7 @@ public class EmployeePayrollDetailsConfiguration : IEntityTypeConfiguration<Empl
 		builder.Property(x => x.UanNumber).HasMaxLength(50);
 		builder.Property(x => x.PunchId).HasMaxLength(50);
 
-		builder.Property(x => x.BasicSalary).HasColumnType("decimal(18,2)");
-		builder.Property(x => x.TdsPercentage).HasColumnType("decimal(5,2)");
-		builder.Property(x => x.TdsAmount).HasColumnType("decimal(18,2)");
+		builder.Property(x => x.TotalWorkingHourPerMonth).HasColumnType("decimal(18,2)");
 	}
 }
 

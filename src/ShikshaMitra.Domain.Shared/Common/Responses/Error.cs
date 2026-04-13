@@ -15,7 +15,6 @@ public class Error
 	public string Code { get; }
 	public string Message { get; }
 
-	/// <summary>Per-property validation messages when available (HTTP 400 validation flows).</summary>
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public IReadOnlyDictionary<string, string>? Fields { get; }
 

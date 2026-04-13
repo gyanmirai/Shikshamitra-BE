@@ -1,12 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
-/// <summary>
-/// EF Core configuration for LeavePolicy entity
-/// </summary>
 public class LeavePolicyConfiguration : IEntityTypeConfiguration<LeavePolicy>
 {
 	public void Configure(EntityTypeBuilder<LeavePolicy> builder)
@@ -15,8 +12,7 @@ public class LeavePolicyConfiguration : IEntityTypeConfiguration<LeavePolicy>
 
 		builder.ConfigureByConvention();
 
-		// Configure properties
-		builder.Property(x => x.EducationMediumStageId)
+		builder.Property(x => x.AcademicYearId)
 			.IsRequired();
 
 		builder.Property(x => x.PolicyName)
@@ -26,7 +22,10 @@ public class LeavePolicyConfiguration : IEntityTypeConfiguration<LeavePolicy>
 		builder.Property(x => x.LeaveTypeId)
 			.IsRequired();
 
-		builder.Property(x => x.MaximumDaysPerYear)
+		builder.Property(x => x.AccrualPolicyType)
+			.IsRequired();
+
+		builder.Property(x => x.LeaveCount)
 			.IsRequired();
 
 		builder.Property(x => x.PaidType)
@@ -40,6 +39,8 @@ public class LeavePolicyConfiguration : IEntityTypeConfiguration<LeavePolicy>
 			.IsRequired()
 			.HasDefaultValue(false);
 
+		builder.Property(x => x.EncashmentTiming);
+
 		builder.Property(x => x.RequiresApproval)
 			.IsRequired()
 			.HasDefaultValue(true);
@@ -51,25 +52,22 @@ public class LeavePolicyConfiguration : IEntityTypeConfiguration<LeavePolicy>
 			.IsRequired()
 			.HasDefaultValue(true);
 
-		// Navigation properties
 		builder.HasOne(x => x.LeaveType)
 			.WithMany()
 			.HasForeignKey(x => x.LeaveTypeId)
 			.OnDelete(DeleteBehavior.Restrict);
 
-		builder.HasOne(x => x.EducationMediumStage)
+		builder.HasOne(x => x.AcademicYear)
 			.WithMany()
-			.HasForeignKey(x => x.EducationMediumStageId)
+			.HasForeignKey(x => x.AcademicYearId)
 			.OnDelete(DeleteBehavior.Restrict);
 
-		// Indexes for performance
-		// Unique index scoped per tenant and organization
-		builder.HasIndex(x => new { x.TenantId, x.EducationMediumStageId, x.PolicyName })
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.PolicyName })
 			.IsUnique()
-			.HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_MediumStageId_PolicyName");
+			.HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_AcademicYearId_PolicyName");
 
-		builder.HasIndex(x => new { x.TenantId, x.EducationMediumStageId, x.IsActive })
-			.HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_MediumStageId_IsActive");
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsActive })
+			.HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_AcademicYearId_IsActive");
 
 		builder.HasIndex(x => x.LeaveTypeId)
 			.HasDatabaseName("IX_EmployeeLeavePolicies_LeaveTypeId");

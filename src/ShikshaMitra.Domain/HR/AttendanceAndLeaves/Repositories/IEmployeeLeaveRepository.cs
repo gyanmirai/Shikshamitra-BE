@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories;
 
@@ -22,4 +24,15 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
         Guid employeeId,
         Guid leaveTypeId,
         int year);
+
+	/// <summary>
+	/// Paged leave ids for management list: start date in [rangeStart, rangeEnd] (date inclusive) and optional text search.
+	/// </summary>
+	Task<(int TotalCount, List<Guid> PageIds)> GetPagedIdsForManagementListAsync(
+		DateTime rangeStart,
+		DateTime rangeEnd,
+		string? search,
+		int skip,
+		int take,
+		CancellationToken cancellationToken = default);
 }

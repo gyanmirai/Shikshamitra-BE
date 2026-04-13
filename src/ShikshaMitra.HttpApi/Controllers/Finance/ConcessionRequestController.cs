@@ -2,13 +2,14 @@
 using Microsoft.AspNetCore.Mvc;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
+using ShikshaMitra.Common;
 using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.ConcessionRequests.Dtos;
 
 namespace ShikshaMitra.Controllers.Finance;
 
 [Authorize]
-[Route("api/app/finance/concession-requests")]
+[Route("api/concession-request")]
 public class ConcessionRequestController : AbpController
 {
     private readonly IConcessionRequestAppService _appService;
@@ -18,9 +19,17 @@ public class ConcessionRequestController : AbpController
         _appService = appService;
     }
 
-    /// <summary>Gets a single ConcessionRequest with its fee-head mappings.</summary>
+    /// <summary>
+    /// Gets a concession request by ID (Step 1 + Step 2 data).
+    /// Returns the anchor request enriched with the student's enrollment context
+    /// (board, medium, standard, division) and all concession-type selections
+    /// that share the same lifecycle status.
+    /// </summary>
     [HttpGet("{id:guid}")]
-    public virtual Task<ConcessionRequestDto> GetAsync(Guid id)
+    [ProducesResponseType(typeof(ApiDataResponseDto<ConcessionRequestDetailDto>), 200)]
+    [ProducesResponseType(401)]
+    [ProducesResponseType(404)]
+    public virtual Task<ApiDataResponseDto<ConcessionRequestDetailDto>> GetAsync(Guid id)
         => _appService.GetAsync(id);
 
     /// <summary>Returns a paged list of ConcessionRequests.</summary>
@@ -31,13 +40,18 @@ public class ConcessionRequestController : AbpController
 
     /// <summary>Creates a new ConcessionRequest in Draft state.</summary>
     [HttpPost]
-    public virtual Task<ConcessionRequestDto> CreateAsync([FromBody] CreateConcessionRequestDto input)
-        => _appService.CreateAsync(input);
+    public async Task CreateAsync([FromBody] CreateConcessionRequestDto input)
+        => await _appService.CreateAsync(input);
 
-    /// <summary>Updates a Draft ConcessionRequest.</summary>
+    /// <summary>
+    /// Replaces the concession-type selection for a student's Pending request batch.
+    /// The <paramref name="id"/> must identify a Pending request owned by the student
+    /// in the body; all Pending requests for that student are then replaced with the
+    /// supplied <c>concessionTypeIds</c>.
+    /// </summary>
     [HttpPut("{id:guid}")]
-    public virtual Task<ConcessionRequestDto> UpdateAsync(Guid id, [FromBody] UpdateConcessionRequestDto input)
-        => _appService.UpdateAsync(id, input);
+    public async Task<ConcessionRequestDto> UpdateAsync(Guid id, [FromBody] UpdateConcessionRequestDto input)
+        => await _appService.UpdateAsync(id, input);
 
     /// <summary>Submits a Draft request for approval (Draft → Pending).</summary>
     [HttpPost("{id:guid}/submit")]

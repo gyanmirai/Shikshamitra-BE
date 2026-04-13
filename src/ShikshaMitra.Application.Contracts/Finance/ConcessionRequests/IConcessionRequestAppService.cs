@@ -1,21 +1,26 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using ShikshaMitra.Common;
 using ShikshaMitra.Finance.ConcessionRequests.Dtos;
 
 namespace ShikshaMitra.Finance.ConcessionRequests;
 
 public interface IConcessionRequestAppService : IApplicationService
 {
-    /// <summary>Gets a single ConcessionRequest with its fee-head mappings.</summary>
-    Task<ConcessionRequestDto> GetAsync(Guid id);
+    /// <summary>
+    /// Gets a single ConcessionRequest by its ID.
+    /// The response includes the student's enrollment context and all sibling
+    /// requests that share the same lifecycle status as the anchor.
+    /// </summary>
+    Task<ApiDataResponseDto<ConcessionRequestDetailDto>> GetAsync(Guid id);
 
     /// <summary>Returns a paged list of ConcessionRequests.</summary>
     Task<PagedResultDto<ConcessionRequestDto>> GetListAsync(GetConcessionRequestListRequestDto input);
 
     /// <summary>Creates a new ConcessionRequest in Draft state.</summary>
-    Task<ConcessionRequestDto> CreateAsync(CreateConcessionRequestDto input);
+    Task CreateAsync(CreateConcessionRequestDto input);
 
     /// <summary>Updates a Draft ConcessionRequest (metadata + fee-head mappings).</summary>
     Task<ConcessionRequestDto> UpdateAsync(Guid id, UpdateConcessionRequestDto input);

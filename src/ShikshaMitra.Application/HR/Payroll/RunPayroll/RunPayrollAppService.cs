@@ -471,7 +471,9 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		var payableDays = PayrollProrationCalculator.CalculatePayableDays(presentDays, halfDays);
 		var factor = PayrollProrationCalculator.CalculateProrationFactor(basis.BasisDays, payableDays);
 
-		var basicSalary = payrollDetails?.BasicSalary ?? 0m;
+		var basicSalary = components
+			.Where(c => c.IsEarning && string.Equals(c.Name, "Basic", StringComparison.OrdinalIgnoreCase))
+			.Sum(c => c.Amount);
 		basicSalary = PayrollProrationCalculator.ProrateAmount(basicSalary, isTemp: false, factor);
 
 		var grossSalary = 0m;

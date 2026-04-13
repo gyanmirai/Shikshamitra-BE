@@ -3385,6 +3385,90 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppNotificationInfos", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.AttendanceConfiguration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<int>("GraceTime")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("HoursBasedPayPercentage")
+                        .HasColumnType("double precision");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<int>("MaxLateAllowedPerMonth")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MinOvertimeMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("OvertimeEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("OvertimeRate")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PenaltyType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "AcademicYearId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_AttendanceConfigurations_TenantId_AcademicYearId");
+
+                    b.ToTable("AppAttendanceConfigurations", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.AutomatedNotificationsSettings", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3418,58 +3502,16 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppAutomatedNotificationsSettings", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.CustomAttendanceRule", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<bool>("EnableNotificationForUpperAuthority")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<int>("HalfDayThreshold")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("HalfDayThresholdUnit")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("LateThreshold")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("LateThresholdUnit")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.Property<int>("Type")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("AppCustomAttendanceRules", (string)null);
-                });
-
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicy", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AccrualPolicyType")
+                        .HasColumnType("integer");
 
                     b.Property<bool>("CarryForward")
                         .ValueGeneratedOnAdd()
@@ -3503,13 +3545,13 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<Guid>("EducationMediumStageId")
-                        .HasColumnType("uuid");
-
                     b.Property<bool>("Encashable")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
+
+                    b.Property<int?>("EncashmentTiming")
+                        .HasColumnType("integer");
 
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
@@ -3535,11 +3577,11 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<int>("LeaveCount")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("LeaveTypeId")
                         .HasColumnType("uuid");
-
-                    b.Property<int>("MaximumDaysPerYear")
-                        .HasColumnType("integer");
 
                     b.Property<int>("PaidType")
                         .HasColumnType("integer");
@@ -3560,17 +3602,17 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EducationMediumStageId");
+                    b.HasIndex("AcademicYearId");
 
                     b.HasIndex("LeaveTypeId")
                         .HasDatabaseName("IX_EmployeeLeavePolicies_LeaveTypeId");
 
-                    b.HasIndex("TenantId", "EducationMediumStageId", "IsActive")
-                        .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_MediumStageId_IsActive");
+                    b.HasIndex("TenantId", "AcademicYearId", "IsActive")
+                        .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_AcademicYearId_IsActive");
 
-                    b.HasIndex("TenantId", "EducationMediumStageId", "PolicyName")
+                    b.HasIndex("TenantId", "AcademicYearId", "PolicyName")
                         .IsUnique()
-                        .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_MediumStageId_PolicyName");
+                        .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_AcademicYearId_PolicyName");
 
                     b.ToTable("AppEmployeeLeavePolicies", (string)null);
                 });
@@ -3578,6 +3620,9 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeaveType", b =>
                 {
                     b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Color")
@@ -3611,9 +3656,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
-
-                    b.Property<Guid>("EducationMediumStageId")
-                        .HasColumnType("uuid");
 
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
@@ -3650,12 +3692,14 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "EducationMediumStageId", "IsActive")
-                        .HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_MediumStageId_IsActive");
+                    b.HasIndex("AcademicYearId");
 
-                    b.HasIndex("TenantId", "EducationMediumStageId", "Type")
+                    b.HasIndex("TenantId", "AcademicYearId", "IsActive")
+                        .HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_AcademicYearId_IsActive");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "Type")
                         .IsUnique()
-                        .HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_MediumStageId_Type");
+                        .HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_AcademicYearId_Type");
 
                     b.ToTable("AppEmployeeLeaveTypes", (string)null);
                 });
@@ -4555,9 +4599,6 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<decimal?>("BasicSalary")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<string>("BranchName")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
@@ -4581,11 +4622,8 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.Property<decimal?>("TdsAmount")
+                    b.Property<decimal?>("TotalWorkingHourPerMonth")
                         .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("TdsPercentage")
-                        .HasColumnType("decimal(5,2)");
 
                     b.Property<string>("UanNumber")
                         .HasMaxLength(50)
@@ -10949,9 +10987,9 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicy", b =>
                 {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
+                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", "AcademicYear")
                         .WithMany()
-                        .HasForeignKey("EducationMediumStageId")
+                        .HasForeignKey("AcademicYearId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -10961,9 +10999,20 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("EducationMediumStage");
+                    b.Navigation("AcademicYear");
 
                     b.Navigation("LeaveType");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeaveType", b =>
+                {
+                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", "AcademicYear")
+                        .WithMany()
+                        .HasForeignKey("AcademicYearId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AcademicYear");
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Calendar.Events.Event", b =>

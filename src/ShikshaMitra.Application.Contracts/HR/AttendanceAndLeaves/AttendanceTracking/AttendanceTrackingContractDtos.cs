@@ -11,10 +11,10 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
 /// </summary>
 public enum AttendanceTrackingStatus
 {
-	PRESENT = 0,
-	ABSENT = 1,
-	HALF_DAY = 2,
-	REJECTED_LEAVE = 3
+	Present = 0,
+	Absent = 1,
+	HalfDay = 2,
+	RejectedLeave = 3
 }
 
 #endregion
@@ -60,7 +60,7 @@ public class AttendanceDateWiseItem
 	public string? HoursWorked { get; set; }
 
 	public string? Remarks { get; set; }
-	public AttendanceTrackingStatus Status { get; set; }
+	public string Status { get; set; } = string.Empty;
 }
 
 #endregion
@@ -72,6 +72,10 @@ public class AttendanceDateWiseItem
 /// </summary>
 public class AttendanceEmployeeWiseResponse
 {
+	public int TotalCount { get; set; }
+	public int CurrentPage { get; set; }
+	public int PageSize { get; set; }
+	public int TotalPages { get; set; }
 	public AttendanceSummary AttendanceSummary { get; set; } = new();
 	public List<AttendanceEmployeeWiseItem> Items { get; set; } = new();
 }
@@ -82,7 +86,7 @@ public class AttendanceEmployeeWiseResponse
 public class AttendanceEmployeeWiseItem
 {
 	/// <summary>
-	/// Date formatted as DD-MM-YYYY
+	/// Date formatted as ISO 8601 with offset
 	/// </summary>
 	public string Date { get; set; } = string.Empty;
 
@@ -107,7 +111,7 @@ public class AttendanceEmployeeWiseItem
 	public string? HoursWorked { get; set; }
 
 	public string? Description { get; set; }
-	public AttendanceTrackingStatus Status { get; set; }
+	public string Status { get; set; } = string.Empty;
 }
 
 #endregion
@@ -119,7 +123,6 @@ public class AttendanceEmployeeWiseItem
 /// </summary>
 public class AttendanceSummary
 {
-	public int All { get; set; }
 	public int Present { get; set; }
 	public int Absent { get; set; }
 	public int HalfDay { get; set; }
@@ -144,6 +147,8 @@ public class GetAttendanceDateWiseInput
 	/// Optional status filter
 	/// </summary>
 	public AttendanceTrackingStatus? Status { get; set; }
+	public Guid EducationMediumStageId { get; set; }
+	public string? Search { get; set; }
 
 	public int Page { get; set; } = 1;
 
@@ -171,6 +176,10 @@ public class GetAttendanceEmployeeWiseInput
 	/// Optional status filter
 	/// </summary>
 	public AttendanceTrackingStatus? Status { get; set; }
+	public Guid EducationMediumStageId { get; set; }
+	public string? Search { get; set; }
+	public int Page { get; set; } = 1;
+	public int PageSize { get; set; } = 10;
 }
 
 #endregion

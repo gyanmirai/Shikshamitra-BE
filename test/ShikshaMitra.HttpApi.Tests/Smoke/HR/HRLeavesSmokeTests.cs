@@ -16,9 +16,9 @@ public class HRLeavesSmokeTests : ShikshaMitraSmokeTestBase
 	{
 		await AuthenticateAsync();
 
-		var mediumStageId = Guid.NewGuid();
+		var academicYearId = Guid.NewGuid();
 		var response = await Client.GetAsync(
-			$"/api/leave-types?mediumStageId={mediumStageId}&page=1&pageSize=5");
+			$"/api/hr-leave-types?academicYearId={academicYearId}&page=1&pageSize=5");
 
 		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.InternalServerError);
 	}
@@ -28,9 +28,9 @@ public class HRLeavesSmokeTests : ShikshaMitraSmokeTestBase
 	{
 		await AuthenticateAsync();
 
-		var mediumStageId = Guid.NewGuid();
+		var academicYearId = Guid.NewGuid();
 		var response = await Client.GetAsync(
-			$"/api/leave-policies?mediumStageId={mediumStageId}&page=1&pageSize=5");
+			$"/api/leave-policies?academicYearId={academicYearId}&page=1&pageSize=5");
 
 		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.InternalServerError);
 	}

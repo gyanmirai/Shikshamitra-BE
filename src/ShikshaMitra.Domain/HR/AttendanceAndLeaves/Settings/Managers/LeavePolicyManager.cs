@@ -1,13 +1,10 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
-/// <summary>
-/// Domain service for managing employee leave policies with business logic
-/// </summary>
 public class LeavePolicyManager : DomainService
 {
 	private readonly ILeavePolicyRepository _leavePolicyRepository;
@@ -22,102 +19,101 @@ public class LeavePolicyManager : DomainService
 	}
 
 	public async Task<LeavePolicy> CreateAsync(
-		Guid educationMediumStageId,
+		Guid academicYearId,
 		string policyName,
 		Guid leaveTypeId,
-		int maximumDaysPerYear,
+		LeaveAccrualPolicyType accrualPolicyType,
+		int leaveCount,
 		LeavePaidType paidType,
 		bool carryForward,
 		bool encashable,
+		LeaveEncashmentTiming? encashmentTiming,
 		bool requiresApproval,
 		string? description = null)
 	{
-		// Check if policy name already exists within the organization
-		await CheckPolicyNameAvailabilityAsync(educationMediumStageId, policyName);
+		await CheckPolicyNameAvailabilityAsync(academicYearId, policyName);
+		await ValidateLeaveTypeExistsAsync(leaveTypeId, academicYearId);
 
-		// Validate that the referenced LeaveType exists and is active
-		await ValidateLeaveTypeExistsAsync(leaveTypeId);
-
-		var leavePolicy = new LeavePolicy(
+		return new LeavePolicy(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
-			educationMediumStageId,
+			academicYearId,
 			policyName,
 			leaveTypeId,
-			maximumDaysPerYear,
+			accrualPolicyType,
+			leaveCount,
 			paidType,
 			carryForward,
 			encashable,
+			encashmentTiming,
 			requiresApproval,
 			description
 		);
-
-		return leavePolicy;
 	}
 
 	public async Task UpdateAsync(
 		LeavePolicy leavePolicy,
 		string policyName,
 		Guid leaveTypeId,
-		int maximumDaysPerYear,
+		LeaveAccrualPolicyType accrualPolicyType,
+		int leaveCount,
 		LeavePaidType paidType,
 		bool carryForward,
 		bool encashable,
+		LeaveEncashmentTiming? encashmentTiming,
 		bool requiresApproval,
 		string? description)
 	{
-		// Check if policy name already exists (excluding current policy) within the same organization
-		if (leavePolicy.PolicyName != policyName)
+		if (!string.Equals(leavePolicy.PolicyName, policyName, StringComparison.OrdinalIgnoreCase))
 		{
-			await CheckPolicyNameAvailabilityAsync(leavePolicy.EducationMediumStageId, policyName, leavePolicy.Id);
+			await CheckPolicyNameAvailabilityAsync(leavePolicy.AcademicYearId, policyName, leavePolicy.Id);
 		}
 
-		// Validate that the referenced LeaveType exists and is active
-		await ValidateLeaveTypeExistsAsync(leaveTypeId);
+		await ValidateLeaveTypeExistsAsync(leaveTypeId, leavePolicy.AcademicYearId);
 
 		leavePolicy.Update(
 			policyName,
 			leaveTypeId,
-			maximumDaysPerYear,
+			accrualPolicyType,
+			leaveCount,
 			paidType,
 			carryForward,
 			encashable,
+			encashmentTiming,
 			requiresApproval,
-			description
-		);
+			description);
 	}
 
-	private async Task CheckPolicyNameAvailabilityAsync(Guid educationMediumStageId, string policyName, Guid? excludeId = null)
+	private async Task CheckPolicyNameAvailabilityAsync(Guid academicYearId, string policyName, Guid? excludeId = null)
 	{
-		if (await _leavePolicyRepository.IsPolicyNameExistsAsync(educationMediumStageId, policyName, excludeId))
+		if (await _leavePolicyRepository.IsPolicyNameExistsAsync(academicYearId, policyName, excludeId))
 		{
 			throw new BusinessException("ShikshaMitra:LeavePolicyNameAlreadyExists")
 				.WithData("policyName", policyName);
 		}
 	}
 
-	/// <summary>
-	/// Validates that the specified LeaveType exists and is active.
-	/// </summary>
-	/// <param name="leaveTypeId">The LeaveType ID to validate</param>
-	/// <exception cref="BusinessException">Thrown when the LeaveType does not exist or is inactive</exception>
-	private async Task ValidateLeaveTypeExistsAsync(Guid leaveTypeId)
+	private async Task ValidateLeaveTypeExistsAsync(Guid leaveTypeId, Guid academicYearId)
 	{
 		var existingLeaveType = await _leaveTypeRepository.GetAsync(leaveTypeId);
 
 		if (existingLeaveType == null)
 		{
 			throw new BusinessException("ShikshaMitra:LeaveTypeNotFound")
-				.WithData("leaveTypeId", leaveTypeId)
-				.WithData("message", $"The leave type with ID '{leaveTypeId}' does not exist. Please create the leave type first.");
+				.WithData("leaveTypeId", leaveTypeId);
 		}
 
-		// Validate that the LeaveType is active
 		if (!existingLeaveType.IsActive)
 		{
 			throw new BusinessException("ShikshaMitra:LeaveTypeInactive")
+				.WithData("leaveTypeId", leaveTypeId);
+		}
+
+		if (existingLeaveType.AcademicYearId != academicYearId)
+		{
+			throw new BusinessException("ShikshaMitra:LeaveTypeAcademicYearMismatch")
 				.WithData("leaveTypeId", leaveTypeId)
-				.WithData("message", $"The leave type with ID '{leaveTypeId}' is inactive. Please activate it before creating a policy for it.");
+				.WithData("academicYearId", academicYearId);
 		}
 	}
 }

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common.Responses;
@@ -99,8 +99,9 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 			400 => Error.Create("VALIDATION_ERROR", localizedMessage, validationFields),
 			401 => Error.Create("UNAUTHORIZED", localizedMessage ?? "Authentication required. Please provide valid credentials."),
 			403 => Error.Create("FORBIDDEN", localizedMessage ?? "You don't have permission to access this resource."),
-			404 => Error.Create("NOT_FOUND", localizedMessage),
-			_ => Error.Create("ERROR", localizedMessage)
+			404 => Error.Create("RESOURCE_NOT_FOUND", localizedMessage),
+			409 => Error.Create("DUPLICATE_RESOURCE", localizedMessage ?? "Resource conflict."),
+			_ => Error.Create("INTERNAL_SERVER_ERROR", localizedMessage)
 		};
 
 		var result = Result.Failure(error);
@@ -300,24 +301,24 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 			),
 			AbpAuthorizationException => (
 				(int) HttpStatusCode.Forbidden,
-				Error.Create("AUTHORIZATION_ERROR", "You don't have permission to access this resource")
+				Error.Create("FORBIDDEN", "You don't have permission to access this resource")
 			),
 			EntityNotFoundException entityNotFoundEx => (
 				(int) HttpStatusCode.NotFound,
-				Error.Create("NOT_FOUND", entityNotFoundEx.Message)
+				Error.Create("RESOURCE_NOT_FOUND", entityNotFoundEx.Message)
 			),
 			BusinessException businessEx => BuildBusinessExceptionResponse(businessEx),
 			ArgumentException argEx => (
 				(int) HttpStatusCode.BadRequest,
-				Error.Create("INVALID_ARGUMENT", argEx.Message)
+				Error.Create("INVALID_REQUEST", argEx.Message)
 			),
 			InvalidOperationException invalidOpEx => (
 				(int) HttpStatusCode.BadRequest,
-				Error.Create("INVALID_OPERATION", invalidOpEx.Message)
+				Error.Create("INVALID_STATE_TRANSITION", invalidOpEx.Message)
 			),
 			_ => (
 				(int) HttpStatusCode.InternalServerError,
-				Error.Create("INTERNAL_ERROR", exception.Message ?? "An internal server error occurred")
+				Error.Create("INTERNAL_SERVER_ERROR", exception.Message ?? "An internal server error occurred")
 			)
 		};
 	}
@@ -338,7 +339,7 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 		{
 			return (
 				(int)HttpStatusCode.NotFound,
-				Error.Create("NOT_FOUND", localizedMessage));
+				Error.Create("RESOURCE_NOT_FOUND", localizedMessage));
 		}
 
 		if (code == HRErrorCodes.LeaveFileTooLarge)
@@ -436,3 +437,4 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 		}
 	}
 }
+

@@ -68,7 +68,8 @@ public class LeaveManagementAppService(
 
 		var detailQuery = await employeeLeaveRepository.WithDetailsAsync(
 			x => x.Employee,
-			x => x.LeavePolicy);
+			x => x.LeavePolicy,
+			x => x.LeavePolicy!.AcademicYear);
 
 		var leaveRequests = await AsyncExecuter.ToListAsync(
 			detailQuery.Where(x => pageIds.Contains(x.Id)));
@@ -85,7 +86,7 @@ public class LeaveManagementAppService(
 			StartDate = leave.StartDate.DateTime,
 			EndDate = leave.EndDate.DateTime,
 			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
-			MediumStageName = leave.LeavePolicy?.EducationMediumStage?.Name ?? "",
+			MediumStageName = leave.LeavePolicy?.AcademicYear?.Name ?? "",
 			Description = leave.Description ?? "",
 			Remarks = leave.RejectionReason,
 			Status = leave.Status.ToString().ToUpperInvariant()
@@ -276,8 +277,8 @@ public class LeaveManagementAppService(
 		return new LeaveRequestDetailsDto
 		{
 			Id = leave.Id,
-			MediumStageId = leave.LeavePolicy?.EducationMediumStageId ?? Guid.Empty,
-			MediumStageName = leave.LeavePolicy?.EducationMediumStage?.Name ?? "",
+			MediumStageId = leave.LeavePolicy?.AcademicYearId ?? Guid.Empty,
+			MediumStageName = leave.LeavePolicy?.AcademicYear?.Name ?? "",
 			EmployeeId = leave.EmployeeId,
 			EmployeeName = leave.Employee?.EmployeeNameWithFather ?? "Unknown",
 			EmployeeCode = leave.Employee?.EmployeeCode ?? "Unknown",

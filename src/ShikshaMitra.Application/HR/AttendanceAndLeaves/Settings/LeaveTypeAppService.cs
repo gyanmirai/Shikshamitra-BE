@@ -1,15 +1,13 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Caching;
-using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -28,17 +26,14 @@ public class LeaveTypeAppService : CrudAppService<
 	private readonly IDistributedCache<PagedResultDto<LeaveTypeDto>> _cache;
 	private readonly IDistributedCache<LeaveTypeListResponse> _contractCache;
 
-	// Base cache key for all active leave types (unpaginated)
 	private string GetBaseCacheKey() =>
 		$"EmployeeLeaveTypes:Active:Tenant:{CurrentTenant?.Id ?? Guid.Empty}";
 
-	// Paginated cache key
 	private string GetActiveCacheKey(int skipCount, int maxResultCount) =>
 		$"{GetBaseCacheKey()}:Skip:{skipCount}:Take:{maxResultCount}";
 
-	// Contract-specific cache key by mediumStageId
-	private string GetContractCacheKey(Guid mediumStageId, int page, int pageSize) =>
-		$"EmployeeLeaveTypes:Contract:Tenant:{CurrentTenant?.Id ?? Guid.Empty}:Org:{mediumStageId}:Page:{page}:Size:{pageSize}";
+	private string GetContractCacheKey(Guid academicYearId, int page, int pageSize, string? search) =>
+		$"EmployeeLeaveTypes:Contract:Tenant:{CurrentTenant?.Id ?? Guid.Empty}:AcademicYear:{academicYearId}:Page:{page}:Size:{pageSize}:Search:{search ?? string.Empty}";
 
 	public LeaveTypeAppService(
 		IRepository<LeaveType, Guid> repository,
@@ -54,11 +49,9 @@ public class LeaveTypeAppService : CrudAppService<
 		_contractCache = contractCache;
 	}
 
-	public override async Task<LeaveTypeDto> CreateAsync(CreateLeaveTypeDto input)
+	public override Task<LeaveTypeDto> CreateAsync(CreateLeaveTypeDto input)
 	{
-		// Note: This method is kept for backward compatibility
-		// Use CreateLeaveTypeAsync for new contract-based operations
-		throw new UserFriendlyException("Please use the new CreateLeaveTypeAsync method with mediumStageId");
+		throw new UserFriendlyException("Please use CreateLeaveTypeAsync with academicYearId.");
 	}
 
 	public override async Task<LeaveTypeDto> UpdateAsync(Guid id, UpdateLeaveTypeDto input)
@@ -67,7 +60,7 @@ public class LeaveTypeAppService : CrudAppService<
 		await _leaveTypeManager.UpdateAsync(leaveType, input.Type, input.Color, input.Description);
 		await Repository.UpdateAsync(leaveType, autoSave: true);
 		await ClearCacheAsync();
-		await ClearContractCacheAsync(leaveType.EducationMediumStageId);
+		await ClearContractCacheAsync(leaveType.AcademicYearId);
 		return ObjectMapper.Map<LeaveType, LeaveTypeDto>(leaveType);
 	}
 
@@ -77,25 +70,16 @@ public class LeaveTypeAppService : CrudAppService<
 		leaveType.Deactivate();
 		await Repository.UpdateAsync(leaveType, autoSave: true);
 		await ClearCacheAsync();
+		await ClearContractCacheAsync(leaveType.AcademicYearId);
 	}
 
 	public override async Task<PagedResultDto<LeaveTypeDto>> GetListAsync(PagedAndSortedResultRequestDto input)
 	{
 		var queryable = await Repository.GetQueryableAsync();
-
-		// Apply sorting
 		var sorting = input.Sorting ?? "Type ASC";
 		queryable = ApplySorting(queryable, sorting);
-
-		// Get total count
 		var totalCount = await AsyncExecuter.CountAsync(queryable);
-
-		// Get items
-		var items = await AsyncExecuter.ToListAsync(
-			queryable
-				.Skip(input.SkipCount)
-				.Take(input.MaxResultCount)
-		);
+		var items = await AsyncExecuter.ToListAsync(queryable.Skip(input.SkipCount).Take(input.MaxResultCount));
 
 		return new PagedResultDto<LeaveTypeDto>(
 			totalCount,
@@ -114,13 +98,8 @@ public class LeaveTypeAppService : CrudAppService<
 
 		var queryable = await Repository.GetQueryableAsync();
 		var query = queryable.Where(x => x.IsActive);
-
 		var totalCount = await AsyncExecuter.CountAsync(query);
-		var items = await AsyncExecuter.ToListAsync(
-			query.OrderBy(x => x.Type)
-				.Skip(input.SkipCount)
-				.Take(input.MaxResultCount)
-		);
+		var items = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.Type).Skip(input.SkipCount).Take(input.MaxResultCount));
 
 		var result = new PagedResultDto<LeaveTypeDto>(
 			totalCount,
@@ -130,116 +109,83 @@ public class LeaveTypeAppService : CrudAppService<
 		await _cache.SetAsync(
 			activeCacheKey,
 			result,
-			new DistributedCacheEntryOptions
-			{
-				AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24)
-			}
+			new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24) }
 		);
 
 		return result;
 	}
 
-	/// <summary>
-	/// Get paginated leave types for an organization (matches OpenAPI contract)
-	/// </summary>
-	public async Task<LeaveTypeListResponse> GetListByMediumStageIdAsync(
-		Guid mediumStageId,
+	public async Task<LeaveTypeListResponse> GetListByAcademicYearIdAsync(
+		Guid academicYearId,
 		int page,
 		int pageSize,
+		string? search = null,
 		CancellationToken cancellationToken = default)
 	{
-		Check.NotNull(mediumStageId, nameof(mediumStageId));
+		Check.NotNull(academicYearId, nameof(academicYearId));
 		Check.Range(page, nameof(page), 1, int.MaxValue);
 		Check.Range(pageSize, nameof(pageSize), 1, 100);
 
-		var cacheKey = GetContractCacheKey(mediumStageId, page, pageSize);
+		var cacheKey = GetContractCacheKey(academicYearId, page, pageSize, search);
 		var cached = await _contractCache.GetAsync(cacheKey, token: cancellationToken);
 		if (cached != null)
 		{
-			Logger.LogDebug("Cache hit for leave types. Key: {CacheKey}", cacheKey);
 			return cached;
 		}
 
 		var skipCount = (page - 1) * pageSize;
+		var items = await _leaveTypeRepository.GetListByAcademicYearIdAsync(
+			academicYearId,
+			skipCount,
+			pageSize,
+			sorting: "Type ASC",
+			search: search,
+			includeInactive: false,
+			cancellationToken: cancellationToken);
 
-		Logger.LogDebug(
-			"Fetching leave types. MediumStageId: {MediumStageId}, Page: {Page}, PageSize: {PageSize}, Skip: {Skip}",
-			mediumStageId, page, pageSize, skipCount);
+		var totalCount = await _leaveTypeRepository.GetCountByAcademicYearIdAsync(
+			academicYearId,
+			search: search,
+			includeInactive: false,
+			cancellationToken: cancellationToken);
 
-		try
+		var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
+		var response = new LeaveTypeListResponse
 		{
-			var items = await _leaveTypeRepository.GetListByMediumStageIdAsync(
-				mediumStageId,
-				skipCount,
-				pageSize,
-				sorting: "Type ASC",
-				includeInactive: false,
-				cancellationToken
-			);
-
-			var totalCount = await _leaveTypeRepository.GetCountByMediumStageIdAsync(
-				mediumStageId,
-				includeInactive: false,
-				cancellationToken
-			);
-
-			Logger.LogDebug(
-				"Found {Count} leave types out of {Total} total for MediumStageId: {MediumStageId}",
-				items.Count, totalCount, mediumStageId);
-
-			var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
-
-			var response = new LeaveTypeListResponse
+			TotalCount = (int)totalCount,
+			CurrentPage = page,
+			PageSize = pageSize,
+			TotalPages = Math.Max(1, totalPages),
+			Items = items.Select(lt => new LeaveTypeItem
 			{
-				TotalCount = (int)totalCount,
-				CurrentPage = page,
-				PageSize = pageSize,
-				TotalPages = Math.Max(1, totalPages),
-				Items = items.Select(lt => new LeaveTypeItem
-				{
-					Id = lt.Id,
-					Name = lt.Type,
-					Description = lt.Description,
-					Color = lt.Color
-				}).ToList()
-			};
+				Id = lt.Id,
+				Name = lt.Type,
+				Description = lt.Description,
+				Color = lt.Color
+			}).ToList()
+		};
 
-			await _contractCache.SetAsync(
-				cacheKey,
-				response,
-				new DistributedCacheEntryOptions
-				{
-					AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24)
-				},
-				token: cancellationToken
-			);
+		await _contractCache.SetAsync(
+			cacheKey,
+			response,
+			new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24) },
+			token: cancellationToken);
 
-			return response;
-		}
-		catch (Exception ex)
-		{
-			Logger.LogError(ex,
-				"Failed to fetch leave types for MediumStageId: {MediumStageId}, Page: {Page}, PageSize: {PageSize}",
-				mediumStageId, page, pageSize);
-			throw;
-		}
+		return response;
 	}
 
-	/// <summary>
-	/// Create a leave type (matches OpenAPI contract)
-	/// </summary>
-	public async Task<LeaveTypeResponse> CreateLeaveTypeAsync(LeaveTypeCreateRequest input)
+	public async Task<LeaveTypeResponse> CreateLeaveTypeAsync(Guid academicYearId, LeaveTypeCreateRequest input)
 	{
 		var leaveType = await _leaveTypeManager.CreateAsync(
-			input.MediumStageId,
+			academicYearId,
 			input.Name,
 			input.Color,
-			input.Description
-		);
+			input.Description);
 
 		await Repository.InsertAsync(leaveType, autoSave: true);
 		await ClearCacheAsync();
-		await ClearContractCacheAsync(input.MediumStageId);
+		await ClearContractCacheAsync(academicYearId);
 
 		return new LeaveTypeResponse
 		{
@@ -250,14 +196,9 @@ public class LeaveTypeAppService : CrudAppService<
 		};
 	}
 
-	/// <summary>
-	/// Get leave type by ID (matches OpenAPI contract)
-	/// </summary>
 	public async Task<LeaveTypeResponse> GetLeaveTypeByIdAsync(Guid leaveTypeId)
 	{
-		// Repository.GetAsync throws EntityNotFoundException if not found
 		var leaveType = await Repository.GetAsync(leaveTypeId);
-
 		return new LeaveTypeResponse
 		{
 			Id = leaveType.Id,
@@ -267,23 +208,17 @@ public class LeaveTypeAppService : CrudAppService<
 		};
 	}
 
-	/// <summary>
-	/// Update a leave type (matches OpenAPI contract)
-	/// </summary>
 	public async Task<LeaveTypeResponse> UpdateLeaveTypeAsync(Guid leaveTypeId, LeaveTypeUpdateRequest input)
 	{
-		// Repository.GetAsync throws EntityNotFoundException if not found
 		var leaveType = await Repository.GetAsync(leaveTypeId);
-
-		// Apply partial updates - only update fields that are provided
 		var newType = input.Name ?? leaveType.Type;
 		var newColor = input.Color ?? leaveType.Color;
-		var newDescription = input.Description; // Can be null to clear
+		var newDescription = input.Description;
 
 		await _leaveTypeManager.UpdateAsync(leaveType, newType, newColor, newDescription);
 		await Repository.UpdateAsync(leaveType, autoSave: true);
 		await ClearCacheAsync();
-		await ClearContractCacheAsync(leaveType.EducationMediumStageId);
+		await ClearContractCacheAsync(leaveType.AcademicYearId);
 
 		return new LeaveTypeResponse
 		{
@@ -294,59 +229,45 @@ public class LeaveTypeAppService : CrudAppService<
 		};
 	}
 
-	/// <summary>
-	/// Delete (deactivate) a leave type (matches OpenAPI contract)
-	/// </summary>
 	public async Task<LeaveTypeDeleteResponse> DeleteLeaveTypeAsync(Guid leaveTypeId)
 	{
-		// Repository.GetAsync throws EntityNotFoundException if not found
 		var leaveType = await Repository.GetAsync(leaveTypeId);
-
 		leaveType.Deactivate();
 		await Repository.UpdateAsync(leaveType, autoSave: true);
 		await ClearCacheAsync();
-		await ClearContractCacheAsync(leaveType.EducationMediumStageId);
+		await ClearContractCacheAsync(leaveType.AcademicYearId);
 
-		return new LeaveTypeDeleteResponse
-		{
-			Id = leaveTypeId,
-			Message = "Leave type deleted successfully"
-		};
+		return new LeaveTypeDeleteResponse { Id = leaveTypeId, Message = "Leave type deleted successfully" };
 	}
 
 	private async Task ClearCacheAsync()
 	{
-		// Clear cache by removing common pagination combinations
-		var baseCacheKey = GetBaseCacheKey();
 		var cacheKeysToRemove = new List<string>();
-
 		int[] commonPageSizes = { 10, 25, 50, 100 };
-		int maxPages = 10;
+		const int maxPages = 10;
 
 		foreach (var pageSize in commonPageSizes)
 		{
 			for (int page = 0; page < maxPages; page++)
 			{
-				int skipCount = page * pageSize;
-				cacheKeysToRemove.Add(GetActiveCacheKey(skipCount, pageSize));
+				cacheKeysToRemove.Add(GetActiveCacheKey(page * pageSize, pageSize));
 			}
 		}
 
 		await _cache.RemoveManyAsync(cacheKeysToRemove);
 	}
 
-	private async Task ClearContractCacheAsync(Guid mediumStageId)
+	private async Task ClearContractCacheAsync(Guid academicYearId)
 	{
-		// Clear contract cache for the specific organization
 		var cacheKeysToRemove = new List<string>();
 		int[] commonPageSizes = { 10, 25, 50, 100 };
-		int maxPages = 10;
+		const int maxPages = 10;
 
 		foreach (var pageSize in commonPageSizes)
 		{
 			for (int page = 1; page <= maxPages; page++)
 			{
-				cacheKeysToRemove.Add(GetContractCacheKey(mediumStageId, page, pageSize));
+				cacheKeysToRemove.Add(GetContractCacheKey(academicYearId, page, pageSize, null));
 			}
 		}
 
@@ -362,44 +283,32 @@ public class LeaveTypeAppService : CrudAppService<
 
 		var sortingParts = sorting.Split(',');
 		IOrderedQueryable<LeaveType>? orderedQueryable = null;
-		bool isFirstSort = true;
+		var isFirstSort = true;
 
 		foreach (var sortPart in sortingParts)
 		{
 			var parts = sortPart.Trim().Split(' ');
 			var property = parts[0];
-			var direction = parts.Length > 1 ? parts[1].ToUpper() : "ASC";
+			var direction = parts.Length > 1 ? parts[1].ToUpperInvariant() : "ASC";
 
 			if (isFirstSort)
 			{
-				orderedQueryable = property.ToLower() switch
+				orderedQueryable = property.ToLowerInvariant() switch
 				{
-					"type" => direction == "DESC"
-						? queryable.OrderByDescending(x => x.Type)
-						: queryable.OrderBy(x => x.Type),
-					"color" => direction == "DESC"
-						? queryable.OrderByDescending(x => x.Color)
-						: queryable.OrderBy(x => x.Color),
-					"isactive" => direction == "DESC"
-						? queryable.OrderByDescending(x => x.IsActive)
-						: queryable.OrderBy(x => x.IsActive),
+					"type" => direction == "DESC" ? queryable.OrderByDescending(x => x.Type) : queryable.OrderBy(x => x.Type),
+					"color" => direction == "DESC" ? queryable.OrderByDescending(x => x.Color) : queryable.OrderBy(x => x.Color),
+					"isactive" => direction == "DESC" ? queryable.OrderByDescending(x => x.IsActive) : queryable.OrderBy(x => x.IsActive),
 					_ => queryable.OrderBy(x => x.Type)
 				};
 				isFirstSort = false;
 			}
 			else
 			{
-				orderedQueryable = property.ToLower() switch
+				orderedQueryable = property.ToLowerInvariant() switch
 				{
-					"type" => direction == "DESC"
-						? orderedQueryable!.ThenByDescending(x => x.Type)
-						: orderedQueryable!.ThenBy(x => x.Type),
-					"color" => direction == "DESC"
-						? orderedQueryable!.ThenByDescending(x => x.Color)
-						: orderedQueryable!.ThenBy(x => x.Color),
-					"isactive" => direction == "DESC"
-						? orderedQueryable!.ThenByDescending(x => x.IsActive)
-						: orderedQueryable!.ThenBy(x => x.IsActive),
+					"type" => direction == "DESC" ? orderedQueryable!.ThenByDescending(x => x.Type) : orderedQueryable!.ThenBy(x => x.Type),
+					"color" => direction == "DESC" ? orderedQueryable!.ThenByDescending(x => x.Color) : orderedQueryable!.ThenBy(x => x.Color),
+					"isactive" => direction == "DESC" ? orderedQueryable!.ThenByDescending(x => x.IsActive) : orderedQueryable!.ThenBy(x => x.IsActive),
 					_ => orderedQueryable!.ThenBy(x => x.Type)
 				};
 			}

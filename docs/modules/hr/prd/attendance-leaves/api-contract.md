@@ -2,349 +2,193 @@
 
 ## Authentication
 
-All endpoints require Bearer token + `__tenant` header. All controllers use `[Authorize]`.
+All endpoints require:
+- `Authorization: Bearer <token>`
+- `__tenant: <tenant-id>`
+
+All controllers are `[Authorize]`.
 
 ---
 
-## Endpoints Overview
+## Endpoint Overview
 
-### Leave Management (`api/leave-management`)
+### Leave Types (`/api/hr-leave-types`)
 
 | Method | Route | Description |
-|--------|-------|-------------|
-| GET | `/api/leave-management` | List leave requests (academic year + month-year + optional search, paginated) |
-| GET | `/api/leave-management/{id}` | Get leave request details (`id` = aggregate Guid) |
-| POST | `/api/leave-management` | Create leave request (multipart; `academicYearId` query) |
-| PATCH | `/api/leave-management/{id}/approve` | Approve pending/reviewed leave |
-| PATCH | `/api/leave-management/{id}/reject` | Reject pending/reviewed leave (remarks required) |
-| DELETE | `/api/leave-management/{id}` | Cancel leave request (employee owner; Pending or Reviewed) |
-| GET | `/api/leave-management/{id}/attachment` | Attachment metadata + bytes (JSON DTO) |
-| GET | `/api/leave-management/{id}/attachment/download` | Attachment as file download |
+|---|---|---|
+| GET | `/api/hr-leave-types` | List leave types by academic year, with pagination + search |
+| GET | `/api/hr-leave-types/{id}` | Get leave type by id |
+| POST | `/api/hr-leave-types?academicYearId={id}` | Create leave type |
+| PUT | `/api/hr-leave-types/{id}` | Update leave type |
+| DELETE | `/api/hr-leave-types/{id}` | Soft-delete leave type |
 
-### Leave Types (`api/leave-types`)
+### Leave Policies (`/api/leave-policies`)
 
 | Method | Route | Description |
-|--------|-------|-------------|
-| GET | `/api/leave-types` | List leave types |
-| GET | `/api/leave-types/{leaveTypeId}` | Get leave type |
-| POST | `/api/leave-types?mediumStageId={id}` | Create leave type |
-| PUT | `/api/leave-types/{leaveTypeId}` | Update leave type |
-| DELETE | `/api/leave-types/{leaveTypeId}` | Delete leave type |
+|---|---|---|
+| GET | `/api/leave-policies` | List policies by academic year, with pagination + search |
+| GET | `/api/leave-policies/{id}` | Get leave policy detail by id |
+| POST | `/api/leave-policies?academicYearId={id}` | Create leave policy |
+| PUT | `/api/leave-policies/{id}` | Update leave policy |
+| DELETE | `/api/leave-policies/{id}` | Soft-delete leave policy |
 
-### Leave Policies (`api/leave-policies`)
-
-| Method | Route | Description |
-|--------|-------|-------------|
-| GET | `/api/leave-policies` | List leave policies |
-| POST | `/api/leave-policies?mediumStageId={id}` | Create leave policy |
-| PUT | `/api/leave-policies/{policyId}` | Update leave policy |
-| DELETE | `/api/leave-policies/{policyId}` | Delete leave policy |
-
-### Attendance Tracking (`api/attendance-tracking`)
+### Attendance Configuration (`/api/attendance/configuration`)
 
 | Method | Route | Description |
-|--------|-------|-------------|
-| GET | `/api/attendance-tracking/date-wise` | Attendance by date |
-| GET | `/api/attendance-tracking/employee-wise` | Attendance by employee |
+|---|---|---|
+| POST | `/api/attendance/configuration?academicYearId={id}` | Create or update attendance configuration (upsert) |
 
-### Notifications (`api/attendance/notifications`)
-
-| Method | Route | Description |
-|--------|-------|-------------|
-| GET | `/api/attendance/notifications` | List notification history |
-| GET | `/api/attendance/notifications/{id}` | Get notification detail |
-
-### Automated Notifications (`api/attendance/automated-notifications`)
+### Attendance Tracking (`/api/attendance-tracking`)
 
 | Method | Route | Description |
-|--------|-------|-------------|
-| GET | `/api/attendance/automated-notifications` | List settings |
-| GET | `/api/attendance/automated-notifications/{id}` | Get setting |
-| POST | `/api/attendance/automated-notifications` | Create setting |
-| PUT | `/api/attendance/automated-notifications/{id}` | Update setting |
-| DELETE | `/api/attendance/automated-notifications/{id}` | Delete setting |
+|---|---|---|
+| GET | `/api/attendance-tracking/date-wise` | Attendance by date with status + scope filters |
+| GET | `/api/attendance-tracking/employee-wise` | Attendance by employee/date-range with paging |
 
 ---
 
-## Endpoint Details
+## Leave Types Contract
 
-### GET /api/leave-management
+### GET `/api/hr-leave-types`
+Query:
+- `academicYearId` (Guid, required)
+- `page` (int, default `1`)
+- `pageSize` (int, default `10`)
+- `search` (string, optional)
 
-**Query params:**
+Response `200`: `LeaveTypeListResponse`
 
-| Param | Type | Required | Default | Constraints |
-|-------|------|----------|---------|-------------|
-| academicYearId | Guid | yes | | Must exist |
-| month-year | DateTime (ISO 8601) | yes | | Calendar month/year taken from this instant; must intersect academic year |
-| search | string | no | | Substring match on employee code / name parts / description |
-| page | int | no | 1 | >= 1 |
-| pageSize | int | no | 10 | 10-100 |
+### POST `/api/hr-leave-types`
+Query:
+- `academicYearId` (Guid, required)
+Body:
+- `name` (required)
+- `description` (optional)
+- `color` (hex string, required)
 
-**Response (200):**
+Response `201`: `LeaveTypeResponse`
 
-```
-LeaveManagementListResponse {
-  totalCount: int
-  currentPage: int
-  pageSize: int
-  totalPages: int
-  items: [{
-    id: Guid                     // aggregate ID
-    name: string
-    employeeIdentifier: string  // employee code
-    leaveType: string
-    startDate: DateTime
-    endDate: DateTime
-    totalDays: int
-    mediumStageName: string // from leave policy’s education medium stage
-    description: string
-    remarks: string?
-    status: string               // uppercased enum name
-  }]
-}
-```
-
-**Notes:** List includes leave requests whose **start date** falls in the filtered calendar month after intersecting that month with the academic year’s `[StartDate, EndDate]`. On SQLite (unit tests), paging is evaluated in-process in the repository; on PostgreSQL the same filter runs in SQL.
+### DELETE `/api/hr-leave-types/{id}`
+Behavior:
+- Soft delete (`IsActive=false`), contract response remains:
+`{ id, message }`
 
 ---
 
-### GET /api/leave-management/{id}
+## Leave Policies Contract
 
-**Path params:** `id` — `Guid` (aggregate id).
+### POST `/api/leave-policies`
+Query:
+- `academicYearId` (Guid, required)
 
-**Response (200):**
+Body:
+- `policyTitle` (string, required)
+- `leaveType` (Guid, required)
+- `accrualPolicyType` (`Monthly|Yearly`, required)
+- `leaveCount` (int, required)
+- `paidType` (`Paid|Unpaid`, required)
+- `carryForward` (bool, required)
+- `encashmentAllowed` (bool, required)
+- `encashmentTiming` (`next_payroll|end_of_year`, required if `encashmentAllowed=true`)
+- `requiresApproval` (bool, required)
+- `description` (string, optional)
 
-```
-LeaveRequestDetailsResponse {
-  id: Guid
-  mediumStageId: Guid
-  mediumStageName: string
-  employeeId: Guid
-  employeeName: string
-  employeeCode: string
-  leaveTypeId: Guid             // LeaveType aggregate id (from policy)
-  leaveType: string
-  startDate: DateTime
-  endDate: DateTime
-  totalDays: int
-  description: string
-  attachmentUrl: string?
-  remarks: string?
-  status: string
-}
-```
+Response `201`: `LeavePolicyResponse`
 
-**Status codes:** 200, 404
+### GET `/api/leave-policies/{id}`
+Response `200`: `LeavePolicyDetailResponse`
+- includes nested `leaveType: { id, name }`
 
----
+### GET `/api/leave-policies`
+Query:
+- `academicYearId` (Guid, required)
+- `page` / `pageSize`
+- `search` (optional)
 
-### PATCH /api/leave-management/{id}/approve
-
-**Authorization (business rule):** Same reporting-manager chain as reject; see [prd.md §1a](./prd.md#1a-leave-approval-reporting-chain).
-
-**Request body (optional):** `{ "remarks": "..." }` (optional; not persisted on approval today).
-
-**Response (200):** `LeaveActionResponse` — `{ id: Guid, status: string, message: string }`
-
-**Errors:** `HR:Leave:020020`, `HR:Leave:020021`; invalid state `HR:Leave:020025`; terminal conflict `HR:Leave:020024` (HTTP409 via middleware).
+Response `200`: paginated `LeavePolicyListResponse`
 
 ---
 
-### PATCH /api/leave-management/{id}/reject
+## Attendance Configuration Contract
 
-**Request body:** `{ "remarks": "..." }` (required).
+### POST `/api/attendance/configuration`
+Query:
+- `academicYearId` (Guid, required)
 
-**Response (200):** `LeaveActionResponse`
+Body:
+- `dailyRules.hoursBasedPayPercentage` (number, required)
+- `lateEarlyRules.graceTime` (number, required)
+- `lateEarlyRules.maxLateAllowedPerMonth` (number, required)
+- `lateEarlyRules.penaltyType` (`none|deduct_half_day|deduct_full_day`, required)
+- `overtime.enabled` (bool, required)
+- `overtime.rate` (`1.5x|2.0x|flat`, required when `enabled=true`)
+- `overtime.minOvertimeMinutes` (number, required when `enabled=true`)
 
-**Errors:** Same family as approve; remarks required (validation /400).
-
----
-
-### DELETE /api/leave-management/{id}
-
-Cancels a leave request. Only the owning employee can cancel, for **Pending** or **Reviewed** status (domain `Cancelled` transition).
-
-**Response (200):** `{ id: Guid, message: "Leave request cancelled successfully" }`
-
-**Error codes:** `LeaveNotCancellable`, `LeaveDeleteOwnOnly`, `LeaveAlreadyCancelled` (HTTP 409 for already cancelled).
-
----
-
-### POST /api/leave-management
-
-Creates a leave request with optional file attachment.
-
-**Query:** `academicYearId` (Guid, required) — start/end dates must fall within this academic year.
-
-**Content-Type:** `multipart/form-data`
-
-**Form fields:**
-
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| leaveTypeId | Guid | yes | Resolves to **leave policy** id in current validation pipeline |
-| startDate | DateTime | yes | must be >= today; within academic year |
-| endDate | DateTime | yes | must be >= startDate; within academic year |
-| reason | string | yes | 5-500 chars |
-| attachment | IFormFile | no | optional upload field name bound via `EmployeeLeaveCreateUploadRequest.File`; see file validation error codes |
-
-**Response (201):** `{ id: Guid, status: string }`
+Response `200`:
+- `{ "success": true, "message": "Attendance configuration saved successfully" }`
 
 ---
 
-### POST /api/leave-types?mediumStageId={id}
+## Attendance Tracking Contract
 
-**Request body:**
+### GET `/api/attendance-tracking/date-wise`
+Query:
+- `attendanceDate` (string, required; ISO date-time or `dd-MM-yyyy`)
+- `status` (string, required; `PRESENT|ABSENT|HALF_DAY|REJECTED_LEAVE`)
+- `page` (int, default `1`)
+- `pageSize` (int, default `10`, range `10-100`)
+- `educationMediumStageId` (Guid, required)
+- `search` (string, optional)
 
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| name | string | yes | 1-100 chars |
-| description | string | no | max 500 |
-| color | string | yes | `^#[A-Fa-f0-9]{6}$` |
+Response `200`: `AttendanceDateWiseResponse`
+- Paging: `totalCount`, `currentPage`, `pageSize`, `totalPages`
+- Summary: `{ present, absent, halfDay, rejectedLeave }`
+- Item fields: `employeeId`, `fullName`, `employeeIdentifier`, `contactNo`, `inTime?`, `outTime?`, `hoursWorked?`, `remarks?`, `status`
+- `inTime` and `outTime` are ISO 8601 date-time with offset.
 
-**Response (201):** `{ id: Guid, name, description?, color }`
+### GET `/api/attendance-tracking/employee-wise`
+Query:
+- `employeeId` (Guid, required)
+- `startDate` (string, required; ISO date-time or `dd-MM-yyyy`)
+- `endDate` (string, required; ISO date-time or `dd-MM-yyyy`)
+- `status` (string, optional; `PRESENT|ABSENT|HALF_DAY|REJECTED_LEAVE`)
+- `page` (int, default `1`)
+- `pageSize` (int, default `10`, range `10-100`)
+- `educationMediumStageId` (Guid, required)
+- `search` (string, optional)
+
+Response `200`: `AttendanceEmployeeWiseResponse`
+- Paging: `totalCount`, `currentPage`, `pageSize`, `totalPages`
+- Summary: `{ present, absent, halfDay, rejectedLeave }`
+- Item fields: `date`, `day`, `inTime?`, `outTime?`, `hoursWorked?`, `description?`, `status`
+- `date`, `inTime`, and `outTime` are ISO 8601 date-time with offset.
 
 ---
 
-### PUT /api/leave-types/{leaveTypeId}
+## Error Envelope (Global)
 
-**Request body:**
+All `/api/*` errors must use:
 
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| name | string | no | 1-100 chars |
-| description | string | no | max 500 |
-| color | string | no | `^#[A-Fa-f0-9]{6}$` |
-
-**Response (200):** `{ id, name, description?, color }`
-
----
-
-### POST /api/leave-policies?mediumStageId={id}
-
-**Request body:**
-
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| policyTitle | string | yes | 1-200 chars |
-| leaveType | Guid | yes | Reference to leave type |
-| maxLeavePerYear | int | yes | 0-365 |
-| paidType | string | yes | "Paid" or "Unpaid" |
-| carryForward | bool | yes | |
-| encashmentAllowed | bool | yes | |
-| requiresApproval | bool | yes | |
-| description | string | no | max 500 |
-
-**Response (201):**
-
-```
+```json
 {
-  id: string
-  policyTitle: string
-  leaveType: Guid
-  maxLeavePerYear: int
-  paidType: string
-  carryForward: bool
-  encashmentAllowed: bool
-  requiresApproval: bool
-  description: string?
-  createdAt: DateTime
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed",
+    "fields": {
+      "field": "reason"
+    }
+  }
 }
 ```
 
----
-
-### GET /api/attendance-tracking/date-wise
-
-**Query params:**
-
-| Param | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| attendanceDate | string | yes | DD-MM-YYYY or ISO |
-| status | int | no | 0=PRESENT, 1=ABSENT, 2=HALF_DAY, 3=REJECTED_LEAVE |
-| page | int | no | >= 1 |
-| pageSize | int | no | 10-100 |
-
-**Response (200):**
-
-```
-AttendanceDateWiseResponse {
-  totalCount, currentPage, pageSize, totalPages: int
-  summary: { all, present, absent, halfDay, rejectedLeave: int }
-  items: [{
-    employeeId: Guid
-    fullName: string
-    employeeIdentifier: string
-    contactNo: string
-    inTime: string?              // HH:mm
-    outTime: string?
-    hoursWorked: string?
-    remarks: string?
-    status: string
-  }]
-}
-```
-
----
-
-### GET /api/attendance-tracking/employee-wise
-
-**Query params:**
-
-| Param | Type | Required |
-|-------|------|----------|
-| employeeId | Guid | yes |
-| startDate | string | yes (DD-MM-YYYY) |
-| endDate | string | yes (DD-MM-YYYY) |
-| status | int | no |
-
-**Response (200):**
-
-```
-AttendanceEmployeeWiseResponse {
-  summary: { all, present, absent, halfDay, rejectedLeave: int }
-  items: [{
-    date: string                 // DD-MM-YYYY
-    day: string                  // e.g., "Monday"
-    inTime: string?              // HH:mm AM/PM
-    outTime: string?
-    hoursWorked: string?         // e.g., "09H 00M"
-    description: string?
-    status: string
-  }]
-}
-```
-
----
-
-### POST /api/attendance/automated-notifications
-
-**Request body:**
-
-```
-AutomatedNotificationsSettingsDto {
-  employeeAttendanceStatusType: int    // 0=Present, 1=HalfDayLeave, 2=FullDayLeave
-  notificationMethods: int[]           // 0=Email, 1=SMS, 2=PushNotification
-}
-```
-
-**Response (201):** same shape with `id`
-
----
-
-### GET /api/attendance/notifications
-
-**Query params:** ABP standard `PagedAndSortedResultRequestDto` (skipCount, maxResultCount, sorting)
-
-**Response (200):** `PagedResultDto<NotificationInfoDto>`
-
-```
-NotificationInfoDto {
-  id: Guid
-  receiverName: string
-  notificationTime: DateTimeOffset
-  receiverRole: string
-  notificationType: int          // EmployeeAttendanceStatusType
-  isDelivered: bool
-}
-```
+Standard `error.code` values:
+- `VALIDATION_ERROR`
+- `INVALID_REQUEST`
+- `UNAUTHORIZED`
+- `FORBIDDEN`
+- `RESOURCE_NOT_FOUND`
+- `DUPLICATE_RESOURCE`
+- `INVALID_STATE_TRANSITION`
+- `RATE_LIMIT_EXCEEDED`
+- `INTERNAL_SERVER_ERROR`

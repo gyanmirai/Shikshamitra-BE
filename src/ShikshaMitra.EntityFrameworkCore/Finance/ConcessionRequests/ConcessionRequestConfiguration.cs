@@ -32,6 +32,12 @@ public class ConcessionRequestConfiguration : IEntityTypeConfiguration<Concessio
             .HasForeignKey(m => m.ConcessionRequestId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // One-to-many: ConcessionRequest → ConcessionRequestDocuments
+        builder.HasMany(x => x.ConcessionRequestDocuments)
+            .WithOne()
+            .HasForeignKey(d => d.ConcessionRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         // Indexes
         builder.HasIndex(x => x.StudentId)
             .HasDatabaseName("IX_ConcessionRequests_StudentId");

@@ -47,6 +47,7 @@ public partial class ShikshaMitraDbContext
 	// Finance — Concession Requests
 	// ───────────────────────────────────────────────
 	public DbSet<ConcessionRequest> ConcessionRequests { get; set; }
+	public DbSet<ConcessionRequestDocument> ConcessionRequestDocuments { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Transactions

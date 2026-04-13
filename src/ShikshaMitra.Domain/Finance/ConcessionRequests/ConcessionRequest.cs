@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -28,6 +29,9 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     public virtual ICollection<ConcessionFeeHeadMapping> ConcessionFeeHeadMappings { get; private set; }
         = new List<ConcessionFeeHeadMapping>();
+
+    public virtual ICollection<ConcessionRequestDocument> ConcessionRequestDocuments { get; private set; }
+        = new List<ConcessionRequestDocument>();
 
     protected ConcessionRequest()
     {
@@ -126,6 +130,114 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         foreach (var mapping in mappings)
         {
             ConcessionFeeHeadMappings.Add(mapping);
+        }
+    }
+
+    /// <summary>
+    /// Step 4 — persists discount values for every fee head of this request.
+    ///
+    /// <para>
+    /// Invariants enforced here:
+    /// <list type="bullet">
+    ///   <item><description>Request must be in <b>Draft</b> status.</description></item>
+    ///   <item><description>Every existing fee-head mapping must have a corresponding entry
+    ///   in <paramref name="values"/> (completeness check).</description></item>
+    ///   <item><description>No entry in <paramref name="values"/> may reference a fee head
+    ///   that is not already mapped to this request (prevents phantom entries).</description></item>
+    /// </list>
+    /// </para>
+    /// </summary>
+    /// <param name="values">
+    /// One <see cref="FeeHeadValueEntryInput"/> per mapped fee head.  The
+    /// <see cref="FeeHeadValueEntryInput.AnnualBaseAmount"/> is the pre-concession annual fee
+    /// amount sourced from the student's fee structure by the caller.
+    /// </param>
+    public void ApplyValueEntry(IReadOnlyList<FeeHeadValueEntryInput> values)
+    {
+        if (Status != ConcessionRequestStatus.Draft)
+        {
+            throw new BusinessException(ConcessionRequestErrorCodes.CannotUpdateNonDraft)
+                .WithData("RequestId", Id)
+                .WithData("Status", Status.ToString());
+        }
+
+        var valueByFeeHead = values.ToDictionary(v => v.FeeHeadId);
+
+        // Guard: every existing mapping must have a value entry
+        foreach (var mapping in ConcessionFeeHeadMappings)
+        {
+            if (!valueByFeeHead.ContainsKey(mapping.FeeHeadId))
+            {
+                throw new BusinessException(ConcessionRequestErrorCodes.FeeHeadMissingFromValueEntry)
+                    .WithData("FeeHeadId", mapping.FeeHeadId)
+                    .WithData("ConcessionTypeId", ConcessionTypeId)
+                    .WithData("ConcessionRequestId", Id);
+            }
+        }
+
+        // Guard: no entry may reference an unmapped fee head
+        var mappedFeeHeadIds = ConcessionFeeHeadMappings.Select(m => m.FeeHeadId).ToHashSet();
+        foreach (var entry in values)
+        {
+            if (!mappedFeeHeadIds.Contains(entry.FeeHeadId))
+            {
+                throw new BusinessException(ConcessionRequestErrorCodes.FeeHeadNotMappedToRequest)
+                    .WithData("FeeHeadId", entry.FeeHeadId)
+                    .WithData("ConcessionTypeId", ConcessionTypeId)
+                    .WithData("ConcessionRequestId", Id);
+            }
+        }
+
+        // Apply each update — ConcessionFeeHeadMapping.Update() recomputes derived amounts
+        foreach (var mapping in ConcessionFeeHeadMappings)
+        {
+            var entry = valueByFeeHead[mapping.FeeHeadId];
+            mapping.Update(
+                entry.AnnualBaseAmount,
+                entry.UserSpecifiedAmount,
+                entry.UserSpecifiedAmountType);
+        }
+    }
+
+    /// <summary>
+    /// Step 6 — Saves an optional free-text description against this request.
+    /// Only allowed while the request is in <b>Draft</b> status.
+    /// Passing <c>null</c> or an empty string clears any previously saved description.
+    /// </summary>
+    public void SetDescription(string? description)
+    {
+        if (Status != ConcessionRequestStatus.Draft)
+        {
+            throw new BusinessException(ConcessionRequestErrorCodes.CannotUpdateNonDraft)
+                .WithData("RequestId", Id)
+                .WithData("Status", Status.ToString());
+        }
+
+        Remarks = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+    }
+
+    /// <summary>
+    /// Step 5 — Full replacement of document uploads for this request.
+    ///
+    /// <para>
+    /// All previously saved documents are discarded and replaced by the supplied
+    /// <paramref name="documents"/> list. Only allowed while the request is in
+    /// <b>Draft</b> status.
+    /// </para>
+    /// </summary>
+    public void SetDocumentUploads(IEnumerable<ConcessionRequestDocument> documents)
+    {
+        if (Status != ConcessionRequestStatus.Draft)
+        {
+            throw new BusinessException(ConcessionRequestErrorCodes.CannotUploadDocumentsForNonDraft)
+                .WithData("RequestId", Id)
+                .WithData("Status", Status.ToString());
+        }
+
+        ConcessionRequestDocuments.Clear();
+        foreach (var doc in documents)
+        {
+            ConcessionRequestDocuments.Add(doc);
         }
     }
 }

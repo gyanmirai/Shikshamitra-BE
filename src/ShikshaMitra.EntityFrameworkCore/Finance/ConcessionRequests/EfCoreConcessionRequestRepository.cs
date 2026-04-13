@@ -66,4 +66,47 @@ public class EfCoreConcessionRequestRepository(
         return entity ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(
             typeof(ConcessionRequest), id);
     }
+
+    public async Task<List<ConcessionRequest>> GetDraftRequestsWithMappingsAsync(
+        Guid studentId,
+        IReadOnlyList<Guid> concessionTypeIds,
+        CancellationToken cancellationToken = default)
+    {
+        var dbSet = await GetDbSetAsync();
+
+        return await dbSet
+            .Include(r => r.ConcessionFeeHeadMappings)
+            .Where(r => r.StudentId == studentId
+                     && r.Status == ConcessionRequestStatus.Draft
+                     && concessionTypeIds.Contains(r.ConcessionTypeId))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<ConcessionRequest>> GetBatchWithMappingsAsync(
+        Guid studentId,
+        ConcessionRequestStatus status,
+        CancellationToken cancellationToken = default)
+    {
+        var dbSet = await GetDbSetAsync();
+
+        return await dbSet
+            .Include(r => r.ConcessionFeeHeadMappings)
+            .Where(r => r.StudentId == studentId && r.Status == status)
+            .OrderBy(r => r.CreationTime)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<ConcessionRequest>> GetBatchWithDocumentsAsync(
+        Guid studentId,
+        ConcessionRequestStatus status,
+        CancellationToken cancellationToken = default)
+    {
+        var dbSet = await GetDbSetAsync();
+
+        return await dbSet
+            .Include(r => r.ConcessionRequestDocuments)
+            .Where(r => r.StudentId == studentId && r.Status == status)
+            .OrderBy(r => r.CreationTime)
+            .ToListAsync(cancellationToken);
+    }
 }

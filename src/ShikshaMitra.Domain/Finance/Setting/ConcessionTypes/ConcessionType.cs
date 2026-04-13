@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.Setting.ConcessionTypes;
 using System;
 using System.Collections.Generic;
@@ -15,6 +16,12 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string Name { get; private set; }
 	public string? Description { get; private set; }
 
+	/// <summary>
+	/// Indicates whether this concession type applies as a percentage or a flat amount.
+	/// Nullable to remain compatible with concession types created before this field was introduced.
+	/// </summary>
+	public AmountType? DiscountType { get; private set; }
+
 	public virtual ICollection<ConcessionTypeDocument> ConcessionTypeDocuments { get; private set; } = new List<ConcessionTypeDocument>();
 
 	private ConcessionType()
@@ -28,23 +35,27 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid academicYearId,
 		string name,
 		string? description = null,
-		bool isActive = true
+		bool isActive = true,
+		AmountType? discountType = null
 	) : base(id)
 	{
 		TenantId = tenantId;
 		AcademicYearId = academicYearId;
 		Name = name;
 		Description = description;
+		DiscountType = discountType;
 		ConcessionTypeDocuments = new List<ConcessionTypeDocument>();
 	}
 
 	public void Update(
 		string name,
-		string? description
+		string? description,
+		AmountType? discountType = null
 	)
 	{
 		Name = name;
 		Description = description;
+		DiscountType = discountType;
 	}
 
 	public void AddDocument(string documentName, long documentSize, List<DocumentType> acceptedFormats)

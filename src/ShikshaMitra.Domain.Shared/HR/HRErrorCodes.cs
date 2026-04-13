@@ -84,6 +84,11 @@ public static class HRErrorCodes
 	public const string LeaveReportingManagerCycle = "HR:Leave:020021";
 	public const string LeaveAlreadyCancelled = "HR:Leave:020022";
 	public const string LeaveNotCancellable = "HR:Leave:020023";
+	public const string LeaveConflictTerminalState = "HR:Leave:020024";
+	public const string LeaveCannotActOnLeaveState = "HR:Leave:020025";
+	public const string LeaveInvalidMonthForAcademicYear = "HR:Leave:020026";
+	public const string LeaveAttachmentNotFound = "HR:Leave:020027";
+	public const string LeaveDatesOutsideAcademicYear = "HR:Leave:020028";
 
 	// Attendance — Validation
 	public const string AttendanceInvalidDateFormat = "HR:Attendance:020301";

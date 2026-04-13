@@ -12,11 +12,14 @@ All endpoints require Bearer token + `__tenant` header. All controllers use `[Au
 
 | Method | Route | Description |
 |--------|-------|-------------|
-| GET | `/api/leave-management` | List leave requests (paginated) |
-| GET | `/api/leave-management/{leaveRequestId}` | Get leave request details |
-| PUT | `/api/leave-management/{leaveRequestId}` | Update leave status |
-| DELETE | `/api/leave-management/{leaveRequestId}` | Cancel leave request |
-| POST | `/api/v1/leave-management` | Create leave request (v1, multipart) |
+| GET | `/api/leave-management` | List leave requests (academic year + month-year + optional search, paginated) |
+| GET | `/api/leave-management/{id}` | Get leave request details (`id` = aggregate Guid) |
+| POST | `/api/leave-management` | Create leave request (multipart; `academicYearId` query) |
+| PATCH | `/api/leave-management/{id}/approve` | Approve pending/reviewed leave |
+| PATCH | `/api/leave-management/{id}/reject` | Reject pending/reviewed leave (remarks required) |
+| DELETE | `/api/leave-management/{id}` | Cancel leave request (employee owner; Pending or Reviewed) |
+| GET | `/api/leave-management/{id}/attachment` | Attachment metadata + bytes (JSON DTO) |
+| GET | `/api/leave-management/{id}/attachment/download` | Attachment as file download |
 
 ### Leave Types (`api/leave-types`)
 
@@ -71,9 +74,9 @@ All endpoints require Bearer token + `__tenant` header. All controllers use `[Au
 
 | Param | Type | Required | Default | Constraints |
 |-------|------|----------|---------|-------------|
-| mediumStageId | Guid | yes | | |
-| month | int | no | | 1-12 |
-| year | int | no | | |
+| academicYearId | Guid | yes | | Must exist |
+| month-year | DateTime (ISO 8601) | yes | | Calendar month/year taken from this instant; must intersect academic year |
+| search | string | no | | Substring match on employee code / name parts / description |
 | page | int | no | 1 | >= 1 |
 | pageSize | int | no | 10 | 10-100 |
 
@@ -86,37 +89,40 @@ LeaveManagementListResponse {
   pageSize: int
   totalPages: int
   items: [{
-    id: int                      // public sequential ID
-    name: string                 // employee name
-    employeeCode: string
+    id: Guid                     // aggregate ID
+    name: string
+    employeeIdentifier: string  // employee code
     leaveType: string
     startDate: DateTime
     endDate: DateTime
     totalDays: int
-    organization: string
+    mediumStageName: string // from leave policy’s education medium stage
     description: string
     remarks: string?
-    status: string               // "Pending"/"Reviewed"/"Approved"/"Rejected"
+    status: string               // uppercased enum name
   }]
 }
 ```
 
+**Notes:** List includes leave requests whose **start date** falls in the filtered calendar month after intersecting that month with the academic year’s `[StartDate, EndDate]`. On SQLite (unit tests), paging is evaluated in-process in the repository; on PostgreSQL the same filter runs in SQL.
+
 ---
 
-### GET /api/leave-management/{leaveRequestId}
+### GET /api/leave-management/{id}
 
-**Path params:** `leaveRequestId` (string, parsed as int -- public sequential ID)
+**Path params:** `id` — `Guid` (aggregate id).
 
 **Response (200):**
 
 ```
 LeaveRequestDetailsResponse {
-  id: int
+  id: Guid
   mediumStageId: Guid
+  mediumStageName: string
   employeeId: Guid
   employeeName: string
   employeeCode: string
-  leaveTypeId: Guid
+  leaveTypeId: Guid             // LeaveType aggregate id (from policy)
   leaveType: string
   startDate: DateTime
   endDate: DateTime
@@ -125,45 +131,50 @@ LeaveRequestDetailsResponse {
   attachmentUrl: string?
   remarks: string?
   status: string
-  createdAt: DateTime
-  updatedAt: DateTime
 }
 ```
 
-**Status codes:** 200, 400 (invalid ID format), 404
+**Status codes:** 200, 404
 
 ---
 
-### PUT /api/leave-management/{leaveRequestId}
+### PATCH /api/leave-management/{id}/approve
 
-**Authorization (business rule):** The authenticated user must resolve to an `Employee` who appears in the leave requester’s **reporting-manager chain** (walk `ReportingManagerId` from the requester upward until null). The direct reporting manager may approve; if they are unavailable, **any ancestor manager** in that same chain may approve or reject instead. The requester must not approve their own request. **One** successful approve or reject from any eligible approver is sufficient (no sequential multi-step workflow in v1). Full spec: [prd.md §1a](./prd.md#1a-leave-approval-reporting-chain).
+**Authorization (business rule):** Same reporting-manager chain as reject; see [prd.md §1a](./prd.md#1a-leave-approval-reporting-chain).
 
-**Request body:**
+**Request body (optional):** `{ "remarks": "..." }` (optional; not persisted on approval today).
 
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| status | string | yes | "Pending", "Reviewed", "Approved", or "Rejected" |
-| remarks | string | conditional | Required when status = "Rejected" |
+**Response (200):** `LeaveActionResponse` — `{ id: Guid, status: string, message: string }`
 
-**Response (200):** `LeaveRequestDetailsResponse`
-
-**Errors:** `HR:Leave:020020` *LeaveApproverNotInReportingChain* — caller is not an approver in the requester’s chain above the requester (includes self-approval). `HR:Leave:020021` *LeaveReportingManagerCycle* — invalid/cyclic reporting hierarchy.
+**Errors:** `HR:Leave:020020`, `HR:Leave:020021`; invalid state `HR:Leave:020025`; terminal conflict `HR:Leave:020024` (HTTP409 via middleware).
 
 ---
 
-### DELETE /api/leave-management/{leaveRequestId}
+### PATCH /api/leave-management/{id}/reject
 
-Cancels a leave request. Only the owning employee can cancel, and only if status is Pending.
+**Request body:** `{ "remarks": "..." }` (required).
 
-**Response (200):** `{ id: int, message: "Leave request cancelled successfully" }`
+**Response (200):** `LeaveActionResponse`
 
-**Error codes:** `LeaveCancelApproved`, `LeaveCancelRejected`, `LeaveDeleteOwnOnly`
+**Errors:** Same family as approve; remarks required (validation /400).
 
 ---
 
-### POST /api/v1/leave-management
+### DELETE /api/leave-management/{id}
+
+Cancels a leave request. Only the owning employee can cancel, for **Pending** or **Reviewed** status (domain `Cancelled` transition).
+
+**Response (200):** `{ id: Guid, message: "Leave request cancelled successfully" }`
+
+**Error codes:** `LeaveNotCancellable`, `LeaveDeleteOwnOnly`, `LeaveAlreadyCancelled` (HTTP 409 for already cancelled).
+
+---
+
+### POST /api/leave-management
 
 Creates a leave request with optional file attachment.
+
+**Query:** `academicYearId` (Guid, required) — start/end dates must fall within this academic year.
 
 **Content-Type:** `multipart/form-data`
 
@@ -171,14 +182,13 @@ Creates a leave request with optional file attachment.
 
 | Field | Type | Required | Constraints |
 |-------|------|----------|-------------|
-| mediumStageId | Guid | yes | |
-| leaveTypeId | Guid | yes | |
-| startDate | DateTime | yes | must be >= today |
-| endDate | DateTime | yes | must be >= startDate |
+| leaveTypeId | Guid | yes | Resolves to **leave policy** id in current validation pipeline |
+| startDate | DateTime | yes | must be >= today; within academic year |
+| endDate | DateTime | yes | must be >= startDate; within academic year |
 | reason | string | yes | 5-500 chars |
-| file | IFormFile | no | see file validation error codes |
+| attachment | IFormFile | no | optional upload field name bound via `EmployeeLeaveCreateUploadRequest.File`; see file validation error codes |
 
-**Response (201):** `{ id: Guid, status: string, appliedAt: DateTime }`
+**Response (201):** `{ id: Guid, status: string }`
 
 ---
 

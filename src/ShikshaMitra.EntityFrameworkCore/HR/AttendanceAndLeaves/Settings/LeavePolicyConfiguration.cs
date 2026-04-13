@@ -73,5 +73,8 @@ public class LeavePolicyConfiguration : IEntityTypeConfiguration<LeavePolicy>
 
 		builder.HasIndex(x => x.LeaveTypeId)
 			.HasDatabaseName("IX_EmployeeLeavePolicies_LeaveTypeId");
+
+		builder.Navigation(x => x.LeaveType).AutoInclude();
+		builder.Navigation(x => x.EducationMediumStage).AutoInclude();
 	}
 }

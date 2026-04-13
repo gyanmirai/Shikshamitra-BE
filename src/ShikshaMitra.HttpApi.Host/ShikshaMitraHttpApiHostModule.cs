@@ -463,9 +463,8 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 		ConfigureSmtpPassword(context.ServiceProvider);
 
-		// 🔧 DEVELOPMENT TOGGLE: Comment this out to see raw ABP exception details
-		// Uncomment to use custom error formatting
-		// app.UseGlobalExceptionHandling();
+		// Custom error formatting for API endpoints - returns JSON instead of HTML
+		app.UseGlobalExceptionHandling();
 
 		if (env.IsDevelopment())
 		{

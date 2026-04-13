@@ -3,7 +3,7 @@ module: hr
 domain: attendance-leaves
 status: canonical
 source: ../raw/attendance-leaves-api.raw.2026-03-27.md
-updated_on: 2026-03-27
+updated_on: 2026-04-13
 owner: backend-team
 ---
 
@@ -41,4 +41,5 @@ Authorization: Bearer <token>
 ```
 
 ## Change log
+- 2026-04-13: Leave management contract aligned with Guid ids, academic-year list, PATCH approve/reject — see [api-contract.md](../../prd/attendance-leaves/api-contract.md).
 - 2026-03-27: Created canonical curated wrapper from raw contract export.

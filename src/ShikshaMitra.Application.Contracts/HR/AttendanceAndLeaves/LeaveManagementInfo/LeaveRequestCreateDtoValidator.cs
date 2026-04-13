@@ -14,7 +14,10 @@ public class LeaveRequestCreateDtoValidator : AbstractValidator<LeaveRequestCrea
 			.GreaterThanOrEqualTo(x => x.StartDate)
 			.WithMessage("End date must be on or after start date.");
 
-		RuleFor(x => x.Reason).NotEmpty().MaximumLength(1000)
-			.WithMessage("Reason is required and must not exceed 1000 characters.");
+		RuleFor(x => x.Reason)
+			.NotEmpty()
+			.MinimumLength(5)
+			.MaximumLength(500)
+			.WithMessage("Reason is required and must be between 5 and 500 characters.");
 	}
 }

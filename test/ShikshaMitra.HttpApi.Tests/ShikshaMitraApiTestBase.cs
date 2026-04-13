@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Students.Enrollment;
 namespace ShikshaMitra;
 
 /// <summary>
@@ -24,6 +25,10 @@ public abstract class ShikshaMitraApiTestBase
 
 		EmployeeTestHelper.DefaultRoleId = factory.SeededRoleId;
 		EmployeeTestHelper.DefaultShiftId = factory.SeededShiftId;
+
+		StudentEnrollmentTestHelper.DefaultAcademicMediumId = factory.SeededMediumId;
+		StudentEnrollmentTestHelper.DefaultStandardId = factory.SeededStandardId;
+		StudentEnrollmentTestHelper.DefaultDivisionId = factory.SeededDivisionId;
 	}
 
 	/// <summary>

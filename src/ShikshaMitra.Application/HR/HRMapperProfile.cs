@@ -61,7 +61,6 @@ public class HRMapperProfile : Profile
 		CreateMap<NotificationInfo, NotificationInfoDto>();
 
 		CreateMap<CustomAttendanceRule, CustomAttendanceRuleDto>();
-		CreateMap<CreateUpdateCustomAttendanceRuleDto, CustomAttendanceRule>();
 
 		#endregion
 

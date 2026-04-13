@@ -2,7 +2,7 @@ using FluentValidation;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
-public class CreateUpdateCustomAttendanceRuleDtoValidator : AbstractValidator<CustomAttendanceRuleDto>
+public class CreateUpdateCustomAttendanceRuleDtoValidator : AbstractValidator<CreateUpdateCustomAttendanceRuleDto>
 {
 	public CreateUpdateCustomAttendanceRuleDtoValidator()
 	{

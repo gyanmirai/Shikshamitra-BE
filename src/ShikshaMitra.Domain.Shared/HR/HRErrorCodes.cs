@@ -100,6 +100,9 @@ public static class HRErrorCodes
 	public const string LeaveFileContentMismatch = "HR:Leave:020107";
 	public const string LeaveFileInvalidAttachment = "HR:Leave:020108";
 
+	/// <summary>Tenant context is required (e.g. custom attendance rules are tenant-scoped).</summary>
+	public const string AttendanceRuleTenantRequired = "HR:Leave:020109";
+
 	// Attendance import
 	public const string AttendanceImportFileEmpty = "HR:Leave:020201";
 	public const string AttendanceImportInvalidExtension = "HR:Leave:020202";

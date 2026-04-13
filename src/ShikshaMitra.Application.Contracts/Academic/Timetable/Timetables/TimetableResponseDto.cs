@@ -1,0 +1,33 @@
+using System;
+using System.Collections.Generic;
+
+namespace ShikshaMitra.Academic.Timetable.Timetables;
+
+public class TimetableResponseDto
+{
+    public Dictionary<string, List<TimetableSlotResponseDto>> Days { get; set; } = [];
+}
+
+public class TimetableSlotResponseDto
+{
+    public int Sequence { get; set; }
+    public string StartTime { get; set; } = string.Empty;
+    public string EndTime { get; set; } = string.Empty;
+    public SlotType Type { get; set; }
+    public BreakType? BreakType { get; set; }
+    public Curriculum.SubjectType? SubjectType { get; set; }
+    public Guid? ElectiveGroupId { get; set; }
+    public string? ElectiveGroupName { get; set; }
+    public List<TimetableSubjectResponseDto> Subjects { get; set; } = [];
+}
+
+public class TimetableSubjectResponseDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Color { get; set; }
+    public Guid? TeacherId { get; set; }
+    public string? TeacherName { get; set; }
+    public Guid? RoomId { get; set; }
+    public string? RoomName { get; set; }
+}

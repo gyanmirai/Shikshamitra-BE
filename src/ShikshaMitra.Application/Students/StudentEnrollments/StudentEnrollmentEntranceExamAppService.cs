@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.Enrollments.Admissions;
 using ShikshaMitra.Students.Enrollments.EntranceExams;
+using ShikshaMitra.Students.StudentEnrollments.Managers;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -14,6 +15,7 @@ using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Authorization;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
@@ -23,287 +25,136 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 /// </summary>
 [Authorize]
 [RemoteService(false)]
-public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, IStudentEnrollmentEntranceExamAppService
+public class StudentEnrollmentEntranceExamAppService(
+	IRepository<Student, Guid> studentRepository,
+	IRepository<StudentAdditionalDetail, Guid> studentAdditionalDetailRepository,
+	IRepository<EntranceExamSlot, Guid> entranceExamSlotRepository,
+	IRepository<EducationMedium, Guid> educationMediumRepository,
+	IRepository<Standard, Guid> standardRepository,
+	IRepository<EducationBoard, Guid> educationBoardRepository,
+	EntranceExamManager entranceExamManager) : ShikshaMitraAppService, IStudentEnrollmentEntranceExamAppService
 {
-	private readonly IRepository<Student, Guid> _studentRepository;
-	private readonly IRepository<StudentAdditionalDetail, Guid> _studentAdditionalDetailRepository;
-	private readonly IRepository<EntranceExamSlot, Guid> _entranceExamSlotRepository;
-	private readonly IRepository<EducationMedium, Guid> _educationMediumRepository;
-	private readonly IRepository<Standard, Guid> _standardRepository;
-	private readonly IRepository<EducationBoard, Guid> _educationBoardRepository;
-
-	public StudentEnrollmentEntranceExamAppService(
-		IRepository<Student, Guid> studentRepository,
-		IRepository<StudentAdditionalDetail, Guid> studentAdditionalDetailRepository,
-		IRepository<EntranceExamSlot, Guid> entranceExamSlotRepository,
-		IRepository<EducationMedium, Guid> educationMediumRepository,
-		IRepository<Standard, Guid> standardRepository,
-		IRepository<EducationBoard, Guid> educationBoardRepository)
-	{
-		_studentRepository = studentRepository;
-		_studentAdditionalDetailRepository = studentAdditionalDetailRepository;
-		_entranceExamSlotRepository = entranceExamSlotRepository;
-		_educationMediumRepository = educationMediumRepository;
-		_standardRepository = standardRepository;
-		_educationBoardRepository = educationBoardRepository;
-	}
-
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.View)]
 	public async Task<PagedResultDto<EntranceExamStudentDto>> GetListAsync(GetEntranceExamStudentsInput input)
 	{
-		// Get queryable with necessary includes
-		var studentQueryable = await _studentRepository.GetQueryableAsync();
-		var additionalDetailQueryable = await _studentAdditionalDetailRepository.GetQueryableAsync();
-		var mediumQueryable = await _educationMediumRepository.GetQueryableAsync();
-		var standardQueryable = await _standardRepository.GetQueryableAsync();
-		var boardQueryable = await _educationBoardRepository.GetQueryableAsync();
-
-		// Build the query with joins
-		var query = from student in studentQueryable
-					join additionalDetail in additionalDetailQueryable
-						on student.Id equals additionalDetail.Id
-					join medium in mediumQueryable
-						on student.AcademicMediumId equals medium.Id
-					join standard in standardQueryable
-						on student.StandardId equals standard.Id into standardGroup
-					from standard in standardGroup.DefaultIfEmpty()
-					join board in boardQueryable
-						on medium.EducationBoardId equals board.Id
-					where student.TenantId == CurrentTenant.Id &&
-						  (student.Status == StudentLifeCycleStatusEnum.EntranceExam ||
-						   student.Status == StudentLifeCycleStatusEnum.RegistrationFormIssued)
-					select new { student, additionalDetail, medium, standard, board };
-
-		// Apply filters
-		if (input.StartDate.HasValue)
-		{
-			query = query.Where(x => x.additionalDetail.ExamDate.HasValue &&
-									 x.additionalDetail.ExamDate.Value.Date >= input.StartDate.Value.Date);
-		}
-
-		if (input.EndDate.HasValue)
-		{
-			query = query.Where(x => x.additionalDetail.ExamDate.HasValue &&
-									 x.additionalDetail.ExamDate.Value.Date <= input.EndDate.Value.Date);
-		}
-
-		if (input.StandardId.HasValue)
-		{
-			query = query.Where(x => x.student.StandardId == input.StandardId.Value);
-		}
-
-		if (input.EducationMediumId.HasValue)
-		{
-			query = query.Where(x => x.student.AcademicMediumId == input.EducationMediumId.Value);
-		}
-
-		if (input.ExamStatus.HasValue)
-		{
-			query = query.Where(x => x.additionalDetail.ExamStatus == input.ExamStatus.Value);
-		}
+		var studentQueryable = await studentRepository.GetQueryableAsync();
+		studentQueryable = studentQueryable.Where(x => x.AdditionalDetail.EntranceExamStartDateTime >= input.StartDate && x.AdditionalDetail.EntranceExamStartDateTime <= input.EndDate);
 
 		if (!input.SearchTerm.IsNullOrWhiteSpace())
 		{
 			var searchTerm = input.SearchTerm.ToLower();
-			query = query.Where(x =>
-				(x.student.FirstName != null && x.student.FirstName.ToLower().Contains(searchTerm)) ||
-				(x.student.MiddleName != null && x.student.MiddleName.ToLower().Contains(searchTerm)) ||
-				(x.student.LastName != null && x.student.LastName.ToLower().Contains(searchTerm)));
+			studentQueryable = studentQueryable.Where(x =>
+				(x.FirstName != null && x.FirstName.ToLower().Contains(searchTerm)) ||
+				(x.MiddleName != null && x.MiddleName.ToLower().Contains(searchTerm)) ||
+				(x.LastName != null && x.LastName.ToLower().Contains(searchTerm)));
 		}
 
-		// Get total count
-		var totalCount = await AsyncExecuter.CountAsync(query);
+		var totalCount = await AsyncExecuter.CountAsync(studentQueryable);
 
-		// Apply sorting
 		if (!input.Sorting.IsNullOrWhiteSpace())
 		{
-			query = query.OrderBy(input.Sorting);
+			studentQueryable = studentQueryable.OrderBy(input.Sorting);
 		}
 		else
 		{
-			query = query.OrderBy(x => x.additionalDetail.ExamDate).ThenBy(x => x.student.FirstName);
+			studentQueryable = studentQueryable.OrderBy(x => x.AdditionalDetail.EntranceExamStartDateTime).ThenBy(x => x.FirstName);
 		}
 
-		// Apply paging
-		query = query.Skip(input.SkipCount).Take(input.MaxResultCount);
+		studentQueryable = studentQueryable.Skip(input.SkipCount).Take(input.MaxResultCount);
 
-		// Execute query and map to DTOs
-		var results = await AsyncExecuter.ToListAsync(query);
-		var items = results.Select(result =>
+		var results = await AsyncExecuter.ToListAsync(studentQueryable.Select(x => new EntranceExamStudentDto
 		{
-			var dto = new EntranceExamStudentDto
-			{
-				StudentId = result.student.Id,
-				StudentName = $"{result.student.FirstName} {result.student.MiddleName ?? ""} {result.student.LastName}".Trim(),
-				EducationBoard = result.board.Type.ToString(),
-				EducationMedium = result.medium.Name,
-				Standard = result.standard?.Name ?? "",
-				ExamDate = result.additionalDetail.ExamDate?.DateTime,
-				ExamStartTime = result.additionalDetail.ExamStartTime,
-				ExamEndTime = result.additionalDetail.ExamEndTime,
-				ExamTime = result.additionalDetail.ExamStartTime.HasValue && result.additionalDetail.ExamEndTime.HasValue
-					? $"{result.additionalDetail.ExamStartTime.Value:hh\\:mm} to {result.additionalDetail.ExamEndTime.Value:hh\\:mm}"
-					: null,
-				ExamRoomNo = result.additionalDetail.ExamRoomNo,
-				TotalMarks = result.additionalDetail.ExamTotalMarks,
-				PassingMarks = result.additionalDetail.ExamPassingMarks,
-				ObtainedMarks = result.additionalDetail.ExamObtainedMarks,
-				Percentage = result.additionalDetail.ExamPercentage,
-				ExamStatus = result.additionalDetail.ExamStatus,
-				ExamStatusDisplay = result.additionalDetail.ExamStatus?.ToString() ?? "Not Scheduled",
-				EnrollmentState = result.student.Status,
-				Progress = CalculateRegistrationProgress(result.student.AdditionalDetail!.StudentRegistrationState)
-			};
-			return dto;
-		}).ToList();
+			StudentId = x.Id,
+			StudentName = x.FirstName + " " + x.MiddleName + " " + x.LastName,
+			EducationBoard = x.AcademicBoard.Type.ToString(),
+			EducationMedium = x.AcademicMedium.Name,
+			Standard = x.Standard != null ? x.Standard.Name : string.Empty,
+			ExamStartTime = x.AdditionalDetail.EntranceExamStartDateTime,
+			ExamEndTime = x.AdditionalDetail.EntranceExamEndDateTime,
+			ExamRoomNo = x.AdditionalDetail.EntranceExamRoomNo,
+			TotalMarks = x.AdditionalDetail.EntranceExamTotalMarks,
+			PassingMarks = x.AdditionalDetail.EntranceExamPassingMarks,
+			ObtainedMarks = x.AdditionalDetail.EntranceExamObtainedMarks,
+			Percentage = x.AdditionalDetail.EntranceExamPercentage,
+			ExamStatus = x.AdditionalDetail.EntranceExamStatus,
+			Progress = CalculateRegistrationProgressPercentage(x.AdditionalDetail.StudentRegistrationState),
+			ExamStatusDisplay = x.AdditionalDetail.EntranceExamStatus != null ? x.AdditionalDetail.EntranceExamStatus.ToString() : "Not Scheduled",
+			EnrollmentState = x.Status
+		}));
 
-		return new PagedResultDto<EntranceExamStudentDto>(totalCount, items);
+		return new PagedResultDto<EntranceExamStudentDto>(totalCount, results);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.View)]
 	public async Task<EntranceExamDetailDto> GetAsync(Guid studentId)
 	{
-		var student = await _studentRepository.GetAsync(studentId);
-		var additionalDetail = await _studentAdditionalDetailRepository.GetAsync(studentId);
-		var medium = await _educationMediumRepository.GetAsync(student.AcademicMediumId);
-		var board = await _educationBoardRepository.GetAsync(medium.EducationBoardId);
+		var student = await studentRepository.GetAsync(studentId, includeDetails: true) ?? throw new EntityNotFoundException(typeof(Student), studentId);
 
-		Standard standard = null;
-		if (student.StandardId.HasValue)
-		{
-			standard = await _standardRepository.GetAsync(student.StandardId.Value);
-		}
-
-		var dto = new EntranceExamDetailDto
+		return new EntranceExamDetailDto
 		{
 			StudentId = student.Id,
-			StudentName = $"{student.FirstName} {student.MiddleName ?? ""} {student.LastName}".Trim(),
-			InquiryNo = additionalDetail.InquiryNo,
-			RegistrationFormNo = additionalDetail.RegistrationFormNo,
-			EducationBoard = board.Type.ToString(),
-			EducationMedium = medium.Name,
-			Standard = standard?.Name ?? "",
-			ExamScheduled = additionalDetail.ExamDate.HasValue,
-			EntranceExamSlotId = additionalDetail.EntranceExamSlotId,
-			ExamDate = additionalDetail.ExamDate?.DateTime,
-			ExamStartTime = additionalDetail.ExamStartTime,
-			ExamEndTime = additionalDetail.ExamEndTime,
-			ExamRoomNo = additionalDetail.ExamRoomNo,
-			ResultUploaded = additionalDetail.ExamObtainedMarks.HasValue,
-			TotalMarks = additionalDetail.ExamTotalMarks,
-			PassingMarks = additionalDetail.ExamPassingMarks,
-			ObtainedMarks = additionalDetail.ExamObtainedMarks,
-			Percentage = additionalDetail.ExamPercentage,
-			ExamStatus = additionalDetail.ExamStatus,
-			ResultDate = additionalDetail.ExamResultDate?.DateTime,
+			StudentName = BuildStudentName(student.FirstName, student.MiddleName, student.LastName),
+			InquiryNo = student.AdditionalDetail.InquiryNo,
+			RegistrationFormNo = student.AdditionalDetail.RegistrationFormNo,
+			EducationBoard = student.AcademicBoard.Type.ToString(),
+			EducationMedium = student.AcademicMedium.Name,
+			Standard = student.Standard?.Name ?? string.Empty,
+			ExamScheduled = student.AdditionalDetail.EntranceExamStartDateTime.HasValue,
+			EntranceExamSlotId = student.AdditionalDetail.EntranceExamSlotId,
+			ExamDate = student.AdditionalDetail.EntranceExamStartDateTime?.DateTime,
+			ExamStartTime = student.AdditionalDetail.EntranceExamStartDateTime?.TimeOfDay,
+			ExamEndTime = student.AdditionalDetail.EntranceExamEndDateTime?.TimeOfDay,
+			ExamRoomNo = student.AdditionalDetail.EntranceExamRoomNo,
+			ResultUploaded = student.AdditionalDetail.EntranceExamObtainedMarks.HasValue,
+			TotalMarks = student.AdditionalDetail.EntranceExamTotalMarks,
+			PassingMarks = student.AdditionalDetail.EntranceExamPassingMarks,
+			ObtainedMarks = student.AdditionalDetail.EntranceExamObtainedMarks,
+			Percentage = student.AdditionalDetail.EntranceExamPercentage,
+			ExamStatus = student.AdditionalDetail.EntranceExamStatus,
+			ResultDate = student.AdditionalDetail.EntranceExamResultDate?.DateTime,
 			EnrollmentState = student.Status,
-			CanMoveToAdmission = additionalDetail.ExamStatus == EntranceExamStatusEnum.Pass
+			CanMoveToAdmission = student.AdditionalDetail.EntranceExamStatus == EntranceExamStatusEnum.Pass
 		};
-
-		return dto;
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.Add)]
 	public async Task ScheduleExamAsync(Guid studentId, ScheduleEntranceExamDto input)
 	{
-		// Get student and validate
-		var student = await _studentRepository.GetAsync(studentId);
+		var student = await studentRepository.GetAsync(studentId, includeDetails: true) ?? throw new EntityNotFoundException(typeof(Student), studentId);
 
-		if (student.Status != StudentLifeCycleStatusEnum.Registation)
-		{
-			throw new BusinessException("SM:EntranceExam:001")
-				.WithData("currentStatus", student.Status.ToString())
-				.WithData("requiredStatus", StudentLifeCycleStatusEnum.RegistrationFormIssued.ToString());
-		}
+		var slot = await entranceExamSlotRepository.GetAsync(input.EntranceExamSlotId);
 
-		// Get and validate slot
-		var slot = await _entranceExamSlotRepository.GetAsync(input.EntranceExamSlotId);
+		await entranceExamManager.ValidateScheduling(student.Id, slot.Id);
 
-		// Check if slot has available capacity
-		var enrolledCount = await GetEnrolledStudentsCountInSlotAsync(input.EntranceExamSlotId);
-		if (enrolledCount >= slot.StudentLimit)
-		{
-			throw new BusinessException("SM:EntranceExam:002")
-				.WithData("slotId", input.EntranceExamSlotId)
-				.WithData("capacity", slot.StudentLimit);
-		}
-
-		// Check if student is already scheduled
-		var additionalDetail = await _studentAdditionalDetailRepository.GetAsync(studentId);
-		if (additionalDetail.EntranceExamSlotId.HasValue)
-		{
-			throw new BusinessException("SM:EntranceExam:003")
-				.WithData("existingSlotId", additionalDetail.EntranceExamSlotId.Value);
-		}
-
-		// Schedule the exam using domain method
-		student.ScheduleEntranceExam(
-			slot.Id,
-			slot.StartDate,
-			slot.EndDate,
-			slot.RoomNo
-		);
-
-		await _studentRepository.UpdateAsync(student, autoSave: true);
+		student.ScheduleEntranceExam(slot.Id, slot.StartDate, slot.EndDate, slot.RoomNo);
+		await studentRepository.UpdateAsync(student, autoSave: true);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.Add)]
 	public async Task<EntranceExamResultResponseDto> UploadResultAsync(Guid studentId, UploadEntranceExamResultDto input)
 	{
-		// Get student and validate
-		var student = await _studentRepository.GetAsync(studentId);
-		var additionalDetail = await _studentAdditionalDetailRepository.GetAsync(studentId);
+		var student = await studentRepository.GetAsync(studentId) ?? throw new EntityNotFoundException(typeof(Student), studentId);
 
-		if (student.Status != StudentLifeCycleStatusEnum.EntranceExam)
-		{
-			throw new BusinessException("SM:EntranceExam:004")
-				.WithData("currentStatus", student.Status.ToString())
-				.WithData("requiredStatus", StudentLifeCycleStatusEnum.EntranceExam.ToString());
-		}
+		await entranceExamManager.ValidateResultUpload(student.Id, input.TotalMarks, input.PassingMarks, input.ObtainedMarks);
 
-		if (!additionalDetail.ExamDate.HasValue)
-		{
-			throw new BusinessException("SM:EntranceExam:005")
-				.WithData("studentId", studentId);
-		}
+		student.AdditionalDetail.RecordExamResult(input.TotalMarks, input.PassingMarks, input.ObtainedMarks);
+		await studentRepository.UpdateAsync(student, autoSave: true);
 
-		// Additional validation
-		if (input.ObtainedMarks > input.TotalMarks)
-		{
-			throw new BusinessException("SM:EntranceExam:006")
-				.WithData("obtainedMarks", input.ObtainedMarks)
-				.WithData("totalMarks", input.TotalMarks);
-		}
-
-		if (input.PassingMarks > input.TotalMarks)
-		{
-			throw new BusinessException("SM:EntranceExam:007")
-				.WithData("passingMarks", input.PassingMarks)
-				.WithData("totalMarks", input.TotalMarks);
-		}
-
-		// Record exam result using domain method
-		additionalDetail.RecordExamResult(input.TotalMarks, input.PassingMarks, input.ObtainedMarks);
-
-		await _studentAdditionalDetailRepository.UpdateAsync(additionalDetail, autoSave: true);
-
-		// Return response
 		return new EntranceExamResultResponseDto
 		{
 			StudentId = student.Id,
-			StudentName = $"{student.FirstName} {student.MiddleName ?? ""} {student.LastName}".Trim(),
+			StudentName = BuildStudentName(student.FirstName, student.MiddleName, student.LastName),
 			TotalMarks = input.TotalMarks,
 			PassingMarks = input.PassingMarks,
 			ObtainedMarks = input.ObtainedMarks,
-			Percentage = additionalDetail.ExamPercentage.Value,
-			ExamStatus = additionalDetail.ExamStatus.Value,
-			ResultDate = additionalDetail.ExamResultDate.Value.DateTime
+			Percentage = student.AdditionalDetail.EntranceExamPercentage!.Value,
+			ExamStatus = student.AdditionalDetail.EntranceExamStatus!.Value,
+			ResultDate = student.AdditionalDetail.EntranceExamResultDate!.Value.DateTime
 		};
 	}
 
 	public async Task MoveToAdmissionAsync(Guid studentId, Guid? academicYearId = null)
 	{
-		// Check if user has either of the required permissions (OR logic)
+		// OR-permission: user needs EntranceExam.Add OR RegistrationFormIssued.Add.
+		// TODO: Replace with a named ABP authorization policy defined in the module setup.
 		var hasEntranceExamPermission = await AuthorizationService.IsGrantedAsync(
 			ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.Add);
 		var hasRegistrationFormIssuedPermission = await AuthorizationService.IsGrantedAsync(
@@ -312,73 +163,51 @@ public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, I
 		if (!hasEntranceExamPermission && !hasRegistrationFormIssuedPermission)
 		{
 			throw new AbpAuthorizationException(
-				"You need either Enrollment_EntranceExam.Add or Enrollment_RegistrationFormIssued.Add permission to perform this operation.");
+				"You need either Enrollment_EntranceExam.Add or Enrollment_RegistrationFormIssued.Add permission.");
 		}
 
-		var student = await _studentRepository.GetAsync(studentId, includeDetails: true);
+		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
 
-		if (student.Status != StudentLifeCycleStatusEnum.Registation && student.Status != StudentLifeCycleStatusEnum.EntranceExam)
+		if (!IsStudentAllowedToMoveToAdmission(student))
 		{
-			throw new BusinessException("SM:EntranceExam:008")
-				.WithData("currentStatus", student.Status.ToString())
-				.WithData("requiredStatus", StudentLifeCycleStatusEnum.EntranceExam.ToString());
+			throw new UserFriendlyException("Student is not in a valid state to move to admission.");
 		}
 
-		var additionalDetail = await _studentAdditionalDetailRepository.GetAsync(studentId);
-		if (student.Status == StudentLifeCycleStatusEnum.EntranceExam && additionalDetail.ExamStatus != EntranceExamStatusEnum.Pass)
-		{
-			throw new BusinessException("SM:EntranceExam:009")
-				.WithData("currentExamStatus", additionalDetail.ExamStatus?.ToString() ?? "Not Set");
-		}
-
-		// Move to admission using domain method
 		student.MoveToAdmission();
-
-		await _studentRepository.UpdateAsync(student, autoSave: true);
+		await studentRepository.UpdateAsync(student, autoSave: true);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.Add)]
 	public async Task<BulkMoveResultDto> BulkMoveToAdmissionAsync(BulkMoveToAdmissionDto input)
 	{
+		// Pre-load all students in a single query for name resolution — avoids per-iteration DB calls
+		var studentQueryable = await studentRepository.GetQueryableAsync();
+		var preLoaded = await AsyncExecuter.ToListAsync(
+			studentQueryable.Where(s => input.StudentIds.Contains(s.Id)));
+		var nameMap = preLoaded.ToDictionary(
+			s => s.Id,
+			s => BuildStudentName(s.FirstName, s.MiddleName, s.LastName));
+
 		var result = new BulkMoveResultDto
 		{
 			TotalRequested = input.StudentIds.Count,
 			SuccessCount = 0,
 			FailureCount = 0,
-			SucceededStudents = new List<StudentSummaryDto>(),
-			FailedStudents = new List<FailedStudentDto>()
+			SucceededStudents = [],
+			FailedStudents = []
 		};
 
 		foreach (var studentId in input.StudentIds)
 		{
+			var studentName = nameMap.GetValueOrDefault(studentId, "Unknown Student");
 			try
 			{
-			var student = await _studentRepository.GetAsync(studentId);
-			var studentName = $"{student.FirstName} {student.MiddleName ?? ""} {student.LastName}".Trim();
-
-			// Validate and move
-			await MoveToAdmissionAsync(studentId, input.AcademicYearId);
-
-			result.SucceededStudents.Add(new StudentSummaryDto
-				{
-					StudentId = studentId,
-					StudentName = studentName
-				});
+				await MoveToAdmissionAsync(studentId, input.AcademicYearId);
+				result.SucceededStudents.Add(new StudentSummaryDto { StudentId = studentId, StudentName = studentName });
 				result.SuccessCount++;
 			}
 			catch (Exception ex)
 			{
-				var student = await _studentRepository.FindAsync(studentId);
-				var studentName = student != null
-					? $"{student.FirstName} {student.MiddleName ?? ""} {student.LastName}".Trim()
-					: "Unknown Student";
-
-				result.FailedStudents.Add(new FailedStudentDto
-				{
-					StudentId = studentId,
-					StudentName = studentName,
-					Reason = ex.Message
-				});
+				result.FailedStudents.Add(new FailedStudentDto { StudentId = studentId, StudentName = studentName, Reason = ex.Message });
 				result.FailureCount++;
 			}
 		}
@@ -386,22 +215,37 @@ public class StudentEnrollmentEntranceExamAppService : ShikshaMitraAppService, I
 		return result;
 	}
 
-	private async Task<int> GetEnrolledStudentsCountInSlotAsync(Guid slotId)
+	private bool IsStudentAllowedToMoveToAdmission(Student student)
 	{
-		var queryable = await _studentAdditionalDetailRepository.GetQueryableAsync();
-		return await AsyncExecuter.CountAsync(
-			queryable.Where(sd => sd.EntranceExamSlotId == slotId));
+		var progress = CalculateRegistrationProgressPercentage(student.AdditionalDetail!.StudentRegistrationState);
+
+		if (student.Status == StudentLifeCycleStatusEnum.Registration &&
+		    progress >= EnrollmentConsts.MoveToAdmissionThreasold)
+		{
+			return true;
+		}
+
+		if (student.Status == StudentLifeCycleStatusEnum.EntranceExam &&
+		    progress >= EnrollmentConsts.MoveToAdmissionThreasold &&
+		    student.AdditionalDetail.EntranceExamObtainedMarks >= student.AdditionalDetail.EntranceExamPassingMarks)
+		{
+			return true;
+		}
+
+		return false;
 	}
 
-	private double CalculateRegistrationProgress(StudentRegistrationStateEnum status)
-	{
-		// Calculate progress based on enrollment stages
-		// Assuming 7 stages total: New, Inquiry, RegistrationFormIssued, EntranceExam, Registration, Admission, Enrolled
-		var totalStates = (double) Enum.GetValues<StudentRegistrationStateEnum>()
-					.Count(s => s != StudentRegistrationStateEnum.Default);
+	private static string BuildStudentName(string? firstName, string? middleName, string? lastName)
+		=> new[] { firstName, middleName, lastName }
+			.Where(s => !string.IsNullOrWhiteSpace(s))
+			.DefaultIfEmpty(string.Empty)
+			.Aggregate((a, b) => $"{a} {b}");
 
-		var v = (double) status
-			/ totalStates;
-		return (double) v * 100;
+	private static double CalculateRegistrationProgressPercentage(
+		StudentRegistrationStateEnum registrationState = StudentRegistrationStateEnum.Default)
+	{
+		var totalStates = (double)Enum.GetValues<StudentRegistrationStateEnum>()
+			.Count(s => s != StudentRegistrationStateEnum.Default);
+		return (double)registrationState / totalStates * 100;
 	}
 }

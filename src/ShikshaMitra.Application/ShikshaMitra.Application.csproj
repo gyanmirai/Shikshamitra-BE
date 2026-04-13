@@ -49,6 +49,9 @@
   <ItemGroup>
     <Folder Include="Academic\Syllabus\" />
     <Folder Include="HR\AttendanceAndLeaves\Import\" />
+    <Folder Include="HR\EventAndHolidays\" />
+    <Folder Include="HR\Payroll\ImportAttendances\" />
+    <Folder Include="HR\Payroll\PayrollStructures\" />
     <Folder Include="Library\Setting\GeneralSetting\LoanPolicies\" />
   </ItemGroup>
 

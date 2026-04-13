@@ -1,0 +1,225 @@
+using System;
+using System.Data.Common;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.Infrastructure.Auth;
+using ShikshaMitra.Infrastructure.Data;
+using ShikshaMitra.Seeders;
+using ShikshaMitra.TenantSettings;
+using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+using Volo.Abp.Auditing;
+using Volo.Abp.Security.Claims;
+using Volo.Abp.Authorization;
+using Volo.Abp.BackgroundJobs;
+using Volo.Abp.Data;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.EntityFrameworkCore;
+using Volo.Abp.FeatureManagement;
+using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.PermissionManagement;
+using Volo.Abp.SettingManagement;
+using Volo.Abp.Uow;
+
+namespace ShikshaMitra;
+
+/// <summary>
+/// Custom <see cref="WebApplicationFactory{TEntryPoint}"/> that boots the
+/// ShikshaMitra host with in-memory SQLite and a test auth handler.
+/// Shared across all in-process API tests via xUnit collection fixture.
+/// </summary>
+public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
+{
+	private SqliteConnection? _keepAliveConnection;
+
+	public Guid SeededRoleId { get; private set; }
+	public Guid SeededShiftId { get; private set; }
+	public Guid SeededAcademicYearId { get; private set; }
+	public Guid SeededMediumStageId { get; private set; }
+
+	protected override IHost CreateHost(IHostBuilder builder)
+	{
+		var host = base.CreateHost(builder);
+
+		Task.Run(async () =>
+		{
+			// Seeding completes UoWs that dispose the scoped DbContext; resolve lookups in a new scope.
+			using (var seedScope = host.Services.CreateScope())
+			{
+				var dataSeeder = seedScope.ServiceProvider.GetRequiredService<IDataSeeder>();
+				await dataSeeder.SeedAsync(new DataSeedContext()).ConfigureAwait(false);
+			}
+
+			using var lookupScope = host.Services.CreateScope();
+			await ResolveSeededLookupsAsync(lookupScope.ServiceProvider).ConfigureAwait(false);
+		}).GetAwaiter().GetResult();
+
+		return host;
+	}
+
+	private async Task ResolveSeededLookupsAsync(IServiceProvider services)
+	{
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		var currentTenant = services.GetRequiredService<ICurrentTenant>();
+		var uowManager = services.GetRequiredService<IUnitOfWorkManager>();
+
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		using (currentTenant.Change(tenantId))
+		{
+			// Avoid GetListAsync on IIdentityRoleRepository: implementation can materialize heavy graphs
+			// and stall SQLite in-memory for many minutes.
+			var roleRepo = services.GetRequiredService<IIdentityRoleRepository>();
+			var lookupNormalizer = services.GetRequiredService<ILookupNormalizer>();
+			var teacherRole = await roleRepo.FindByNormalizedNameAsync(lookupNormalizer.NormalizeName("Teacher"));
+			SeededRoleId = teacherRole?.Id ?? Guid.Empty;
+
+			var shiftRepo = services.GetRequiredService<IRepository<ShiftManagement, Guid>>();
+			var fullDayShift = await (await shiftRepo.GetQueryableAsync()).AsNoTracking()
+				.FirstOrDefaultAsync(s => s.ShiftName == "Full Day Shift");
+			SeededShiftId = fullDayShift?.Id ?? Guid.Empty;
+
+			var academicYearRepo = services.GetRequiredService<IAcademicYearRepository>();
+			var firstYear = await (await academicYearRepo.GetQueryableAsync()).AsNoTracking()
+				.OrderBy(y => y.Id)
+				.FirstOrDefaultAsync();
+			SeededAcademicYearId = firstYear?.Id ?? Guid.Empty;
+
+			var mediumStageRepo = services.GetRequiredService<IEducationMediumStageRepository>();
+			var firstStage = await (await mediumStageRepo.GetQueryableAsync()).AsNoTracking()
+				.OrderBy(s => s.Id)
+				.FirstOrDefaultAsync();
+			SeededMediumStageId = firstStage?.Id ?? Guid.Empty;
+
+			await uow.CompleteAsync();
+		}
+	}
+
+	protected override void ConfigureWebHost(IWebHostBuilder builder)
+	{
+		builder.UseEnvironment("Development");
+
+		builder.ConfigureServices(services =>
+		{
+			ReplaceDbWithSqlite(services);
+			DisableBackgroundJobs(services);
+			DisableDynamicStores(services);
+			DisableAuditing(services);
+			DisableDynamicClaims(services);
+		});
+
+		builder.ConfigureTestServices(services =>
+		{
+			AddTestAuthentication(services);
+			services.AddTransient<StudentSeederContributor, NoOpStudentSeeder>();
+		});
+	}
+
+	private void ReplaceDbWithSqlite(IServiceCollection services)
+	{
+		_keepAliveConnection = new SqliteConnection("Data Source=:memory:");
+		_keepAliveConnection.Open();
+
+		services.Configure<AbpDbContextOptions>(options =>
+		{
+			options.Configure(ctx =>
+			{
+				ctx.DbContextOptions.UseSqlite(_keepAliveConnection);
+			});
+		});
+
+		var dbOptions = new DbContextOptionsBuilder<ShikshaMitraDbContext>()
+			.UseSqlite(_keepAliveConnection)
+			.Options;
+
+		using var context = new ShikshaMitraDbContext(dbOptions);
+		context.GetService<IRelationalDatabaseCreator>().CreateTables();
+	}
+
+	private static void DisableBackgroundJobs(IServiceCollection services)
+	{
+		services.Configure<AbpBackgroundJobOptions>(o => o.IsJobExecutionEnabled = false);
+	}
+
+	private static void DisableAuditing(IServiceCollection services)
+	{
+		services.Configure<AbpAuditingOptions>(o => o.IsEnabled = false);
+	}
+
+	private static void DisableDynamicClaims(IServiceCollection services)
+	{
+		services.Configure<AbpClaimsPrincipalFactoryOptions>(o => o.IsDynamicClaimsEnabled = false);
+	}
+
+	private static void DisableDynamicStores(IServiceCollection services)
+	{
+		services.Configure<FeatureManagementOptions>(o =>
+		{
+			o.SaveStaticFeaturesToDatabase = false;
+			o.IsDynamicFeatureStoreEnabled = false;
+		});
+		services.Configure<PermissionManagementOptions>(o =>
+		{
+			o.SaveStaticPermissionsToDatabase = false;
+			o.IsDynamicPermissionStoreEnabled = false;
+		});
+		services.Configure<SettingManagementOptions>(o =>
+		{
+			o.SaveStaticSettingsToDatabase = false;
+			o.IsDynamicSettingStoreEnabled = false;
+		});
+	}
+
+	private static void AddTestAuthentication(IServiceCollection services)
+	{
+		services.AddAuthentication(TestAuthHandler.SchemeName)
+			.AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(
+				TestAuthHandler.SchemeName, _ => { });
+
+		services.PostConfigure<AuthenticationOptions>(options =>
+		{
+			options.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
+			options.DefaultChallengeScheme = TestAuthHandler.SchemeName;
+			options.DefaultScheme = TestAuthHandler.SchemeName;
+			options.DefaultForbidScheme = TestAuthHandler.SchemeName;
+
+			foreach (var scheme in options.SchemeMap.Values)
+			{
+				if (scheme.Name != TestAuthHandler.SchemeName)
+				{
+					scheme.HandlerType = typeof(TestAuthHandler);
+				}
+			}
+		});
+
+		services.AddSingleton<IAuthorizationHandler, AllowAllAuthorizationHandler>();
+
+		services.AddAlwaysAllowAuthorization();
+
+		services.AddTransient<Volo.Abp.Authorization.Permissions.IPermissionChecker,
+			AlwaysGrantPermissionChecker>();
+	}
+
+	protected override void Dispose(bool disposing)
+	{
+		base.Dispose(disposing);
+		if (disposing)
+		{
+			_keepAliveConnection?.Dispose();
+		}
+	}
+}

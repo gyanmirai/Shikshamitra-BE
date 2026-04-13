@@ -1,8 +1,7 @@
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.Payroll;
-using ShikshaMitra.HR.Payroll.PayrollStructures;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -28,7 +27,6 @@ public class EmployeeAppService(
 	EmployeeManager employeeManager,
 	EmployeeDocumentManager employeeDocumentManager,
 	EmployeeAuthorizationService authorizationService,
-	PayrollStructureManager payrollStructureManager,
 	IBlobContainer blobContainer,
 	IEmployeeCacheManager employeeCacheManager,
 	IEmployeePayrollDetailsRepository payrollDetailsRepository,
@@ -54,8 +52,8 @@ public class EmployeeAppService(
 
 	public override async Task<EmployeeDto> GetAsync(Guid id)
 	{
-		// Use GetWithDetailsAsync for complete employee data including PayrollStructure
-		var employee = await employeeRepository.GetWithDetailsAsync(id, includePayrollStructure: true)
+		// Use GetWithDetailsAsync for complete employee data
+		var employee = await employeeRepository.GetWithDetailsAsync(id)
 			?? throw new EntityNotFoundException(typeof(Employee), id);
 
 		var employeeDto = ObjectMapper.Map<Employee, EmployeeDto>(employee);
@@ -647,30 +645,6 @@ public class EmployeeAppService(
 	}
 
 
-	[RemoteService(false)]
-
-	public async Task SetEmployeePayrollStructure(Guid employeeId, Guid payrollStructureId)
-	{
-		await payrollStructureManager.SetEmployeePayrollStructureAsync(employeeId, payrollStructureId);
-	}
-
-	[RemoteService(false)]
-	public async Task RemoveEmployeePayrollStructure(Guid employeeId)
-	{
-		await payrollStructureManager.RemoveEmployeePayrollStructureAsync(employeeId);
-	}
-
-	public async Task UpdatePayrollStructureAsync(Guid employeeId, CreateUpdateEmployeePayrollStructureDto input)
-	{
-		if (input?.PayrollStructures == null || input.PayrollStructures.Count == 0)
-		{
-			throw new UserFriendlyException("Payroll structure is required.");
-		}
-
-		var payrollStructureId = input.PayrollStructures[0].Id;
-		await payrollStructureManager.SetEmployeePayrollStructureAsync(employeeId, payrollStructureId);
-	}
-
 	public async Task DeleteDocumentAsync(Guid employeeId, Guid documentId)
 	{
 		await employeeDocumentManager.DeleteDocumentAsync(employeeId, documentId);
@@ -866,10 +840,12 @@ public class EmployeeAppService(
 				guidGenerator.Create(),
 				employeeId,
 				earning.Name,
+				componentId: null,
 				earning.Description,
 				earning.Amount,
 				earning.IsFixed,
 				earning.IsTemp,
+				applicableMonth: null,
 				earning.ComponentType,
 				earning.DependOn,
 				isEarning: true
@@ -883,10 +859,12 @@ public class EmployeeAppService(
 				guidGenerator.Create(),
 				employeeId,
 				deduction.Name,
+				componentId: null,
 				deduction.Description,
 				deduction.Amount,
 				deduction.IsFixed,
 				deduction.IsTemp,
+				applicableMonth: null,
 				deduction.ComponentType,
 				deduction.DependOn,
 				isEarning: false
@@ -929,6 +907,8 @@ public class EmployeeAppService(
 			queryable = queryable.Where(e => e.RoleId == input.RoleId.Value);
 		}
 
+		queryable = ApplySearchFilter(queryable, input.Search);
+
 		// Get total count before pagination
 		var totalCount = await AsyncExecuter.CountAsync(queryable);
 
@@ -960,19 +940,16 @@ public class EmployeeAppService(
 		};
 	}
 
-	public async Task<EmployeeSearchResponse> SearchAsync(SearchEmployeeInput input)
+	private static IQueryable<Employee> ApplySearchFilter(IQueryable<Employee> queryable, string? search)
 	{
-		// Validate minimum search length (matches controller MinLength(3))
-		if (string.IsNullOrEmpty(input.SearchTerm) || input.SearchTerm.Length < 3)
+		if (string.IsNullOrWhiteSpace(search))
 		{
-			return new EmployeeSearchResponse { Items = new List<EmployeeSearchItem>() };
+			return queryable;
 		}
 
-		var searchTerm = input.SearchTerm.ToLower();
-		var queryable = await Repository.GetQueryableAsync();
+		var searchTerm = search.Trim().ToLower();
 
-		// Search by name, employee identifier, email, or mobile number
-		queryable = queryable.Where(e =>
+		return queryable.Where(e =>
 			(e.FirstName != null && e.FirstName.ToLower().Contains(searchTerm)) ||
 			(e.LastName != null && e.LastName.ToLower().Contains(searchTerm)) ||
 			(e.MiddleName != null && e.MiddleName.ToLower().Contains(searchTerm)) ||
@@ -980,20 +957,6 @@ public class EmployeeAppService(
 			(e.Email != null && e.Email.ToLower().Contains(searchTerm)) ||
 			(e.MobileNo != null && e.MobileNo.Contains(searchTerm))
 		);
-
-		// Apply result limit
-		var maxResults = input.MaxResultCount > 0 ? input.MaxResultCount : 50;
-		var employees = await AsyncExecuter.ToListAsync(
-			queryable
-				.OrderBy(e => e.FirstName)
-				.ThenBy(e => e.LastName)
-				.Take(maxResults)
-		);
-
-		// Map to response DTOs
-		var items = employees.Select(MapToEmployeeSearchItem).ToList();
-
-		return new EmployeeSearchResponse { Items = items };
 	}
 
 	private EmployeeSummary MapToEmployeeSummary(Employee employee)
@@ -1018,32 +981,6 @@ public class EmployeeAppService(
 				StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"),
 				EndTime = employee.Shift.EndTime.ToString("HH:mm:ss")
 			} : null,
-			Status = (int) (employee.EmployeeStatusType ?? EmployeeStatusType.Active)
-		};
-	}
-
-	private EmployeeSearchItem MapToEmployeeSearchItem(Employee employee)
-	{
-		return new EmployeeSearchItem
-		{
-			Id = employee.Id,
-			RoleName = employee.Role?.Name ?? string.Empty,
-			FullName = employee.EmployeeName ?? string.Empty,
-			ThumbnailPicture = employee.ProfilePictureBlobName ?? string.Empty,
-			EmployeeIdentifier = employee.EmployeeCode ?? string.Empty,
-			Dob = employee.DateOfBirth?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MinValue,
-			Gender = employee.GenderType?.ToString() ?? string.Empty,
-			Doj = employee.DateOfJoining?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MinValue,
-			Email = employee.Email ?? string.Empty,
-			MobileNo = employee.MobileNo ?? string.Empty,
-			IsTeaching = employee.EmployeeGroup == EmployeeGroupType.Teaching,
-			Shift = employee.Shift != null ? new ShiftInfo
-			{
-				Id = employee.Shift.Id,
-				Name = employee.Shift.ShiftName ?? string.Empty,
-				StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"),
-				EndTime = employee.Shift.EndTime.ToString("HH:mm:ss")
-			} : new ShiftInfo(),
 			Status = (int) (employee.EmployeeStatusType ?? EmployeeStatusType.Active)
 		};
 	}

@@ -19,7 +19,7 @@ public class CustomAttendanceRule : AggregateRoot<Guid>, IMultiTenant
 	{
 	}
 
-	internal CustomAttendanceRule(
+	private CustomAttendanceRule(
 		Guid id,
 		Guid tenantId,
 		string name,
@@ -31,6 +31,36 @@ public class CustomAttendanceRule : AggregateRoot<Guid>, IMultiTenant
 		bool enableNotificationForUpperAuthority) : base(id)
 	{
 		TenantId = tenantId;
+		Name = name;
+		Type = type;
+		LateThreshold = lateThreshold;
+		LateThresholdUnit = lateThresholdUnit;
+		HalfDayThreshold = halfDayThreshold;
+		HalfDayThresholdUnit = halfDayThresholdUnit;
+		EnableNotificationForUpperAuthority = enableNotificationForUpperAuthority;
+	}
+
+	public static CustomAttendanceRule Create(
+		Guid id,
+		Guid tenantId,
+		string name,
+		EmployeeAttendanceStatusType type,
+		int lateThreshold,
+		TimeUnitType lateThresholdUnit,
+		int halfDayThreshold,
+		TimeUnitType halfDayThresholdUnit,
+		bool enableNotificationForUpperAuthority) =>
+		new(id, tenantId, name, type, lateThreshold, lateThresholdUnit, halfDayThreshold, halfDayThresholdUnit, enableNotificationForUpperAuthority);
+
+	public void UpdateConfiguration(
+		string name,
+		EmployeeAttendanceStatusType type,
+		int lateThreshold,
+		TimeUnitType lateThresholdUnit,
+		int halfDayThreshold,
+		TimeUnitType halfDayThresholdUnit,
+		bool enableNotificationForUpperAuthority)
+	{
 		Name = name;
 		Type = type;
 		LateThreshold = lateThreshold;

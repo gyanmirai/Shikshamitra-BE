@@ -26,8 +26,11 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 		{
 			doc.ToTable(ShikshaMitraConsts.DbTablePrefix + "EmployeeDocuments", ShikshaMitraConsts.DbSchema);
 			doc.WithOwner().HasForeignKey("EmployeeId");
-			doc.Property<Guid>("Id");
+			doc.Property<Guid>("Id").ValueGeneratedNever();
 			doc.HasKey("Id");
+			doc.Property(d => d.DocumentNameId);
+			doc.HasIndex("EmployeeId", "DocumentNameId")
+				.HasDatabaseName("IX_EmployeeDocuments_EmployeeId_DocumentNameId");
 		});
 
 		// Configure owned value objects (stored in same table)
@@ -55,12 +58,6 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 			.HasForeignKey(e => e.RoleId)
 			.OnDelete(DeleteBehavior.Restrict)
 			.IsRequired();
-
-		builder.HasOne(e => e.PayrollStructure)
-			.WithMany()
-			.HasForeignKey(e => e.PayrollStructureId)
-			.OnDelete(DeleteBehavior.Restrict)
-			.IsRequired(false);
 
 		builder.HasOne(e => e.Shift)
 			.WithMany()

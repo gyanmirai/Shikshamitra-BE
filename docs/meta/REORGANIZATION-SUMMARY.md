@@ -27,7 +27,7 @@ docs/api/
 ```
 docs/api/
 ├── README.md                         # Updated with module navigation
-├── DIRECTORY-STRUCTURE.md            # New: Organization guide
+├── directory-structure.md            # New: Organization guide
 ├── endpoints.md                      # General API reference
 ├── RoomManagement-QuickRef.md        # Room docs (to be organized)
 ├── RoomsManagement.md                # Room docs (to be organized)
@@ -64,7 +64,7 @@ Each module now has its own folder with:
 ### 2. Enhanced Navigation
 - ✅ Main API README updated
 - ✅ Employee README with detailed navigation
-- ✅ DIRECTORY-STRUCTURE.md for overview
+- ✅ directory-structure.md for overview
 - ✅ Cross-links between all docs
 
 ### 3. Better Discoverability
@@ -78,7 +78,7 @@ Each module now has its own folder with:
 ### Main Entry Points
 1. **[docs/api/README.md](../README.md)** - Start here for all API docs
 2. **[docs/api/employee/README.md](./README.md)** - Employee module home
-3. **[DIRECTORY-STRUCTURE.md](./DIRECTORY-STRUCTURE.md)** - Structure guide (historical snapshot)
+3. **[directory-structure.md](./directory-structure.md)** - Structure guide (historical snapshot)
 
 ### Quick Access by Role
 
@@ -239,7 +239,7 @@ docs/api/{module-name}/README.md
 
 ### Questions?
 - Check module README first
-- Review DIRECTORY-STRUCTURE.md
+- Review directory-structure.md
 - Ask in team channels
 - Contribute improvements
 
@@ -264,7 +264,7 @@ This sets the standard for all future documentation in the project.
 ## Quick Links
 - [Main API Documentation](../README.md)
 - [Employee Module](./README.md)
-- [Directory Structure Guide](./DIRECTORY-STRUCTURE.md)
+- [Directory Structure Guide](./directory-structure.md)
 - [General API Endpoints](../endpoints.md)
 
 ---
@@ -275,3 +275,4 @@ This sets the standard for all future documentation in the project.
 **Next:** Room Management module organization
 
 **Maintained By:** Development Team
+

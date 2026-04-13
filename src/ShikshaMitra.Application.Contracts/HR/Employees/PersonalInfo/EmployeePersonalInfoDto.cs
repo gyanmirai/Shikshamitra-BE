@@ -100,6 +100,12 @@ public class EmployeePersonalInfoDto : EntityDto<Guid>
 
 	#endregion
 
+	#region Profile Picture
+
+	public string? ProfilePictureBlobName { get; set; }
+
+	#endregion
+
 	#region Related Entities
 
 	public Guid? ShiftId { get; set; }

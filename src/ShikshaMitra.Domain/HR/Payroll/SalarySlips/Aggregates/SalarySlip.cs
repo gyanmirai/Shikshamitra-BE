@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Payroll.Settings;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -74,6 +75,26 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// Salary slip line items for deductions
 	/// </summary>
 	public List<SalarySlipLineItem> Deductions { get; private set; } = new();
+
+	/// <summary>
+	/// Payroll day basis used for LOP proration (denominator days).
+	/// </summary>
+	public int? PayrollBasisDays { get; private set; }
+
+	/// <summary>
+	/// Payable days from attendance (present + half-days as 0.5).
+	/// </summary>
+	public decimal? PayableDays { get; private set; }
+
+	/// <summary>
+	/// Applied LOP factor (capped at 1).
+	/// </summary>
+	public decimal? ProrationFactor { get; private set; }
+
+	/// <summary>
+	/// Day calculation mode active when the slip was computed.
+	/// </summary>
+	public DayCalculationType? PayrollDayCalculationMode { get; private set; }
 
 	private SalarySlip() { } // For ORM
 
@@ -163,6 +184,24 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Deductions = deductions ?? new List<SalarySlipLineItem>();
 		ProcessedDate = DateTime.UtcNow;
 		RecalculateTotals();
+	}
+
+	/// <summary>
+	/// Stores payroll day basis snapshot for audit (draft only).
+	/// </summary>
+	internal void SetPayrollComputationSnapshot(
+		int basisDays,
+		decimal payableDays,
+		decimal factor,
+		DayCalculationType dayMode)
+	{
+		if (Status == SalarySlipStatus.Finalized)
+			throw new InvalidOperationException("Cannot update finalized salary slip");
+
+		PayrollBasisDays = basisDays;
+		PayableDays = payableDays;
+		ProrationFactor = factor;
+		PayrollDayCalculationMode = dayMode;
 	}
 }
 

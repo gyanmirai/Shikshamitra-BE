@@ -6,7 +6,7 @@ public enum StudentLifeCycleStatusEnum
 	Inquiry = 1,
 	RegistrationFormIssued = 2,
 	EntranceExam = 3,
-	Registation = 4,
+	Registration = 4,
 	Admission = 5,
 	Enrolled = 6,
 	InActive = 7,

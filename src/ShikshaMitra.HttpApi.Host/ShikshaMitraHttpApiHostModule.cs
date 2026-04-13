@@ -14,7 +14,6 @@ using OpenIddict.Validation.AspNetCore;
 using QuestPDF.Infrastructure;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Extensions;
-using ShikshaMitra.Middleware;
 using ShikshaMitra.MultiTenancy;
 using System;
 using System.Collections.Generic;
@@ -112,10 +111,18 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 	private void ConfigureFormOptions(ServiceConfigurationContext context, IConfiguration configuration)
 	{
+		// Missing or zero config yields 0 for MultipartBodyLengthLimit, which rejects every multipart request
+		// ("Multipart body length limit 0 exceeded"). Default matches ASP.NET Core when FormOptions is not overridden.
+		const long defaultMultipartLimit = 128L * 1024 * 1024;
+		const int defaultMemoryBufferThreshold = 64 * 1024;
+
 		context.Services.Configure<FormOptions>(options =>
 		{
-			options.MultipartBodyLengthLimit = configuration.GetValue<long>("FormOptions:MultipartBodyLengthLimit");
-			options.MemoryBufferThreshold = configuration.GetValue<int>("FormOptions:MemoryBufferThreshold");
+			var multipartLimit = configuration.GetValue<long?>("FormOptions:MultipartBodyLengthLimit");
+			options.MultipartBodyLengthLimit = multipartLimit is > 0 ? multipartLimit.Value : defaultMultipartLimit;
+
+			var memoryThreshold = configuration.GetValue<int?>("FormOptions:MemoryBufferThreshold");
+			options.MemoryBufferThreshold = memoryThreshold is > 0 ? memoryThreshold.Value : defaultMemoryBufferThreshold;
 		});
 	}
 
@@ -232,7 +239,6 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 					"AttendanceAndLeaves" => "HR - Attendance & Leaves",
 					"Payroll" => "HR - Payroll",
 					"Calendar" => "HR - Calendar",
-					"EventAndHolidays" => "HR - Events & Holidays",
 					"Reports" => "HR - Reports",
 					_ => $"HR - {sub}"
 				}
@@ -258,7 +264,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			];
 		}
 
-		// Students Module — handles .Controllers.Students.* and ShikshaMitra.Students.Attendances.*
+		// Students Module — handles .Controllers.Students.* and ShikshaMitra.Students.Attendance.*
 		if (ns.Contains(".Controllers.Students."))
 		{
 			var sub = ns.Split(".Controllers.Students.").Last().Split('.').First();
@@ -273,7 +279,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 				}
 			];
 		}
-		if (ns.StartsWith("ShikshaMitra.Students.Attendances"))
+		if (ns.StartsWith("ShikshaMitra.Students.Attendance"))
 			return ["Students - Attendance"];
 
 		// Finance Module — handles .Controllers.Finance.Setting and .Controllers.Finance (root-level)
@@ -475,7 +481,6 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 		app.UseCorrelationId();
 		app.UseStaticFiles();
-		app.UseCustomHeader();
 		app.UseRouting();
 		app.UseCors();
 		app.UseAuthentication();

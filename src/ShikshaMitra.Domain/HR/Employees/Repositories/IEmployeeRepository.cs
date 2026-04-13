@@ -25,16 +25,14 @@ public interface IEmployeeRepository : IRepository<Employee, Guid>
 	Task<Employee?> GetLastEmployeeAsync(CancellationToken cancellationToken = default);
 
 	/// <summary>
-	/// Gets an employee with all related data including PayrollStructure.
+	/// Gets an employee with all related data.
 	/// Use this method when you need complete employee information.
 	/// </summary>
 	/// <param name="id">Employee ID</param>
-	/// <param name="includePayrollStructure">Include payroll structure details</param>
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>Employee entity with all relations loaded</returns>
 	Task<Employee?> GetWithDetailsAsync(
 		Guid id,
-		bool includePayrollStructure = false,
 		CancellationToken cancellationToken = default);
 
 	/// <summary>

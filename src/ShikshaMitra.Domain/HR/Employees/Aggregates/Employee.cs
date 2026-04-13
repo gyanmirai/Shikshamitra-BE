@@ -1,5 +1,4 @@
 ﻿using ShikshaMitra.Common;
-using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.TenantSettings;
 using System;
 using System.Collections.Generic;
@@ -66,17 +65,12 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	// Navigation property for Family Members (now in separate table)
 	public virtual ICollection<EmployeeFamilyMember> FamilyMembers { get; private set; } = new List<EmployeeFamilyMember>();
 
-	// Payroll Structure
-	public Guid? PayrollStructureId { get; private set; }
-
 	// Reporting Manager
 	public Guid? ReportingManagerId { get; private set; }
 
 	// Navigation Property for Role
 	public virtual IdentityRole? Role { get; private set; }
 
-	// Navigation property for PayrollStructure
-	public virtual PayrollStructure? PayrollStructure { get; private set; }
 	// Navigation property for Shift
 	public virtual ShiftManagement? Shift { get; private set; }
 	// Navigation property for Reporting Manager
@@ -257,7 +251,15 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	internal Employee UpdateWorkExperiences(List<WorkExperience> workExperiences)
 	{
-		this.WorkExperiences = workExperiences;
+		ArgumentNullException.ThrowIfNull(workExperiences);
+
+		// Mutate the existing collection so EF Core keeps tracking the same OwnsMany(ToJson) instance.
+		// Replacing the list reference can cause the JSON column not to persist (empty after SaveChanges).
+		WorkExperiences.Clear();
+		foreach (var item in workExperiences)
+		{
+			WorkExperiences.Add(item);
+		}
 
 		return this;
 	}
@@ -283,16 +285,6 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	internal void UpdateProfilePicture(string? profilePictureBlobName)
 	{
 		ProfilePictureBlobName = profilePictureBlobName;
-	}
-
-	internal void SetPayrollStructure(Guid payrollStructureId)
-	{
-		PayrollStructureId = payrollStructureId;
-	}
-
-	internal void RemovePayrollStructure()
-	{
-		PayrollStructureId = null;
 	}
 
 	internal void UpdateUserId(Guid id)

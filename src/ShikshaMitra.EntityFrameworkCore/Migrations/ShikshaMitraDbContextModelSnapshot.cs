@@ -3237,6 +3237,9 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_EmployeeLeaves_Tenant_PublicId");
 
+                    b.HasIndex("TenantId", "EmployeeId", "Status", "StartDate", "EndDate")
+                        .HasDatabaseName("IX_EmployeeLeaves_Overlap");
+
                     b.ToTable("AppEmployeeLeaves", (string)null);
                 });
 
@@ -4051,9 +4054,6 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
-                    b.Property<Guid?>("PayrollStructureId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("PinCode")
                         .HasColumnType("text");
 
@@ -4116,8 +4116,6 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("Email")
                         .HasDatabaseName("IX_Employees_Email");
-
-                    b.HasIndex("PayrollStructureId");
 
                     b.HasIndex("ReportingManagerId")
                         .HasDatabaseName("IX_Employees_ReportingManagerId");
@@ -4399,6 +4397,12 @@ namespace ShikshaMitra.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<DateTime?>("ApplicableMonth")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ComponentId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("ComponentType")
                         .HasColumnType("integer");
 
@@ -4567,141 +4571,6 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppDocumentSettings", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.HR.EventAndHolidays.EventAndHoliday", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
-
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
-
-                    b.Property<DateTimeOffset>("EndDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
-
-                    b.Property<bool>("IsHoliday")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Reason")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("StartDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("AppEventAndHolidays", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("Amount")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("CreationTime");
-
-                    b.Property<Guid?>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("CreatorId");
-
-                    b.Property<Guid?>("DeleterId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("DeleterId");
-
-                    b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DeletionTime");
-
-                    b.Property<Guid?>("EducationMediumStageId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("EmployeeId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("IsDeleted");
-
-                    b.Property<DateTime?>("LastModificationTime")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("LastModificationTime");
-
-                    b.Property<Guid?>("LastModifierId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("LastModifierId");
-
-                    b.Property<Guid>("PayElementId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("PayElementType")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EducationMediumStageId");
-
-                    b.HasIndex("PayElementId");
-
-                    b.ToTable("AppPayrollStructures", (string)null);
-                });
-
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.SalarySlips.SalarySlip", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4772,8 +4641,22 @@ namespace ShikshaMitra.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<decimal?>("PayableDays")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("PayrollBasisDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PayrollDayCalculationMode")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("ProcessedDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("ProrationFactor")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<string>("Remarks")
                         .HasMaxLength(1000)
@@ -4818,15 +4701,68 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("HR_SalarySlips", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.DayCalculationSetting", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<int>("DayCalculationType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<int?>("ManualDays")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_DayCalculationSettings_TenantId");
+
+                    b.ToTable("AppDayCalculationSettings", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.DeductionComponent", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Amount")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                    b.Property<decimal?>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("CalculationType")
+                        .HasColumnType("integer");
 
                     b.Property<int>("ComponentType")
                         .HasColumnType("integer");
@@ -4845,9 +4781,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("CreatorId")
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
-
-                    b.Property<Guid?>("CustomComponentId")
-                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("DeleterId")
                         .HasColumnType("uuid")
@@ -4897,6 +4830,12 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<decimal?>("Percentage")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<Guid?>("SelectedDeductionComponentId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
@@ -4917,7 +4856,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "Name")
                         .IsUnique()
-                        .HasDatabaseName("IX_DeductionComponents_TenantId_Name");
+                        .HasDatabaseName("IX_DeductionComponents_TenantId_Name")
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("AppDeductionComponents", (string)null);
                 });
@@ -4927,10 +4867,11 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Amount")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                    b.Property<decimal?>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("CalculationType")
+                        .HasColumnType("integer");
 
                     b.Property<int>("ComponentType")
                         .HasColumnType("integer");
@@ -4949,9 +4890,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("CreatorId")
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
-
-                    b.Property<Guid?>("CustomComponentId")
-                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("DeleterId")
                         .HasColumnType("uuid")
@@ -5002,6 +4940,12 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<decimal?>("Percentage")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<Guid?>("SelectedEarningComponentId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
@@ -5021,7 +4965,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "Name")
                         .IsUnique()
-                        .HasDatabaseName("IX_EarningComponents_TenantId_Name");
+                        .HasDatabaseName("IX_EarningComponents_TenantId_Name")
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("AppEarningComponents", (string)null);
                 });
@@ -5160,7 +5105,8 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -5212,13 +5158,24 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ProvidentFunds_TenantId_Code")
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.HasIndex("TenantId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ProvidentFunds_TenantId_Name")
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("AppProvidentFunds", (string)null);
                 });
@@ -6280,7 +6237,7 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppStudentLeaveTypes", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Students.Attendances.StudentLeave", b =>
+            modelBuilder.Entity("ShikshaMitra.Students.Attendance.StudentLeave", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -6544,17 +6501,11 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
-                    b.Property<Guid?>("FamilyDetailId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("FirstName")
                         .HasColumnType("text");
 
                     b.Property<int?>("GrNo")
                         .HasColumnType("integer");
-
-                    b.Property<Guid?>("InquiryPreferenceId")
-                        .HasColumnType("uuid");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -6606,10 +6557,6 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("CommunicationDetailId");
 
                     b.HasIndex("DivisionId");
-
-                    b.HasIndex("FamilyDetailId");
-
-                    b.HasIndex("InquiryPreferenceId");
 
                     b.HasIndex("MedicalRecordId");
 
@@ -6678,38 +6625,35 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("EmergencyRelationType")
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("EntranceExamEndDateTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double?>("EntranceExamObtainedMarks")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("EntranceExamPassingMarks")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("EntranceExamPercentage")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTimeOffset?>("EntranceExamResultDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("EntranceExamRoomNo")
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("EntranceExamSlotId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset?>("ExamDate")
+                    b.Property<DateTimeOffset?>("EntranceExamStartDateTime")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<TimeSpan?>("ExamEndTime")
-                        .HasColumnType("interval");
-
-                    b.Property<decimal?>("ExamObtainedMarks")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal?>("ExamPassingMarks")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal?>("ExamPercentage")
-                        .HasColumnType("numeric");
-
-                    b.Property<DateTimeOffset?>("ExamResultDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("ExamRoomNo")
+                    b.Property<int?>("EntranceExamStatus")
                         .HasColumnType("integer");
 
-                    b.Property<TimeSpan?>("ExamStartTime")
-                        .HasColumnType("interval");
-
-                    b.Property<int?>("ExamStatus")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal?>("ExamTotalMarks")
-                        .HasColumnType("numeric");
+                    b.Property<double?>("EntranceExamTotalMarks")
+                        .HasColumnType("double precision");
 
                     b.Property<string>("FamilyCast")
                         .IsRequired()
@@ -6809,6 +6753,8 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("HouseId");
+
+                    b.HasIndex("InquiryPreferenceId");
 
                     b.ToTable("AppStudentAdditionalDetails", (string)null);
                 });
@@ -10931,11 +10877,6 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
                 {
-                    b.HasOne("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", "PayrollStructure")
-                        .WithMany()
-                        .HasForeignKey("PayrollStructureId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("ShikshaMitra.HR.Employees.Employee", "ReportingManager")
                         .WithMany()
                         .HasForeignKey("ReportingManagerId")
@@ -11010,7 +10951,6 @@ namespace ShikshaMitra.Migrations
                     b.OwnsMany("ShikshaMitra.HR.Employees.EmployeeDocument", "Documents", b1 =>
                         {
                             b1.Property<Guid>("Id")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("uuid");
 
                             b1.Property<string>("BlobName")
@@ -11028,8 +10968,14 @@ namespace ShikshaMitra.Migrations
                                 .IsRequired()
                                 .HasColumnType("text");
 
+                            b1.Property<Guid?>("DocumentNameId")
+                                .HasColumnType("uuid");
+
                             b1.Property<Guid>("EmployeeId")
                                 .HasColumnType("uuid");
+
+                            b1.Property<DateTime?>("LastModificationTime")
+                                .HasColumnType("timestamp with time zone");
 
                             b1.Property<long>("Size")
                                 .HasColumnType("bigint");
@@ -11039,7 +10985,8 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasKey("Id");
 
-                            b1.HasIndex("EmployeeId");
+                            b1.HasIndex("EmployeeId", "DocumentNameId")
+                                .HasDatabaseName("IX_EmployeeDocuments_EmployeeId_DocumentNameId");
 
                             b1.ToTable("AppEmployeeDocuments", (string)null);
 
@@ -11093,8 +11040,6 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Country");
 
                     b.Navigation("Documents");
-
-                    b.Navigation("PayrollStructure");
 
                     b.Navigation("ReportingManager");
 
@@ -11160,23 +11105,6 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
 
                     b.Navigation("Employee");
-                });
-
-            modelBuilder.Entity("ShikshaMitra.HR.Payroll.PayrollStructures.PayrollStructure", b =>
-                {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
-                        .WithMany()
-                        .HasForeignKey("EducationMediumStageId");
-
-                    b.HasOne("ShikshaMitra.HR.Payroll.Settings.PayElement", "PayElement")
-                        .WithMany()
-                        .HasForeignKey("PayElementId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("EducationMediumStage");
-
-                    b.Navigation("PayElement");
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.Settings.PayElement", b =>
@@ -11256,7 +11184,7 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Student");
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Students.Attendances.StudentLeave", b =>
+            modelBuilder.Entity("ShikshaMitra.Students.Attendance.StudentLeave", b =>
                 {
                     b.HasOne("ShikshaMitra.Students.Student", "Student")
                         .WithMany()
@@ -11287,6 +11215,10 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("AcademicMediumId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", "AcademicYear")
+                        .WithMany()
+                        .HasForeignKey("AcademicYearId");
+
                     b.HasOne("ShikshaMitra.Students.StudentBankDetail", "BankDetail")
                         .WithMany()
                         .HasForeignKey("BankDetailId");
@@ -11299,14 +11231,6 @@ namespace ShikshaMitra.Migrations
                         .WithMany()
                         .HasForeignKey("DivisionId")
                         .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("ShikshaMitra.Students.StudentFamilyDetail", "FamilyDetail")
-                        .WithMany()
-                        .HasForeignKey("FamilyDetailId");
-
-                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.Settings.InquiryPreference", "InquiryPreference")
-                        .WithMany()
-                        .HasForeignKey("InquiryPreferenceId");
 
                     b.HasOne("ShikshaMitra.Students.StudentMedicalRecord", "MedicalRecord")
                         .WithMany()
@@ -11325,15 +11249,13 @@ namespace ShikshaMitra.Migrations
 
                     b.Navigation("AcademicMedium");
 
+                    b.Navigation("AcademicYear");
+
                     b.Navigation("BankDetail");
 
                     b.Navigation("CommunicationDetail");
 
                     b.Navigation("Division");
-
-                    b.Navigation("FamilyDetail");
-
-                    b.Navigation("InquiryPreference");
 
                     b.Navigation("MedicalRecord");
 
@@ -11354,7 +11276,14 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.Settings.InquiryPreference", "InquiryPreference")
+                        .WithMany()
+                        .HasForeignKey("InquiryPreferenceId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.Navigation("House");
+
+                    b.Navigation("InquiryPreference");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentCommunicationDetail", b =>
@@ -11741,6 +11670,12 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentFamilyDetail", b =>
                 {
+                    b.HasOne("ShikshaMitra.Students.Student", null)
+                        .WithOne("FamilyDetail")
+                        .HasForeignKey("ShikshaMitra.Students.StudentFamilyDetail", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.OwnsOne("ShikshaMitra.Students.ValueObjects.ParentGuardianDetails", "FatherDetails", b1 =>
                         {
                             b1.Property<Guid>("StudentFamilyDetailId")
@@ -12864,6 +12799,8 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("AdditionalDetail");
 
                     b.Navigation("ContactDetail");
+
+                    b.Navigation("FamilyDetail");
 
                     b.Navigation("Notes");
 

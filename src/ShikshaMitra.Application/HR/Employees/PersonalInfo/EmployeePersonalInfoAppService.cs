@@ -26,6 +26,7 @@ public class EmployeePersonalInfoAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeeFamilyMemberRepository familyMemberRepository,
 	EmployeeManager employeeManager,
+	EmployeeDocumentManager employeeDocumentManager,
 	IdentityUserManager userManager,
 	IIdentityUserRepository userRepository,
 	ILookupNormalizer lookupNormalizer,
@@ -35,8 +36,27 @@ public class EmployeePersonalInfoAppService(
 	ILogger<EmployeePersonalInfoAppService> logger)
 	: ApplicationService, IEmployeePersonalInfoAppService
 {
+	private const int MaxEmployeeCodeInsertAttempts = 5;
+
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	public async Task<EmployeePersonalInfoDto> CreateAsync(CreateEmployeePersonalInfoDto input)
+	{
+		return await CreateCoreAsync(input, null, null);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
+	public async Task<EmployeePersonalInfoDto> CreateWithProfilePictureAsync(
+		CreateEmployeePersonalInfoDto input,
+		string profilePictureFileName,
+		byte[] profilePictureContent)
+	{
+		return await CreateCoreAsync(input, profilePictureFileName, profilePictureContent);
+	}
+
+	private async Task<EmployeePersonalInfoDto> CreateCoreAsync(
+		CreateEmployeePersonalInfoDto input,
+		string? profilePictureFileName,
+		byte[]? profilePictureContent)
 	{
 		if (string.IsNullOrWhiteSpace(input.Email))
 			throw new BusinessException(HRErrorCodes.EmployeeEmailRequired);
@@ -51,8 +71,6 @@ public class EmployeePersonalInfoAppService(
 		var existingUserByEmail = await userRepository.FindByNormalizedEmailAsync(normalizedEmail);
 		if (existingUserByEmail != null)
 			throw new BusinessException(HRErrorCodes.EmployeeEmailAlreadyExists);
-
-		using var uow = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true });
 
 		var username = await GenerateUniqueUsernameAsync(input.FirstName, input.LastName);
 		var last4Digits = input.MobileNo[^4..];
@@ -73,25 +91,31 @@ public class EmployeePersonalInfoAppService(
 			throw new BusinessException(HRErrorCodes.EmployeeUserCreationFailed).WithData("details", errors);
 		}
 
-		var employee = await employeeManager.CreateEmployeeAsync(
-			userId: user.Id, roleId: input.RoleId,
-			firstName: input.FirstName, lastName: input.LastName,
-			middleName: input.MiddleName, shortName: input.ShortName,
-			employeeStatusType: input.EmployeeStatusType, dateOfBirth: input.DateOfBirth,
-			familyCast: input.FamilyCaste, castType: input.CastType,
-			genderType: input.GenderType, religion: input.Religion,
-			maritalStatus: input.MaritalStatus, bloodGroup: input.BloodGroup,
-			mobileNo: input.MobileNo, secondaryMobileNo: input.SecondaryMobileNo,
-			email: input.Email, address1: input.Address1, address2: input.Address2,
-			address3: input.Address3, department: input.Department,
-			designation: input.Designation, dateOfJoining: input.DateOfJoining,
-			employeeGroup: input.EmployeeGroup, qualification: input.Qualification,
-			identificationMark1: input.IdentificationMark1, city: input.City,
-			state: input.State, country: input.Country, pinCode: input.Pincode,
-			shiftId: input.ShiftId);
+		Employee employee;
+		try
+		{
+			employee = await CreateAndInsertEmployeeWithRetryAsync(user.Id, input);
+		}
+		catch
+		{
+			var deleteResult = await userManager.DeleteAsync(user);
+			if (!deleteResult.Succeeded)
+			{
+				var deleteErrors = string.Join(", ", deleteResult.Errors.Select(e => e.Description));
+				logger.LogWarning(
+					"Employee creation failed and cleanup user delete also failed for {Email}: {Errors}",
+					input.Email,
+					deleteErrors);
+			}
 
-		employee = await employeeRepository.InsertAsync(employee);
-		await uow.CompleteAsync();
+			throw;
+		}
+
+		if (profilePictureContent != null && !string.IsNullOrWhiteSpace(profilePictureFileName))
+		{
+			await employeeDocumentManager.UploadProfilePictureAsync(
+				employee.Id, profilePictureFileName, profilePictureContent);
+		}
 
 		logger.LogInformation(
 			"Employee created: EmployeeId={EmployeeId}, Code={EmployeeCode}, Email={Email}",
@@ -111,6 +135,69 @@ public class EmployeePersonalInfoAppService(
 		await emailService.SendWelcomeEmailAsync(input.Email, fullName, username, password);
 
 		return MapToDto(employee);
+	}
+
+	private async Task<Employee> CreateAndInsertEmployeeWithRetryAsync(
+		Guid userId,
+		CreateEmployeePersonalInfoDto input)
+	{
+		for (var attempt = 1; attempt <= MaxEmployeeCodeInsertAttempts; attempt++)
+		{
+			try
+			{
+				using var uow = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true });
+
+				var employee = await employeeManager.CreateEmployeeAsync(
+					userId: userId, roleId: input.RoleId,
+					firstName: input.FirstName, lastName: input.LastName,
+					middleName: input.MiddleName, shortName: input.ShortName,
+					employeeStatusType: input.EmployeeStatusType, dateOfBirth: input.DateOfBirth,
+					familyCast: input.FamilyCaste, castType: input.CastType,
+					genderType: input.GenderType, religion: input.Religion,
+					maritalStatus: input.MaritalStatus, bloodGroup: input.BloodGroup,
+					mobileNo: input.MobileNo, secondaryMobileNo: input.SecondaryMobileNo,
+					email: input.Email, address1: input.Address1, address2: input.Address2,
+					address3: input.Address3, department: input.Department,
+					designation: input.Designation, dateOfJoining: input.DateOfJoining,
+					employeeGroup: input.EmployeeGroup, qualification: input.Qualification,
+					identificationMark1: input.IdentificationMark1, city: input.City,
+					state: input.State, country: input.Country, pinCode: input.Pincode,
+					shiftId: input.ShiftId);
+
+				employee = await employeeRepository.InsertAsync(employee, autoSave: true);
+				await uow.CompleteAsync();
+				return employee;
+			}
+			catch (Exception ex) when (IsEmployeeCodeUniqueConstraintViolation(ex) && attempt < MaxEmployeeCodeInsertAttempts)
+			{
+				logger.LogWarning(
+					ex,
+					"Employee code collision detected for {Email}. Retrying create flow (attempt {Attempt}/{MaxAttempts}).",
+					input.Email,
+					attempt + 1,
+					MaxEmployeeCodeInsertAttempts);
+			}
+		}
+
+		throw new InvalidOperationException("Employee creation retry loop exited unexpectedly.");
+	}
+
+	private static bool IsEmployeeCodeUniqueConstraintViolation(Exception exception)
+	{
+		for (var current = exception; current != null; current = current.InnerException)
+		{
+			var message = current.Message;
+			if (
+				message.Contains("IX_Employees_TenantId_EmployeeCode_Unique", StringComparison.OrdinalIgnoreCase) ||
+				message.Contains("AppEmployees.TenantId, AppEmployees.EmployeeCode", StringComparison.OrdinalIgnoreCase) ||
+				message.Contains("duplicate key value violates unique constraint", StringComparison.OrdinalIgnoreCase) ||
+				message.Contains("Cannot insert duplicate key row", StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public async Task<EmployeePersonalInfoDto> GetAsync(Guid id)
@@ -174,7 +261,7 @@ public class EmployeePersonalInfoAppService(
 
 	public async Task<EmployeeDto> GetWithDetailsAsync(Guid id)
 	{
-		var employee = await employeeRepository.GetWithDetailsAsync(id, includePayrollStructure: true)
+		var employee = await employeeRepository.GetWithDetailsAsync(id)
 			?? throw new EntityNotFoundException(typeof(Employee), id);
 
 		var employeeDto = ObjectMapper.Map<Employee, EmployeeDto>(employee);
@@ -249,6 +336,7 @@ public class EmployeePersonalInfoAppService(
 			Qualification = employee.Qualification,
 			RoleId = employee.RoleId,
 			RoleName = employee.Role?.Name,
+			ProfilePictureBlobName = employee.ProfilePictureBlobName,
 			IdentificationMark1 = employee.IdentificationMark1,
 			Address1 = employee.Address1,
 			Address2 = employee.Address2,

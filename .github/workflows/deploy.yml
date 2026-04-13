@@ -6,13 +6,13 @@ on:
 
 env:
   AZURE_WEBAPP_NAME: stg-gyanmirai-be
-  DOTNET_VERSION: '10.0.x'
+  DOTNET_VERSION: '9.0.x'
   ASPNETCORE_ENVIRONMENT: Staging
   DOTNET_ENVIRONMENT: Staging
   DOTNET_USELAUNCHSETTINGS: '0'
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -35,6 +35,14 @@ jobs:
     - name: Build
       run: dotnet build --configuration Release
 
+    # ⭐ Run Critical API Tests before deployment
+    # - name: Run Critical API Tests
+    #   run: >
+    #     dotnet test test/ShikshaMitra.HttpApi.Tests
+    #     --configuration Release
+    #     --no-build
+    #     --filter "Tier=Critical"
+
     # ⭐ Run ABP DbMigrator
     - name: Run DbMigrator
       env:
@@ -47,28 +55,10 @@ jobs:
     - name: Publish
       run: dotnet publish src/ShikshaMitra.HttpApi.Host -c Release -o ./publish
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
+    # ⭐ Deploy using Publish Profile
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v2
       with:
-        name: build_artifact
-        path: ./publish
-
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: build_artifact
-          path: ./build_artifact
-
-      # ⭐ Deploy using Publish Profile
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: ./build_artifact
+        app-name: ${{ env.AZURE_WEBAPP_NAME }}
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: ./publish

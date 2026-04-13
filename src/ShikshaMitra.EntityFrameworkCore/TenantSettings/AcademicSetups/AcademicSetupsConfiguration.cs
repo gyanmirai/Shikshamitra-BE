@@ -122,6 +122,8 @@ public class AcademicSetupsConfiguration
 			.HasForeignKey(x => x.EducationMediumId);
 
 		builder.Navigation(x => x.Standards).AutoInclude();
+
+		builder.Navigation(x => x.EducationMedium).AutoInclude();
 	}
 
 	// Configure the Standard entity
@@ -142,6 +144,8 @@ public class AcademicSetupsConfiguration
 			.HasOne(x => x.EducationMediumStage)
 			.WithMany(x => x.Standards)
 			.HasForeignKey(x => x.EducationMediumStageId);
+
+		builder.Navigation(x => x.EducationMediumStage).AutoInclude();
 
 		builder.Navigation(x => x.Divisions).AutoInclude();
 

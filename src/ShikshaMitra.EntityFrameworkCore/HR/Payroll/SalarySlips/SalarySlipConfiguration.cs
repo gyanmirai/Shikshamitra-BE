@@ -68,6 +68,17 @@ public class SalarySlipConfiguration : IEntityTypeConfiguration<SalarySlip>
 		builder.Property(x => x.Remarks)
 			.HasMaxLength(1000);
 
+		builder.Property(x => x.PayrollBasisDays);
+
+		builder.Property(x => x.PayableDays)
+			.HasPrecision(18, 2);
+
+		builder.Property(x => x.ProrationFactor)
+			.HasPrecision(18, 4);
+
+		builder.Property(x => x.PayrollDayCalculationMode)
+			.HasConversion<int?>();
+
 		// JSON columns for line items (EF Core 8+ feature)
 		// PostgreSQL uses jsonb for efficient JSON storage
 		builder.Property(x => x.Earnings)

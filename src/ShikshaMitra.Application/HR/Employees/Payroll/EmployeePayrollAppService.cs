@@ -1,7 +1,7 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees.Payroll;
-using ShikshaMitra.HR.Payroll.PayrollStructures;
+using ShikshaMitra.HR.Payroll.Settings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,7 +18,8 @@ public class EmployeePayrollAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeePayrollDetailsRepository payrollDetailsRepository,
 	IEmployeePayrollComponentRepository payrollComponentRepository,
-	PayrollStructureManager payrollStructureManager,
+	IEarningComponentRepository earningComponentRepository,
+	IDeductionComponentRepository deductionComponentRepository,
 	IEmployeeCacheManager employeeCacheManager,
 	IGuidGenerator guidGenerator)
 	: ApplicationService, IEmployeePayrollAppService
@@ -113,8 +114,8 @@ public class EmployeePayrollAppService(
 		{
 			var component = new EmployeePayrollComponent(
 				guidGenerator.Create(), employeeId,
-				earning.Name, earning.Description, earning.Amount,
-				earning.IsFixed, earning.IsTemp, earning.ComponentType,
+				earning.Name, componentId: null, earning.Description, earning.Amount,
+				earning.IsFixed, earning.IsTemp, applicableMonth: null, earning.ComponentType,
 				earning.DependOn, isEarning: true);
 			await payrollComponentRepository.InsertAsync(component);
 		}
@@ -123,8 +124,8 @@ public class EmployeePayrollAppService(
 		{
 			var component = new EmployeePayrollComponent(
 				guidGenerator.Create(), employeeId,
-				deduction.Name, deduction.Description, deduction.Amount,
-				deduction.IsFixed, deduction.IsTemp, deduction.ComponentType,
+				deduction.Name, componentId: null, deduction.Description, deduction.Amount,
+				deduction.IsFixed, deduction.IsTemp, applicableMonth: null, deduction.ComponentType,
 				deduction.DependOn, isEarning: false);
 			await payrollComponentRepository.InsertAsync(component);
 		}
@@ -139,6 +140,8 @@ public class EmployeePayrollAppService(
 		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
 		var earnings = await payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
 		var deductions = await payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);
+		var earningComponentIdByName = await GetEarningComponentIdsByNameAsync(earnings);
+		var deductionComponentIdByName = await GetDeductionComponentIdsByNameAsync(deductions);
 
 		return new PayrollContract
 		{
@@ -163,12 +166,16 @@ public class EmployeePayrollAppService(
 			} : null,
 			EarningComponents = earnings?.Select(e => new ComponentAmountContract
 			{
-				ComponentId = e.Id,
+				// Prefer persisted master component ID, then name-based lookup, then employee component row ID.
+				ComponentId = e.ComponentId
+					?? (earningComponentIdByName.TryGetValue(e.Name, out var masterId) ? masterId : e.Id),
 				Amount = e.Amount
 			}).ToList() ?? new List<ComponentAmountContract>(),
 			DeductionComponents = deductions?.Select(d => new ComponentAmountContract
 			{
-				ComponentId = d.Id,
+				// Prefer persisted master component ID, then name-based lookup, then employee component row ID.
+				ComponentId = d.ComponentId
+					?? (deductionComponentIdByName.TryGetValue(d.Name, out var masterId) ? masterId : d.Id),
 				Amount = d.Amount
 			}).ToList() ?? new List<ComponentAmountContract>()
 		};
@@ -176,6 +183,8 @@ public class EmployeePayrollAppService(
 
 	public async Task UpdatePayrollContractAsync(Guid employeeId, PayrollContract input)
 	{
+		ValidatePayrollContract(input);
+
 		await employeeRepository.GetAsync(employeeId);
 
 		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
@@ -204,27 +213,355 @@ public class EmployeePayrollAppService(
 			await payrollDetailsRepository.UpdateAsync(payrollDetails);
 		}
 
+		var existingEarnings = await payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
+		var existingDeductions = await payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);
+		var existingEarningByRowId = existingEarnings.ToDictionary(x => x.Id);
+		var existingDeductionByRowId = existingDeductions.ToDictionary(x => x.Id);
+
+		var inputEarnings = input.EarningComponents ?? [];
+		var earningIds = inputEarnings
+			.Select(x => x.ComponentId)
+			.Where(id => !existingEarningByRowId.ContainsKey(id))
+			.Distinct()
+			.ToList();
+		var earningMasters = earningIds.Count == 0
+			? new List<EarningComponent>()
+			: await AsyncExecuter.ToListAsync(
+				(await earningComponentRepository.GetQueryableAsync())
+				.Where(x => earningIds.Contains(x.Id)));
+		EnsureAllMasterComponentsExist(
+			earningIds,
+			earningMasters.Select(x => x.Id),
+			HRErrorCodes.EmployeePayrollInvalidEarningComponent);
+		var earningById = earningMasters.ToDictionary(x => x.Id);
+
+		var inputDeductions = input.DeductionComponents ?? [];
+		var deductionIds = inputDeductions
+			.Select(x => x.ComponentId)
+			.Where(id => !existingDeductionByRowId.ContainsKey(id))
+			.Distinct()
+			.ToList();
+		var deductionMasters = deductionIds.Count == 0
+			? new List<DeductionComponent>()
+			: await AsyncExecuter.ToListAsync(
+				(await deductionComponentRepository.GetQueryableAsync())
+				.Where(x => deductionIds.Contains(x.Id)));
+		EnsureAllMasterComponentsExist(
+			deductionIds,
+			deductionMasters.Select(x => x.Id),
+			HRErrorCodes.EmployeePayrollInvalidDeductionComponent);
+		var deductionById = deductionMasters.ToDictionary(x => x.Id);
+
+		await payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: true);
+		await payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: false);
+
+		if (inputEarnings.Count > 0)
+		{
+			foreach (var earningInput in inputEarnings)
+			{
+				if (existingEarningByRowId.TryGetValue(earningInput.ComponentId, out var existingEarningComponent))
+				{
+					var earningComponentFromExisting = new EmployeePayrollComponent(
+						guidGenerator.Create(),
+						employeeId,
+						existingEarningComponent.Name,
+						existingEarningComponent.ComponentId,
+						existingEarningComponent.Description,
+						earningInput.Amount,
+						existingEarningComponent.IsFixed,
+						existingEarningComponent.IsTemp,
+						existingEarningComponent.ApplicableMonth,
+						existingEarningComponent.ComponentType,
+						existingEarningComponent.DependOn,
+						isEarning: true);
+
+					await payrollComponentRepository.InsertAsync(earningComponentFromExisting);
+					continue;
+				}
+
+				if (!earningById.TryGetValue(earningInput.ComponentId, out var earningMaster))
+				{
+					throw new BusinessException(HRErrorCodes.EmployeePayrollInvalidEarningComponent)
+						.WithData("componentId", earningInput.ComponentId);
+				}
+
+				var earningComponent = new EmployeePayrollComponent(
+					guidGenerator.Create(),
+					employeeId,
+					earningMaster.Name,
+					earningInput.ComponentId,
+					earningMaster.Description,
+					earningInput.Amount,
+					earningMaster.CalculationType == CalculationType.Amount,
+					isTemp: false,
+					applicableMonth: null,
+					earningMaster.CalculationType == CalculationType.Amount
+						? SalaryComponentType.Fixed
+						: SalaryComponentType.Percentage,
+					MapDependency(earningMaster.DependOn),
+					isEarning: true);
+
+				await payrollComponentRepository.InsertAsync(earningComponent);
+			}
+		}
+
+		if (inputDeductions.Count > 0)
+		{
+			foreach (var deductionInput in inputDeductions)
+			{
+				if (existingDeductionByRowId.TryGetValue(deductionInput.ComponentId, out var existingDeductionComponent))
+				{
+					var deductionComponentFromExisting = new EmployeePayrollComponent(
+						guidGenerator.Create(),
+						employeeId,
+						existingDeductionComponent.Name,
+						existingDeductionComponent.ComponentId,
+						existingDeductionComponent.Description,
+						deductionInput.Amount,
+						existingDeductionComponent.IsFixed,
+						existingDeductionComponent.IsTemp,
+						existingDeductionComponent.ApplicableMonth,
+						existingDeductionComponent.ComponentType,
+						existingDeductionComponent.DependOn,
+						isEarning: false);
+
+					await payrollComponentRepository.InsertAsync(deductionComponentFromExisting);
+					continue;
+				}
+
+				if (!deductionById.TryGetValue(deductionInput.ComponentId, out var deductionMaster))
+				{
+					throw new BusinessException(HRErrorCodes.EmployeePayrollInvalidDeductionComponent)
+						.WithData("componentId", deductionInput.ComponentId);
+				}
+
+				var deductionComponent = new EmployeePayrollComponent(
+					guidGenerator.Create(),
+					employeeId,
+					deductionMaster.Name,
+					deductionInput.ComponentId,
+					deductionMaster.Description,
+					deductionInput.Amount,
+					deductionMaster.CalculationType == CalculationType.Amount,
+					isTemp: false,
+					applicableMonth: null,
+					deductionMaster.CalculationType == CalculationType.Amount
+						? SalaryComponentType.Fixed
+						: SalaryComponentType.Percentage,
+					MapDependency(deductionMaster.DependOn),
+					isEarning: false);
+
+				await payrollComponentRepository.InsertAsync(deductionComponent);
+			}
+		}
+
 		await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
 	}
 
-	public async Task SetPayrollStructureAsync(Guid employeeId, Guid payrollStructureId)
+	private static void EnsureAllMasterComponentsExist(
+		IReadOnlyCollection<Guid> requestedIds,
+		IEnumerable<Guid> foundIds,
+		string errorCode)
 	{
-		await payrollStructureManager.SetEmployeePayrollStructureAsync(employeeId, payrollStructureId);
-	}
-
-	public async Task RemovePayrollStructureAsync(Guid employeeId)
-	{
-		await payrollStructureManager.RemoveEmployeePayrollStructureAsync(employeeId);
-	}
-
-	public async Task UpdatePayrollStructureAsync(Guid employeeId, CreateUpdateEmployeePayrollStructureDto input)
-	{
-		if (input?.PayrollStructures == null || input.PayrollStructures.Count == 0)
+		if (requestedIds.Count == 0)
 		{
-			throw new BusinessException(HRErrorCodes.EmployeePayrollStructureRequired);
+			return;
 		}
 
-		var payrollStructureId = input.PayrollStructures[0].Id;
-		await payrollStructureManager.SetEmployeePayrollStructureAsync(employeeId, payrollStructureId);
+		var foundIdSet = foundIds.ToHashSet();
+		var missingIds = requestedIds.Where(id => !foundIdSet.Contains(id)).ToList();
+		if (missingIds.Count == 0)
+		{
+			return;
+		}
+
+		throw new BusinessException(errorCode)
+			.WithData("missingComponentIds", string.Join(",", missingIds));
 	}
+
+	private static SalaryComponentDependency? MapDependency(ComponentDependency dependOn)
+	{
+		return dependOn switch
+		{
+			ComponentDependency.None => SalaryComponentDependency.None,
+			ComponentDependency.Basic => SalaryComponentDependency.Basic,
+			ComponentDependency.Gross => SalaryComponentDependency.Gross,
+			_ => null
+		};
+	}
+
+	private async Task<Dictionary<string, Guid>> GetEarningComponentIdsByNameAsync(
+		IEnumerable<EmployeePayrollComponent>? earnings)
+	{
+		var names = (earnings ?? Enumerable.Empty<EmployeePayrollComponent>())
+			.Select(x => x.Name)
+			.Where(x => !string.IsNullOrWhiteSpace(x))
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+
+		if (names.Count == 0)
+		{
+			return new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+		}
+
+		var masters = await AsyncExecuter.ToListAsync(
+			(await earningComponentRepository.GetQueryableAsync()).Where(x => names.Contains(x.Name)));
+
+		return masters
+			.GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+	}
+
+	private async Task<Dictionary<string, Guid>> GetDeductionComponentIdsByNameAsync(
+		IEnumerable<EmployeePayrollComponent>? deductions)
+	{
+		var names = (deductions ?? Enumerable.Empty<EmployeePayrollComponent>())
+			.Select(x => x.Name)
+			.Where(x => !string.IsNullOrWhiteSpace(x))
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+
+		if (names.Count == 0)
+		{
+			return new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+		}
+
+		var masters = await AsyncExecuter.ToListAsync(
+			(await deductionComponentRepository.GetQueryableAsync()).Where(x => names.Contains(x.Name)));
+
+		return masters
+			.GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+	}
+
+	/// <summary>
+	/// Performs domain-level validation of the PayrollContract before persisting.
+	/// FluentValidation on the DTO handles structural/format rules; this method
+	/// catches business-rule violations that require cross-field or collection checks.
+	/// </summary>
+	private static void ValidatePayrollContract(PayrollContract input)
+	{
+		// ── Salary / TDS sanity ─────────────────────────────────
+		if (input.SalaryDetails?.BasicSalary is < 0)
+		{
+			throw new BusinessException(HRErrorCodes.EmployeePayrollNegativeSalary)
+				.WithData("basicSalary", input.SalaryDetails.BasicSalary);
+		}
+
+		if (input.SalaryDetails?.TdsPercentage is < 0 or > 100)
+		{
+			throw new BusinessException(HRErrorCodes.EmployeePayrollInvalidTdsPercentage)
+				.WithData("tdsPercentage", input.SalaryDetails.TdsPercentage);
+		}
+
+		if (input.SalaryDetails?.TdsAmount is < 0)
+		{
+			throw new BusinessException(HRErrorCodes.EmployeePayrollNegativeTdsAmount)
+				.WithData("tdsAmount", input.SalaryDetails.TdsAmount);
+		}
+
+		// ── Bank details completeness ───────────────────────────
+		if (input.BankDetails != null)
+		{
+			if (string.IsNullOrWhiteSpace(input.BankDetails.BankName))
+			{
+				throw new BusinessException(HRErrorCodes.EmployeePayrollBankNameRequired);
+			}
+
+			if (string.IsNullOrWhiteSpace(input.BankDetails.AccountHolderName))
+			{
+				throw new BusinessException(HRErrorCodes.EmployeePayrollAccountHolderRequired);
+			}
+
+			if (!string.IsNullOrWhiteSpace(input.BankDetails.AccountNumber) &&
+				!System.Text.RegularExpressions.Regex.IsMatch(input.BankDetails.AccountNumber, @"^\d{8,20}$"))
+			{
+				throw new BusinessException(HRErrorCodes.EmployeePayrollInvalidAccountNumber)
+					.WithData("accountNumber", input.BankDetails.AccountNumber);
+			}
+
+			if (!string.IsNullOrWhiteSpace(input.BankDetails.IfscCode) &&
+				!System.Text.RegularExpressions.Regex.IsMatch(input.BankDetails.IfscCode, @"^[A-Z]{4}0[A-Z0-9]{6}$"))
+			{
+				throw new BusinessException(HRErrorCodes.EmployeePayrollInvalidIfscCode)
+					.WithData("ifscCode", input.BankDetails.IfscCode);
+			}
+		}
+
+		// ── Earning components ──────────────────────────────────
+		ValidateComponentList(
+			input.EarningComponents,
+			HRErrorCodes.EmployeePayrollEmptyComponentId,
+			HRErrorCodes.EmployeePayrollComponentAmountInvalid,
+			HRErrorCodes.EmployeePayrollDuplicateEarningComponent,
+			"earning");
+
+		// ── Deduction components ────────────────────────────────
+		ValidateComponentList(
+			input.DeductionComponents,
+			HRErrorCodes.EmployeePayrollEmptyComponentId,
+			HRErrorCodes.EmployeePayrollComponentAmountInvalid,
+			HRErrorCodes.EmployeePayrollDuplicateDeductionComponent,
+			"deduction");
+
+		// ── No component ID in both lists ───────────────────────
+		if (input.EarningComponents is { Count: > 0 } && input.DeductionComponents is { Count: > 0 })
+		{
+			var earningIds = input.EarningComponents.Select(c => c.ComponentId).ToHashSet();
+			var overlapping = input.DeductionComponents
+				.Where(c => earningIds.Contains(c.ComponentId))
+				.Select(c => c.ComponentId)
+				.ToList();
+
+			if (overlapping.Count > 0)
+			{
+				throw new BusinessException(HRErrorCodes.EmployeePayrollComponentInBothLists)
+					.WithData("overlappingComponentIds", string.Join(",", overlapping));
+			}
+		}
+	}
+
+	private static void ValidateComponentList(
+		List<ComponentAmountContract>? components,
+		string emptyIdErrorCode,
+		string amountErrorCode,
+		string duplicateErrorCode,
+		string listName)
+	{
+		if (components == null || components.Count == 0)
+		{
+			return;
+		}
+
+		foreach (var component in components)
+		{
+			if (component.ComponentId == Guid.Empty)
+			{
+				throw new BusinessException(emptyIdErrorCode)
+					.WithData("list", listName);
+			}
+
+			if (component.Amount <= 0)
+			{
+				throw new BusinessException(amountErrorCode)
+					.WithData("componentId", component.ComponentId)
+					.WithData("amount", component.Amount)
+					.WithData("list", listName);
+			}
+		}
+
+		var duplicateIds = components
+			.GroupBy(c => c.ComponentId)
+			.Where(g => g.Count() > 1)
+			.Select(g => g.Key)
+			.ToList();
+
+		if (duplicateIds.Count > 0)
+		{
+			throw new BusinessException(duplicateErrorCode)
+				.WithData("duplicateComponentIds", string.Join(",", duplicateIds))
+				.WithData("list", listName);
+		}
+	}
+
 }

@@ -85,6 +85,7 @@ public class LeaveType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	private void SetType(string type)
 	{
 		Check.NotNullOrWhiteSpace(type, nameof(type));
+		type = type.Trim();
 		Check.Length(type, nameof(type), LeaveTypeConsts.MaxTypeLength);
 		Type = type;
 	}

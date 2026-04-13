@@ -4,8 +4,10 @@ Historical notes about documentation moves and directory structure snapshots. **
 
 | File | Purpose |
 |------|---------|
-| [DOCUMENTATION-REORGANIZATION.md](./DOCUMENTATION-REORGANIZATION.md) | Earlier reorg log (paths may be outdated) |
-| [DIRECTORY-STRUCTURE.md](./DIRECTORY-STRUCTURE.md) | Snapshot of API doc tree (may be outdated) |
-| [REORGANIZATION-SUMMARY.md](./REORGANIZATION-SUMMARY.md) | Employee API folder reorg summary (may be outdated) |
+| [documentation-reorganization.md](./documentation-reorganization.md) | Earlier reorg log (paths may be outdated) |
+| [directory-structure.md](./directory-structure.md) | Snapshot of old doc tree (may be outdated) |
+| [reorganization-summary.md](./reorganization-summary.md) | Historical reorg summary (may be outdated) |
+| [legacy-migration-log.md](./legacy-migration-log.md) | Record of legacy content migration and archive decisions |
+| [legacy/hr-root/README.md](./legacy/hr-root/README.md) | Archived HR root-level exports with normalized filenames |
 
 Do not treat these files as the source of truth for where documentation lives today.

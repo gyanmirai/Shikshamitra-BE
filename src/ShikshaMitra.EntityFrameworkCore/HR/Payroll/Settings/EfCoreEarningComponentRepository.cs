@@ -20,8 +20,10 @@ public class EfCoreEarningComponentRepository : EfCoreRepository<ShikshaMitraDbC
 
 	public async Task<bool> IsNameExistsAsync(string name, Guid? excludeId = null)
 	{
+		// Must match aggregate SetName trimming; otherwise availability check can miss a DB collision.
+		var normalized = (name ?? string.Empty).Trim();
 		var dbSet = await GetDbSetAsync();
-		var query = dbSet.Where(x => x.Name.ToLower() == name.ToLower());
+		var query = dbSet.Where(x => x.Name.ToLower() == normalized.ToLower());
 
 		if (excludeId.HasValue)
 		{
@@ -33,9 +35,10 @@ public class EfCoreEarningComponentRepository : EfCoreRepository<ShikshaMitraDbC
 
 	public async Task<EarningComponent?> FindByNameAsync(string name)
 	{
+		var normalized = (name ?? string.Empty).Trim();
 		var dbSet = await GetDbSetAsync();
 		return await dbSet
-			.Where(x => x.Name.ToLower() == name.ToLower())
+			.Where(x => x.Name.ToLower() == normalized.ToLower())
 			.FirstOrDefaultAsync();
 	}
 }

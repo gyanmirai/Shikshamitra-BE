@@ -45,6 +45,18 @@ public class PayrollController : AbpControllerBase
 	}
 
 	/// <summary>
+	/// Backward-compatible alias for payroll fetch endpoint.
+	/// </summary>
+	[HttpGet("{employeeId}/get-payroll")]
+	[ProducesResponseType(typeof(PayrollContract), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public virtual async Task<PayrollContract> GetLegacyAsync([FromRoute, Required] Guid employeeId)
+	{
+		return await GetAsync(employeeId);
+	}
+
+	/// <summary>
 	/// Update employee payroll information (matches OpenAPI Payroll contract)
 	/// </summary>
 	[HttpPut("{employeeId}/payroll")]

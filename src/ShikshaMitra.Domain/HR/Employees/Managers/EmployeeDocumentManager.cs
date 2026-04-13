@@ -43,7 +43,8 @@ public class EmployeeDocumentManager(
 				documentName: docData.FileName,
 				contentType: docData.ContentType,
 				size: docData.Size,
-				blobName: blobName
+				blobName: blobName,
+				documentNameId: docData.DocumentNameId
 			);
 
 			employee.AddDocument(document);
@@ -72,7 +73,8 @@ public class EmployeeDocumentManager(
 		string fileName,
 		string contentType,
 		long size,
-		byte[] content
+		byte[] content,
+		Guid? documentNameId = null
 	)
 	{
 		FileValidationService.ValidateDocumentUpload(fileName, content, size);
@@ -83,7 +85,7 @@ public class EmployeeDocumentManager(
 
 		await blobContainer.SaveAsync(document.BlobName, content, overrideExisting: true);
 
-		document.UpdateDocumentMetadata(fileName, contentType, size);
+		document.UpdateDocumentMetadata(fileName, contentType, size, documentNameId);
 
 		await employeeRepository.UpdateAsync(employee);
 		return document;

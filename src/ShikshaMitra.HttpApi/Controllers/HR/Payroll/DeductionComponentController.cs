@@ -2,20 +2,15 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
-using ShikshaMitra.HR.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.Mappers.HR.Payroll;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.HR.Payroll;
 
-/// <summary>
-/// API Controller for managing deduction components.
-/// </summary>
 [Area("app")]
 [RemoteService(Name = "Default")]
 [Route("api/payroll/deduction-components")]
@@ -29,34 +24,41 @@ public class DeductionComponentController : AbpControllerBase
 		_deductionComponentAppService = deductionComponentAppService;
 	}
 
-	#region API Endpoints
-
-	/// <summary>
-	/// Get paginated list of deduction components
-	/// </summary>
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.View)]
 	[ProducesResponseType(typeof(DeductionComponentPaginatedResponseDto), 200)]
-	public virtual async Task<DeductionComponentPaginatedResponseDto> GetPaginatedAsync([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+	public virtual async Task<DeductionComponentPaginatedResponseDto> GetPaginatedAsync(
+		[FromQuery] int page = 1,
+		[FromQuery] int pageSize = 20,
+		[FromQuery] string? search = null)
 	{
-		var result = await _deductionComponentAppService.GetListAsync(new PagedAndSortedResultRequestDto
-		{
-			SkipCount = (page - 1) * pageSize,
-			MaxResultCount = pageSize
-		});
+		var result = await _deductionComponentAppService.GetFilteredListAsync(
+			(page - 1) * pageSize, pageSize, search);
 
-		return DeductionComponentMapper.ToPaginatedResponse(result, page, pageSize);
+		return DeductionComponentContractMapper.ToPaginatedResponse(result, page, pageSize);
 	}
 
-	/// <summary>
-	/// Create a new deduction component
-	/// </summary>
+	[HttpGet("{id}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.View)]
+	[ProducesResponseType(typeof(DeductionComponentResponseDto), 200)]
+	[ProducesResponseType(404)]
+	public virtual async Task<DeductionComponentResponseDto> GetAsync(Guid id)
+	{
+		var dto = await _deductionComponentAppService.GetAsync(id);
+		return DeductionComponentContractMapper.ToResponseDto(dto);
+	}
+
 	[HttpPost]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Add)]
 	[ProducesResponseType(typeof(ComponentCreateResponseDto), 201)]
-	public virtual async Task<ActionResult<ComponentCreateResponseDto>> CreateAsync([FromBody] PayrollComponentCreateRequestDto input)
+	[ProducesResponseType(400)]
+	[ProducesResponseType(401)]
+	public virtual async Task<ActionResult<ComponentCreateResponseDto>> CreateAsync(
+		[FromBody] DeductionComponentCreateRequestDto input)
 	{
-		var createDto = DeductionComponentMapper.ToCreateDto(input);
+		ArgumentNullException.ThrowIfNull(input);
+
+		var createDto = DeductionComponentContractMapper.ToCreateDto(input);
 		var createdComponent = await _deductionComponentAppService.CreateAsync(createDto);
 		return StatusCode(201, new ComponentCreateResponseDto
 		{
@@ -65,23 +67,21 @@ public class DeductionComponentController : AbpControllerBase
 		});
 	}
 
-	/// <summary>
-	/// Update an existing deduction component
-	/// </summary>
 	[HttpPut("{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Add)]
 	[ProducesResponseType(200)]
-	public virtual async Task<IActionResult> UpdateAsync(Guid id, [FromBody] PayrollComponentCreateRequestDto input)
+	[ProducesResponseType(400)]
+	[ProducesResponseType(401)]
+	[ProducesResponseType(404)]
+	public virtual async Task<IActionResult> UpdateAsync(Guid id,
+		[FromBody] DeductionComponentUpdateRequestDto input)
 	{
 		var existingComponent = await _deductionComponentAppService.GetAsync(id);
-		var updateDto = DeductionComponentMapper.ToUpdateDto(input, existingComponent.DisplayOrder);
+		var updateDto = DeductionComponentContractMapper.ToUpdateDto(input, existingComponent.DisplayOrder);
 		await _deductionComponentAppService.UpdateAsync(id, updateDto);
 		return Ok();
 	}
 
-	/// <summary>
-	/// Delete a deduction component
-	/// </summary>
 	[HttpDelete("{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Delete)]
 	[ProducesResponseType(204)]
@@ -90,6 +90,4 @@ public class DeductionComponentController : AbpControllerBase
 		await _deductionComponentAppService.DeleteAsync(id);
 		return NoContent();
 	}
-
-		#endregion
-	}
+}

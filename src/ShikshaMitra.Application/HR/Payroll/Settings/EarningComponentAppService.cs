@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -11,9 +12,6 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.Payroll.Settings;
 
-/// <summary>
-/// Application service for managing earning components
-/// </summary>
 [RemoteService(false)]
 public class EarningComponentAppService : CrudAppService<
 	EarningComponent,
@@ -26,11 +24,9 @@ public class EarningComponentAppService : CrudAppService<
 	private readonly EarningComponentManager _earningComponentManager;
 	private readonly IDistributedCache<PagedResultDto<EarningComponentDto>> _cache;
 
-	// Base cache key for all active earning components
 	private string GetBaseCacheKey() =>
 		$"EarningComponents:Active:Tenant:{CurrentTenant?.Id ?? Guid.Empty}";
 
-	// Paginated cache key
 	private string GetActiveCacheKey(int skipCount, int maxResultCount) =>
 		$"{GetBaseCacheKey()}:Skip:{skipCount}:Take:{maxResultCount}";
 
@@ -46,20 +42,31 @@ public class EarningComponentAppService : CrudAppService<
 
 	public override async Task<EarningComponentDto> CreateAsync(CreateEarningComponentDto input)
 	{
+		ArgumentNullException.ThrowIfNull(input);
+
 		var earningComponent = await _earningComponentManager.CreateAsync(
 			input.Name,
 			input.Description,
 			input.ComponentType,
-			input.DependOn,
-			input.CustomComponentId,
+			input.CalculationType,
 			input.Amount,
+			input.Percentage,
+			input.SelectedEarningComponentId,
+			input.DependOn,
 			input.VisibleInPayslip,
 			input.DisplayOrder
 		);
 
-		await Repository.InsertAsync(earningComponent, autoSave: true);
+		try
+		{
+			await Repository.InsertAsync(earningComponent, autoSave: true);
+		}
+		catch (Exception ex) when (IsEarningComponentNameUniqueViolation(ex))
+		{
+			throw new BusinessException("ShikshaMitra:EarningComponentNameAlreadyExists")
+				.WithData("name", input.Name);
+		}
 
-		// Clear cache
 		await ClearCacheAsync();
 
 		return ObjectMapper.Map<EarningComponent, EarningComponentDto>(earningComponent);
@@ -67,6 +74,8 @@ public class EarningComponentAppService : CrudAppService<
 
 	public override async Task<EarningComponentDto> UpdateAsync(Guid id, UpdateEarningComponentDto input)
 	{
+		ArgumentNullException.ThrowIfNull(input);
+
 		var earningComponent = await Repository.GetAsync(id);
 
 		await _earningComponentManager.UpdateAsync(
@@ -74,16 +83,25 @@ public class EarningComponentAppService : CrudAppService<
 			input.Name,
 			input.Description,
 			input.ComponentType,
-			input.DependOn,
-			input.CustomComponentId,
+			input.CalculationType,
 			input.Amount,
+			input.Percentage,
+			input.SelectedEarningComponentId,
+			input.DependOn,
 			input.VisibleInPayslip,
 			input.DisplayOrder
 		);
 
-		await Repository.UpdateAsync(earningComponent, autoSave: true);
+		try
+		{
+			await Repository.UpdateAsync(earningComponent, autoSave: true);
+		}
+		catch (Exception ex) when (IsEarningComponentNameUniqueViolation(ex))
+		{
+			throw new BusinessException("ShikshaMitra:EarningComponentNameAlreadyExists")
+				.WithData("name", input.Name);
+		}
 
-		// Clear cache
 		await ClearCacheAsync();
 
 		return ObjectMapper.Map<EarningComponent, EarningComponentDto>(earningComponent);
@@ -92,38 +110,48 @@ public class EarningComponentAppService : CrudAppService<
 	public override async Task DeleteAsync(Guid id)
 	{
 		await Repository.DeleteAsync(id);
-
-		// Clear cache
 		await ClearCacheAsync();
 	}
 
 	public override async Task<PagedResultDto<EarningComponentDto>> GetListAsync(PagedAndSortedResultRequestDto input)
 	{
+		return await GetFilteredListAsync(input.SkipCount, input.MaxResultCount, null);
+	}
+
+	public override async Task<EarningComponentDto> GetAsync(Guid id)
+	{
+		var dto = await base.GetAsync(id);
+		return await PopulateSelectedComponentDataAsync(dto);
+	}
+
+	public async Task<PagedResultDto<EarningComponentDto>> GetFilteredListAsync(int skipCount, int maxResultCount, string? search)
+	{
 		var queryable = await Repository.GetQueryableAsync();
 
-		// Apply sorting
-		var sorting = input.Sorting ?? "DisplayOrder ASC, Name ASC";
-		queryable = ApplySorting(queryable, sorting);
+		if (!string.IsNullOrWhiteSpace(search))
+		{
+			var term = search.Trim().ToLower();
+			queryable = queryable.Where(x => x.Name.ToLower().Contains(term));
+		}
 
-		// Get total count
+		queryable = queryable.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name);
+
 		var totalCount = await AsyncExecuter.CountAsync(queryable);
 
-		// Get items
 		var items = await AsyncExecuter.ToListAsync(
 			queryable
-				.Skip(input.SkipCount)
-				.Take(input.MaxResultCount)
+				.Skip(skipCount)
+				.Take(maxResultCount)
 		);
 
-		return new PagedResultDto<EarningComponentDto>(
-			totalCount,
-			ObjectMapper.Map<List<EarningComponent>, List<EarningComponentDto>>(items)
-		);
+		var mappedItems = ObjectMapper.Map<List<EarningComponent>, List<EarningComponentDto>>(items);
+		await PopulateSelectedComponentDataAsync(mappedItems);
+
+		return new PagedResultDto<EarningComponentDto>(totalCount, mappedItems);
 	}
 
 	public async Task<PagedResultDto<EarningComponentDto>> GetAllActiveAsync(PagedResultRequestDto input)
 	{
-		// Try to get from cache
 		var activeCacheKey = GetActiveCacheKey(input.SkipCount, input.MaxResultCount);
 		var cached = await _cache.GetAsync(activeCacheKey);
 		if (cached != null)
@@ -131,7 +159,6 @@ public class EarningComponentAppService : CrudAppService<
 			return cached;
 		}
 
-		// Fetch from database
 		var queryable = await Repository.GetQueryableAsync();
 		var query = queryable.Where(x => x.IsActive);
 
@@ -148,7 +175,8 @@ public class EarningComponentAppService : CrudAppService<
 			ObjectMapper.Map<List<EarningComponent>, List<EarningComponentDto>>(items)
 		);
 
-		// Cache the result
+		await PopulateSelectedComponentDataAsync(result.Items);
+
 		await _cache.SetAsync(
 			activeCacheKey,
 			result,
@@ -166,8 +194,6 @@ public class EarningComponentAppService : CrudAppService<
 		var earningComponent = await Repository.GetAsync(id);
 		earningComponent.Activate();
 		await Repository.UpdateAsync(earningComponent, autoSave: true);
-
-		// Clear cache
 		await ClearCacheAsync();
 	}
 
@@ -176,25 +202,13 @@ public class EarningComponentAppService : CrudAppService<
 		var earningComponent = await Repository.GetAsync(id);
 		earningComponent.Deactivate();
 		await Repository.UpdateAsync(earningComponent, autoSave: true);
-
-		// Clear cache
 		await ClearCacheAsync();
 	}
 
 	private async Task ClearCacheAsync()
 	{
-		// Clear cache by removing common pagination combinations
-		// Since IDistributedCache doesn't support pattern-based removal out of the box,
-		// we generate cache keys for common pagination scenarios
-
-		var baseCacheKey = GetBaseCacheKey();
 		var cacheKeysToRemove = new List<string>();
-
-		// Common page sizes used in the application
-		int[] commonPageSizes = { 10, 25, 50, 100 };
-
-		// For each page size, clear first few pages (covers most access patterns)
-		// Adjust maxPages based on your typical data volume
+		int[] commonPageSizes = { 10, 20, 25, 50, 100 };
 		int maxPages = 10;
 
 		foreach (var pageSize in commonPageSizes)
@@ -206,8 +220,56 @@ public class EarningComponentAppService : CrudAppService<
 			}
 		}
 
-		// Use RemoveManyAsync for better performance (single operation vs multiple awaits)
-		await _cache.RemoveManyAsync(cacheKeysToRemove);
+		try
+		{
+			await _cache.RemoveManyAsync(cacheKeysToRemove);
+		}
+		catch (Exception ex)
+		{
+			Logger.LogWarning(
+				ex,
+				"Failed to invalidate earning component cache for tenant {TenantId}. List endpoints may be stale until expiration.",
+				CurrentTenant?.Id);
+		}
+	}
+
+	/// <summary>
+	/// Maps DB unique violations on (TenantId, Name) to a handled business error (e.g. race after <see cref="EarningComponentManager"/> check).
+	/// </summary>
+	private static bool IsEarningComponentNameUniqueViolation(Exception exception)
+	{
+		const string indexName = "IX_EarningComponents_TenantId_Name";
+		const string tableHint = "AppEarningComponents";
+
+		for (var ex = exception; ex != null; ex = ex.InnerException!)
+		{
+			var message = ex.Message;
+			if (string.IsNullOrEmpty(message))
+			{
+				continue;
+			}
+
+			if (message.Contains(indexName, StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			if (message.Contains(tableHint, StringComparison.OrdinalIgnoreCase)
+			    && message.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			// PostgreSQL: 23505 = unique_violation
+			if (message.Contains("23505", StringComparison.Ordinal)
+			    && (message.Contains(tableHint, StringComparison.OrdinalIgnoreCase)
+			        || message.Contains(indexName, StringComparison.OrdinalIgnoreCase)))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private IQueryable<EarningComponent> ApplySorting(IQueryable<EarningComponent> queryable, string sorting)
@@ -229,7 +291,6 @@ public class EarningComponentAppService : CrudAppService<
 
 			if (isFirstSort)
 			{
-				// First sort: use OrderBy/OrderByDescending
 				orderedQueryable = property.ToLower() switch
 				{
 					"name" => direction == "DESC"
@@ -250,7 +311,6 @@ public class EarningComponentAppService : CrudAppService<
 			}
 			else
 			{
-				// Subsequent sorts: use ThenBy/ThenByDescending
 				orderedQueryable = property.ToLower() switch
 				{
 					"name" => direction == "DESC"
@@ -270,7 +330,63 @@ public class EarningComponentAppService : CrudAppService<
 			}
 		}
 
-		// Apply default fallback if no valid sort was applied
 		return orderedQueryable ?? queryable.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name);
+	}
+
+	private async Task<EarningComponentDto> PopulateSelectedComponentDataAsync(EarningComponentDto dto)
+	{
+		if (!dto.SelectedEarningComponentId.HasValue)
+		{
+			return dto;
+		}
+
+		var selected = await Repository.FindAsync(dto.SelectedEarningComponentId.Value);
+		if (selected is null)
+		{
+			return dto;
+		}
+
+		dto.SelectedEarningComponentName = selected.Name;
+		dto.SelectedEarningComponentDescription = selected.Description;
+		dto.SelectedEarningComponentVisibleInPayslip = selected.VisibleInPayslip;
+
+		return dto;
+	}
+
+	private async Task PopulateSelectedComponentDataAsync(IReadOnlyList<EarningComponentDto> items)
+	{
+		var selectedIds = items
+			.Where(x => x.SelectedEarningComponentId.HasValue)
+			.Select(x => x.SelectedEarningComponentId!.Value)
+			.Distinct()
+			.ToList();
+
+		if (selectedIds.Count == 0)
+		{
+			return;
+		}
+
+		var queryable = await Repository.GetQueryableAsync();
+		var selectedComponents = await AsyncExecuter.ToListAsync(
+			queryable.Where(x => selectedIds.Contains(x.Id)));
+
+		var selectedById = selectedComponents.ToDictionary(x => x.Id);
+
+		foreach (var item in items)
+		{
+			if (!item.SelectedEarningComponentId.HasValue)
+			{
+				continue;
+			}
+
+			if (!selectedById.TryGetValue(item.SelectedEarningComponentId.Value, out var selected))
+			{
+				continue;
+			}
+
+			item.SelectedEarningComponentName = selected.Name;
+			item.SelectedEarningComponentDescription = selected.Description;
+			item.SelectedEarningComponentVisibleInPayslip = selected.VisibleInPayslip;
+		}
 	}
 }

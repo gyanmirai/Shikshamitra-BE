@@ -1,4 +1,4 @@
-using AutoMapper;
+﻿using AutoMapper;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -12,8 +12,6 @@ using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.AdditionalDetails;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.Settings;
-using ShikshaMitra.HR.EventAndHolidays;
-using ShikshaMitra.HR.Payroll.PayrollStructures;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.SalaryStructure;
 using ShikshaMitra.HR.Payroll.Settings;
@@ -63,7 +61,6 @@ public class HRMapperProfile : Profile
 		CreateMap<NotificationInfo, NotificationInfoDto>();
 
 		CreateMap<CustomAttendanceRule, CustomAttendanceRuleDto>();
-		CreateMap<CreateUpdateCustomAttendanceRuleDto, CustomAttendanceRule>();
 
 		#endregion
 
@@ -75,13 +72,6 @@ public class HRMapperProfile : Profile
 		# endregion
 
 		# endregion
-
-		#region Events & Holidays (legacy)
-
-		CreateMap<EventAndHoliday, EventAndHolidayDto>();
-		CreateMap<CreateUpdateEventAndHolidayDto, EventAndHoliday>();
-
-		#endregion
 
 		#region Calendar — Events, EventTypes, Holidays, HolidayTypes
 
@@ -99,13 +89,6 @@ public class HRMapperProfile : Profile
 		#endregion
 
 		#region Payroll
-
-		#region Payroll Structure
-
-		CreateMap<PayrollStructure, PayrollStructureDto>();
-		CreateMap<CreateUpdatePayrollStructureDto, PayrollStructure>();
-
-		#endregion
 
 		#region Salary Slips
 

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -115,16 +115,16 @@ public class LeaveManagementAppService(
 		var currentUserId = CurrentUser.Id
 			?? throw new BusinessException(HRErrorCodes.LeaveUserNotAuthenticated);
 
-		var employee = await employeeRepository.FindAsync(currentUserId)
+		var employee = await employeeRepository.GetEmployeeByUserIdAsync(currentUserId)
 			?? throw new BusinessException(HRErrorCodes.LeaveEmployeeNotFound);
 
-		await leaveValidationService.ValidateLeaveRequestAsync(
+		var resolvedPolicyId = await leaveValidationService.ValidateLeaveRequestAsync(
 			employee.Id, input.LeaveTypeId, input.StartDate, input.EndDate);
 
 		byte[]? attachmentBytes = await ExtractAttachmentBytesAsync(attachment);
 
 		var leave = await employeeLeaveManager.CreateAsync(
-			employee.Id, input.LeaveTypeId,
+			employee.Id, resolvedPolicyId,
 			new DateTimeOffset(input.StartDate), new DateTimeOffset(input.EndDate),
 			input.Reason, false);
 
@@ -158,6 +158,16 @@ public class LeaveManagementAppService(
 		if (!IsValidStatusTransition(leave.Status, status))
 			throw new BusinessException(HRErrorCodes.LeaveInvalidStatusTransition);
 
+		var currentUserId = CurrentUser.Id
+			?? throw new BusinessException(HRErrorCodes.LeaveUserNotAuthenticated);
+
+		var actorEmployee = await employeeRepository.GetEmployeeByUserIdAsync(currentUserId)
+			?? throw new BusinessException(HRErrorCodes.LeaveEmployeeNotFound);
+
+		await leaveValidationService.EnsureActorMayChangeLeaveStatusAsync(
+			leave.EmployeeId,
+			actorEmployee.Id);
+
 		await employeeLeaveManager.UpdateLeaveRequestStatusAsync(leave, status, input.Remarks);
 
 		return await GetAsync(leaveRequestId);
@@ -172,19 +182,20 @@ public class LeaveManagementAppService(
 			query.Where(x => x.PublicId == leaveRequestId))
 			?? throw new EntityNotFoundException(typeof(EmployeeLeave), leaveRequestId);
 
-		if (leave.Status == EmployeeLeaveStatusType.Approved)
-			throw new BusinessException(HRErrorCodes.LeaveCancelApproved);
-
-		if (leave.Status == EmployeeLeaveStatusType.Rejected)
-			throw new BusinessException(HRErrorCodes.LeaveCancelRejected);
+		if (leave.Status == EmployeeLeaveStatusType.Cancelled)
+			throw new BusinessException(HRErrorCodes.LeaveAlreadyCancelled);
 
 		var currentUserId = CurrentUser.Id
 			?? throw new BusinessException(HRErrorCodes.LeaveUserNotAuthenticated);
 
-		if (leave.EmployeeId != currentUserId)
+		var actingEmployee = await employeeRepository.GetEmployeeByUserIdAsync(currentUserId)
+			?? throw new BusinessException(HRErrorCodes.LeaveEmployeeNotFound);
+
+		if (leave.EmployeeId != actingEmployee.Id)
 			throw new BusinessException(HRErrorCodes.LeaveDeleteOwnOnly);
 
-		await employeeLeaveRepository.DeleteAsync(leave);
+		// Soft-cancel: transitions to Cancelled status (domain invariant enforces valid source states)
+		await employeeLeaveManager.CancelAsync(leave);
 
 		return new LeaveRequestDeleteDto { Id = leave.PublicId };
 	}
@@ -196,9 +207,10 @@ public class LeaveManagementAppService(
 			(EmployeeLeaveStatusType.Pending, EmployeeLeaveStatusType.Reviewed) => true,
 			(EmployeeLeaveStatusType.Pending, EmployeeLeaveStatusType.Approved) => true,
 			(EmployeeLeaveStatusType.Pending, EmployeeLeaveStatusType.Rejected) => true,
+			(EmployeeLeaveStatusType.Pending, EmployeeLeaveStatusType.Cancelled) => true,
 			(EmployeeLeaveStatusType.Reviewed, EmployeeLeaveStatusType.Approved) => true,
 			(EmployeeLeaveStatusType.Reviewed, EmployeeLeaveStatusType.Rejected) => true,
-			(EmployeeLeaveStatusType.Reviewed, EmployeeLeaveStatusType.Pending) => true,
+			(EmployeeLeaveStatusType.Reviewed, EmployeeLeaveStatusType.Cancelled) => true,
 			_ => false
 		};
 	}

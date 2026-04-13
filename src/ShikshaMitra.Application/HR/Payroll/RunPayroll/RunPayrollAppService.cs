@@ -3,8 +3,10 @@ using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
-using ShikshaMitra.HR.EventAndHolidays;
+using ShikshaMitra.HR.Calendar.Holidays;
+using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.SalarySlips;
+using ShikshaMitra.HR.Payroll.Settings;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -29,7 +31,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	private readonly IEmployeePayrollDetailsRepository _payrollDetailsRepository;
 	private readonly IEmployeePayrollComponentRepository _payrollComponentRepository;
 	private readonly ISalarySlipRepository _salarySlipRepository;
-	private readonly IRepository<EventAndHoliday, Guid> _holidayRepository;
+	private readonly IRepository<Holiday, Guid> _holidayRepository;
+	private readonly IDayCalculationSettingRepository _dayCalculationSettingRepository;
 	private readonly SalarySlipManager _salarySlipManager;
 	private readonly ILogger<RunPayrollAppService> _logger;
 
@@ -43,7 +46,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		IEmployeePayrollDetailsRepository payrollDetailsRepository,
 		IEmployeePayrollComponentRepository payrollComponentRepository,
 		ISalarySlipRepository salarySlipRepository,
-		IRepository<EventAndHoliday, Guid> holidayRepository,
+		IRepository<Holiday, Guid> holidayRepository,
+		IDayCalculationSettingRepository dayCalculationSettingRepository,
 		SalarySlipManager salarySlipManager,
 		ILogger<RunPayrollAppService> logger)
 	{
@@ -53,6 +57,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		_payrollComponentRepository = payrollComponentRepository;
 		_salarySlipRepository = salarySlipRepository;
 		_holidayRepository = holidayRepository;
+		_dayCalculationSettingRepository = dayCalculationSettingRepository;
 		_salarySlipManager = salarySlipManager;
 		_logger = logger;
 	}
@@ -118,8 +123,10 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				};
 			}
 
-			// Calculate total working days in the month (business days - holidays)
-			var totalWorkingDays = await CalculateTotalWorkingDaysAsync(year, month);
+			var holidays = await LoadHolidaysForMonthAsync(year, month);
+			var workingWeekdaysMinusHolidays = PayrollMonthCalendar.CountWorkingWeekdaysExcludingHolidayWeekdays(year, month, holidays);
+			var daySetting = await _dayCalculationSettingRepository.FindByTenantAsync(CurrentTenant.Id);
+			var basis = PayrollBasisDays.Resolve(daySetting, year, month, workingWeekdaysMinusHolidays);
 
 			// Get all employee IDs for batch operations
 			var employeeIds = employees.Select(e => e.Id).ToList();
@@ -143,7 +150,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
 				payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
 				componentsByEmployee[employee.Id]?.ToList() ?? new List<EmployeePayrollComponent>(),
-				totalWorkingDays
+				basis
 			)).ToList();
 
 			return new RunPayrollResponse
@@ -156,18 +163,17 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				Items = items
 			};
 		}
-			catch (BusinessException)
-			{
-				// Re-throw business exceptions as-is
-				throw;
-			}
-			catch (Exception ex)
-			{
-				_logger.LogError(ex, "Unexpected error generating payroll preview for month {Month}", input.Month);
-				throw new BusinessException("HR:PayrollPreviewFailed")
-					.WithData("month", input.Month);
-			}
+		catch (BusinessException)
+		{
+			throw;
 		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Unexpected error generating payroll preview for month {Month}", input.Month);
+			throw new BusinessException("HR:PayrollPreviewFailed")
+				.WithData("month", input.Month);
+		}
+	}
 
 	/// <summary>
 	/// Generate and lock payroll for a month
@@ -401,26 +407,13 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		return (year, month, internalFormat);
 	}
 
-	/// <summary>
-	/// Calculate total working days in a month (business days minus holidays)
-	/// Uses HashSet to avoid double-counting overlapping holidays
-	/// </summary>
-	private async Task<int> CalculateTotalWorkingDaysAsync(int year, int month)
+	private async Task<List<Holiday>> LoadHolidaysForMonthAsync(int year, int month)
 	{
 		var firstDay = new DateTime(year, month, 1);
 		var lastDay = new DateTime(year, month, DateTime.DaysInMonth(year, month));
+		var startDate = new DateTimeOffset(firstDay);
+		var endDate = new DateTimeOffset(lastDay.AddDays(1).AddTicks(-1));
 
-		// Count business days (Monday to Friday)
-		var businessDays = 0;
-		for (var date = firstDay; date <= lastDay; date = date.AddDays(1))
-		{
-			if (date.DayOfWeek != DayOfWeek.Saturday && date.DayOfWeek != DayOfWeek.Sunday)
-			{
-				businessDays++;
-			}
-		}
-
-		// Get holidays for this month
 		var holidayQuery = await _holidayRepository.GetQueryableAsync();
 
 		if (CurrentTenant.Id.HasValue)
@@ -428,34 +421,11 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			holidayQuery = holidayQuery.Where(h => h.TenantId == CurrentTenant.Id);
 		}
 
-		var startDate = new DateTimeOffset(firstDay);
-		var endDate = new DateTimeOffset(lastDay.AddDays(1).AddTicks(-1));
-
-		var holidays = await AsyncExecuter.ToListAsync(
+		return await AsyncExecuter.ToListAsync(
 			holidayQuery.Where(h =>
-				h.IsHoliday &&
 				h.StartDate <= endDate &&
 				h.EndDate >= startDate)
 		);
-
-		// Use HashSet to track unique holiday dates (avoids double-counting overlapping holidays)
-		var holidayDates = new HashSet<DateTime>();
-		foreach (var holiday in holidays)
-		{
-			var hStart = holiday.StartDate.Date > firstDay ? holiday.StartDate.Date : firstDay;
-			var hEnd = holiday.EndDate.Date < lastDay ? holiday.EndDate.Date : lastDay;
-
-			for (var date = hStart; date <= hEnd; date = date.AddDays(1))
-			{
-				// Only count weekdays, and HashSet ensures no duplicates
-				if (date.DayOfWeek != DayOfWeek.Saturday && date.DayOfWeek != DayOfWeek.Sunday)
-				{
-					holidayDates.Add(date);
-				}
-			}
-		}
-
-		return Math.Max(0, businessDays - holidayDates.Count);
 	}
 
 	/// <summary>
@@ -494,26 +464,41 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		List<EmployeeAttendance> attendanceRecords,
 		EmployeePayrollDetails? payrollDetails,
 		List<EmployeePayrollComponent> components,
-		int totalWorkingDays)
+		PayrollBasisDaysResult basis)
 	{
-		var basicSalary = payrollDetails?.BasicSalary ?? 0m;
+		var presentDays = attendanceRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.Present);
+		var halfDays = attendanceRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.HalfDayLeave);
+		var payableDays = PayrollProrationCalculator.CalculatePayableDays(presentDays, halfDays);
+		var factor = PayrollProrationCalculator.CalculateProrationFactor(basis.BasisDays, payableDays);
 
-		// Single-pass calculation for earnings and deductions (optimized)
+		var basicSalary = payrollDetails?.BasicSalary ?? 0m;
+		basicSalary = PayrollProrationCalculator.ProrateAmount(basicSalary, isTemp: false, factor);
+
 		var grossSalary = 0m;
 		var totalDeduction = 0m;
+		var earningComponents = new List<RunPayrollComponentItem>(components.Count);
+		var deductionComponents = new List<RunPayrollComponentItem>(components.Count);
 		foreach (var component in components)
 		{
+			var prorated = PayrollProrationCalculator.ProrateAmount(component.Amount, component.IsTemp, factor);
+			var item = new RunPayrollComponentItem
+			{
+				Name = component.Name,
+				Amount = (double)prorated
+			};
 			if (component.IsEarning)
-				grossSalary += component.Amount;
+			{
+				grossSalary += prorated;
+				earningComponents.Add(item);
+			}
 			else
-				totalDeduction += component.Amount;
+			{
+				totalDeduction += prorated;
+				deductionComponents.Add(item);
+			}
 		}
 
 		var netPay = grossSalary - totalDeduction;
-
-		// Calculate attendance
-		var presentDays = attendanceRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.Present);
-		var halfDays = attendanceRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.HalfDayLeave);
 
 		return new RunPayrollItem
 		{
@@ -526,7 +511,13 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			NetPay = (double)netPay,
 			PresentDays = presentDays,
 			HalfWorkingDays = halfDays,
-			TotalWorkingDays = totalWorkingDays
+			TotalWorkingDays = basis.BasisDays,
+			PayableDays = (double)payableDays,
+			ProrationFactor = (double)factor,
+			DayCalculationMode = PayrollDayCalculationApiLabels.ToApiString(basis.EffectiveMode),
+			UsedDefaultDayCalculation = basis.UsedTenantDefault,
+			EarningComponents = earningComponents,
+			DeductionComponents = deductionComponents
 		};
 	}
 

@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
+﻿using ShikshaMitra.HR;
+using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
 using ShikshaMitra.HR.Employees;
 using System;
 using System.Collections.Generic;
@@ -159,7 +160,13 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 
 		if (endDate < startDate)
 		{
-			throw new UserFriendlyException("End date must be greater than or equal to start date");
+			throw new BusinessException(HRErrorCodes.AttendanceEndDateBeforeStartDate);
+		}
+
+		const int maxDateRangeDays = 90;
+		if ((endDate - startDate).Days > maxDateRangeDays)
+		{
+			throw new BusinessException(HRErrorCodes.AttendanceDateRangeTooLarge);
 		}
 
 		var startDateOnly = DateOnly.FromDateTime(startDate);
@@ -290,7 +297,7 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 			return dto.DateTime;
 		}
 
-		throw new UserFriendlyException($"Invalid date format: {dateString}. Expected DD-MM-YYYY or ISO date-time format.");
+		throw new BusinessException(HRErrorCodes.AttendanceInvalidDateFormat);
 	}
 
 	private static string? CalculateHoursWorked(DateTimeOffset? timeIn, DateTimeOffset? timeOut)

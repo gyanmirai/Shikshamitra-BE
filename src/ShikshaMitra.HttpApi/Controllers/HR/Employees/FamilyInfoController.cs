@@ -42,6 +42,7 @@ public class FamilyInfoController : AbpControllerBase
 		[FromRoute, Required] Guid employeeId,
 		[FromBody, Required] FamilyInfoRequest request)
 	{
+		await _authorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 		await _familyInfoAppService.UpsertAsync(employeeId, request);
 		return NoContent();
 	}

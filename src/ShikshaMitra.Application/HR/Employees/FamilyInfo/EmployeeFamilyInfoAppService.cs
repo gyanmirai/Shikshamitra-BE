@@ -39,6 +39,7 @@ public class EmployeeFamilyInfoAppService(
 	}
 
 	/// <inheritdoc />
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	public async Task UpsertAsync(Guid employeeId, FamilyInfoRequest input)
 	{
 		// Map DTOs to domain value objects (for backward compatibility)

@@ -90,9 +90,48 @@ public class RunPayrollItem
 	public double HalfWorkingDays { get; set; }
 
 	/// <summary>
-	/// Total working days in the month (business days excluding holidays)
+	/// Payroll basis days (denominator) per tenant day-calculation setting: working-days, total calendar days, or manual.
 	/// </summary>
 	public double TotalWorkingDays { get; set; }
+
+	/// <summary>
+	/// Payable days from attendance: present +0.5 × half days.
+	/// </summary>
+	public double PayableDays { get; set; }
+
+	/// <summary>
+	/// LOP proration factor applied to non-temporary line items (capped at 1).
+	/// </summary>
+	public double ProrationFactor { get; set; }
+
+	/// <summary>
+	/// Effective day calculation mode: working-days, total-month-days, or manual-days.
+	/// </summary>
+	public string DayCalculationMode { get; set; } = string.Empty;
+
+	/// <summary>
+	/// True when no tenant day-calculation row exists and working-days default was used.
+	/// </summary>
+	public bool UsedDefaultDayCalculation { get; set; }
+
+	/// <summary>
+	/// Itemized earning components contributing to gross salary
+	/// </summary>
+	public List<RunPayrollComponentItem> EarningComponents { get; set; } = new();
+
+	/// <summary>
+	/// Itemized deduction components contributing to total deduction
+	/// </summary>
+	public List<RunPayrollComponentItem> DeductionComponents { get; set; } = new();
+}
+
+/// <summary>
+/// Lightweight earning/deduction component line item in a payroll preview
+/// </summary>
+public class RunPayrollComponentItem
+{
+	public string Name { get; set; } = string.Empty;
+	public double Amount { get; set; }
 }
 
 /// <summary>

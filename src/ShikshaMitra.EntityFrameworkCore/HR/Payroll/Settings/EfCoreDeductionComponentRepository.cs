@@ -20,8 +20,9 @@ public class EfCoreDeductionComponentRepository : EfCoreRepository<ShikshaMitraD
 
 	public async Task<bool> IsNameExistsAsync(string name, Guid? excludeId = null)
 	{
+		var normalized = (name ?? string.Empty).Trim();
 		var dbSet = await GetDbSetAsync();
-		var query = dbSet.Where(x => x.Name.ToLower() == name.ToLower());
+		var query = dbSet.Where(x => x.Name.ToLower() == normalized.ToLower());
 
 		if (excludeId.HasValue)
 		{
@@ -33,9 +34,10 @@ public class EfCoreDeductionComponentRepository : EfCoreRepository<ShikshaMitraD
 
 	public async Task<DeductionComponent?> FindByNameAsync(string name)
 	{
+		var normalized = (name ?? string.Empty).Trim();
 		var dbSet = await GetDbSetAsync();
 		return await dbSet
-			.Where(x => x.Name.ToLower() == name.ToLower())
+			.Where(x => x.Name.ToLower() == normalized.ToLower())
 			.FirstOrDefaultAsync();
 	}
 }

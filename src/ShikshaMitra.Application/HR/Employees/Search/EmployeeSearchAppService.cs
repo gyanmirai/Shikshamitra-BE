@@ -2,7 +2,6 @@
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -45,6 +44,8 @@ public class EmployeeSearchAppService(
 			queryable = queryable.Where(e => e.RoleId == input.RoleId.Value);
 		}
 
+		queryable = ApplySearchFilter(queryable, input.Search);
+
 		var totalCount = await AsyncExecuter.CountAsync(queryable);
 
 		queryable = queryable.OrderBy(e => e.FirstName).ThenBy(e => e.LastName);
@@ -68,31 +69,22 @@ public class EmployeeSearchAppService(
 		};
 	}
 
-	public async Task<EmployeeSearchResponse> SearchAsync(SearchEmployeeInput input)
+	private static IQueryable<Employee> ApplySearchFilter(IQueryable<Employee> queryable, string? search)
 	{
-		if (string.IsNullOrEmpty(input.SearchTerm) || input.SearchTerm.Length < 3)
+		if (string.IsNullOrWhiteSpace(search))
 		{
-			return new EmployeeSearchResponse { Items = new List<EmployeeSearchItem>() };
+			return queryable;
 		}
 
-		var searchTerm = input.SearchTerm.ToLower();
-		var queryable = await employeeRepository.GetQueryableAsync();
+		var searchTerm = search.Trim().ToLower();
 
-		queryable = queryable.Where(e =>
+		return queryable.Where(e =>
 			(e.FirstName != null && e.FirstName.ToLower().Contains(searchTerm)) ||
 			(e.LastName != null && e.LastName.ToLower().Contains(searchTerm)) ||
 			(e.MiddleName != null && e.MiddleName.ToLower().Contains(searchTerm)) ||
 			(e.EmployeeCode != null && e.EmployeeCode.ToLower().Contains(searchTerm)) ||
 			(e.Email != null && e.Email.ToLower().Contains(searchTerm)) ||
 			(e.MobileNo != null && e.MobileNo.Contains(searchTerm)));
-
-		var maxResults = input.MaxResultCount > 0 ? input.MaxResultCount : 50;
-		var employees = await AsyncExecuter.ToListAsync(
-			queryable.OrderBy(e => e.FirstName).ThenBy(e => e.LastName).Take(maxResults));
-
-		var items = employees.Select(MapToEmployeeSearchItem).ToList();
-
-		return new EmployeeSearchResponse { Items = items };
 	}
 
 	private static EmployeeSummary MapToEmployeeSummary(Employee employee)
@@ -121,29 +113,4 @@ public class EmployeeSearchAppService(
 		};
 	}
 
-	private static EmployeeSearchItem MapToEmployeeSearchItem(Employee employee)
-	{
-		return new EmployeeSearchItem
-		{
-			Id = employee.Id,
-			RoleName = employee.Role?.Name ?? string.Empty,
-			FullName = employee.EmployeeName ?? string.Empty,
-			ThumbnailPicture = employee.ProfilePictureBlobName ?? string.Empty,
-			EmployeeIdentifier = employee.EmployeeCode ?? string.Empty,
-			Dob = employee.DateOfBirth?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MinValue,
-			Gender = employee.GenderType?.ToString() ?? string.Empty,
-			Doj = employee.DateOfJoining?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MinValue,
-			Email = employee.Email ?? string.Empty,
-			MobileNo = employee.MobileNo ?? string.Empty,
-			IsTeaching = employee.EmployeeGroup == EmployeeGroupType.Teaching,
-			Shift = employee.Shift != null ? new ShiftInfo
-			{
-				Id = employee.Shift.Id,
-				Name = employee.Shift.ShiftName ?? string.Empty,
-				StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"),
-				EndTime = employee.Shift.EndTime.ToString("HH:mm:ss")
-			} : new ShiftInfo(),
-			Status = (int)(employee.EmployeeStatusType ?? EmployeeStatusType.Active)
-		};
-	}
 }

@@ -22,8 +22,6 @@ bld/
 [Oo]bj/
 [Ll]og/
 
-# Visual Studio 2015 cache/options directory
-.vs/
 # Uncomment if you have tasks that create the project's static files in wwwroot
 #wwwroot/
 
@@ -247,9 +245,20 @@ paket-files/
 # FAKE - F# Make
 .fake/
 
-# JetBrains Rider
+# IDE — local caches (Visual Studio, JetBrains Rider)
+.vs/
 .idea/
 *.sln.iml
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Accidental root-level dumps / local tools (re-commit only if intentional)
+/output.txt
+/code2prompt.exe
+/temp_match.txt
 
 # ShikshaMitra
 src/ShikshaMitra.Web/Logs/*
@@ -268,3 +277,10 @@ src/ShikshaMitra.Blazor.Server.Tiered/Logs/*
 skills-lock.json
 skills-output.txt
 /.gemini/*
+
+# Cursor IDE — local plans, workspace data, optional MCP copies; not portable across machines.
+# To share team rules only, use: .cursor/* + !.cursor/rules/ (and commit rules under .cursor/rules/).
+.cursor/
+
+# .NET CLI / tool home when created under the repo (machine-local; not source).
+.dotnet/

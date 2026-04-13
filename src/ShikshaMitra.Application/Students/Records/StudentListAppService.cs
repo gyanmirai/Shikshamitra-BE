@@ -1,9 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentRecords;
 using Volo.Abp;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
@@ -25,6 +27,32 @@ public class StudentListAppService(
 	IRepository<Student, Guid> studentRepository
 ) : ApplicationService, IStudentListAppService
 {
+	public async Task<PagedResultDto<StudentDto>> GetStudentsByDivisionAsync(Guid divisionId, int skipCount = 0, int maxResultCount = 10, string? searchTerm = null)
+	{
+		var queryable = await studentRepository.GetQueryableAsync();
+
+		var studentsQuery = queryable
+			.Where(s => s.DivisionId == divisionId && s.Status == StudentLifeCycleStatusEnum.Enrolled);
+
+		if (!string.IsNullOrWhiteSpace(searchTerm))
+		{
+			studentsQuery = studentsQuery.Where(s => s.FirstName.Contains(searchTerm) || s.LastName.Contains(searchTerm));
+		}
+
+		var totalCount = await AsyncExecuter.CountAsync(studentsQuery);
+
+		var students = await AsyncExecuter.ToListAsync(
+			studentsQuery
+				.OrderByDescending(s => s.CreationTime)
+				.PageBy(skipCount, maxResultCount)
+		);
+
+		return new PagedResultDto<StudentDto>(
+			totalCount,
+			ObjectMapper.Map<List<Student>, List<StudentDto>>(students)
+		);
+	}
+
 	/// <inheritdoc/>
 	public async Task ChangeStudentStatusAsync(Guid studentId, ChangeStudentStatusDto input)
 	{

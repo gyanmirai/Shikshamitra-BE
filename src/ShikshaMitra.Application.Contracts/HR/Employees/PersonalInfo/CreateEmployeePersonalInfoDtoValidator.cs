@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using FluentValidation;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
@@ -13,8 +14,16 @@ public class CreateEmployeePersonalInfoDtoValidator : AbstractValidator<CreateEm
 			.Matches(@"^[6-9]\d{9}$").WithMessage("Invalid mobile number. Must be 10 digits starting with 6-9.");
 		RuleFor(x => x.DateOfJoining).NotEmpty();
 		RuleFor(x => x.RoleId).NotEmpty();
+		RuleFor(x => x.Email).NotEmpty().WithMessage("Email is required.")
+			.EmailAddress().WithMessage("Invalid email address format.");
+		RuleFor(x => x.ShiftId).Must(s => s.HasValue && s.Value != Guid.Empty)
+			.WithMessage("Shift is required.");
 
-		RuleFor(x => x.Email).EmailAddress().When(x => !string.IsNullOrEmpty(x.Email));
+		RuleFor(x => x.SecondaryMobileNo)
+			.Must((dto, secondary) => string.IsNullOrWhiteSpace(secondary) ||
+				NormalizeDigits(dto.MobileNo) != NormalizeDigits(secondary))
+			.WithMessage("Secondary mobile number must be different from the primary mobile number.")
+			.When(x => !string.IsNullOrWhiteSpace(x.SecondaryMobileNo));
 
 		RuleFor(x => x.DateOfBirth)
 			.LessThan(DateOnly.FromDateTime(System.DateTime.UtcNow))
@@ -40,4 +49,7 @@ public class CreateEmployeePersonalInfoDtoValidator : AbstractValidator<CreateEm
 		if (referenceDate < dob.AddYears(age)) age--;
 		return age;
 	}
+
+	private static string NormalizeDigits(string? value) =>
+		value == null ? string.Empty : new string(value.Where(char.IsDigit).ToArray());
 }

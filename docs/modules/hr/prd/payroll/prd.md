@@ -27,10 +27,12 @@ Handles payroll execution and salary output: assigning payroll structures to emp
 ### 2. Run Payroll
 
 1. Admin previews payroll for a given month (format: `MMMM-YYYY`, e.g., `JANUARY-2025`).
-2. Preview returns per-employee: basic salary, gross salary, total deductions, net pay, present/half-day/total working days, **and itemized earning/deduction component line items** (name + amount each).
-3. Admin locks payroll for the month. If already locked, returns `PayrollAlreadyLocked`. If no employees found, returns `PayrollNoEmployees`.
-4. Lock response reports: employees processed, skipped, failed, and any error messages.
-5. System publishes `PayrollLockedEto` (distributed event) after successful lock.
+2. Preview returns per-employee: basic salary, gross salary, total deductions, net pay, present/half-day counts, **payroll basis days** (denominator from tenant day-calculation setting), **payable days** (present + 0.5 × half days), **proration factor** (capped at 1), **day calculation mode** (`working-days` / `total-month-days` / `manual-days`), **and itemized earning/deduction component line items** (name + amount each). Amounts are **LOP-prorated**: non-temporary components are multiplied by `min(1, payableDays / basisDays)`. Temporary (`IsTemp`) lines are not prorated.
+3. If no day-calculation row exists for the tenant, behaviour matches **`working-days`** (weekdays in the month minus holidays on weekdays).
+4. Admin locks payroll for the month. If already locked, returns `PayrollAlreadyLocked`. If no employees found, returns `PayrollNoEmployees`.
+5. Lock response reports: employees processed, skipped, failed, and any error messages.
+6. Salary slips generated at lock use the **same** basis, factor, and prorated line amounts as preview for that attendance snapshot.
+7. System publishes `PayrollLockedEto` (distributed event) after successful lock.
 
 ### 3. Salary Slips
 
@@ -40,7 +42,7 @@ Handles payroll execution and salary output: assigning payroll structures to emp
    - If finalized and `forceRegenerate` -> `SalarySlipAlreadyFinalized`
    - If finalized and not force -> returns existing
    - If draft exists -> returns existing
-   - Otherwise generates from employee payroll components (earnings + deductions)
+   - Otherwise generates from employee payroll components (earnings + deductions) with **LOP proration** and persists **payroll basis days, payable days, proration factor, and day-calculation mode** on the slip for audit.
 4. Month-year format validated: `MonthYearRequired`, `InvalidMonthYearFormat`.
 
 ### 4. Employee Salary Structure

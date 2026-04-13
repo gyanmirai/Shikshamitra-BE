@@ -80,6 +80,15 @@ public static class HRErrorCodes
 	public const string LeaveInsufficientBalance = "HR:Leave:020017";
 	public const string LeaveNoticePeriod = "HR:Leave:020018";
 	public const string LeavePolicyInactive = "HR:Leave:020019";
+	public const string LeaveApproverNotInReportingChain = "HR:Leave:020020";
+	public const string LeaveReportingManagerCycle = "HR:Leave:020021";
+	public const string LeaveAlreadyCancelled = "HR:Leave:020022";
+	public const string LeaveNotCancellable = "HR:Leave:020023";
+
+	// Attendance — Validation
+	public const string AttendanceInvalidDateFormat = "HR:Attendance:020301";
+	public const string AttendanceEndDateBeforeStartDate = "HR:Attendance:020302";
+	public const string AttendanceDateRangeTooLarge = "HR:Attendance:020303";
 
 	// Leave — File validation
 	public const string LeaveFileTooLarge = "HR:Leave:020101";
@@ -93,6 +102,17 @@ public static class HRErrorCodes
 
 	/// <summary>Tenant context is required (e.g. custom attendance rules are tenant-scoped).</summary>
 	public const string AttendanceRuleTenantRequired = "HR:Leave:020109";
+
+	// Attendance import
+	public const string AttendanceImportFileEmpty = "HR:Leave:020201";
+	public const string AttendanceImportInvalidExtension = "HR:Leave:020202";
+	public const string AttendanceImportMalformedFile = "HR:Leave:020203";
+	public const string AttendanceImportMissingHeaders = "HR:Leave:020204";
+	public const string AttendanceImportUnknownHeaders = "HR:Leave:020205";
+	public const string AttendanceImportPreviewExpired = "HR:Leave:020206";
+	public const string AttendanceImportPreviewInvalid = "HR:Leave:020207";
+	public const string AttendanceImportNoValidRows = "HR:Leave:020208";
+	public const string AttendanceImportFileTooLarge = "HR:Leave:020209";
 
 	// ── Payroll: 03xxxx ──────────────────────────────────────────
 

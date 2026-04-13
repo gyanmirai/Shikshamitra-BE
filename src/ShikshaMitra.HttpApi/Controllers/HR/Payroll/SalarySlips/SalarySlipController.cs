@@ -76,6 +76,10 @@ public class SalarySlipController : AbpControllerBase
 			TotalEarning = Convert.ToDouble(dto.TotalEarning),
 			TotalDeduction = Convert.ToDouble(dto.TotalDeduction),
 			NetPay = Convert.ToDouble(dto.NetSalary),
+			PayrollBasisDays = dto.PayrollBasisDays,
+			PayableDays = dto.PayableDays.HasValue ? Convert.ToDouble(dto.PayableDays.Value) : null,
+			ProrationFactor = dto.ProrationFactor.HasValue ? Convert.ToDouble(dto.ProrationFactor.Value) : null,
+			PayrollDayCalculationMode = dto.PayrollDayCalculationMode,
 			Earnings = dto.Earnings.Select(e => new SalaryComponent
 			{
 				Name = e.Name,

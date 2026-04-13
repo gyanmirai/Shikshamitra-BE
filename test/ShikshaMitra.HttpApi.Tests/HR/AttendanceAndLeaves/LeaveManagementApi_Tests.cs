@@ -1,5 +1,8 @@
-using System;
+﻿using System;
 using System.Net;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
@@ -25,7 +28,21 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		var response = await Client.GetAsync(
 			$"{BaseUrl}?mediumStageId={TestMediumStageId}&page=1&pageSize=10");
 
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.InternalServerError);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task List_Response_Should_Have_TotalCount_And_Items()
+	{
+		var response = await Client.GetAsync(
+			$"{BaseUrl}?mediumStageId={TestMediumStageId}&page=1&pageSize=10");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var json = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		json.TryGetProperty("totalCount", out _).ShouldBeTrue("Response must include 'totalCount'");
+		json.TryGetProperty("items", out var items).ShouldBeTrue("Response must include 'items'");
+		items.ValueKind.ShouldBe(JsonValueKind.Array);
 	}
 
 	#endregion
@@ -34,14 +51,11 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Get_Leave_Request_By_Id_Returns_Error_For_Invalid()
+	public async Task Should_Get_Leave_Request_By_Id_Returns_NotFound_For_Invalid()
 	{
 		var response = await Client.GetAsync($"{BaseUrl}/999999");
 
-		response.StatusCode.ShouldBeOneOf(
-			HttpStatusCode.NotFound,
-			HttpStatusCode.InternalServerError,
-			HttpStatusCode.BadRequest);
+		response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 	}
 
 	[Fact]
@@ -55,14 +69,41 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Delete_Returns_Error_For_Nonexistent()
+	public async Task Should_Delete_Returns_NotFound_For_Nonexistent()
 	{
 		var response = await Client.DeleteAsync($"{BaseUrl}/999999");
 
-		response.StatusCode.ShouldBeOneOf(
-			HttpStatusCode.NotFound,
-			HttpStatusCode.InternalServerError,
-			HttpStatusCode.BadRequest);
+		response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Invalid_Page_Parameters()
+	{
+		var response = await Client.GetAsync(
+			$"{BaseUrl}?mediumStageId={TestMediumStageId}&page=0&pageSize=10");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Invalid_PageSize_Parameters()
+	{
+		var response = await Client.GetAsync(
+			$"{BaseUrl}?mediumStageId={TestMediumStageId}&page=1&pageSize=5");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Invalid_Month()
+	{
+		var response = await Client.GetAsync(
+			$"{BaseUrl}?mediumStageId={TestMediumStageId}&month=13&year=2024&page=1&pageSize=10");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
 	}
 
 	#endregion

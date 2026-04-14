@@ -109,4 +109,59 @@ public class EfCoreConcessionRequestRepository(
             .OrderBy(r => r.CreationTime)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<List<ConcessionRequest>> GetStudentRequestsWithDetailsAsync(
+        Guid studentId,
+        int skipCount,
+        int maxResultCount,
+        ConcessionRequestStatus? status = null,
+        IReadOnlyList<Guid>? concessionTypeIds = null,
+        CancellationToken cancellationToken = default)
+    {
+        var dbSet = await GetDbSetAsync();
+
+        return await dbSet
+            .Include(r => r.ConcessionFeeHeadMappings)
+            .Include(r => r.ConcessionRequestDocuments)
+            .Where(r => r.StudentId == studentId)
+            .WhereIf(status.HasValue, r => r.Status == status!.Value)
+            .WhereIf(
+                concessionTypeIds != null && concessionTypeIds.Count > 0,
+                r => concessionTypeIds!.Contains(r.ConcessionTypeId))
+            .OrderByDescending(r => r.CreationTime)
+            .Skip(skipCount)
+            .Take(maxResultCount)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<long> GetStudentRequestsCountAsync(
+        Guid studentId,
+        ConcessionRequestStatus? status = null,
+        IReadOnlyList<Guid>? concessionTypeIds = null,
+        CancellationToken cancellationToken = default)
+    {
+        var dbSet = await GetDbSetAsync();
+
+        return await dbSet
+            .Where(r => r.StudentId == studentId)
+            .WhereIf(status.HasValue, r => r.Status == status!.Value)
+            .WhereIf(
+                concessionTypeIds != null && concessionTypeIds.Count > 0,
+                r => concessionTypeIds!.Contains(r.ConcessionTypeId))
+            .LongCountAsync(cancellationToken);
+    }
+
+    public async Task<ConcessionRequest> GetWithDocumentsAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        var dbSet = await GetDbSetAsync();
+
+        var entity = await dbSet
+            .Include(r => r.ConcessionRequestDocuments)
+            .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+
+        return entity ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(
+            typeof(ConcessionRequest), id);
+    }
 }

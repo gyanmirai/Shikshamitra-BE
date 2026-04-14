@@ -119,4 +119,10 @@ public static class ConcessionRequestErrorCodes
     /// The <c>status</c> discriminator is not a recognised value (must be 0 = Pending or 1 = Uploaded).
     /// </summary>
     public const string InvalidDocumentStatus = Prefix + "InvalidDocumentStatus";
+
+    /// <summary>
+    /// An Approved concession application cannot be deleted.
+    /// Only Pending and Rejected applications may be removed via the admin delete endpoint.
+    /// </summary>
+    public const string CannotDeleteApprovedApplication = Prefix + "CannotDeleteApprovedApplication";
 }

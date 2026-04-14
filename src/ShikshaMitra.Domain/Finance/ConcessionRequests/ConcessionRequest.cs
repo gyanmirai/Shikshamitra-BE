@@ -27,6 +27,11 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     public string? Remarks { get; private set; }
 
+    /// <summary>
+    /// Optional message left by the approver when the request is approved.
+    /// </summary>
+    public string? ApproverMessage { get; private set; }
+
     public virtual ICollection<ConcessionFeeHeadMapping> ConcessionFeeHeadMappings { get; private set; }
         = new List<ConcessionFeeHeadMapping>();
 
@@ -72,9 +77,13 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     }
 
     /// <summary>
-    /// Approves a pending request.
+    /// Approves a pending request with an optional approver message.
     /// </summary>
-    public void Approve()
+    /// <param name="approverMessage">
+    /// Free-text comment from the approver (e.g. conditions or notes).
+    /// Trimmed and stored; <c>null</c> or whitespace clears any previously saved message.
+    /// </param>
+    public void Approve(string? approverMessage = null)
     {
         if (Status != ConcessionRequestStatus.Pending)
         {
@@ -82,7 +91,10 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
                 .WithData("Status", Status.ToString());
         }
 
-        Status = ConcessionRequestStatus.Approved;
+        Status          = ConcessionRequestStatus.Approved;
+        ApproverMessage = string.IsNullOrWhiteSpace(approverMessage)
+            ? null
+            : approverMessage.Trim();
     }
 
     /// <summary>

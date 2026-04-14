@@ -66,5 +66,38 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
         Guid studentId,
         ConcessionRequestStatus status,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns a paged list of concession requests for a student with both
+    /// <see cref="ConcessionRequest.ConcessionFeeHeadMappings"/> and
+    /// <see cref="ConcessionRequest.ConcessionRequestDocuments"/> eagerly loaded.
+    /// Optionally filtered by status and/or a pre-resolved set of concession-type IDs.
+    /// Results are ordered newest-first.
+    /// </summary>
+    Task<List<ConcessionRequest>> GetStudentRequestsWithDetailsAsync(
+        Guid studentId,
+        int skipCount,
+        int maxResultCount,
+        ConcessionRequestStatus? status = null,
+        IReadOnlyList<Guid>? concessionTypeIds = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the total count of concession requests for a student
+    /// with optional status and concession-type filters.
+    /// </summary>
+    Task<long> GetStudentRequestsCountAsync(
+        Guid studentId,
+        ConcessionRequestStatus? status = null,
+        IReadOnlyList<Guid>? concessionTypeIds = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Fetches a single concession request by its identifier with its
+    /// <see cref="ConcessionRequest.ConcessionRequestDocuments"/> collection eagerly loaded.
+    /// Throws <see cref="Volo.Abp.Domain.Entities.EntityNotFoundException"/> when the record
+    /// does not exist.
+    /// </summary>
+    Task<ConcessionRequest> GetWithDocumentsAsync(Guid id, CancellationToken cancellationToken = default);
 }
 

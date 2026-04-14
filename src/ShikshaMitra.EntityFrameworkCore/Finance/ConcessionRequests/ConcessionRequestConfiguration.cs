@@ -26,6 +26,9 @@ public class ConcessionRequestConfiguration : IEntityTypeConfiguration<Concessio
         builder.Property(x => x.Remarks)
             .HasMaxLength(2000);
 
+        builder.Property(x => x.ApproverMessage)
+            .HasMaxLength(1000);
+
         // One-to-many: ConcessionRequest → ConcessionFeeHeadMappings
         builder.HasMany(x => x.ConcessionFeeHeadMappings)
             .WithOne()

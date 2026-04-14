@@ -3,13 +3,13 @@ using System.ComponentModel.DataAnnotations;
 namespace ShikshaMitra.Finance.ConcessionRequests.Dtos;
 
 /// <summary>
-/// Payload for rejecting a Pending ConcessionRequest.
-/// A non-empty, meaningful reason is mandatory.
+/// Request body for <c>POST /api/concession-requests/{studentConcessionTypeRequestId}/reject</c>.
+/// The rejection reason is mandatory and must be meaningful (10 – 1 000 characters).
 /// </summary>
 public class RejectConcessionRequestDto
 {
     [Required]
-    [StringLength(2000, MinimumLength = 10,
-        ErrorMessage = "Rejection reason must be between 10 and 2000 characters.")]
-    public string RejectionReason { get; set; } = string.Empty;
+    [StringLength(1000, MinimumLength = 10,
+        ErrorMessage = "Rejection reason must be between 10 and 1000 characters.")]
+    public string Message { get; set; } = string.Empty;
 }

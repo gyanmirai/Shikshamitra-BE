@@ -284,11 +284,18 @@ public class ConcessionRequestManager(
     }
 
     /// <summary>
-    /// Approves a Pending request (Pending → Approved).
+    /// Approves a Pending request (Pending → Approved) with an optional approver message.
     /// </summary>
-    public async Task<ConcessionRequest> ApproveAsync(ConcessionRequest request)
+    /// <param name="request">The request to approve; must be in <c>Pending</c> status.</param>
+    /// <param name="approverMessage">
+    /// Optional free-text comment from the approver. Stored on the entity and returned
+    /// in the approval response.
+    /// </param>
+    public async Task<ConcessionRequest> ApproveAsync(
+        ConcessionRequest request,
+        string? approverMessage = null)
     {
-        request.Approve();
+        request.Approve(approverMessage);
         await concessionRequestRepository.UpdateAsync(request);
         return request;
     }

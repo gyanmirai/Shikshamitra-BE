@@ -14,7 +14,7 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20260414060715_v1")]
+    [Migration("20260414111906_v1")]
     partial class v1
     {
         /// <inheritdoc />
@@ -2202,6 +2202,10 @@ namespace ShikshaMitra.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ApproverMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<Guid>("ConcessionTypeId")
                         .HasColumnType("uuid");

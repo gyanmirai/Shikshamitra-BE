@@ -731,6 +731,7 @@ namespace ShikshaMitra.Migrations
                     Status = table.Column<int>(type: "integer", nullable: false),
                     RejectionReason = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
                     Remarks = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    ApproverMessage = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),

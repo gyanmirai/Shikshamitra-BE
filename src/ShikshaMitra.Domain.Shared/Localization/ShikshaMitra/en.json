@@ -203,6 +203,14 @@
     "AttendanceImport:AllRecordsImportedSuccessfully": "All {0} attendance records imported successfully!",
     "AttendanceImport:AllRecordsWithWarnings": "All {0} records imported successfully with {1} warning(s). Please review warnings.",
     "AttendanceImport:PartialSuccess": "Partial success: {0} of {1} records imported. {2} failed. Please review errors and re-import failed records.",
-    "AttendanceImport:CompleteFailure": "Import failed. All {0} records have errors. Please fix the errors and try again."
+    "AttendanceImport:CompleteFailure": "Import failed. All {0} records have errors. Please fix the errors and try again.",
+    "HR:Employee:010026": "Document setting with name '{documentName}' already exists.",
+    "HR:Employee:010027": "File is required.",
+    "HR:Leave:020029": "Please use CreateLeavePolicyAsync with academicYearId.",
+    "HR:Leave:020030": "Please use UpdateLeavePolicyAsync.",
+    "HR:Leave:020031": "Please use CreateLeaveTypeAsync with academicYearId.",
+    "HR:Payroll:030009": "EmployeeId is required.",
+    "HR:Payroll:030010": "An error occurred while fetching the salary slip. Please try again.",
+    "HR:Calendar:040005": "Calendar item with ID '{itemId}' was not found."
   }
 }

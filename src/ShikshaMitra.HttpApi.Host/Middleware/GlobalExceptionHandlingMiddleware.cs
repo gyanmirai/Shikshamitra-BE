@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common.Responses;
@@ -90,19 +90,9 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 		}
 
 		var (errorCode, errorMessage, errorData, validationFields) = GetErrorDetailsFromResponse(responseBody, statusCode);
+		var localizedMessage = ResolveErrorMessage(errorCode, errorMessage, errorData, validationFields);
 
-		// Localize the error message if it looks like a localization key
-		var localizedMessage = LocalizeErrorMessage(errorCode ?? errorMessage, errorData);
-
-		var error = statusCode switch
-		{
-			400 => Error.Create("VALIDATION_ERROR", localizedMessage, validationFields),
-			401 => Error.Create("UNAUTHORIZED", localizedMessage ?? "Authentication required. Please provide valid credentials."),
-			403 => Error.Create("FORBIDDEN", localizedMessage ?? "You don't have permission to access this resource."),
-			404 => Error.Create("RESOURCE_NOT_FOUND", localizedMessage),
-			409 => Error.Create("DUPLICATE_RESOURCE", localizedMessage ?? "Resource conflict."),
-			_ => Error.Create("INTERNAL_SERVER_ERROR", localizedMessage)
-		};
+var error = CreateErrorForStatusCode(statusCode, errorCode, localizedMessage, validationFields);
 
 		var result = Result.Failure(error);
 		var jsonResponse = JsonSerializer.Serialize(result, new JsonSerializerOptions
@@ -115,6 +105,31 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 		context.Response.ContentLength = System.Text.Encoding.UTF8.GetByteCount(jsonResponse);
 
 		await context.Response.WriteAsync(jsonResponse);
+	}
+
+	private static Error CreateErrorForStatusCode(
+		int statusCode,
+		string? upstreamCode,
+		string message,
+		Dictionary<string, string>? validationFields)
+	{
+		return statusCode switch
+		{
+			400 when validationFields?.Count > 0 =>
+				Error.Create("VALIDATION_ERROR", message, validationFields),
+			400 =>
+				Error.Create(upstreamCode ?? "INVALID_REQUEST", message),
+			401 =>
+				Error.Create("UNAUTHORIZED", message),
+			403 =>
+				Error.Create("FORBIDDEN", message),
+			404 =>
+				Error.Create("RESOURCE_NOT_FOUND", message),
+			409 =>
+				Error.Create("DUPLICATE_RESOURCE", message),
+			_ =>
+				Error.Create("INTERNAL_SERVER_ERROR", message)
+		};
 	}
 
 	private (string? ErrorCode, string ErrorMessage, Dictionary<string, object>? ErrorData, Dictionary<string, string>? ValidationFields)
@@ -163,13 +178,66 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 						}
 					}
 				}
+				// Check for custom validation payload shape: { error: "...", details: { field: "message" } }
+				else if (jsonDoc.RootElement.TryGetProperty("details", out var detailsElement) &&
+					detailsElement.ValueKind == JsonValueKind.Object)
+				{
+					var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+					foreach (var field in detailsElement.EnumerateObject())
+					{
+						if (field.Value.ValueKind == JsonValueKind.String)
+						{
+							var message = field.Value.GetString();
+							if (!string.IsNullOrWhiteSpace(message))
+							{
+								fields[field.Name] = message;
+							}
+						}
+						else
+						{
+							var message = field.Value.ToString();
+							if (!string.IsNullOrWhiteSpace(message))
+							{
+								fields[field.Name] = message;
+							}
+						}
+					}
+
+					if (fields.Count > 0)
+					{
+						var message = string.Join("; ", fields.Select(kv => $"{kv.Key}: {kv.Value}"));
+						return (null, message, null, fields);
+					}
+
+					if (jsonDoc.RootElement.TryGetProperty("error", out var errorTextElement) &&
+						errorTextElement.ValueKind == JsonValueKind.String)
+					{
+						var errorText = errorTextElement.GetString();
+						if (!string.IsNullOrWhiteSpace(errorText))
+						{
+							return (null, errorText, null, null);
+						}
+					}
+				}
 
 				// Check for ABP error structure
 				else if (jsonDoc.RootElement.TryGetProperty("error", out var errorElement))
 				{
+					if (errorElement.ValueKind != JsonValueKind.Object)
+					{
+						var nonObjectErrorText = errorElement.ToString();
+						if (!string.IsNullOrWhiteSpace(nonObjectErrorText))
+						{
+							return (null, nonObjectErrorText, null, null);
+						}
+
+						return (null, "An error occurred", null, null);
+					}
+
 					string? errorCode = null;
 					string? errorMessage = null;
 					Dictionary<string, object>? errorData = null;
+					Dictionary<string, string>? validationFields = null;
 
 					if (errorElement.TryGetProperty("code", out var codeElement))
 					{
@@ -183,11 +251,34 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 
 					if (errorElement.TryGetProperty("data", out var dataElement))
 					{
-						errorData = new Dictionary<string, object>();
-						foreach (var property in dataElement.EnumerateObject())
+						if (dataElement.ValueKind == JsonValueKind.Object)
 						{
-							errorData[property.Name] = property.Value.ToString();
+							errorData = new Dictionary<string, object>();
+							foreach (var property in dataElement.EnumerateObject())
+							{
+								errorData[property.Name] = property.Value.ToString();
+							}
 						}
+						else if (dataElement.ValueKind != JsonValueKind.Null)
+						{
+							errorData = new Dictionary<string, object>
+							{
+								["data"] = dataElement.ToString()
+							};
+						}
+					}
+
+					if (errorElement.TryGetProperty("validationErrors", out var validationErrorsElement) &&
+						validationErrorsElement.ValueKind == JsonValueKind.Array)
+					{
+						validationFields = ParseValidationErrors(validationErrorsElement);
+					}
+
+					if (validationFields?.Count > 0)
+					{
+						var validationMessage = string.Join("; ",
+							validationFields.Select(kv => kv.Key == "_" ? kv.Value : $"{kv.Key}: {kv.Value}"));
+						return (errorCode, validationMessage, errorData, validationFields);
 					}
 
 					if (!string.IsNullOrEmpty(errorCode))
@@ -200,9 +291,9 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 						return (null, errorMessage, errorData, null);
 					}
 
-					if (errorElement.TryGetProperty("details", out var detailsElement))
+					if (errorElement.TryGetProperty("details", out var abpDetailsElement))
 					{
-						var details = detailsElement.GetString();
+						var details = abpDetailsElement.GetString();
 						if (!string.IsNullOrEmpty(details))
 						{
 							return (null, details, errorData, null);
@@ -220,9 +311,10 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 				}
 			}
 		}
-		catch (JsonException)
+		catch (Exception ex)
 		{
-			// If JSON parsing fails, fall back to default messages
+			// If response parsing fails, fall back to default messages.
+			_logger.LogWarning(ex, "Failed to parse error response body. Falling back to default API error message.");
 		}
 
 		var defaultMessage = statusCode switch
@@ -271,6 +363,75 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 			_logger.LogWarning(ex, "Failed to localize error message: {Message}", messageOrCode);
 			return messageOrCode;
 		}
+	}
+
+	private string ResolveErrorMessage(
+		string? errorCode,
+		string errorMessage,
+		Dictionary<string, object>? errorData,
+		Dictionary<string, string>? validationFields)
+	{
+		if (validationFields?.Count > 0)
+		{
+			return errorMessage;
+		}
+
+		return !string.IsNullOrWhiteSpace(errorCode)
+			? LocalizeErrorMessage(errorCode, errorData)
+			: errorMessage;
+	}
+
+	private static Dictionary<string, string>? ParseValidationErrors(JsonElement validationErrorsElement)
+	{
+		var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+
+		foreach (var validationError in validationErrorsElement.EnumerateArray())
+		{
+			if (!validationError.TryGetProperty("message", out var messageElement))
+			{
+				continue;
+			}
+
+			var message = messageElement.GetString();
+			if (string.IsNullOrWhiteSpace(message))
+			{
+				continue;
+			}
+
+			var members = new List<string>();
+			if (validationError.TryGetProperty("members", out var membersElement) &&
+				membersElement.ValueKind == JsonValueKind.Array)
+			{
+				members.AddRange(membersElement.EnumerateArray()
+					.Select(m => m.GetString())
+					.Where(m => !string.IsNullOrWhiteSpace(m))
+					.Select(m => m!));
+			}
+
+			if (members.Count == 0)
+			{
+				AppendValidationMessage(fields, "_", message);
+				continue;
+			}
+
+			foreach (var member in members)
+			{
+				AppendValidationMessage(fields, member, message);
+			}
+		}
+
+		return fields.Count > 0 ? fields : null;
+	}
+
+	private static void AppendValidationMessage(IDictionary<string, string> fields, string key, string message)
+	{
+		if (fields.TryGetValue(key, out var existing))
+		{
+			fields[key] = $"{existing}; {message}";
+			return;
+		}
+
+		fields[key] = message;
 	}
 
 	private async Task HandleExceptionAsync(HttpContext context, Exception exception)

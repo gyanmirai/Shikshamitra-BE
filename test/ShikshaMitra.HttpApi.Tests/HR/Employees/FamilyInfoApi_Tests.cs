@@ -1,7 +1,9 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.FamilyInfo;
 using ShikshaMitra.Infrastructure.Traits;
@@ -71,6 +73,42 @@ public class FamilyInfoApi_Tests : ShikshaMitraApiTestBase
 			HttpStatusCode.NotFound,
 			HttpStatusCode.InternalServerError,
 			HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Field_Level_Validation_Errors_For_Invalid_Request()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "FamVal");
+
+		var request = new FamilyInfoRequest
+		{
+			FatherDetails = new FamilyMemberInfo
+			{
+				Name = new string('A', 257),
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/family-info", request, JsonOptions);
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
+
+		if (response.StatusCode != HttpStatusCode.BadRequest)
+		{
+			return;
+		}
+
+		var json = await response.Content.ReadAsStringAsync();
+		using var document = JsonDocument.Parse(json);
+		var root = document.RootElement;
+
+		root.GetProperty("success").GetBoolean().ShouldBeFalse();
+		var error = root.GetProperty("error");
+		error.GetProperty("code").GetString().ShouldBe("VALIDATION_ERROR");
+
+		var fields = error.GetProperty("fields");
+		var keys = fields.EnumerateObject().Select(p => p.Name).ToList();
+		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+		keys.Any(k => k.Contains("name", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
 	}
 
 	#endregion

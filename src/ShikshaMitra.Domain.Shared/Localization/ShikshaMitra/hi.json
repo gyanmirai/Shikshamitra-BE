@@ -3,6 +3,14 @@
   "texts": {
     "Menu:Home": "घर",
     "Welcome": "स्वागत हे",
-    "LongWelcomeMessage": "आवेदन करने के लिए आपका स्वागत है। यह एबीपी ढांचे पर आधारित एक स्टार्टअप परियोजना है। अधिक जानकारी के लिए, abp.io पर जाएं।"
+    "LongWelcomeMessage": "आवेदन करने के लिए आपका स्वागत है। यह एबीपी ढांचे पर आधारित एक स्टार्टअप परियोजना है। अधिक जानकारी के लिए, abp.io पर जाएं।",
+    "HR:Employee:010026": "दस्तावेज़ सेटिंग नाम '{documentName}' पहले से मौजूद है।",
+    "HR:Employee:010027": "फ़ाइल आवश्यक है।",
+    "HR:Leave:020029": "कृपया academicYearId के साथ CreateLeavePolicyAsync का उपयोग करें।",
+    "HR:Leave:020030": "कृपया UpdateLeavePolicyAsync का उपयोग करें।",
+    "HR:Leave:020031": "कृपया academicYearId के साथ CreateLeaveTypeAsync का उपयोग करें।",
+    "HR:Payroll:030009": "EmployeeId आवश्यक है।",
+    "HR:Payroll:030010": "वेतन पर्ची प्राप्त करते समय त्रुटि हुई। कृपया पुनः प्रयास करें।",
+    "HR:Calendar:040005": "आईडी '{itemId}' वाला कैलेंडर आइटम नहीं मिला।"
   }
 }

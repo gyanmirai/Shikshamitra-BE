@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -51,7 +51,7 @@ public class LeaveTypeAppService : CrudAppService<
 
 	public override Task<LeaveTypeDto> CreateAsync(CreateLeaveTypeDto input)
 	{
-		throw new BusinessException(HRErrorCodes.LeaveTypeCreateMethodNotSupported);
+throw new BusinessException(HRErrorCodes.LeaveTypeCreateMethodNotSupported);
 	}
 
 	public override async Task<LeaveTypeDto> UpdateAsync(Guid id, UpdateLeaveTypeDto input)

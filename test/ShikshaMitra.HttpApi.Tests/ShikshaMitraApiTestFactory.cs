@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Data.Common;
 using System.Linq;
 using System.Threading.Tasks;
@@ -21,7 +21,9 @@ using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Seeders;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using Volo.Abp.Auditing;
 using Volo.Abp.Security.Claims;
 using Volo.Abp.Authorization;
@@ -51,6 +53,9 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	public Guid SeededShiftId { get; private set; }
 	public Guid SeededAcademicYearId { get; private set; }
 	public Guid SeededMediumStageId { get; private set; }
+	public Guid SeededMediumId { get; private set; }
+	public Guid SeededStandardId { get; private set; }
+	public Guid SeededDivisionId { get; private set; }
 
 	protected override IHost CreateHost(IHostBuilder builder)
 	{
@@ -104,6 +109,32 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 				.OrderBy(s => s.Id)
 				.FirstOrDefaultAsync();
 			SeededMediumStageId = firstStage?.Id ?? Guid.Empty;
+
+			var standardRepo = services.GetRequiredService<IStandardRepository>();
+			var firstStandard = await (await standardRepo.GetQueryableAsync()).AsNoTracking()
+				.OrderBy(s => s.Id)
+				.FirstOrDefaultAsync();
+			SeededStandardId = firstStandard?.Id ?? Guid.Empty;
+
+			// Resolve the EducationMedium.Id from the standard's EducationMediumStage.
+			// AcademicMediumId in enrollment DTOs refers to EducationMedium.Id, not EducationMediumStage.Id.
+			if (firstStandard != null)
+			{
+				SeededMediumStageId = firstStandard.EducationMediumStageId;
+				var standardStage = await (await mediumStageRepo.GetQueryableAsync()).AsNoTracking()
+					.FirstOrDefaultAsync(s => s.Id == firstStandard.EducationMediumStageId);
+				SeededMediumId = standardStage?.EducationMediumId ?? Guid.Empty;
+			}
+			else if (firstStage != null)
+			{
+				SeededMediumId = firstStage.EducationMediumId;
+			}
+
+			var divisionRepo = services.GetRequiredService<IDivisionRepository>();
+			var firstDivision = await (await divisionRepo.GetQueryableAsync()).AsNoTracking()
+				.OrderBy(d => d.Id)
+				.FirstOrDefaultAsync();
+			SeededDivisionId = firstDivision?.Id ?? Guid.Empty;
 
 			await uow.CompleteAsync();
 		}

@@ -91,9 +91,9 @@ public static class HRErrorCodes
 	public const string LeaveInvalidMonthForAcademicYear = "HR:Leave:020026";
 	public const string LeaveAttachmentNotFound = "HR:Leave:020027";
 	public const string LeaveDatesOutsideAcademicYear = "HR:Leave:020028";
-	public const string LeavePolicyCreateMethodNotSupported = "HR:Leave:020029";
-	public const string LeavePolicyUpdateMethodNotSupported = "HR:Leave:020030";
-	public const string LeaveTypeCreateMethodNotSupported = "HR:Leave:020031";
+public const string LeavePolicyCreateMethodNotSupported = "HR:Leave:020029";
+public const string LeavePolicyUpdateMethodNotSupported = "HR:Leave:020030";
+public const string LeaveTypeCreateMethodNotSupported = "HR:Leave:020031";
 
 	// Attendance — Validation
 	public const string AttendanceInvalidDateFormat = "HR:Attendance:020301";

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -52,12 +52,12 @@ public class LeavePolicyAppService : CrudAppService<
 
 	public override Task<LeavePolicyDto> CreateAsync(CreateLeavePolicyDto input)
 	{
-		throw new BusinessException(HRErrorCodes.LeavePolicyCreateMethodNotSupported);
-	}
+	throw new BusinessException(HRErrorCodes.LeavePolicyCreateMethodNotSupported);
+}
 
-	public override Task<LeavePolicyDto> UpdateAsync(Guid id, UpdateLeavePolicyDto input)
-	{
-		throw new BusinessException(HRErrorCodes.LeavePolicyUpdateMethodNotSupported);
+public override Task<LeavePolicyDto> UpdateAsync(Guid id, UpdateLeavePolicyDto input)
+{
+	throw new BusinessException(HRErrorCodes.LeavePolicyUpdateMethodNotSupported);
 	}
 
 	public override async Task DeleteAsync(Guid id)

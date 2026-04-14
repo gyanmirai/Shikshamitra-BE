@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common.Responses;
@@ -92,7 +92,7 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 		var (errorCode, errorMessage, errorData, validationFields) = GetErrorDetailsFromResponse(responseBody, statusCode);
 		var localizedMessage = ResolveErrorMessage(errorCode, errorMessage, errorData, validationFields);
 
-		var error = CreateErrorForStatusCode(statusCode, errorCode, localizedMessage, validationFields);
+var error = CreateErrorForStatusCode(statusCode, errorCode, localizedMessage, validationFields);
 
 		var result = Result.Failure(error);
 		var jsonResponse = JsonSerializer.Serialize(result, new JsonSerializerOptions

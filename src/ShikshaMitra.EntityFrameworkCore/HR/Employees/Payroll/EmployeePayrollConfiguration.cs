@@ -64,7 +64,7 @@ public class EmployeePayrollComponentConfiguration : IEntityTypeConfiguration<Em
 		builder.Property(x => x.Amount).HasColumnType("decimal(18,2)");
 		builder.Property(x => x.IsFixed).IsRequired();
 		builder.Property(x => x.IsTemp).IsRequired();
-		builder.Property(x => x.ApplicableMonth).HasColumnType("datetime2");
+		builder.Property(x => x.ApplicableMonth);
 		builder.Property(x => x.ComponentType).IsRequired();
 		builder.Property(x => x.DependOn);
 		builder.Property(x => x.IsEarning).IsRequired();

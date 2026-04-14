@@ -35,7 +35,7 @@ public class ConcessionRequestController : AbpController
     /// <summary>Returns a paged list of ConcessionRequests.</summary>
     [HttpGet]
     public virtual Task<PagedResultDto<ConcessionRequestDto>> GetListAsync(
-        [FromQuery] GetConcessionRequestListRequestDto input)
+        [FromQuery] ConcessionRequestDto input)
         => _appService.GetListAsync(input);
 
     /// <summary>Creates a new ConcessionRequest in Draft state.</summary>

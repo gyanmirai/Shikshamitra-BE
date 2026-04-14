@@ -2277,6 +2277,71 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppConcessionRequests", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequestDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ConcessionRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConcessionRequestId")
+                        .HasDatabaseName("IX_ConcessionRequestDocuments_ConcessionRequestId");
+
+                    b.HasIndex("ConcessionRequestId", "DocumentId")
+                        .IsUnique()
+                        .HasDatabaseName("UIX_ConcessionRequestDocuments_RequestId_DocumentId");
+
+                    b.ToTable("AppConcessionRequestDocuments", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.Expenses.Expense", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2647,6 +2712,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
+                    b.Property<int?>("DiscountType")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -2703,16 +2771,18 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.ConcessionTypes.ConcessionTypeDocumentFormat", b =>
                 {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("ConcessionTypeDocumentId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("DocumentType")
                         .HasColumnType("integer");
 
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+                    b.HasKey("Id");
 
-                    b.HasKey("ConcessionTypeDocumentId", "DocumentType");
+                    b.HasIndex("ConcessionTypeDocumentId");
 
                     b.ToTable("AppConcessionTypeDocumentFormats", (string)null);
                 });
@@ -4848,7 +4918,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("ApplicableMonth")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("ComponentId")
                         .HasColumnType("uuid");
@@ -11192,10 +11262,19 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequestConcessionType", b =>
+            modelBuilder.Entity("ShikshaMitra.Finance.ConcessionRequests.ConcessionFeeHeadMapping", b =>
                 {
                     b.HasOne("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequest", null)
                         .WithMany("ConcessionFeeHeadMappings")
+                        .HasForeignKey("ConcessionRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequestDocument", b =>
+                {
+                    b.HasOne("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequest", null)
+                        .WithMany("ConcessionRequestDocuments")
                         .HasForeignKey("ConcessionRequestId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -13266,6 +13345,8 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequest", b =>
                 {
                     b.Navigation("ConcessionFeeHeadMappings");
+
+                    b.Navigation("ConcessionRequestDocuments");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Setting.ConcessionType.ConcessionType", b =>

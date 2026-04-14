@@ -7,6 +7,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using System;
@@ -28,6 +29,7 @@ public class StudentSeederContributor : BaseSeederContributor
 {
 	private readonly IRepository<Student, Guid> _studentRepository;
 	private readonly IAcademicYearRepository _academicYearRepository;
+	private readonly IRepository<EducationBoard, Guid> _eduBoardRepository;
 	private readonly IEducationMediumRepository _educationMediumRepository;
 	private readonly IStandardRepository _standardRepository;
 	private readonly IDivisionRepository _divisionRepository;
@@ -67,6 +69,7 @@ public class StudentSeederContributor : BaseSeederContributor
 		IUnitOfWork unitOfWork,
 		IRepository<Student, Guid> studentRepository,
 		IAcademicYearRepository academicYearRepository,
+		IRepository<EducationBoard, Guid> eduBoardRepository,
 		IEducationMediumRepository educationMediumRepository,
 		IStandardRepository standardRepository,
 		IDivisionRepository divisionRepository)
@@ -74,6 +77,7 @@ public class StudentSeederContributor : BaseSeederContributor
 	{
 		_studentRepository = studentRepository;
 		_academicYearRepository = academicYearRepository;
+		_eduBoardRepository = eduBoardRepository;
 		_educationMediumRepository = educationMediumRepository;
 		_standardRepository = standardRepository;
 		_divisionRepository = divisionRepository;
@@ -101,43 +105,46 @@ public class StudentSeederContributor : BaseSeederContributor
 			return; // No academic year found
 		}
 
-		// Get all mediums
-		var mediums = await _educationMediumRepository.GetListAsync();
+		var boards = await _eduBoardRepository.GetListAsync();
 
 		int totalStudentsCreated = 0;
+		foreach ( var board in boards ) {
+			// Seed students only for Class 10
+			var mediums = await _educationMediumRepository.GetListAsync(x => x.EducationBoardId == board.Id);
 
-		// Seed students only for Class 10
-		foreach (var medium in mediums)
-		{
-			// Get Class 10 standard for this medium directly from repository
-			var allStandards = await _standardRepository.GetListAsync();
-			var class10Standards = allStandards
-				.Where(s => s.EducationMediumStage.EducationMediumId == medium.Id
-				            && s.Name == "Class 10")
-				.ToList();
-
-			foreach (var standard in class10Standards)
+			foreach (var medium in mediums)
 			{
-				// Get all divisions for Class 10
-				var divisions = await _divisionRepository.GetListAsync(d => d.StandardId == standard.Id);
+				// Get Class 10 standard for this medium directly from repository
+				var allStandards = await _standardRepository.GetListAsync();
+				var class10Standards = allStandards
+					.Where(s => s.EducationMediumStage.EducationMediumId == medium.Id
+								&& s.Name == "Class 10")
+					.ToList();
 
-				foreach (var division in divisions)
+				foreach (var standard in class10Standards)
 				{
-					// Create 36 students per division (80% of 45 capacity)
-					var studentsInDivision = 36;
+					// Get all divisions for Class 10
+					var divisions = await _divisionRepository.GetListAsync(d => d.StandardId == standard.Id);
 
-					for (int i = 0; i < studentsInDivision; i++)
+					foreach (var division in divisions)
 					{
-						await CreateStudentAsync(
-							medium.Id,
-							standard.Id,
-							division.Id,
-							currentAcademicYear.Id,
-							totalStudentsCreated + 1,
-							i + 1 // Roll number within division
-						);
+						// Create 36 students per division (80% of 45 capacity)
+						var studentsInDivision = 36;
 
-						totalStudentsCreated++;
+						for (int i = 0; i < studentsInDivision; i++)
+						{
+							await CreateStudentAsync(
+								medium.Id,
+								standard.Id,
+								division.Id,
+								currentAcademicYear.Id,
+								board.Id,
+								totalStudentsCreated + 1,
+								i + 1 // Roll number within division
+							);
+
+							totalStudentsCreated++;
+						}
 					}
 				}
 			}
@@ -151,6 +158,7 @@ public class StudentSeederContributor : BaseSeederContributor
 		Guid standardId,
 		Guid divisionId,
 		Guid academicYearId,
+		Guid academicBoardId,
 		int globalCounter,
 		int rollNo)
 	{
@@ -181,7 +189,7 @@ public class StudentSeederContributor : BaseSeederContributor
 			middleName: middleName,
 			lastName: lastName,
 			educationYearId: academicYearId,
-			educationBoardId: Guid.Empty, // Can be set if needed
+			educationBoardId: academicBoardId,
 			educationMediumId: mediumId,
 			educationMediumStageId: Guid.Empty, // Can be set if needed
 			standardId: standardId,

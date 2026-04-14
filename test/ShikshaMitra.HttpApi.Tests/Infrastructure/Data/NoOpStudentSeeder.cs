@@ -6,6 +6,7 @@ using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
@@ -27,12 +28,13 @@ internal sealed class NoOpStudentSeeder : StudentSeederContributor
 		IUnitOfWork unitOfWork,
 		IRepository<Student, Guid> studentRepository,
 		IAcademicYearRepository academicYearRepository,
+		IRepository<EducationBoard, Guid> educationBoardRepository,
 		IEducationMediumRepository educationMediumRepository,
 		IStandardRepository standardRepository,
 		IDivisionRepository divisionRepository)
 		: base(currentTenant, guidGenerator, unitOfWork,
 			studentRepository, academicYearRepository,
-			educationMediumRepository, standardRepository, divisionRepository)
+			educationBoardRepository, educationMediumRepository, standardRepository, divisionRepository)
 	{
 	}
 

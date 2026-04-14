@@ -10,6 +10,7 @@ using ShikshaMitra.EntityFrameworkCore.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.Events;
 using ShikshaMitra.EntityFrameworkCore.HR.Calendar.Events;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Students;
 using Volo.Abp.Uow;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
@@ -69,6 +70,7 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
             options.AddRepository<Event, EFCoreEventRepository>();
             options.AddRepository<DayCalculationSetting, EfCoreDayCalculationSettingRepository>();
             options.AddRepository<Student, EfCoreStudentRepository>();
+            options.AddRepository<ConcessionRequest, EfCoreConcessionRequestRepository>();
         });
 
         // Register custom repository extensions

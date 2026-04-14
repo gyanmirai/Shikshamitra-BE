@@ -1,5 +1,7 @@
 ﻿using AutoMapper;
 using ShikshaMitra.Application.Contracts.Finance.Setting.ChargeCategory.Dtos;
+using ShikshaMitra.Finance.ConcessionRequests;
+using ShikshaMitra.Finance.ConcessionRequests.Dtos;
 using ShikshaMitra.Finance.Setting;
 using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
 using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
@@ -32,6 +34,13 @@ public class FinanceMapperProfile : Profile
 		// because we need to populate related entity names via joins
 		#endregion
 
+		#region ConcessionRequests
+
+		CreateMap<ConcessionRequest, ConcessionRequestDto>();
+		CreateMap<ConcessionFeeHeadMapping, ConcessionFeeHeadMappingDto>();
+
+		#endregion
 	}
 
 }
+

@@ -1,125 +1,254 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.Application.Contracts.Finance.ConcessionRequests;
-using ShikshaMitra.Application.Contracts.Finance.ConcessionRequests.Dtos;
 using Volo.Abp;
-using Volo.Abp.Application.Services;
+using Volo.Abp.Application.Dtos;
+using ShikshaMitra.Common;
+using ShikshaMitra.Finance.ConcessionRequests.Dtos;
+using ShikshaMitra.Finance.Setting.ConcessionType;
+using Volo.Abp.Domain.Repositories;
+using ShikshaMitra.Students;
 
-namespace ShikshaMitra.Application.Finance.ConcessionRequests;
+namespace ShikshaMitra.Finance.ConcessionRequests;
 
-[Authorize]
+/// <summary>
+/// Core lifecycle operations: create, read, update, submit, and delete Draft requests.
+///
+/// <list type="bullet">
+///   <item>Wizard steps (3–6) → <see cref="ConcessionRequestWizardAppService"/></item>
+///   <item>Approval workflow → <see cref="ConcessionRequestApprovalAppService"/></item>
+///   <item>Student / document queries → <see cref="ConcessionRequestQueryAppService"/></item>
+/// </list>
+/// </summary>
 [RemoteService(false)]
-public class ConcessionRequestAppService : ApplicationService, IConcessionRequestAppService
+public class ConcessionRequestAppService(
+	IConcessionRequestRepository concessionRequestRepository,
+	IRepository<ConcessionType, Guid> concessionTypeRepository,
+	IRepository<Student, Guid> studentRepository,
+	ConcessionRequestManager concessionRequestManager)
+	: ShikshaMitraAppService, IConcessionRequestAppService
 {
-	// ─── Step 1+2 POST (merged) ───────────────────────────────────────────────
+    // -------------------------------------------------------------------------
+    // Queries
+    // -------------------------------------------------------------------------
 
-	public async Task<CreateConcessionRequestResponse> CreateConcessionRequestAsync(CreateConcessionRequestInput input)
-	{
-		throw new NotImplementedException("Creation of concession request is now merged with update. Please use UpdateConcessionRequestAsync for both creating and updating concession requests.");
-	}
+    /// <summary>
+    /// Returns the anchor request enriched with the student's enrollment context
+    /// and all sibling requests (same student, same status) as
+    /// <c>selectedConcessionTypes</c>.
+    /// </summary>
+    public virtual async Task<ApiDataResponseDto<ConcessionRequestDetailDto>> GetAsync(Guid id)
+    {
+        // 1. Load the anchor request
+        var anchor = await concessionRequestRepository.GetAsync(id);
 
-	// ─── Step 1+2 PUT (Update) ────────────────────────────────────────────────
+        // 2. Load the student to source the enrollment context fields
+        var student = await studentRepository.GetAsync(anchor.StudentId);
 
-	public async Task<UpdateConcessionRequestResponse> UpdateConcessionRequestAsync(
-		Guid concessionRequestId, UpdateConcessionRequestInput input)
-	{
-		throw new NotImplementedException("Creation of concession request is now merged with update. To create a new concession request, generate a new Guid and call this method with that Guid and the input data. For example: UpdateConcessionRequestAsync(Guid.NewGuid(), input).");
-	}
+        // 3. Load all requests for this student that share the anchor's status
+        //    — they form the logical "batch" that was created / updated together.
+        var siblingRequests = await concessionRequestRepository.GetListAsync(
+            skipCount: 0,
+            maxResultCount: int.MaxValue,
+            studentId: anchor.StudentId,
+            status: anchor.Status);
 
-	// ─── Step 1 GET ──────────────────────────────────────────────────────────
+        // 4. Build the aggregated response
+        var detail = new ConcessionRequestDetailDto
+        {
+            ConcessionRequestId   = anchor.Id,
+            BoardId               = student.AcademicBoardId,
+            EducationMediumId     = student.AcademicMediumId,
+            StandardId            = student.StandardId,
+            DivisionId            = student.DivisionId,
+            StudentId             = anchor.StudentId,
+            Status                = ConcessionRequestDetailDto.MapStatus(anchor.Status),
+            CreatedAt             = anchor.CreationTime,
+            UpdatedAt             = anchor.LastModificationTime ?? anchor.CreationTime,
+            SelectedConcessionTypes = siblingRequests
+                .Select(r => new SelectedConcessionTypeDto
+                {
+                    ConcessionTypeId                 = r.ConcessionTypeId,
+                    ConcessionRequestConcessionTypeId = r.Id,
+                })
+                .ToList(),
+        };
 
-	public async Task<GetBasicDetailsResponse> GetBasicDetailsAsync(Guid concessionRequestId)
-	{
-		throw new NotImplementedException();
-	}
+        return ApiDataResponseDto<ConcessionRequestDetailDto>.SuccessResult(detail);
+    }
 
-	// ─── Step 3 PUT ──────────────────────────────────────────────────────────
+    public virtual async Task<PagedResultDto<ConcessionRequestDto>> GetListAsync(
+        GetConcessionRequestListRequestDto input)
+    {
+        var totalCount = await concessionRequestRepository.GetCountAsync(
+            studentId: input.StudentId,
+            concessionTypeId: input.ConcessionTypeId,
+            status: input.Status,
+            filter: input.Filter);
 
-	public async Task<SaveFeeHeadsDataResponse> SaveFeeHeadsDataAsync(Guid concessionRequestId, SaveFeeHeadsDataRequest input)
-	{
-		throw new NotImplementedException();
-	}
+        var list = await concessionRequestRepository.GetListAsync(
+            skipCount: input.SkipCount,
+            maxResultCount: input.MaxResultCount,
+            sorting: input.Sorting,
+            studentId: input.StudentId,
+            concessionTypeId: input.ConcessionTypeId,
+            status: input.Status,
+            filter: input.Filter);
 
-	// ─── Step 4 PUT ──────────────────────────────────────────────────────────
+        return new PagedResultDto<ConcessionRequestDto>(
+            totalCount,
+            ObjectMapper.Map<List<ConcessionRequest>, List<ConcessionRequestDto>>(list));
+    }
 
-	public async Task<SaveValueEntryResponse> SaveValueEntryAsync(Guid concessionRequestId, SaveValueEntryRequest input)
-	{
-		throw new NotImplementedException();
-	}
+    // -------------------------------------------------------------------------
+    // Commands
+    // -------------------------------------------------------------------------
 
-	// ─── Step 5 PUT — Document Upload ────────────────────────────────────────
+    /// <summary>
+    /// Creates one <see cref="ConcessionRequest"/> per concession-type ID (Steps 1 + 2).
+    /// Validates student existence and enrollment context before persisting any records.
+    /// </summary>
+    public async Task CreateAsync(CreateConcessionRequestDto input)
+    {
+        var student = await studentRepository.GetAsync(input.StudentId);
 
-	public async Task<UploadDocumentsResponse> UploadDocumentsAsync(Guid concessionRequestId, UploadDocumentsRequest input)
-	{
-		throw new NotImplementedException();
-	}
+        ValidateStudentEnrollmentContext(student,
+            input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId);
 
-	// ─── GET Documents ────────────────────────────────────────────────────────
+        await EnsureAllConcessionTypesExistAsync(input.ConcessionTypeIds);
 
-	public async Task<GetDocumentsResponse> GetConcessionDocumentsAsync(
-		Guid studentConcessionTypeRequestId, int? status, int page, int pageSize)
-	{
-		throw new NotImplementedException();
-	}
+        await concessionRequestManager.CreateAsync(
+            CurrentTenant.Id,
+            input.StudentId,
+            input.ConcessionTypeIds);
+    }
 
-	// ─── Step 3 GET — Fee Heads (Edit/Resume) ────────────────────────────────
+    /// <summary>
+    /// Replaces the student's Pending concession-type selection in full.
+    /// The <paramref name="id"/> must be Pending and must belong to the student
+    /// specified in <paramref name="input"/>. The manager performs a batch replace:
+    /// Pending requests for types removed from the list are deleted; newly selected
+    /// types get new Draft requests created for them.
+    /// </summary>
+    public virtual async Task<ConcessionRequestDto> UpdateAsync(Guid id, UpdateConcessionRequestDto input)
+    {
+        var anchor = await concessionRequestRepository.GetAsync(id);
 
-	public async Task<GetFeeHeadsResponse> GetConcessionRequestFeeHeadsAsync(Guid concessionRequestId)
-	{
-		throw new NotImplementedException();
-	}
+        if (anchor.Status != ConcessionRequestStatus.Pending)
+        {
+            throw new BusinessException(ConcessionRequestErrorCodes.CannotUpdateNonPending)
+                .WithData("RequestId", id)
+                .WithData("Status", anchor.Status.ToString());
+        }
 
-	// ─── Step 4 GET — Value Entries (Edit/Resume) ─────────────────────────────
+        if (anchor.StudentId != input.StudentId)
+        {
+            throw new BusinessException(ConcessionRequestErrorCodes.StudentRequestOwnershipMismatch)
+                .WithData("RequestId", id)
+                .WithData("AnchorStudentId", anchor.StudentId)
+                .WithData("InputStudentId", input.StudentId);
+        }
 
-	public async Task<GetValueEntriesResponse> GetConcessionRequestValueEntriesAsync(Guid concessionRequestId)
-	{
-		throw new NotImplementedException();
-	}
+        var student = await studentRepository.GetAsync(input.StudentId);
 
-	// ─── Step 5 GET — Document Upload (Edit/Resume) ───────────────────────────
+        ValidateStudentEnrollmentContext(student,
+            input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId);
 
-	public async Task<GetDocumentUploadResponse> GetConcessionRequestDocumentsForResumeAsync(Guid concessionRequestId)
-	{
-		throw new NotImplementedException();
-	}
+        await EnsureAllConcessionTypesExistAsync(input.ConcessionTypeIds);
 
-	// ─── Get Student Concession Requests ─────────────────────────────────────
+        var result = await concessionRequestManager.UpdateAsync(
+            CurrentTenant.Id,
+            input.StudentId,
+            input.ConcessionTypeIds);
 
-	public async Task<ConcessionListResponse> GetStudentConcessionRequestsAsync(
-		Guid studentId, int? status, int page, int pageSize, string? search)
-	{
-		throw new NotImplementedException();
-	}
+        return ObjectMapper.Map<ConcessionRequest, ConcessionRequestDto>(result);
+    }
 
-	// ─── Approve ─────────────────────────────────────────────────────────────
+    /// <summary>Submits a Draft request for approval (Draft → Pending).</summary>
+    public virtual async Task<ConcessionRequestDto> SubmitAsync(Guid id)
+    {
+        var entity = await concessionRequestRepository.GetWithMappingsAsync(id);
+        entity = await concessionRequestManager.SubmitAsync(entity);
+        return ObjectMapper.Map<ConcessionRequest, ConcessionRequestDto>(entity);
+    }
 
-	public async Task<ApprovalResponse> ApproveConcessionRequestAsync(
-		Guid studentConcessionTypeRequestId, ApprovalRequest input)
-	{
-		throw new NotImplementedException();
-	}
+    /// <summary>Deletes a Draft ConcessionRequest.</summary>
+    public virtual async Task DeleteAsync(Guid id)
+    {
+        var entity = await concessionRequestRepository.GetAsync(id);
 
-	// ─── Reject ──────────────────────────────────────────────────────────────
+        if (entity.Status != ConcessionRequestStatus.Draft)
+        {
+            throw new BusinessException(ConcessionRequestErrorCodes.CannotDeleteNonDraft)
+                .WithData("Status", entity.Status.ToString());
+        }
 
-	public async Task<RejectionResponse> RejectConcessionRequestAsync(
-		Guid studentConcessionTypeRequestId, RejectionRequest input)
-	{
-		throw new NotImplementedException();
-	}
+        await concessionRequestRepository.DeleteAsync(id);
+    }
 
-	// ─── Get Concession Applications (admin list) ─────────────────────────────
+    // -------------------------------------------------------------------------
+    // Private helpers
+    // -------------------------------------------------------------------------
 
-	public async Task<ConcessionApplicationsResponse> GetConcessionApplicationsAsync(
-		Guid boardId, Guid educationMediumId, int? status, int page, int pageSize, string? search)
-	{
-		throw new NotImplementedException();
-	}
+    /// <summary>
+    /// Guards against stale UI state: verifies that the four enrollment context
+    /// identifiers submitted by the caller match the student's record.
+    /// </summary>
+    private static void ValidateStudentEnrollmentContext(
+        Student student,
+        Guid boardId,
+        Guid educationMediumId,
+        Guid standardId,
+        Guid divisionId)
+    {
+        if (student.AcademicBoardId != boardId)
+        {
+            throw new BusinessException(ConcessionRequestErrorCodes.StudentBoardMismatch)
+                .WithData("StudentId", student.Id)
+                .WithData("ExpectedBoardId", boardId)
+                .WithData("ActualBoardId", student.AcademicBoardId);
+        }
 
-	// ─── Delete ───────────────────────────────────────────────────────────────
+        if (student.AcademicMediumId != educationMediumId)
+        {
+            throw new BusinessException(ConcessionRequestErrorCodes.StudentMediumMismatch)
+                .WithData("StudentId", student.Id)
+                .WithData("ExpectedMediumId", educationMediumId)
+                .WithData("ActualMediumId", student.AcademicMediumId);
+        }
 
-	public async Task DeleteConcessionApplicationAsync(Guid studentConcessionTypeRequestId)
-	{
-		throw new NotImplementedException();
-	}
+        if (student.StandardId != standardId)
+        {
+            throw new BusinessException(ConcessionRequestErrorCodes.StudentStandardMismatch)
+                .WithData("StudentId", student.Id)
+                .WithData("ExpectedStandardId", standardId)
+                .WithData("ActualStandardId", student.StandardId);
+        }
+
+        if (student.DivisionId != divisionId)
+        {
+            throw new BusinessException(ConcessionRequestErrorCodes.StudentDivisionMismatch)
+                .WithData("StudentId", student.Id)
+                .WithData("ExpectedDivisionId", divisionId)
+                .WithData("ActualDivisionId", student.DivisionId);
+        }
+    }
+
+    /// <summary>
+    /// Validates all concession-type IDs up front so the operation either
+    /// succeeds entirely or fails before any data is written.
+    /// </summary>
+    private async Task EnsureAllConcessionTypesExistAsync(IEnumerable<Guid> typeIds)
+    {
+        foreach (var typeId in typeIds)
+        {
+            var exists = await concessionTypeRepository.AnyAsync(t => t.Id == typeId);
+            if (!exists)
+            {
+                throw new BusinessException(ConcessionRequestErrorCodes.ConcessionTypeNotFound)
+                    .WithData("ConcessionTypeId", typeId);
+            }
+        }
+    }
 }

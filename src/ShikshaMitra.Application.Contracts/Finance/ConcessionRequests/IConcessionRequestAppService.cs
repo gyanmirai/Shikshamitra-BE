@@ -1,42 +1,47 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
-using ShikshaMitra.Application.Contracts.Finance.ConcessionRequests.Dtos;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using ShikshaMitra.Common;
+using ShikshaMitra.Finance.ConcessionRequests.Dtos;
 
-namespace ShikshaMitra.Application.Contracts.Finance.ConcessionRequests;
+namespace ShikshaMitra.Finance.ConcessionRequests;
 
+/// <summary>
+/// Core lifecycle operations for concession requests:
+/// create, read, update, submit, and delete Draft requests.
+///
+/// <list type="bullet">
+///   <item>Wizard steps (3–6) → <see cref="IConcessionRequestWizardAppService"/></item>
+///   <item>Approval workflow → <see cref="IConcessionRequestApprovalAppService"/></item>
+///   <item>Student / document queries → <see cref="IConcessionRequestQueryAppService"/></item>
+/// </list>
+/// </summary>
 public interface IConcessionRequestAppService : IApplicationService
 {
-	// Step 1+2 merged — Create concession request with concession types
-	Task<CreateConcessionRequestResponse> CreateConcessionRequestAsync(CreateConcessionRequestInput input);
-	Task<UpdateConcessionRequestResponse> UpdateConcessionRequestAsync(Guid concessionRequestId, UpdateConcessionRequestInput input);
-	Task<GetBasicDetailsResponse> GetBasicDetailsAsync(Guid concessionRequestId);
+	/// <summary>
+	/// Gets a single ConcessionRequest by its ID (Step 1 + Step 2 data).
+	/// Returns the anchor request enriched with the student's enrollment context
+	/// and all sibling requests that share the same lifecycle status.
+	/// </summary>
+	Task<ApiDataResponseDto<ConcessionRequestDetailDto>> GetAsync(Guid id);
 
-	// Step 3
-	Task<SaveFeeHeadsDataResponse> SaveFeeHeadsDataAsync(Guid concessionRequestId, SaveFeeHeadsDataRequest input);
-	Task<GetFeeHeadsResponse> GetConcessionRequestFeeHeadsAsync(Guid concessionRequestId);
+	/// <summary>Returns a paged list of ConcessionRequests.</summary>
+	Task<PagedResultDto<ConcessionRequestDto>> GetListAsync(GetConcessionRequestListRequestDto input);
 
-	// Step 4
-	Task<SaveValueEntryResponse> SaveValueEntryAsync(Guid concessionRequestId, SaveValueEntryRequest input);
-	Task<GetValueEntriesResponse> GetConcessionRequestValueEntriesAsync(Guid concessionRequestId);
+	/// <summary>Creates a new ConcessionRequest batch in Draft state (Steps 1 + 2).</summary>
+	Task CreateAsync(CreateConcessionRequestDto input);
 
-	// Step 5 — Document Upload
-	Task<UploadDocumentsResponse> UploadDocumentsAsync(Guid concessionRequestId, UploadDocumentsRequest input);
-	Task<GetDocumentUploadResponse> GetConcessionRequestDocumentsForResumeAsync(Guid concessionRequestId);
+	/// <summary>
+	/// Replaces the concession-type selection for a student's Pending request batch
+	/// (batch replace: removes deselected types, adds newly selected ones).
+	/// </summary>
+	Task<ConcessionRequestDto> UpdateAsync(Guid id, UpdateConcessionRequestDto input);
 
-	// Get documents list for a request
-	Task<GetDocumentsResponse> GetConcessionDocumentsAsync(Guid studentConcessionTypeRequestId, int? status, int page, int pageSize);
+	/// <summary>Submits a Draft request for approval (Draft → Pending).</summary>
+	Task<ConcessionRequestDto> SubmitAsync(Guid id);
 
-	// Concession requests list for a student
-	Task<ConcessionListResponse> GetStudentConcessionRequestsAsync(Guid studentId, int? status, int page, int pageSize, string? search);
-
-	// Approve / Reject
-	Task<ApprovalResponse> ApproveConcessionRequestAsync(Guid studentConcessionTypeRequestId, ApprovalRequest input);
-	Task<RejectionResponse> RejectConcessionRequestAsync(Guid studentConcessionTypeRequestId, RejectionRequest input);
-
-	// Applications list (admin view)
-	Task<ConcessionApplicationsResponse> GetConcessionApplicationsAsync(Guid boardId, Guid educationMediumId, int? status, int page, int pageSize, string? search);
-
-	// Delete
-	Task DeleteConcessionApplicationAsync(Guid studentConcessionTypeRequestId);
+	/// <summary>Deletes a Draft ConcessionRequest.</summary>
+	Task DeleteAsync(Guid id);
 }
+

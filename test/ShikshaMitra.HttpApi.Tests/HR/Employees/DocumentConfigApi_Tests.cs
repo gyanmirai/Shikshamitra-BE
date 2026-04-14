@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.Infrastructure.Traits;
@@ -107,6 +108,29 @@ public class DocumentConfigApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBeOneOf(
 			HttpStatusCode.NotFound,
 			HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Business_Code_For_Duplicate_Document_Title()
+	{
+		var request = BuildDocumentRequest();
+		var firstCreate = await Client.PostAsJsonAsync(BaseUrl, request, JsonOptions);
+		firstCreate.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+		var duplicateCreate = await Client.PostAsJsonAsync(BaseUrl, request, JsonOptions);
+		duplicateCreate.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+		if (duplicateCreate.StatusCode != HttpStatusCode.BadRequest)
+		{
+			return;
+		}
+
+		var json = await duplicateCreate.Content.ReadAsStringAsync();
+		using var document = JsonDocument.Parse(json);
+		var error = document.RootElement.GetProperty("error");
+		var code = error.GetProperty("code").GetString();
+		code.ShouldNotBe("VALIDATION_ERROR");
+		code.ShouldBe("HR:Employee:010026");
 	}
 
 	#endregion

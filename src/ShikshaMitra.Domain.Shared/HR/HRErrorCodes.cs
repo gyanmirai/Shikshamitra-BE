@@ -40,6 +40,8 @@ public static class HRErrorCodes
 	// Employee — Status
 	public const string EmployeeStatusRemarksRequired = "HR:Employee:010024";
 	public const string EmployeeStatusInvalidTransition = "HR:Employee:010025";
+	public const string EmployeeDocumentSettingAlreadyExists = "HR:Employee:010026";
+	public const string EmployeeDocumentFileRequired = "HR:Employee:010027";
 
 	// Employee — Payroll
 	public const string EmployeePayrollStructureRequired = "HR:Employee:010201";
@@ -84,6 +86,14 @@ public static class HRErrorCodes
 	public const string LeaveReportingManagerCycle = "HR:Leave:020021";
 	public const string LeaveAlreadyCancelled = "HR:Leave:020022";
 	public const string LeaveNotCancellable = "HR:Leave:020023";
+	public const string LeaveConflictTerminalState = "HR:Leave:020024";
+	public const string LeaveCannotActOnLeaveState = "HR:Leave:020025";
+	public const string LeaveInvalidMonthForAcademicYear = "HR:Leave:020026";
+	public const string LeaveAttachmentNotFound = "HR:Leave:020027";
+	public const string LeaveDatesOutsideAcademicYear = "HR:Leave:020028";
+public const string LeavePolicyCreateMethodNotSupported = "HR:Leave:020029";
+public const string LeavePolicyUpdateMethodNotSupported = "HR:Leave:020030";
+public const string LeaveTypeCreateMethodNotSupported = "HR:Leave:020031";
 
 	// Attendance — Validation
 	public const string AttendanceInvalidDateFormat = "HR:Attendance:020301";
@@ -124,6 +134,8 @@ public static class HRErrorCodes
 	public const string MonthYearRequired = "HR:Payroll:030006";
 	public const string PayrollStructureNotFound = "HR:Payroll:030007";
 	public const string PayrollNoStructureAssigned = "HR:Payroll:030008";
+	public const string PayrollEmployeeIdRequired = "HR:Payroll:030009";
+	public const string SalarySlipFetchFailed = "HR:Payroll:030010";
 
 	// ── Calendar: 04xxxx ─────────────────────────────────────────
 
@@ -131,6 +143,7 @@ public static class HRErrorCodes
 	public const string EventMeetingDateRequired = "HR:Calendar:040002";
 	public const string EventMeetingDateNotAllowed = "HR:Calendar:040003";
 	public const string HolidayTypeNotFound = "HR:Calendar:040004";
+	public const string CalendarItemNotFound = "HR:Calendar:040005";
 
 	// ── Reports: 05xxxx ──────────────────────────────────────────
 

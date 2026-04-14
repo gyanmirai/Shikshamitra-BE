@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -30,9 +32,11 @@ public class AttendanceTrackingController : AbpControllerBase
 	/// Get attendance (date-wise) - Fetch attendance records for a specific date
 	/// </summary>
 	/// <param name="attendanceDate">Attendance date (DD-MM-YYYY format or ISO date-time)</param>
-	/// <param name="status">Optional attendance status filter</param>
+	/// <param name="status">Attendance status filter (PRESENT, ABSENT, HALF_DAY, REJECTED_LEAVE)</param>
 	/// <param name="page">Page number (1-based)</param>
 	/// <param name="pageSize">Page size (10-100)</param>
+	/// <param name="educationMediumStageId">Education medium stage id</param>
+	/// <param name="search">Search text for employee fields</param>
 	/// <returns>Paginated attendance records with summary</returns>
 	[HttpGet("date-wise")]
 	[ProducesResponseType(typeof(AttendanceDateWiseResponse), StatusCodes.Status200OK)]
@@ -40,14 +44,23 @@ public class AttendanceTrackingController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status401Unauthorized)]
 	public virtual async Task<ActionResult<AttendanceDateWiseResponse>> GetDateWiseAsync(
 		[FromQuery, Required] string attendanceDate,
-		[FromQuery] AttendanceTrackingStatus? status = null,
+		[FromQuery, Required] string status,
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
-		[FromQuery, Range(10, 100)] int pageSize = 10)
+		[FromQuery, Range(10, 100)] int pageSize = 10,
+		[FromQuery, Required] Guid educationMediumStageId = default,
+		[FromQuery] string? search = null)
 	{
+		if (!TryParseStatus(status, out var parsedStatus))
+		{
+			return BuildValidationError(nameof(status), "Status must be one of PRESENT, ABSENT, HALF_DAY, or REJECTED_LEAVE.");
+		}
+
 		var input = new GetAttendanceDateWiseInput
 		{
 			AttendanceDate = attendanceDate,
-			Status = status,
+			Status = parsedStatus,
+			EducationMediumStageId = educationMediumStageId,
+			Search = search,
 			Page = page,
 			PageSize = pageSize
 		};
@@ -63,6 +76,10 @@ public class AttendanceTrackingController : AbpControllerBase
 	/// <param name="startDate">Start date (DD-MM-YYYY format)</param>
 	/// <param name="endDate">End date (DD-MM-YYYY format)</param>
 	/// <param name="status">Optional attendance status filter</param>
+	/// <param name="page">Page number (1-based)</param>
+	/// <param name="pageSize">Page size (10-100)</param>
+	/// <param name="educationMediumStageId">Education medium stage id</param>
+	/// <param name="search">Search text</param>
 	/// <returns>Employee attendance records with summary</returns>
 	[HttpGet("employee-wise")]
 	[ProducesResponseType(typeof(AttendanceEmployeeWiseResponse), StatusCodes.Status200OK)]
@@ -72,18 +89,74 @@ public class AttendanceTrackingController : AbpControllerBase
 		[FromQuery, Required] Guid employeeId,
 		[FromQuery, Required] string startDate,
 		[FromQuery, Required] string endDate,
-		[FromQuery] AttendanceTrackingStatus? status = null)
+		[FromQuery] string? status = null,
+		[FromQuery, Range(1, int.MaxValue)] int page = 1,
+		[FromQuery, Range(10, 100)] int pageSize = 10,
+		[FromQuery, Required] Guid educationMediumStageId = default,
+		[FromQuery] string? search = null)
 	{
+		AttendanceTrackingStatus? parsedStatus = null;
+		if (!string.IsNullOrWhiteSpace(status))
+		{
+			if (!TryParseStatus(status, out var statusValue))
+			{
+				return BuildValidationError(nameof(status), "Status must be one of PRESENT, ABSENT, HALF_DAY, or REJECTED_LEAVE.");
+			}
+
+			parsedStatus = statusValue;
+		}
+
 		var input = new GetAttendanceEmployeeWiseInput
 		{
 			EmployeeId = employeeId,
 			StartDate = startDate,
 			EndDate = endDate,
-			Status = status
+			Status = parsedStatus,
+			EducationMediumStageId = educationMediumStageId,
+			Search = search,
+			Page = page,
+			PageSize = pageSize
 		};
 
 		var result = await _attendanceTrackingAppService.GetEmployeeWiseAsync(input);
 		return Ok(result);
+	}
+
+	private static bool TryParseStatus(string status, out AttendanceTrackingStatus parsedStatus)
+	{
+		parsedStatus = default;
+		var normalized = status.Trim().ToUpper(CultureInfo.InvariantCulture);
+		return normalized switch
+		{
+			"PRESENT" => SetStatus(AttendanceTrackingStatus.Present, out parsedStatus),
+			"ABSENT" => SetStatus(AttendanceTrackingStatus.Absent, out parsedStatus),
+			"HALF_DAY" => SetStatus(AttendanceTrackingStatus.HalfDay, out parsedStatus),
+			"REJECTED_LEAVE" => SetStatus(AttendanceTrackingStatus.RejectedLeave, out parsedStatus),
+			_ => false
+		};
+	}
+
+	private static bool SetStatus(AttendanceTrackingStatus value, out AttendanceTrackingStatus parsedStatus)
+	{
+		parsedStatus = value;
+		return true;
+	}
+
+	private ActionResult BuildValidationError(string fieldName, string message)
+	{
+		return BadRequest(new
+		{
+			success = false,
+			error = new
+			{
+				code = "VALIDATION_ERROR",
+				message = "Request validation failed",
+				fields = new Dictionary<string, string>
+				{
+					[fieldName] = message
+				}
+			}
+		});
 	}
 }
 

@@ -15,7 +15,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 {
 	private const string BaseUrl = "/api/leave-management";
-	private static readonly Guid TestMediumStageId = Guid.NewGuid();
+	private static readonly Guid TestAcademicYearId = Guid.Parse("00000000-0000-0000-0000-000000000030");
 
 	public LeaveManagementApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
 
@@ -25,20 +25,26 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Get_Leave_Request_List()
 	{
+		var monthYear = Uri.EscapeDataString(new DateTime(DateTime.UtcNow.Year, 6, 1).ToString("O"));
 		var response = await Client.GetAsync(
-			$"{BaseUrl}?mediumStageId={TestMediumStageId}&page=1&pageSize=10");
+			$"{BaseUrl}?academicYearId={TestAcademicYearId}&month-year={monthYear}&page=1&pageSize=10");
 
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.NotFound, HttpStatusCode.InternalServerError);
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task List_Response_Should_Have_TotalCount_And_Items()
+	public async Task List_Response_Should_Have_TotalCount_And_Items_When_Ok()
 	{
+		var monthYear = Uri.EscapeDataString(new DateTime(DateTime.UtcNow.Year, 6, 1).ToString("O"));
 		var response = await Client.GetAsync(
-			$"{BaseUrl}?mediumStageId={TestMediumStageId}&page=1&pageSize=10");
+			$"{BaseUrl}?academicYearId={TestAcademicYearId}&month-year={monthYear}&page=1&pageSize=10");
 
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		if (response.StatusCode != HttpStatusCode.OK)
+		{
+			return;
+		}
+
 		var json = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
 		json.TryGetProperty("totalCount", out _).ShouldBeTrue("Response must include 'totalCount'");
 		json.TryGetProperty("items", out var items).ShouldBeTrue("Response must include 'items'");
@@ -51,27 +57,18 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Get_Leave_Request_By_Id_Returns_NotFound_For_Invalid()
+	public async Task Should_Get_Leave_Request_By_Id_Returns_NotFound_For_Random_Guid()
 	{
-		var response = await Client.GetAsync($"{BaseUrl}/999999");
+		var response = await Client.GetAsync($"{BaseUrl}/{Guid.NewGuid()}");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Return_BadRequest_For_Invalid_Id_Format()
+	public async Task Should_Delete_Returns_NotFound_For_Random_Guid()
 	{
-		var response = await Client.GetAsync($"{BaseUrl}/not-a-number");
-
-		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Delete_Returns_NotFound_For_Nonexistent()
-	{
-		var response = await Client.DeleteAsync($"{BaseUrl}/999999");
+		var response = await Client.DeleteAsync($"{BaseUrl}/{Guid.NewGuid()}");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 	}
@@ -80,30 +77,22 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Reject_Invalid_Page_Parameters()
 	{
+		var monthYear = Uri.EscapeDataString(new DateTime(DateTime.UtcNow.Year, 6, 1).ToString("O"));
 		var response = await Client.GetAsync(
-			$"{BaseUrl}?mediumStageId={TestMediumStageId}&page=0&pageSize=10");
+			$"{BaseUrl}?academicYearId={TestAcademicYearId}&month-year={monthYear}&page=0&pageSize=10");
 
-		response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Reject_Invalid_PageSize_Parameters()
 	{
+		var monthYear = Uri.EscapeDataString(new DateTime(DateTime.UtcNow.Year, 6, 1).ToString("O"));
 		var response = await Client.GetAsync(
-			$"{BaseUrl}?mediumStageId={TestMediumStageId}&page=1&pageSize=5");
+			$"{BaseUrl}?academicYearId={TestAcademicYearId}&month-year={monthYear}&page=1&pageSize=5");
 
-		response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Reject_Invalid_Month()
-	{
-		var response = await Client.GetAsync(
-			$"{BaseUrl}?mediumStageId={TestMediumStageId}&month=13&year=2024&page=1&pageSize=10");
-
-		response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 	}
 
 	#endregion

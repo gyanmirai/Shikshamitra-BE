@@ -42,18 +42,6 @@ public class UpdateEmployeePayrollDetailsDto : IValidatableObject
 			}
 		}
 
-		// Validate TDS percentage
-		if (PayrollDetails.TdsPercentage.HasValue)
-		{
-			if (PayrollDetails.TdsPercentage < 0 || PayrollDetails.TdsPercentage > 100)
-			{
-				yield return new ValidationResult(
-					"TDS percentage must be between 0 and 100.",
-					new[] { nameof(PayrollDetails.TdsPercentage) }
-				);
-			}
-		}
-
 		// Validate earnings
 		for (int i = 0; i < Earnings.Count; i++)
 		{

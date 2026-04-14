@@ -28,11 +28,7 @@ public class EmployeePayrollDetails : Entity<Guid>
 
 	public string? PunchId { get; set; }
 
-	public decimal? BasicSalary { get; set; }
-
-	public decimal? TdsPercentage { get; set; }
-
-	public decimal? TdsAmount { get; set; }
+	public decimal? TotalWorkingHourPerMonth { get; set; }
 
 	// Navigation property
 	public Employee Employee { get; set; } = null!;
@@ -56,9 +52,7 @@ public class EmployeePayrollDetails : Entity<Guid>
 		string? epfNumber,
 		string? uanNumber,
 		string? punchId,
-		decimal? basicSalary,
-		decimal? tdsPercentage,
-		decimal? tdsAmount)
+		decimal? totalWorkingHourPerMonth)
 	{
 		BankName = bankName;
 		BranchName = branchName;
@@ -69,8 +63,6 @@ public class EmployeePayrollDetails : Entity<Guid>
 		EpfNumber = epfNumber;
 		UanNumber = uanNumber;
 		PunchId = punchId;
-		BasicSalary = basicSalary;
-		TdsPercentage = tdsPercentage;
-		TdsAmount = tdsAmount;
+		TotalWorkingHourPerMonth = totalWorkingHourPerMonth;
 	}
 }

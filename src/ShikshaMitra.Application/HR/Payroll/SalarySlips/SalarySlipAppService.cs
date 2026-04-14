@@ -53,7 +53,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 
 			if (employeeId == Guid.Empty)
 			{
-				throw new UserFriendlyException("EmployeeId is required");
+				throw new BusinessException(HRErrorCodes.PayrollEmployeeIdRequired);
 			}
 
 			_salarySlipManager.ValidateMonthYearFormat(monthYear);
@@ -102,7 +102,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 
 			return dto;
 		}
-		catch (UserFriendlyException ex)
+		catch (BusinessException ex)
 		{
 			stopwatch.Stop();
 			_logger.LogWarning(ex, "User-friendly error in GetSalarySlip - EmployeeId: {EmployeeId}, " +
@@ -116,7 +116,9 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 			_logger.LogError(ex, "Unexpected error in GetSalarySlip - EmployeeId: {EmployeeId}, " +
 				"MonthYear: {MonthYear}, Duration: {Duration}ms",
 				employeeId, monthYear, stopwatch.ElapsedMilliseconds);
-			throw new UserFriendlyException("An error occurred while fetching the salary slip. Please try again.");
+			throw new BusinessException(HRErrorCodes.SalarySlipFetchFailed)
+				.WithData("employeeId", employeeId)
+				.WithData("monthYear", monthYear);
 		}
 	}
 
@@ -130,7 +132,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 
 		if (input.EmployeeId == Guid.Empty)
 		{
-			throw new UserFriendlyException("EmployeeId is required");
+			throw new BusinessException(HRErrorCodes.PayrollEmployeeIdRequired);
 		}
 
 		_salarySlipManager.ValidateMonthYearFormat(input.MonthYear);
@@ -242,7 +244,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 
 		if (salarySlip.Status == SalarySlipStatus.Finalized)
 		{
-			throw new UserFriendlyException("Cannot delete a finalized salary slip");
+			throw new BusinessException(HRErrorCodes.SalarySlipAlreadyFinalized);
 		}
 
 		// Clear cache

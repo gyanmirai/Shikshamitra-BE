@@ -132,7 +132,7 @@ public interface
 	/// </summary>
 	/// <param name="employeeId">The ID of the employee.</param>
 	/// <returns>Payroll contract response.</returns>
-	Task<PayrollContract> GetPayrollContractAsync(Guid employeeId);
+	Task<EmployeePayrollResponse> GetPayrollContractAsync(Guid employeeId);
 
 	/// <summary>
 	/// Updates the payroll details for an employee (matches OpenAPI Payroll contract).

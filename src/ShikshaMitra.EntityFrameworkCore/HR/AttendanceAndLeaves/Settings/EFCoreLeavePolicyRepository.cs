@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Dynamic.Core;
@@ -11,9 +11,6 @@ using Volo.Abp.EntityFrameworkCore;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
-/// <summary>
-/// EF Core repository implementation for LeavePolicy
-/// </summary>
 public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContext, LeavePolicy, Guid>, ILeavePolicyRepository
 {
 	public EfCoreLeavePolicyRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
@@ -21,11 +18,11 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 	{
 	}
 
-	public async Task<bool> IsPolicyNameExistsAsync(Guid educationMediumStageId, string policyName, Guid? excludeId = null)
+	public async Task<bool> IsPolicyNameExistsAsync(Guid academicYearId, string policyName, Guid? excludeId = null)
 	{
 		var dbSet = await GetDbSetAsync();
 		var query = dbSet.Where(x =>
-			x.EducationMediumStageId == educationMediumStageId &&
+			x.AcademicYearId == academicYearId &&
 			x.PolicyName.ToLower() == policyName.ToLower());
 
 		if (excludeId.HasValue)
@@ -36,64 +33,71 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 		return await query.AnyAsync();
 	}
 
-	public async Task<LeavePolicy?> FindByPolicyNameAsync(Guid educationMediumStageId, string policyName)
+	public async Task<LeavePolicy?> FindByPolicyNameAsync(Guid academicYearId, string policyName)
 	{
 		var dbSet = await GetDbSetAsync();
 		return await dbSet
-			.Where(x =>
-				x.EducationMediumStageId == educationMediumStageId &&
-				x.PolicyName.ToLower() == policyName.ToLower())
+			.Where(x => x.AcademicYearId == academicYearId && x.PolicyName.ToLower() == policyName.ToLower())
 			.Include(x => x.LeaveType)
 			.FirstOrDefaultAsync();
 	}
 
-	public async Task<List<LeavePolicy>> GetListByMediumStageIdAsync(
-		Guid educationMediumStageId,
+	public async Task<List<LeavePolicy>> GetListByAcademicYearIdAsync(
+		Guid academicYearId,
 		int skipCount = 0,
 		int maxResultCount = int.MaxValue,
 		string? sorting = null,
+		string? search = null,
 		bool includeInactive = false,
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
-
-		// Build base query with includes
 		IQueryable<LeavePolicy> query = dbSet
 			.Include(x => x.LeaveType)
-			.Where(x => x.EducationMediumStageId == educationMediumStageId);
+			.Where(x => x.AcademicYearId == academicYearId);
 
 		if (!includeInactive)
 		{
 			query = query.Where(x => x.IsActive);
 		}
 
-		if (!string.IsNullOrWhiteSpace(sorting))
+		if (!string.IsNullOrWhiteSpace(search))
 		{
-			query = query.OrderBy(sorting);
-		}
-		else
-		{
-			query = query.OrderBy(x => x.PolicyName);
+			var normalizedSearch = search.Trim().ToLower();
+			query = query.Where(x =>
+				x.PolicyName.ToLower().Contains(normalizedSearch) ||
+				(x.LeaveType != null && x.LeaveType.Type.ToLower().Contains(normalizedSearch)));
 		}
 
-		return await query
-			.Skip(skipCount)
-			.Take(maxResultCount)
-			.ToListAsync(cancellationToken);
+		query = !string.IsNullOrWhiteSpace(sorting)
+			? query.OrderBy(sorting)
+			: query.OrderBy(x => x.PolicyName);
+
+		return await query.Skip(skipCount).Take(maxResultCount).ToListAsync(cancellationToken);
 	}
 
-	public async Task<long> GetCountByMediumStageIdAsync(
-		Guid educationMediumStageId,
+	public async Task<long> GetCountByAcademicYearIdAsync(
+		Guid academicYearId,
+		string? search = null,
 		bool includeInactive = false,
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
-		var query = dbSet
-			.Where(x => x.EducationMediumStageId == educationMediumStageId);
+		IQueryable<LeavePolicy> query = dbSet.Where(x => x.AcademicYearId == academicYearId);
 
 		if (!includeInactive)
 		{
 			query = query.Where(x => x.IsActive);
+		}
+
+		if (!string.IsNullOrWhiteSpace(search))
+		{
+			var normalizedSearch = search.Trim().ToLower();
+			query = query
+				.Include(x => x.LeaveType)
+				.Where(x =>
+					x.PolicyName.ToLower().Contains(normalizedSearch) ||
+					(x.LeaveType != null && x.LeaveType.Type.ToLower().Contains(normalizedSearch)));
 		}
 
 		return await query.LongCountAsync(cancellationToken);
@@ -102,8 +106,6 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 	public async Task<LeavePolicy?> GetWithLeaveTypeAsync(Guid id, CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
-		return await dbSet
-			.Include(x => x.LeaveType)
-			.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+		return await dbSet.Include(x => x.LeaveType).FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 	}
 }

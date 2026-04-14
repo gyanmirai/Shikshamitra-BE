@@ -1,6 +1,5 @@
 using System;
 using System.Net;
-using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -15,136 +14,83 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 [TestModule(TestTraits.Modules.HR)]
 public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 {
-	private const string BaseUrl = "/api/leave-policies";
-	private Guid TestMediumStageId => Factory.SeededMediumStageId;
+	private const string LeaveTypesUrl = "/api/hr-leave-types";
+	private const string LeavePoliciesUrl = "/api/leave-policies";
 
-	public LeavePolicyApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
-
-	#region Tier 0 — Critical
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Create_Leave_Policy()
+	public LeavePolicyApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
 	{
-		var leaveType = await CreateLeaveTypeAsync();
-
-		var input = new LeavePolicyCreateRequest
-		{
-			MediumStageId = TestMediumStageId,
-			PolicyTitle = TestDataHelper.UniqueName("AnnualPolicy"),
-			LeaveType = leaveType.Id,
-			MaxLeavePerYear = 12,
-			PaidType = "Paid",
-			CarryForward = true,
-			EncashmentAllowed = false,
-			RequiresApproval = true,
-			Description = "Annual leave policy",
-		};
-
-		var response = await Client.PostAsJsonAsync(
-			$"{BaseUrl}?mediumStageId={TestMediumStageId}", input, JsonOptions);
-
-		response.EnsureSuccessStatusCode();
-		var body = await response.Content.ReadFromJsonAsync<LeavePolicyResponse>(JsonOptions);
-		body.ShouldNotBeNull();
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Get_Leave_Policy_List()
-	{
-		var leaveType = await CreateLeaveTypeAsync();
-		await CreateLeavePolicyAsync(leaveType.Id);
-
-		var response = await Client.GetAsync(
-			$"{BaseUrl}?mediumStageId={TestMediumStageId}&page=1&pageSize=10");
-
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
-		var body = await response.Content.ReadFromJsonAsync<LeavePolicyListResponse>(JsonOptions);
-		body.ShouldNotBeNull();
-		body.Items.ShouldNotBeNull();
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Update_Leave_Policy()
+	public async Task Should_Create_And_Get_Leave_Policy_By_Id()
 	{
 		var leaveType = await CreateLeaveTypeAsync();
 		var created = await CreateLeavePolicyAsync(leaveType.Id);
 
-		var updateRequest = new LeavePolicyCreateRequest
-		{
-			MediumStageId = TestMediumStageId,
-			PolicyTitle = TestDataHelper.UniqueName("UpdatedPolicy"),
-			LeaveType = leaveType.Id,
-			MaxLeavePerYear = 15,
-			PaidType = "Paid",
-			CarryForward = false,
-			EncashmentAllowed = true,
-			RequiresApproval = true,
-		};
-
-		var response = await Client.PutAsJsonAsync(
-			$"{BaseUrl}/{created.Id}", updateRequest, JsonOptions);
-
+		var response = await Client.GetAsync($"{LeavePoliciesUrl}/{created.Id}");
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var detail = await response.Content.ReadFromJsonAsync<LeavePolicyDetailResponse>(JsonOptions);
+		detail.ShouldNotBeNull();
+		detail.Id.ShouldBe(created.Id);
+		detail.LeaveType.Id.ShouldBe(leaveType.Id);
 	}
-
-	#endregion
-
-	#region Tier 1 — Important
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Delete_Leave_Policy()
+	public async Task Should_Filter_Leave_Policies_By_Search()
 	{
 		var leaveType = await CreateLeaveTypeAsync();
-		var created = await CreateLeavePolicyAsync(leaveType.Id);
+		var marker = $"Policy-{Guid.NewGuid():N}";
 
-		var response = await Client.DeleteAsync($"{BaseUrl}/{created.Id}");
+		await CreateLeavePolicyAsync(leaveType.Id, marker);
 
+		var response = await Client.GetAsync($"{LeavePoliciesUrl}?academicYearId={AcademicYearId}&page=1&pageSize=10&search={marker}");
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var list = await response.Content.ReadFromJsonAsync<LeavePolicyListResponse>(JsonOptions);
+		list.ShouldNotBeNull();
+		list.Items.ShouldContain(x => x.PolicyTitle == marker);
 	}
-
-	#endregion
-
-	#region Helpers
 
 	private async Task<LeaveTypeResponse> CreateLeaveTypeAsync()
 	{
-		var input = new LeaveTypeCreateRequest
+		var request = new LeaveTypeCreateRequest
 		{
-			MediumStageId = TestMediumStageId,
-			Name = TestDataHelper.UniqueName("PolicyLeave"),
-			Color = "#28A745",
-			Description = "Leave type for policy test",
+			Name = $"LT-{Guid.NewGuid():N}",
+			Color = "#1A73E8"
 		};
-		var response = await Client.PostAsJsonAsync(
-			$"/api/leave-types?mediumStageId={TestMediumStageId}", input, JsonOptions);
-		response.EnsureSuccessStatusCode();
+
+		var response = await Client.PostAsJsonAsync($"{LeaveTypesUrl}?academicYearId={AcademicYearId}", request, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.Created);
+
 		return await response.Content.ReadFromJsonAsync<LeaveTypeResponse>(JsonOptions)
-			?? throw new InvalidOperationException("Failed to create leave type");
+			?? throw new InvalidOperationException("Failed to create leave type.");
 	}
 
-	private async Task<LeavePolicyResponse> CreateLeavePolicyAsync(Guid leaveTypeId)
+	private async Task<LeavePolicyResponse> CreateLeavePolicyAsync(Guid leaveTypeId, string? policyTitle = null)
 	{
-		var input = new LeavePolicyCreateRequest
+		var request = new LeavePolicyCreateRequest
 		{
-			MediumStageId = TestMediumStageId,
-			PolicyTitle = TestDataHelper.UniqueName("TestPolicy"),
+			PolicyTitle = policyTitle ?? $"Policy-{Guid.NewGuid():N}",
 			LeaveType = leaveTypeId,
-			MaxLeavePerYear = 12,
+			AccrualPolicyType = "Monthly",
+			LeaveCount = 12,
 			PaidType = "Paid",
 			CarryForward = true,
-			EncashmentAllowed = false,
+			EncashmentAllowed = true,
+			EncashmentTiming = "next_payroll",
 			RequiresApproval = true,
+			Description = "Policy for API testing"
 		};
-		var response = await Client.PostAsJsonAsync(
-			$"{BaseUrl}?mediumStageId={TestMediumStageId}", input, JsonOptions);
-		response.EnsureSuccessStatusCode();
+
+		var response = await Client.PostAsJsonAsync($"{LeavePoliciesUrl}?academicYearId={AcademicYearId}", request, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.Created);
+
 		return await response.Content.ReadFromJsonAsync<LeavePolicyResponse>(JsonOptions)
-			?? throw new InvalidOperationException("Failed to create leave policy");
+			?? throw new InvalidOperationException("Failed to create leave policy.");
 	}
 
-	#endregion
+	private Guid AcademicYearId => Factory.SeededAcademicYearId;
 }

@@ -17,7 +17,7 @@ public class CreateLeavePolicyDtoValidator : AbstractValidator<CreateLeavePolicy
 			.MaximumLength(LeavePolicyConsts.MaxLeaveTypeLength);
 
 		RuleFor(x => x.MaximumDaysPerYear)
-			.InclusiveBetween(LeavePolicyConsts.MinMaximumDaysPerYear, LeavePolicyConsts.MaxMaximumDaysPerYear);
+			.InclusiveBetween(LeavePolicyConsts.MinLeaveCount, LeavePolicyConsts.MaxLeaveCount);
 
 		RuleFor(x => x.PaidType).IsInEnum();
 

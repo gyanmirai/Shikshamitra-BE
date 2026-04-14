@@ -4,6 +4,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.TenantSettings;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Collections.Generic;
@@ -33,6 +34,7 @@ public class HRSeederContributor : BaseSeederContributor
 	private readonly IRepository<LeavePolicy, Guid> _leavePolicyRepository;
 	private readonly LeavePolicyManager _leavePolicyManager;
 	private readonly ILeaveTypeRepository _leaveTypeQueryRepository;
+	private readonly IAcademicYearRepository _academicYearRepository;
 	private readonly IRepository<EducationMediumStage, Guid> _educationMediumStageRepository;
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
 	private readonly IEmployeeRepository _employeeRepository;
@@ -56,6 +58,7 @@ public class HRSeederContributor : BaseSeederContributor
 		IRepository<LeavePolicy, Guid> leavePolicyRepository,
 		LeavePolicyManager leavePolicyManager,
 		ILeaveTypeRepository leaveTypeQueryRepository,
+		IAcademicYearRepository academicYearRepository,
 		IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
 			IRepository<ShiftManagement, Guid> shiftRepository,
 			IEmployeeRepository employeeRepository,
@@ -76,6 +79,7 @@ public class HRSeederContributor : BaseSeederContributor
 		_leavePolicyRepository = leavePolicyRepository;
 		_leavePolicyManager = leavePolicyManager;
 		_leaveTypeQueryRepository = leaveTypeQueryRepository;
+		_academicYearRepository = academicYearRepository;
 		_educationMediumStageRepository = educationMediumStageRepository;
 		_shiftRepository = shiftRepository;
 		_employeeRepository = employeeRepository;
@@ -109,18 +113,18 @@ public class HRSeederContributor : BaseSeederContributor
 		if (await _leaveTypeRepository.AnyAsync())
 			return;
 
-		// Get the first available EducationMediumStage
-		var educationMediumStage = (await _educationMediumStageRepository.GetQueryableAsync())
-			.FirstOrDefault();
+		var currentYear = DateTime.Now.Year;
+		var academicYear = await _academicYearRepository
+			.FirstOrDefaultAsync(y => y.Name.StartsWith(currentYear.ToString()))
+			?? await _academicYearRepository.FirstOrDefaultAsync();
 
-		if (educationMediumStage == null)
+		if (academicYear == null)
 		{
-			// Skip seeding if no EducationMediumStage is available
-			// This can happen if academic setup hasn't been seeded yet
+			// Skip seeding if no academic year is available.
 			return;
 		}
 
-		var educationMediumStageId = educationMediumStage.Id;
+		var academicYearId = academicYear.Id;
 
 		// Seed leave types
 		var leaveTypes = new[]
@@ -136,15 +140,15 @@ public class HRSeederContributor : BaseSeederContributor
 
 		foreach (var (type, color, description) in leaveTypes)
 		{
-			var leaveType = await _leaveTypeManager.CreateAsync(educationMediumStageId, type, color, description);
+			var leaveType = await _leaveTypeManager.CreateAsync(academicYearId, type, color, description);
 			await _leaveTypeRepository.InsertAsync(leaveType, autoSave: true);
 		}
 
 		// Seed leave policies
-		await SeedLeavePoliciesAsync(educationMediumStageId);
+		await SeedLeavePoliciesAsync(academicYearId);
 	}
 
-	private async Task SeedLeavePoliciesAsync(Guid educationMediumStageId)
+	private async Task SeedLeavePoliciesAsync(Guid academicYearId)
 	{
 		// Check if already seeded
 		if (await _leavePolicyRepository.AnyAsync())
@@ -153,7 +157,7 @@ public class HRSeederContributor : BaseSeederContributor
 		// Get the leave type IDs by name
 		async Task<Guid?> GetLeaveTypeIdAsync(string typeName)
 		{
-			var leaveType = await _leaveTypeQueryRepository.FindByTypeAsync(educationMediumStageId, typeName);
+			var leaveType = await _leaveTypeQueryRepository.FindByTypeAsync(academicYearId, typeName);
 			return leaveType?.Id;
 		}
 
@@ -175,13 +179,15 @@ public class HRSeederContributor : BaseSeederContributor
 				continue;
 
 			var leavePolicy = await _leavePolicyManager.CreateAsync(
-				educationMediumStageId,
+				academicYearId,
 				policy.PolicyName,
 				leaveTypeId.Value,
+				LeaveAccrualPolicyType.Monthly,
 				policy.MaximumDaysPerYear,
 				policy.PaidType,
 				policy.CarryForward,
 				policy.Encashable,
+				policy.Encashable ? LeaveEncashmentTiming.EndOfYear : null,
 				policy.RequiresApproval,
 				policy.Description
 			);

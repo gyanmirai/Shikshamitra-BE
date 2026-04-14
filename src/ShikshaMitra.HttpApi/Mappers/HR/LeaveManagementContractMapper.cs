@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
@@ -12,12 +11,12 @@ public static class LeaveManagementContractMapper
 		{
 			Id = dto.Id,
 			Name = dto.Name,
-			EmployeeCode = dto.EmployeeCode,
+			EmployeeIdentifier = dto.EmployeeIdentifier,
 			LeaveType = dto.LeaveType,
 			StartDate = dto.StartDate,
 			EndDate = dto.EndDate,
 			TotalDays = dto.TotalDays,
-			Organization = dto.Organization,
+			MediumStageName = dto.MediumStageName,
 			Description = dto.Description,
 			Remarks = dto.Remarks,
 			Status = dto.Status
@@ -43,6 +42,7 @@ public static class LeaveManagementContractMapper
 		{
 			Id = dto.Id,
 			MediumStageId = dto.MediumStageId,
+			MediumStageName = dto.MediumStageName,
 			EmployeeId = dto.EmployeeId,
 			EmployeeName = dto.EmployeeName,
 			EmployeeCode = dto.EmployeeCode,
@@ -54,9 +54,7 @@ public static class LeaveManagementContractMapper
 			Description = dto.Description,
 			AttachmentUrl = dto.AttachmentUrl,
 			Remarks = dto.Remarks,
-			Status = dto.Status,
-			CreatedAt = dto.CreatedAt,
-			UpdatedAt = dto.UpdatedAt
+			Status = dto.Status
 		};
 	}
 
@@ -65,8 +63,7 @@ public static class LeaveManagementContractMapper
 		return new LeaveRequestCreatedResponse
 		{
 			Id = dto.Id,
-			Status = dto.Status,
-			AppliedAt = dto.AppliedAt
+			Status = dto.Status
 		};
 	}
 
@@ -75,6 +72,16 @@ public static class LeaveManagementContractMapper
 		return new LeaveRequestDeleteResponse
 		{
 			Id = dto.Id,
+			Message = dto.Message
+		};
+	}
+
+	public static LeaveActionResponse ToActionResponse(LeaveActionResultDto dto)
+	{
+		return new LeaveActionResponse
+		{
+			Id = dto.Id,
+			Status = dto.Status,
 			Message = dto.Message
 		};
 	}

@@ -12,11 +12,16 @@ All endpoints require Bearer token + `__tenant` header. All controllers use `[Au
 
 | Method | Route | Description |
 |--------|-------|-------------|
-| GET | `/api/leave-management` | List leave requests (paginated) |
-| GET | `/api/leave-management/{leaveRequestId}` | Get leave request details |
-| PUT | `/api/leave-management/{leaveRequestId}` | Update leave status |
-| DELETE | `/api/leave-management/{leaveRequestId}` | Cancel leave request |
-| POST | `/api/v1/leave-management` | Create leave request (v1, multipart) |
+| GET | `/api/leave-management` | List leave requests (academicYearId + month-year + optional search) |
+| GET | `/api/leave-management/{id}` | Get leave request details (Guid) |
+| POST | `/api/leave-management` | Create leave request (multipart) |
+| PATCH | `/api/leave-management/{id}/approve` | Approve leave |
+| PATCH | `/api/leave-management/{id}/reject` | Reject leave |
+| DELETE | `/api/leave-management/{id}` | Cancel leave request |
+| GET | `/api/leave-management/{id}/attachment` | Attachment DTO |
+| GET | `/api/leave-management/{id}/attachment/download` | Attachment download |
+
+**Note:** Historical export; canonical details: [api-contract.md](../../prd/attendance-leaves/api-contract.md).
 
 ### Leave Types (`api/leave-types`)
 
@@ -103,78 +108,7 @@ LeaveManagementListResponse {
 
 ---
 
-### GET /api/leave-management/{leaveRequestId}
-
-**Path params:** `leaveRequestId` (string, parsed as int -- public sequential ID)
-
-**Response (200):**
-
-```
-LeaveRequestDetailsResponse {
-  id: int
-  mediumStageId: Guid
-  employeeId: Guid
-  employeeName: string
-  employeeCode: string
-  leaveTypeId: Guid
-  leaveType: string
-  startDate: DateTime
-  endDate: DateTime
-  totalDays: int
-  description: string
-  attachmentUrl: string?
-  remarks: string?
-  status: string
-  createdAt: DateTime
-  updatedAt: DateTime
-}
-```
-
-**Status codes:** 200, 400 (invalid ID format), 404
-
----
-
-### PUT /api/leave-management/{leaveRequestId}
-
-**Request body:**
-
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| status | string | yes | "Pending", "Reviewed", "Approved", or "Rejected" |
-| remarks | string | conditional | Required when status = "Rejected" |
-
-**Response (200):** `LeaveRequestDetailsResponse`
-
----
-
-### DELETE /api/leave-management/{leaveRequestId}
-
-Cancels a leave request. Only the owning employee can cancel, and only if status is Pending.
-
-**Response (200):** `{ id: int, message: "Leave request cancelled successfully" }`
-
-**Error codes:** `LeaveCancelApproved`, `LeaveCancelRejected`, `LeaveDeleteOwnOnly`
-
----
-
-### POST /api/v1/leave-management
-
-Creates a leave request with optional file attachment.
-
-**Content-Type:** `multipart/form-data`
-
-**Form fields:**
-
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| mediumStageId | Guid | yes | |
-| leaveTypeId | Guid | yes | |
-| startDate | DateTime | yes | must be >= today |
-| endDate | DateTime | yes | must be >= startDate |
-| reason | string | yes | 5-500 chars |
-| file | IFormFile | no | see file validation error codes |
-
-**Response (201):** `{ id: Guid, status: string, appliedAt: DateTime }`
+**Leave management detail schemas below are superseded.** Use [api-contract.md](../../prd/attendance-leaves/api-contract.md) for Guid ids, PATCH approve/reject, POST on `/api/leave-management`, and list query parameters.
 
 ---
 

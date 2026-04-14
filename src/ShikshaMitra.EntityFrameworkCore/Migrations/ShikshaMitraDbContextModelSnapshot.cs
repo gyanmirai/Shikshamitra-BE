@@ -1516,6 +1516,412 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppStudentHomeworkAssignmentSubmissions", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Settings.LectureSlots.LectureSlotConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<Guid?>("PreviousStandardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SchoolHours")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("StandardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StandardId")
+                        .IsUnique();
+
+                    b.ToTable("AppLectureSlotConfigs", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Settings.LectureSlots.LectureSlotGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<Guid>("LectureSlotConfigId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<int>("TotalSlots")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WeekRangeEnd")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WeekRangeStart")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LectureSlotConfigId");
+
+                    b.ToTable("AppLectureSlotGroups", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Settings.LectureSlots.LectureSlotTimeSlot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("BreakType")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeOnly>("EndTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<Guid>("LectureSlotGroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SlotType")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeOnly>("StartTime")
+                        .HasColumnType("time without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LectureSlotGroupId");
+
+                    b.ToTable("AppLectureSlotTimeSlots", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots.WeeklyLectureSlot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<Guid>("StandardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StandardId")
+                        .IsUnique();
+
+                    b.ToTable("AppWeeklyLectureSlots", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots.WeeklyLectureSlotSubject", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<Guid?>("ElectiveGroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<Guid?>("SubjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<Guid>("WeeklyLectureSlotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("WeeklyLectures")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WeeklyLectureSlotId");
+
+                    b.ToTable("AppWeeklyLectureSlotSubjects", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Timetables.Timetable", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<Guid>("DivisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<Guid>("StandardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StandardId", "DivisionId")
+                        .IsUnique();
+
+                    b.ToTable("AppTimetables", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Timetables.TimetableSlot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("BreakType")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Day")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ElectiveGroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<TimeOnly>("EndTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SlotType")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeOnly>("StartTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<int?>("SubjectType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TimetableId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TimetableId");
+
+                    b.ToTable("AppTimetableSlots", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Timetables.TimetableSlotSubject", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("RoomId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SubjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TeacherId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TimetableSlotId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TimetableSlotId");
+
+                    b.ToTable("AppTimetableSlotSubjects", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Communication.AnnouncementTypes.AnnouncementType", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3286,6 +3692,90 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppNotificationInfos", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.AttendanceConfiguration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<int>("GraceTime")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("HoursBasedPayPercentage")
+                        .HasColumnType("double precision");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<int>("MaxLateAllowedPerMonth")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MinOvertimeMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("OvertimeEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("OvertimeRate")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PenaltyType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "AcademicYearId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_AttendanceConfigurations_TenantId_AcademicYearId");
+
+                    b.ToTable("AppAttendanceConfigurations", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.AutomatedNotificationsSettings", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3319,58 +3809,16 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppAutomatedNotificationsSettings", (string)null);
                 });
 
-            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.CustomAttendanceRule", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<bool>("EnableNotificationForUpperAuthority")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
-
-                    b.Property<int>("HalfDayThreshold")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("HalfDayThresholdUnit")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("LateThreshold")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("LateThresholdUnit")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("TenantId");
-
-                    b.Property<int>("Type")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("AppCustomAttendanceRules", (string)null);
-                });
-
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicy", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AccrualPolicyType")
+                        .HasColumnType("integer");
 
                     b.Property<bool>("CarryForward")
                         .ValueGeneratedOnAdd()
@@ -3404,13 +3852,13 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<Guid>("EducationMediumStageId")
-                        .HasColumnType("uuid");
-
                     b.Property<bool>("Encashable")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
+
+                    b.Property<int?>("EncashmentTiming")
+                        .HasColumnType("integer");
 
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
@@ -3436,11 +3884,11 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<int>("LeaveCount")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("LeaveTypeId")
                         .HasColumnType("uuid");
-
-                    b.Property<int>("MaximumDaysPerYear")
-                        .HasColumnType("integer");
 
                     b.Property<int>("PaidType")
                         .HasColumnType("integer");
@@ -3461,17 +3909,17 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EducationMediumStageId");
+                    b.HasIndex("AcademicYearId");
 
                     b.HasIndex("LeaveTypeId")
                         .HasDatabaseName("IX_EmployeeLeavePolicies_LeaveTypeId");
 
-                    b.HasIndex("TenantId", "EducationMediumStageId", "IsActive")
-                        .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_MediumStageId_IsActive");
+                    b.HasIndex("TenantId", "AcademicYearId", "IsActive")
+                        .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_AcademicYearId_IsActive");
 
-                    b.HasIndex("TenantId", "EducationMediumStageId", "PolicyName")
+                    b.HasIndex("TenantId", "AcademicYearId", "PolicyName")
                         .IsUnique()
-                        .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_MediumStageId_PolicyName");
+                        .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_AcademicYearId_PolicyName");
 
                     b.ToTable("AppEmployeeLeavePolicies", (string)null);
                 });
@@ -3479,6 +3927,9 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeaveType", b =>
                 {
                     b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Color")
@@ -3512,9 +3963,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
-
-                    b.Property<Guid>("EducationMediumStageId")
-                        .HasColumnType("uuid");
 
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
@@ -3551,12 +3999,14 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "EducationMediumStageId", "IsActive")
-                        .HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_MediumStageId_IsActive");
+                    b.HasIndex("AcademicYearId");
 
-                    b.HasIndex("TenantId", "EducationMediumStageId", "Type")
+                    b.HasIndex("TenantId", "AcademicYearId", "IsActive")
+                        .HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_AcademicYearId_IsActive");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "Type")
                         .IsUnique()
-                        .HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_MediumStageId_Type");
+                        .HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_AcademicYearId_Type");
 
                     b.ToTable("AppEmployeeLeaveTypes", (string)null);
                 });
@@ -4456,9 +4906,6 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<decimal?>("BasicSalary")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<string>("BranchName")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
@@ -4482,11 +4929,8 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.Property<decimal?>("TdsAmount")
+                    b.Property<decimal?>("TotalWorkingHourPerMonth")
                         .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("TdsPercentage")
-                        .HasColumnType("decimal(5,2)");
 
                     b.Property<string>("UanNumber")
                         .HasMaxLength(50)
@@ -10703,7 +11147,52 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("HomeworkAssignment");
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Finance.ConcessionRequests.ConcessionFeeHeadMapping", b =>
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Settings.LectureSlots.LectureSlotGroup", b =>
+                {
+                    b.HasOne("ShikshaMitra.Academic.Timetable.Settings.LectureSlots.LectureSlotConfig", null)
+                        .WithMany("SlotGroups")
+                        .HasForeignKey("LectureSlotConfigId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Settings.LectureSlots.LectureSlotTimeSlot", b =>
+                {
+                    b.HasOne("ShikshaMitra.Academic.Timetable.Settings.LectureSlots.LectureSlotGroup", null)
+                        .WithMany("TimeSlots")
+                        .HasForeignKey("LectureSlotGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots.WeeklyLectureSlotSubject", b =>
+                {
+                    b.HasOne("ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots.WeeklyLectureSlot", null)
+                        .WithMany("Subjects")
+                        .HasForeignKey("WeeklyLectureSlotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Timetables.TimetableSlot", b =>
+                {
+                    b.HasOne("ShikshaMitra.Academic.Timetable.Timetables.Timetable", null)
+                        .WithMany("Slots")
+                        .HasForeignKey("TimetableId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Timetables.TimetableSlotSubject", b =>
+                {
+                    b.HasOne("ShikshaMitra.Academic.Timetable.Timetables.TimetableSlot", null)
+                        .WithMany("Subjects")
+                        .HasForeignKey("TimetableSlotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequestConcessionType", b =>
                 {
                     b.HasOne("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequest", null)
                         .WithMany("ConcessionFeeHeadMappings")
@@ -10840,9 +11329,9 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicy", b =>
                 {
-                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", "EducationMediumStage")
+                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", "AcademicYear")
                         .WithMany()
-                        .HasForeignKey("EducationMediumStageId")
+                        .HasForeignKey("AcademicYearId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -10852,9 +11341,20 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("EducationMediumStage");
+                    b.Navigation("AcademicYear");
 
                     b.Navigation("LeaveType");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeaveType", b =>
+                {
+                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", "AcademicYear")
+                        .WithMany()
+                        .HasForeignKey("AcademicYearId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AcademicYear");
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Calendar.Events.Event", b =>
@@ -12736,6 +13236,31 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.Academic.HomeworkAssignment.HomeworkAssignmentEntity", b =>
                 {
                     b.Navigation("DivisionSchedules");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Settings.LectureSlots.LectureSlotConfig", b =>
+                {
+                    b.Navigation("SlotGroups");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Settings.LectureSlots.LectureSlotGroup", b =>
+                {
+                    b.Navigation("TimeSlots");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots.WeeklyLectureSlot", b =>
+                {
+                    b.Navigation("Subjects");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Timetables.Timetable", b =>
+                {
+                    b.Navigation("Slots");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Timetables.TimetableSlot", b =>
+                {
+                    b.Navigation("Subjects");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.ConcessionRequests.ConcessionRequest", b =>

@@ -50,7 +50,8 @@ public class DocumentSettingAppService
 			var exists = await _repository.FindAsync(x => x.DocumentName == input.DocumentName);
 			if (exists != null)
 			{
-				throw new UserFriendlyException($"Document setting with name '{input.DocumentName}' already exists.");
+				throw new BusinessException(HRErrorCodes.EmployeeDocumentSettingAlreadyExists)
+					.WithData("documentName", input.DocumentName);
 			}
 			return await base.CreateAsync(input);
 		}
@@ -121,7 +122,8 @@ public class DocumentSettingAppService
 		var exists = await _repository.FindAsync(x => x.DocumentName == input.Title);
 		if (exists != null)
 		{
-			throw new UserFriendlyException($"Document setting with name '{input.Title}' already exists.");
+			throw new BusinessException(HRErrorCodes.EmployeeDocumentSettingAlreadyExists)
+				.WithData("documentName", input.Title);
 		}
 
 		var documentTypes = input.DocumentTypes
@@ -158,7 +160,8 @@ public class DocumentSettingAppService
 		var duplicate = await _repository.FindAsync(x => x.DocumentName == input.Title && x.Id != documentId);
 		if (duplicate != null)
 		{
-			throw new UserFriendlyException($"Document setting with name '{input.Title}' already exists.");
+			throw new BusinessException(HRErrorCodes.EmployeeDocumentSettingAlreadyExists)
+				.WithData("documentName", input.Title);
 		}
 
 		var documentTypes = input.DocumentTypes

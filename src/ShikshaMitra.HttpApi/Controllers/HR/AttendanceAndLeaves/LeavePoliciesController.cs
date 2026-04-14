@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,10 +11,6 @@ using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.HR.AttendanceAndLeaves;
 
-/// <summary>
-/// Leave policy management controller
-/// Handles CRUD operations for employee leave policies in the school ERP system
-/// </summary>
 [Area("app")]
 [RemoteService(Name = "Default")]
 [Route("api/leave-policies")]
@@ -28,64 +24,56 @@ public class LeavePoliciesController : AbpControllerBase
 		_leavePolicyAppService = leavePolicyAppService;
 	}
 
-	/// <summary>
-	/// Get paginated list of leave policies
-	/// </summary>
 	[HttpGet]
 	[ProducesResponseType(typeof(LeavePolicyListResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	public virtual async Task<LeavePolicyListResponse> GetListAsync(
-		[FromQuery, Required] Guid mediumStageId,
+		[FromQuery, Required] Guid academicYearId,
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
-		[FromQuery, Range(10, 100)] int pageSize = 10,
+		[FromQuery, Range(1, 100)] int pageSize = 10,
+		[FromQuery] string? search = null,
 		CancellationToken cancellationToken = default)
 	{
-		return await _leavePolicyAppService.GetListByMediumStageIdAsync(
-			mediumStageId, page, pageSize, cancellationToken);
+		return await _leavePolicyAppService.GetListByAcademicYearIdAsync(
+			academicYearId, page, pageSize, search, cancellationToken);
 	}
 
-	/// <summary>
-	/// Create a new leave policy
-	/// </summary>
+	[HttpGet("{id}")]
+	[ProducesResponseType(typeof(LeavePolicyDetailResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public virtual async Task<LeavePolicyDetailResponse> GetAsync([FromRoute, Required] Guid id)
+	{
+		return await _leavePolicyAppService.GetLeavePolicyByIdAsync(id);
+	}
+
 	[HttpPost]
 	[ProducesResponseType(typeof(LeavePolicyResponse), StatusCodes.Status201Created)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
-	[ProducesResponseType(StatusCodes.Status500InternalServerError)]
 	public virtual async Task<ActionResult<LeavePolicyResponse>> CreateAsync(
-		[FromQuery, Required] Guid mediumStageId,
+		[FromQuery, Required] Guid academicYearId,
 		[FromBody, Required] LeavePolicyCreateRequest request)
 	{
-		// Set the mediumStageId from query parameter
-		request.MediumStageId = mediumStageId;
-		var response = await _leavePolicyAppService.CreateLeavePolicyAsync(request);
+		var response = await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, request);
 		return StatusCode(StatusCodes.Status201Created, response);
 	}
 
-	/// <summary>
-	/// Update an existing leave policy
-	/// </summary>
-	[HttpPut("{policyId}")]
-	[ProducesResponseType(typeof(LeavePolicyUpdatedResponse), StatusCodes.Status200OK)]
+	[HttpPut("{id}")]
+	[ProducesResponseType(typeof(LeavePolicyDetailResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
-	[ProducesResponseType(StatusCodes.Status500InternalServerError)]
-	public virtual async Task<LeavePolicyUpdatedResponse> UpdateAsync(
-		[FromRoute, Required] Guid policyId,
-		[FromBody, Required] LeavePolicyCreateRequest request)
+	public virtual async Task<LeavePolicyDetailResponse> UpdateAsync(
+		[FromRoute, Required] Guid id,
+		[FromBody, Required] LeavePolicyUpdateRequest request)
 	{
-		return await _leavePolicyAppService.UpdateLeavePolicyAsync(policyId, request);
+		return await _leavePolicyAppService.UpdateLeavePolicyAsync(id, request);
 	}
 
-	/// <summary>
-	/// Delete a leave policy (soft delete)
-	/// </summary>
-	[HttpDelete("{policyId}")]
+	[HttpDelete("{id}")]
 	[ProducesResponseType(typeof(LeavePolicyDeleteResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	[ProducesResponseType(StatusCodes.Status409Conflict)]
-	[ProducesResponseType(StatusCodes.Status500InternalServerError)]
-	public virtual async Task<LeavePolicyDeleteResponse> DeleteAsync([FromRoute, Required] Guid policyId)
+	public virtual async Task<LeavePolicyDeleteResponse> DeleteAsync([FromRoute, Required] Guid id)
 	{
-		return await _leavePolicyAppService.DeleteLeavePolicyAsync(policyId);
+		return await _leavePolicyAppService.DeleteLeavePolicyAsync(id);
 	}
 }

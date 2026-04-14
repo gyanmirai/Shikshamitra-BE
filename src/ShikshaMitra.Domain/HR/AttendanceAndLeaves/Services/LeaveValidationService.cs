@@ -156,7 +156,7 @@ public class LeaveValidationService : DomainService
 			leavePolicy.Id,
 			currentYear);
 
-		var remainingBalance = leavePolicy.MaximumDaysPerYear - approvedDaysThisYear;
+		var remainingBalance = leavePolicy.LeaveCount - approvedDaysThisYear;
 
 		if (requestedDays > remainingBalance)
 		{
@@ -216,6 +216,6 @@ public class LeaveValidationService : DomainService
 			leavePolicy.Id,
 			currentYear);
 
-		return Math.Max(0, leavePolicy.MaximumDaysPerYear - approvedDays);
+		return Math.Max(0, leavePolicy.LeaveCount - approvedDays);
 	}
 }

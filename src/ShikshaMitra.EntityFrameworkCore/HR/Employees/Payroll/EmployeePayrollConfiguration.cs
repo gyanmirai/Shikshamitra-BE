@@ -34,9 +34,7 @@ public class EmployeePayrollDetailsConfiguration : IEntityTypeConfiguration<Empl
 		builder.Property(x => x.UanNumber).HasMaxLength(50);
 		builder.Property(x => x.PunchId).HasMaxLength(50);
 
-		builder.Property(x => x.BasicSalary).HasColumnType("decimal(18,2)");
-		builder.Property(x => x.TdsPercentage).HasColumnType("decimal(5,2)");
-		builder.Property(x => x.TdsAmount).HasColumnType("decimal(18,2)");
+		builder.Property(x => x.TotalWorkingHourPerMonth).HasColumnType("decimal(18,2)");
 	}
 }
 
@@ -66,7 +64,7 @@ public class EmployeePayrollComponentConfiguration : IEntityTypeConfiguration<Em
 		builder.Property(x => x.Amount).HasColumnType("decimal(18,2)");
 		builder.Property(x => x.IsFixed).IsRequired();
 		builder.Property(x => x.IsTemp).IsRequired();
-		builder.Property(x => x.ApplicableMonth).HasColumnType("datetime2");
+		builder.Property(x => x.ApplicableMonth);
 		builder.Property(x => x.ComponentType).IsRequired();
 		builder.Property(x => x.DependOn);
 		builder.Property(x => x.IsEarning).IsRequired();

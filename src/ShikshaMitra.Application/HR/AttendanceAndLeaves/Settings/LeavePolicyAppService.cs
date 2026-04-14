@@ -52,12 +52,12 @@ public class LeavePolicyAppService : CrudAppService<
 
 	public override Task<LeavePolicyDto> CreateAsync(CreateLeavePolicyDto input)
 	{
-		throw new UserFriendlyException("Please use CreateLeavePolicyAsync with academicYearId.");
+		throw new BusinessException(HRErrorCodes.LeavePolicyCreateMethodNotSupported);
 	}
 
 	public override Task<LeavePolicyDto> UpdateAsync(Guid id, UpdateLeavePolicyDto input)
 	{
-		throw new UserFriendlyException("Please use UpdateLeavePolicyAsync.");
+		throw new BusinessException(HRErrorCodes.LeavePolicyUpdateMethodNotSupported);
 	}
 
 	public override async Task DeleteAsync(Guid id)

@@ -117,13 +117,13 @@ public class EmployeeAppService(
 		if (string.IsNullOrWhiteSpace(input.Email))
 		{
 			logger.LogWarning("Employee creation failed: Email is required");
-			throw new UserFriendlyException("Email is required for employee creation.");
+			throw new BusinessException(HRErrorCodes.EmployeeEmailRequired);
 		}
 
 		if (string.IsNullOrWhiteSpace(input.MobileNo))
 		{
 			logger.LogWarning("Employee creation failed: Mobile number is required for email: {Email}", input.Email);
-			throw new UserFriendlyException("Mobile number is required for employee creation.");
+			throw new BusinessException(HRErrorCodes.EmployeeMobileRequired);
 		}
 
 		// Validate mobile number length
@@ -134,7 +134,7 @@ public class EmployeeAppService(
 				input.MobileNo.Length,
 				input.Email
 			);
-			throw new UserFriendlyException("Mobile number must be at least 4 digits.");
+			throw new BusinessException(HRErrorCodes.EmployeeMobileTooShort);
 		}
 
 		// Check if email already exists
@@ -147,7 +147,8 @@ public class EmployeeAppService(
 				input.Email,
 				existingUserByEmail.Id
 			);
-			throw new UserFriendlyException($"Email '{input.Email}' is already in use.");
+			throw new BusinessException(HRErrorCodes.EmployeeEmailAlreadyExists)
+				.WithData("email", input.Email);
 		}
 
 		// Use explicit transaction to ensure atomicity
@@ -201,7 +202,8 @@ public class EmployeeAppService(
 						username,
 						errors
 					);
-					throw new UserFriendlyException("Failed to create user: " + errors);
+					throw new BusinessException(HRErrorCodes.EmployeeUserCreationFailed)
+						.WithData("details", errors);
 				}
 
 				logger.LogInformation(
@@ -219,7 +221,7 @@ public class EmployeeAppService(
 						"User verification failed: User with ID {UserId} was not found after creation",
 						userId
 					);
-					throw new BusinessException("User was not created successfully.");
+					throw new BusinessException(HRErrorCodes.EmployeeUserVerificationFailed);
 				}
 
 				logger.LogInformation(
@@ -303,7 +305,7 @@ public class EmployeeAppService(
 				// Return the DTO
 				return ObjectMapper.Map<Employee, EmployeeDto>(employee);
 			}
-			catch (UserFriendlyException ex)
+			catch (BusinessException ex)
 			{
 				logger.LogWarning(
 					ex,
@@ -378,7 +380,7 @@ public class EmployeeAppService(
 			sequence++;
 			if (sequence > 99)
 			{
-				throw new UserFriendlyException("Unable to generate unique username.");
+				throw new BusinessException(HRErrorCodes.EmployeeUsernameGenerationFailed);
 			}
 		}
 	}

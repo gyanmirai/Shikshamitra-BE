@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Documents;
 using ShikshaMitra.Models;
@@ -36,7 +37,7 @@ public class EmployeeDocumentController(
 		await authorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 
 		if (request.File == null || request.File.Length == 0)
-			throw new UserFriendlyException("File is required");
+			throw new BusinessException(HRErrorCodes.EmployeeDocumentFileRequired);
 
 		await using var memoryStream = new MemoryStream();
 		await request.File.CopyToAsync(memoryStream);
@@ -96,7 +97,7 @@ public class EmployeeDocumentController(
 		await authorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 
 		if (request.File == null || request.File.Length == 0)
-			throw new UserFriendlyException("File is required");
+			throw new BusinessException(HRErrorCodes.EmployeeDocumentFileRequired);
 
 		await using var memoryStream = new MemoryStream();
 		await request.File.CopyToAsync(memoryStream);

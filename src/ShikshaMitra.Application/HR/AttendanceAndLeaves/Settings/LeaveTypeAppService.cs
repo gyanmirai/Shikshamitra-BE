@@ -51,7 +51,7 @@ public class LeaveTypeAppService : CrudAppService<
 
 	public override Task<LeaveTypeDto> CreateAsync(CreateLeaveTypeDto input)
 	{
-		throw new UserFriendlyException("Please use CreateLeaveTypeAsync with academicYearId.");
+		throw new BusinessException(HRErrorCodes.LeaveTypeCreateMethodNotSupported);
 	}
 
 	public override async Task<LeaveTypeDto> UpdateAsync(Guid id, UpdateLeaveTypeDto input)

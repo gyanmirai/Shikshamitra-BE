@@ -127,8 +127,7 @@ public class DocumentConfigApi_Tests : ShikshaMitraApiTestBase
 
 		var json = await duplicateCreate.Content.ReadAsStringAsync();
 		using var document = JsonDocument.Parse(json);
-		var error = document.RootElement.GetProperty("error");
-		var code = error.GetProperty("code").GetString();
+		var code = document.RootElement.GetProperty("errorCode").GetString();
 		code.ShouldNotBe("VALIDATION_ERROR");
 		code.ShouldBe("HR:Employee:010026");
 	}

@@ -101,15 +101,12 @@ public class FamilyInfoApi_Tests : ShikshaMitraApiTestBase
 		using var document = JsonDocument.Parse(json);
 		var root = document.RootElement;
 
-		var error = root.GetProperty("error");
-		error.GetProperty("validationErrors").ValueKind.ShouldBe(JsonValueKind.Array);
+		root.GetProperty("status").GetInt32().ShouldBe((int)HttpStatusCode.BadRequest);
+		var errors = root.GetProperty("errors");
+		errors.ValueKind.ShouldBe(JsonValueKind.Object);
 
-		var validationErrors = error.GetProperty("validationErrors").EnumerateArray().ToList();
-		var keys = validationErrors
-			.SelectMany(ve => ve.GetProperty("members").EnumerateArray())
-			.Select(m => m.GetString())
-			.Where(m => !string.IsNullOrWhiteSpace(m))
-			.Select(m => m!)
+		var keys = errors.EnumerateObject()
+			.Select(e => e.Name)
 			.ToList();
 		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
 		keys.Any(k => k.Contains("name", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
@@ -151,15 +148,12 @@ public class FamilyInfoApi_Tests : ShikshaMitraApiTestBase
 		using var document = JsonDocument.Parse(json);
 		var root = document.RootElement;
 
-		var error = root.GetProperty("error");
-		error.GetProperty("validationErrors").ValueKind.ShouldBe(JsonValueKind.Array);
+		root.GetProperty("status").GetInt32().ShouldBe((int)HttpStatusCode.BadRequest);
+		var errors = root.GetProperty("errors");
+		errors.ValueKind.ShouldBe(JsonValueKind.Object);
 
-		var validationErrors = error.GetProperty("validationErrors").EnumerateArray().ToList();
-		var keys = validationErrors
-			.SelectMany(ve => ve.GetProperty("members").EnumerateArray())
-			.Select(m => m.GetString())
-			.Where(m => !string.IsNullOrWhiteSpace(m))
-			.Select(m => m!)
+		var keys = errors.EnumerateObject()
+			.Select(e => e.Name)
 			.ToList();
 
 		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase) &&

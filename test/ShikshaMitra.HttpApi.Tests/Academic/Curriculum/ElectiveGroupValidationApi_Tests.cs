@@ -30,10 +30,10 @@ public class ElectiveGroupValidationApi_Tests : ShikshaMitraApiTestBase
 		using var document = JsonDocument.Parse(json);
 		var root = document.RootElement;
 
-		root.GetProperty("success").GetBoolean().ShouldBeFalse();
-		var error = root.GetProperty("error");
-		error.GetProperty("code").GetString().ShouldBe("VALIDATION_ERROR");
-		var fields = error.GetProperty("fields");
+		root.GetProperty("status").GetInt32().ShouldBe((int)HttpStatusCode.BadRequest);
+		root.GetProperty("title").GetString().ShouldNotBeNullOrWhiteSpace();
+		root.GetProperty("errorCode").GetString().ShouldBe("VALIDATION_ERROR");
+		var fields = root.GetProperty("errors");
 		fields.TryGetProperty("academicMediumId", out _).ShouldBeTrue();
 	}
 }

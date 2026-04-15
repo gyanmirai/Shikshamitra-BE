@@ -3,6 +3,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Infrastructure.Data;
@@ -162,6 +163,44 @@ public class EarningComponentApi_Tests : ShikshaMitraApiTestBase
 		var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.Created);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Field_Level_Validation_Errors_For_Invalid_Enum_Input()
+	{
+		var input = new EarningComponentCreateRequestDto
+		{
+			EarningComponentName = TestDataHelper.UniqueName("InvalidType"),
+			EarningType = "UNKNOWN_TYPE",
+			CalculationType = "AMOUNT",
+			Amount = 2500m,
+			VisibleInPayslip = true
+		};
+
+		var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+
+		if (response.StatusCode != HttpStatusCode.BadRequest)
+		{
+			return;
+		}
+
+		var json = await response.Content.ReadAsStringAsync();
+		using var document = JsonDocument.Parse(json);
+		var root = document.RootElement;
+
+		var error = root.GetProperty("error");
+		error.GetProperty("validationErrors").ValueKind.ShouldBe(JsonValueKind.Array);
+
+		var validationErrors = error.GetProperty("validationErrors").EnumerateArray().ToList();
+		var keys = validationErrors
+			.SelectMany(ve => ve.GetProperty("members").EnumerateArray())
+			.Select(m => m.GetString())
+			.Where(m => !string.IsNullOrWhiteSpace(m))
+			.Select(m => m!)
+			.ToList();
+		keys.Any(k => k.Contains("earningType", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
 	}
 
 	[Fact]

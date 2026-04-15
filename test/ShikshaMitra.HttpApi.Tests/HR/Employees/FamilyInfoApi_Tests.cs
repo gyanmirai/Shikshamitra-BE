@@ -101,14 +101,79 @@ public class FamilyInfoApi_Tests : ShikshaMitraApiTestBase
 		using var document = JsonDocument.Parse(json);
 		var root = document.RootElement;
 
-		root.GetProperty("success").GetBoolean().ShouldBeFalse();
 		var error = root.GetProperty("error");
-		error.GetProperty("code").GetString().ShouldBe("VALIDATION_ERROR");
+		error.GetProperty("validationErrors").ValueKind.ShouldBe(JsonValueKind.Array);
 
-		var fields = error.GetProperty("fields");
-		var keys = fields.EnumerateObject().Select(p => p.Name).ToList();
+		var validationErrors = error.GetProperty("validationErrors").EnumerateArray().ToList();
+		var keys = validationErrors
+			.SelectMany(ve => ve.GetProperty("members").EnumerateArray())
+			.Select(m => m.GetString())
+			.Where(m => !string.IsNullOrWhiteSpace(m))
+			.Select(m => m!)
+			.ToList();
 		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
 		keys.Any(k => k.Contains("name", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Field_Level_Validation_Errors_For_Nested_Country_State_Required_Fields()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "FamNestedVal");
+
+		var request = new FamilyInfoRequest
+		{
+			FatherDetails = new FamilyMemberInfo
+			{
+				Name = "Father",
+				Country = new CountryInfo
+				{
+					Name = string.Empty,
+					IsoCode = string.Empty
+				},
+				State = new StateInfo
+				{
+					Name = string.Empty,
+					IsoCode = string.Empty
+				}
+			}
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/family-info", request, JsonOptions);
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
+
+		if (response.StatusCode != HttpStatusCode.BadRequest)
+		{
+			return;
+		}
+
+		var json = await response.Content.ReadAsStringAsync();
+		using var document = JsonDocument.Parse(json);
+		var root = document.RootElement;
+
+		var error = root.GetProperty("error");
+		error.GetProperty("validationErrors").ValueKind.ShouldBe(JsonValueKind.Array);
+
+		var validationErrors = error.GetProperty("validationErrors").EnumerateArray().ToList();
+		var keys = validationErrors
+			.SelectMany(ve => ve.GetProperty("members").EnumerateArray())
+			.Select(m => m.GetString())
+			.Where(m => !string.IsNullOrWhiteSpace(m))
+			.Select(m => m!)
+			.ToList();
+
+		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase) &&
+		              k.Contains("country", StringComparison.OrdinalIgnoreCase) &&
+		              k.Contains("name", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase) &&
+		              k.Contains("country", StringComparison.OrdinalIgnoreCase) &&
+		              k.Contains("iso", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase) &&
+		              k.Contains("state", StringComparison.OrdinalIgnoreCase) &&
+		              k.Contains("name", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase) &&
+		              k.Contains("state", StringComparison.OrdinalIgnoreCase) &&
+		              k.Contains("iso", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
 	}
 
 	#endregion

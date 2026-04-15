@@ -10,6 +10,7 @@ using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -49,6 +50,16 @@ public class GlobalExceptionHandlingMiddleware : ITransientDependency
 
 		try
 		{
+			// HR APIs are migrating to raw ABP error contract.
+			// Skip custom response wrapping entirely to preserve native ABP problem shape.
+			// Keep this inside try/catch so unexpected exceptions still flow through
+			// the middleware's exception handling path.
+			if (IsHrApiRequest(context.Request.Path))
+			{
+				await _next(context);
+				return;
+			}
+
 			using var responseStream = new MemoryStream();
 			context.Response.Body = responseStream;
 
@@ -144,24 +155,7 @@ var error = CreateErrorForStatusCode(statusCode, errorCode, localizedMessage, va
 				// Check for .NET validation errors format (model state / ProblemDetails)
 				if (jsonDoc.RootElement.TryGetProperty("errors", out var errorsElement))
 				{
-					var fields = new Dictionary<string, string>(StringComparer.Ordinal);
-					foreach (var error in errorsElement.EnumerateObject())
-					{
-						var fieldName = error.Name;
-						if (error.Value.ValueKind != JsonValueKind.Array)
-						{
-							continue;
-						}
-
-						var msgs = error.Value.EnumerateArray()
-							.Select(e => e.GetString())
-							.Where(s => !string.IsNullOrEmpty(s))
-							.ToList();
-						if (msgs.Count > 0)
-						{
-							fields[fieldName] = string.Join("; ", msgs);
-						}
-					}
+					var fields = ParseErrorsObject(errorsElement);
 
 					if (fields.Count > 0)
 					{
@@ -219,6 +213,23 @@ var error = CreateErrorForStatusCode(statusCode, errorCode, localizedMessage, va
 						}
 					}
 				}
+				// Check for custom validation payload shape: { details: "The following errors ... - field: message" }
+				else if (jsonDoc.RootElement.TryGetProperty("details", out var detailsTextElement) &&
+					detailsTextElement.ValueKind == JsonValueKind.String)
+				{
+					var detailsText = detailsTextElement.GetString();
+					var fields = ParseValidationFieldsFromDetails(detailsText);
+					if (fields?.Count > 0)
+					{
+						var message = string.Join("; ", fields.Select(kv => kv.Key == "_" ? kv.Value : $"{kv.Key}: {kv.Value}"));
+						return (null, message, null, fields);
+					}
+
+					if (!string.IsNullOrWhiteSpace(detailsText))
+					{
+						return (null, detailsText, null, null);
+					}
+				}
 
 				// Check for ABP error structure
 				else if (jsonDoc.RootElement.TryGetProperty("error", out var errorElement))
@@ -268,18 +279,27 @@ var error = CreateErrorForStatusCode(statusCode, errorCode, localizedMessage, va
 						}
 					}
 
-					if (errorElement.TryGetProperty("validationErrors", out var validationErrorsElement) &&
-						validationErrorsElement.ValueKind == JsonValueKind.Array)
-					{
-						validationFields = ParseValidationErrors(validationErrorsElement);
-					}
+						if (errorElement.TryGetProperty("validationErrors", out var validationErrorsElement) &&
+							validationErrorsElement.ValueKind == JsonValueKind.Array)
+						{
+							validationFields = ParseValidationErrors(validationErrorsElement);
+						}
 
-					if (validationFields?.Count > 0)
-					{
-						var validationMessage = string.Join("; ",
-							validationFields.Select(kv => kv.Key == "_" ? kv.Value : $"{kv.Key}: {kv.Value}"));
-						return (errorCode, validationMessage, errorData, validationFields);
-					}
+						if ((validationFields == null || validationFields.Count == 0) &&
+							errorData != null &&
+							errorData.TryGetValue("validationErrors", out var validationErrorsRaw) &&
+							validationErrorsRaw is string validationErrorsText &&
+							!string.IsNullOrWhiteSpace(validationErrorsText))
+						{
+							validationFields = ParseValidationErrorsFromString(validationErrorsText);
+						}
+
+						if (validationFields?.Count > 0)
+						{
+							var validationMessage = string.Join("; ",
+								validationFields.Select(kv => kv.Key == "_" ? kv.Value : $"{kv.Key}: {kv.Value}"));
+							return (errorCode, validationMessage, errorData, validationFields);
+						}
 
 					if (!string.IsNullOrEmpty(errorCode))
 					{
@@ -291,15 +311,23 @@ var error = CreateErrorForStatusCode(statusCode, errorCode, localizedMessage, va
 						return (null, errorMessage, errorData, null);
 					}
 
-					if (errorElement.TryGetProperty("details", out var abpDetailsElement))
-					{
-						var details = abpDetailsElement.GetString();
-						if (!string.IsNullOrEmpty(details))
+						if (errorElement.TryGetProperty("details", out var abpDetailsElement))
 						{
-							return (null, details, errorData, null);
+							var details = abpDetailsElement.GetString();
+							if (!string.IsNullOrEmpty(details))
+							{
+								validationFields = ParseValidationFieldsFromDetails(details);
+								if (validationFields?.Count > 0)
+								{
+									var validationMessage = string.Join("; ",
+										validationFields.Select(kv => kv.Key == "_" ? kv.Value : $"{kv.Key}: {kv.Value}"));
+									return (errorCode, validationMessage, errorData, validationFields);
+								}
+
+								return (null, details, errorData, null);
+							}
 						}
 					}
-				}
 
 				else if (jsonDoc.RootElement.TryGetProperty("title", out var simpleTitleElement))
 				{
@@ -418,6 +446,173 @@ var error = CreateErrorForStatusCode(statusCode, errorCode, localizedMessage, va
 			{
 				AppendValidationMessage(fields, member, message);
 			}
+		}
+
+		return fields.Count > 0 ? fields : null;
+	}
+
+	private static bool IsHrApiRequest(PathString requestPath)
+	{
+		return requestPath.StartsWithSegments("/api/employees") ||
+		       requestPath.StartsWithSegments("/api/attendance/configuration") ||
+		       requestPath.StartsWithSegments("/api/attendance-import") ||
+		       requestPath.StartsWithSegments("/api/attendance-tracking") ||
+		       requestPath.StartsWithSegments("/api/attendance/automated-notifications") ||
+		       requestPath.StartsWithSegments("/api/attendance/notifications") ||
+		       requestPath.StartsWithSegments("/api/leave-management") ||
+		       requestPath.StartsWithSegments("/api/leave-policies") ||
+		       requestPath.StartsWithSegments("/api/hr-leave-types") ||
+		       requestPath.StartsWithSegments("/api/calendar") ||
+		       requestPath.StartsWithSegments("/api/payroll") ||
+		       requestPath.StartsWithSegments("/api/hr/reports/employees");
+	}
+
+	private static Dictionary<string, string> ParseErrorsObject(JsonElement errorsElement)
+	{
+		var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+		if (errorsElement.ValueKind != JsonValueKind.Object)
+		{
+			return fields;
+		}
+
+		foreach (var error in errorsElement.EnumerateObject())
+		{
+			var messages = ParseMessages(error.Value).ToList();
+			if (messages.Count == 0)
+			{
+				continue;
+			}
+
+			fields[error.Name] = string.Join("; ", messages);
+		}
+
+		return fields;
+	}
+
+	private static IEnumerable<string> ParseMessages(JsonElement value)
+	{
+		switch (value.ValueKind)
+		{
+			case JsonValueKind.Array:
+			{
+				foreach (var element in value.EnumerateArray())
+				{
+					foreach (var message in ParseMessages(element))
+					{
+						yield return message;
+					}
+				}
+
+				yield break;
+			}
+			case JsonValueKind.String:
+			{
+				var message = value.GetString();
+				if (!string.IsNullOrWhiteSpace(message))
+				{
+					yield return message;
+				}
+
+				yield break;
+			}
+			case JsonValueKind.Object:
+			{
+				foreach (var property in value.EnumerateObject())
+				{
+					foreach (var message in ParseMessages(property.Value))
+					{
+						yield return message;
+					}
+				}
+
+				yield break;
+			}
+			default:
+			{
+				var text = value.ToString();
+				if (!string.IsNullOrWhiteSpace(text))
+				{
+					yield return text;
+				}
+
+				yield break;
+			}
+		}
+	}
+
+	private static Dictionary<string, string>? ParseValidationErrorsFromString(string value)
+	{
+		if (string.IsNullOrWhiteSpace(value))
+		{
+			return null;
+		}
+
+		try
+		{
+			using var doc = JsonDocument.Parse(value);
+			if (doc.RootElement.ValueKind == JsonValueKind.Array)
+			{
+				return ParseValidationErrors(doc.RootElement);
+			}
+		}
+		catch
+		{
+			// Ignore parse errors and fall back to details-style parsing.
+		}
+
+		return ParseValidationFieldsFromDetails(value);
+	}
+
+	private static Dictionary<string, string>? ParseValidationFieldsFromDetails(string? details)
+	{
+		if (string.IsNullOrWhiteSpace(details))
+		{
+			return null;
+		}
+
+		var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+		var lines = details.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+		foreach (var rawLine in lines)
+		{
+			var line = rawLine.Trim();
+			if (line.StartsWith("-", StringComparison.Ordinal))
+			{
+				line = line[1..].Trim();
+			}
+
+			if (string.IsNullOrWhiteSpace(line))
+			{
+				continue;
+			}
+
+			var colonIndex = line.IndexOf(':');
+			if (colonIndex > 0 && colonIndex < line.Length - 1)
+			{
+				var key = line[..colonIndex].Trim();
+				var message = line[(colonIndex + 1)..].Trim();
+				if (!string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(message))
+				{
+					AppendValidationMessage(fields, key, message);
+					continue;
+				}
+			}
+
+			var fluentMatch = Regex.Match(
+				line,
+				"'(?<field>[^']+)'\\s+(must|should|is)\\s+",
+				RegexOptions.IgnoreCase);
+
+			if (fluentMatch.Success)
+			{
+				var key = fluentMatch.Groups["field"].Value.Trim();
+				if (!string.IsNullOrWhiteSpace(key))
+				{
+					AppendValidationMessage(fields, key, line);
+					continue;
+				}
+			}
+
+			AppendValidationMessage(fields, "_", line);
 		}
 
 		return fields.Count > 0 ? fields : null;

@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.Validation;
 
 namespace ShikshaMitra.Controllers.HR.AttendanceAndLeaves;
 
@@ -52,7 +53,7 @@ public class AttendanceTrackingController : AbpControllerBase
 	{
 		if (!TryParseStatus(status, out var parsedStatus))
 		{
-			return BuildValidationError(nameof(status), "Status must be one of PRESENT, ABSENT, HALF_DAY, or REJECTED_LEAVE.");
+			throw CreateStatusValidationException();
 		}
 
 		var input = new GetAttendanceDateWiseInput
@@ -100,7 +101,7 @@ public class AttendanceTrackingController : AbpControllerBase
 		{
 			if (!TryParseStatus(status, out var statusValue))
 			{
-				return BuildValidationError(nameof(status), "Status must be one of PRESENT, ABSENT, HALF_DAY, or REJECTED_LEAVE.");
+				throw CreateStatusValidationException();
 			}
 
 			parsedStatus = statusValue;
@@ -142,21 +143,18 @@ public class AttendanceTrackingController : AbpControllerBase
 		return true;
 	}
 
-	private ActionResult BuildValidationError(string fieldName, string message)
+	private static AbpValidationException CreateStatusValidationException()
 	{
-		return BadRequest(new
+		var validationErrors = new List<ValidationResult>
 		{
-			success = false,
-			error = new
-			{
-				code = "VALIDATION_ERROR",
-				message = "Request validation failed",
-				fields = new Dictionary<string, string>
-				{
-					[fieldName] = message
-				}
-			}
-		});
+			new(
+				"Status must be one of PRESENT, ABSENT, HALF_DAY, or REJECTED_LEAVE.",
+				new[] { "status" })
+		};
+
+		return new AbpValidationException(
+			"Validation failed",
+			validationErrors);
 	}
 }
 

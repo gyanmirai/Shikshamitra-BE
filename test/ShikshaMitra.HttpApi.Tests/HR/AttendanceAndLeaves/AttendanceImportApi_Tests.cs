@@ -72,14 +72,14 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Require_Authentication_For_Preview()
+	public async Task Should_Return_Forbidden_For_Preview_When_Anonymous()
 	{
 		using var anonymousClient = CreateAnonymousClient();
 		using var content = BuildCsvUpload("11-04-2026,EMP0001,09:00 AM,05:30 PM,,Regular shift,John Doe,9876543210");
 
 		var response = await anonymousClient.PostAsync($"{BaseUrl}/preview", content);
 
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Unauthorized);
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
 
 	[Fact]

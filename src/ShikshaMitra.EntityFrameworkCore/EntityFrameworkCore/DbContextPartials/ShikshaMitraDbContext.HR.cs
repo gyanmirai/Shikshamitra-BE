@@ -8,6 +8,7 @@ using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.HolidayTypes;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Payroll.AttendanceImports;
 using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
@@ -39,6 +40,8 @@ public partial class ShikshaMitraDbContext
     public DbSet<DeductionComponent> DeductionComponents { get; set; }
     public DbSet<DayCalculationSetting> DayCalculationSettings { get; set; }
     public DbSet<SalarySlip> SalarySlips { get; set; }
+    public DbSet<AttendanceImportBatch> AttendanceImportBatches { get; set; }
+    public DbSet<AttendanceImportRow> AttendanceImportRows { get; set; }
 
     public DbSet<HolidayType> HolidayTypes { get; set; }
     public DbSet<EventType> EventTypes { get; set; }

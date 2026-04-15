@@ -2,7 +2,7 @@
 
 API-level tests for the HR module endpoints. These validate the full HTTP pipeline including routing, serialization, authentication, and response contracts.
 
-**Total test coverage: ~191 tests across 31 controllers (all HR endpoints covered)**
+**Total test coverage: ~194 tests across 32 controllers (all HR endpoints covered)**
 
 ## Test Inventory
 
@@ -21,7 +21,7 @@ API-level tests for the HR module endpoints. These validate the full HTTP pipeli
 | DocumentConfigController | `DocumentConfigApi_Tests` | POST create, GET list, GET by ID, PUT, DELETE, 404, reject invalid title, reject out-of-range size, full CRUD lifecycle | Critical, Important, Extended |
 | EmployeeDocumentController | `EmployeeDocumentApi_Tests` | Upload with valid doc config, upload image file (JPEG), GET list, 404, DELETE, download document, fail upload without file, upload PDF, update existing document, search by filename | Critical, Important, Extended |
 
-### HR/Payroll -- 8 controllers, ~40 tests
+### HR/Payroll -- 9 controllers, ~43 tests
 
 | Controller | Test Class | Tests | Tiers |
 |-----------|-----------|-------|-------|
@@ -33,6 +33,7 @@ API-level tests for the HR module endpoints. These validate the full HTTP pipeli
 | EmployeeSalaryStructureController | `EmployeeSalaryStructureApi_Tests` | GET, PUT with components | Critical |
 | RunPayrollController | `RunPayrollApi_Tests` | GET preview, POST lock, invalid format | Critical, Important, Extended |
 | SalarySlipController | `SalarySlipApi_Tests` | GET slip, missing params, invalid format | Important |
+| AttendanceImportLogsController | `AttendanceImportLogsApi_Tests` | GET list, GET detail+rows, reject multi-month preview file | Critical, Important |
 
 ### HR/Calendar -- 5 controllers, ~28 tests
 

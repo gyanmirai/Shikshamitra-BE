@@ -69,7 +69,7 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Reject_Invalid_Status_With_400_And_Standard_Error_Envelope()
+	public async Task Should_Reject_Invalid_Status_With_400_And_Raw_Abp_ValidationErrors()
 	{
 		var today = DateTime.UtcNow.ToString("dd-MM-yyyy");
 		var mediumStageId = Guid.NewGuid();
@@ -80,8 +80,9 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 
 		var json = await response.Content.ReadAsStringAsync();
 		using var document = JsonDocument.Parse(json);
-		document.RootElement.TryGetProperty("success", out _).ShouldBeTrue();
-		document.RootElement.TryGetProperty("error", out _).ShouldBeTrue();
+		document.RootElement.TryGetProperty("error", out var errorElement).ShouldBeTrue();
+		errorElement.TryGetProperty("validationErrors", out var validationErrors).ShouldBeTrue();
+		validationErrors.ValueKind.ShouldBe(JsonValueKind.Array);
 	}
 
 	[Fact]

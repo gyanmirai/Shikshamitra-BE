@@ -5,8 +5,8 @@ namespace ShikshaMitra.Extensions;
 
 public static class ApplicationBuilderExtensions
 {
-	public static IApplicationBuilder UseGlobalExceptionHandling(this IApplicationBuilder app)
+	public static IApplicationBuilder UseApiProblemDetails(this IApplicationBuilder app)
 	{
-		return app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
+		return app.UseMiddleware<ApiProblemDetailsMiddleware>();
 	}
 }

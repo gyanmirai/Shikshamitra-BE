@@ -167,28 +167,22 @@ Response `200`: `AttendanceEmployeeWiseResponse`
 
 ## Error Envelope (Global)
 
-All `/api/*` errors must use:
+All `/api/*` errors must use RFC 7807 (`application/problem+json`):
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Request validation failed",
-    "fields": {
-      "field": "reason"
-    }
+  "type": "https://httpstatuses.com/400",
+  "title": "Validation failed",
+  "status": 400,
+  "detail": "Request validation failed",
+  "instance": "/api/...",
+  "errorCode": "VALIDATION_ERROR",
+  "errors": {
+    "field": ["reason"]
   }
 }
 ```
 
-Standard `error.code` values:
-- `VALIDATION_ERROR`
-- `INVALID_REQUEST`
-- `UNAUTHORIZED`
-- `FORBIDDEN`
-- `RESOURCE_NOT_FOUND`
-- `DUPLICATE_RESOURCE`
-- `INVALID_STATE_TRANSITION`
-- `RATE_LIMIT_EXCEEDED`
-- `INTERNAL_SERVER_ERROR`
+Notes:
+- `errorCode` carries machine-readable business/validation code when available.
+- `errors` is included for field-level validation failures.

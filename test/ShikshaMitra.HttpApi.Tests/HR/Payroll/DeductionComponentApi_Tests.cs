@@ -176,27 +176,28 @@ public class DeductionComponentApi_Tests : ShikshaMitraApiTestBase
 
 		var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
 		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
-
-		if (response.StatusCode != HttpStatusCode.BadRequest)
-		{
-			return;
-		}
-
+		response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
 		var json = await response.Content.ReadAsStringAsync();
 		using var document = JsonDocument.Parse(json);
 		var root = document.RootElement;
 
-		var error = root.GetProperty("error");
-		error.GetProperty("validationErrors").ValueKind.ShouldBe(JsonValueKind.Array);
+		root.TryGetProperty("status", out var statusElement).ShouldBeTrue();
+		statusElement.GetInt32().ShouldBe((int)response.StatusCode);
+		root.TryGetProperty("title", out var titleElement).ShouldBeTrue();
+		titleElement.GetString().ShouldNotBeNullOrWhiteSpace();
+		root.TryGetProperty("type", out _).ShouldBeTrue();
+		root.TryGetProperty("detail", out _).ShouldBeTrue();
+		root.TryGetProperty("instance", out _).ShouldBeTrue();
 
-		var validationErrors = error.GetProperty("validationErrors").EnumerateArray().ToList();
-		var keys = validationErrors
-			.SelectMany(ve => ve.GetProperty("members").EnumerateArray())
-			.Select(m => m.GetString())
-			.Where(m => !string.IsNullOrWhiteSpace(m))
-			.Select(m => m!)
-			.ToList();
-		keys.Any(k => k.Contains("deductionType", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+		if (response.StatusCode == HttpStatusCode.BadRequest)
+		{
+			root.TryGetProperty("errors", out var errors).ShouldBeTrue();
+			errors.ValueKind.ShouldBe(JsonValueKind.Object);
+			var keys = errors.EnumerateObject()
+				.Select(e => e.Name)
+				.ToList();
+			keys.Any(k => k.Contains("deductionType", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+		}
 	}
 
 	[Fact]

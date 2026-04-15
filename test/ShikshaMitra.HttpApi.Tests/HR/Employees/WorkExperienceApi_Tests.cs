@@ -39,6 +39,9 @@ public class WorkExperienceApi_Tests : ShikshaMitraApiTestBase
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "WExpPut");
 
+		var start = new DateTime(2023, 4, 14, 12, 0, 0, DateTimeKind.Utc);
+		var end = new DateTime(2025, 4, 14, 12, 0, 0, DateTimeKind.Utc);
+
 		var request = new List<WorkExperienceContract>
 		{
 			new()
@@ -46,8 +49,8 @@ public class WorkExperienceApi_Tests : ShikshaMitraApiTestBase
 				MediumStageName = "Previous School",
 				Designation = "Assistant Teacher",
 				Department = "Mathematics",
-				StartDate = DateTime.UtcNow.AddYears(-3),
-				EndDate = DateTime.UtcNow.AddYears(-1),
+				StartDate = start,
+				EndDate = end,
 				City = "Mumbai",
 			}
 		};
@@ -55,6 +58,15 @@ public class WorkExperienceApi_Tests : ShikshaMitraApiTestBase
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/work-experience", request, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var body = await GetAndReadAsync<List<WorkExperienceContract>>($"{BaseUrl}/{empId}/work-experience");
+		body.Count.ShouldBe(1);
+		body[0].MediumStageName.ShouldBe("Previous School");
+		body[0].Designation.ShouldBe("Assistant Teacher");
+		body[0].Department.ShouldBe("Mathematics");
+		body[0].City.ShouldBe("Mumbai");
+		DateOnly.FromDateTime(body[0].StartDate!.Value).ShouldBe(DateOnly.FromDateTime(start));
+		DateOnly.FromDateTime(body[0].EndDate!.Value).ShouldBe(DateOnly.FromDateTime(end));
 	}
 
 	/// <summary>

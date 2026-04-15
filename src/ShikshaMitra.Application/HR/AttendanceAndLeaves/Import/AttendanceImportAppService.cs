@@ -17,9 +17,11 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.AttendanceAndLeaves.Import;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Payroll.AttendanceImports;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Caching;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
@@ -28,6 +30,8 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 public class AttendanceImportAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeeAttendanceRepository employeeAttendanceRepository,
+	IRepository<AttendanceImportBatch, Guid> attendanceImportBatchRepository,
+	IRepository<AttendanceImportRow, Guid> attendanceImportRowRepository,
 	IDistributedCache<AttendanceImportPreviewCacheItem> previewCache,
 	IExcelService excelService)
 	: ApplicationService, IAttendanceImportAppService
@@ -53,6 +57,17 @@ public class AttendanceImportAppService(
 	private const string EmployeeNameHeader = "Employee Name";
 	private const string ContactNoHeader = "Contact No";
 	private const long MaxFileSizeBytes = 5 * 1024 * 1024;
+	private const int ImportBatchFileNameMaxLength = 255;
+	private const int ImportBatchImportedByNameMaxLength = 128;
+	private const int ImportBatchPayrollMonthMaxLength = 20;
+	private const int RowActionMaxLength = 32;
+	private const int RowAttendanceDateMaxLength = 32;
+	private const int RowEmployeeCodeMaxLength = 64;
+	private const int RowEmployeeNameMaxLength = 256;
+	private const int RowContactNoMaxLength = 64;
+	private const int RowTimeMaxLength = 32;
+	private const int RowStatusMaxLength = 64;
+	private const int RowRemarksMaxLength = 512;
 	private static readonly TimeZoneInfo DefaultImportTimeZone = TimeZoneInfo.Local;
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_ImportAttendance.Add)]
@@ -62,6 +77,7 @@ public class AttendanceImportAppService(
 
 		var rawRows = ParseFile(fileName, fileContent);
 		var previewRows = rawRows.Select(MapRawToPreviewRow).ToList();
+		EnsureSinglePayrollMonth(previewRows);
 
 		MarkDuplicateRows(previewRows);
 		await EnrichRowsAsync(previewRows);
@@ -74,9 +90,36 @@ public class AttendanceImportAppService(
 			invalidRow.Action = "invalid";
 		}
 
-		var previewToken = validRows.Count > 0
-			? await CachePreviewAsync(validRows)
-			: null;
+		string? previewToken = null;
+		var previewTokenExpiresAt = default(DateTime?);
+		var batchId = GuidGenerator.Create();
+
+		if (validRows.Count > 0)
+		{
+			previewToken = await CachePreviewAsync(validRows, batchId);
+			previewTokenExpiresAt = Clock.Now.AddMinutes(30);
+		}
+
+		var monthYear = ResolveInternalPayrollMonthYear(previewRows);
+		try
+		{
+			await CreateImportBatchAsync(
+				batchId,
+				fileName,
+				previewRows,
+				monthYear,
+				previewToken,
+				previewTokenExpiresAt);
+		}
+		catch
+		{
+			if (!string.IsNullOrWhiteSpace(previewToken))
+			{
+				await previewCache.RemoveAsync(GetPreviewCacheKey(previewToken));
+			}
+
+			throw;
+		}
 
 		return new AttendanceImportPreviewResponseDto
 		{
@@ -165,6 +208,16 @@ public class AttendanceImportAppService(
 			createdCount++;
 		}
 
+		var importBatch = await attendanceImportBatchRepository.FindAsync(cached.ImportBatchId);
+		if (importBatch != null && importBatch.TenantId == CurrentTenant.Id)
+		{
+			importBatch.MarkConfirmed(
+				cached.Rows.Count,
+				createdCount,
+				replacedCount,
+				Clock.Now);
+			await attendanceImportBatchRepository.UpdateAsync(importBatch, autoSave: true);
+		}
 		await previewCache.RemoveAsync(cacheKey);
 
 		return new AttendanceImportConfirmResponseDto
@@ -416,6 +469,7 @@ public class AttendanceImportAppService(
 		}
 
 		MapTimeAndStatus(rawRow, previewRow);
+		ValidateRowColumnLengths(previewRow);
 		return previewRow;
 	}
 
@@ -568,7 +622,7 @@ public class AttendanceImportAppService(
 		}
 	}
 
-	private async Task<string> CachePreviewAsync(List<AttendanceImportPreviewRow> validRows)
+	private async Task<string> CachePreviewAsync(List<AttendanceImportPreviewRow> validRows, Guid importBatchId)
 	{
 		var userId = CurrentUser.Id
 			?? throw new BusinessException(HRErrorCodes.AttendanceImportPreviewInvalid);
@@ -581,6 +635,7 @@ public class AttendanceImportAppService(
 				Token = token,
 				TenantId = CurrentTenant.Id,
 				UserId = userId,
+				ImportBatchId = importBatchId,
 				Rows = validRows.Select(x => new AttendanceImportPreviewCacheRow
 				{
 					EmployeeId = x.EmployeeId,
@@ -599,6 +654,110 @@ public class AttendanceImportAppService(
 		return token;
 	}
 
+	private async Task<AttendanceImportBatch> CreateImportBatchAsync(
+		Guid batchId,
+		string fileName,
+		List<AttendanceImportPreviewRow> previewRows,
+		string? monthYear,
+		string? previewToken,
+		DateTime? previewTokenExpiresAt)
+	{
+		var importedByUserId = CurrentUser.Id
+			?? throw new BusinessException(HRErrorCodes.AttendanceImportPreviewInvalid);
+
+		var importedByName = BuildImportedByName();
+		var errorsSummary = previewRows
+			.SelectMany(x => x.Errors)
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.Take(20)
+			.ToList();
+		var warningsSummary = previewRows
+			.SelectMany(x => x.Warnings)
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.Take(20)
+			.ToList();
+
+		var importBatch = new AttendanceImportBatch(
+			batchId,
+			CurrentTenant.Id,
+			TruncateForStorage(fileName, ImportBatchFileNameMaxLength),
+			importedByUserId,
+			TruncateForStorage(importedByName, ImportBatchImportedByNameMaxLength),
+			Clock.Now,
+			monthYear,
+			TruncateForStorage(ToApiMonthYear(monthYear), ImportBatchPayrollMonthMaxLength),
+			previewRows.Count,
+			previewRows.Count(x => x.Errors.Count == 0),
+			previewRows.Count(x => x.Errors.Count > 0),
+			previewRows.Count(x => x.Action == "create"),
+			previewRows.Count(x => x.Action == "replace"),
+				errorsSummary,
+				warningsSummary);
+
+		if (!string.IsNullOrWhiteSpace(previewToken) && previewTokenExpiresAt.HasValue)
+		{
+			importBatch.SetPreviewToken(previewToken, previewTokenExpiresAt.Value);
+		}
+
+		await attendanceImportBatchRepository.InsertAsync(importBatch, autoSave: true);
+
+		var rowEntities = previewRows.Select(x => new AttendanceImportRow(
+			GuidGenerator.Create(),
+			CurrentTenant.Id,
+			importBatch.Id,
+			x.RowNumber,
+			TruncateForStorage(x.Action, RowActionMaxLength) ?? "invalid",
+			TruncateForStorage(x.AttendanceDate, RowAttendanceDateMaxLength) ?? string.Empty,
+			TruncateForStorage(x.EmployeeCode, RowEmployeeCodeMaxLength) ?? string.Empty,
+			TruncateForStorage(x.EmployeeName, RowEmployeeNameMaxLength),
+			TruncateForStorage(x.ContactNo, RowContactNoMaxLength),
+			TruncateForStorage(x.TimeIn, RowTimeMaxLength),
+			TruncateForStorage(x.TimeOut, RowTimeMaxLength),
+			TruncateForStorage(x.Status, RowStatusMaxLength),
+			TruncateForStorage(x.Remarks, RowRemarksMaxLength),
+			[.. x.Errors],
+			[.. x.Warnings]))
+			.ToList();
+
+		if (rowEntities.Count > 0)
+		{
+			await attendanceImportRowRepository.InsertManyAsync(rowEntities, autoSave: true);
+		}
+
+		return importBatch;
+	}
+
+	private static void ValidateRowColumnLengths(AttendanceImportPreviewRow row)
+	{
+		ValidateMaxLength(row.Action, RowActionMaxLength, "Action", row.Errors);
+		ValidateMaxLength(row.AttendanceDate, RowAttendanceDateMaxLength, "Attendance Date", row.Errors);
+		ValidateMaxLength(row.EmployeeCode, RowEmployeeCodeMaxLength, "Employee Code", row.Errors);
+		ValidateMaxLength(row.EmployeeName, RowEmployeeNameMaxLength, "Employee Name", row.Errors);
+		ValidateMaxLength(row.ContactNo, RowContactNoMaxLength, "Contact No", row.Errors);
+		ValidateMaxLength(row.TimeIn, RowTimeMaxLength, "Time In", row.Errors);
+		ValidateMaxLength(row.TimeOut, RowTimeMaxLength, "Time Out", row.Errors);
+		ValidateMaxLength(row.Status, RowStatusMaxLength, "Status", row.Errors);
+		ValidateMaxLength(row.Remarks, RowRemarksMaxLength, "Remarks", row.Errors);
+	}
+
+	private static void ValidateMaxLength(string? value, int maxLength, string fieldName, ICollection<string> errors)
+	{
+		if (!string.IsNullOrEmpty(value) && value.Length > maxLength)
+		{
+			errors.Add($"{fieldName} exceeds maximum length of {maxLength} characters.");
+		}
+	}
+
+	private static string? TruncateForStorage(string? value, int maxLength)
+	{
+		if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
+		{
+			return value;
+		}
+
+		return value[..maxLength];
+	}
+
 	private string GetPreviewCacheKey(string token) =>
 		$"AttendanceImportPreview:Tenant:{CurrentTenant.Id ?? Guid.Empty}:Token:{token}";
 
@@ -610,6 +769,71 @@ public class AttendanceImportAppService(
 
 	private static string NormalizeComparableValue(string? value) =>
 		string.Join(" ", (value ?? string.Empty).Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+	private static void EnsureSinglePayrollMonth(List<AttendanceImportPreviewRow> previewRows)
+	{
+		var distinctMonthKeys = previewRows
+			.Where(x => x.AttendanceDateValue.HasValue)
+			.Select(x => $"{x.AttendanceDateValue!.Value.Year:D4}-{x.AttendanceDateValue.Value.Month:D2}")
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+
+		if (distinctMonthKeys.Count > 1)
+		{
+			throw new BusinessException(HRErrorCodes.AttendanceImportMultiplePayrollMonths);
+		}
+	}
+
+	private static string? ResolveInternalPayrollMonthYear(List<AttendanceImportPreviewRow> previewRows)
+	{
+		var rowWithDate = previewRows.FirstOrDefault(x => x.AttendanceDateValue.HasValue);
+		if (rowWithDate?.AttendanceDateValue == null)
+		{
+			return null;
+		}
+
+		var date = rowWithDate.AttendanceDateValue.Value;
+		return $"{date.Year:D4}-{date.Month:D2}";
+	}
+
+	private static string? ToApiMonthYear(string? internalMonthYear)
+	{
+		if (string.IsNullOrWhiteSpace(internalMonthYear))
+		{
+			return null;
+		}
+
+		if (!DateTime.TryParseExact(
+			$"{internalMonthYear}-01",
+			"yyyy-MM-dd",
+			CultureInfo.InvariantCulture,
+			DateTimeStyles.None,
+			out var monthDate))
+		{
+			return null;
+		}
+
+		return $"{monthDate.ToString("MMMM", CultureInfo.InvariantCulture).ToUpperInvariant()}-{monthDate.Year}";
+	}
+
+	private string BuildImportedByName()
+	{
+		var fullName = string.Join(" ",
+			(CurrentUser.Name ?? string.Empty).Trim(),
+			(CurrentUser.SurName ?? string.Empty).Trim()).Trim();
+
+		if (!string.IsNullOrWhiteSpace(fullName))
+		{
+			return fullName;
+		}
+
+		if (!string.IsNullOrWhiteSpace(CurrentUser.UserName))
+		{
+			return CurrentUser.UserName!;
+		}
+
+		return CurrentUser.Id?.ToString() ?? "unknown-user";
+	}
 
 	private static bool TryParseDate(object value, out DateOnly date)
 	{

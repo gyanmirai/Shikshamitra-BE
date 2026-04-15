@@ -8,6 +8,7 @@ public class AttendanceImportPreviewCacheItem
 	public string Token { get; set; } = string.Empty;
 	public Guid? TenantId { get; set; }
 	public Guid UserId { get; set; }
+	public Guid ImportBatchId { get; set; }
 	public List<AttendanceImportPreviewCacheRow> Rows { get; set; } = [];
 }
 

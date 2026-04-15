@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Linq;
 using ShikshaMitra.HR.Payroll.Settings;
-using Volo.Abp;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Validation;
 
 namespace ShikshaMitra.Mappers.HR.Payroll;
 
@@ -100,8 +102,9 @@ public static class EarningComponentContractMapper
         {
             "FIXED" => EarningComponentType.Fixed,
             "VARIABLE" => EarningComponentType.Variable,
-            _ => throw new BusinessException("ShikshaMitra:InvalidEarningType")
-                .WithData("message", $"earningType must be FIXED or VARIABLE, got: '{earningType}'.")
+            _ => throw CreateValidationException(
+                "earningType",
+                $"earningType must be FIXED or VARIABLE, got: '{earningType}'.")
         };
     }
 
@@ -112,9 +115,20 @@ public static class EarningComponentContractMapper
         {
             "AMOUNT" => CalculationType.Amount,
             "PERCENTAGE" => CalculationType.Percentage,
-            _ => throw new BusinessException("ShikshaMitra:InvalidCalculationType")
-                .WithData("message", $"calculationType must be AMOUNT or PERCENTAGE, got: '{calculationType}'.")
+            _ => throw CreateValidationException(
+                "calculationType",
+                $"calculationType must be AMOUNT or PERCENTAGE, got: '{calculationType}'.")
         };
+    }
+
+    private static AbpValidationException CreateValidationException(string memberName, string message)
+    {
+        return new AbpValidationException(
+            "Validation failed",
+            new List<ValidationResult>
+            {
+                new(message, new[] { memberName })
+            });
     }
 
     private static ComponentDependency InferDependency(CalculationType calculationType, Guid? selectedComponentId)

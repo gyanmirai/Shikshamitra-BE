@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.Students.StudentEnrollments;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -23,16 +24,7 @@ public class AdmissionStatusChangeItemDto
 	public Guid StudentId { get; set; }
 
 	[Required]
-	public AdmissionAction Action { get; set; }
+	public StudentEnrollmentApprovalState Action { get; set; }
 
 	public string? Remarks { get; set; }
-}
-
-/// <summary>
-/// Enum for admission actions
-/// </summary>
-public enum AdmissionAction
-{
-	Approve = 0,
-	Reject = 1
 }

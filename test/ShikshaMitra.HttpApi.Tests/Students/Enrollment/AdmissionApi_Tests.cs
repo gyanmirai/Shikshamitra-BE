@@ -111,7 +111,7 @@ public class AdmissionApi_Tests : ShikshaMitraApiTestBase
                 new()
                 {
                     StudentId = Guid.NewGuid(),
-                    Action = AdmissionAction.Approve,
+                    Action = StudentEnrollmentApprovalState.Approved,
                     Remarks = "Test approval",
                 },
             },
@@ -163,7 +163,7 @@ public class AdmissionApi_Tests : ShikshaMitraApiTestBase
                 new()
                 {
                     StudentId = Guid.NewGuid(),
-                    Action = AdmissionAction.Reject,
+                    Action = StudentEnrollmentApprovalState.Rejected,
                     Remarks = "Does not meet criteria",
                 },
             },

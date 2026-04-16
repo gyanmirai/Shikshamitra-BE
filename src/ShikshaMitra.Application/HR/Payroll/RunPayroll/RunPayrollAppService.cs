@@ -472,7 +472,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		var factor = PayrollProrationCalculator.CalculateProrationFactor(basis.BasisDays, payableDays);
 
 		var basicSalary = components
-			.Where(c => c.IsEarning && string.Equals(c.Name, "Basic", StringComparison.OrdinalIgnoreCase))
+			.Where(c => c.IsEarning && IsBasicSalaryComponentName(c.Name))
 			.Sum(c => c.Amount);
 		basicSalary = PayrollProrationCalculator.ProrateAmount(basicSalary, isTemp: false, factor);
 
@@ -521,6 +521,17 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			EarningComponents = earningComponents,
 			DeductionComponents = deductionComponents
 		};
+	}
+
+	private static bool IsBasicSalaryComponentName(string? name)
+	{
+		if (string.IsNullOrWhiteSpace(name))
+		{
+			return false;
+		}
+
+		return string.Equals(name, "Basic", StringComparison.OrdinalIgnoreCase)
+			|| name.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase);
 	}
 
 	/// <summary>

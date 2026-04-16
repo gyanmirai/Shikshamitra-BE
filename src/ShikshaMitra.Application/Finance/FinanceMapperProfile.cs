@@ -3,6 +3,7 @@ using ShikshaMitra.Application.Contracts.Finance.Setting.ChargeCategory.Dtos;
 using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.ConcessionRequests.Dtos;
 using ShikshaMitra.Finance.Setting;
+using ShikshaMitra.Finance.Setting.FeeStructures;
 using ShikshaMitra.Finance.Setting.GeneralSetting.FeeHead;
 using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
 
@@ -17,13 +18,9 @@ public class FinanceMapperProfile : Profile
 		#region GeneralSetting
 		#region FeeHead
 
-
 		CreateMap<FeeHead, FeeHeadDto>();
-
 		CreateMap<CreateUpdateFeeHeadDto, FeeHead>();
 		CreateMap<ChargeCategory, ChargeCategoryResponse>();
-
-
 
 		#endregion
 		#endregion
@@ -41,6 +38,4 @@ public class FinanceMapperProfile : Profile
 
 		#endregion
 	}
-
 }
-

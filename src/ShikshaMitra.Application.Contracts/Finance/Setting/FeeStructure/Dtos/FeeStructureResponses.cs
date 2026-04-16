@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.Finance.Setting.FeeStructure;
+using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
 
@@ -21,7 +22,7 @@ public class FeeStructureDetailsResponse : EntityDto<Guid>
     public string MediumName { get; set; }
     public Guid ReceiptBookId { get; set; }
     public string ReceiptBookName { get; set; }
-    public int Status { get; set; }
+    public FeeStructureMetadataStatus Status { get; set; }
 }
 
 public class FeeStructureListResponse

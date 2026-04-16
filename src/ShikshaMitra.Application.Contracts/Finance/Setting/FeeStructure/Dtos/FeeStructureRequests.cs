@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.Finance.Setting.FeeStructure;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -30,7 +31,7 @@ public class FeeStructureUpdateRequest
 
 public class FeeStructureStatusUpdateRequest
 {
-	public int Status { get; set; }
+	public FeeStructureMetadataStatus Status { get; set; }
 }
 
 public class StandardFeeStructureSaveRequest

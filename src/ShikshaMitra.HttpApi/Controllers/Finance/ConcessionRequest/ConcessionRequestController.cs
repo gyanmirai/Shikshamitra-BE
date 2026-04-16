@@ -6,7 +6,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.ConcessionRequests.Dtos;
 
-namespace ShikshaMitra.Controllers.Finance;
+namespace ShikshaMitra.HttpApi.Controllers.Finance.ConcessionRequest;
 
 /// <summary>
 /// Core lifecycle operations for concession requests:

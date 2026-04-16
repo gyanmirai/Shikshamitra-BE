@@ -1,10 +1,10 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Volo.Abp.AspNetCore.Mvc;
 using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.ConcessionRequests.Dtos;
 
-namespace ShikshaMitra.Controllers.Finance;
+namespace ShikshaMitra.HttpApi.Controllers.Finance.ConcessionRequest;
 
 /// <summary>
 /// Manages the approval lifecycle: approve, reject, admin application listing,

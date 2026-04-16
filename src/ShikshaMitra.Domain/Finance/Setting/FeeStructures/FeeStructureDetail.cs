@@ -2,31 +2,31 @@
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra.Finance.Setting.FeeStructure;
+namespace ShikshaMitra.Finance.Setting.FeeStructures;
 
 public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
 {
     public Guid? TenantId { get; private set; }
-    public Guid FeeStructureStandardId { get; private set; }
+    public Guid FeeStructureId { get; private set; }
     public Guid FeeHeadId { get; private set; }
 
-    public decimal Amount { get; private set; }
+    public double Amount { get; private set; }
     public bool IsOneTime { get; private set; }
     public bool IsOptional { get; private set; }
 
-    protected FeeStructureDetail() { }
+	protected FeeStructureDetail() { }
 
     public FeeStructureDetail(
         Guid id,
         Guid? tenantId,
-        Guid feeStructureStandardId,
+        Guid feeStructureId,
         Guid feeHeadId,
-        decimal amount,
+        double amount,
         bool isOneTime,
         bool isOptional) : base(id)
     {
         TenantId = tenantId;
-        FeeStructureStandardId = feeStructureStandardId;
+        FeeStructureId = feeStructureId;
         FeeHeadId = feeHeadId;
         Amount = amount;
         IsOneTime = isOneTime;

@@ -455,6 +455,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Approved;
 		AdmissionApprovalRemarks = null; // Clear any previous rejection remarks
+		Status = StudentLifeCycleStatusEnum.Enrolled;
 	}
 
 	/// <summary>

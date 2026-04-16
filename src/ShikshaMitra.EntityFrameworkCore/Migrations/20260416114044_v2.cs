@@ -23,19 +23,14 @@ namespace ShikshaMitra.Migrations
                 table: "FeeStructures");
 
             migrationBuilder.RenameColumn(
-                name: "ReceiptBookId",
+                name: "MediumId",
                 table: "FeeStructures",
                 newName: "StandardId");
 
             migrationBuilder.RenameColumn(
-                name: "MediumId",
-                table: "FeeStructures",
-                newName: "FeeStructureMetadataId");
-
-            migrationBuilder.RenameColumn(
                 name: "BoardId",
                 table: "FeeStructures",
-                newName: "AcademicMediumId");
+                newName: "FeeStructureMetadataId");
 
             migrationBuilder.RenameColumn(
                 name: "FeeStructureStandardId",
@@ -49,6 +44,13 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.AddColumn<Guid>(
                 name: "AcademicBoardId",
+                table: "FeeStructures",
+                type: "uuid",
+                nullable: false,
+                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+
+            migrationBuilder.AddColumn<Guid>(
+                name: "AcademicMediumId",
                 table: "FeeStructures",
                 type: "uuid",
                 nullable: false,
@@ -91,22 +93,26 @@ namespace ShikshaMitra.Migrations
                         name: "FK_FeeStructureMetadatas_AppAcademicYears_AcademicYearId",
                         column: x => x.AcademicYearId,
                         principalTable: "AppAcademicYears",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_FeeStructureMetadatas_AppEducationBoards_AcademicBoardId",
                         column: x => x.AcademicBoardId,
                         principalTable: "AppEducationBoards",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_FeeStructureMetadatas_AppEducationMediums_AcademicMediumId",
                         column: x => x.AcademicMediumId,
                         principalTable: "AppEducationMediums",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_FeeStructureMetadatas_ReceiptBooks_ReceiptBookId",
                         column: x => x.ReceiptBookId,
                         principalTable: "ReceiptBooks",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateIndex(
@@ -128,14 +134,6 @@ namespace ShikshaMitra.Migrations
                 name: "IX_FeeStructureMetadatas_ReceiptBookId",
                 table: "FeeStructureMetadatas",
                 column: "ReceiptBookId");
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_FeeStructureDetails_FeeStructures_FeeStructureId",
-                table: "FeeStructureDetails",
-                column: "FeeStructureId",
-                principalTable: "FeeStructures",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Cascade);
         }
 
         /// <inheritdoc />
@@ -152,18 +150,17 @@ namespace ShikshaMitra.Migrations
                 name: "AcademicBoardId",
                 table: "FeeStructures");
 
-            migrationBuilder.RenameColumn(
-                name: "StandardId",
-                table: "FeeStructures",
-                newName: "ReceiptBookId");
+            migrationBuilder.DropColumn(
+                name: "AcademicMediumId",
+                table: "FeeStructures");
 
             migrationBuilder.RenameColumn(
-                name: "FeeStructureMetadataId",
+                name: "StandardId",
                 table: "FeeStructures",
                 newName: "MediumId");
 
             migrationBuilder.RenameColumn(
-                name: "AcademicMediumId",
+                name: "FeeStructureMetadataId",
                 table: "FeeStructures",
                 newName: "BoardId");
 

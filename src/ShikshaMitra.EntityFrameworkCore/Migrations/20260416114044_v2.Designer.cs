@@ -14,7 +14,7 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20260416070949_v2")]
+    [Migration("20260416114044_v2")]
     partial class v2
     {
         /// <inheritdoc />
@@ -3068,6 +3068,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<Guid>("ReceiptBookId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("StandardId")
                         .HasColumnType("uuid");
@@ -11587,19 +11590,23 @@ namespace ShikshaMitra.Migrations
                 {
                     b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationBoard", "AcademicBoard")
                         .WithMany()
-                        .HasForeignKey("AcademicBoardId");
+                        .HasForeignKey("AcademicBoardId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("ShikshaMitra.TenantSettings.EducationMediums.EducationMedium", "AcademicMedium")
                         .WithMany()
-                        .HasForeignKey("AcademicMediumId");
+                        .HasForeignKey("AcademicMediumId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", "AcademicYear")
                         .WithMany()
-                        .HasForeignKey("AcademicYearId");
+                        .HasForeignKey("AcademicYearId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("ShikshaMitra.Finance.Setting.ReceiptBook", "ReceiptBook")
                         .WithMany()
-                        .HasForeignKey("ReceiptBookId");
+                        .HasForeignKey("ReceiptBookId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("AcademicBoard");
 

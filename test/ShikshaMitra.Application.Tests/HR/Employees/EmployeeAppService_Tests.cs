@@ -120,7 +120,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             RoleId = roleId
         };
 
-        await Should.ThrowAsync<UserFriendlyException>(async () =>
+        await Should.ThrowAsync<BusinessException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
         });
@@ -841,7 +841,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         await CreateTestEmployeeAsync("First", "Employee", email: email, mobileNo: "9876543217");
 
         // Act & Assert — second employee with same email should fail
-        await Should.ThrowAsync<UserFriendlyException>(async () =>
+        await Should.ThrowAsync<BusinessException>(async () =>
         {
             await CreateTestEmployeeAsync("Second", "Employee", email: email, mobileNo: "9876543218");
         });
@@ -864,7 +864,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         };
 
         // Act & Assert — app service rejects null email
-        await Should.ThrowAsync<UserFriendlyException>(async () =>
+        await Should.ThrowAsync<BusinessException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
         });
@@ -887,7 +887,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         };
 
         // Act & Assert — app service rejects whitespace mobile
-        await Should.ThrowAsync<UserFriendlyException>(async () =>
+        await Should.ThrowAsync<BusinessException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
         });

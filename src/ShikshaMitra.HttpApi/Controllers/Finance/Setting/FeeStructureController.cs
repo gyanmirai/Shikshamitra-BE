@@ -1,11 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Application.Contracts.Finance.Setting.FeeStructure;
 using ShikshaMitra.Application.Contracts.Finance.Setting.FeeStructure.Dtos;
-using ShikshaMitra.Application.Contracts.Finance.Setting.FeeCategory.Dtos; // For MessageResponse
+using ShikshaMitra.Application.Contracts.Finance.Setting.FeeCategory.Dtos;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -15,22 +12,15 @@ namespace ShikshaMitra.Controllers.Finance.Setting;
 [Area("Finance")]
 [Route("api/fee-structures")]
 [Authorize]
-public class FeeStructureController : AbpController
+public class FeeStructureController(IFeeStructureAppService feeStructureAppService) : AbpController
 {
-	private readonly IFeeStructureAppService _feeStructureAppService;
-
-	public FeeStructureController(IFeeStructureAppService feeStructureAppService)
-	{
-		_feeStructureAppService = feeStructureAppService;
-	}
-
 	/// <summary>
 	/// Create a new Fee Structure
 	/// </summary>
 	[HttpPost]
 	public Task<FeeStructureDetailsResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] FeeStructureCreateRequest input)
 	{
-		return _feeStructureAppService.CreateAsync(academicYearId, input);
+		return feeStructureAppService.CreateAsync(academicYearId, input);
 	}
 
 	/// <summary>
@@ -43,51 +33,42 @@ public class FeeStructureController : AbpController
 		[FromQuery] int pageSize = 10,
 		[FromQuery] string search = null)
 	{
-		return _feeStructureAppService.GetListAsync(academicYearId, page, pageSize, search);
-	}
-
-	/// <summary>
-	/// Get Fee Structure Details
-	/// </summary>
-	[HttpGet("{feeStructureId}")]
-	public Task<FeeStructureDetailsResponse> GetAsync(Guid feeStructureId)
-	{
-		return _feeStructureAppService.GetAsync(feeStructureId);
+		return feeStructureAppService.GetListAsync(academicYearId, page, pageSize, search);
 	}
 
 	/// <summary>
 	/// Update Fee Structure Status
 	/// </summary>
 	[HttpPatch("{feeStructureId}/status")]
-	public Task<MessageResponse> UpdateStatusAsync(Guid feeStructureId, [FromBody] FeeStructureStatusUpdateRequest input)
+	public async Task UpdateStatusAsync(Guid feeStructureId, [FromBody] FeeStructureStatusUpdateRequest input)
 	{
-		return _feeStructureAppService.UpdateStatusAsync(feeStructureId, input);
+		await feeStructureAppService.UpdateStatusAsync(feeStructureId, input);
 	}
 
 	/// <summary>
 	/// Update Fee Structure
 	/// </summary>
 	[HttpPut("{feeStructureId}")]
-	public Task<MessageResponse> UpdateAsync(Guid feeStructureId, [FromBody] FeeStructureUpdateRequest input)
+	public async Task<MessageResponse> UpdateAsync(Guid feeStructureId, [FromBody] FeeStructureUpdateRequest input)
 	{
-		return _feeStructureAppService.UpdateAsync(feeStructureId, input);
+		return await feeStructureAppService.UpdateAsync(feeStructureId, input);
 	}
 
 	/// <summary>
 	/// Save Standard Fee Structures (Bulk)
 	/// </summary>
 	[HttpPut("{feeStructureId}/standard-fee-structures")]
-	public Task<MessageResponse> SaveStandardFeeStructuresAsync(Guid feeStructureId, [FromBody] List<StandardFeeStructureSaveRequest> input)
+	public async Task SaveStandardFeeStructuresAsync(Guid feeStructureId, [FromBody] StandardFeeStructureSaveRequest input)
 	{
-		return _feeStructureAppService.SaveStandardFeeStructuresAsync(feeStructureId, input);
+		await feeStructureAppService.SaveStandardFeeStructuresAsync(feeStructureId, input);
 	}
 
 	/// <summary>
 	/// Get Fee Structure for a Particular Standard
 	/// </summary>
 	[HttpGet("standards/{standardId}")]
-	public Task<StandardFeeStructureResponse> GetStandardFeeStructureAsync(Guid standardId)
+	public async Task<StandardFeeStructureResponse> GetStandardFeeStructureAsync(Guid standardId)
 	{
-		return _feeStructureAppService.GetStandardFeeStructureAsync(standardId);
+		return await feeStructureAppService.GetStandardFeeStructureAsync(standardId);
 	}
 }

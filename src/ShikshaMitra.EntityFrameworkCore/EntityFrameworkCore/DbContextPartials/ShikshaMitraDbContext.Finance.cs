@@ -7,6 +7,7 @@ using ShikshaMitra.Finance.Setting;
 using ShikshaMitra.Finance.Setting.ConcessionType;
 using ShikshaMitra.Finance.Setting.ConcessionTypes;
 using ShikshaMitra.Finance.Setting.FeeStructure;
+using ShikshaMitra.Finance.Setting.FeeStructures;
 using ShikshaMitra.Finance.StudentFeeAssignment;
 
 namespace ShikshaMitra.EntityFrameworkCore;
@@ -19,8 +20,8 @@ public partial class ShikshaMitraDbContext
 	public DbSet<FeeHead> FeeHeads { get; set; }
 	public DbSet<ReceiptBook> ReceiptBooks { get; set; }
 	public DbSet<FeeCategory> FeeCategories { get; set; }
+	public DbSet<FeeStructureMetadata> FeeStructureMetadatas { get; set; }
 	public DbSet<FeeStructure> FeeStructures { get; set; }
-	public DbSet<FeeStructureStandard> FeeStructureStandards { get; set; }
 	public DbSet<FeeStructureDetail> FeeStructureDetails { get; set; }
 
 	// ───────────────────────────────────────────────

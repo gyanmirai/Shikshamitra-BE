@@ -1,6 +1,6 @@
+﻿using ShikshaMitra.Finance.Setting.FeeStructures;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -11,52 +11,48 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; private set; }
 
 	public Guid AcademicYearId { get; private set; }
-	public Guid BoardId { get; private set; }
-	public Guid MediumId { get; private set; }
+	public Guid AcademicBoardId { get; private set; }
+	public Guid AcademicMediumId { get; private set; }
 	public Guid ReceiptBookId { get; private set; }
+	public Guid StandardId { get; private set; }
+	public Guid FeeStructureMetadataId { get; private set; }
 
-	[Required]
 	public string Name { get; private set; }
-
-	public int Status { get; private set; } // 0: DRAFT (or similar), 1: PUBLISHED - using int as per doc
-
-	public ICollection<FeeStructureStandard> FeeStructureStandards { get; private set; }
+	public ICollection<FeeStructureDetail> FeeStructureDetails { get; private set; } = new List<FeeStructureDetail>();
 
 	protected FeeStructure()
 	{
-		FeeStructureStandards = new List<FeeStructureStandard>();
 	}
 
 	public FeeStructure(
 		Guid id,
 		Guid? tenantId,
+		Guid feeStructureMetadataId,
+		Guid standardId,
 		Guid academicYearId,
 		Guid boardId,
 		Guid mediumId,
 		Guid receiptBookId,
-		string name,
-		int status = 0) : base(id)
+		string name) : base(id)
 	{
 		TenantId = tenantId;
+		FeeStructureMetadataId = feeStructureMetadataId;
+		StandardId = standardId;
 		AcademicYearId = academicYearId;
-		BoardId = boardId;
-		MediumId = mediumId;
+		AcademicBoardId = boardId;
+		AcademicMediumId = mediumId;
 		ReceiptBookId = receiptBookId;
 		Name = name;
-		Status = status;
-		FeeStructureStandards = new List<FeeStructureStandard>();
+		FeeStructureDetails = new List<FeeStructureDetail>();
 	}
 
-	public void SetStatus(int status)
+	public void AddDetail(FeeStructureDetail detail)
 	{
-		Status = status;
+		FeeStructureDetails.Add(detail);
 	}
 
-	public void Update(string name, Guid boardId, Guid mediumId, Guid receiptBookId)
+	public void ClearDetails()
 	{
-		Name = name;
-		BoardId = boardId;
-		MediumId = mediumId;
-		ReceiptBookId = receiptBookId;
+		FeeStructureDetails.Clear();
 	}
 }

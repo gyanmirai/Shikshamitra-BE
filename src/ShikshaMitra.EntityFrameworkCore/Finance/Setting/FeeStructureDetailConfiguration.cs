@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
-using ShikshaMitra.Finance.Setting.FeeStructure;
+using ShikshaMitra.Finance.Setting.FeeStructures;
 
 namespace ShikshaMitra.Finance.Setting;
 

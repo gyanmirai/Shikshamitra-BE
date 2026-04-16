@@ -6,6 +6,7 @@ using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Academic.HomeworkAssignment;
+using ShikshaMitra.Academic.Syllabus;
 using ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
 using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 using ShikshaMitra.Academic.Timetable.Timetables;
@@ -31,6 +32,7 @@ public partial class ShikshaMitraDbContext
     // Academic — Syllabus
     // ───────────────────────────────────────────────
     public DbSet<AssignedSubjectChapter> SubjectChapters { get; set; }
+    public DbSet<ChapterProgress> ChapterProgresses { get; set; }
 
     // ───────────────────────────────────────────────
     // Academic — Homework & Assignments

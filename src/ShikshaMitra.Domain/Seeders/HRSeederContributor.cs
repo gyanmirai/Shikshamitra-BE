@@ -858,7 +858,7 @@ public class HRSeederContributor : BaseSeederContributor
 			if (role == null) continue;
 
 			// Create user first
-			var userId = await CreateUserForEmployeeAsync(emp.FirstName, emp.LastName, emp.Email, emp.Mobile);
+			var userId = await CreateUserForEmployeeAsync(emp.FirstName, emp.LastName, emp.Email, emp.Mobile, emp.RoleName);
 
 			var employee = await _employeeManager.CreateEmployeeAsync(
 				userId: userId,
@@ -1054,6 +1054,35 @@ public class HRSeederContributor : BaseSeederContributor
 							Country = new Country("India", "IN"),
 							PinCode = "400602",
 							IdentificationMark = "Dimple on right cheek"
+						},
+						new
+						{
+							FirstName = "Nilesh",
+							LastName = "Joshi",
+							MiddleName = (string?)null,
+							Email = "clerk@school.edu",
+							Mobile = "9876543231",
+							SecondaryMobile = (string?)null,
+							RoleName = "Clerk",
+							Designation = "Clerk",
+							Department = "Administration",
+							DateOfBirth = new DateOnly(1990, 11, 11),
+							DateOfJoining = new DateOnly(2021, 6, 1),
+							Gender = GenderType.Male,
+							MaritalStatus = MaritalStatusType.Unmarried,
+							FamilyCast = "Joshi",
+							CastType = CastType.General,
+							Religion = "Hindu",
+							BloodGroup = "B+",
+							Qualification = "B.A.",
+							Address1 = "O-108, Admin Arcade",
+							Address2 = "School Campus Road",
+							Address3 = (string?)null,
+							City = "Surat",
+							State = new State("Gujarat", "GJ"),
+							Country = new Country("India", "IN"),
+							PinCode = "395010",
+							IdentificationMark = "Scar on right thumb"
 						}
 					};
 
@@ -1063,7 +1092,7 @@ public class HRSeederContributor : BaseSeederContributor
 			if (role == null) continue;
 
 			// Create user first
-			var userId = await CreateUserForEmployeeAsync(emp.FirstName, emp.LastName, emp.Email, emp.Mobile);
+			var userId = await CreateUserForEmployeeAsync(emp.FirstName, emp.LastName, emp.Email, emp.Mobile, emp.RoleName);
 
 			var employee = await _employeeManager.CreateEmployeeAsync(
 				userId: userId,
@@ -1199,7 +1228,12 @@ public class HRSeederContributor : BaseSeederContributor
 					await _familyMemberRepository.InsertAsync(spouse, autoSave: true);
 				}
 
-				private async Task<Guid> CreateUserForEmployeeAsync(string firstName, string lastName, string email, string mobileNo)
+				private async Task<Guid> CreateUserForEmployeeAsync(
+		string firstName,
+		string lastName,
+		string email,
+		string mobileNo,
+		string roleName)
 	{
 		// Validate mobile number
 		if (string.IsNullOrWhiteSpace(mobileNo) || mobileNo.Length < 4)
@@ -1212,7 +1246,7 @@ public class HRSeederContributor : BaseSeederContributor
 		var existingUserByEmail = await _userRepository.FindByNormalizedEmailAsync(normalizedEmail);
 		if (existingUserByEmail != null)
 		{
-			// For seeding, we can skip if user already exists
+			await EnsureUserInRoleAsync(existingUserByEmail, roleName);
 			return existingUserByEmail.Id;
 		}
 
@@ -1254,7 +1288,34 @@ public class HRSeederContributor : BaseSeederContributor
 			throw new Exception("User was not created successfully during seeding.");
 		}
 
+		await EnsureUserInRoleAsync(createdUser, roleName);
+
 		return user.Id;
+	}
+
+	private async Task EnsureUserInRoleAsync(IdentityUser user, string roleName)
+	{
+		var normalizedRoleName = _lookupNormalizer.NormalizeName(roleName);
+		var role = await _roleRepository.FindByNormalizedNameAsync(normalizedRoleName);
+		if (role == null || string.IsNullOrWhiteSpace(role.Name))
+		{
+			return;
+		}
+
+		var isInRole = await _userManager.IsInRoleAsync(user, role.Name);
+		if (isInRole)
+		{
+			return;
+		}
+
+		var addRoleResult = await _userManager.AddToRoleAsync(user, role.Name);
+		if (!addRoleResult.Succeeded)
+		{
+			throw new Exception(
+				$"Failed to assign role '{role.Name}' to seeded user '{user.UserName}': " +
+				string.Join(", ", addRoleResult.Errors.Select(e => e.Description))
+			);
+		}
 	}
 
 	private async Task<string> GenerateUniqueUsernameAsync(string firstName, string lastName)

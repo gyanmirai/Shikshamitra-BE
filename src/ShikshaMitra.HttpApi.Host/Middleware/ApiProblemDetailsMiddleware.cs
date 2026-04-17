@@ -145,17 +145,24 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 	{
 		var (statusCode, title) = exception.Code switch
 		{
+			HRErrorCodes.LeaveEmployeeNotFound => (StatusCodes.Status403Forbidden, "Forbidden"),
 			HRErrorCodes.LeaveAlreadyCancelled or HRErrorCodes.LeaveConflictTerminalState => (StatusCodes.Status409Conflict, "Conflict"),
 			HRErrorCodes.LeaveAttachmentNotFound => (StatusCodes.Status404NotFound, "Resource not found"),
 			HRErrorCodes.LeaveFileTooLarge => (StatusCodes.Status413PayloadTooLarge, "Payload too large"),
 			_ => (StatusCodes.Status400BadRequest, "Business rule violated")
 		};
 
+		var defaultDetail = GetDefaultDetail(statusCode);
+		var normalizedDetail = ApiProblemDetailsErrorMessages.NormalizeBusinessDetail(
+			exception.Message,
+			exception.Code,
+			defaultDetail);
+
 		return CreateProblemDetails(
 			context,
 			statusCode,
 			title,
-			string.IsNullOrWhiteSpace(exception.Message) ? title : exception.Message,
+			normalizedDetail,
 			exception.Code,
 			null);
 	}

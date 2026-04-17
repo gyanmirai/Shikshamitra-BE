@@ -66,6 +66,10 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 					// Seed Student data (after Academic Setup)
 					var studentSeeder = scope.ServiceProvider.GetRequiredService<Seeders.StudentSeederContributor>();
 					await studentSeeder.SeedAsync(context);
+
+					// Seed deterministic test-login accounts (feature-flagged; DDVS only)
+					var testLoginSeeder = scope.ServiceProvider.GetRequiredService<Seeders.TestLoginSeederContributor>();
+					await testLoginSeeder.SeedAsync(context);
 				}
 			}
 		}

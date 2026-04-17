@@ -2,6 +2,8 @@
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Students;
+using Volo.Abp;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
@@ -33,5 +35,19 @@ public class StudentEnrollmentManager(
 			cancellationToken);
 
 		return $"{InquiryPrefix}{maxSequence + 1:D3}";
+	}
+
+	public async Task ValidateFormNumberUniqueAsync(
+		string formNumber,
+		Guid academicYearId,
+		CancellationToken cancellationToken = default)
+	{
+		bool exists = await studentRepository.AnyAsync(
+			s => s.AdditionalDetail.RegistrationFormNo == formNumber && s.AcademicYearId == academicYearId,
+			cancellationToken);
+		if (exists)
+		{
+			throw new BusinessException($"Student with form number: {formNumber} already exists.");
+		}
 	}
 }

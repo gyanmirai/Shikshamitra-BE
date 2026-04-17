@@ -8,8 +8,8 @@ using ShikshaMitra.Students.Attendance;
 
 namespace ShikshaMitra.HttpApi.Controllers.Student.Attendance;
 
-[RemoteService(Name = "Students")]
-[Area("students")]
+[ApiController]
+[Authorize]
 [Route("api/students/attendance")]
 public class StudentAttendanceController(IStudentAttendanceAppService attendanceAppService) : AbpControllerBase
 {

@@ -77,6 +77,8 @@ public class StandardAppService(
 			}
 		}
 
+		standards = standards.OrderBy(x => x.CreationTime).ToList();
+
 		return ObjectMapper.Map<List<Standard>, List<StandardDto>>(standards);
 	}
 }

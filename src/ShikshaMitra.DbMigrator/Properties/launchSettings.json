@@ -4,6 +4,7 @@
       "commandName": "Project",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
+        "SeedTestLogins": "true",
         "ConnectionStrings__Default": "Host=localhost;Port=5432;Database=postgres;User ID=postgres;Password=postgres;"
       }
     },
@@ -11,6 +12,7 @@
       "commandName": "Project",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Staging",
+        "SeedTestLogins": "true",
         "ConnectionStrings__Default": "Host=localhost;Port=5432;Database=postgres;User ID=postgres;Password=postgres;"
       }
     }

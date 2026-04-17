@@ -56,6 +56,7 @@ namespace ShikshaMitra;
         {
             options.MapCodeNamespace("ShikshaMitra", typeof(ShikshaMitraResource));
 			options.MapCodeNamespace("ShikshaMitra.TenantSettings", typeof(ShikshaMitraResource));
+			options.MapCodeNamespace("HR", typeof(ShikshaMitraResource));
 		});
     }
 }

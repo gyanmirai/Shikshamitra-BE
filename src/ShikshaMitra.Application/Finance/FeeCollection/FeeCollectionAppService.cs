@@ -343,7 +343,7 @@ public class FeeCollectionAppService(
         };
     }
 
-    [Authorize(ShikshaMitraSubModulePermissions.FeeDetailsRead)]
+    [Authorize(ShikshaMitraSubModulePermissions.FeeCollection)]
     public async Task<StudentFeeDetailsDto> GetStudentFeeDetailsAsync(GetStudentFeeDetailsInput input)
     {
         // ── 1. Load student (navigation props auto-included via EF config) ─
@@ -538,7 +538,7 @@ public class FeeCollectionAppService(
         throw new NotImplementedException();
     }
 
-    [Authorize(ShikshaMitraSubModulePermissions.FeeCollectionRead)]
+    [Authorize(ShikshaMitraSubModulePermissions.FeeCollection)]
     public async Task<FeeCollectionDetailsDto> GetFeeCollectionDetailsAsync(Guid studentFeeId)
     {
         // ── 1. Resolve the student fee record ─────────────────────────────

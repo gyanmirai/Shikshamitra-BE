@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -10,6 +6,10 @@ namespace ShikshaMitra.Finance.FeeCollection;
 
 public class ChargeCollectionRecord : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	private ChargeCollectionRecord() { /* For ORM */ }
+
+	public ChargeCollectionRecord(Guid id) : base(id) { }
+
 	public Guid? TenantId { get; set; }
 	public Guid StudentId { get; set; }
 	public Guid ChargeId { get; set; }

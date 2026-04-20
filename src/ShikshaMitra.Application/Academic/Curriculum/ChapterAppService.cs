@@ -36,10 +36,9 @@ public class ChapterAppService(
 
 			await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
 
-			var dto = ObjectMapper.Map<AssignedSubjectChapter, ChapterDto>(assignedSubject.Chapters.Last());
-			dto.StandardId = assignedSubject.StandardId;
-			dto.SubjectId = assignedSubject.SubjectId;
-			return dto;
+			return ObjectMapper.Map<
+				AssignedSubjectChapter,
+				ChapterDto>(assignedSubject.Chapters.Last());
 		}
 		catch (Exception ex)
 		{
@@ -56,13 +55,7 @@ public class ChapterAppService(
 				?? throw new UserFriendlyException("Assigned subject not found");
 
 			var chapters = assignedSubject.Chapters.ToList();
-			var dtos = ObjectMapper.Map<List<AssignedSubjectChapter>, List<ChapterDto>>(chapters);
-			foreach (var dto in dtos)
-			{
-				dto.StandardId = assignedSubject.StandardId;
-				dto.SubjectId = assignedSubject.SubjectId;
-			}
-			return dtos;
+			return ObjectMapper.Map<List<AssignedSubjectChapter>, List<ChapterDto>>(chapters);
 		}
 		catch (Exception ex)
 		{
@@ -88,10 +81,7 @@ public class ChapterAppService(
 			);
 			await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
 
-			var dto = ObjectMapper.Map<AssignedSubjectChapter, ChapterDto>(chapter);
-			dto.StandardId = assignedSubject.StandardId;
-			dto.SubjectId = assignedSubject.SubjectId;
-			return dto;
+			return ObjectMapper.Map<AssignedSubjectChapter, ChapterDto>(chapter);
 		}
 		catch (UserFriendlyException ex)
 		{

@@ -10,13 +10,11 @@ using ShikshaMitra.EntityFrameworkCore.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.Events;
 using ShikshaMitra.EntityFrameworkCore.HR.Calendar.Events;
 using ShikshaMitra.Security.UserScope;
-using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Students;
 using Volo.Abp.Uow;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
 using Volo.Abp.BackgroundJobs.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore.PostgreSql;
 using Volo.Abp.FeatureManagement.EntityFrameworkCore;
@@ -63,14 +61,6 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
             /* Remove "includeAllEntities: true" to create
              * default repositories only for aggregate roots */
             options.AddDefaultRepositories(includeAllEntities: true);
-
-            options.Entity<AssignedSubject>(opt =>
-            {
-                opt.DefaultWithDetailsFunc = query =>
-                    query.Include(x => x.Chapters)
-                         .ThenInclude(c => c.Documents)
-                         .Include(x => x.Documents);
-            });
 
             // Register custom repositories
             options.AddRepository<UserScopeAssignment, EfCoreUserScopeAssignmentRepository>();

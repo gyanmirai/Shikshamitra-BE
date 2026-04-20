@@ -124,7 +124,7 @@ public class WeeklyLectureSlotAppService(
                 subject.WeeklyLectures);
         }
 
-        await weeklyLectureSlotRepository.InsertAsync(slot);
+        await weeklyLectureSlotRepository.InsertAsync(slot, autoSave: true);
 
         return await GetAsync(slot.Id);
     }

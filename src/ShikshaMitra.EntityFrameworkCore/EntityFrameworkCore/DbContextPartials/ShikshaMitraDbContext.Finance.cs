@@ -2,6 +2,7 @@
 using ShikshaMitra.Finance.Charges;
 using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.Expenses;
+using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Incomes;
 using ShikshaMitra.Finance.Setting;
 using ShikshaMitra.Finance.Setting.ConcessionType;
@@ -9,6 +10,7 @@ using ShikshaMitra.Finance.Setting.ConcessionTypes;
 using ShikshaMitra.Finance.Setting.FeeStructure;
 using ShikshaMitra.Finance.Setting.FeeStructures;
 using ShikshaMitra.Finance.StudentFeeAssignment;
+using ShikshaMitra.Students.Fees;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -56,4 +58,13 @@ public partial class ShikshaMitraDbContext
 	public DbSet<Charge> Charges { get; set; }
 	public DbSet<Income> Incomes { get; set; }
 	public DbSet<Expense> Expenses { get; set; }
+
+	// ───────────────────────────────────────────────
+	// Finance — Fee Collection
+	// ───────────────────────────────────────────────
+	public DbSet<FeeRecordMetadata> FeeRecordMetadatas { get; set; }
+	public DbSet<FeeCollectionRecord> FeeCollectionRecords { get; set; }
+	public DbSet<ChargeCollectionRecord> ChargeCollectionRecords { get; set; }
+	public DbSet<PaymentMethodRecord> PaymentMethodRecords { get; set; }
+	public DbSet<StudentFeeRecord> StudentFeeRecords { get; set; }
 }

@@ -12,4 +12,5 @@ public interface IFeeCollectionAppService
 	Task<CollectFeeOutput> CollectFeeAsync(CollectFeeInput input);
 	Task<StudentFeeDetailsDto> GetStudentFeeDetailsAsync(GetStudentFeeDetailsInput input);
 	Task<ComprehensiveFeeDetailsDto> GetComprehensiveFeeDetailsAsync(GetComprehensiveFeeDetailsInput input);
+	Task<FeeCollectionDetailsDto> GetFeeCollectionDetailsAsync(Guid studentFeeId);
 }

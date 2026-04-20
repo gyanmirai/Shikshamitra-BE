@@ -43,18 +43,53 @@ public class FeeCollectionController(
 	}
 
 	/// <summary>
-	/// Retrieves a paginated list of students with their fee collection status.
+	/// Retrieves comprehensive fee collection details for a specific student fee record,
+	/// including student info, fee summary, fee heads breakdown, and charges.
 	/// </summary>
-	[HttpGet("students")]
+	/// <remarks>
+	/// Required roles: ADMIN, PRINCIPAL, ACCOUNTANT, TEACHER, PARENT<br/>
+	/// Required permission: fee.collection.read
+	/// </remarks>
+	/// <response code="200">Fee collection details retrieved successfully.</response>
+	[HttpGet("{studentFeeId:guid}")]
+	[Authorize(ShikshaMitraSubModulePermissions.FeeCollection)]
+	[ProducesResponseType(typeof(FeeCollectionDetailsDto), StatusCodes.Status200OK)]
+	public Task<FeeCollectionDetailsDto> GetFeeCollectionDetailsAsync([FromRoute] Guid studentFeeId)
+	{
+		return feeCollectionAppService.GetFeeCollectionDetailsAsync(studentFeeId);
+	}
+
+	/// <summary>
+	/// Returns a paginated list of students with their fee collection status.
+	/// </summary>
+	/// <remarks>
+	/// Required roles: ADMIN, PRINCIPAL, ACCOUNTANT, TEACHER, PARENT<br/>
+	/// Required permission: fee.collection.list<br/>
+	/// Filters by academic year, board, and medium (all required).
+	/// Supports search by student name or roll number.
+	/// Returns overdue fees highlighted for quick action.
+	/// </remarks>
+	/// <response code="200">Fee collection list retrieved successfully.</response>
+	[HttpGet]
+	[Authorize(ShikshaMitraSubModulePermissions.FeeCollection)]
+	[ProducesResponseType(typeof(StudentFeeCollectionListDto), StatusCodes.Status200OK)]
 	public Task<StudentFeeCollectionListDto> GetStudentsAsync([FromQuery] GetStudentsInput input)
 	{
 		return feeCollectionAppService.GetStudentsAsync(input);
 	}
 
 	/// <summary>
-	/// Retrieves fee collection details for a specific student in an academic year.
+	/// Returns complete fee information for a student in an academic year,
+	/// including fee heads breakdown, payment history, and applied concessions.
 	/// </summary>
+	/// <remarks>
+	/// Required roles: ADMIN, PRINCIPAL, ACCOUNTANT, TEACHER, PARENT, STUDENT<br/>
+	/// Required permission: fee.details.read
+	/// </remarks>
+	/// <response code="200">Fee details retrieved successfully.</response>
 	[HttpGet("{studentId:guid}/fee-details")]
+	[Authorize(ShikshaMitraSubModulePermissions.FeeCollection)]
+	[ProducesResponseType(typeof(StudentFeeDetailsDto), StatusCodes.Status200OK)]
 	public Task<StudentFeeDetailsDto> GetStudentFeeDetailsAsync(
 		[FromRoute] Guid studentId,
 		[FromQuery] GetStudentFeeDetailsInput input)

@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
-namespace ShikshaMitra.Application.Contracts.Finance.Setting.ExpenseCategory.Dtos;
+namespace ShikshaMitra.Application.Contracts.Finance.Setting.TransactionCategory.Dtos;
 
-public class ExpenseCategoryResponse
+public class TransactionCategoryResponse
 {
     public Guid Id { get; set; }
     public string Name { get; set; }
@@ -11,11 +11,11 @@ public class ExpenseCategoryResponse
     public List<string> Tags { get; set; } = new();
 }
 
-public class PaginatedExpenseCategoryResponse
+public class PaginatedTransactionCategoryResponse
 {
     public long TotalCount { get; set; }
     public int CurrentPage { get; set; }
     public int PageSize { get; set; }
     public int TotalPages { get; set; }
-    public List<ExpenseCategoryResponse> Items { get; set; }
+    public List<TransactionCategoryResponse> Items { get; set; }
 }

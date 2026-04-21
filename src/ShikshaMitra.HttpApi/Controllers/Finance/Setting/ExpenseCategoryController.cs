@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.Application.Contracts.Finance.Setting.ExpenseCategory;
-using ShikshaMitra.Application.Contracts.Finance.Setting.ExpenseCategory.Dtos;
+using ShikshaMitra.Application.Contracts.Finance.Setting.TransactionCategory;
+using ShikshaMitra.Application.Contracts.Finance.Setting.TransactionCategory.Dtos;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -12,21 +12,21 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Setting;
 [Route("api/expense-categories")]
 public class ExpenseCategoryController : AbpController
 {
-	private readonly IExpenseCategoryAppService _expenseCategoryAppService;
+	private readonly ITransactionCategoryAppService _expenseCategoryAppService;
 
-	public ExpenseCategoryController(IExpenseCategoryAppService expenseCategoryAppService)
+	public ExpenseCategoryController(ITransactionCategoryAppService expenseCategoryAppService)
 	{
 		_expenseCategoryAppService = expenseCategoryAppService;
 	}
 
 	[HttpPost]
-	public Task<ExpenseCategoryResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] CreateExpenseCategoryRequest input)
+	public Task<TransactionCategoryResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] CreateTransactionCategoryRequest input)
 	{
 		return _expenseCategoryAppService.CreateAsync(academicYearId, input);
 	}
 
 	[HttpGet]
-	public Task<PaginatedExpenseCategoryResponse> GetListAsync(
+	public Task<PaginatedTransactionCategoryResponse> GetListAsync(
 		[FromQuery] Guid academicYearId,
 		[FromQuery] int page = 1,
 		[FromQuery] int pageSize = 10,
@@ -36,13 +36,13 @@ public class ExpenseCategoryController : AbpController
 	}
 
 	[HttpGet("{expenseCategoryId}")]
-	public Task<ExpenseCategoryResponse> GetAsync(Guid expenseCategoryId)
+	public Task<TransactionCategoryResponse> GetAsync(Guid expenseCategoryId)
 	{
 		return _expenseCategoryAppService.GetAsync(expenseCategoryId);
 	}
 
 	[HttpPut("{expenseCategoryId}")]
-	public Task<ExpenseCategoryResponse> UpdateAsync(Guid expenseCategoryId, [FromBody] UpdateExpenseCategoryRequest input)
+	public Task<TransactionCategoryResponse> UpdateAsync(Guid expenseCategoryId, [FromBody] UpdateTransactionCategoryRequest input)
 	{
 		return _expenseCategoryAppService.UpdateAsync(expenseCategoryId, input);
 	}

@@ -37,8 +37,7 @@ public partial class ShikshaMitraDbContext
 	// Finance — Categories & Bank
 	// ───────────────────────────────────────────────
 	public DbSet<ChargeCategory> ChargeCategories { get; set; }
-	public DbSet<IncomeCategory> IncomeCategories { get; set; }
-	public DbSet<ExpenseCategory> ExpenseCategories { get; set; }
+	public DbSet<TransactionCategory> TransactionCategories { get; set; }
 	public DbSet<BankAccount> BankAccounts { get; set; }
 
 	// ───────────────────────────────────────────────

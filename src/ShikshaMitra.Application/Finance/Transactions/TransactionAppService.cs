@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -12,14 +12,14 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Finance.Incomes;
 
 [RemoteService(false)]
-public class IncomeAppService : ApplicationService, IIncomeAppService
+public class TransactionAppService : ApplicationService, IIncomeAppService
 {
 	private readonly IRepository<Income, Guid> _incomeRepository;
-	private readonly IRepository<IncomeCategory, Guid> _incomeCategoryRepository;
+	private readonly IRepository<TransactionCategory, Guid> _incomeCategoryRepository;
 
-	public IncomeAppService(
+	public TransactionAppService(
 		IRepository<Income, Guid> incomeRepository,
-		IRepository<IncomeCategory, Guid> incomeCategoryRepository)
+		IRepository<TransactionCategory, Guid> incomeCategoryRepository)
 	{
 		_incomeRepository = incomeRepository;
 		_incomeCategoryRepository = incomeCategoryRepository;
@@ -182,7 +182,7 @@ public class IncomeAppService : ApplicationService, IIncomeAppService
 	// Helpers
 	// ────────────────────────────────────────────────
 
-	private static IncomeCreateUpdateResponse BuildCreateUpdateResponse(Income income, IncomeCategory category)
+	private static IncomeCreateUpdateResponse BuildCreateUpdateResponse(Income income, TransactionCategory category)
 	{
 		return new IncomeCreateUpdateResponse
 		{

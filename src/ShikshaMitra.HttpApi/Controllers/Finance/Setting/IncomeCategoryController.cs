@@ -1,8 +1,6 @@
-using System;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.Application.Contracts.Finance.Setting.IncomeCategory;
-using ShikshaMitra.Application.Contracts.Finance.Setting.IncomeCategory.Dtos;
+﻿using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Application.Contracts.Finance.Setting.TransactionCategory;
+using ShikshaMitra.Application.Contracts.Finance.Setting.TransactionCategory.Dtos;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -13,21 +11,21 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Setting;
 [Route("api/income-categories")]
 public class IncomeCategoryController : AbpController
 {
-	private readonly IIncomeCategoryAppService _incomeCategoryAppService;
+	private readonly ITransactionCategoryAppService _incomeCategoryAppService;
 
-	public IncomeCategoryController(IIncomeCategoryAppService incomeCategoryAppService)
+	public IncomeCategoryController(ITransactionCategoryAppService incomeCategoryAppService)
 	{
 		_incomeCategoryAppService = incomeCategoryAppService;
 	}
 
 	[HttpPost]
-	public Task<IncomeCategoryResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] CreateIncomeCategoryRequest input)
+	public Task<TransactionCategoryResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] CreateTransactionCategoryRequest input)
 	{
 		return _incomeCategoryAppService.CreateAsync(academicYearId, input);
 	}
 
 	[HttpGet]
-	public Task<PaginatedIncomeCategoryResponse> GetListAsync(
+	public Task<PaginatedTransactionCategoryResponse> GetListAsync(
 		[FromQuery] Guid academicYearId,
 		[FromQuery] int page = 1,
 		[FromQuery] int pageSize = 10,
@@ -37,13 +35,13 @@ public class IncomeCategoryController : AbpController
 	}
 
 	[HttpGet("{incomeCategoryId}")]
-	public Task<IncomeCategoryResponse> GetAsync(Guid incomeCategoryId)
+	public Task<TransactionCategoryResponse> GetAsync(Guid incomeCategoryId)
 	{
 		return _incomeCategoryAppService.GetAsync(incomeCategoryId);
 	}
 
 	[HttpPut("{incomeCategoryId}")]
-	public Task<IncomeCategoryResponse> UpdateAsync(Guid incomeCategoryId, [FromBody] UpdateIncomeCategoryRequest input)
+	public Task<TransactionCategoryResponse> UpdateAsync(Guid incomeCategoryId, [FromBody] UpdateTransactionCategoryRequest input)
 	{
 		return _incomeCategoryAppService.UpdateAsync(incomeCategoryId, input);
 	}

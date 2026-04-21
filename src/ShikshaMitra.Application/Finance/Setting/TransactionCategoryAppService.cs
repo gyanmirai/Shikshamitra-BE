@@ -1,29 +1,29 @@
-﻿using System;
+﻿using ShikshaMitra.Application.Contracts.Finance.Setting.TransactionCategory.Dtos;
+using ShikshaMitra.Application.Contracts.Finance.Setting.TransactionCategory;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using ShikshaMitra.Application.Contracts.Finance.Setting.IncomeCategory;
-using ShikshaMitra.Application.Contracts.Finance.Setting.IncomeCategory.Dtos;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Finance.Setting;
 
 [RemoteService(false)]
-public class IncomeCategoryAppService : ApplicationService, IIncomeCategoryAppService
+public class TransactionCategoryAppService : ApplicationService, ITransactionCategoryAppService
 {
-    private readonly IRepository<IncomeCategory, Guid> _incomeCategoryRepository;
+    private readonly IRepository<TransactionCategory, Guid> _transactionCategoryRepository;
 
-    public IncomeCategoryAppService(IRepository<IncomeCategory, Guid> incomeCategoryRepository)
+    public TransactionCategoryAppService(IRepository<TransactionCategory, Guid> transactionCategoryRepository)
     {
-        _incomeCategoryRepository = incomeCategoryRepository;
+        _transactionCategoryRepository = transactionCategoryRepository;
     }
 
-    public async Task<IncomeCategoryResponse> CreateAsync(Guid academicYearId, CreateIncomeCategoryRequest input)
+    public async Task<TransactionCategoryResponse> CreateAsync(Guid academicYearId, CreateTransactionCategoryRequest input)
     {
         var tags = input.Tags != null && input.Tags.Any() ? string.Join(",", input.Tags) : null;
 
-        var incomeCategory = new IncomeCategory(
+        var incomeCategory = new TransactionCategory(
             GuidGenerator.Create(),
             CurrentTenant.Id,
             academicYearId,
@@ -32,14 +32,14 @@ public class IncomeCategoryAppService : ApplicationService, IIncomeCategoryAppSe
             tags
         );
 
-        await _incomeCategoryRepository.InsertAsync(incomeCategory);
+        await _transactionCategoryRepository.InsertAsync(incomeCategory);
 
         return MapToResponse(incomeCategory);
     }
 
-    public async Task<PaginatedIncomeCategoryResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
+    public async Task<PaginatedTransactionCategoryResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
     {
-        var query = await _incomeCategoryRepository.GetQueryableAsync();
+        var query = await _transactionCategoryRepository.GetQueryableAsync();
 
         query = query.Where(x => x.AcademicYearId == academicYearId);
 
@@ -59,7 +59,7 @@ public class IncomeCategoryAppService : ApplicationService, IIncomeCategoryAppSe
 
         var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
-        return new PaginatedIncomeCategoryResponse
+        return new PaginatedTransactionCategoryResponse
         {
             TotalCount = totalCount,
             CurrentPage = page,
@@ -69,33 +69,33 @@ public class IncomeCategoryAppService : ApplicationService, IIncomeCategoryAppSe
         };
     }
 
-    public async Task<IncomeCategoryResponse> GetAsync(Guid id)
+    public async Task<TransactionCategoryResponse> GetAsync(Guid id)
     {
-        var incomeCategory = await _incomeCategoryRepository.GetAsync(id);
+        var incomeCategory = await _transactionCategoryRepository.GetAsync(id);
         return MapToResponse(incomeCategory);
     }
 
-    public async Task<IncomeCategoryResponse> UpdateAsync(Guid id, UpdateIncomeCategoryRequest input)
+    public async Task<TransactionCategoryResponse> UpdateAsync(Guid id, UpdateTransactionCategoryRequest input)
     {
-        var incomeCategory = await _incomeCategoryRepository.GetAsync(id);
+        var incomeCategory = await _transactionCategoryRepository.GetAsync(id);
 
         incomeCategory.Name = input.Name;
         incomeCategory.Description = input.Description;
         incomeCategory.Tags = input.Tags != null && input.Tags.Any() ? string.Join(",", input.Tags) : null;
 
-        await _incomeCategoryRepository.UpdateAsync(incomeCategory);
+        await _transactionCategoryRepository.UpdateAsync(incomeCategory);
 
         return MapToResponse(incomeCategory);
     }
 
     public async Task DeleteAsync(Guid id)
     {
-        await _incomeCategoryRepository.DeleteAsync(id);
+        await _transactionCategoryRepository.DeleteAsync(id);
     }
 
-    private IncomeCategoryResponse MapToResponse(IncomeCategory entity)
+    private TransactionCategoryResponse MapToResponse(TransactionCategory entity)
     {
-        return new IncomeCategoryResponse
+        return new TransactionCategoryResponse
         {
             Id = entity.Id,
             Name = entity.Name,

@@ -63,6 +63,25 @@ public static partial class ShikshaMitraSubmodulePermissions
 			};
 		}
 
+		public static class AttendanceAndLeave_TakeAttendance
+		{
+			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.TakeAttendance";
+			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.TakeAttendance";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Lock = $"{SubmoduleName}.Lock";
+
+			public static readonly string[] All = { View, Add, Lock };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Lock, $"{SubmoduleDisplayName}.Lock" }
+			};
+		}
+
 		public static class AttendanceAndLeave_SettingShiftManagement
 		{
 			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.Setting.ShiftManagement";

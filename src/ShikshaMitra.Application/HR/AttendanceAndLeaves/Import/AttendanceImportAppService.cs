@@ -189,6 +189,7 @@ public class AttendanceImportAppService(
 				existing.TimeOut = row.TimeOut;
 				existing.StatusType = row.StatusType;
 				existing.EducationMediumStageId = row.EducationMediumStageId;
+				existing.Remarks = row.Remarks;
 				await employeeAttendanceRepository.UpdateAsync(existing, autoSave: false);
 				replacedCount++;
 				continue;
@@ -202,7 +203,8 @@ public class AttendanceImportAppService(
 				TimeIn = row.TimeIn,
 				TimeOut = row.TimeOut,
 				StatusType = row.StatusType,
-				EducationMediumStageId = row.EducationMediumStageId
+				EducationMediumStageId = row.EducationMediumStageId,
+				Remarks = row.Remarks
 			}, autoSave: false);
 
 			createdCount++;
@@ -643,7 +645,8 @@ public class AttendanceImportAppService(
 					AttendanceDate = x.AttendanceDateValue!.Value,
 					TimeIn = x.TimeInValue,
 					TimeOut = x.TimeOutValue,
-					StatusType = x.StatusValue
+					StatusType = x.StatusValue,
+					Remarks = TruncateForStorage(x.Remarks, RowRemarksMaxLength)
 				}).ToList()
 			},
 			new DistributedCacheEntryOptions

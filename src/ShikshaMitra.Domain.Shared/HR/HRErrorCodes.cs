@@ -99,6 +99,11 @@ public const string LeaveTypeCreateMethodNotSupported = "HR:Leave:020031";
 	public const string AttendanceInvalidDateFormat = "HR:Attendance:020301";
 	public const string AttendanceEndDateBeforeStartDate = "HR:Attendance:020302";
 	public const string AttendanceDateRangeTooLarge = "HR:Attendance:020303";
+	public const string TakeAttendanceDayLocked = "HR:Attendance:020304";
+	public const string TakeAttendanceFutureDateNotAllowed = "HR:Attendance:020305";
+	public const string TakeAttendanceMediumStageOutOfScope = "HR:Attendance:020306";
+	public const string TakeAttendanceEmptyEntries = "HR:Attendance:020307";
+	public const string TakeAttendanceInvalidStatusWire = "HR:Attendance:020308";
 
 	// Leave — File validation
 	public const string LeaveFileTooLarge = "HR:Leave:020101";

@@ -22,6 +22,7 @@ public partial class ShikshaMitraDbContext
     public DbSet<ElectiveGroup> ElectiveGroups { get; set; }
     public DbSet<AssignedSubject> StandardSubjectAssignments { get; set; }
     public DbSet<TeacherSubjectAllocation> TeacherSubjectAllocations { get; set; }
+    public DbSet<StudentElectiveSelection> StudentElectiveSelections { get; set; }
 
     // ───────────────────────────────────────────────
     // Academic — Class Teacher

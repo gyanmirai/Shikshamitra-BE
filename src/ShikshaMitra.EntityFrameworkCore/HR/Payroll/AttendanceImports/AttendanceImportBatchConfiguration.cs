@@ -55,6 +55,25 @@ public class AttendanceImportBatchConfiguration : IEntityTypeConfiguration<Atten
 					: JsonSerializer.Deserialize<List<string>>(v, JsonSerializerOptions.Default) ?? new List<string>())
 			.HasColumnType("jsonb");
 
+		builder.Property(x => x.RunSource)
+			.IsRequired()
+			.HasConversion<int>();
+
+		builder.Property(x => x.ExternalCorrelationId)
+			.HasMaxLength(128);
+
+		builder.Property(x => x.IntegrationProvider)
+			.HasMaxLength(128);
+
+		builder.Property(x => x.IsBatchLocked)
+			.IsRequired();
+
+		builder.HasIndex(x => x.ExternalCorrelationId)
+			.HasDatabaseName("IX_HR_AttendanceImportBatches_ExternalCorrelationId");
+
+		builder.HasIndex(x => x.RunSource)
+			.HasDatabaseName("IX_HR_AttendanceImportBatches_RunSource");
+
 		builder.HasIndex(x => x.TenantId).HasDatabaseName("IX_HR_AttendanceImportBatches_TenantId");
 		builder.HasIndex(x => x.ImportedAt).HasDatabaseName("IX_HR_AttendanceImportBatches_ImportedAt");
 		builder.HasIndex(x => x.PayrollMonthYear).HasDatabaseName("IX_HR_AttendanceImportBatches_PayrollMonthYear");

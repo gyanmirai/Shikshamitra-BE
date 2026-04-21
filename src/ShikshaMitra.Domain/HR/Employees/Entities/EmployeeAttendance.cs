@@ -27,6 +27,11 @@ public class EmployeeAttendance : FullAuditedEntity<Guid>, IMultiTenant, IUserSc
 	// This ensures EF Core can apply scope filters without relying on navigation properties
 	public Guid? EducationMediumStageId { get; set; }
 
+	/// <summary>
+	/// Optional remarks from manual entry or confirmed import rows.
+	/// </summary>
+	public string? Remarks { get; set; }
+
 	public double? TotalHoursWorked
 	{
 		get

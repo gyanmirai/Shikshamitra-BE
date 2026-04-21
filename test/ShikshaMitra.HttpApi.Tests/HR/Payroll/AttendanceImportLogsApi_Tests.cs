@@ -21,8 +21,22 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 {
 	private const string AttendanceImportUrl = "/api/attendance-import";
 	private const string PayrollImportLogsUrl = "/api/payroll/attendance-imports";
+	private const string HrAutomatedRunsUrl = "/api/hr/attendance/automated-runs";
 
 	public AttendanceImportLogsApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Get_Hr_Mirror_Automated_Runs_List()
+	{
+		var response = await Client.GetAsync($"{HrAutomatedRunsUrl}?skipCount=0&maxResultCount=20");
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Forbidden);
+		if (response.StatusCode == HttpStatusCode.OK)
+		{
+			var body = await response.Content.ReadFromJsonAsync<PagedResultDto<AttendanceImportLogListItemDto>>(JsonOptions);
+			body.ShouldNotBeNull();
+		}
+	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]

@@ -20,4 +20,5 @@ public class AttendanceImportPreviewCacheRow
 	public DateTimeOffset? TimeIn { get; set; }
 	public DateTimeOffset? TimeOut { get; set; }
 	public EmployeeAttendanceStatusType StatusType { get; set; }
+	public string? Remarks { get; set; }
 }

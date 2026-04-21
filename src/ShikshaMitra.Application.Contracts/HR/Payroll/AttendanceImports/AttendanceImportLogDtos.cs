@@ -32,6 +32,13 @@ public class AttendanceImportLogListItemDto
 	public int CreatedCount { get; set; }
 	public int ReplacedCount { get; set; }
 	public bool CanOpen { get; set; }
+
+	/// <summary>file_upload, integration, or internal</summary>
+	public string RunSource { get; set; } = "file_upload";
+
+	public string? ExternalCorrelationId { get; set; }
+	public string? IntegrationProvider { get; set; }
+	public bool IsBatchLocked { get; set; }
 }
 
 public class AttendanceImportLogDetailDto : AttendanceImportLogListItemDto

@@ -29,6 +29,21 @@ public class AttendanceImportBatch : FullAuditedAggregateRoot<Guid>, IMultiTenan
 	public List<string> ErrorsSummary { get; private set; } = [];
 	public List<string> WarningsSummary { get; private set; } = [];
 
+	/// <summary>How this batch was produced (file vs integration job vs internal DB load).</summary>
+	public AttendanceImportRunSource RunSource { get; private set; }
+
+	/// <summary>Optional id from an external system or job run for correlation.</summary>
+	public string? ExternalCorrelationId { get; private set; }
+
+	/// <summary>Optional provider or integration name.</summary>
+	public string? IntegrationProvider { get; private set; }
+
+	public DateTime? RunStartedAt { get; private set; }
+	public DateTime? RunFinishedAt { get; private set; }
+
+	/// <summary>When true, this batch should not be edited or reprocessed (separate from payroll finalization).</summary>
+	public bool IsBatchLocked { get; private set; }
+
 	private AttendanceImportBatch() { }
 
 	public AttendanceImportBatch(
@@ -46,7 +61,13 @@ public class AttendanceImportBatch : FullAuditedAggregateRoot<Guid>, IMultiTenan
 		int createCount,
 		int replaceCount,
 		List<string> errorsSummary,
-		List<string> warningsSummary) : base(id)
+		List<string> warningsSummary,
+		AttendanceImportRunSource runSource = AttendanceImportRunSource.FileUpload,
+		string? externalCorrelationId = null,
+		string? integrationProvider = null,
+		DateTime? runStartedAt = null,
+		DateTime? runFinishedAt = null,
+		bool isBatchLocked = false) : base(id)
 	{
 		TenantId = tenantId;
 		FileName = fileName;
@@ -63,6 +84,12 @@ public class AttendanceImportBatch : FullAuditedAggregateRoot<Guid>, IMultiTenan
 		ReplaceCount = replaceCount;
 		ErrorsSummary = errorsSummary;
 		WarningsSummary = warningsSummary;
+		RunSource = runSource;
+		ExternalCorrelationId = externalCorrelationId;
+		IntegrationProvider = integrationProvider;
+		RunStartedAt = runStartedAt;
+		RunFinishedAt = runFinishedAt;
+		IsBatchLocked = isBatchLocked;
 	}
 
 	public void SetPreviewToken(string previewToken, DateTime previewTokenExpiresAt)
@@ -84,5 +111,16 @@ public class AttendanceImportBatch : FullAuditedAggregateRoot<Guid>, IMultiTenan
 		ConfirmedAt = confirmedAt;
 		PreviewToken = null;
 		PreviewTokenExpiresAt = null;
+	}
+
+	public void SetBatchLocked(bool locked)
+	{
+		IsBatchLocked = locked;
+	}
+
+	public void SetRunTiming(DateTime? startedAt, DateTime? finishedAt)
+	{
+		RunStartedAt = startedAt;
+		RunFinishedAt = finishedAt;
 	}
 }

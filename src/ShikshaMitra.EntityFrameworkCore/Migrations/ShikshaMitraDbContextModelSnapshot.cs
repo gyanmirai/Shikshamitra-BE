@@ -4561,6 +4561,67 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppEmployeeLeaveTypes", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.StaffAttendanceDayLock", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid>("EducationMediumStageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<DateOnly>("LockDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("LockedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LockedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EducationMediumStageId")
+                        .HasDatabaseName("IX_StaffAttendanceDayLocks_EducationMediumStageId");
+
+                    b.HasIndex("TenantId", "EducationMediumStageId", "LockDate")
+                        .IsUnique()
+                        .HasDatabaseName("IX_StaffAttendanceDayLocks_Tenant_Stage_Date");
+
+                    b.ToTable("AppStaffAttendanceDayLocks", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.Calendar.EventTypes.EventType", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5253,6 +5314,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
                     b.Property<string>("StatusType")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -5606,6 +5671,10 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
+                    b.Property<string>("ExternalCorrelationId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -5627,8 +5696,15 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("ImportedByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("IntegrationProvider")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<int>("InvalidRows")
                         .HasColumnType("integer");
+
+                    b.Property<bool>("IsBatchLocked")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -5668,6 +5744,15 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("ReplacedCount")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("RunFinishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RunSource")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("RunStartedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -5687,11 +5772,17 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ExternalCorrelationId")
+                        .HasDatabaseName("IX_HR_AttendanceImportBatches_ExternalCorrelationId");
+
                     b.HasIndex("ImportedAt")
                         .HasDatabaseName("IX_HR_AttendanceImportBatches_ImportedAt");
 
                     b.HasIndex("PayrollMonthYear")
                         .HasDatabaseName("IX_HR_AttendanceImportBatches_PayrollMonthYear");
+
+                    b.HasIndex("RunSource")
+                        .HasDatabaseName("IX_HR_AttendanceImportBatches_RunSource");
 
                     b.HasIndex("Status")
                         .HasDatabaseName("IX_HR_AttendanceImportBatches_Status");

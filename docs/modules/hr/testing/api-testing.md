@@ -33,7 +33,7 @@ API-level tests for the HR module endpoints. These validate the full HTTP pipeli
 | EmployeeSalaryStructureController | `EmployeeSalaryStructureApi_Tests` | GET, PUT with components | Critical |
 | RunPayrollController | `RunPayrollApi_Tests` | GET preview, POST lock, invalid format | Critical, Important, Extended |
 | SalarySlipController | `SalarySlipApi_Tests` | GET slip, missing params, invalid format | Important |
-| AttendanceImportLogsController | `AttendanceImportLogsApi_Tests` | GET list, GET detail+rows, reject multi-month preview file | Critical, Important |
+| AttendanceImportLogsController / HrAutomatedAttendanceRunsController | `AttendanceImportLogsApi_Tests` | Payroll logs + HR mirror `/api/hr/attendance/automated-runs` list; GET detail+rows, reject multi-month preview file | Critical, Important |
 
 ### HR/Calendar -- 5 controllers, ~28 tests
 

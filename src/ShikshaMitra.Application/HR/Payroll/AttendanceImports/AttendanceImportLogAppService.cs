@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -15,7 +13,6 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.HR.Payroll.AttendanceImports;
 
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.View)]
 public class AttendanceImportLogAppService(
 	IRepository<AttendanceImportBatch, Guid> attendanceImportBatchRepository,
 	IRepository<AttendanceImportRow, Guid> attendanceImportRowRepository,
@@ -155,6 +152,7 @@ public class AttendanceImportLogAppService(
 		{
 			AttendanceImportBatchStatus.Preview => "preview",
 			AttendanceImportBatchStatus.Confirmed when isPayrollLocked => "payroll_locked",
+			AttendanceImportBatchStatus.Confirmed when entity.IsBatchLocked => "batch_locked",
 			AttendanceImportBatchStatus.Confirmed => "confirmed",
 			_ => "preview"
 		};
@@ -176,9 +174,21 @@ public class AttendanceImportLogAppService(
 			ProcessedRows = entity.ProcessedRows,
 			CreatedCount = entity.CreatedCount,
 			ReplacedCount = entity.ReplacedCount,
-			CanOpen = entity.TotalRows > 0
+			CanOpen = entity.TotalRows > 0,
+			RunSource = MapRunSourceWire(entity.RunSource),
+			ExternalCorrelationId = entity.ExternalCorrelationId,
+			IntegrationProvider = entity.IntegrationProvider,
+			IsBatchLocked = entity.IsBatchLocked
 		};
 	}
+
+	private static string MapRunSourceWire(AttendanceImportRunSource source) =>
+		source switch
+		{
+			AttendanceImportRunSource.Integration => "integration",
+			AttendanceImportRunSource.Internal => "internal",
+			_ => "file_upload"
+		};
 
 	private static AttendanceImportRowDto MapToRowDto(AttendanceImportRow row)
 	{

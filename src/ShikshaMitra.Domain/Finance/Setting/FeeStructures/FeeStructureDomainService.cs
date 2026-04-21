@@ -102,7 +102,7 @@ public class FeeStructureDomainService(
     {
         var standard = await standardRepository.GetAsync(standardId);
 
-        var structures = await feeStructureRepository.GetListAsync(x => x.StandardId == standardId);
+        var structures = await feeStructureRepository.GetListAsync(x => x.StandardId == standardId, includeDetails: true);
 
         if (structures.Count == 0)
             return new StandardFeeStructureQueryResult(

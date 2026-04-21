@@ -18,5 +18,6 @@ public class FeeStructureConfiguration : IEntityTypeConfiguration<FeeStructure>
 			.WithOne()
 			.HasForeignKey(x => x.FeeStructureId)
 			.OnDelete(DeleteBehavior.Cascade);
+		builder.Navigation(x => x.FeeStructureDetails).AutoInclude();
 	}
 }

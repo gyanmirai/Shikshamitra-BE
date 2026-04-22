@@ -1100,6 +1100,11 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("StandardId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<Guid>("SubjectId")
                         .HasColumnType("uuid");
 
@@ -1114,6 +1119,9 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<decimal>("TotalMarks")
+                        .HasColumnType("decimal(10,2)");
 
                     b.HasKey("Id");
 
@@ -1300,6 +1308,11 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<Guid>("StandardId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
 
                     b.Property<Guid>("SubjectId")
                         .HasColumnType("uuid");

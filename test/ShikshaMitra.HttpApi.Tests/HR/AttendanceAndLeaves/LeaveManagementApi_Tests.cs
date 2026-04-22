@@ -55,6 +55,10 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		json.TryGetProperty("totalCount", out _).ShouldBeTrue("Response must include 'totalCount'");
 		json.TryGetProperty("items", out var items).ShouldBeTrue("Response must include 'items'");
 		items.ValueKind.ShouldBe(JsonValueKind.Array);
+		if (items.GetArrayLength() > 0)
+		{
+			items[0].TryGetProperty("publicId", out _).ShouldBeTrue("List items must include 'publicId'");
+		}
 	}
 
 	#endregion
@@ -128,6 +132,43 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 			$"{BaseUrl}?academicYearId={AcademicYearId}&month-year={monthYear}&page=1&pageSize=5");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Get_Leave_Balances()
+	{
+		var response = await Client.GetAsync($"{BaseUrl}/balances?academicYearId={AcademicYearId}");
+
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Forbidden, HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Get_Leave_Calendar()
+	{
+		var start = Uri.EscapeDataString(new DateTime(DateTime.UtcNow.Year, 6, 1).ToString("O"));
+		var end = Uri.EscapeDataString(new DateTime(DateTime.UtcNow.Year, 6, 15).ToString("O"));
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/calendar?academicYearId={AcademicYearId}&rangeStart={start}&rangeEnd={end}&page=1&pageSize=10");
+
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Forbidden, HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Get_Leave_Export_Excel()
+	{
+		var monthYear = Uri.EscapeDataString(new DateTime(DateTime.UtcNow.Year, 6, 1).ToString("O"));
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/export?academicYearId={AcademicYearId}&month-year={monthYear}");
+
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Forbidden, HttpStatusCode.InternalServerError);
+		if (response.StatusCode == HttpStatusCode.OK)
+		{
+			response.Content.Headers.ContentType!.MediaType.ShouldBe(
+				"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+		}
 	}
 
 	private async Task<(DateTime StartDate, DateTime EndDate)> GetAcademicYearDateRangeAsync(Guid academicYearId)

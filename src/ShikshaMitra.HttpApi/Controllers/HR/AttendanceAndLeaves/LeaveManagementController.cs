@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.HR;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
 using ShikshaMitra.HttpApi.Models;
 using System;
@@ -17,6 +19,9 @@ namespace ShikshaMitra.Controllers.HR.AttendanceAndLeaves;
 [Authorize]
 public class LeaveManagementController : AbpControllerBase
 {
+	private const string ExcelContentType =
+		"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
 	private readonly ILeaveManagementAppService _leaveManagementAppService;
 
 	public LeaveManagementController(ILeaveManagementAppService leaveManagementAppService)
@@ -34,29 +39,122 @@ public class LeaveManagementController : AbpControllerBase
 		[FromQuery(Name = "month-year"), Required] DateTime monthYear,
 		[FromQuery] string? search = null,
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
-		[FromQuery, Range(10, 100)] int pageSize = 10)
+		[FromQuery, Range(10, 100)] int pageSize = 10,
+		[FromQuery] string? status = null,
+		[FromQuery] Guid? leavePolicyId = null,
+		[FromQuery] Guid? leaveTypeMasterId = null)
 	{
-		var result = await _leaveManagementAppService.GetListAsync(academicYearId, monthYear, search, page, pageSize);
+		var input = new LeaveManagementGetListInput
+		{
+			AcademicYearId = academicYearId,
+			MonthYearAnchor = monthYear,
+			Search = search,
+			Page = page,
+			PageSize = pageSize,
+			Status = ParseStatus(status),
+			LeavePolicyId = leavePolicyId,
+			LeaveTypeMasterId = leaveTypeMasterId
+		};
+		var result = await _leaveManagementAppService.GetListAsync(input);
 		return LeaveManagementContractMapper.ToListResponse(result, page, pageSize);
 	}
 
 	/// <summary>
-	/// Create leave request (multipart form: leaveTypeId, startDate, endDate, reason, optional attachment file).
+	/// Per-policy leave balances for an employee (defaults to the signed-in user's employee).
+	/// </summary>
+	[HttpGet("balances")]
+	[ProducesResponseType(typeof(LeaveBalanceListDto), StatusCodes.Status200OK)]
+	public virtual async Task<LeaveBalanceListDto> GetBalancesAsync(
+		[FromQuery, Required] Guid academicYearId,
+		[FromQuery] Guid? employeeId = null)
+	{
+		return await _leaveManagementAppService.GetBalancesAsync(academicYearId, employeeId);
+	}
+
+	/// <summary>
+	/// Leave requests overlapping a date range (calendar view).
+	/// </summary>
+	[HttpGet("calendar")]
+	[ProducesResponseType(typeof(LeaveManagementCalendarResultDto), StatusCodes.Status200OK)]
+	public virtual async Task<LeaveManagementCalendarResultDto> GetCalendarAsync(
+		[FromQuery, Required] Guid academicYearId,
+		[FromQuery, Required] DateTime rangeStart,
+		[FromQuery, Required] DateTime rangeEnd,
+		[FromQuery] string? search = null,
+		[FromQuery, Range(1, int.MaxValue)] int page = 1,
+		[FromQuery, Range(1, 500)] int pageSize = 100,
+		[FromQuery] string? status = null,
+		[FromQuery] Guid? leavePolicyId = null,
+		[FromQuery] Guid? leaveTypeMasterId = null)
+	{
+		var input = new LeaveManagementCalendarInput
+		{
+			AcademicYearId = academicYearId,
+			RangeStart = rangeStart,
+			RangeEnd = rangeEnd,
+			Search = search,
+			Page = page,
+			PageSize = pageSize,
+			Status = ParseStatus(status),
+			LeavePolicyId = leavePolicyId,
+			LeaveTypeMasterId = leaveTypeMasterId
+		};
+		return await _leaveManagementAppService.GetCalendarAsync(input);
+	}
+
+	/// <summary>
+	/// Export leave requests for the same month filters as GET list (Excel).
+	/// </summary>
+	[HttpGet("export")]
+	public virtual async Task<FileContentResult> ExportAsync(
+		[FromQuery, Required] Guid academicYearId,
+		[FromQuery(Name = "month-year"), Required] DateTime monthYear,
+		[FromQuery] string? search = null,
+		[FromQuery] string? status = null,
+		[FromQuery] Guid? leavePolicyId = null,
+		[FromQuery] Guid? leaveTypeMasterId = null)
+	{
+		var input = new LeaveManagementGetListInput
+		{
+			AcademicYearId = academicYearId,
+			MonthYearAnchor = monthYear,
+			Search = search,
+			Page = 1,
+			PageSize = 1000,
+			Status = ParseStatus(status),
+			LeavePolicyId = leavePolicyId,
+			LeaveTypeMasterId = leaveTypeMasterId
+		};
+		var bytes = await _leaveManagementAppService.ExportToExcelAsync(input);
+		return new FileContentResult(bytes, ExcelContentType) { FileDownloadName = "leave-requests.xlsx" };
+	}
+
+	/// <summary>
+	/// Create leave request (multipart: leavePolicyId or leaveTypeId as policy id, dates, reason, optional employeeId for on-behalf, optional attachment).
 	/// </summary>
 	[HttpPost]
 	[Consumes("multipart/form-data")]
 	[ProducesResponseType(typeof(LeaveRequestCreatedResponse), StatusCodes.Status201Created)]
 	public virtual async Task<ActionResult<LeaveRequestCreatedResponse>> CreateAsync(
 		[FromQuery, Required] Guid academicYearId,
-		[FromForm, Required] Guid leaveTypeId,
+		[FromForm] Guid? leavePolicyId,
+		[FromForm] Guid? leaveTypeId,
+		[FromForm] Guid? employeeId,
 		[FromForm, Required] DateTime startDate,
 		[FromForm, Required] DateTime endDate,
 		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
 		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
 	{
+		if (!leavePolicyId.HasValue && (!leaveTypeId.HasValue || leaveTypeId.Value == Guid.Empty))
+		{
+			throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
+		}
+
 		var createDto = new LeaveRequestCreateDto
 		{
-			LeaveTypeId = leaveTypeId,
+			LeavePolicyId = leavePolicyId,
+			LeaveTypeId = leaveTypeId ?? Guid.Empty,
+			ForEmployeeId = employeeId,
 			StartDate = startDate,
 			EndDate = endDate,
 			Reason = reason
@@ -136,5 +234,17 @@ public class LeaveManagementController : AbpControllerBase
 	{
 		var deleted = await _leaveManagementAppService.DeleteAsync(id);
 		return LeaveManagementContractMapper.ToDeleteResponse(deleted);
+	}
+
+	private static EmployeeLeaveStatusType? ParseStatus(string? status)
+	{
+		if (string.IsNullOrWhiteSpace(status))
+		{
+			return null;
+		}
+
+		return Enum.TryParse<EmployeeLeaveStatusType>(status.Trim(), true, out var parsed)
+			? parsed
+			: throw new BusinessException(HRErrorCodes.LeaveInvalidStatus);
 	}
 }

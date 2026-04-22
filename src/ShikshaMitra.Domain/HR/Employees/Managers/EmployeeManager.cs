@@ -109,6 +109,25 @@ public class EmployeeManager(
 			role.Name
 		);
 
+		var roleName = role.Name ?? throw new BusinessException(HRErrorCodes.RoleNameMissing);
+		var isAlreadyInRole = await userManager.IsInRoleAsync(user, roleName);
+		if (!isAlreadyInRole)
+		{
+			var addRoleResult = await userManager.AddToRoleAsync(user, roleName);
+			if (!addRoleResult.Succeeded)
+			{
+				var errors = string.Join(", ", addRoleResult.Errors.Select(e => e.Description));
+				logger.LogError(
+					"[EmployeeManager] Failed to assign role '{RoleName}' to user {UserId}. Errors: {Errors}",
+					roleName,
+					userId,
+					errors
+				);
+				throw new BusinessException(HRErrorCodes.RoleAssignmentFailed)
+					.WithData("details", errors);
+			}
+		}
+
 		// Generate employee code
 		var employeeCode = await employeeCodeGenerator.GenerateAsync(
 			dateOfJoining ?? DateOnly.FromDateTime(DateTime.Now),

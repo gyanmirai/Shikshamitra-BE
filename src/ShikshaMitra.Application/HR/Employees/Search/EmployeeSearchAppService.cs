@@ -18,6 +18,7 @@ public class EmployeeSearchAppService(
 	public async Task<EmployeeListResponse> GetFilteredListAsync(GetEmployeeListInput input)
 	{
 		var queryable = await employeeRepository.GetQueryableAsync();
+		queryable = await ApplyVisibilityScopeAsync(queryable);
 
 		if (!string.IsNullOrEmpty(input.Status))
 		{
@@ -67,6 +68,43 @@ public class EmployeeSearchAppService(
 			TotalPages = totalPages,
 			Items = items
 		};
+	}
+
+	private async Task<IQueryable<Employee>> ApplyVisibilityScopeAsync(IQueryable<Employee> queryable)
+	{
+		if (IsPrivilegedUser())
+		{
+			return queryable;
+		}
+
+		var currentUserId = CurrentUser.Id;
+		if (!currentUserId.HasValue)
+		{
+			return queryable.Where(_ => false);
+		}
+
+		var actorEmployee = await employeeRepository.GetEmployeeByUserIdAsync(currentUserId.Value);
+		if (actorEmployee == null)
+		{
+			return queryable.Where(_ => false);
+		}
+
+		var reportees = await employeeRepository.GetEmployeesByManagerAsync(actorEmployee.Id);
+		if (reportees.Count == 0)
+		{
+			return queryable.Where(e => e.Id == actorEmployee.Id);
+		}
+
+		var reporteeIds = reportees.Select(e => e.Id).ToList();
+		return queryable.Where(e => reporteeIds.Contains(e.Id));
+	}
+
+	private bool IsPrivilegedUser()
+	{
+		return CurrentUser.IsInRole("admin")
+			|| CurrentUser.IsInRole("Administrator")
+			|| CurrentUser.IsInRole("HR Admin")
+			|| CurrentUser.IsInRole("HR Manager");
 	}
 
 	private static IQueryable<Employee> ApplySearchFilter(IQueryable<Employee> queryable, string? search)

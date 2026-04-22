@@ -17,6 +17,8 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 {
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
 	private readonly IIdentityRoleRepository _roleRepository;
+	private readonly IIdentityUserRepository _userRepository;
+	private readonly IdentityUserManager _userManager;
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
 	private readonly ICurrentTenant _currentTenant;
 	private readonly IGuidGenerator _guidGenerator;
@@ -25,6 +27,8 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 	{
 		_personalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
+		_userRepository = GetRequiredService<IIdentityUserRepository>();
+		_userManager = GetRequiredService<IdentityUserManager>();
 		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
@@ -73,6 +77,21 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			await _personalInfoAppService.CreateWithProfilePictureAsync(
 				input, "avatar.bmp", pngBytes);
 		});
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Assign_Identity_User_To_Selected_Role()
+	{
+		var input = await BuildCreateDtoAsync($"role.assign.{Guid.NewGuid():N}@test.com");
+
+		var result = await _personalInfoAppService.CreateAsync(input);
+
+		var user = await _userRepository.GetAsync(result.Id);
+		var role = await _roleRepository.GetAsync(input.RoleId);
+
+		(role.Name is not null).ShouldBeTrue();
+		var inRole = await _userManager.IsInRoleAsync(user, role.Name!);
+		inRole.ShouldBeTrue();
 	}
 
 	#region Helpers

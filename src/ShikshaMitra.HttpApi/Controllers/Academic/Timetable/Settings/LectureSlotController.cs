@@ -16,7 +16,6 @@ public class LectureSlotController(
 ) : ShikshaMitraController
 {
     [HttpGet]
-    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.View)]
     public async Task<PagedResultDto<LectureSlotListDto>> GetByMediumAsync(
         [FromQuery] GetLectureSlotsByMediumInput input)
     {
@@ -24,21 +23,18 @@ public class LectureSlotController(
     }
 
     [HttpGet("{id}")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.View)]
     public async Task<LectureSlotDto> GetAsync([FromRoute] Guid id)
     {
         return await lectureSlotAppService.GetAsync(id);
     }
 
     [HttpPost]
-    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.Add)]
     public async Task<LectureSlotDto> CreateAsync([FromBody] CreateLectureSlotDto input)
     {
         return await lectureSlotAppService.CreateAsync(input);
     }
 
     [HttpPut("{id}")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.Add)]
     public async Task<LectureSlotDto> UpdateAsync(
         [FromRoute] Guid id,
         [FromBody] UpdateLectureSlotDto input)
@@ -47,7 +43,6 @@ public class LectureSlotController(
     }
 
     [HttpPost("{id}/assign")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.Add)]
     public async Task<IActionResult> AssignAsync(
         [FromRoute] Guid id,
         [FromBody] AssignLectureSlotDto input)

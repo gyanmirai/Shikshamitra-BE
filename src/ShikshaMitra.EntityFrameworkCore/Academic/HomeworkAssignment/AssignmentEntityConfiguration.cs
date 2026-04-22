@@ -29,7 +29,8 @@ public class AssignmentEntityConfiguration : IEntityTypeConfiguration<Assignment
 		builder.Property(x => x.Description).IsRequired();
 		builder.Property(x => x.AssignmentTypeId).IsRequired();
 		builder.Property(x => x.SubmissionType).IsRequired();
-		builder.Property(x => x.ChapterIdsJson).IsRequired(false);
+		builder.Property(x => x.TotalMarks).IsRequired().HasColumnType("decimal(10,2)");
+		builder.Property(x => x.Status).IsRequired().HasDefaultValue(AssignmentStatus.Draft);
 		builder.Property(x => x.AttachmentsJson).IsRequired(false);
 
 		// Indexes for performance

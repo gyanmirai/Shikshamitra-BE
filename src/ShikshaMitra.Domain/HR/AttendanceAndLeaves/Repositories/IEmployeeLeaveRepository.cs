@@ -6,6 +6,12 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
+public record LeaveManagementListFilters(
+	Guid AcademicYearId,
+	EmployeeLeaveStatusType? Status,
+	Guid? LeavePolicyId,
+	Guid? LeaveTypeMasterId);
+
 public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 {
     /// <summary>
@@ -26,11 +32,24 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
         int year);
 
 	/// <summary>
-	/// Paged leave ids for management list: start date in [rangeStart, rangeEnd] (date inclusive) and optional text search.
+	/// Paged leave ids for management list: start date in [rangeStart, rangeEnd] (date inclusive), policy academic year, optional filters.
 	/// </summary>
 	Task<(int TotalCount, List<Guid> PageIds)> GetPagedIdsForManagementListAsync(
 		DateTime rangeStart,
 		DateTime rangeEnd,
+		LeaveManagementListFilters filters,
+		string? search,
+		int skip,
+		int take,
+		CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Paged leave ids overlapping [rangeStart, rangeEnd] for calendar views.
+	/// </summary>
+	Task<(int TotalCount, List<Guid> PageIds)> GetPagedIdsForCalendarAsync(
+		DateTime rangeStart,
+		DateTime rangeEnd,
+		LeaveManagementListFilters filters,
 		string? search,
 		int skip,
 		int take,

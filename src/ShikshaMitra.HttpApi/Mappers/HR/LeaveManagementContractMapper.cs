@@ -10,6 +10,7 @@ public static class LeaveManagementContractMapper
 		return new LeaveManagementItemResponse
 		{
 			Id = dto.Id,
+			PublicId = dto.PublicId,
 			Name = dto.Name,
 			EmployeeIdentifier = dto.EmployeeIdentifier,
 			LeaveType = dto.LeaveType,
@@ -41,12 +42,14 @@ public static class LeaveManagementContractMapper
 		return new LeaveRequestDetailsResponse
 		{
 			Id = dto.Id,
+			PublicId = dto.PublicId,
 			MediumStageId = dto.MediumStageId,
 			MediumStageName = dto.MediumStageName,
 			EmployeeId = dto.EmployeeId,
 			EmployeeName = dto.EmployeeName,
 			EmployeeCode = dto.EmployeeCode,
-			LeaveTypeId = dto.LeaveTypeId,
+			LeavePolicyId = dto.LeavePolicyId,
+			LeaveTypeId = dto.LeavePolicyId,
 			LeaveType = dto.LeaveType,
 			StartDate = dto.StartDate,
 			EndDate = dto.EndDate,
@@ -63,6 +66,7 @@ public static class LeaveManagementContractMapper
 		return new LeaveRequestCreatedResponse
 		{
 			Id = dto.Id,
+			PublicId = dto.PublicId,
 			Status = dto.Status
 		};
 	}

@@ -52,7 +52,7 @@ API-level tests for the HR module endpoints. These validate the full HTTP pipeli
 | LeaveTypesController | `LeaveTypeApi_Tests` | `/api/hr-leave-types` create + get-by-id, list search with `academicYearId` | Critical, Important |
 | LeavePoliciesController | `LeavePolicyApi_Tests` | `/api/leave-policies` create + get-by-id, list search with `academicYearId` | Critical, Important |
 | AttendanceConfigurationController | `AttendanceConfigurationApi_Tests` | `/api/attendance/configuration` upsert success, overtime validation failure | Critical, Important |
-| LeaveManagementController | `LeaveManagementApi_Tests` | GET list (academicYearId + month-year), GET by Guid404, delete404, invalid page/pageSize 400 | Critical, Important |
+| LeaveManagementController | `LeaveManagementApi_Tests` | GET list (academicYearId + month-year, `publicId` on items), balances, calendar, Excel export, GET by Guid404, delete404, invalid page/pageSize 400 | Critical, Important |
 | AttendanceTrackingController | `AttendanceTrackingApi_Tests` | Date-wise, employee-wise | Critical, Important |
 | AutomatedNotificationsController | `AutomatedNotificationsApi_Tests` | CRUD | Critical, Important |
 | NotificationInfoController | `NotificationInfoApi_Tests` | GET list, GET by ID | Important |

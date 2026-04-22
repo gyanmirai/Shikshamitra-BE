@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.HR;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
 using Shouldly;
 using Volo.Abp;
@@ -21,6 +22,23 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 	{
 		_leaveManagement = GetRequiredService<ILeaveManagementAppService>();
 		SeedAcademicYearForListTests();
+	}
+
+	private static LeaveManagementGetListInput BuildListInput(
+		Guid academicYearId,
+		DateTime monthYearAnchor,
+		string? search,
+		int page,
+		int pageSize)
+	{
+		return new LeaveManagementGetListInput
+		{
+			AcademicYearId = academicYearId,
+			MonthYearAnchor = monthYearAnchor,
+			Search = search,
+			Page = page,
+			PageSize = pageSize
+		};
 	}
 
 	private void SeedAcademicYearForListTests()
@@ -49,7 +67,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 	public async Task GetListAsync_Should_Return_Empty_When_No_Leaves()
 	{
 		var anchor = new DateTime(DateTime.UtcNow.Year, 6, 15);
-		var result = await _leaveManagement.GetListAsync(TestAcademicYearId, anchor, null, 1, 10);
+		var result = await _leaveManagement.GetListAsync(BuildListInput(TestAcademicYearId, anchor, null, 1, 10));
 
 		result.ShouldNotBeNull();
 		result.TotalCount.ShouldBe(0);
@@ -62,11 +80,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 	{
 		var ex = await Should.ThrowAsync<BusinessException>(async () =>
 			await _leaveManagement.GetListAsync(
-				TestAcademicYearId,
-				new DateTime(DateTime.UtcNow.Year, 6, 1),
-				null,
-				0,
-				10));
+				BuildListInput(TestAcademicYearId, new DateTime(DateTime.UtcNow.Year, 6, 1), null, 0, 10)));
 
 		ex.Code.ShouldBe(HRErrorCodes.LeaveInvalidPage);
 	}
@@ -76,11 +90,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 	{
 		var ex = await Should.ThrowAsync<BusinessException>(async () =>
 			await _leaveManagement.GetListAsync(
-				TestAcademicYearId,
-				new DateTime(DateTime.UtcNow.Year, 6, 1),
-				null,
-				1,
-				5));
+				BuildListInput(TestAcademicYearId, new DateTime(DateTime.UtcNow.Year, 6, 1), null, 1, 5)));
 
 		ex.Code.ShouldBe(HRErrorCodes.LeaveInvalidPageSize);
 	}
@@ -90,11 +100,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 	{
 		var ex = await Should.ThrowAsync<BusinessException>(async () =>
 			await _leaveManagement.GetListAsync(
-				TestAcademicYearId,
-				new DateTime(DateTime.UtcNow.Year, 6, 1),
-				null,
-				1,
-				200));
+				BuildListInput(TestAcademicYearId, new DateTime(DateTime.UtcNow.Year, 6, 1), null, 1, 200)));
 
 		ex.Code.ShouldBe(HRErrorCodes.LeaveInvalidPageSize);
 	}
@@ -104,11 +110,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 	{
 		var ex = await Should.ThrowAsync<BusinessException>(async () =>
 			await _leaveManagement.GetListAsync(
-				TestAcademicYearId,
-				new DateTime(1800, 6, 1),
-				null,
-				1,
-				10));
+				BuildListInput(TestAcademicYearId, new DateTime(1800, 6, 1), null, 1, 10)));
 
 		ex.Code.ShouldBe(HRErrorCodes.LeaveInvalidYear);
 	}
@@ -118,11 +120,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 	{
 		await Should.ThrowAsync<EntityNotFoundException>(async () =>
 			await _leaveManagement.GetListAsync(
-				Guid.NewGuid(),
-				new DateTime(DateTime.UtcNow.Year, 6, 1),
-				null,
-				1,
-				10));
+				BuildListInput(Guid.NewGuid(), new DateTime(DateTime.UtcNow.Year, 6, 1), null, 1, 10)));
 	}
 
 	[Fact]
@@ -148,11 +146,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 
 		var ex = await Should.ThrowAsync<BusinessException>(async () =>
 			await _leaveManagement.GetListAsync(
-				shortAyId,
-				new DateTime(now.Year, 6, 1),
-				null,
-				1,
-				10));
+				BuildListInput(shortAyId, new DateTime(now.Year, 6, 1), null, 1, 10)));
 
 		ex.Code.ShouldBe(HRErrorCodes.LeaveInvalidMonthForAcademicYear);
 	}

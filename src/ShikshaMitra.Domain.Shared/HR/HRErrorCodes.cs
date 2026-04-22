@@ -94,6 +94,7 @@ public static class HRErrorCodes
 public const string LeavePolicyCreateMethodNotSupported = "HR:Leave:020029";
 public const string LeavePolicyUpdateMethodNotSupported = "HR:Leave:020030";
 public const string LeaveTypeCreateMethodNotSupported = "HR:Leave:020031";
+	public const string LeaveNoBusinessDaysInRange = "HR:Leave:020032";
 
 	// Attendance — Validation
 	public const string AttendanceInvalidDateFormat = "HR:Attendance:020301";

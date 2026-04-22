@@ -140,8 +140,12 @@ public class LeaveValidationService : DomainService
 			throw new BusinessException(HRErrorCodes.LeavePolicyInactive);
 		}
 
-		// 5. Check maximum duration per request (if policy specifies)
-		var requestedDays = (endDate - startDate).Days + 1;
+		// 5. Check maximum duration per request (business days per PRD)
+		var requestedDays = LeaveDurationCalculator.CountInclusiveBusinessDays(startDate, endDate);
+		if (requestedDays == 0)
+		{
+			throw new BusinessException(HRErrorCodes.LeaveNoBusinessDaysInRange);
+		}
 		const int maxDaysPerRequest = 30; // Default maximum
 
 		if (requestedDays > maxDaysPerRequest)
@@ -180,21 +184,7 @@ public class LeaveValidationService : DomainService
 	/// </summary>
 	public int CalculateBusinessDays(DateTime startDate, DateTime endDate)
 	{
-		var businessDays = 0;
-		var currentDate = startDate;
-
-		while (currentDate <= endDate)
-		{
-			// Exclude weekends (Saturday and Sunday)
-			if (currentDate.DayOfWeek != DayOfWeek.Saturday &&
-			    currentDate.DayOfWeek != DayOfWeek.Sunday)
-			{
-				businessDays++;
-			}
-			currentDate = currentDate.AddDays(1);
-		}
-
-		return businessDays;
+		return LeaveDurationCalculator.CountInclusiveBusinessDays(startDate, endDate);
 	}
 
 	/// <summary>

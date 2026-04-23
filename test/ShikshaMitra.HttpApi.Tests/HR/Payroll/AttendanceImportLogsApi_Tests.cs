@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.AttendanceAndLeaves.Import;
 using ShikshaMitra.HR.Employees;
@@ -21,8 +22,56 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 {
 	private const string AttendanceImportUrl = "/api/attendance-import";
 	private const string PayrollImportLogsUrl = "/api/payroll/attendance-imports";
+	private const string HrAutomatedRunsUrl = "/api/hr/attendance/automated-runs";
 
 	public AttendanceImportLogsApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Get_Hr_Mirror_Automated_Runs_List()
+	{
+		var response = await Client.GetAsync($"{HrAutomatedRunsUrl}?skipCount=0&maxResultCount=20");
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Forbidden);
+		if (response.StatusCode == HttpStatusCode.OK)
+		{
+			var body = await response.Content.ReadFromJsonAsync<PagedResultDto<AttendanceImportLogListItemDto>>(JsonOptions);
+			body.ShouldNotBeNull();
+		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Lock_And_Unlock_Automated_Run_Idempotently()
+	{
+		var listResponse = await Client.GetAsync($"{HrAutomatedRunsUrl}?skipCount=0&maxResultCount=5");
+		listResponse.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Forbidden);
+		if (listResponse.StatusCode != HttpStatusCode.OK)
+		{
+			return;
+		}
+
+		var list = await listResponse.Content.ReadFromJsonAsync<PagedResultDto<AttendanceImportLogListItemDto>>(JsonOptions);
+		list.ShouldNotBeNull();
+		if (list.Items.Count == 0)
+		{
+			return;
+		}
+
+		var batchId = list.Items[0].Id;
+		var lockResponse = await Client.PostAsync($"{HrAutomatedRunsUrl}/{batchId}/lock", null);
+		lockResponse.StatusCode.ShouldBeOneOf(HttpStatusCode.NoContent, HttpStatusCode.Forbidden);
+		if (lockResponse.StatusCode == HttpStatusCode.NoContent)
+		{
+			var secondLockResponse = await Client.PostAsync($"{HrAutomatedRunsUrl}/{batchId}/lock", null);
+			secondLockResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+			var unlockResponse = await Client.DeleteAsync($"{HrAutomatedRunsUrl}/{batchId}/lock");
+			unlockResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+			var secondUnlockResponse = await Client.DeleteAsync($"{HrAutomatedRunsUrl}/{batchId}/lock");
+			secondUnlockResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+		}
+	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
@@ -42,7 +91,48 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 			var body = await listResponse.Content.ReadFromJsonAsync<PagedResultDto<AttendanceImportLogListItemDto>>(JsonOptions);
 			body.ShouldNotBeNull();
 			body.Items.Count.ShouldBeGreaterThan(0);
+			if (body.Items.Count > 0)
+			{
+				Enum.IsDefined(typeof(AttendanceImportLogStatus), body.Items[0].Status).ShouldBeTrue();
+				Enum.IsDefined(typeof(AttendanceImportRunSource), body.Items[0].RunSource).ShouldBeTrue();
+			}
+
+			var rawJson = await listResponse.Content.ReadAsStringAsync();
+			using var doc = JsonDocument.Parse(rawJson);
+			var items = doc.RootElement.GetProperty("items");
+			if (items.ValueKind == JsonValueKind.Array && items.GetArrayLength() > 0)
+			{
+				items[0].GetProperty("status").ValueKind.ShouldBe(JsonValueKind.Number);
+				items[0].GetProperty("runSource").ValueKind.ShouldBe(JsonValueKind.Number);
+			}
 		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Filter_By_Normalized_Payroll_Month_Formats()
+	{
+		var listByInternal = await Client.GetAsync($"{PayrollImportLogsUrl}?payrollMonth=2026-04&skipCount=0&maxResultCount=20");
+		listByInternal.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Forbidden, HttpStatusCode.BadRequest);
+		if (listByInternal.StatusCode == HttpStatusCode.OK)
+		{
+			var listByApi = await Client.GetAsync($"{PayrollImportLogsUrl}?payrollMonth=APRIL-2026&skipCount=0&maxResultCount=20");
+			listByApi.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+			var byInternal = await listByInternal.Content.ReadFromJsonAsync<PagedResultDto<AttendanceImportLogListItemDto>>(JsonOptions);
+			var byApi = await listByApi.Content.ReadFromJsonAsync<PagedResultDto<AttendanceImportLogListItemDto>>(JsonOptions);
+			byInternal.ShouldNotBeNull();
+			byApi.ShouldNotBeNull();
+			byInternal.TotalCount.ShouldBe(byApi.TotalCount);
+		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Invalid_Payroll_Month_Filter()
+	{
+		var response = await Client.GetAsync($"{PayrollImportLogsUrl}?payrollMonth=NOT-A-MONTH");
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
 	}
 
 	[Fact]
@@ -79,9 +169,33 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 		var importId = listBody.Items[0].Id;
 		var detailResponse = await Client.GetAsync($"{PayrollImportLogsUrl}/{importId}");
 		detailResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var detailJson = await detailResponse.Content.ReadAsStringAsync();
+		using (var detailDoc = JsonDocument.Parse(detailJson))
+		{
+			var root = detailDoc.RootElement;
+			root.GetProperty("id").GetString().ShouldNotBeNullOrWhiteSpace();
+			root.GetProperty("runSource").ValueKind.ShouldBe(JsonValueKind.Number);
+			root.GetProperty("externalCorrelationId").ValueKind.ShouldBeOneOf(JsonValueKind.String, JsonValueKind.Null);
+			root.GetProperty("integrationProvider").ValueKind.ShouldBeOneOf(JsonValueKind.String, JsonValueKind.Null);
+			root.GetProperty("isBatchLocked").ValueKind.ShouldBeOneOf(JsonValueKind.True, JsonValueKind.False);
+		}
 
 		var rowsResponse = await Client.GetAsync($"{PayrollImportLogsUrl}/{importId}/rows?skipCount=0&maxResultCount=50");
 		rowsResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var rowsJson = await rowsResponse.Content.ReadAsStringAsync();
+		using (var rowsDoc = JsonDocument.Parse(rowsJson))
+		{
+			var rowsRoot = rowsDoc.RootElement;
+			rowsRoot.GetProperty("totalCount").GetInt32().ShouldBeGreaterThan(0);
+			var items = rowsRoot.GetProperty("items");
+			items.ValueKind.ShouldBe(JsonValueKind.Array);
+			items.GetArrayLength().ShouldBeGreaterThan(0);
+			var first = items[0];
+			first.GetProperty("id").GetString().ShouldNotBeNullOrWhiteSpace();
+			first.GetProperty("employeeId").GetString().ShouldNotBeNullOrWhiteSpace();
+			first.GetProperty("statusCode").ValueKind.ShouldBe(JsonValueKind.Number);
+			first.GetProperty("status").ValueKind.ShouldBe(JsonValueKind.String);
+		}
 	}
 
 	[Fact]

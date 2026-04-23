@@ -771,6 +771,41 @@
                       ]
                     }
                   }
+                },
+                {
+                  "name": "HR Automated Runs List",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/hr/attendance/automated-runs?skipCount=0&maxResultCount=50",
+                      "host": ["{{base_url}}"],
+                      "path": ["api", "hr", "attendance", "automated-runs"],
+                      "query": [
+                        { "key": "skipCount", "value": "0" },
+                        { "key": "maxResultCount", "value": "50" },
+                        { "key": "payrollMonth", "value": "", "disabled": true }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "Take Attendance Day Grid",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/api/hr/attendance/take-attendance/day?attendanceDate={{current_date}}&educationMediumStageId={{medium_stage_id}}&skipCount=0&maxResultCount=50",
+                      "host": ["{{base_url}}"],
+                      "path": ["api", "hr", "attendance", "take-attendance", "day"],
+                      "query": [
+                        { "key": "attendanceDate", "value": "{{current_date}}" },
+                        { "key": "educationMediumStageId", "value": "{{medium_stage_id}}" },
+                        { "key": "skipCount", "value": "0" },
+                        { "key": "maxResultCount", "value": "50" }
+                      ]
+                    }
+                  }
                 }
               ]
             },

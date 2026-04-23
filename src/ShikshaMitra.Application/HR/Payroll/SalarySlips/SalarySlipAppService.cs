@@ -272,7 +272,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 			TotalEarning = salarySlip.TotalEarning,
 			TotalDeduction = salarySlip.TotalDeduction,
 			NetSalary = salarySlip.NetSalary,
-			Status = salarySlip.Status.ToString(),
+			Status = salarySlip.Status,
 			Remarks = salarySlip.Remarks,
 			ProcessedDate = salarySlip.ProcessedDate,
 			PayrollBasisDays = salarySlip.PayrollBasisDays,

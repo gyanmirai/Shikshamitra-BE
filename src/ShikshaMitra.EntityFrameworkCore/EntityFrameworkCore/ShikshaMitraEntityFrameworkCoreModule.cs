@@ -1,7 +1,9 @@
 ﻿using System;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.EntityFrameworkCore.HR.AttendanceAndLeaves;
 using ShikshaMitra.EntityFrameworkCore.Security.UserScope;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Calendar.HolidayTypes;
@@ -10,11 +12,13 @@ using ShikshaMitra.EntityFrameworkCore.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.Events;
 using ShikshaMitra.EntityFrameworkCore.HR.Calendar.Events;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Students;
 using Volo.Abp.Uow;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
 using Volo.Abp.BackgroundJobs.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore.PostgreSql;
 using Volo.Abp.FeatureManagement.EntityFrameworkCore;
@@ -62,6 +66,14 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
              * default repositories only for aggregate roots */
             options.AddDefaultRepositories(includeAllEntities: true);
 
+            options.Entity<AssignedSubject>(opt =>
+            {
+                opt.DefaultWithDetailsFunc = query =>
+                    query.Include(x => x.Chapters)
+                         .ThenInclude(c => c.Documents)
+                         .Include(x => x.Documents);
+            });
+
             // Register custom repositories
             options.AddRepository<UserScopeAssignment, EfCoreUserScopeAssignmentRepository>();
             options.AddRepository<SalarySlip, EfCoreSalarySlipRepository>();
@@ -71,6 +83,7 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
             options.AddRepository<DayCalculationSetting, EfCoreDayCalculationSettingRepository>();
             options.AddRepository<Student, EfCoreStudentRepository>();
             options.AddRepository<ConcessionRequest, EfCoreConcessionRequestRepository>();
+            options.AddRepository<StaffAttendanceDayLock, EfCoreStaffAttendanceDayLockRepository>();
         });
 
         // Register custom repository extensions

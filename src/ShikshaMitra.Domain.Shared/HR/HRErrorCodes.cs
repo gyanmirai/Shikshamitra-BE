@@ -94,11 +94,17 @@ public static class HRErrorCodes
 public const string LeavePolicyCreateMethodNotSupported = "HR:Leave:020029";
 public const string LeavePolicyUpdateMethodNotSupported = "HR:Leave:020030";
 public const string LeaveTypeCreateMethodNotSupported = "HR:Leave:020031";
+	public const string LeaveNoBusinessDaysInRange = "HR:Leave:020032";
 
 	// Attendance — Validation
 	public const string AttendanceInvalidDateFormat = "HR:Attendance:020301";
 	public const string AttendanceEndDateBeforeStartDate = "HR:Attendance:020302";
 	public const string AttendanceDateRangeTooLarge = "HR:Attendance:020303";
+	public const string TakeAttendanceDayLocked = "HR:Attendance:020304";
+	public const string TakeAttendanceFutureDateNotAllowed = "HR:Attendance:020305";
+	public const string TakeAttendanceMediumStageOutOfScope = "HR:Attendance:020306";
+	public const string TakeAttendanceEmptyEntries = "HR:Attendance:020307";
+	public const string TakeAttendanceInvalidStatusWire = "HR:Attendance:020308";
 
 	// Leave — File validation
 	public const string LeaveFileTooLarge = "HR:Leave:020101";
@@ -124,6 +130,8 @@ public const string LeaveTypeCreateMethodNotSupported = "HR:Leave:020031";
 	public const string AttendanceImportNoValidRows = "HR:Leave:020208";
 	public const string AttendanceImportFileTooLarge = "HR:Leave:020209";
 	public const string AttendanceImportMultiplePayrollMonths = "HR:Leave:020210";
+	public const string AttendanceImportInvalidSkipCount = "HR:Leave:020211";
+	public const string AttendanceImportInvalidMaxResultCount = "HR:Leave:020212";
 
 	// ── Payroll: 03xxxx ──────────────────────────────────────────
 

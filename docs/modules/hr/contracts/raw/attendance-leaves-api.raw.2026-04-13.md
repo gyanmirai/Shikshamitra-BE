@@ -152,6 +152,52 @@ Response `200`:
   - `description` (string, nullable)
   - `status` (`PRESENT|ABSENT|HALF_DAY|REJECTED_LEAVE`)
 
+## HR automated attendance run logs (mirror)
+
+Same contract as payroll import logs; use when the UI should not require payroll permissions.
+
+### GET `/api/hr/attendance/automated-runs`
+
+Query: `search`, `payrollMonth`, `skipCount`, `maxResultCount`
+
+Auth: requires `HR.AttendanceAndLeave.ImportAttendance.View` **or** `HR.AttendanceAndLeave.AttendanceTracking.View`.
+
+### GET `/api/hr/attendance/automated-runs/{importId}`
+
+### GET `/api/hr/attendance/automated-runs/{importId}/rows`
+
+## Take attendance (manual day grid)
+
+### GET `/api/hr/attendance/take-attendance/day`
+
+Query: `attendanceDate` (dd-MM-yyyy or ISO), `educationMediumStageId` (required), optional `department`, `isTeaching`, `roleId`, `search`, `skipCount`, `maxResultCount`
+
+Auth: `HR.AttendanceAndLeave.TakeAttendance.View`
+
+### POST `/api/hr/attendance/take-attendance/day/save`
+
+Body: `attendanceDate`, `educationMediumStageId`, `entries[]` with `employeeId`, `statusWire` (`PRESENT`|`HALF_DAY`|`ABSENT`), optional `inTime`/`outTime` (ISO-8601 offset), `remarks`
+
+Auth: `HR.AttendanceAndLeave.TakeAttendance.Add`
+
+### POST `/api/hr/attendance/take-attendance/day/lock`
+
+Query: `educationMediumStageId`, `attendanceDate`
+
+Auth: `HR.AttendanceAndLeave.TakeAttendance.Lock`
+
+### DELETE `/api/hr/attendance/take-attendance/day/lock`
+
+Query: same as lock (removes lock row)
+
+## Integration attendance run (programmatic)
+
+### POST `/api/hr/attendance/integration-runs`
+
+Auth: `HR.AttendanceAndLeave.ImportAttendance.Add`
+
+Body: `fileName`, `runSource` (`FileUpload`|`Integration`|`Internal`), optional `externalCorrelationId`, `integrationProvider`, `rows[]` (`employeeId`, `attendanceDate` string, optional times, `status` enum, `educationMediumStageId`, `remarks`)
+
 ## Standardized Error Envelope
 
 All `/api/*` errors must follow:

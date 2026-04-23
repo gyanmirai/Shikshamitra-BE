@@ -26,6 +26,7 @@ public partial class ShikshaMitraDbContext
     public DbSet<EmployeePayrollComponent> EmployeePayrollComponents { get; set; }
 
     DbSet<EmployeeAttendance> EmployeeAttendances { get; set; }
+    DbSet<StaffAttendanceDayLock> StaffAttendanceDayLocks { get; set; }
     public DbSet<EmployeeLeave> EmployeeLeaves { get; set; }
     DbSet<AttendanceConfiguration> AttendanceConfigurations { get; set; }
     DbSet<AutomatedNotificationsSettings> AutomatedNotificationsSettings { get; set; }

@@ -24,5 +24,15 @@ public class StandardSubjectAssignmentConfiguration : IEntityTypeConfiguration<A
 
 		builder.Property(x => x.PublishedAt)
 			.IsRequired(false);
+
+		builder.HasMany(x => x.Chapters)
+			.WithOne()
+			.HasForeignKey(c => c.AssignedSubjectId)
+			.IsRequired();
+
+		builder.HasMany(x => x.Documents)
+			.WithOne()
+			.HasForeignKey(d => d.AssignedSubjectId)
+			.IsRequired();
 	}
 }

@@ -39,6 +39,12 @@ public class AssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTenant, IU
 	public string Description { get; set; } = string.Empty;
 	public Guid AssignmentTypeId { get; set; }
 	public SubmissionType SubmissionType { get; set; }
+	public decimal TotalMarks { get; set; }
+
+	/// <summary>
+	/// Lifecycle status of this assignment (Draft → Published → Closed)
+	/// </summary>
+	public AssignmentStatus Status { get; private set; } = AssignmentStatus.Draft;
 
 	// Multi-division support properties
 	/// <summary>
@@ -78,9 +84,9 @@ public class AssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTenant, IU
 		string description,
 		Guid assignmentTypeId,
 		SubmissionType submissionType,
+		decimal totalMarks,
 		Guid? tenantId = null,
 		Guid? academicYearId = null,
-		string? chapterIdsJson = null,
 		string? attachmentsJson = null,
 		Guid? educationBoardId = null,
 		Guid? educationMediumId = null,
@@ -93,9 +99,9 @@ public class AssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTenant, IU
 		Title = title;
 		Description = description;
 		AssignmentTypeId = assignmentTypeId;
-		ChapterIdsJson = chapterIdsJson;
 		AttachmentsJson = attachmentsJson;
 		SubmissionType = submissionType;
+		TotalMarks = totalMarks;
 		TenantId = tenantId;
 		AcademicYearId = academicYearId;
 		EducationBoardId = educationBoardId;
@@ -113,13 +119,13 @@ public class AssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTenant, IU
 	public void UpdateBasicInfo(
 		string title,
 		string description,
-		string? chapterIdsJson = null,
+		decimal totalMarks,
 		string? attachmentsJson = null
 	)
 	{
 		Title = title;
 		Description = description;
-		ChapterIdsJson = chapterIdsJson;
+		TotalMarks = totalMarks;
 		AttachmentsJson = attachmentsJson;
 	}
 
@@ -154,6 +160,29 @@ public class AssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTenant, IU
 				schedule.Publish();
 			}
 		}
+	}
+
+	/// <summary>
+	/// Advance the assignment through its lifecycle.
+	/// Valid transitions: Draft → Published, Published → Closed.
+	/// </summary>
+	public void ChangeStatus(AssignmentStatus newStatus)
+	{
+		var valid = (Status, newStatus) switch
+		{
+			(AssignmentStatus.Draft, AssignmentStatus.Published) => true,
+			(AssignmentStatus.Published, AssignmentStatus.Closed) => true,
+			_ => false,
+		};
+
+		if (!valid)
+		{
+			throw new Volo.Abp.BusinessException("ShikshaMitra.Assignment:InvalidStatusTransition")
+				.WithData("CurrentStatus", Status)
+				.WithData("RequestedStatus", newStatus);
+		}
+
+		Status = newStatus;
 	}
 
 	#endregion

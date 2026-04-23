@@ -31,7 +31,7 @@ public class RunPayrollController : AbpControllerBase
 	/// Get payroll preview for a specific month (paginated)
 	/// Returns employee payroll breakdown before locking
 	/// </summary>
-	/// <param name="month">Payroll month in MMMM-YYYY format (e.g., JANUARY-2025)</param>
+	/// <param name="month">Payroll month (supports YYYY-MM, MMMM-YYYY, and common date-like formats)</param>
 	/// <param name="page">Page index (0-based), defaults to 0</param>
 	/// <param name="pageSize">Number of items per page (10-100), defaults to 50</param>
 	/// <returns>Payroll preview with employee payroll items</returns>
@@ -46,11 +46,6 @@ public class RunPayrollController : AbpControllerBase
 		[FromQuery, Range(0, int.MaxValue)] int page = 0,
 		[FromQuery, Range(10, 100)] int pageSize = 50)
 	{
-		if (!System.Text.RegularExpressions.Regex.IsMatch(month, @"^[A-Z]+-\d{4}$"))
-		{
-			throw new BusinessException(ShikshaMitra.HR.HRErrorCodes.InvalidMonthYearFormat);
-		}
-
 		return await _runPayrollAppService.GetPreviewAsync(new GetRunPayrollInput
 		{
 			Month = month,

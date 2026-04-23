@@ -84,7 +84,7 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 
 		// 3. Get academic year from medium (assuming relationship exists)
 		// For now, we'll pass null and let the entity handle it
-		var academicYearId = (Guid?)null; // TODO: Get from medium relationship
+		var academicYearId = (Guid?) null; // TODO: Get from medium relationship
 
 		// 4. Validate divisions and dates
 		var divisionData = input
@@ -107,13 +107,11 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 			input.Title,
 			input.Description,
 			input.AssignmentTypeId,
-			(SubmissionType)input.SubmissionType,
-			CurrentTenant.Id,
-			academicYearId,
-			input.Chapters != null && input.Chapters.Any()
-				? JsonSerializer.Serialize(input.Chapters)
-				: null,
-			input.Attachments != null && input.Attachments.Any()
+			(SubmissionType) input.SubmissionType,
+			totalMarks: 0m,
+			tenantId: CurrentTenant.Id,
+			academicYearId: academicYearId,
+			attachmentsJson: input.Attachments != null && input.Attachments.Any()
 				? JsonSerializer.Serialize(input.Attachments)
 				: null,
 			educationMediumId: academicMediumId
@@ -343,10 +341,8 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		assignment.UpdateBasicInfo(
 			input.Title,
 			input.Description,
-			input.Chapters != null && input.Chapters.Any()
-				? JsonSerializer.Serialize(input.Chapters)
-				: null,
-			input.Attachments != null && input.Attachments.Any()
+			totalMarks: 0m,
+			attachmentsJson: input.Attachments != null && input.Attachments.Any()
 				? JsonSerializer.Serialize(input.Attachments)
 				: null
 		);
@@ -355,7 +351,7 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		assignment.StandardId = input.ClassId;
 		assignment.SubjectId = input.SubjectId;
 		assignment.AssignmentTypeId = input.AssignmentTypeId;
-		assignment.SubmissionType = (SubmissionType)input.SubmissionType;
+		assignment.SubmissionType = (SubmissionType) input.SubmissionType;
 
 		// 6. Update division schedules (delete old, add new)
 		// Capture existing schedules before clearing

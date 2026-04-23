@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR;
+using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Payroll;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -15,15 +15,17 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.HR.Payroll.AttendanceImports;
 
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.View)]
 public class AttendanceImportLogAppService(
 	IRepository<AttendanceImportBatch, Guid> attendanceImportBatchRepository,
 	IRepository<AttendanceImportRow, Guid> attendanceImportRowRepository,
+	IRepository<Employee, Guid> employeeRepository,
 	ISalarySlipRepository salarySlipRepository)
 	: ApplicationService, IAttendanceImportLogAppService
 {
 	public async Task<PagedResultDto<AttendanceImportLogListItemDto>> GetListAsync(GetAttendanceImportLogListInput input)
 	{
+		ValidatePaging(input.SkipCount, input.MaxResultCount, maxUpperBound: 200);
+
 		var query = await attendanceImportBatchRepository.GetQueryableAsync();
 		if (CurrentTenant.Id.HasValue)
 		{
@@ -40,8 +42,14 @@ public class AttendanceImportLogAppService(
 
 		if (!string.IsNullOrWhiteSpace(input.PayrollMonth))
 		{
-			var payrollMonth = input.PayrollMonth.Trim().ToUpperInvariant();
-			query = query.Where(x => x.PayrollMonth == payrollMonth);
+			if (!PayrollMonthNormalizer.TryNormalizeToInternal(input.PayrollMonth, out var normalizedPayrollMonth))
+			{
+				throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat)
+					.WithData("providedMonth", input.PayrollMonth)
+					.WithData("acceptedFormats", "YYYY-MM, MMMM-YYYY, or date-like values");
+			}
+
+			query = query.Where(x => x.PayrollMonthYear == normalizedPayrollMonth);
 		}
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
@@ -64,10 +72,7 @@ public class AttendanceImportLogAppService(
 		var entity = await attendanceImportBatchRepository.FindAsync(importId)
 			?? throw new EntityNotFoundException(typeof(AttendanceImportBatch), importId);
 
-		if (entity.TenantId != CurrentTenant.Id)
-		{
-			throw new EntityNotFoundException(typeof(AttendanceImportBatch), importId);
-		}
+		EnsureTenantOwnership(entity, importId);
 
 		var finalizedMonthLookup = await BuildFinalizedMonthLookupAsync([entity]);
 		var baseDto = MapToListItemDto(entity, finalizedMonthLookup);
@@ -89,6 +94,10 @@ public class AttendanceImportLogAppService(
 			CreatedCount = baseDto.CreatedCount,
 			ReplacedCount = baseDto.ReplacedCount,
 			CanOpen = baseDto.CanOpen,
+			RunSource = baseDto.RunSource,
+			ExternalCorrelationId = baseDto.ExternalCorrelationId,
+			IntegrationProvider = baseDto.IntegrationProvider,
+			IsBatchLocked = baseDto.IsBatchLocked,
 			ConfirmedAt = entity.ConfirmedAt,
 			PreviewTokenExpiresAt = entity.PreviewTokenExpiresAt,
 			ErrorsSummary = [.. entity.ErrorsSummary],
@@ -98,12 +107,11 @@ public class AttendanceImportLogAppService(
 
 	public async Task<PagedResultDto<AttendanceImportRowDto>> GetRowsAsync(Guid importId, GetAttendanceImportRowsInput input)
 	{
+		ValidatePaging(input.SkipCount, input.MaxResultCount, maxUpperBound: 500);
+
 		var batch = await attendanceImportBatchRepository.FindAsync(importId)
 			?? throw new EntityNotFoundException(typeof(AttendanceImportBatch), importId);
-		if (batch.TenantId != CurrentTenant.Id)
-		{
-			throw new EntityNotFoundException(typeof(AttendanceImportBatch), importId);
-		}
+		EnsureTenantOwnership(batch, importId);
 
 		var query = await attendanceImportRowRepository.GetQueryableAsync();
 		query = query.Where(x => x.BatchId == importId);
@@ -120,10 +128,35 @@ public class AttendanceImportLogAppService(
 				.OrderBy(x => x.RowNumber)
 				.Skip(skipCount)
 				.Take(maxResultCount));
+		var employeeLookup = await BuildEmployeeLookupByCodeAsync(items);
 
 		return new PagedResultDto<AttendanceImportRowDto>(
 			totalCount,
-			items.Select(MapToRowDto).ToList());
+			items.Select(row => MapToRowDto(row, employeeLookup)).ToList());
+	}
+
+	public async Task LockBatchAsync(Guid importId)
+	{
+		var batch = await GetOwnedBatchAsync(importId);
+		if (batch.IsBatchLocked)
+		{
+			return;
+		}
+
+		batch.SetBatchLocked(true);
+		await attendanceImportBatchRepository.UpdateAsync(batch, autoSave: true);
+	}
+
+	public async Task UnlockBatchAsync(Guid importId)
+	{
+		var batch = await GetOwnedBatchAsync(importId);
+		if (!batch.IsBatchLocked)
+		{
+			return;
+		}
+
+		batch.SetBatchLocked(false);
+		await attendanceImportBatchRepository.UpdateAsync(batch, autoSave: true);
 	}
 
 	private async Task<Dictionary<string, bool>> BuildFinalizedMonthLookupAsync(IEnumerable<AttendanceImportBatch> items)
@@ -153,10 +186,11 @@ public class AttendanceImportLogAppService(
 
 		var status = entity.Status switch
 		{
-			AttendanceImportBatchStatus.Preview => "preview",
-			AttendanceImportBatchStatus.Confirmed when isPayrollLocked => "payroll_locked",
-			AttendanceImportBatchStatus.Confirmed => "confirmed",
-			_ => "preview"
+			AttendanceImportBatchStatus.Preview => AttendanceImportLogStatus.Preview,
+			AttendanceImportBatchStatus.Confirmed when isPayrollLocked => AttendanceImportLogStatus.PayrollLocked,
+			AttendanceImportBatchStatus.Confirmed when entity.IsBatchLocked => AttendanceImportLogStatus.BatchLocked,
+			AttendanceImportBatchStatus.Confirmed => AttendanceImportLogStatus.Confirmed,
+			_ => AttendanceImportLogStatus.Preview
 		};
 
 		return new AttendanceImportLogListItemDto
@@ -167,7 +201,7 @@ public class AttendanceImportLogAppService(
 			ImportedByName = entity.ImportedByName,
 			ImportedAt = entity.ImportedAt,
 			Status = status,
-			PayrollMonth = entity.PayrollMonth ?? ToApiMonthYear(entity.PayrollMonthYear),
+			PayrollMonth = entity.PayrollMonth ?? PayrollMonthNormalizer.ToApiMonthYear(entity.PayrollMonthYear),
 			TotalRows = entity.TotalRows,
 			ValidRows = entity.ValidRows,
 			InvalidRows = entity.InvalidRows,
@@ -176,14 +210,33 @@ public class AttendanceImportLogAppService(
 			ProcessedRows = entity.ProcessedRows,
 			CreatedCount = entity.CreatedCount,
 			ReplacedCount = entity.ReplacedCount,
-			CanOpen = entity.TotalRows > 0
+			CanOpen = entity.TotalRows > 0,
+			RunSource = entity.RunSource,
+			ExternalCorrelationId = entity.ExternalCorrelationId,
+			IntegrationProvider = entity.IntegrationProvider,
+			IsBatchLocked = entity.IsBatchLocked
 		};
 	}
 
-	private static AttendanceImportRowDto MapToRowDto(AttendanceImportRow row)
+	private static AttendanceImportRowDto MapToRowDto(AttendanceImportRow row, Dictionary<string, Guid> employeeLookup)
 	{
+		var resolvedEmployeeId = TryResolveEmployeeId(row.EmployeeCode, employeeLookup);
+		var statusCode = TryNormalizeStatusCode(row.Status, out var normalizedWarning);
+		var warnings = row.Warnings.ToList();
+		if (!resolvedEmployeeId.HasValue && !string.IsNullOrWhiteSpace(row.EmployeeCode))
+		{
+			warnings.Add($"Unable to resolve employeeId for employee code '{row.EmployeeCode}'.");
+		}
+
+		if (!string.IsNullOrWhiteSpace(normalizedWarning))
+		{
+			warnings.Add(normalizedWarning);
+		}
+
 		return new AttendanceImportRowDto
 		{
+			Id = row.Id,
+			EmployeeId = resolvedEmployeeId,
 			RowNumber = row.RowNumber,
 			Action = row.Action,
 			AttendanceDate = row.AttendanceDate,
@@ -193,29 +246,111 @@ public class AttendanceImportLogAppService(
 			TimeIn = row.TimeIn,
 			TimeOut = row.TimeOut,
 			Status = row.Status,
+			StatusCode = statusCode,
 			Remarks = row.Remarks,
 			Errors = [.. row.Errors],
-			Warnings = [.. row.Warnings]
+			Warnings = warnings
 		};
 	}
 
-	private static string? ToApiMonthYear(string? internalMonthYear)
+	private async Task<Dictionary<string, Guid>> BuildEmployeeLookupByCodeAsync(List<AttendanceImportRow> rows)
 	{
-		if (string.IsNullOrWhiteSpace(internalMonthYear))
+		var employeeCodes = rows
+			.Select(row => row.EmployeeCode?.Trim())
+			.Where(code => !string.IsNullOrWhiteSpace(code))
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+		if (employeeCodes.Count == 0)
+		{
+			return new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+		}
+		var normalizedEmployeeCodes = employeeCodes
+			.Select(code => code!.ToUpperInvariant())
+			.ToList();
+
+		var employeeQuery = await employeeRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			employeeQuery = employeeQuery.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+
+		var employees = await AsyncExecuter.ToListAsync(
+			employeeQuery
+				.Where(employee =>
+					employee.EmployeeCode != null &&
+					normalizedEmployeeCodes.Contains(employee.EmployeeCode.ToUpper()))
+				.Select(employee => new { employee.EmployeeCode, employee.Id }));
+		return employees
+			.GroupBy(x => x.EmployeeCode, StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(group => group.Key, group => group.First().Id, StringComparer.OrdinalIgnoreCase);
+	}
+
+	private static Guid? TryResolveEmployeeId(string? employeeCode, Dictionary<string, Guid> employeeLookup)
+	{
+		if (string.IsNullOrWhiteSpace(employeeCode))
 		{
 			return null;
 		}
 
-		if (!DateTime.TryParseExact(
-			$"{internalMonthYear}-01",
-			"yyyy-MM-dd",
-			CultureInfo.InvariantCulture,
-			DateTimeStyles.None,
-			out var monthDate))
+		return employeeLookup.TryGetValue(employeeCode.Trim(), out var employeeId) ? employeeId : null;
+	}
+
+	private static AttendanceImportRowStatusCode? TryNormalizeStatusCode(string? status, out string? warning)
+	{
+		warning = null;
+		if (string.IsNullOrWhiteSpace(status))
 		{
 			return null;
 		}
 
-		return $"{monthDate.ToString("MMMM", CultureInfo.InvariantCulture).ToUpperInvariant()}-{monthDate.Year}";
+		var normalized = status.Trim().Replace("_", string.Empty).Replace("-", string.Empty).Replace(" ", string.Empty).ToUpperInvariant();
+		return normalized switch
+		{
+			"PRESENT" => AttendanceImportRowStatusCode.Present,
+			"ABSENT" => AttendanceImportRowStatusCode.Absent,
+			"FULLDAYLEAVE" => AttendanceImportRowStatusCode.Absent,
+			"HALFDAY" => AttendanceImportRowStatusCode.HalfDay,
+			"HALFDAYLEAVE" => AttendanceImportRowStatusCode.HalfDay,
+			"PENDING" => null,
+			"NOTMARKED" => null,
+			_ => SetStatusWarning(status, out warning)
+		};
+	}
+
+	private static AttendanceImportRowStatusCode? SetStatusWarning(string originalStatus, out string? warning)
+	{
+		warning = $"Unable to normalize attendance status '{originalStatus}'.";
+		return null;
+	}
+
+	private static void ValidatePaging(int skipCount, int maxResultCount, int maxUpperBound)
+	{
+		if (skipCount < 0)
+		{
+			throw new BusinessException(HRErrorCodes.AttendanceImportInvalidSkipCount);
+		}
+
+		if (maxResultCount <= 0 || maxResultCount > maxUpperBound)
+		{
+			throw new BusinessException(HRErrorCodes.AttendanceImportInvalidMaxResultCount)
+				.WithData("allowedRange", $"1-{maxUpperBound}")
+				.WithData("providedValue", maxResultCount);
+		}
+	}
+
+	private async Task<AttendanceImportBatch> GetOwnedBatchAsync(Guid importId)
+	{
+		var batch = await attendanceImportBatchRepository.FindAsync(importId)
+			?? throw new EntityNotFoundException(typeof(AttendanceImportBatch), importId);
+		EnsureTenantOwnership(batch, importId);
+		return batch;
+	}
+
+	private void EnsureTenantOwnership(AttendanceImportBatch batch, Guid importId)
+	{
+		if (batch.TenantId != CurrentTenant.Id)
+		{
+			throw new EntityNotFoundException(typeof(AttendanceImportBatch), importId);
+		}
 	}
 }

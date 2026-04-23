@@ -45,6 +45,24 @@ All controllers are `[Authorize]`.
 | GET | `/api/attendance-tracking/date-wise` | Attendance by date with status + scope filters |
 | GET | `/api/attendance-tracking/employee-wise` | Attendance by employee/date-range with paging |
 
+### Leave Management (`/api/leave-management`)
+
+| Method | Route | Description |
+|---|---|---|
+| GET | `/api/leave-management` | Paginated leave requests for a calendar month (`month-year` anchor) within an academic year; optional `status`, `leavePolicyId`, `leaveTypeMasterId`, `search` |
+| GET | `/api/leave-management/balances` | Per active policy: entitled, used (approved business days YTD), remaining (`employeeId` optional; defaults to caller’s employee; respects employee access rules) |
+| GET | `/api/leave-management/calendar` | Requests overlapping `rangeStart`–`rangeEnd` for calendar UI (optional filters) |
+| GET | `/api/leave-management/export` | Excel export for the same month/filters as the list |
+| POST | `/api/leave-management?academicYearId=` | Multipart create: `leavePolicyId` (preferred) or legacy `leaveTypeId` (leave **policy** id), `startDate`, `endDate`, `reason`, optional `employeeId` (manager/HR on-behalf), optional attachment |
+| GET | `/api/leave-management/{id}` | Detail (includes `publicId`, `leavePolicyId`; `leaveTypeId` duplicates `leavePolicyId` for backward compatibility) |
+| PATCH | `/api/leave-management/{id}/approve` | Approve |
+| PATCH | `/api/leave-management/{id}/reject` | Reject |
+| DELETE | `/api/leave-management/{id}` | Cancel (pending, own request) |
+| GET | `/api/leave-management/{id}/attachment` | Attachment metadata |
+| GET | `/api/leave-management/{id}/attachment/download` | Attachment file bytes |
+
+Leave durations and balances use **business days** (weekends excluded) per PRD.
+
 ---
 
 ## Leave Types Contract

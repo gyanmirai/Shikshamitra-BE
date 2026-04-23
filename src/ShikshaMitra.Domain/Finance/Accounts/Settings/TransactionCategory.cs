@@ -15,7 +15,7 @@ public class TransactionCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public string? Description { get; set; }
     public bool IsActive { get; set; }
 
-    private readonly List<Tag> _tags = new List<Tag>();
+    private List<Tag> _tags = new List<Tag>();
     public IReadOnlyCollection<Tag> Tags => _tags.AsReadOnly();
 
     protected TransactionCategory() { }

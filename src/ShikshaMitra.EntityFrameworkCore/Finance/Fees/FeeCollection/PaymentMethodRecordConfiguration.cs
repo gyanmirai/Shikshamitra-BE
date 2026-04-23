@@ -1,7 +1,6 @@
 ﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using ShikshaMitra.Finance.Fees.FeeCollection.PaymentDetails;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Finance.Fees.FeeCollection;
@@ -46,7 +45,7 @@ public class PaymentMethodRecordConfiguration : IEntityTypeConfiguration<Payment
             .HasColumnName("PaymentDetails")
             .HasColumnType("jsonb")
             .HasConversion(
-                v => v == null
+				v => v == null
                     ? null
                     : JsonSerializer.Serialize(v, _jsonOptions),
                 v => v == null

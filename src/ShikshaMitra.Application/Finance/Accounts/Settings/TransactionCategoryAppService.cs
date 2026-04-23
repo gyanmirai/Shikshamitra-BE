@@ -31,7 +31,7 @@ public class TransactionCategoryAppService : ApplicationService, ITransactionCat
 			academicYearId,
 			input.Name,
 			input.Description,
-			tags
+			input.Tags
 		);
 
 		await _transactionCategoryRepository.InsertAsync(incomeCategory);
@@ -83,7 +83,6 @@ public class TransactionCategoryAppService : ApplicationService, ITransactionCat
 
 		incomeCategory.Name = input.Name;
 		incomeCategory.Description = input.Description;
-		incomeCategory.Tags = input.Tags != null && input.Tags.Any() ? string.Join(",", input.Tags) : null;
 
 		await _transactionCategoryRepository.UpdateAsync(incomeCategory);
 

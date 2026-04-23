@@ -14,6 +14,7 @@ using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 
 namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 

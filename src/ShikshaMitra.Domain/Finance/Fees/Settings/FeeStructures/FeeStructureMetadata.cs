@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Finance.Fees.Settings;
+﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Setting.FeeStructure;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;

@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Finance.Fees.Settings;
+﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.TenantSettings.Standards;
 using System;
 using System.Collections.Generic;

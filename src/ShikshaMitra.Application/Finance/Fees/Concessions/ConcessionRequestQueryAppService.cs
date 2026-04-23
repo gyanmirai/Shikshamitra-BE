@@ -14,6 +14,7 @@ using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
 using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 
 namespace ShikshaMitra.Finance.Fees.ConcessionRequests;
 

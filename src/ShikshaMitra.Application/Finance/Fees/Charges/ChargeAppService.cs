@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Charges;
 using ShikshaMitra.Finance.Fees.Charges.Dtos;
 using ShikshaMitra.Finance.Fees.Settings;

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
-using ShikshaMitra.Finance.Fees.Settings.FeeCategory.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 
 namespace ShikshaMitra.Finance.Fees.Settings;

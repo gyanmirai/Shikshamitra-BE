@@ -119,7 +119,7 @@ public class TransactionAppService : ApplicationService, IIncomeAppService
 		);
 
 		var totalAmount = relatedIncomes.Sum(x => x.Amount);
-		var categoryTags = ParseTags(category.Tags ?? string.Empty);
+		//var categoryTags = ParseTags(category.Tags ?? string.Empty);
 
 		return new IncomeDetailsResponse
 		{
@@ -127,7 +127,7 @@ public class TransactionAppService : ApplicationService, IIncomeAppService
 			{
 				IncomeCategoryId = category.Id,
 				IncomeCategoryName = category.Name,
-				CategoryTags = categoryTags,
+				CategoryTags = [],
 				TotalAmountReceived = (double)totalAmount
 			},
 			IncomeList = relatedIncomes.Select(x => new IncomeTransaction

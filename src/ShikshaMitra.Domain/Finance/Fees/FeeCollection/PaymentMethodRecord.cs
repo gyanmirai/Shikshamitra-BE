@@ -1,6 +1,5 @@
 ﻿using System;
 using ShikshaMitra.Finance.FeeCollection;
-using ShikshaMitra.Finance.Fees.FeeCollection.PaymentDetails;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -29,7 +28,7 @@ public class PaymentMethodRecord : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// Method-specific details. Null only for <see cref="PaymentMethodEnum.Cash"/>,
 	/// which requires no additional instrument information.
 	/// </summary>
-	public PaymentDetails.PaymentDetails? PaymentDetails { get; private set; }
+	public PaymentDetails? PaymentDetails { get; private set; }
 
 	private PaymentMethodRecord() { /* For ORM */ }
 
@@ -46,7 +45,7 @@ public class PaymentMethodRecord : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		decimal amount,
 		DateTimeOffset paymentDate,
 		PaymentMethodEnum paymentMethod,
-		PaymentDetails.PaymentDetails? paymentDetails = null,
+		PaymentDetails? paymentDetails = null,
 		Guid? tenantId = null,
 		string? notes = null)
 	{
@@ -75,7 +74,7 @@ public class PaymentMethodRecord : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private static void ValidateDetailsMatchMethod(
 		PaymentMethodEnum paymentMethod,
-		PaymentDetails.PaymentDetails? paymentDetails)
+		PaymentDetails? paymentDetails)
 	{
 		if (paymentDetails is null)
 			return;

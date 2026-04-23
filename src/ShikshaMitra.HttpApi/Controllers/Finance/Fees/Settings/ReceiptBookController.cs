@@ -4,9 +4,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
-using ShikshaMitra.Finance.Fees.Settings.FeeCategory.Dtos;
-using ShikshaMitra.Finance.Fees.Settings.ReceiptBook;
-using ShikshaMitra.Finance.Fees.Settings.ReceiptBook.Dtos;
+using ShikshaMitra.Finance.Fees.Settings.Dtos;
+using ShikshaMitra.Finance.Fees.Settings;
 
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Settings;
 

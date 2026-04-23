@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace ShikshaMitra.Finance.Fees.FeeCollection.PaymentDetails;
+namespace ShikshaMitra.Finance.Fees.FeeCollection;
 
 /// <summary>
 /// Payment details for a UPI payment.

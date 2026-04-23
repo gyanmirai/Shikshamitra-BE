@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructure.Dtos;
+using ShikshaMitra.Finance.Fees.Settings.Dtos;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
 

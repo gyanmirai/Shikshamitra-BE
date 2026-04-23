@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Common.Responses;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionType;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionType.Dtos;
-using ShikshaMitra.Finance.Setting.ConcessionType.Dtos;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;

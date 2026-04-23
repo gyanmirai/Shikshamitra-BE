@@ -11,7 +11,6 @@ using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
-using ShikshaMitra.Finance.Fees.FeeCollection.PaymentDetails;
 using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
@@ -713,7 +712,7 @@ public class FeeCollectionAppService(
     /// <see cref="PaymentDetails.PaymentDetails"/> value object matching the payment method.
     /// Returns <c>null</c> for Cash — no instrument details are required.
     /// </summary>
-    private static PaymentDetails.PaymentDetails? MapPaymentDetails(
+    private static PaymentDetails? MapPaymentDetails(
         PaymentMethodEnum method,
         Dictionary<string, object?>? details)
     {

@@ -2,9 +2,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
-using ShikshaMitra.Finance.Fees.Settings.FeeCategory.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructure;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructure.Dtos;
+using ShikshaMitra.Finance.Fees.Settings.Dtos;
+using ShikshaMitra.Finance.Fees.Settings;
 
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Settings;
 

@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.Finance.Accounts.Settings.BankAccount;
-using ShikshaMitra.Finance.Accounts.Settings.BankAccount.Dtos;
+using ShikshaMitra.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Settings.Dtos;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 

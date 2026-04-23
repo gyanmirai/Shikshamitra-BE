@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
 

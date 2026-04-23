@@ -2,7 +2,7 @@
 using System.Text.Json.Serialization;
 using Volo.Abp.Domain.Values;
 
-namespace ShikshaMitra.Finance.Fees.FeeCollection.PaymentDetails;
+namespace ShikshaMitra.Finance.Fees.FeeCollection;
 
 /// <summary>
 /// Abstract base value object for payment method-specific details.

@@ -265,14 +265,19 @@ public class SubjectAssignmentAppService(
 		CreateUpdateSubjectAssignmentDto input
 	)
 	{
-		// 1. Identify the group being updated
-		var existingEntity = await assignmentRepository.GetAsync(assignmentId);
+		// 1. Identify the group being updated (with navigation properties loaded)
+		var baseQuery = await assignmentRepository.WithDetailsAsync(a => a.Teachers, a => a.Documents);
+
+		var existingEntity = await AsyncExecuter.FirstOrDefaultAsync(
+			baseQuery.Where(a => a.Id == assignmentId)
+		) ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(AssignedSubject), assignmentId);
+
 		List<AssignedSubject> existingGroup;
 
 		if (existingEntity.ElectiveGroupId.HasValue)
 		{
-			existingGroup = await assignmentRepository.GetListAsync(x =>
-				x.ElectiveGroupId == existingEntity.ElectiveGroupId && x.StandardId == existingEntity.StandardId
+			existingGroup = await AsyncExecuter.ToListAsync(
+				baseQuery.Where(x => x.ElectiveGroupId == existingEntity.ElectiveGroupId && x.StandardId == existingEntity.StandardId)
 			);
 		}
 		else
@@ -308,6 +313,16 @@ public class SubjectAssignmentAppService(
 				if (inputSubject.SecondaryTeacherId != null)
 				{
 					existingSubject.SetSecondaryTeachers(inputSubject.SecondaryTeacherId);
+				}
+
+				// Update documents: clear and re-add
+				if (inputSubject.Documents != null)
+				{
+					existingSubject.Documents.Clear();
+					foreach (var doc in inputSubject.Documents)
+					{
+						existingSubject.AddDocument(guidGenerator.Create(), doc);
+					}
 				}
 
 				// Update specific fields like Elective Group ID if shifted?

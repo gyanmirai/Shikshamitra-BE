@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using Volo.Abp;
@@ -17,11 +18,14 @@ namespace ShikshaMitra.HR.Payroll.AttendanceImports;
 public class AttendanceImportLogAppService(
 	IRepository<AttendanceImportBatch, Guid> attendanceImportBatchRepository,
 	IRepository<AttendanceImportRow, Guid> attendanceImportRowRepository,
+	IRepository<Employee, Guid> employeeRepository,
 	ISalarySlipRepository salarySlipRepository)
 	: ApplicationService, IAttendanceImportLogAppService
 {
 	public async Task<PagedResultDto<AttendanceImportLogListItemDto>> GetListAsync(GetAttendanceImportLogListInput input)
 	{
+		ValidatePaging(input.SkipCount, input.MaxResultCount, maxUpperBound: 200);
+
 		var query = await attendanceImportBatchRepository.GetQueryableAsync();
 		if (CurrentTenant.Id.HasValue)
 		{
@@ -90,6 +94,10 @@ public class AttendanceImportLogAppService(
 			CreatedCount = baseDto.CreatedCount,
 			ReplacedCount = baseDto.ReplacedCount,
 			CanOpen = baseDto.CanOpen,
+			RunSource = baseDto.RunSource,
+			ExternalCorrelationId = baseDto.ExternalCorrelationId,
+			IntegrationProvider = baseDto.IntegrationProvider,
+			IsBatchLocked = baseDto.IsBatchLocked,
 			ConfirmedAt = entity.ConfirmedAt,
 			PreviewTokenExpiresAt = entity.PreviewTokenExpiresAt,
 			ErrorsSummary = [.. entity.ErrorsSummary],
@@ -99,6 +107,8 @@ public class AttendanceImportLogAppService(
 
 	public async Task<PagedResultDto<AttendanceImportRowDto>> GetRowsAsync(Guid importId, GetAttendanceImportRowsInput input)
 	{
+		ValidatePaging(input.SkipCount, input.MaxResultCount, maxUpperBound: 500);
+
 		var batch = await attendanceImportBatchRepository.FindAsync(importId)
 			?? throw new EntityNotFoundException(typeof(AttendanceImportBatch), importId);
 		EnsureTenantOwnership(batch, importId);
@@ -118,10 +128,35 @@ public class AttendanceImportLogAppService(
 				.OrderBy(x => x.RowNumber)
 				.Skip(skipCount)
 				.Take(maxResultCount));
+		var employeeLookup = await BuildEmployeeLookupByCodeAsync(items);
 
 		return new PagedResultDto<AttendanceImportRowDto>(
 			totalCount,
-			items.Select(MapToRowDto).ToList());
+			items.Select(row => MapToRowDto(row, employeeLookup)).ToList());
+	}
+
+	public async Task LockBatchAsync(Guid importId)
+	{
+		var batch = await GetOwnedBatchAsync(importId);
+		if (batch.IsBatchLocked)
+		{
+			return;
+		}
+
+		batch.SetBatchLocked(true);
+		await attendanceImportBatchRepository.UpdateAsync(batch, autoSave: true);
+	}
+
+	public async Task UnlockBatchAsync(Guid importId)
+	{
+		var batch = await GetOwnedBatchAsync(importId);
+		if (!batch.IsBatchLocked)
+		{
+			return;
+		}
+
+		batch.SetBatchLocked(false);
+		await attendanceImportBatchRepository.UpdateAsync(batch, autoSave: true);
 	}
 
 	public async Task LockBatchAsync(Guid importId)
@@ -207,10 +242,25 @@ public class AttendanceImportLogAppService(
 		};
 	}
 
-	private static AttendanceImportRowDto MapToRowDto(AttendanceImportRow row)
+	private static AttendanceImportRowDto MapToRowDto(AttendanceImportRow row, Dictionary<string, Guid> employeeLookup)
 	{
+		var resolvedEmployeeId = TryResolveEmployeeId(row.EmployeeCode, employeeLookup);
+		var statusCode = TryNormalizeStatusCode(row.Status, out var normalizedWarning);
+		var warnings = row.Warnings.ToList();
+		if (!resolvedEmployeeId.HasValue && !string.IsNullOrWhiteSpace(row.EmployeeCode))
+		{
+			warnings.Add($"Unable to resolve employeeId for employee code '{row.EmployeeCode}'.");
+		}
+
+		if (!string.IsNullOrWhiteSpace(normalizedWarning))
+		{
+			warnings.Add(normalizedWarning);
+		}
+
 		return new AttendanceImportRowDto
 		{
+			Id = row.Id,
+			EmployeeId = resolvedEmployeeId,
 			RowNumber = row.RowNumber,
 			Action = row.Action,
 			AttendanceDate = row.AttendanceDate,
@@ -220,10 +270,96 @@ public class AttendanceImportLogAppService(
 			TimeIn = row.TimeIn,
 			TimeOut = row.TimeOut,
 			Status = row.Status,
+			StatusCode = statusCode,
 			Remarks = row.Remarks,
 			Errors = [.. row.Errors],
-			Warnings = [.. row.Warnings]
+			Warnings = warnings
 		};
+	}
+
+	private async Task<Dictionary<string, Guid>> BuildEmployeeLookupByCodeAsync(List<AttendanceImportRow> rows)
+	{
+		var employeeCodes = rows
+			.Select(row => row.EmployeeCode?.Trim())
+			.Where(code => !string.IsNullOrWhiteSpace(code))
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+		if (employeeCodes.Count == 0)
+		{
+			return new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+		}
+		var normalizedEmployeeCodes = employeeCodes
+			.Select(code => code!.ToUpperInvariant())
+			.ToList();
+
+		var employeeQuery = await employeeRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			employeeQuery = employeeQuery.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+
+		var employees = await AsyncExecuter.ToListAsync(
+			employeeQuery
+				.Where(employee =>
+					employee.EmployeeCode != null &&
+					normalizedEmployeeCodes.Contains(employee.EmployeeCode.ToUpper()))
+				.Select(employee => new { employee.EmployeeCode, employee.Id }));
+		return employees
+			.GroupBy(x => x.EmployeeCode, StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(group => group.Key, group => group.First().Id, StringComparer.OrdinalIgnoreCase);
+	}
+
+	private static Guid? TryResolveEmployeeId(string? employeeCode, Dictionary<string, Guid> employeeLookup)
+	{
+		if (string.IsNullOrWhiteSpace(employeeCode))
+		{
+			return null;
+		}
+
+		return employeeLookup.TryGetValue(employeeCode.Trim(), out var employeeId) ? employeeId : null;
+	}
+
+	private static AttendanceImportRowStatusCode? TryNormalizeStatusCode(string? status, out string? warning)
+	{
+		warning = null;
+		if (string.IsNullOrWhiteSpace(status))
+		{
+			throw new EntityNotFoundException(typeof(AttendanceImportBatch), importId);
+		}
+
+		var normalized = status.Trim().Replace("_", string.Empty).Replace("-", string.Empty).Replace(" ", string.Empty).ToUpperInvariant();
+		return normalized switch
+		{
+			"PRESENT" => AttendanceImportRowStatusCode.Present,
+			"ABSENT" => AttendanceImportRowStatusCode.Absent,
+			"FULLDAYLEAVE" => AttendanceImportRowStatusCode.Absent,
+			"HALFDAY" => AttendanceImportRowStatusCode.HalfDay,
+			"HALFDAYLEAVE" => AttendanceImportRowStatusCode.HalfDay,
+			"PENDING" => null,
+			"NOTMARKED" => null,
+			_ => SetStatusWarning(status, out warning)
+		};
+	}
+
+	private static AttendanceImportRowStatusCode? SetStatusWarning(string originalStatus, out string? warning)
+	{
+		warning = $"Unable to normalize attendance status '{originalStatus}'.";
+		return null;
+	}
+
+	private static void ValidatePaging(int skipCount, int maxResultCount, int maxUpperBound)
+	{
+		if (skipCount < 0)
+		{
+			throw new BusinessException(HRErrorCodes.AttendanceImportInvalidSkipCount);
+		}
+
+		if (maxResultCount <= 0 || maxResultCount > maxUpperBound)
+		{
+			throw new BusinessException(HRErrorCodes.AttendanceImportInvalidMaxResultCount)
+				.WithData("allowedRange", $"1-{maxUpperBound}")
+				.WithData("providedValue", maxResultCount);
+		}
 	}
 
 	private async Task<AttendanceImportBatch> GetOwnedBatchAsync(Guid importId)

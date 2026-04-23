@@ -130,6 +130,8 @@ public const string LeaveTypeCreateMethodNotSupported = "HR:Leave:020031";
 	public const string AttendanceImportNoValidRows = "HR:Leave:020208";
 	public const string AttendanceImportFileTooLarge = "HR:Leave:020209";
 	public const string AttendanceImportMultiplePayrollMonths = "HR:Leave:020210";
+	public const string AttendanceImportInvalidSkipCount = "HR:Leave:020211";
+	public const string AttendanceImportInvalidMaxResultCount = "HR:Leave:020212";
 
 	// ── Payroll: 03xxxx ──────────────────────────────────────────
 

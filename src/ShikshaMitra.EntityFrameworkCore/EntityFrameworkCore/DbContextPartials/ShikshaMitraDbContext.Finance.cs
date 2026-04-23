@@ -1,15 +1,14 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using ShikshaMitra.Finance.Charges;
-using ShikshaMitra.Finance.ConcessionRequests;
-using ShikshaMitra.Finance.Expenses;
-using ShikshaMitra.Finance.FeeCollection;
-using ShikshaMitra.Finance.Incomes;
-using ShikshaMitra.Finance.Setting;
-using ShikshaMitra.Finance.Setting.ConcessionType;
-using ShikshaMitra.Finance.Setting.ConcessionTypes;
-using ShikshaMitra.Finance.Setting.FeeStructure;
-using ShikshaMitra.Finance.Setting.FeeStructures;
-using ShikshaMitra.Finance.StudentFeeAssignment;
+using ShikshaMitra.Finance.Accounts.Expenses;
+using ShikshaMitra.Finance.Accounts.Incomes;
+using ShikshaMitra.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Fees.Charges;
+using ShikshaMitra.Finance.Fees.ConcessionRequests;
+using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Students.Fees;
 
 namespace ShikshaMitra.EntityFrameworkCore;

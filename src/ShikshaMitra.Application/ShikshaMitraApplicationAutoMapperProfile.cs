@@ -1,4 +1,4 @@
-using AutoMapper;
+﻿using AutoMapper;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Application.Contracts.Groups;
 using ShikshaMitra.Application.Contracts.Communication.AnnouncementTypes;
@@ -22,10 +22,10 @@ using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.Academic.Curriculum.Settings;
-using ShikshaMitra.Finance.StudentFeeAssignment;
-using ShikshaMitra.Application.Contracts.Finance.StudentFeeAssignment.Dtos;
-using ShikshaMitra.Finance.ConcessionRequests;
-using ShikshaMitra.Finance.ConcessionRequests.Dtos;
+using ShikshaMitra.Finance.Fees.Concessions.Dtos;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
+using ShikshaMitra.Finance.Fees.ConcessionRequests;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
 namespace ShikshaMitra;
 

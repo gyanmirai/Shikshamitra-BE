@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.FeeCollection;
+using ShikshaMitra.Finance.Fees.Collections.Dtos;
 
 namespace ShikshaMitra.Finance.FeeCollectionTests;
 

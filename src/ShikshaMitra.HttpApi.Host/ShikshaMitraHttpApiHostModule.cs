@@ -252,10 +252,10 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 	private static string GetSwaggerModule(string ns)
 	{
 		if (ns.Contains(".HR.") || ns.Contains(".Controllers.HR")) return "v1-hr";
-		if (ns.Contains(".Controllers.Academic")) return "v1-academic";
-		if (ns.Contains(".Controllers.Students") || ns.StartsWith("ShikshaMitra.Students.")) return "v1-students";
-		if (ns.Contains(".Controllers.Finance")) return "v1-finance";
-		if (ns.Contains(".Controllers.Library")) return "v1-library";
+		if (ns.Contains(".Controllers.Academic") || ns.Contains(".Academic.")) return "v1-academic";
+		if (ns.Contains(".Controllers.Students") || ns.Contains(".Students.") || ns.StartsWith("ShikshaMitra.Students.")) return "v1-students";
+		if (ns.Contains(".Controllers.Finance") || ns.Contains(".Finance.")) return "v1-finance";
+		if (ns.Contains(".Controllers.Library") || ns.Contains(".Library.")) return "v1-library";
 		return "v1-admin";
 	}
 

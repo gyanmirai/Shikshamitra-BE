@@ -15,8 +15,6 @@ using ShikshaMitra.Students.Enrollments.Registrations;
 using Volo.Abp.Application.Dtos;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionType.Dtos;
-using ShikshaMitra.Finance.Fees.Settings.FeeCategory.Dtos;
-using ShikshaMitra.Finance.Fees.Settings.FeeHead.Dtos;
 
 namespace ShikshaMitra.Finance.ConcessionRequests;
 

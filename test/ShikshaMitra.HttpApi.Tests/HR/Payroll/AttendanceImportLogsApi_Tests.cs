@@ -169,9 +169,33 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 		var importId = listBody.Items[0].Id;
 		var detailResponse = await Client.GetAsync($"{PayrollImportLogsUrl}/{importId}");
 		detailResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var detailJson = await detailResponse.Content.ReadAsStringAsync();
+		using (var detailDoc = JsonDocument.Parse(detailJson))
+		{
+			var root = detailDoc.RootElement;
+			root.GetProperty("id").GetString().ShouldNotBeNullOrWhiteSpace();
+			root.GetProperty("runSource").ValueKind.ShouldBe(JsonValueKind.Number);
+			root.GetProperty("externalCorrelationId").ValueKind.ShouldBeOneOf(JsonValueKind.String, JsonValueKind.Null);
+			root.GetProperty("integrationProvider").ValueKind.ShouldBeOneOf(JsonValueKind.String, JsonValueKind.Null);
+			root.GetProperty("isBatchLocked").ValueKind.ShouldBeOneOf(JsonValueKind.True, JsonValueKind.False);
+		}
 
 		var rowsResponse = await Client.GetAsync($"{PayrollImportLogsUrl}/{importId}/rows?skipCount=0&maxResultCount=50");
 		rowsResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var rowsJson = await rowsResponse.Content.ReadAsStringAsync();
+		using (var rowsDoc = JsonDocument.Parse(rowsJson))
+		{
+			var rowsRoot = rowsDoc.RootElement;
+			rowsRoot.GetProperty("totalCount").GetInt32().ShouldBeGreaterThan(0);
+			var items = rowsRoot.GetProperty("items");
+			items.ValueKind.ShouldBe(JsonValueKind.Array);
+			items.GetArrayLength().ShouldBeGreaterThan(0);
+			var first = items[0];
+			first.GetProperty("id").GetString().ShouldNotBeNullOrWhiteSpace();
+			first.GetProperty("employeeId").GetString().ShouldNotBeNullOrWhiteSpace();
+			first.GetProperty("statusCode").ValueKind.ShouldBe(JsonValueKind.Number);
+			first.GetProperty("status").ValueKind.ShouldBe(JsonValueKind.String);
+		}
 	}
 
 	[Fact]

@@ -22,6 +22,13 @@ public class GetAttendanceImportRowsInput : PagedAndSortedResultRequestDto
 {
 }
 
+public enum AttendanceImportRowStatusCode
+{
+	Present = 0,
+	Absent = 1,
+	HalfDay = 2
+}
+
 public class AttendanceImportLogListItemDto
 {
 	public Guid Id { get; set; }
@@ -58,6 +65,8 @@ public class AttendanceImportLogDetailDto : AttendanceImportLogListItemDto
 
 public class AttendanceImportRowDto
 {
+	public Guid Id { get; set; }
+	public Guid? EmployeeId { get; set; }
 	public int RowNumber { get; set; }
 	public string Action { get; set; } = "invalid";
 	public string AttendanceDate { get; set; } = string.Empty;
@@ -67,6 +76,7 @@ public class AttendanceImportRowDto
 	public string? TimeIn { get; set; }
 	public string? TimeOut { get; set; }
 	public string? Status { get; set; }
+	public AttendanceImportRowStatusCode? StatusCode { get; set; }
 	public string? Remarks { get; set; }
 	public List<string> Errors { get; set; } = [];
 	public List<string> Warnings { get; set; } = [];

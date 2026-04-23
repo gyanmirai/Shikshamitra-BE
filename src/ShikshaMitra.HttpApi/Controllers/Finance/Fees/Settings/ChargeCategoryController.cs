@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.Finance.Fees.Settings.ChargeCategory;
-using ShikshaMitra.Finance.Fees.Settings.ChargeCategory.Dtos;
+using ShikshaMitra.Finance.Fees.Settings.ChargeCategories;
+using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 

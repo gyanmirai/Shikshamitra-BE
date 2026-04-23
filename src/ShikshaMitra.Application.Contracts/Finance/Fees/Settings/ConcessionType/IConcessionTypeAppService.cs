@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
-using ShikshaMitra.Application.Contracts.Finance.Setting.FeeCategory.Dtos;
-using ShikshaMitra.Finance.Setting.ConcessionType.Dtos;
 using Volo.Abp.Application.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionType.Dtos;
 

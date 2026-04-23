@@ -1,7 +1,7 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace ShikshaMitra.Finance.Fees.Settings.ReceiptBook.Dtos;
+namespace ShikshaMitra.Finance.Fees.Settings.Dtos;
 
 public class ReceiptBookCreateRequest
 {

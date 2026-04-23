@@ -1,6 +1,5 @@
 ﻿using ShikshaMitra.Common;
 using ShikshaMitra.Finance.ConcessionRequests;
-using ShikshaMitra.Finance.Setting.ConcessionTypes;
 using System;
 using System.Collections.Generic;
 using System.Linq;

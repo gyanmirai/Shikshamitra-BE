@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using ShikshaMitra.Finance.Setting;
 
-namespace ShikshaMitra.Finance.Accounts.Settings.BankAccount.Dtos;
+namespace ShikshaMitra.Finance.Accounts.Settings.Dtos;
 
 public class BankAccountResponse
 {

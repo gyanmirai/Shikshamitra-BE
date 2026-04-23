@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace ShikshaMitra.Finance.Fees.Settings.ChargeCategory.Dtos;
+namespace ShikshaMitra.Finance.Fees.Settings.Dtos;
 
 public class ChargeCategoryResponse
 {

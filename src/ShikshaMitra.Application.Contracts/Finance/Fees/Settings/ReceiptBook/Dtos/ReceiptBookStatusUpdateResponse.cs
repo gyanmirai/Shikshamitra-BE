@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace ShikshaMitra.Finance.Fees.Settings.ReceiptBook.Dtos;
+namespace ShikshaMitra.Finance.Fees.Settings.Dtos;
 
 public class ReceiptBookStatusUpdateResponse
 {

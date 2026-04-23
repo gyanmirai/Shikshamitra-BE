@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace ShikshaMitra.Finance.Fees.Settings.FeeHead.Dtos;
+namespace ShikshaMitra.Finance.Fees.Settings.Dtos;
 
 public class FeeHeadListResponse
 {

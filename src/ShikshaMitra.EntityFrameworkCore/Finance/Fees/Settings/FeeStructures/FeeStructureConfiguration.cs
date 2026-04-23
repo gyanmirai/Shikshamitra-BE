@@ -2,7 +2,6 @@
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
-using ShikshaMitra.Finance.Setting.FeeStructures;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 public class FeeStructureConfiguration : IEntityTypeConfiguration<FeeStructure>

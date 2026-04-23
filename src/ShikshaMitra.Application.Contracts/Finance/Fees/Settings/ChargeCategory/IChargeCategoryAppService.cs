@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Threading.Tasks;
-using ShikshaMitra.Application.Contracts.Finance.Setting.FeeCategory.Dtos; // For MessageResponse if we reuse it, or create generic one.
-using ShikshaMitra.Finance.Fees.Settings.ChargeCategory.Dtos;
+using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using Volo.Abp.Application.Services;
 
-namespace ShikshaMitra.Finance.Fees.Settings.ChargeCategory;
+namespace ShikshaMitra.Finance.Fees.Settings.ChargeCategories;
 
 public interface IChargeCategoryAppService : IApplicationService
 {

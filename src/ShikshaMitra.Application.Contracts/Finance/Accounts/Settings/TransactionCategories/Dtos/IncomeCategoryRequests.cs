@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-namespace ShikshaMitra.Finance.Accounts.Settings.TransactionCategory.Dtos;
+namespace ShikshaMitra.Finance.Accounts.Settings.TransactionCategories.Dtos;
 
 public class CreateTransactionCategoryRequest
 {

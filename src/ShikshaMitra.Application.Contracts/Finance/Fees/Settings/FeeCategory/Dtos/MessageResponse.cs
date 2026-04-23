@@ -1,4 +1,4 @@
-﻿namespace ShikshaMitra.Finance.Fees.Settings.FeeCategory.Dtos;
+﻿namespace ShikshaMitra.Finance.Fees.Settings.Dtos;
 
 public class MessageResponse
 {

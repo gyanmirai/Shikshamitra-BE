@@ -1,10 +1,11 @@
-﻿using System;
+﻿using ShikshaMitra.Finance.Accounts.Settings;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra.Finance.Accounts.Settings;
+namespace ShikshaMitra.Domain.Finance.Accounts.Settings;
 
 public class TransactionCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
@@ -14,7 +15,7 @@ public class TransactionCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public string? Description { get; set; }
     public bool IsActive { get; set; }
 
-    private readonly List<Tag> _tags = [];
+    private readonly List<Tag> _tags = new List<Tag>();
     public IReadOnlyCollection<Tag> Tags => _tags.AsReadOnly();
 
     protected TransactionCategory() { }

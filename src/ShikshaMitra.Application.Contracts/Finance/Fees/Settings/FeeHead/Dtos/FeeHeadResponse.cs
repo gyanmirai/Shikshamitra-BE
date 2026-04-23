@@ -1,7 +1,7 @@
 ﻿using System;
 using Volo.Abp.Application.Dtos;
 
-namespace ShikshaMitra.Finance.Fees.Settings.FeeHead.Dtos;
+namespace ShikshaMitra.Finance.Fees.Settings.Dtos;
 
 public class FeeHeadResponse : EntityDto<Guid>
 {

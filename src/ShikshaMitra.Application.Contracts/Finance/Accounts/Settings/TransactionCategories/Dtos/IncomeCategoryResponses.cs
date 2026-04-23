@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace ShikshaMitra.Finance.Accounts.Settings.TransactionCategory.Dtos;
+namespace ShikshaMitra.Finance.Accounts.Settings.TransactionCategories.Dtos;
 
 public class TransactionCategoryResponse
 {

@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace ShikshaMitra.Finance.Fees.Settings.FeeHead.Dtos;
+namespace ShikshaMitra.Finance.Fees.Settings.Dtos;
 
 public class FeeHeadStatusUpdateRequest
 {

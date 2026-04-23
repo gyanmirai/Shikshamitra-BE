@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.Finance.Accounts.Settings.TransactionCategory;
-using ShikshaMitra.Finance.Accounts.Settings.TransactionCategory.Dtos;
+using ShikshaMitra.Finance.Accounts.Settings.TransactionCategories.Dtos;
+using ShikshaMitra.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Settings.TransactionCategories.Dtos;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -10,19 +11,12 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Accounts.Settings;
 
 [Area("Finance")]
 [Route("api/expense-categories")]
-public class ExpenseCategoryController : AbpController
+public class ExpenseCategoryController(ITransactionCategoryAppService expenseCategoryAppService) : AbpController
 {
-	private readonly ITransactionCategoryAppService _expenseCategoryAppService;
-
-	public ExpenseCategoryController(ITransactionCategoryAppService expenseCategoryAppService)
-	{
-		_expenseCategoryAppService = expenseCategoryAppService;
-	}
-
 	[HttpPost]
 	public Task<TransactionCategoryResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] CreateTransactionCategoryRequest input)
 	{
-		return _expenseCategoryAppService.CreateAsync(academicYearId, input);
+		return expenseCategoryAppService.CreateAsync(academicYearId, input);
 	}
 
 	[HttpGet]
@@ -32,24 +26,24 @@ public class ExpenseCategoryController : AbpController
 		[FromQuery] int pageSize = 10,
 		[FromQuery] string? search = null)
 	{
-		return _expenseCategoryAppService.GetListAsync(academicYearId, page, pageSize, search);
+		return expenseCategoryAppService.GetListAsync(academicYearId, page, pageSize, search);
 	}
 
 	[HttpGet("{expenseCategoryId}")]
 	public Task<TransactionCategoryResponse> GetAsync(Guid expenseCategoryId)
 	{
-		return _expenseCategoryAppService.GetAsync(expenseCategoryId);
+		return expenseCategoryAppService.GetAsync(expenseCategoryId);
 	}
 
 	[HttpPut("{expenseCategoryId}")]
 	public Task<TransactionCategoryResponse> UpdateAsync(Guid expenseCategoryId, [FromBody] UpdateTransactionCategoryRequest input)
 	{
-		return _expenseCategoryAppService.UpdateAsync(expenseCategoryId, input);
+		return expenseCategoryAppService.UpdateAsync(expenseCategoryId, input);
 	}
 
 	[HttpDelete("{expenseCategoryId}")]
 	public Task DeleteAsync(Guid expenseCategoryId)
 	{
-		return _expenseCategoryAppService.DeleteAsync(expenseCategoryId);
+		return expenseCategoryAppService.DeleteAsync(expenseCategoryId);
 	}
 }

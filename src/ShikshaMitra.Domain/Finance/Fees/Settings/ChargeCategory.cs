@@ -2,7 +2,7 @@
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra.Finance.Fees.Settings;
+namespace ShikshaMitra.Domain.Finance.Fees.Settings;
 
 public class ChargeCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {

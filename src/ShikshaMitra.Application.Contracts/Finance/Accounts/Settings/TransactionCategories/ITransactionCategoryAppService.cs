@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Threading.Tasks;
-using ShikshaMitra.Finance.Accounts.Settings.TransactionCategory.Dtos;
+using ShikshaMitra.Finance.Accounts.Settings.TransactionCategories.Dtos;
 using Volo.Abp.Application.Services;
 
-namespace ShikshaMitra.Finance.Accounts.Settings.TransactionCategory;
+namespace ShikshaMitra.Finance.Accounts.Settings;
 
 public interface ITransactionCategoryAppService : IApplicationService
 {

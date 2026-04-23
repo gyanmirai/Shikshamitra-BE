@@ -3,7 +3,7 @@ using System;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra.Finance.Accounts.Settings;
+namespace ShikshaMitra.Domain.Finance.Accounts.Settings;
 
 public class BankAccount : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {

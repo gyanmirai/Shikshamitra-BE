@@ -10,9 +10,8 @@ using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.Finance.Setting;
-using ShikshaMitra.Finance.Fees.Settings.FeeCategory.Dtos;
-using ShikshaMitra.Finance.Fees.Settings.ReceiptBook;
-using ShikshaMitra.Finance.Fees.Settings.ReceiptBook.Dtos;
+using ShikshaMitra.Finance.Fees.Settings.Dtos;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
 

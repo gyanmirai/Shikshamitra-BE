@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.Finance.Fees.Settings.FeeCategory.Dtos;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructure;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructure.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;

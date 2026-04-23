@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Threading.Tasks;
-using ShikshaMitra.Finance.Accounts.Settings.BankAccount.Dtos;
+using ShikshaMitra.Finance.Accounts.Settings.Dtos;
 using Volo.Abp.Application.Services;
 
-namespace ShikshaMitra.Finance.Accounts.Settings.BankAccount;
+namespace ShikshaMitra.Finance.Accounts.Settings;
 
 public interface IBankAccountAppService : IApplicationService
 {

@@ -1,9 +1,9 @@
-﻿using System;
+﻿using ShikshaMitra.Finance.Fees.Settings.Dtos;
+using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
-using ShikshaMitra.Finance.Fees.Settings.FeeCategory.Dtos;
 
-namespace ShikshaMitra.Finance.Fees.Settings.FeeCategory;
+namespace ShikshaMitra.Finance.Fees.Settings;
 
 public interface IFeeCategoryAppService : IApplicationService
 {

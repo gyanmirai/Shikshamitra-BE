@@ -7,9 +7,8 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp;
 using ShikshaMitra.Finance.Setting;
-using ShikshaMitra.Finance.Fees.Settings.FeeCategory.Dtos;
-using ShikshaMitra.Finance.Fees.Settings.FeeHead;
-using ShikshaMitra.Finance.Fees.Settings.FeeHead.Dtos;
+using ShikshaMitra.Finance.Fees.Settings.Dtos;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
 
@@ -28,7 +27,7 @@ public class FeeHeadAppService : ApplicationService, IFeeHeadAppService
         _feeCategoryRepository = feeCategoryRepository;
     }
 
-    public async Task<MessageResponse> CreateAsync(Guid academicYearId, FeeHeadCreateRequest input)
+	public async Task<MessageResponse> CreateAsync(Guid academicYearId, FeeHeadCreateRequest input)
     {
         var feeHead = new FeeHead(
             GuidGenerator.Create(),

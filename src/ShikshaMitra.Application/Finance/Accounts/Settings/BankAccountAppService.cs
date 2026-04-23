@@ -2,8 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using ShikshaMitra.Finance.Accounts.Settings.BankAccount;
-using ShikshaMitra.Finance.Accounts.Settings.BankAccount.Dtos;
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Settings.Dtos;
 using ShikshaMitra.Finance.Setting;
 using Volo.Abp;
 using Volo.Abp.Application.Services;

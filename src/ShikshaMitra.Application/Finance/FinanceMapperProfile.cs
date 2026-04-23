@@ -1,11 +1,10 @@
 ﻿using AutoMapper;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
 using ShikshaMitra.Finance.Fees.Settings;
-using ShikshaMitra.Finance.Fees.Settings.ChargeCategory.Dtos;
+using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.GeneralSetting.FeeHead;
-using ShikshaMitra.Finance.Setting.FeeStructures;
-using ShikshaMitra.Finance.Setting.GeneralSetting.PaymentStatusOption;
 
 
 namespace ShikshaMitra.Finance;

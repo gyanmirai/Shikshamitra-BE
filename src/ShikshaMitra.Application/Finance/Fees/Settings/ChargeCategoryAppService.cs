@@ -1,10 +1,11 @@
-﻿using System;
+﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Fees.Settings.ChargeCategories;
+using ShikshaMitra.Finance.Fees.Settings.Dtos;
+using ShikshaMitra.Finance.Setting;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using ShikshaMitra.Finance.Fees.Settings.ChargeCategory;
-using ShikshaMitra.Finance.Fees.Settings.ChargeCategory.Dtos;
-using ShikshaMitra.Finance.Setting;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;

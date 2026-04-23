@@ -4,12 +4,14 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
+using ShikshaMitra.Finance.Fees.FeeCollection.PaymentDetails;
 using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
@@ -22,7 +24,6 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Users;
 using FeeStructureEntity = ShikshaMitra.Finance.Fees.Settings.FeeStructures.FeeStructure;
-using PD = ShikshaMitra.Finance.FeeCollection.PaymentDetails;
 
 namespace ShikshaMitra.Finance.Fees.FeeCollection;
 
@@ -726,26 +727,26 @@ public class FeeCollectionAppService(
 
         return method switch
         {
-            PaymentMethodEnum.Cheque => new PD.ChequeDetails(
+            PaymentMethodEnum.Cheque => new ChequeDetails(
                 chequeNumber: Get("chequeNumber"),
                 bankName: Get("bankName"),
                 branchName: Get("branchName"),
                 chequeDate: DateOnly.TryParse(Get("chequeDate"), out var cd)
                     ? cd : DateOnly.FromDateTime(DateTime.UtcNow)),
 
-            PaymentMethodEnum.DemandDraft => new PD.DemandDraftDetails(
+            PaymentMethodEnum.DemandDraft => new DemandDraftDetails(
                 ddNumber: Get("ddNumber"),
                 issuingBankName: Get("issuingBankName"),
                 branchName: Get("branchName"),
                 ddDate: DateOnly.TryParse(Get("ddDate"), out var dd)
                     ? dd : DateOnly.FromDateTime(DateTime.UtcNow)),
 
-            PaymentMethodEnum.BankTransfer => new PD.BankTransferDetails(
+            PaymentMethodEnum.BankTransfer => new BankTransferDetails(
                 transactionReferenceNumber: Get("transactionReferenceNumber"),
                 bankName: Get("bankName"),
                 ifscCode: Get("ifscCode")),
 
-            PaymentMethodEnum.UPI => new PD.UpiDetails(
+            PaymentMethodEnum.UPI => new UpiDetails(
                 upiTransactionId: Get("upiTransactionId"),
                 upiId: Get("upiId"),
                 appName: Get("appName")),

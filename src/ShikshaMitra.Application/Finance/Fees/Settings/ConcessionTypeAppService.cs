@@ -2,7 +2,6 @@
 using ShikshaMitra.Finance.Fees.Settings.ConcessionType;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionType.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
-using ShikshaMitra.Finance.Setting.ConcessionType.Dtos;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using System;
 using System.Linq;

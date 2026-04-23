@@ -21,4 +21,3 @@ public class SubjectAssignmentDetailResponseDto
         public string? Prerequisites { get; set; }
         public string? Description { get; set; }
         public List<string> Documents { get; set; } = [];
-}

@@ -4594,9 +4594,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
-                    b.Property<Guid>("EducationMediumStageId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -4625,12 +4622,9 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EducationMediumStageId")
-                        .HasDatabaseName("IX_StaffAttendanceDayLocks_EducationMediumStageId");
-
-                    b.HasIndex("TenantId", "EducationMediumStageId", "LockDate")
+                    b.HasIndex("TenantId", "LockDate")
                         .IsUnique()
-                        .HasDatabaseName("IX_StaffAttendanceDayLocks_Tenant_Stage_Date");
+                        .HasDatabaseName("IX_StaffAttendanceDayLocks_Tenant_Date");
 
                     b.ToTable("AppStaffAttendanceDayLocks", (string)null);
                 });

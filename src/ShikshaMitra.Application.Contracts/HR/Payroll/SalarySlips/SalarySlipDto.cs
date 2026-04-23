@@ -62,7 +62,7 @@ public class SalarySlipDto
 	/// <summary>
 	/// Salary slip status
 	/// </summary>
-	public string Status { get; set; } = string.Empty;
+	public SalarySlipStatus Status { get; set; }
 
 	/// <summary>
 	/// Optional remarks

@@ -20,7 +20,6 @@ public class TakeAttendanceController(ITakeAttendanceAppService takeAttendanceAp
 	[ProducesResponseType(typeof(TakeAttendanceDayResponse), StatusCodes.Status200OK)]
 	public virtual Task<TakeAttendanceDayResponse> GetDayAsync(
 		[FromQuery, Required] string attendanceDate,
-		[FromQuery, Required] Guid educationMediumStageId,
 		[FromQuery] string? department = null,
 		[FromQuery] bool? isTeaching = null,
 		[FromQuery] Guid? roleId = null,
@@ -31,7 +30,6 @@ public class TakeAttendanceController(ITakeAttendanceAppService takeAttendanceAp
 		return takeAttendanceAppService.GetDayAsync(new GetTakeAttendanceDayInput
 		{
 			AttendanceDate = attendanceDate,
-			EducationMediumStageId = educationMediumStageId,
 			Department = department,
 			IsTeaching = isTeaching,
 			RoleId = roleId,
@@ -51,20 +49,18 @@ public class TakeAttendanceController(ITakeAttendanceAppService takeAttendanceAp
 	[HttpPost("day/lock")]
 	[ProducesResponseType(StatusCodes.Status204NoContent)]
 	public virtual async Task<IActionResult> LockDayAsync(
-		[FromQuery, Required] Guid educationMediumStageId,
 		[FromQuery, Required] string attendanceDate)
 	{
-		await takeAttendanceAppService.LockDayAsync(educationMediumStageId, attendanceDate);
+		await takeAttendanceAppService.LockDayAsync(attendanceDate);
 		return NoContent();
 	}
 
 	[HttpDelete("day/lock")]
 	[ProducesResponseType(StatusCodes.Status204NoContent)]
 	public virtual async Task<IActionResult> UnlockDayAsync(
-		[FromQuery, Required] Guid educationMediumStageId,
 		[FromQuery, Required] string attendanceDate)
 	{
-		await takeAttendanceAppService.UnlockDayAsync(educationMediumStageId, attendanceDate);
+		await takeAttendanceAppService.UnlockDayAsync(attendanceDate);
 		return NoContent();
 	}
 }

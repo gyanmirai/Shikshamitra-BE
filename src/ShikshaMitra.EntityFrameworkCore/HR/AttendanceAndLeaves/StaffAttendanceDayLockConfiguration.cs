@@ -16,11 +16,8 @@ public class StaffAttendanceDayLockConfiguration : IEntityTypeConfiguration<Staf
 		builder.Property(x => x.LockDate)
 			.HasColumnType("date");
 
-		builder.HasIndex(x => new { x.TenantId, x.EducationMediumStageId, x.LockDate })
+		builder.HasIndex(x => new { x.TenantId, x.LockDate })
 			.IsUnique()
-			.HasDatabaseName("IX_StaffAttendanceDayLocks_Tenant_Stage_Date");
-
-		builder.HasIndex(x => x.EducationMediumStageId)
-			.HasDatabaseName("IX_StaffAttendanceDayLocks_EducationMediumStageId");
+			.HasDatabaseName("IX_StaffAttendanceDayLocks_Tenant_Date");
 	}
 }

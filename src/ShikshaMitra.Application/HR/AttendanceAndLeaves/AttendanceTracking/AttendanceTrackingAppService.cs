@@ -145,7 +145,7 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 			OutTime = a.TimeOut?.ToString("o"),
 			HoursWorked = CalculateHoursWorked(a.TimeIn, a.TimeOut),
 			Remarks = null,
-			Status = ToWireStatus(MapToTrackingStatus(a.StatusType, rejectedLeaveEmployeeIds.Contains(a.EmployeeId)))
+			Status = MapToTrackingStatus(a.StatusType, rejectedLeaveEmployeeIds.Contains(a.EmployeeId))
 		}).ToList();
 
 		return new AttendanceDateWiseResponse
@@ -258,8 +258,6 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 			}
 
 			var isoDate = BuildDateIsoString(date, attendance?.TimeIn?.Offset);
-			var statusWire = ToWireStatus(status);
-
 			// Apply status filter if specified (skip adding to items but keep in summary counts)
 			if (input.Status.HasValue && status != input.Status.Value)
 			{
@@ -274,7 +272,7 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 				OutTime = attendance?.TimeOut?.ToString("o"),
 				HoursWorked = CalculateHoursWorked(attendance?.TimeIn, attendance?.TimeOut),
 				Description = hasRejectedLeave ? "Leave Rejected" : null,
-				Status = statusWire
+				Status = status
 			};
 
 			if (!string.IsNullOrWhiteSpace(input.Search))
@@ -283,7 +281,7 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 				var matchesSearch = item.Day.ToLowerInvariant().Contains(search) ||
 									item.Date.ToLowerInvariant().Contains(search) ||
 									(item.Description ?? string.Empty).ToLowerInvariant().Contains(search) ||
-									item.Status.ToLowerInvariant().Contains(search);
+									item.Status.ToString().ToLowerInvariant().Contains(search);
 				if (!matchesSearch)
 				{
 					continue;
@@ -356,18 +354,6 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 			EmployeeAttendanceStatusType.FullDayLeave => AttendanceTrackingStatus.Absent,
 			EmployeeAttendanceStatusType.HalfDayLeave => AttendanceTrackingStatus.HalfDay,
 			_ => AttendanceTrackingStatus.Absent
-		};
-	}
-
-	private static string ToWireStatus(AttendanceTrackingStatus status)
-	{
-		return status switch
-		{
-			AttendanceTrackingStatus.Present => "PRESENT",
-			AttendanceTrackingStatus.Absent => "ABSENT",
-			AttendanceTrackingStatus.HalfDay => "HALF_DAY",
-			AttendanceTrackingStatus.RejectedLeave => "REJECTED_LEAVE",
-			_ => "ABSENT"
 		};
 	}
 

@@ -4,10 +4,17 @@ using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 
+public enum TakeAttendanceStatus
+{
+	NotMarked = 0,
+	Present = 1,
+	Absent = 2,
+	HalfDay = 3
+}
+
 public class GetTakeAttendanceDayInput : PagedAndSortedResultRequestDto
 {
 	public string AttendanceDate { get; set; } = string.Empty;
-	public Guid EducationMediumStageId { get; set; }
 	public string? Department { get; set; }
 	public bool? IsTeaching { get; set; }
 	public Guid? RoleId { get; set; }
@@ -42,16 +49,18 @@ public class TakeAttendanceEmployeeRowDto
 	public string DateIso { get; set; } = string.Empty;
 	public string? InTime { get; set; }
 	public string? OutTime { get; set; }
+	public string? ShiftName { get; set; }
+	public string? ShiftStartTime { get; set; }
+	public string? ShiftEndTime { get; set; }
 	public string? Remarks { get; set; }
 	public List<string> Warnings { get; set; } = [];
 	public List<string> Errors { get; set; } = [];
-	public string StatusWire { get; set; } = "NOT_MARKED";
+	public TakeAttendanceStatus Status { get; set; } = TakeAttendanceStatus.NotMarked;
 }
 
 public class TakeAttendanceSaveInput
 {
 	public string AttendanceDate { get; set; } = string.Empty;
-	public Guid EducationMediumStageId { get; set; }
 	public List<TakeAttendanceSaveEntryDto> Entries { get; set; } = [];
 }
 

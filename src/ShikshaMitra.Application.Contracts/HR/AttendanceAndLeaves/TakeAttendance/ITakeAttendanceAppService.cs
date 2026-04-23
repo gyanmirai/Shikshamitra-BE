@@ -8,6 +8,6 @@ public interface ITakeAttendanceAppService : IApplicationService
 {
 	Task<TakeAttendanceDayResponse> GetDayAsync(GetTakeAttendanceDayInput input);
 	Task<TakeAttendanceSaveOutput> SaveDayAsync(TakeAttendanceSaveInput input);
-	Task LockDayAsync(Guid educationMediumStageId, string attendanceDate);
-	Task UnlockDayAsync(Guid educationMediumStageId, string attendanceDate);
+	Task LockDayAsync(string attendanceDate);
+	Task UnlockDayAsync(string attendanceDate);
 }

@@ -159,6 +159,30 @@ public class AttendanceImportLogAppService(
 		await attendanceImportBatchRepository.UpdateAsync(batch, autoSave: true);
 	}
 
+	public async Task LockBatchAsync(Guid importId)
+	{
+		var batch = await GetOwnedBatchAsync(importId);
+		if (batch.IsBatchLocked)
+		{
+			return;
+		}
+
+		batch.SetBatchLocked(true);
+		await attendanceImportBatchRepository.UpdateAsync(batch, autoSave: true);
+	}
+
+	public async Task UnlockBatchAsync(Guid importId)
+	{
+		var batch = await GetOwnedBatchAsync(importId);
+		if (!batch.IsBatchLocked)
+		{
+			return;
+		}
+
+		batch.SetBatchLocked(false);
+		await attendanceImportBatchRepository.UpdateAsync(batch, autoSave: true);
+	}
+
 	private async Task<Dictionary<string, bool>> BuildFinalizedMonthLookupAsync(IEnumerable<AttendanceImportBatch> items)
 	{
 		var monthYears = items
@@ -300,7 +324,7 @@ public class AttendanceImportLogAppService(
 		warning = null;
 		if (string.IsNullOrWhiteSpace(status))
 		{
-			return null;
+			throw new EntityNotFoundException(typeof(AttendanceImportBatch), importId);
 		}
 
 		var normalized = status.Trim().Replace("_", string.Empty).Replace("-", string.Empty).Replace(" ", string.Empty).ToUpperInvariant();

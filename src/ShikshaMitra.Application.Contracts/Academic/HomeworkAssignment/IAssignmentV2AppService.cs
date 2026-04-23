@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
 
@@ -17,7 +17,7 @@ public interface IAssignmentV2AppService : IApplicationService
         GetAssignmentV2ListFilterDto filter
     );
 
-    Task<AssignmentV2ResponseDto> GetAsync(Guid assignmentId, Guid? academicMediumId = null);
+    Task<AssignmentV2ResponseDto> GetAsync(Guid id, Guid? academicMediumId = null);
 
     Task<AssignmentV2ResponseDto> UpdateAsync(
         Guid assignmentId,

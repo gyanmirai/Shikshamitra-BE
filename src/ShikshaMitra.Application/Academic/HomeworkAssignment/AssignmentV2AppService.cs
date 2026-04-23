@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -174,7 +174,7 @@ public class AssignmentV2AppService(
     // ─────────────────────────────────────────────────────────────────────
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.View)]
-    public async Task<AssignmentV2ResponseDto> GetAsync(Guid assignmentId, Guid? academicMediumId = null)
+    public async Task<AssignmentV2ResponseDto> GetAsync(Guid id, Guid? academicMediumId = null)
     {
         var q = await assignmentRepository.WithDetailsAsync(
             a => a.DivisionSchedules,
@@ -182,11 +182,11 @@ public class AssignmentV2AppService(
         );
 
         var assignment = await asyncExecuter.FirstOrDefaultAsync(
-            q.Where(a => a.Id == assignmentId)
-        ) ?? throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", assignmentId);
+            q.Where(a => a.Id == id)
+        ) ?? throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", id);
 
         if (academicMediumId.HasValue && assignment.EducationMediumId != academicMediumId.Value)
-            throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", assignmentId);
+            throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", id);
 
         var dto = await MapToAssignmentDtoAsync(assignment, assignment.EducationMediumId ?? Guid.Empty);
         return new AssignmentV2ResponseDto { Data = dto };

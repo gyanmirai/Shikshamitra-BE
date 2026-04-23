@@ -113,75 +113,75 @@ public class SubjectAssignmentAppService(
 
 
 
-        // I need to fetch all subjects for these assignments to get Name and Color.
-        var subjectIds = assignments.Select(x => x.SubjectId).Distinct().ToList();
-        var subjectsDict = (await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id)))
-                           .ToDictionary(s => s.Id);
+		// I need to fetch all subjects for these assignments to get Name and Color.
+		var subjectIds = assignments.Select(x => x.SubjectId).Distinct().ToList();
+		var subjectsDict = (await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id)))
+						   .ToDictionary(s => s.Id);
 
-        var electiveGroupIds = assignments.Where(x => x.ElectiveGroupId.HasValue).Select(x => x.ElectiveGroupId.Value).Distinct().ToList();
-        var electiveGroupsDict = (await electiveGroupRepository.GetListAsync(g => electiveGroupIds.Contains(g.Id)))
-                                 .ToDictionary(g => g.Id);
+		var electiveGroupIds = assignments.Where(x => x.ElectiveGroupId.HasValue).Select(x => x.ElectiveGroupId.Value).Distinct().ToList();
+		var electiveGroupsDict = (await electiveGroupRepository.GetListAsync(g => electiveGroupIds.Contains(g.Id)))
+								 .ToDictionary(g => g.Id);
 
-        foreach (var coreAssignment in coreSubjects)
-        {
-            subjectsDict.TryGetValue(coreAssignment.SubjectId, out var subject);
+		foreach (var coreAssignment in coreSubjects)
+		{
+			subjectsDict.TryGetValue(coreAssignment.SubjectId, out var subject);
 
-            groupedAssignments.Add(new SubjectAssignmentGroupDto
-            {
-                Id = coreAssignment.Id,
-                SubjectType = coreAssignment.SubjectType,
-                Status = coreAssignment.Status,
-                Color = subject?.Color, // Use subject color for core
-                Subjects = new List<SubjectLiteDto>
-                {
-                    new SubjectLiteDto
-                    {
-                        SubjectType = coreAssignment.SubjectType,
-                        SubjectId = coreAssignment.SubjectId,
-                        SubjectName = subject?.Name,
-                        SubjectCode = coreAssignment.SubjectCode, // Or subject.Code?
+			groupedAssignments.Add(new SubjectAssignmentGroupDto
+			{
+				Id = coreAssignment.Id,
+				SubjectType = coreAssignment.SubjectType,
+				Status = coreAssignment.Status,
+				Color = subject?.Color, // Use subject color for core
+				Subjects = new List<SubjectLiteDto>
+				{
+					new SubjectLiteDto
+					{
+						SubjectType = coreAssignment.SubjectType,
+						SubjectId = coreAssignment.SubjectId,
+						SubjectName = subject?.Name,
+						SubjectCode = coreAssignment.SubjectCode, // Or subject.Code?
                         Color = subject?.Color
-                    }
-                }
-            });
-        }
+					}
+				}
+			});
+		}
 
-        foreach (var group in groupedByElective)
-        {
-            var first = group.First();
-            electiveGroupsDict.TryGetValue(first.ElectiveGroupId.Value, out var electiveGroup);
+		foreach (var group in groupedByElective)
+		{
+			var first = group.First();
+			electiveGroupsDict.TryGetValue(first.ElectiveGroupId.Value, out var electiveGroup);
 
-            groupedAssignments.Add(new SubjectAssignmentGroupDto
-            {
-                Id = first.Id,
-                SubjectType = SubjectType.Elective,
-                Status = first.Status,
-                ElectiveGroupId = first.ElectiveGroupId,
-                ElectiveGroupName = electiveGroup?.Name,
-                Color = electiveGroup?.Color,
-                Subjects = group.Select(a =>
-                {
-                    subjectsDict.TryGetValue(a.SubjectId, out var subj);
-                    return new SubjectLiteDto
-                    {
-                        SubjectType = a.SubjectType,
-                        SubjectId = a.SubjectId,
-                        SubjectName = subj?.Name,
-                        SubjectCode = a.SubjectCode,
-                        Color = subj?.Color
-                    };
-                }).ToList()
-            });
-        }
+			groupedAssignments.Add(new SubjectAssignmentGroupDto
+			{
+				Id = first.Id,
+				SubjectType = SubjectType.Elective,
+				Status = first.Status,
+				ElectiveGroupId = first.ElectiveGroupId,
+				ElectiveGroupName = electiveGroup?.Name,
+				Color = electiveGroup?.Color,
+				Subjects = group.Select(a =>
+				{
+					subjectsDict.TryGetValue(a.SubjectId, out var subj);
+					return new SubjectLiteDto
+					{
+						SubjectType = a.SubjectType,
+						SubjectId = a.SubjectId,
+						SubjectName = subj?.Name,
+						SubjectCode = a.SubjectCode,
+						Color = subj?.Color
+					};
+				}).ToList()
+			});
+		}
 
-        // Pagination
-        var totalCount = groupedAssignments.Count;
-        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+		// Pagination
+		var totalCount = groupedAssignments.Count;
+		var totalPages = (int) Math.Ceiling(totalCount / (double) pageSize);
 
-        var pagedItems = groupedAssignments
-            .Skip(page * pageSize)
-            .Take(pageSize)
-            .ToList();
+		var pagedItems = groupedAssignments
+			.Skip(page * pageSize)
+			.Take(pageSize)
+			.ToList();
 
 		return new SubjectAssignmentPagedResponse
 		{
@@ -195,13 +195,17 @@ public class SubjectAssignmentAppService(
 
 	public async Task<SubjectAssignmentDto> GetAsync(Guid assignmentId)
 	{
-		var assignment = await assignmentRepository.GetAsync(assignmentId);
+		var baseQuery = await assignmentRepository.WithDetailsAsync(a => a.Teachers, a => a.Documents);
+
+		var assignment = await AsyncExecuter.FirstOrDefaultAsync(
+			baseQuery.Where(a => a.Id == assignmentId)
+		) ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(AssignedSubject), assignmentId);
 
 		List<AssignedSubject> groupAssignments;
 		if (assignment.ElectiveGroupId.HasValue)
 		{
-			groupAssignments = await assignmentRepository.GetListAsync(a =>
-				a.ElectiveGroupId == assignment.ElectiveGroupId && a.StandardId == assignment.StandardId
+			groupAssignments = await AsyncExecuter.ToListAsync(
+				baseQuery.Where(a => a.ElectiveGroupId == assignment.ElectiveGroupId && a.StandardId == assignment.StandardId)
 			);
 		}
 		else
@@ -397,7 +401,7 @@ public class SubjectAssignmentAppService(
 			throw new UserFriendlyException("Invalid status value");
 		}
 
-		var status = (SubjectStatus)input.Status;
+		var status = (SubjectStatus) input.Status;
 		assignment.ChangeStatus(status);
 
 		if (status == SubjectStatus.Published)
@@ -509,7 +513,7 @@ public class SubjectAssignmentAppService(
 				};
 				result.Add(subjectDto);
 			}
-				return result;
+			return result;
 		}
 		catch (Exception ex)
 		{

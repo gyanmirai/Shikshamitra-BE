@@ -1,9 +1,11 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
+[RemoteService(IsEnabled = false)]
 public interface IHomeworkAppService : IApplicationService
 {
     Task<HomeworkCreateResponseDto> CreateAsync(

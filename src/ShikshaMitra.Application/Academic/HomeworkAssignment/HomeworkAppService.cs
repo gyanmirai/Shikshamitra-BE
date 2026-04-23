@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -18,6 +18,7 @@ using Volo.Abp.Linq;
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
 [Authorize]
+[RemoteService(IsEnabled = false)]
 public class HomeworkAppService(
     IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
     IRepository<HomeworkDivisionSchedule, Guid> scheduleRepository,

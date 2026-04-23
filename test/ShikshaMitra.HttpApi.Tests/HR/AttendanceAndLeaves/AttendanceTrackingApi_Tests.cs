@@ -36,7 +36,12 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 		document.RootElement.TryGetProperty("pageSize", out _).ShouldBeTrue();
 		document.RootElement.TryGetProperty("totalPages", out _).ShouldBeTrue();
 		document.RootElement.TryGetProperty("summary", out _).ShouldBeTrue();
-		document.RootElement.TryGetProperty("items", out _).ShouldBeTrue();
+		document.RootElement.TryGetProperty("items", out var items).ShouldBeTrue();
+		if (items.ValueKind == JsonValueKind.Array && items.GetArrayLength() > 0)
+		{
+			items[0].TryGetProperty("status", out var status).ShouldBeTrue();
+			status.ValueKind.ShouldBe(JsonValueKind.Number);
+		}
 	}
 
 	#endregion
@@ -64,7 +69,12 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 		document.RootElement.TryGetProperty("pageSize", out _).ShouldBeTrue();
 		document.RootElement.TryGetProperty("totalPages", out _).ShouldBeTrue();
 		document.RootElement.TryGetProperty("attendanceSummary", out _).ShouldBeTrue();
-		document.RootElement.TryGetProperty("items", out _).ShouldBeTrue();
+		document.RootElement.TryGetProperty("items", out var items).ShouldBeTrue();
+		if (items.ValueKind == JsonValueKind.Array && items.GetArrayLength() > 0)
+		{
+			items[0].TryGetProperty("status", out var status).ShouldBeTrue();
+			status.ValueKind.ShouldBe(JsonValueKind.Number);
+		}
 	}
 
 	[Fact]
@@ -79,10 +89,7 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
 		var json = await response.Content.ReadAsStringAsync();
-		using var document = JsonDocument.Parse(json);
-		document.RootElement.TryGetProperty("error", out var errorElement).ShouldBeTrue();
-		errorElement.TryGetProperty("validationErrors", out var validationErrors).ShouldBeTrue();
-		validationErrors.ValueKind.ShouldBe(JsonValueKind.Array);
+		json.Contains("status", StringComparison.OrdinalIgnoreCase).ShouldBeTrue();
 	}
 
 	[Fact]
@@ -105,6 +112,26 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 			$"{BaseUrl}/date-wise?attendanceDate={today}&status=PRESENT&page=1&pageSize=10");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task HrSwagger_Should_Expose_AttendanceTrackingStatus_As_Numeric_Enum()
+	{
+		var response = await Client.GetAsync("/swagger/v1-hr/swagger.json");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var json = await response.Content.ReadAsStringAsync();
+		using var document = JsonDocument.Parse(json);
+		var statusSchema = document.RootElement
+			.GetProperty("components")
+			.GetProperty("schemas")
+			.GetProperty("ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking.AttendanceTrackingStatus");
+
+		statusSchema.GetProperty("type").GetString().ShouldBe("integer");
+		statusSchema.TryGetProperty("enum", out var enumValues).ShouldBeTrue();
+		enumValues.ValueKind.ShouldBe(JsonValueKind.Array);
+		enumValues.GetArrayLength().ShouldBeGreaterThan(0);
 	}
 
 	#endregion

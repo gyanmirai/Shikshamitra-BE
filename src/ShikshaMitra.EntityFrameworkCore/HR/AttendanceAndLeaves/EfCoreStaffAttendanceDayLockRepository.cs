@@ -13,13 +13,12 @@ public class EfCoreStaffAttendanceDayLockRepository(IDbContextProvider<ShikshaMi
 	: EfCoreRepository<ShikshaMitraDbContext, StaffAttendanceDayLock, Guid>(dbContextProvider), IStaffAttendanceDayLockRepository
 {
 	public async Task<StaffAttendanceDayLock?> FindAsync(
-		Guid educationMediumStageId,
 		DateOnly lockDate,
 		CancellationToken cancellationToken = default)
 	{
 		var query = await GetQueryableAsync();
 		return await query
-			.Where(x => x.EducationMediumStageId == educationMediumStageId && x.LockDate == lockDate)
+			.Where(x => x.LockDate == lockDate)
 			.FirstOrDefaultAsync(cancellationToken);
 	}
 }

@@ -9,7 +9,6 @@ using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -363,47 +362,24 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	#region Private Methods
 
 	/// <summary>
-	/// Parse month from MMMM-YYYY format to year, month number, and internal format
+	/// Parse month from accepted formats to year, month number, and internal YYYY-MM format
 	/// </summary>
 	private (int year, int month, string internalFormat) ParseMonth(string monthYear)
 	{
 		if (string.IsNullOrWhiteSpace(monthYear))
 		{
-			throw new BusinessException("HR:MonthRequired");
+			throw new BusinessException(HRErrorCodes.MonthYearRequired);
 		}
 
-		// Expected format: JANUARY-2025
-		var parts = monthYear.Split('-');
-		if (parts.Length != 2)
+		if (!PayrollMonthNormalizer.TryNormalizeToInternal(monthYear, out var internalFormat))
 		{
-			throw new BusinessException("HR:InvalidMonthFormat")
-				.WithData("providedFormat", monthYear)
-				.WithData("expectedFormat", "MMMM-YYYY");
+			throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat)
+				.WithData("providedMonth", monthYear)
+				.WithData("acceptedFormats", "YYYY-MM, MMMM-YYYY, or date-like values");
 		}
 
-		var monthName = parts[0];
-		var yearStr = parts[1];
-
-		if (!int.TryParse(yearStr, out var year) || year < 1900 || year > 2100)
-		{
-			throw new BusinessException("HR:InvalidYear")
-				.WithData("providedYear", yearStr)
-				.WithData("minYear", 1900)
-				.WithData("maxYear", 2100);
-		}
-
-		// Parse month name
-		if (!DateTime.TryParseExact(monthName, "MMMM", CultureInfo.InvariantCulture,
-			DateTimeStyles.None, out var date))
-		{
-			throw new BusinessException("HR:InvalidMonthName")
-				.WithData("providedMonth", monthName)
-				.WithData("expectedFormat", "JANUARY, FEBRUARY, etc.");
-		}
-
-		var month = date.Month;
-		var internalFormat = $"{year:D4}-{month:D2}"; // YYYY-MM format
-
+		var year = int.Parse(internalFormat[..4]);
+		var month = int.Parse(internalFormat[5..7]);
 		return (year, month, internalFormat);
 	}
 

@@ -75,4 +75,22 @@ public class HrAutomatedAttendanceRunsController(
 			MaxResultCount = maxResultCount
 		});
 	}
+
+	[HttpPost("{batchId:guid}/lock")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_ImportAttendance.Add)]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	public virtual async Task<IActionResult> LockBatchAsync([FromRoute] Guid batchId)
+	{
+		await attendanceImportLogAppService.LockBatchAsync(batchId);
+		return NoContent();
+	}
+
+	[HttpDelete("{batchId:guid}/lock")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_ImportAttendance.Add)]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	public virtual async Task<IActionResult> UnlockBatchAsync([FromRoute] Guid batchId)
+	{
+		await attendanceImportLogAppService.UnlockBatchAsync(batchId);
+		return NoContent();
+	}
 }

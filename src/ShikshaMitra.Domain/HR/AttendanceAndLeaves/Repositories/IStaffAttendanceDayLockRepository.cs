@@ -8,7 +8,6 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 public interface IStaffAttendanceDayLockRepository : IRepository<StaffAttendanceDayLock, Guid>
 {
 	Task<StaffAttendanceDayLock?> FindAsync(
-		Guid educationMediumStageId,
 		DateOnly lockDate,
 		CancellationToken cancellationToken = default);
 }

@@ -11,6 +11,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -22,7 +23,8 @@ public class TakeAttendanceAppService(
 	IRepository<Employee, Guid> employeeRepository,
 	IEmployeeAttendanceRepository employeeAttendanceRepository,
 	IStaffAttendanceDayLockRepository staffAttendanceDayLockRepository,
-	IUserScopeService userScopeService)
+	IUserScopeService userScopeService,
+	IRepository<ShiftManagement, Guid> shiftRepository)
 	: ApplicationService, ITakeAttendanceAppService
 {
 	private const int AttendanceRemarksMaxLength = 512;
@@ -37,8 +39,8 @@ public class TakeAttendanceAppService(
 			throw new BusinessException(HRErrorCodes.TakeAttendanceFutureDateNotAllowed);
 		}
 
-		await EnsureMediumStageAllowedAsync(input.EducationMediumStageId);
-		var locked = await staffAttendanceDayLockRepository.FindAsync(input.EducationMediumStageId, dateOnly);
+		var scope = await EnsureCanOperateAttendanceAsync();
+		var locked = await staffAttendanceDayLockRepository.FindAsync(dateOnly);
 
 		var empQuery = await employeeRepository.GetQueryableAsync();
 		empQuery = empQuery.Where(e => e.EmployeeStatusType == EmployeeStatusType.Active);
@@ -78,6 +80,9 @@ public class TakeAttendanceAppService(
 		empQuery = empQuery.OrderBy(e => e.FirstName).ThenBy(e => e.LastName);
 
 		var allEmployeeIds = await AsyncExecuter.ToListAsync(empQuery.Select(e => e.Id));
+		var employeeStageMap = await ResolveEmployeeStagesAsync(allEmployeeIds);
+		var scopedEmployeeIds = FilterEmployeeIdsByScope(allEmployeeIds, employeeStageMap, scope);
+		empQuery = empQuery.Where(e => scopedEmployeeIds.Contains(e.Id));
 
 		var attBaseQuery = await employeeAttendanceRepository.GetQueryableAsync();
 		if (CurrentTenant.Id.HasValue)
@@ -87,9 +92,8 @@ public class TakeAttendanceAppService(
 
 		var attForSummary = await AsyncExecuter.ToListAsync(
 			attBaseQuery.Where(a =>
-				allEmployeeIds.Contains(a.EmployeeId) &&
-				a.AttendanceDate == dateOnly &&
-				a.EducationMediumStageId == input.EducationMediumStageId));
+				scopedEmployeeIds.Contains(a.EmployeeId) &&
+				a.AttendanceDate == dateOnly));
 
 		var employees = await AsyncExecuter.ToListAsync(
 			empQuery.Skip(input.SkipCount).Take(input.MaxResultCount <= 0 ? 50 : input.MaxResultCount));
@@ -97,14 +101,17 @@ public class TakeAttendanceAppService(
 		var ids = employees.Select(e => e.Id).ToList();
 		var attRows = attForSummary.Where(a => ids.Contains(a.EmployeeId)).ToList();
 		var attByEmp = attRows.GroupBy(a => a.EmployeeId).ToDictionary(g => g.Key, g => g.First());
+		var shiftIds = employees.Where(e => e.ShiftId.HasValue).Select(e => e.ShiftId!.Value).Distinct().ToList();
+		var shifts = await LoadShiftLookupAsync(shiftIds);
 
 		var items = new List<TakeAttendanceEmployeeRowDto>();
 		foreach (var e in employees)
 		{
 			attByEmp.TryGetValue(e.Id, out var a);
-			var statusWire = a == null
-				? "NOT_MARKED"
-				: MapDomainStatusToWire(a.StatusType);
+			shifts.TryGetValue(e.ShiftId ?? Guid.Empty, out var shift);
+			var status = a == null
+				? TakeAttendanceStatus.NotMarked
+				: MapDomainStatus(a.StatusType);
 			items.Add(new TakeAttendanceEmployeeRowDto
 			{
 				EmployeeId = e.Id,
@@ -114,10 +121,13 @@ public class TakeAttendanceAppService(
 				DateIso = new DateTimeOffset(date.Date, TimeSpan.Zero).ToString("o"),
 				InTime = a?.TimeIn?.ToString("o"),
 				OutTime = a?.TimeOut?.ToString("o"),
+				ShiftName = shift?.ShiftName,
+				ShiftStartTime = shift?.StartTime.ToString("HH:mm:ss"),
+				ShiftEndTime = shift?.EndTime.ToString("HH:mm:ss"),
 				Remarks = a?.Remarks,
 				Warnings = [],
 				Errors = [],
-				StatusWire = statusWire
+				Status = status
 			});
 		}
 
@@ -126,12 +136,12 @@ public class TakeAttendanceAppService(
 			Present = attForSummary.Count(x => x.StatusType == EmployeeAttendanceStatusType.Present),
 			HalfDay = attForSummary.Count(x => x.StatusType == EmployeeAttendanceStatusType.HalfDayLeave),
 			Absent = attForSummary.Count(x => x.StatusType == EmployeeAttendanceStatusType.FullDayLeave),
-			NotMarked = allEmployeeIds.Count - attForSummary.Count
+			NotMarked = scopedEmployeeIds.Count - attForSummary.Count
 		};
 
 		return new TakeAttendanceDayResponse
 		{
-			TotalCount = allEmployeeIds.Count,
+			TotalCount = scopedEmployeeIds.Count,
 			Date = dateOnly,
 			IsDayLocked = locked != null,
 			LockedByUserId = locked?.LockedByUserId,
@@ -151,8 +161,8 @@ public class TakeAttendanceAppService(
 			throw new BusinessException(HRErrorCodes.TakeAttendanceFutureDateNotAllowed);
 		}
 
-		await EnsureMediumStageAllowedAsync(input.EducationMediumStageId);
-		if (await staffAttendanceDayLockRepository.FindAsync(input.EducationMediumStageId, dateOnly) != null)
+		var scope = await EnsureCanOperateAttendanceAsync();
+		if (await staffAttendanceDayLockRepository.FindAsync(dateOnly) != null)
 		{
 			throw new BusinessException(HRErrorCodes.TakeAttendanceDayLocked);
 		}
@@ -162,6 +172,8 @@ public class TakeAttendanceAppService(
 			throw new BusinessException(HRErrorCodes.TakeAttendanceEmptyEntries);
 		}
 
+		var requestedEmployeeIds = input.Entries.Select(x => x.EmployeeId).Distinct().ToList();
+		var employeeStageMap = await ResolveEmployeeStagesAsync(requestedEmployeeIds);
 		var upserted = 0;
 		foreach (var entry in input.Entries)
 		{
@@ -194,18 +206,21 @@ public class TakeAttendanceAppService(
 					a.EmployeeId == entry.EmployeeId &&
 					a.AttendanceDate == dateOnly));
 
+			var resolvedStageId = existing?.EducationMediumStageId;
+			if (!resolvedStageId.HasValue)
+			{
+				employeeStageMap.TryGetValue(entry.EmployeeId, out resolvedStageId);
+			}
+			resolvedStageId = ResolveScopedStageFallback(scope, resolvedStageId);
+
+			EnsureEmployeeScopeAllowed(scope, resolvedStageId);
+
 			if (existing != null)
 			{
-				if (existing.EducationMediumStageId.HasValue &&
-				    existing.EducationMediumStageId.Value != input.EducationMediumStageId)
-				{
-					throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
-				}
-
 				existing.StatusType = status;
 				existing.TimeIn = tIn;
 				existing.TimeOut = tOut;
-				existing.EducationMediumStageId ??= input.EducationMediumStageId;
+				existing.EducationMediumStageId ??= resolvedStageId;
 				existing.Remarks = normalizedRemarks;
 				await employeeAttendanceRepository.UpdateAsync(existing, autoSave: false);
 			}
@@ -216,7 +231,7 @@ public class TakeAttendanceAppService(
 					TenantId = CurrentTenant.Id,
 					EmployeeId = entry.EmployeeId,
 					AttendanceDate = dateOnly,
-					EducationMediumStageId = input.EducationMediumStageId,
+					EducationMediumStageId = resolvedStageId,
 					StatusType = status,
 					TimeIn = tIn,
 					TimeOut = tOut,
@@ -236,12 +251,13 @@ public class TakeAttendanceAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_TakeAttendance.Lock)]
-	public async Task LockDayAsync(Guid educationMediumStageId, string attendanceDate)
+	public async Task LockDayAsync(string attendanceDate)
 	{
 		var date = ParseDate(attendanceDate).Date;
 		var dateOnly = DateOnly.FromDateTime(date);
-		await EnsureMediumStageAllowedAsync(educationMediumStageId);
-		if (await staffAttendanceDayLockRepository.FindAsync(educationMediumStageId, dateOnly) != null)
+		var scope = await EnsureCanOperateAttendanceAsync();
+		EnsureTenantWideDayLockAllowed(scope);
+		if (await staffAttendanceDayLockRepository.FindAsync(dateOnly) != null)
 		{
 			return;
 		}
@@ -250,7 +266,6 @@ public class TakeAttendanceAppService(
 		var entity = new StaffAttendanceDayLock(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
-			educationMediumStageId,
 			dateOnly,
 			userId,
 			Clock.Now);
@@ -258,19 +273,20 @@ public class TakeAttendanceAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_TakeAttendance.Lock)]
-	public async Task UnlockDayAsync(Guid educationMediumStageId, string attendanceDate)
+	public async Task UnlockDayAsync(string attendanceDate)
 	{
 		var date = ParseDate(attendanceDate).Date;
 		var dateOnly = DateOnly.FromDateTime(date);
-		await EnsureMediumStageAllowedAsync(educationMediumStageId);
-		var existing = await staffAttendanceDayLockRepository.FindAsync(educationMediumStageId, dateOnly);
+		var scope = await EnsureCanOperateAttendanceAsync();
+		EnsureTenantWideDayLockAllowed(scope);
+		var existing = await staffAttendanceDayLockRepository.FindAsync(dateOnly);
 		if (existing != null)
 		{
 			await staffAttendanceDayLockRepository.DeleteAsync(existing, autoSave: true);
 		}
 	}
 
-	private async Task EnsureMediumStageAllowedAsync(Guid educationMediumStageId)
+	private async Task<UserScopeContext> EnsureCanOperateAttendanceAsync()
 	{
 		var uid = CurrentUser.Id;
 		if (!uid.HasValue)
@@ -281,7 +297,7 @@ public class TakeAttendanceAppService(
 		var scope = await userScopeService.GetUserScopeAsync(uid.Value);
 		if (scope.IsAdmin || scope.HasWildcardMediumStage)
 		{
-			return;
+			return scope;
 		}
 
 		if (scope.MediumStageIds.Count == 0)
@@ -289,7 +305,67 @@ public class TakeAttendanceAppService(
 			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 		}
 
-		if (scope.MediumStageIds.Contains(educationMediumStageId))
+		return scope;
+	}
+
+	private static List<Guid> FilterEmployeeIdsByScope(
+		List<Guid> employeeIds,
+		Dictionary<Guid, Guid?> employeeStageMap,
+		UserScopeContext scope)
+	{
+		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		{
+			return employeeIds;
+		}
+
+		return employeeIds
+			.Where(id =>
+			{
+				if (!employeeStageMap.TryGetValue(id, out var stageId) || !stageId.HasValue)
+				{
+					return scope.MediumStageIds.Count == 1;
+				}
+
+				return scope.MediumStageIds.Contains(stageId.Value);
+			})
+			.ToList();
+	}
+
+	private static TakeAttendanceStatus MapDomainStatus(EmployeeAttendanceStatusType s) =>
+		s switch
+		{
+			EmployeeAttendanceStatusType.Present => TakeAttendanceStatus.Present,
+			EmployeeAttendanceStatusType.HalfDayLeave => TakeAttendanceStatus.HalfDay,
+			EmployeeAttendanceStatusType.FullDayLeave => TakeAttendanceStatus.Absent,
+			_ => TakeAttendanceStatus.NotMarked
+		};
+
+	private void EnsureEmployeeScopeAllowed(UserScopeContext scope, Guid? employeeStageId)
+	{
+		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		{
+			return;
+		}
+
+		if (!employeeStageId.HasValue || !scope.MediumStageIds.Contains(employeeStageId.Value))
+		{
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		}
+	}
+
+	private static Guid? ResolveScopedStageFallback(UserScopeContext scope, Guid? employeeStageId)
+	{
+		if (employeeStageId.HasValue || scope.IsAdmin || scope.HasWildcardMediumStage)
+		{
+			return employeeStageId;
+		}
+
+		return scope.MediumStageIds.Count == 1 ? scope.MediumStageIds[0] : null;
+	}
+
+	private static void EnsureTenantWideDayLockAllowed(UserScopeContext scope)
+	{
+		if (scope.IsAdmin || scope.HasWildcardMediumStage)
 		{
 			return;
 		}
@@ -297,14 +373,56 @@ public class TakeAttendanceAppService(
 		throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 	}
 
-	private static string MapDomainStatusToWire(EmployeeAttendanceStatusType s) =>
-		s switch
+	private async Task<Dictionary<Guid, Guid?>> ResolveEmployeeStagesAsync(List<Guid> employeeIds)
+	{
+		if (employeeIds.Count == 0)
 		{
-			EmployeeAttendanceStatusType.Present => "PRESENT",
-			EmployeeAttendanceStatusType.HalfDayLeave => "HALF_DAY",
-			EmployeeAttendanceStatusType.FullDayLeave => "ABSENT",
-			_ => "NOT_MARKED"
-		};
+			return new Dictionary<Guid, Guid?>();
+		}
+
+		var attQuery = await employeeAttendanceRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			attQuery = attQuery.Where(a => a.TenantId == CurrentTenant.Id);
+		}
+
+		var rows = await AsyncExecuter.ToListAsync(
+			attQuery
+				.Where(a => employeeIds.Contains(a.EmployeeId) && a.EducationMediumStageId.HasValue)
+				.OrderByDescending(a => a.AttendanceDate)
+				.Select(a => new { a.EmployeeId, a.EducationMediumStageId }));
+
+		var result = new Dictionary<Guid, Guid?>();
+		foreach (var row in rows)
+		{
+			if (!result.ContainsKey(row.EmployeeId))
+			{
+				result[row.EmployeeId] = row.EducationMediumStageId;
+			}
+		}
+
+		foreach (var employeeId in employeeIds)
+		{
+			if (!result.ContainsKey(employeeId))
+			{
+				result[employeeId] = null;
+			}
+		}
+
+		return result;
+	}
+
+	private async Task<Dictionary<Guid, ShiftManagement>> LoadShiftLookupAsync(List<Guid> shiftIds)
+	{
+		if (shiftIds.Count == 0)
+		{
+			return new Dictionary<Guid, ShiftManagement>();
+		}
+
+		var query = await shiftRepository.GetQueryableAsync();
+		var shifts = await AsyncExecuter.ToListAsync(query.Where(x => shiftIds.Contains(x.Id)));
+		return shifts.ToDictionary(x => x.Id, x => x);
+	}
 
 	private static EmployeeAttendanceStatusType ParseWireStatus(string wire) =>
 		(wire ?? "").Trim().ToUpperInvariant() switch

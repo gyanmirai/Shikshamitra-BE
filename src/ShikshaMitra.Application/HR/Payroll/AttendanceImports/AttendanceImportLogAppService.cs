@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.HR;
+using ShikshaMitra.HR.Payroll;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -37,8 +38,14 @@ public class AttendanceImportLogAppService(
 
 		if (!string.IsNullOrWhiteSpace(input.PayrollMonth))
 		{
-			var payrollMonth = input.PayrollMonth.Trim().ToUpperInvariant();
-			query = query.Where(x => x.PayrollMonth == payrollMonth);
+			if (!PayrollMonthNormalizer.TryNormalizeToInternal(input.PayrollMonth, out var normalizedPayrollMonth))
+			{
+				throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat)
+					.WithData("providedMonth", input.PayrollMonth)
+					.WithData("acceptedFormats", "YYYY-MM, MMMM-YYYY, or date-like values");
+			}
+
+			query = query.Where(x => x.PayrollMonthYear == normalizedPayrollMonth);
 		}
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
@@ -61,10 +68,7 @@ public class AttendanceImportLogAppService(
 		var entity = await attendanceImportBatchRepository.FindAsync(importId)
 			?? throw new EntityNotFoundException(typeof(AttendanceImportBatch), importId);
 
-		if (entity.TenantId != CurrentTenant.Id)
-		{
-			throw new EntityNotFoundException(typeof(AttendanceImportBatch), importId);
-		}
+		EnsureTenantOwnership(entity, importId);
 
 		var finalizedMonthLookup = await BuildFinalizedMonthLookupAsync([entity]);
 		var baseDto = MapToListItemDto(entity, finalizedMonthLookup);
@@ -97,10 +101,7 @@ public class AttendanceImportLogAppService(
 	{
 		var batch = await attendanceImportBatchRepository.FindAsync(importId)
 			?? throw new EntityNotFoundException(typeof(AttendanceImportBatch), importId);
-		if (batch.TenantId != CurrentTenant.Id)
-		{
-			throw new EntityNotFoundException(typeof(AttendanceImportBatch), importId);
-		}
+		EnsureTenantOwnership(batch, importId);
 
 		var query = await attendanceImportRowRepository.GetQueryableAsync();
 		query = query.Where(x => x.BatchId == importId);
@@ -121,6 +122,30 @@ public class AttendanceImportLogAppService(
 		return new PagedResultDto<AttendanceImportRowDto>(
 			totalCount,
 			items.Select(MapToRowDto).ToList());
+	}
+
+	public async Task LockBatchAsync(Guid importId)
+	{
+		var batch = await GetOwnedBatchAsync(importId);
+		if (batch.IsBatchLocked)
+		{
+			return;
+		}
+
+		batch.SetBatchLocked(true);
+		await attendanceImportBatchRepository.UpdateAsync(batch, autoSave: true);
+	}
+
+	public async Task UnlockBatchAsync(Guid importId)
+	{
+		var batch = await GetOwnedBatchAsync(importId);
+		if (!batch.IsBatchLocked)
+		{
+			return;
+		}
+
+		batch.SetBatchLocked(false);
+		await attendanceImportBatchRepository.UpdateAsync(batch, autoSave: true);
 	}
 
 	private async Task<Dictionary<string, bool>> BuildFinalizedMonthLookupAsync(IEnumerable<AttendanceImportBatch> items)
@@ -150,11 +175,11 @@ public class AttendanceImportLogAppService(
 
 		var status = entity.Status switch
 		{
-			AttendanceImportBatchStatus.Preview => "preview",
-			AttendanceImportBatchStatus.Confirmed when isPayrollLocked => "payroll_locked",
-			AttendanceImportBatchStatus.Confirmed when entity.IsBatchLocked => "batch_locked",
-			AttendanceImportBatchStatus.Confirmed => "confirmed",
-			_ => "preview"
+			AttendanceImportBatchStatus.Preview => AttendanceImportLogStatus.Preview,
+			AttendanceImportBatchStatus.Confirmed when isPayrollLocked => AttendanceImportLogStatus.PayrollLocked,
+			AttendanceImportBatchStatus.Confirmed when entity.IsBatchLocked => AttendanceImportLogStatus.BatchLocked,
+			AttendanceImportBatchStatus.Confirmed => AttendanceImportLogStatus.Confirmed,
+			_ => AttendanceImportLogStatus.Preview
 		};
 
 		return new AttendanceImportLogListItemDto
@@ -165,7 +190,7 @@ public class AttendanceImportLogAppService(
 			ImportedByName = entity.ImportedByName,
 			ImportedAt = entity.ImportedAt,
 			Status = status,
-			PayrollMonth = entity.PayrollMonth ?? ToApiMonthYear(entity.PayrollMonthYear),
+			PayrollMonth = entity.PayrollMonth ?? PayrollMonthNormalizer.ToApiMonthYear(entity.PayrollMonthYear),
 			TotalRows = entity.TotalRows,
 			ValidRows = entity.ValidRows,
 			InvalidRows = entity.InvalidRows,
@@ -175,20 +200,12 @@ public class AttendanceImportLogAppService(
 			CreatedCount = entity.CreatedCount,
 			ReplacedCount = entity.ReplacedCount,
 			CanOpen = entity.TotalRows > 0,
-			RunSource = MapRunSourceWire(entity.RunSource),
+			RunSource = entity.RunSource,
 			ExternalCorrelationId = entity.ExternalCorrelationId,
 			IntegrationProvider = entity.IntegrationProvider,
 			IsBatchLocked = entity.IsBatchLocked
 		};
 	}
-
-	private static string MapRunSourceWire(AttendanceImportRunSource source) =>
-		source switch
-		{
-			AttendanceImportRunSource.Integration => "integration",
-			AttendanceImportRunSource.Internal => "internal",
-			_ => "file_upload"
-		};
 
 	private static AttendanceImportRowDto MapToRowDto(AttendanceImportRow row)
 	{
@@ -209,23 +226,19 @@ public class AttendanceImportLogAppService(
 		};
 	}
 
-	private static string? ToApiMonthYear(string? internalMonthYear)
+	private async Task<AttendanceImportBatch> GetOwnedBatchAsync(Guid importId)
 	{
-		if (string.IsNullOrWhiteSpace(internalMonthYear))
-		{
-			return null;
-		}
+		var batch = await attendanceImportBatchRepository.FindAsync(importId)
+			?? throw new EntityNotFoundException(typeof(AttendanceImportBatch), importId);
+		EnsureTenantOwnership(batch, importId);
+		return batch;
+	}
 
-		if (!DateTime.TryParseExact(
-			$"{internalMonthYear}-01",
-			"yyyy-MM-dd",
-			CultureInfo.InvariantCulture,
-			DateTimeStyles.None,
-			out var monthDate))
+	private void EnsureTenantOwnership(AttendanceImportBatch batch, Guid importId)
+	{
+		if (batch.TenantId != CurrentTenant.Id)
 		{
-			return null;
+			throw new EntityNotFoundException(typeof(AttendanceImportBatch), importId);
 		}
-
-		return $"{monthDate.ToString("MMMM", CultureInfo.InvariantCulture).ToUpperInvariant()}-{monthDate.Year}";
 	}
 }

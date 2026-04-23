@@ -60,7 +60,7 @@ public class AttendanceDateWiseItem
 	public string? HoursWorked { get; set; }
 
 	public string? Remarks { get; set; }
-	public string Status { get; set; } = string.Empty;
+	public AttendanceTrackingStatus Status { get; set; }
 }
 
 #endregion
@@ -111,7 +111,7 @@ public class AttendanceEmployeeWiseItem
 	public string? HoursWorked { get; set; }
 
 	public string? Description { get; set; }
-	public string Status { get; set; } = string.Empty;
+	public AttendanceTrackingStatus Status { get; set; }
 }
 
 #endregion

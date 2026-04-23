@@ -4,6 +4,14 @@ using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.HR.Payroll.AttendanceImports;
 
+public enum AttendanceImportLogStatus
+{
+	Preview = 1,
+	Confirmed = 2,
+	BatchLocked = 3,
+	PayrollLocked = 4
+}
+
 public class GetAttendanceImportLogListInput : PagedAndSortedResultRequestDto
 {
 	public string? Search { get; set; }
@@ -21,7 +29,7 @@ public class AttendanceImportLogListItemDto
 	public Guid ImportedByUserId { get; set; }
 	public string ImportedByName { get; set; } = string.Empty;
 	public DateTime ImportedAt { get; set; }
-	public string Status { get; set; } = "preview";
+	public AttendanceImportLogStatus Status { get; set; } = AttendanceImportLogStatus.Preview;
 	public string? PayrollMonth { get; set; }
 	public int TotalRows { get; set; }
 	public int ValidRows { get; set; }
@@ -33,8 +41,7 @@ public class AttendanceImportLogListItemDto
 	public int ReplacedCount { get; set; }
 	public bool CanOpen { get; set; }
 
-	/// <summary>file_upload, integration, or internal</summary>
-	public string RunSource { get; set; } = "file_upload";
+	public AttendanceImportRunSource RunSource { get; set; } = AttendanceImportRunSource.FileUpload;
 
 	public string? ExternalCorrelationId { get; set; }
 	public string? IntegrationProvider { get; set; }

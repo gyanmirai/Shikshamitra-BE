@@ -6,13 +6,11 @@ using ShikshaMitra.Security.UserScope;
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 /// <summary>
-/// Prevents further manual edits for staff attendance on a given medium stage and calendar date.
+/// Prevents further manual edits for staff attendance on a given calendar date.
 /// </summary>
 public class StaffAttendanceDayLock : AuditedAggregateRoot<Guid>, IMultiTenant, IUserScopedEntity
 {
 	public Guid? TenantId { get; private set; }
-
-	public Guid EducationMediumStageId { get; private set; }
 
 	public DateOnly LockDate { get; private set; }
 
@@ -25,13 +23,11 @@ public class StaffAttendanceDayLock : AuditedAggregateRoot<Guid>, IMultiTenant, 
 	public StaffAttendanceDayLock(
 		Guid id,
 		Guid? tenantId,
-		Guid educationMediumStageId,
 		DateOnly lockDate,
 		Guid lockedByUserId,
 		DateTime lockedAt) : base(id)
 	{
 		TenantId = tenantId;
-		EducationMediumStageId = educationMediumStageId;
 		LockDate = lockDate;
 		LockedByUserId = lockedByUserId;
 		LockedAt = lockedAt;
@@ -40,7 +36,7 @@ public class StaffAttendanceDayLock : AuditedAggregateRoot<Guid>, IMultiTenant, 
 	Guid? IUserScopedEntity.AcademicYearId => null;
 	Guid? IUserScopedEntity.EducationBoardId => null;
 	Guid? IUserScopedEntity.EducationMediumId => null;
-	Guid? IUserScopedEntity.EducationMediumStageId => EducationMediumStageId;
+	Guid? IUserScopedEntity.EducationMediumStageId => null;
 	Guid? IUserScopedEntity.StandardId => null;
 	Guid? IUserScopedEntity.DivisionId => null;
 }

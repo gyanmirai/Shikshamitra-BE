@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Academic.Curriculum;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -208,8 +209,50 @@ public class SubjectAssignmentAppService(
 			groupAssignments = new List<AssignedSubject> { assignment };
 		}
 
-		//return await MapToResponseDtoAsync(groupAssignments);
-		return null;
+		// Load subject lookups
+		var subjectIds = groupAssignments.Select(a => a.SubjectId).Distinct().ToList();
+		var subjectsDict = (await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id)))
+			.ToDictionary(s => s.Id);
+
+		ElectiveGroup? electiveGroup = null;
+		if (assignment.ElectiveGroupId.HasValue)
+		{
+			electiveGroup = await electiveGroupRepository.FindAsync(assignment.ElectiveGroupId.Value);
+		}
+
+		var first = groupAssignments.First();
+
+		return new SubjectAssignmentDto
+		{
+			Id = first.Id,
+			Status = first.Status,
+			SubjectType = first.SubjectType,
+			ElectiveGroupId = first.ElectiveGroupId,
+			ElectiveGroupName = electiveGroup?.Name,
+			Color = electiveGroup?.Color ?? (subjectsDict.TryGetValue(first.SubjectId, out var fs) ? fs.Color : null),
+			Subjects = groupAssignments.Select(a =>
+			{
+				subjectsDict.TryGetValue(a.SubjectId, out var subj);
+				var primaryTeacher = a.Teachers.FirstOrDefault(t => t.TeacherType == SubjectTeacherType.Primary);
+				var secondaryTeacherIds = a.Teachers.Where(t => t.TeacherType == SubjectTeacherType.Secondary).Select(t => t.TeacherId).ToList();
+				return new SubjectAssignmentDetailResponseDto
+				{
+					AssignedSubjectId = a.Id,
+					SubjectId = a.SubjectId,
+					SubjectName = subj?.Name,
+					SubjectCode = a.SubjectCode,
+					Color = subj?.Color,
+					SubjectType = a.SubjectType,
+					ElectiveGroupId = a.ElectiveGroupId,
+					PrimaryTeacherId = primaryTeacher?.TeacherId,
+					SecondaryTeacherIds = secondaryTeacherIds,
+					LearningGoals = a.LearningGoals,
+					Prerequisites = a.Prerequisites,
+					Description = a.Description,
+					Documents = a.Documents.Select(d => d.BlobName).ToList(),
+				};
+			}).ToList()
+		};
 	}
 
 	public async Task<SubjectAssignmentDto> UpdateAsync(

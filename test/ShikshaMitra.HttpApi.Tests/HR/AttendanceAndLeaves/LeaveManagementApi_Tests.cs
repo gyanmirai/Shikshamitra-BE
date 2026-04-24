@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.HR;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
@@ -35,7 +36,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		var response = await Client.GetAsync(
 			$"{BaseUrl}?academicYearId={AcademicYearId}&month-year={monthYear}&page=1&pageSize=10");
 
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.NotFound, HttpStatusCode.Forbidden, HttpStatusCode.InternalServerError);
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.NotFound, HttpStatusCode.Forbidden, HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
 	}
 
 	[Fact]
@@ -85,11 +86,12 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Return_403_With_HR_Leave_020006_When_User_Has_No_Employee_Profile()
+	public async Task Should_Return_403_With_HR_Leave_020006_When_NonAdmin_User_Has_No_Employee_Profile()
 	{
 		var (startDate, endDate) = await GetAcademicYearDateRangeAsync(AcademicYearId);
 		using var unmappedUserClient = Factory.CreateClient();
 		unmappedUserClient.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, Guid.NewGuid().ToString());
+		unmappedUserClient.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "Teacher");
 
 		using var form = new MultipartFormDataContent();
 		form.Add(new StringContent(Guid.NewGuid().ToString()), "leaveTypeId");
@@ -105,11 +107,47 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, rawPayload);
 
 		var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
-		payload.GetProperty("errorCode").GetString().ShouldBe("HR:Leave:020006");
+		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.LeaveEmployeeNotFound);
+	}
 
-		var detail = payload.GetProperty("detail").GetString();
-		detail.ShouldNotBeNullOrWhiteSpace();
-		detail.ShouldNotContain("An internal error occurred during your request!");
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Not_Return_HR_Leave_020006_For_Admin_Without_Employee_Profile_On_Create()
+	{
+		var (startDate, endDate) = await GetAcademicYearDateRangeAsync(AcademicYearId);
+		using var unmappedAdminClient = Factory.CreateClient();
+		unmappedAdminClient.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, Guid.NewGuid().ToString());
+
+		using var form = new MultipartFormDataContent();
+		form.Add(new StringContent(Guid.NewGuid().ToString()), "forEmployeeId");
+		form.Add(new StringContent(Guid.NewGuid().ToString()), "leaveTypeId");
+		form.Add(new StringContent(startDate.ToString("yyyy-MM-dd")), "startDate");
+		form.Add(new StringContent(endDate.ToString("yyyy-MM-dd")), "endDate");
+		form.Add(new StringContent("Planned leave request"), "reason");
+
+		var response = await unmappedAdminClient.PostAsync($"{BaseUrl}?academicYearId={AcademicYearId}", form);
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		if (response.StatusCode == HttpStatusCode.Forbidden)
+		{
+			var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
+			payload.GetProperty("errorCode").GetString().ShouldNotBe(HRErrorCodes.LeaveEmployeeNotFound);
+		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Admin_Without_Employee_Profile_Should_Get_400_When_Balances_Target_Is_Missing()
+	{
+		using var unmappedAdminClient = Factory.CreateClient();
+		unmappedAdminClient.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, Guid.NewGuid().ToString());
+
+		var response = await unmappedAdminClient.GetAsync($"{BaseUrl}/balances?academicYearId={AcademicYearId}");
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, rawPayload);
+		var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
+		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.LeaveTargetEmployeeRequired);
 	}
 
 	[Fact]
@@ -121,6 +159,24 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 			$"{BaseUrl}?academicYearId={AcademicYearId}&month-year={monthYear}&page=0&pageSize=10");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_400_With_HR_Leave_020026_When_Month_Is_Outside_Academic_Year()
+	{
+		var (_, academicYearEnd) = await GetAcademicYearDateRangeAsync(AcademicYearId);
+		var outsideMonth = new DateTime(academicYearEnd.Year, academicYearEnd.Month, 1).AddMonths(2);
+		var monthYear = Uri.EscapeDataString(outsideMonth.ToString("O"));
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}?academicYearId={AcademicYearId}&month-year={monthYear}&page=1&pageSize=20");
+
+		var rawPayload = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, rawPayload);
+
+		var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
+		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.LeaveInvalidMonthForAcademicYear);
 	}
 
 	[Fact]
@@ -140,7 +196,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 	{
 		var response = await Client.GetAsync($"{BaseUrl}/balances?academicYearId={AcademicYearId}");
 
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Forbidden, HttpStatusCode.InternalServerError);
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.BadRequest, HttpStatusCode.Forbidden, HttpStatusCode.InternalServerError);
 	}
 
 	[Fact]

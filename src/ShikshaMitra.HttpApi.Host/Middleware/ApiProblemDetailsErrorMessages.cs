@@ -19,6 +19,16 @@ internal static class ApiProblemDetailsErrorMessages
 			return "Current user is not linked to an employee profile, so this leave action is not allowed.";
 		}
 
+		if (string.Equals(errorCode, HRErrorCodes.LeaveInvalidMonthForAcademicYear, StringComparison.Ordinal))
+		{
+			return "Selected month is outside the selected academic year range.";
+		}
+
+		if (string.Equals(errorCode, HRErrorCodes.LeaveTargetEmployeeRequired, StringComparison.Ordinal))
+		{
+			return "Target employee is required for this leave action.";
+		}
+
 		return defaultDetail;
 	}
 

@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using ShikshaMitra.HR;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -74,8 +73,8 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 		var fallback = CreateProblemDetails(
 			context,
 			context.Response.StatusCode,
-			GetDefaultTitle(context.Response.StatusCode),
-			GetDefaultDetail(context.Response.StatusCode),
+			ApiProblemDetailsMapper.GetDefaultTitle(context.Response.StatusCode),
+			ApiProblemDetailsMapper.GetDefaultDetail(context.Response.StatusCode),
 			errorCode: null,
 			errors: null);
 
@@ -143,16 +142,9 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 
 	private static ProblemDetails BuildBusinessProblem(HttpContext context, BusinessException exception)
 	{
-		var (statusCode, title) = exception.Code switch
-		{
-			HRErrorCodes.LeaveEmployeeNotFound => (StatusCodes.Status403Forbidden, "Forbidden"),
-			HRErrorCodes.LeaveAlreadyCancelled or HRErrorCodes.LeaveConflictTerminalState => (StatusCodes.Status409Conflict, "Conflict"),
-			HRErrorCodes.LeaveAttachmentNotFound => (StatusCodes.Status404NotFound, "Resource not found"),
-			HRErrorCodes.LeaveFileTooLarge => (StatusCodes.Status413PayloadTooLarge, "Payload too large"),
-			_ => (StatusCodes.Status400BadRequest, "Business rule violated")
-		};
-
-		var defaultDetail = GetDefaultDetail(statusCode);
+		var statusCode = ApiProblemDetailsMapper.ResolveBusinessStatusCode(exception.Code);
+		var title = ApiProblemDetailsMapper.GetDefaultTitle(statusCode);
+		var defaultDetail = ApiProblemDetailsMapper.GetDefaultDetail(statusCode);
 		var normalizedDetail = ApiProblemDetailsErrorMessages.NormalizeBusinessDetail(
 			exception.Message,
 			exception.Code,
@@ -236,34 +228,6 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 		}
 
 		return problem;
-	}
-
-	private static string GetDefaultTitle(int statusCode)
-	{
-		return statusCode switch
-		{
-			StatusCodes.Status400BadRequest => "Validation failed",
-			StatusCodes.Status401Unauthorized => "Unauthorized",
-			StatusCodes.Status403Forbidden => "Forbidden",
-			StatusCodes.Status404NotFound => "Resource not found",
-			StatusCodes.Status409Conflict => "Conflict",
-			StatusCodes.Status413PayloadTooLarge => "Payload too large",
-			_ => "Request failed"
-		};
-	}
-
-	private static string GetDefaultDetail(int statusCode)
-	{
-		return statusCode switch
-		{
-			StatusCodes.Status400BadRequest => "One or more validation errors occurred.",
-			StatusCodes.Status401Unauthorized => "Authentication is required to access this resource.",
-			StatusCodes.Status403Forbidden => "You don't have permission to access this resource.",
-			StatusCodes.Status404NotFound => "The requested resource was not found.",
-			StatusCodes.Status409Conflict => "The request could not be completed because of a conflict.",
-			StatusCodes.Status413PayloadTooLarge => "The request payload is too large.",
-			_ => "The request failed."
-		};
 	}
 
 	private static async Task WriteProblemDetailsAsync(HttpContext context, ProblemDetails problem)

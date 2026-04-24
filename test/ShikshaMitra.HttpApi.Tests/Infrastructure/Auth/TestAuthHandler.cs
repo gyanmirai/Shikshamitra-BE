@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
@@ -26,6 +27,7 @@ public class TestAuthHandler(
 	public const string TestEmail = "admin@abp.io";
 	public const string TestTenantId = "11111111-1111-1111-1111-111111111111";
 	public const string TestUserIdHeader = "X-Test-UserId";
+	public const string TestRolesHeader = "X-Test-Roles";
 
 	protected override Task<AuthenticateResult> HandleAuthenticateAsync()
 	{
@@ -48,9 +50,22 @@ public class TestAuthHandler(
 			new(AbpClaimTypes.Email, TestEmail),
 			new(ClaimTypes.Name, TestUserName),
 			new(ClaimTypes.NameIdentifier, userId),
-			new(AbpClaimTypes.Role, "admin"),
-			new(ClaimTypes.Role, "admin"),
 		};
+
+		var roles = new List<string> { "admin" };
+		if (Context.Request.Headers.TryGetValue(TestRolesHeader, out var rolesOverride))
+		{
+			roles = rolesOverride
+				.ToString()
+				.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+				.ToList();
+		}
+
+		foreach (var role in roles)
+		{
+			claims.Add(new Claim(AbpClaimTypes.Role, role));
+			claims.Add(new Claim(ClaimTypes.Role, role));
+		}
 
 		if (!string.IsNullOrEmpty(TestTenantId))
 		{

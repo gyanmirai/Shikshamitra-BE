@@ -35,8 +35,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <ProjectReference
-      Include="..\ShikshaMitra.Application.Contracts\ShikshaMitra.Application.Contracts.csproj" />
+    <ProjectReference Include="..\ShikshaMitra.Application.Contracts\ShikshaMitra.Application.Contracts.csproj" />
     <ProjectReference Include="..\ShikshaMitra.Domain.Shared\ShikshaMitra.Domain.Shared.csproj" />
   </ItemGroup>
 

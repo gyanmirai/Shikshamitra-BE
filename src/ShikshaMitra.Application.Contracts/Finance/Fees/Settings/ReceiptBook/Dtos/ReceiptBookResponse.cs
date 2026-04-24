@@ -1,0 +1,25 @@
+﻿using System;
+using Volo.Abp.Application.Dtos;
+
+namespace ShikshaMitra.Finance.Fees.Settings.Dtos;
+
+public class ReceiptBookResponse : EntityDto<Guid>
+{
+	public string Name { get; set; }
+	public string Prefix { get; set; }
+	public string Suffix { get; set; }
+
+	public Guid BoardId { get; set; }
+	public string BoardName { get; set; }
+	public Guid MediumId { get; set; }
+	public string MediumName { get; set; }
+	public Guid MediumStageId { get; set; }
+	public string MediumStageName { get; set; }
+
+	public long StartingNumber { get; set; }
+	public long EndingNumber { get; set; }
+
+	public string Description { get; set; }
+	public bool IsActive { get; set; }
+	public DateTime CreatedAt { get; set; }
+}

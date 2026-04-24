@@ -1,0 +1,75 @@
+﻿using ShikshaMitra.Finance.FeeCollection;
+using System;
+using System.Collections.Generic;
+
+namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
+
+/// <summary>
+/// Detailed fee collection information for a specific student fee record,
+/// including fee heads breakdown and charge details.
+/// </summary>
+public class FeeCollectionDetailsDto
+{
+    public StudentInfoDto Student { get; set; } = default!;
+    public FeeSummaryDto Summary { get; set; } = default!;
+    public List<FeeHeadDetailDto> FeeHeads { get; set; } = [];
+    public List<ChargeDetailDto>? Charges { get; set; }
+}
+
+/// <summary>Student identity and enrolment context for a fee collection record.</summary>
+public class StudentInfoDto
+{
+    public Guid StudentId { get; set; }
+    public string StudentName { get; set; } = string.Empty;
+    public string GrNo { get; set; } = string.Empty;
+    public string RollNo { get; set; } = string.Empty;
+    public Guid BoardId { get; set; }
+    public string BoardName { get; set; } = string.Empty;
+    public Guid EducationMediumId { get; set; }
+    public string EducationMediumName { get; set; } = string.Empty;
+    public Guid StandardId { get; set; }
+    public string StandardName { get; set; } = string.Empty;
+    public Guid DivisionId { get; set; }
+    public string DivisionName { get; set; } = string.Empty;
+    public string ContactNo { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string FeeStructureName { get; set; } = string.Empty;
+    public bool IsFeeStructureAssigned { get; set; }
+}
+
+/// <summary>Aggregated fee payment summary for the academic year.</summary>
+public class FeeSummaryDto
+{
+    public double TotalFee { get; set; }
+    public double PaidFee { get; set; }
+    public double PendingFee { get; set; }
+}
+
+/// <summary>Breakdown of a single fee head including payment status.</summary>
+public class FeeHeadDetailDto
+{
+    public Guid FeeHeadId { get; set; }
+    public string FeeHeadName { get; set; } = string.Empty;
+    public string CategoryName { get; set; } = string.Empty;
+    public double NetAmount { get; set; }
+    public double PaidAmount { get; set; }
+    public double PendingAmount { get; set; }
+    public FeeCollectionStatus Status { get; set; }
+    public bool IsSelected { get; set; }
+    public bool IsOneTime { get; set; }
+    public bool IsOptional { get; set; }
+
+    /// <summary>Additional charges linked to this fee head (currently null — charges are tracked separately).</summary>
+    public List<ChargeDetailDto>? Charges { get; set; }
+}
+
+/// <summary>Breakdown of a single additional charge including payment status.</summary>
+public class ChargeDetailDto
+{
+    public Guid ChargeId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public double Amount { get; set; }
+    public double PaidAmount { get; set; }
+    public double PendingAmount { get; set; }
+    public FeeCollectionStatus Status { get; set; }
+}

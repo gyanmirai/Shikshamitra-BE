@@ -1,23 +1,20 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
-using ShikshaMitra.Application.Contracts.Finance.Setting.ConcessionType.Dtos;
-using ShikshaMitra.Application.Contracts.Finance.Setting.FeeCategory.Dtos;
-using ShikshaMitra.Application.Contracts.Finance.Setting.FeeHead.Dtos;
 using ShikshaMitra.Common;
 using ShikshaMitra.Students;
 using ShikshaMitra.Common.Responses;
 using ShikshaMitra.Finance.ConcessionRequests;
-using ShikshaMitra.Finance.ConcessionRequests.Dtos;
-using ShikshaMitra.Finance.Setting.ConcessionType.Dtos;
 using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Students.Enrollment;
 using ShikshaMitra.Students.Enrollments.Registrations;
 using Volo.Abp.Application.Dtos;
+using ShikshaMitra.Finance.Fees.Concessions.Dtos;
+using ShikshaMitra.Finance.Fees.Settings.ConcessionType.Dtos;
 
 namespace ShikshaMitra.Finance.ConcessionRequests;
 

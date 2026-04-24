@@ -150,11 +150,7 @@ public class LeaveManagementAppService(
 			throw new BusinessException(HRErrorCodes.LeaveDatesOutsideAcademicYear);
 		}
 
-		var currentUserId = CurrentUser.Id
-			?? throw new BusinessException(HRErrorCodes.LeaveUserNotAuthenticated);
-
-		var actorEmployee = await employeeRepository.GetEmployeeByUserIdAsync(currentUserId)
-			?? throw new BusinessException(HRErrorCodes.LeaveEmployeeNotFound);
+		var actorContext = await ResolveLeaveActorContextAsync();
 
 		var policyId = input.ResolveLeavePolicyId();
 		if (policyId == Guid.Empty)
@@ -162,11 +158,11 @@ public class LeaveManagementAppService(
 			throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
 		}
 
-		Guid targetEmployeeId = input.ForEmployeeId ?? actorEmployee.Id;
-		if (targetEmployeeId != actorEmployee.Id)
-		{
-			await EnsureMayCreateLeaveOnBehalfAsync(targetEmployeeId, actorEmployee.Id);
-		}
+		Guid targetEmployeeId = input.ForEmployeeId
+			?? actorContext.ActorEmployeeId
+			?? throw new BusinessException(HRErrorCodes.LeaveTargetEmployeeRequired);
+
+		await EnsureMayCreateLeaveOnBehalfAsync(targetEmployeeId, actorContext);
 
 		var targetEmployee = await employeeRepository.FindAsync(targetEmployeeId)
 			?? throw new EntityNotFoundException(typeof(Employee), targetEmployeeId);
@@ -213,15 +209,13 @@ public class LeaveManagementAppService(
 			throw new BusinessException(HRErrorCodes.LeaveCannotActOnLeaveState);
 		}
 
-		var currentUserId = CurrentUser.Id
-			?? throw new BusinessException(HRErrorCodes.LeaveUserNotAuthenticated);
-
-		var actorEmployee = await employeeRepository.GetEmployeeByUserIdAsync(currentUserId)
-			?? throw new BusinessException(HRErrorCodes.LeaveEmployeeNotFound);
-
-		await leaveValidationService.EnsureActorMayChangeLeaveStatusAsync(
-			leave.EmployeeId,
-			actorEmployee.Id);
+		var actorContext = await ResolveLeaveActorContextAsync();
+		if (!actorContext.IsAdminBypass)
+		{
+			await leaveValidationService.EnsureActorMayChangeLeaveStatusAsync(
+				leave.EmployeeId,
+				actorContext.ActorEmployeeId!.Value);
+		}
 
 		await employeeLeaveManager.UpdateLeaveRequestStatusAsync(
 			leave,
@@ -251,15 +245,13 @@ public class LeaveManagementAppService(
 			throw new BusinessException(HRErrorCodes.LeaveCannotActOnLeaveState);
 		}
 
-		var currentUserId = CurrentUser.Id
-			?? throw new BusinessException(HRErrorCodes.LeaveUserNotAuthenticated);
-
-		var actorEmployee = await employeeRepository.GetEmployeeByUserIdAsync(currentUserId)
-			?? throw new BusinessException(HRErrorCodes.LeaveEmployeeNotFound);
-
-		await leaveValidationService.EnsureActorMayChangeLeaveStatusAsync(
-			leave.EmployeeId,
-			actorEmployee.Id);
+		var actorContext = await ResolveLeaveActorContextAsync();
+		if (!actorContext.IsAdminBypass)
+		{
+			await leaveValidationService.EnsureActorMayChangeLeaveStatusAsync(
+				leave.EmployeeId,
+				actorContext.ActorEmployeeId!.Value);
+		}
 
 		await employeeLeaveManager.UpdateLeaveRequestStatusAsync(
 			leave,
@@ -287,13 +279,8 @@ public class LeaveManagementAppService(
 			throw new BusinessException(HRErrorCodes.LeaveAlreadyCancelled);
 		}
 
-		var currentUserId = CurrentUser.Id
-			?? throw new BusinessException(HRErrorCodes.LeaveUserNotAuthenticated);
-
-		var actingEmployee = await employeeRepository.GetEmployeeByUserIdAsync(currentUserId)
-			?? throw new BusinessException(HRErrorCodes.LeaveEmployeeNotFound);
-
-		if (leave.EmployeeId != actingEmployee.Id)
+		var actorContext = await ResolveLeaveActorContextAsync();
+		if (!actorContext.IsAdminBypass && leave.EmployeeId != actorContext.ActorEmployeeId!.Value)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveDeleteOwnOnly);
 		}
@@ -329,13 +316,11 @@ public class LeaveManagementAppService(
 	{
 		await academicYearRepository.GetAsync(academicYearId);
 
-		var currentUserId = CurrentUser.Id
-			?? throw new BusinessException(HRErrorCodes.LeaveUserNotAuthenticated);
+		var actorContext = await ResolveLeaveActorContextAsync();
+		var targetId = forEmployeeId
+			?? actorContext.ActorEmployeeId
+			?? throw new BusinessException(HRErrorCodes.LeaveTargetEmployeeRequired);
 
-		var actorEmployee = await employeeRepository.GetEmployeeByUserIdAsync(currentUserId)
-			?? throw new BusinessException(HRErrorCodes.LeaveEmployeeNotFound);
-
-		var targetId = forEmployeeId ?? actorEmployee.Id;
 		await employeeAuthorizationService.CheckEmployeeAccessAsync(targetId, requireOwnership: false);
 
 		var policies = await leavePolicyRepository.GetListByAcademicYearIdAsync(
@@ -495,23 +480,46 @@ public class LeaveManagementAppService(
 		};
 	}
 
-	private async Task EnsureMayCreateLeaveOnBehalfAsync(Guid targetEmployeeId, Guid actorEmployeeId)
+	private async Task EnsureMayCreateLeaveOnBehalfAsync(Guid targetEmployeeId, LeaveActorContext actorContext)
 	{
-		if (IsPrivilegedHrUser())
+		if (actorContext.IsAdminBypass)
 		{
 			return;
 		}
 
-		await leaveValidationService.EnsureActorMayChangeLeaveStatusAsync(targetEmployeeId, actorEmployeeId);
+		if (targetEmployeeId == actorContext.ActorEmployeeId)
+		{
+			return;
+		}
+
+		await leaveValidationService.EnsureActorMayChangeLeaveStatusAsync(
+			targetEmployeeId,
+			actorContext.ActorEmployeeId!.Value);
 	}
 
-	private bool IsPrivilegedHrUser()
+	private async Task<LeaveActorContext> ResolveLeaveActorContextAsync()
 	{
-		return CurrentUser.IsInRole("HR Admin")
-			|| CurrentUser.IsInRole("HR Manager")
-			|| CurrentUser.IsInRole("admin")
+		var currentUserId = CurrentUser.Id
+			?? throw new BusinessException(HRErrorCodes.LeaveUserNotAuthenticated);
+
+		var actorEmployee = await employeeRepository.GetEmployeeByUserIdAsync(currentUserId);
+		var isAdminBypass = IsAdminBypassUser();
+
+		if (actorEmployee is null && !isAdminBypass)
+		{
+			throw new BusinessException(HRErrorCodes.LeaveEmployeeNotFound);
+		}
+
+		return new LeaveActorContext(isAdminBypass, actorEmployee?.Id);
+	}
+
+	private bool IsAdminBypassUser()
+	{
+		return CurrentUser.IsInRole("admin")
 			|| CurrentUser.IsInRole("Administrator");
 	}
+
+	private readonly record struct LeaveActorContext(bool IsAdminBypass, Guid? ActorEmployeeId);
 
 	private static LeaveRequestDetailsDto MapToDetailsDto(EmployeeLeave leave)
 	{

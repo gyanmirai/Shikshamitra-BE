@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
-using ShikshaMitra.HR;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -35,7 +34,7 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 		var problem = BuildProblemDetails(context.HttpContext.Request.Path, status, payload);
 		context.Result = new ObjectResult(problem)
 		{
-			StatusCode = status,
+			StatusCode = problem.Status ?? status,
 			DeclaredType = typeof(ProblemDetails),
 			ContentTypes = { "application/problem+json" }
 		};
@@ -107,25 +106,25 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 		if (value is ProblemDetails problemDetails)
 		{
 			var existingErrorCode = TryGetExtensionString(problemDetails.Extensions, "errorCode");
-			var normalizedStatus = ResolveStatusCode(status, existingErrorCode);
+			var normalizedStatus = ApiProblemDetailsMapper.NormalizeStatusCode(status, existingErrorCode);
 			var hasValidationErrorsInExtensions = status == StatusCodes.Status400BadRequest &&
 			                                      problemDetails.Extensions.ContainsKey("errors");
 			problemDetails.Type = $"https://httpstatuses.com/{normalizedStatus}";
 			problemDetails.Status = normalizedStatus;
-			problemDetails.Title ??= GetDefaultTitle(normalizedStatus, hasValidationErrorsInExtensions);
+			problemDetails.Title ??= ApiProblemDetailsMapper.GetDefaultTitle(normalizedStatus, hasValidationErrorsInExtensions);
 			problemDetails.Instance ??= instance;
 			problemDetails.Detail = ApiProblemDetailsErrorMessages.NormalizeBusinessDetail(
 				problemDetails.Detail,
 				existingErrorCode,
-				GetDefaultDetail(normalizedStatus, hasValidationErrorsInExtensions));
+				ApiProblemDetailsMapper.GetDefaultDetail(normalizedStatus, hasValidationErrorsInExtensions));
 			return problemDetails;
 		}
 
 		var (title, detail, errorCode, errors) = ParseErrorPayload(value);
 		var hasValidationErrors = errors?.Count > 0;
-		var normalizedStatusCode = ResolveStatusCode(status, errorCode);
-		var defaultTitle = GetDefaultTitle(normalizedStatusCode, hasValidationErrors);
-		var defaultDetail = GetDefaultDetail(normalizedStatusCode, hasValidationErrors);
+		var normalizedStatusCode = ApiProblemDetailsMapper.NormalizeStatusCode(status, errorCode);
+		var defaultTitle = ApiProblemDetailsMapper.GetDefaultTitle(normalizedStatusCode, hasValidationErrors);
+		var defaultDetail = ApiProblemDetailsMapper.GetDefaultDetail(normalizedStatusCode, hasValidationErrors);
 		var normalizedDetail = ApiProblemDetailsErrorMessages.NormalizeBusinessDetail(detail, errorCode, defaultDetail);
 		var normalized = new ProblemDetails
 		{
@@ -231,42 +230,6 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 		return (title, detail, errorCode, errors);
 	}
 
-	private static string GetDefaultTitle(int status, bool hasValidationErrors)
-	{
-		if (status == StatusCodes.Status400BadRequest && hasValidationErrors)
-		{
-			return "Validation failed";
-		}
-
-		return status switch
-		{
-			StatusCodes.Status401Unauthorized => "Unauthorized",
-			StatusCodes.Status403Forbidden => "Forbidden",
-			StatusCodes.Status404NotFound => "Resource not found",
-			StatusCodes.Status409Conflict => "Conflict",
-			StatusCodes.Status413PayloadTooLarge => "Payload too large",
-			_ => "Request failed"
-		};
-	}
-
-	private static string GetDefaultDetail(int status, bool hasValidationErrors)
-	{
-		if (status == StatusCodes.Status400BadRequest && hasValidationErrors)
-		{
-			return "One or more validation errors occurred.";
-		}
-
-		return status switch
-		{
-			StatusCodes.Status401Unauthorized => "Authentication is required to access this resource.",
-			StatusCodes.Status403Forbidden => "You don't have permission to access this resource.",
-			StatusCodes.Status404NotFound => "The requested resource was not found.",
-			StatusCodes.Status409Conflict => "The request could not be completed because of a conflict.",
-			StatusCodes.Status413PayloadTooLarge => "The request payload is too large.",
-			_ => "The request failed."
-		};
-	}
-
 	private static string? TryGetExtensionString(IDictionary<string, object?> extensions, string key)
 	{
 		if (!extensions.TryGetValue(key, out var rawValue) || rawValue is null)
@@ -275,16 +238,6 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 		}
 
 		return rawValue.ToString();
-	}
-
-	private static int ResolveStatusCode(int currentStatus, string? errorCode)
-	{
-		if (string.Equals(errorCode, HRErrorCodes.LeaveEmployeeNotFound, StringComparison.Ordinal))
-		{
-			return StatusCodes.Status403Forbidden;
-		}
-
-		return currentStatus;
 	}
 
 	private static string? TryGetString(JsonElement element, string propertyName)

@@ -83,6 +83,11 @@ public class TransactionCategoryAppService : ApplicationService, ITransactionCat
 
 		incomeCategory.Name = input.Name;
 		incomeCategory.Description = input.Description;
+		incomeCategory.ClearTags();
+		foreach (var tag in input.Tags)
+		{
+			incomeCategory.AddTag(tag);
+		}
 
 		await _transactionCategoryRepository.UpdateAsync(incomeCategory);
 

@@ -13,7 +13,6 @@ using ShikshaMitra.HR.Calendar.Events;
 using ShikshaMitra.EntityFrameworkCore.HR.Calendar.Events;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Academic.Curriculum;
-using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Students;
 using Volo.Abp.Uow;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
@@ -30,6 +29,8 @@ using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.TenantManagement.EntityFrameworkCore;
 using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
 using Volo.Abp.Data;
+using ShikshaMitra.Finance.Fees.ConcessionRequests;
+using ShikshaMitra.Finance.Fees.Concessions;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 

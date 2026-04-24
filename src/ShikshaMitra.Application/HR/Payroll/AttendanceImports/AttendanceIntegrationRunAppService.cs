@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -16,7 +16,6 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.HR.Payroll.AttendanceImports;
 
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_ImportAttendance.Add)]
 public class AttendanceIntegrationRunAppService(
 	IRepository<AttendanceImportBatch, Guid> attendanceImportBatchRepository,
 	IRepository<AttendanceImportRow, Guid> attendanceImportRowRepository,

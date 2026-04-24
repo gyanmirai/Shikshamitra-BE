@@ -6,10 +6,10 @@ public static partial class ShikshaMitraSubmodulePermissions
 {
 	public static partial class HR
 	{
-		public static class AttendanceAndLeave_ImportAttendance
+		public static class AttendanceAndLeave_MarkAttendance
 		{
-			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.ImportAttendance";
-			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.ImportAttendance";
+			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.MarkAttendance";
+			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.MarkAttendance";
 
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
@@ -25,10 +25,10 @@ public static partial class ShikshaMitraSubmodulePermissions
 			};
 		}
 
-		public static class AttendanceAndLeave_LeaveManagement
+		public static class AttendanceAndLeave_BiometricAttendance
 		{
-			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.LeaveManagement";
-			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.LeaveManagement";
+			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.BiometricAttendance";
+			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.BiometricAttendance";
 
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
@@ -41,44 +41,6 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
-			};
-		}
-
-		public static class AttendanceAndLeave_AttendanceTracking
-		{
-			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.AttendanceTracking";
-			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.AttendanceTracking";
-
-			public const string View = $"{SubmoduleName}.View";
-			public const string Add = $"{SubmoduleName}.Add";
-			public const string Delete = $"{SubmoduleName}.Delete";
-
-			public static readonly string[] All = { View, Add, Delete };
-			public static readonly Dictionary<string, string> DisplayNames = new()
-			{
-				{ SubmoduleName, SubmoduleDisplayName },
-				{ View, $"{SubmoduleDisplayName}.View" },
-				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Delete, $"{SubmoduleDisplayName}.Delete" }
-			};
-		}
-
-		public static class AttendanceAndLeave_TakeAttendance
-		{
-			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.TakeAttendance";
-			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.TakeAttendance";
-
-			public const string View = $"{SubmoduleName}.View";
-			public const string Add = $"{SubmoduleName}.Add";
-			public const string Lock = $"{SubmoduleName}.Lock";
-
-			public static readonly string[] All = { View, Add, Lock };
-			public static readonly Dictionary<string, string> DisplayNames = new()
-			{
-				{ SubmoduleName, SubmoduleDisplayName },
-				{ View, $"{SubmoduleDisplayName}.View" },
-				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Lock, $"{SubmoduleDisplayName}.Lock" }
 			};
 		}
 
@@ -101,29 +63,10 @@ public static partial class ShikshaMitraSubmodulePermissions
 			};
 		}
 
-		public static class AttendanceAndLeave_SettingLeaveType
+		public static class AttendanceAndLeave_SettingAttendanceConfiguration
 		{
-			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.Setting.LeaveType";
-			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.Setting.LeaveType";
-
-			public const string View = $"{SubmoduleName}.View";
-			public const string Add = $"{SubmoduleName}.Add";
-			public const string Delete = $"{SubmoduleName}.Delete";
-
-			public static readonly string[] All = { View, Add, Delete };
-			public static readonly Dictionary<string, string> DisplayNames = new()
-			{
-				{ SubmoduleName, SubmoduleDisplayName },
-				{ View, $"{SubmoduleDisplayName}.View" },
-				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Delete, $"{SubmoduleDisplayName}.Delete" }
-			};
-		}
-
-		public static class AttendanceAndLeave_SettingLeavePolicy
-		{
-			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.Setting.LeavePolicy";
-			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.Setting.LeavePolicy";
+			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.Setting.AttendanceConfiguration";
+			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.Setting.AttendanceConfiguration";
 
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";

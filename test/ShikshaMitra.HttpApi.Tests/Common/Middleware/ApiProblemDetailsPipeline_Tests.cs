@@ -92,6 +92,84 @@ public class ApiProblemDetailsPipeline_Tests
 	}
 
 	[Fact]
+	public async Task ResultFilter_Should_Resolve_Localized_Detail_When_Detail_Is_Status_Default()
+	{
+		var resolver = CreateResolver(new Dictionary<string, string>
+		{
+			[HRErrorCodes.LeaveInsufficientBalance] = "Insufficient leave balance for this request."
+		});
+		var filter = new ApiProblemDetailsResultFilter(resolver);
+		var httpContext = new DefaultHttpContext();
+		httpContext.Request.Path = "/api/test";
+		var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
+		var sourceProblem = new ProblemDetails
+		{
+			Status = StatusCodes.Status400BadRequest,
+			Detail = ApiProblemDetailsMapper.GetDefaultDetail(StatusCodes.Status400BadRequest)
+		};
+		sourceProblem.Extensions["errorCode"] = HRErrorCodes.LeaveInsufficientBalance;
+		var executingContext = new ResultExecutingContext(
+			actionContext,
+			new List<IFilterMetadata>(),
+			new ObjectResult(sourceProblem)
+			{
+				StatusCode = StatusCodes.Status400BadRequest
+			},
+			controller: new object());
+
+		await filter.OnResultExecutionAsync(
+			executingContext,
+			() => Task.FromResult(new ResultExecutedContext(
+				actionContext,
+				new List<IFilterMetadata>(),
+				executingContext.Result,
+				controller: new object())));
+
+		var output = (executingContext.Result as ObjectResult)!.Value.ShouldBeOfType<ProblemDetails>();
+		output.Detail.ShouldBe("Insufficient leave balance for this request.");
+		output.Extensions["errorCode"]!.ToString().ShouldBe(HRErrorCodes.LeaveInsufficientBalance);
+	}
+
+	[Fact]
+	public async Task ResultFilter_Should_Resolve_Localized_Detail_When_Status_Default_Detail_Has_Case_Or_Whitespace_Drift()
+	{
+		var resolver = CreateResolver(new Dictionary<string, string>
+		{
+			[HRErrorCodes.LeaveInsufficientBalance] = "Insufficient leave balance for this request."
+		});
+		var filter = new ApiProblemDetailsResultFilter(resolver);
+		var httpContext = new DefaultHttpContext();
+		httpContext.Request.Path = "/api/test";
+		var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
+		var sourceProblem = new ProblemDetails
+		{
+			Status = StatusCodes.Status400BadRequest,
+			Detail = "  one or more business rules were violated.  "
+		};
+		sourceProblem.Extensions["errorCode"] = HRErrorCodes.LeaveInsufficientBalance;
+		var executingContext = new ResultExecutingContext(
+			actionContext,
+			new List<IFilterMetadata>(),
+			new ObjectResult(sourceProblem)
+			{
+				StatusCode = StatusCodes.Status400BadRequest
+			},
+			controller: new object());
+
+		await filter.OnResultExecutionAsync(
+			executingContext,
+			() => Task.FromResult(new ResultExecutedContext(
+				actionContext,
+				new List<IFilterMetadata>(),
+				executingContext.Result,
+				controller: new object())));
+
+		var output = (executingContext.Result as ObjectResult)!.Value.ShouldBeOfType<ProblemDetails>();
+		output.Detail.ShouldBe("Insufficient leave balance for this request.");
+		output.Extensions["errorCode"]!.ToString().ShouldBe(HRErrorCodes.LeaveInsufficientBalance);
+	}
+
+	[Fact]
 	public async Task Middleware_Should_Fallback_To_Default_Detail_When_ErrorCode_Has_No_Localization()
 	{
 		const string unmappedCode = "HR:Leave:029999";

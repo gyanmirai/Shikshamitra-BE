@@ -1,3 +1,4 @@
+using System;
 using FluentValidation;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
@@ -6,7 +7,11 @@ public class LeaveRequestCreateDtoValidator : AbstractValidator<LeaveRequestCrea
 {
 	public LeaveRequestCreateDtoValidator()
 	{
-		RuleFor(x => x.LeaveTypeId).NotEmpty().WithMessage("Leave type is required.");
+		RuleFor(x => x)
+			.Must(x =>
+				(x.LeavePolicyId.HasValue && x.LeavePolicyId.Value != Guid.Empty) ||
+				x.LeaveTypeId != Guid.Empty)
+			.WithMessage("Leave policy is required.");
 		RuleFor(x => x.StartDate).NotEmpty().WithMessage("Start date is required.");
 		RuleFor(x => x.EndDate).NotEmpty().WithMessage("End date is required.");
 

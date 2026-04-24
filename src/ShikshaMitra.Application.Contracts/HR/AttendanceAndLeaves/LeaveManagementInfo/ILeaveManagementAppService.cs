@@ -34,7 +34,8 @@ public interface ILeaveManagementAppService
 public class LeaveManagementGetListInput
 {
 	public Guid AcademicYearId { get; set; }
-	public DateTime MonthYearAnchor { get; set; }
+	/// <summary>When set, list is scoped to this calendar month intersected with the academic year. When null, the full academic year span is used.</summary>
+	public DateTime? MonthYearAnchor { get; set; }
 	public string? Search { get; set; }
 	public int Page { get; set; } = 1;
 	public int PageSize { get; set; } = 10;
@@ -50,8 +51,8 @@ public class LeaveManagementGetListInput
 public class LeaveManagementCalendarInput
 {
 	public Guid AcademicYearId { get; set; }
-	public DateTime RangeStart { get; set; }
-	public DateTime RangeEnd { get; set; }
+	public DateTimeOffset RangeStart { get; set; }
+	public DateTimeOffset RangeEnd { get; set; }
 	public string? Search { get; set; }
 	public int Page { get; set; } = 1;
 	public int PageSize { get; set; } = 100;
@@ -71,6 +72,7 @@ public class LeaveManagementCalendarItemDto
 	public Guid Id { get; set; }
 	public int PublicId { get; set; }
 	public Guid EmployeeId { get; set; }
+	public Guid? MediumStageId { get; set; }
 	public string EmployeeName { get; set; } = string.Empty;
 	public string EmployeeCode { get; set; } = string.Empty;
 	public string LeaveTypeName { get; set; } = string.Empty;

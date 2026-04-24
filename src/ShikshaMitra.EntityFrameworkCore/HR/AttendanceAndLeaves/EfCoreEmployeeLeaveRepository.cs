@@ -72,6 +72,32 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 		return totalDays;
 	}
 
+	public async Task<int> GetApprovedLeaveDaysAsync(
+		Guid employeeId,
+		Guid leavePolicyId)
+	{
+		var dbSet = await GetDbSetAsync();
+
+		var leaves = await dbSet
+			.Where(x =>
+				x.EmployeeId == employeeId &&
+				x.LeaveTypeId == leavePolicyId &&
+				x.Status == EmployeeLeaveStatusType.Approved &&
+				!x.IsDeleted)
+			.ToListAsync();
+
+		var totalDays = 0;
+		foreach (var leave in leaves)
+		{
+			totalDays += LeaveDurationCalculator.CountLeaveDays(
+				leave.StartDate.DateTime,
+				leave.EndDate.DateTime,
+				leave.HalfDay);
+		}
+
+		return totalDays;
+	}
+
 	public async Task<(int TotalCount, List<Guid> PageIds)> GetPagedIdsForManagementListAsync(
 		DateTime rangeStart,
 		DateTime rangeEnd,
@@ -128,8 +154,8 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 	}
 
 	public async Task<(int TotalCount, List<Guid> PageIds)> GetPagedIdsForCalendarAsync(
-		DateTime rangeStart,
-		DateTime rangeEnd,
+		DateTimeOffset rangeStart,
+		DateTimeOffset rangeEnd,
 		LeaveManagementListFilters filters,
 		string? search,
 		int skip,
@@ -138,19 +164,17 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 	{
 		var dbContext = await GetDbContextAsync();
 		var dbSet = await GetDbSetAsync();
-		var rs = rangeStart.Date;
-		var re = rangeEnd.Date;
+		var rs = rangeStart;
+		var re = rangeEnd;
 
 		if (dbContext.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true)
 		{
 			return await FilterCalendarSqliteAsync(dbSet, rs, re, filters, search, skip, take, cancellationToken);
 		}
 
-		var rangeStartOffset = new DateTimeOffset(DateTime.SpecifyKind(rs, DateTimeKind.Utc));
-		var rangeEndExclusive = new DateTimeOffset(DateTime.SpecifyKind(re.AddDays(1), DateTimeKind.Utc));
 		var query = dbSet.Where(x =>
-			x.StartDate < rangeEndExclusive &&
-			x.EndDate >= rangeStartOffset);
+			x.StartDate <= re &&
+			x.EndDate >= rs);
 		query = ApplyPolicyYearFilter(query, filters);
 		query = ApplyOptionalFilters(query, filters);
 
@@ -279,8 +303,8 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 
 	private static async Task<(int TotalCount, List<Guid> PageIds)> FilterCalendarSqliteAsync(
 		IQueryable<EmployeeLeave> dbSet,
-		DateTime rs,
-		DateTime re,
+		DateTimeOffset rs,
+		DateTimeOffset re,
 		LeaveManagementListFilters filters,
 		string? search,
 		int skip,
@@ -306,13 +330,10 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 			})
 			.ToListAsync(cancellationToken);
 
-		var rangeStart = DateTime.SpecifyKind(rs, DateTimeKind.Unspecified);
-		var rangeEndExcl = DateTime.SpecifyKind(re.AddDays(1), DateTimeKind.Unspecified);
-
 		var filtered = rows.Where(r =>
 			r.AcademicYearId == filters.AcademicYearId &&
-			r.StartDate.DateTime < rangeEndExcl &&
-			r.EndDate.DateTime >= rangeStart).ToList();
+			r.StartDate <= re &&
+			r.EndDate >= rs).ToList();
 
 		if (filters.Status.HasValue)
 		{

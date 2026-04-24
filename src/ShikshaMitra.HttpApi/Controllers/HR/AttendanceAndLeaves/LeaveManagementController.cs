@@ -30,13 +30,13 @@ public class LeaveManagementController : AbpControllerBase
 	}
 
 	/// <summary>
-	/// Get leave requests filtered by academic year, calendar month (from month-year), and optional search.
+	/// Get leave requests filtered by academic year. When <c>month-year</c> is set, results are limited to that calendar month (clipped to the year). When omitted, the full academic year span is used.
 	/// </summary>
 	[HttpGet]
 	[ProducesResponseType(typeof(LeaveManagementListResponse), StatusCodes.Status200OK)]
 	public virtual async Task<LeaveManagementListResponse> GetListAsync(
 		[FromQuery, Required] Guid academicYearId,
-		[FromQuery(Name = "month-year"), Required] DateTime monthYear,
+		[FromQuery(Name = "month-year")] DateTime? monthYear,
 		[FromQuery] string? search = null,
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
 		[FromQuery, Range(10, 100)] int pageSize = 10,
@@ -72,14 +72,14 @@ public class LeaveManagementController : AbpControllerBase
 	}
 
 	/// <summary>
-	/// Leave requests overlapping a date range (calendar view).
+	/// Leave requests overlapping a date range (calendar view). Accepts ISO-8601 date-time values with timezone offset.
 	/// </summary>
 	[HttpGet("calendar")]
 	[ProducesResponseType(typeof(LeaveManagementCalendarResultDto), StatusCodes.Status200OK)]
 	public virtual async Task<LeaveManagementCalendarResultDto> GetCalendarAsync(
 		[FromQuery, Required] Guid academicYearId,
-		[FromQuery, Required] DateTime rangeStart,
-		[FromQuery, Required] DateTime rangeEnd,
+		[FromQuery, Required] DateTimeOffset rangeStart,
+		[FromQuery, Required] DateTimeOffset rangeEnd,
 		[FromQuery] string? search = null,
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
 		[FromQuery, Range(1, 500)] int pageSize = 100,
@@ -108,7 +108,7 @@ public class LeaveManagementController : AbpControllerBase
 	[HttpGet("export")]
 	public virtual async Task<FileContentResult> ExportAsync(
 		[FromQuery, Required] Guid academicYearId,
-		[FromQuery(Name = "month-year"), Required] DateTime monthYear,
+		[FromQuery(Name = "month-year")] DateTime? monthYear,
 		[FromQuery] string? search = null,
 		[FromQuery] string? status = null,
 		[FromQuery] Guid? leavePolicyId = null,

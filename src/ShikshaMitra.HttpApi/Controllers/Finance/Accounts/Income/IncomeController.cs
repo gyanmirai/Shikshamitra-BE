@@ -3,8 +3,9 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.Finance.Accounts.Incomes;
-using ShikshaMitra.Finance.Accounts.Incomes.Dtos;
+using ShikshaMitra.Finance.Accounts;
+using ShikshaMitra.Finance.Accounts.Transactions;
+using ShikshaMitra.Finance.Accounts.Transactions.Dtos;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -14,15 +15,8 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Accounts.Income;
 [Area("Finance")]
 [Route("api/incomes")]
 [Authorize]
-public class IncomeController : AbpController
+public class IncomeController(ITransactionAppService transactionAppService) : AbpController
 {
-	private readonly IIncomeAppService _incomeAppService;
-
-	public IncomeController(IIncomeAppService incomeAppService)
-	{
-		_incomeAppService = incomeAppService;
-	}
-
 	/// <summary>
 	/// Get income list (paginated)
 	/// </summary>
@@ -30,22 +24,22 @@ public class IncomeController : AbpController
 	/// <param name="page">Page number for pagination</param>
 	/// <param name="pageSize">Number of records per page</param>
 	/// <param name="search">Search keyword for filtering incomes by name</param>
-	/// <returns>Paginated income list</returns>
+	/// <returns>Paginated transaction list</returns>
 	[HttpGet]
-	public Task<IncomeListResponse> GetListAsync(
+	public Task<TransactionListResponse> GetListAsync(
 		[FromQuery] Guid academicYearId,
 		[FromQuery] int page = 1,
 		[FromQuery] int pageSize = 20,
 		[FromQuery] string? search = null)
 	{
-		var request = new GetIncomesRequest
+		var request = new GetTransactionsRequest
 		{
 			Page = page,
 			PageSize = pageSize,
 			Search = search
 		};
 
-		return _incomeAppService.GetListAsync(academicYearId, request);
+		return transactionAppService.GetListAsync(academicYearId, request, TransactionType.Income);
 	}
 
 	/// <summary>
@@ -57,9 +51,9 @@ public class IncomeController : AbpController
 	[HttpPost]
 	public async Task<IActionResult> CreateAsync(
 		[FromQuery] Guid academicYearId,
-		[FromBody] IncomeCreateRequest input)
+		[FromBody] TransactionCreateRequest input)
 	{
-		var result = await _incomeAppService.CreateAsync(academicYearId, input);
+		var result = await transactionAppService.CreateAsync(academicYearId, input, TransactionType.Income);
 		return StatusCode(StatusCodes.Status201Created, result);
 	}
 
@@ -69,9 +63,9 @@ public class IncomeController : AbpController
 	/// <param name="incomeId">Unique identifier of the income transaction</param>
 	/// <returns>Income details with category information</returns>
 	[HttpGet("{income-id}")]
-	public Task<IncomeDetailsResponse> GetByIdAsync([FromRoute(Name = "income-id")] Guid incomeId)
+	public Task<TransactionDetailsResponse> GetByIdAsync([FromRoute(Name = "income-id")] Guid incomeId)
 	{
-		return _incomeAppService.GetByIdAsync(incomeId);
+		return transactionAppService.GetByIdAsync(incomeId, TransactionType.Income);
 	}
 
 	/// <summary>
@@ -81,11 +75,11 @@ public class IncomeController : AbpController
 	/// <param name="input">Income update details</param>
 	/// <returns>Updated income details</returns>
 	[HttpPut("{income-id}")]
-	public Task<IncomeCreateUpdateResponse> UpdateAsync(
+	public Task<TransactionCreateUpdateResponse> UpdateAsync(
 		[FromRoute(Name = "income-id")] Guid incomeId,
-		[FromBody] IncomeUpdateRequest input)
+		[FromBody] TransactionUpdateRequest input)
 	{
-		return _incomeAppService.UpdateAsync(incomeId, input);
+		return transactionAppService.UpdateAsync(incomeId, input, TransactionType.Income);
 	}
 
 	/// <summary>
@@ -94,8 +88,8 @@ public class IncomeController : AbpController
 	/// <param name="incomeId">Unique identifier of the income transaction</param>
 	/// <returns>Success response</returns>
 	[HttpDelete("{income-id}")]
-	public Task<IncomeDeleteResponse> DeleteAsync([FromRoute(Name = "income-id")] Guid incomeId)
+	public Task<TransactionDeleteResponse> DeleteAsync([FromRoute(Name = "income-id")] Guid incomeId)
 	{
-		return _incomeAppService.DeleteAsync(incomeId);
+		return transactionAppService.DeleteAsync(incomeId, TransactionType.Income);
 	}
 }

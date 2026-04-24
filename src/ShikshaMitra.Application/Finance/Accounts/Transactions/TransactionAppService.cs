@@ -4,8 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Incomes;
-using ShikshaMitra.Finance.Accounts.Incomes.Dtos;
 using ShikshaMitra.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Transactions.Dtos;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -13,211 +13,204 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Finance.Accounts.Transactions;
 
 [RemoteService(false)]
-public class TransactionAppService : ApplicationService, IIncomeAppService
+public class TransactionAppService(
+	IRepository<Transaction, Guid> transactionRepository,
+	IRepository<TransactionCategory, Guid> transactionCategoryRepository
+) : ApplicationService, ITransactionAppService
 {
-	private readonly IRepository<Income, Guid> _incomeRepository;
-	private readonly IRepository<TransactionCategory, Guid> _incomeCategoryRepository;
-
-	public TransactionAppService(
-		IRepository<Income, Guid> incomeRepository,
-		IRepository<TransactionCategory, Guid> incomeCategoryRepository)
+	public async Task<TransactionListResponse> GetListAsync(Guid academicYearId, GetTransactionsRequest input, TransactionType transactionType)
 	{
-		_incomeRepository = incomeRepository;
-		_incomeCategoryRepository = incomeCategoryRepository;
-	}
-
-	public async Task<IncomeListResponse> GetListAsync(Guid academicYearId, GetIncomesRequest input)
-	{
-		var incomeQuery = await _incomeRepository.GetQueryableAsync();
-		var categoryQuery = await _incomeCategoryRepository.GetQueryableAsync();
+		var transactionQuery = await transactionRepository.GetQueryableAsync();
+		var categoryQuery = await transactionCategoryRepository.GetQueryableAsync();
 
 		var joinedQuery =
-			from income in incomeQuery
-			join category in categoryQuery on income.CategoryId equals category.Id
-			where income.AcademicYearId == academicYearId
-			select new { income, category };
+			from t in transactionQuery
+			join c in categoryQuery on t.CategoryId equals c.Id
+			where t.AcademicYearId == academicYearId && t.TransactionType == transactionType
+			select new { Transaction = t, Category = c };
 
-		if (!string.IsNullOrWhiteSpace(input.Search))
+		if (!input.Search.IsNullOrWhiteSpace())
 		{
 			var searchLower = input.Search.ToLower();
-			joinedQuery = joinedQuery.Where(x => x.income.Name.ToLower().Contains(searchLower));
+			joinedQuery = joinedQuery.Where(x => x.Transaction.Name.ToLower().Contains(searchLower));
 		}
 
 		var totalCount = await AsyncExecuter.CountAsync(joinedQuery);
 
-		var items = await AsyncExecuter.ToListAsync(
+		var rows = await AsyncExecuter.ToListAsync(
 			joinedQuery
-				.OrderByDescending(x => x.income.CreationTime)
+				.OrderByDescending(x => x.Transaction.CreationTime)
 				.Skip((input.Page - 1) * input.PageSize)
 				.Take(input.PageSize)
 		);
 
-		var totalPages = (int)Math.Ceiling(totalCount / (double)input.PageSize);
-
-		var listItems = items.Select(x => new IncomeListItem
-		{
-			Id = x.income.Id,
-			CategoryId = x.income.CategoryId,
-			CategoryName = x.category.Name,
-			CategoryTags = ParseTags(x.income.CategoryTags),
-			Name = x.income.Name,
-			Amount = (double)x.income.Amount,
-			PaymentMethod = x.income.PaymentMethod,
-			PaymentDate = x.income.PaymentDate,
-			Notes = x.income.Notes,
-			CreatedAt = x.income.CreationTime
-		}).ToList();
-
-		return new IncomeListResponse
+		return new TransactionListResponse
 		{
 			TotalCount = totalCount,
 			CurrentPage = input.Page,
 			PageSize = input.PageSize,
-			TotalPages = totalPages,
-			Items = listItems
+			TotalPages = (int) Math.Ceiling(totalCount / (double) input.PageSize),
+			Items = rows.Select(x => MapToListItem(x.Transaction, x.Category)).ToList()
 		};
 	}
 
-	public async Task<IncomeCreateUpdateResponse> CreateAsync(Guid academicYearId, IncomeCreateRequest input)
+	public async Task<TransactionCreateUpdateResponse> CreateAsync(Guid academicYearId, TransactionCreateRequest input, TransactionType transactionType)
 	{
-		var category = await _incomeCategoryRepository.FindAsync(input.CategoryId);
-		if (category == null)
-		{
-			throw new BusinessException("ShikshaMitra:IncomeCategoryNotFound")
+		var category = await transactionCategoryRepository.FindAsync(input.CategoryId)
+			?? throw new BusinessException("ShikshaMitra:TransactionCategoryNotFound")
 				.WithData("CategoryId", input.CategoryId);
-		}
 
-		var income = new Income(
+		var transaction = new Transaction(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
 			academicYearId,
 			input.CategoryId,
 			input.Name,
-			SerializeTags(input.CategoryTags),
-			(decimal)input.Amount,
+			input.CategoryTags,
+			(decimal) input.Amount,
 			input.PaymentMethod,
 			input.PaymentDate,
-			input.Notes
+			input.Notes,
+			transactionType
 		);
 
-		await _incomeRepository.InsertAsync(income, autoSave: true);
+		await transactionRepository.InsertAsync(transaction, autoSave: true);
 
-		return BuildCreateUpdateResponse(income, category);
+		return MapToCreateUpdateResponse(transaction, category);
 	}
 
-	public async Task<IncomeDetailsResponse> GetByIdAsync(Guid incomeId)
+	public async Task<TransactionDetailsResponse> GetByIdAsync(Guid transactionId, TransactionType transactionType)
 	{
-		var income = await _incomeRepository.GetAsync(incomeId);
-		var category = await _incomeCategoryRepository.GetAsync(income.CategoryId);
+		var transaction = await transactionRepository.GetAsync(transactionId);
 
-		// Fetch all incomes for the same category in the same academic year
-		var incomeQuery = await _incomeRepository.GetQueryableAsync();
-		var relatedIncomes = await AsyncExecuter.ToListAsync(
-			incomeQuery.Where(x =>
-				x.CategoryId == income.CategoryId &&
-				x.AcademicYearId == income.AcademicYearId)
+		EnsureTransactionType(transaction, transactionType);
+
+		var category = await transactionCategoryRepository.GetAsync(transaction.CategoryId);
+
+		var transactionQuery = await transactionRepository.GetQueryableAsync();
+		var relatedTransactions = await AsyncExecuter.ToListAsync(
+			transactionQuery.Where(x =>
+				x.CategoryId == transaction.CategoryId &&
+				x.AcademicYearId == transaction.AcademicYearId &&
+				x.TransactionType == transactionType)
 		);
 
-		var totalAmount = relatedIncomes.Sum(x => x.Amount);
-		//var categoryTags = ParseTags(category.Tags ?? string.Empty);
+		var totalAmount = relatedTransactions.Sum(x => x.Amount);
 
-		return new IncomeDetailsResponse
+		return new TransactionDetailsResponse
 		{
-			IncomeInformation = new IncomeInformation
+			TransactionInformation = new TransactionInformation
 			{
-				IncomeCategoryId = category.Id,
-				IncomeCategoryName = category.Name,
-				CategoryTags = [],
-				TotalAmountReceived = (double)totalAmount
+				TransactionCategoryId = category.Id,
+				TransactionCategoryName = category.Name,
+				CategoryTags = ToTagValues(category.Tags),
+				TotalAmountReceived = (double) totalAmount
 			},
-			IncomeList = relatedIncomes.Select(x => new IncomeTransaction
-			{
-				TransactionId = x.Id,
-				IncomeName = x.Name,
-				ReceivedDate = x.PaymentDate,
-				PaymentMethod = x.PaymentMethod,
-				Amount = (double)x.Amount
-			}).ToList()
+			TransactionList = relatedTransactions.Select(MapToTransactionItem).ToList()
 		};
 	}
 
-	public async Task<IncomeCreateUpdateResponse> UpdateAsync(Guid incomeId, IncomeUpdateRequest input)
+	public async Task<TransactionCreateUpdateResponse> UpdateAsync(Guid transactionId, TransactionUpdateRequest input, TransactionType transactionType)
 	{
-		var income = await _incomeRepository.GetAsync(incomeId);
+		var transaction = await transactionRepository.GetAsync(transactionId);
 
-		var category = await _incomeCategoryRepository.FindAsync(input.CategoryId);
-		if (category == null)
-		{
-			throw new BusinessException("ShikshaMitra:IncomeCategoryNotFound")
+		EnsureTransactionType(transaction, transactionType);
+
+		var category = await transactionCategoryRepository.FindAsync(input.CategoryId)
+			?? throw new BusinessException("ShikshaMitra:TransactionCategoryNotFound")
 				.WithData("CategoryId", input.CategoryId);
-		}
 
-		income.Update(
+		transaction.Update(
 			input.CategoryId,
 			input.Name,
-			SerializeTags(input.CategoryTags),
-			(decimal)input.Amount,
+			input.CategoryTags,
+			(decimal) input.Amount,
 			input.PaymentMethod,
 			input.PaymentDate,
 			input.Notes
 		);
 
-		await _incomeRepository.UpdateAsync(income, autoSave: true);
+		await transactionRepository.UpdateAsync(transaction, autoSave: true);
 
-		return BuildCreateUpdateResponse(income, category);
+		return MapToCreateUpdateResponse(transaction, category);
 	}
 
-	public async Task<IncomeDeleteResponse> DeleteAsync(Guid incomeId)
+	public async Task<TransactionDeleteResponse> DeleteAsync(Guid transactionId, TransactionType transactionType)
 	{
-		var income = await _incomeRepository.GetAsync(incomeId);
-		await _incomeRepository.DeleteAsync(income, autoSave: true);
+		var transaction = await transactionRepository.GetAsync(transactionId);
 
-		return new IncomeDeleteResponse
+		EnsureTransactionType(transaction, transactionType);
+
+		await transactionRepository.DeleteAsync(transaction, autoSave: true);
+
+		return new TransactionDeleteResponse
 		{
 			Success = true,
-			Message = "Income deleted successfully"
+			Message = "Transaction deleted successfully"
 		};
 	}
 
 	// ────────────────────────────────────────────────
-	// Helpers
+	// Guards
 	// ────────────────────────────────────────────────
 
-	private static IncomeCreateUpdateResponse BuildCreateUpdateResponse(Income income, TransactionCategory category)
+	private static void EnsureTransactionType(Transaction transaction, TransactionType expected)
 	{
-		return new IncomeCreateUpdateResponse
+		if (transaction.TransactionType != expected)
+			throw new BusinessException("ShikshaMitra:TransactionTypeMismatch")
+				.WithData("TransactionId", transaction.Id)
+				.WithData("Expected", expected)
+				.WithData("Actual", transaction.TransactionType);
+	}
+
+	// ────────────────────────────────────────────────
+	// Mapping
+	// ────────────────────────────────────────────────
+
+	private static TransactionListItem MapToListItem(Transaction transaction, TransactionCategory category) =>
+		new()
+		{
+			Id = transaction.Id,
+			CategoryId = transaction.CategoryId,
+			CategoryName = category.Name,
+			CategoryTags = ToTagValues(transaction.CategoryTags),
+			Name = transaction.Name,
+			Amount = (double) transaction.Amount,
+			PaymentMethod = transaction.PaymentMethod,
+			PaymentDate = transaction.PaymentDate,
+			Notes = transaction.Notes,
+			CreatedAt = transaction.CreationTime
+		};
+
+	private static TransactionItem MapToTransactionItem(Transaction transaction) =>
+		new()
+		{
+			TransactionId = transaction.Id,
+			IncomeName = transaction.Name,
+			ReceivedDate = transaction.PaymentDate,
+			PaymentMethod = transaction.PaymentMethod,
+			Amount = (double) transaction.Amount
+		};
+
+	private static TransactionCreateUpdateResponse MapToCreateUpdateResponse(Transaction transaction, TransactionCategory category) =>
+		new()
 		{
 			Success = true,
-			Data = new IncomeResponseData
+			Data = new TransactionResponseData
 			{
-				Id = income.Id,
-				CategoryId = income.CategoryId,
+				Id = transaction.Id,
+				CategoryId = transaction.CategoryId,
 				CategoryName = category.Name,
-				CategoryTags = ParseTags(income.CategoryTags),
-				Name = income.Name,
-				Amount = (double)income.Amount,
-				PaymentMethod = income.PaymentMethod,
-				PaymentDate = income.PaymentDate,
-				Notes = income.Notes,
-				CreatedAt = income.CreationTime
+				CategoryTags = ToTagValues(transaction.CategoryTags),
+				Name = transaction.Name,
+				Amount = (double) transaction.Amount,
+				PaymentMethod = transaction.PaymentMethod,
+				PaymentDate = transaction.PaymentDate,
+				Notes = transaction.Notes,
+				CreatedAt = transaction.CreationTime
 			}
 		};
-	}
 
-	private static List<string> ParseTags(string tags)
-	{
-		if (string.IsNullOrWhiteSpace(tags))
-			return new List<string>();
-
-		return tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-			.ToList();
-	}
-
-	private static string SerializeTags(List<string>? tags)
-	{
-		if (tags == null || tags.Count == 0)
-			return string.Empty;
-
-		return string.Join(",", tags);
-	}
+	private static List<string> ToTagValues(IEnumerable<Tag> tags) =>
+		tags.Select(t => t.Value).ToList();
 }

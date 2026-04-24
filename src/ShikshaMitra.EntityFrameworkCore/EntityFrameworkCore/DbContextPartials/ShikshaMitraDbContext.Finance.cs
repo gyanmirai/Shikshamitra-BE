@@ -56,8 +56,7 @@ public partial class ShikshaMitraDbContext
 	// Finance — Transactions
 	// ───────────────────────────────────────────────
 	public DbSet<Charge> Charges { get; set; }
-	public DbSet<Income> Incomes { get; set; }
-	public DbSet<Expense> Expenses { get; set; }
+	public DbSet<Transaction> Transactions { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Fee Collection

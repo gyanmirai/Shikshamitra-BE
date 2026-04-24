@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
@@ -18,7 +18,6 @@ public class DayCalculationSettingAppService : ApplicationService, IDayCalculati
 		_repository = repository;
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDayCalculation.Add)]
 	public async Task<DayCalculationResponseDto> SaveAsync(DayCalculationRequestDto input)
 	{
 		var dayCalcType = ParseDayCalculationType(input.DayCalculationType);

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -25,9 +25,9 @@ public class HrAutomatedAttendanceRunsController(
 	private async Task EnsureHrRunLogReadAccessAsync()
 	{
 		var import = await permissionChecker.IsGrantedAsync(
-			ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_ImportAttendance.View);
+			ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_BiometricAttendance.View);
 		var tracking = await permissionChecker.IsGrantedAsync(
-			ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_AttendanceTracking.View);
+			ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_MarkAttendance.View);
 		if (!import && !tracking)
 		{
 			throw new AbpAuthorizationException(
@@ -77,7 +77,7 @@ public class HrAutomatedAttendanceRunsController(
 	}
 
 	[HttpPost("{batchId:guid}/lock")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_ImportAttendance.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_BiometricAttendance.Add)]
 	[ProducesResponseType(StatusCodes.Status204NoContent)]
 	public virtual async Task<IActionResult> LockBatchAsync([FromRoute] Guid batchId)
 	{
@@ -86,7 +86,7 @@ public class HrAutomatedAttendanceRunsController(
 	}
 
 	[HttpDelete("{batchId:guid}/lock")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_ImportAttendance.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_BiometricAttendance.Add)]
 	[ProducesResponseType(StatusCodes.Status204NoContent)]
 	public virtual async Task<IActionResult> UnlockBatchAsync([FromRoute] Guid batchId)
 	{

@@ -22,7 +22,7 @@ public class DayCalculationController : AbpControllerBase
 	}
 
 	[HttpPost]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDayCalculation.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsPayrollConfiguration.Add)]
 	[ProducesResponseType(typeof(DayCalculationResponseDto), 200)]
 	[ProducesResponseType(400)]
 	public virtual async Task<DayCalculationResponseDto> SaveAsync(

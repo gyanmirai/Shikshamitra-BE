@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -26,7 +26,6 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_ImportAttendance.View)]
 public class AttendanceImportAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeeAttendanceRepository employeeAttendanceRepository,
@@ -70,7 +69,6 @@ public class AttendanceImportAppService(
 	private const int RowRemarksMaxLength = 512;
 	private static readonly TimeZoneInfo DefaultImportTimeZone = TimeZoneInfo.Local;
 
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_ImportAttendance.Add)]
 	public async Task<AttendanceImportPreviewResponseDto> PreviewAsync(string fileName, string? contentType, byte[] fileContent)
 	{
 		ValidateUpload(fileName, fileContent);
@@ -140,7 +138,6 @@ public class AttendanceImportAppService(
 		};
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_ImportAttendance.Add)]
 	public async Task<AttendanceImportConfirmResponseDto> ConfirmAsync(AttendanceImportConfirmRequestDto input)
 	{
 		var userId = CurrentUser.Id

@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-namespace ShikshaMitra.Finance.Accounts.Expenses.Dtos;
+namespace ShikshaMitra.Finance.Accounts.Transactions.Dtos;
 
-public class ExpenseCreateRequest
+public class TransactionCreateRequest
 {
 	[Required]
 	public Guid CategoryId { get; set; }
@@ -29,7 +29,7 @@ public class ExpenseCreateRequest
 	public string? Notes { get; set; }
 }
 
-public class ExpenseUpdateRequest
+public class TransactionUpdateRequest
 {
 	[Required]
 	public Guid CategoryId { get; set; }
@@ -54,7 +54,7 @@ public class ExpenseUpdateRequest
 	public string? Notes { get; set; }
 }
 
-public class GetExpensesRequest
+public class GetTransactionsRequest
 {
 	public int Page { get; set; } = 1;
 	public int PageSize { get; set; } = 20;

@@ -1,21 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace ShikshaMitra.Finance.Accounts.Incomes.Dtos;
+namespace ShikshaMitra.Finance.Accounts.Transactions.Dtos;
 
 // ────────────────────────────────────────────────────────────────
-// List response  →  GET /api/incomes
+// List response  →  GET /api/transactions
 // ────────────────────────────────────────────────────────────────
-public class IncomeListResponse
+public class TransactionListResponse
 {
 	public int TotalCount { get; set; }
 	public int CurrentPage { get; set; }
 	public int PageSize { get; set; }
 	public int TotalPages { get; set; }
-	public List<IncomeListItem> Items { get; set; } = new();
+	public List<TransactionListItem> Items { get; set; } = new();
 }
 
-public class IncomeListItem
+public class TransactionListItem
 {
 	public Guid Id { get; set; }
 	public Guid CategoryId { get; set; }
@@ -32,13 +32,13 @@ public class IncomeListItem
 // ────────────────────────────────────────────────────────────────
 // Create / Update response  →  POST 201 / PUT 200
 // ────────────────────────────────────────────────────────────────
-public class IncomeCreateUpdateResponse
+public class TransactionCreateUpdateResponse
 {
 	public bool Success { get; set; } = true;
-	public IncomeResponseData Data { get; set; }
+	public TransactionResponseData Data { get; set; }
 }
 
-public class IncomeResponseData
+public class TransactionResponseData
 {
 	public Guid Id { get; set; }
 	public Guid CategoryId { get; set; }
@@ -53,23 +53,23 @@ public class IncomeResponseData
 }
 
 // ────────────────────────────────────────────────────────────────
-// Detail response  →  GET /api/incomes/{income-id}
+// Detail response  →  GET /api/transactions/{transaction-id}
 // ────────────────────────────────────────────────────────────────
-public class IncomeDetailsResponse
+public class TransactionDetailsResponse
 {
-	public IncomeInformation IncomeInformation { get; set; }
-	public List<IncomeTransaction> IncomeList { get; set; } = new();
+	public TransactionInformation TransactionInformation { get; set; }
+	public List<TransactionItem> TransactionList { get; set; } = new();
 }
 
-public class IncomeInformation
+public class TransactionInformation
 {
-	public Guid IncomeCategoryId { get; set; }
-	public string IncomeCategoryName { get; set; }
+	public Guid TransactionCategoryId { get; set; }
+	public string TransactionCategoryName { get; set; }
 	public List<string> CategoryTags { get; set; } = new();
 	public double TotalAmountReceived { get; set; }
 }
 
-public class IncomeTransaction
+public class TransactionItem
 {
 	public Guid TransactionId { get; set; }
 	public string IncomeName { get; set; }
@@ -81,7 +81,7 @@ public class IncomeTransaction
 // ────────────────────────────────────────────────────────────────
 // Delete response  →  DELETE 200
 // ────────────────────────────────────────────────────────────────
-public class IncomeDeleteResponse
+public class TransactionDeleteResponse
 {
 	public bool Success { get; set; } = true;
 	public string Message { get; set; }

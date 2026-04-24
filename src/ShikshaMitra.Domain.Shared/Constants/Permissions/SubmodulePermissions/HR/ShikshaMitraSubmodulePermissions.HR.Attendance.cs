@@ -6,6 +6,21 @@ public static partial class ShikshaMitraSubmodulePermissions
 {
 	public static partial class HR
 	{
+		public static class AttendanceAndLeave_AttendanceTracking
+		{
+			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.AttendanceTracking";
+			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.AttendanceTracking";
+
+			public const string View = $"{SubmoduleName}.View";
+
+			public static readonly string[] All = { View };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" }
+			};
+		}
+
 		public static class AttendanceAndLeave_MarkAttendance
 		{
 			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.MarkAttendance";

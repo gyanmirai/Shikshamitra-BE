@@ -153,12 +153,13 @@ public class LeaveValidationService : DomainService
 			throw new BusinessException(HRErrorCodes.LeaveMaxDaysExceeded);
 		}
 
-		// 6. Check annual leave balance
-		var currentYear = DateTime.Today.Year;
+		// 6. Check annual leave balance based on the requested leave year.
+		// Using server "today" year causes incorrect balance checks for future dated requests.
+		var balanceYear = startDate.Year;
 		var approvedDaysThisYear = await _employeeLeaveRepository.GetApprovedLeaveDaysAsync(
 			employeeId,
 			leavePolicy.Id,
-			currentYear);
+			balanceYear);
 
 		var remainingBalance = leavePolicy.LeaveCount - approvedDaysThisYear;
 

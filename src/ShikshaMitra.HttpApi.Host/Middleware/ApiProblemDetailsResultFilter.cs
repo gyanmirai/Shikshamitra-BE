@@ -15,6 +15,13 @@ namespace ShikshaMitra.Common.Middleware;
 
 public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITransientDependency
 {
+	private readonly IApiProblemDetailsErrorDetailResolver _errorDetailResolver;
+
+	public ApiProblemDetailsResultFilter(IApiProblemDetailsErrorDetailResolver errorDetailResolver)
+	{
+		_errorDetailResolver = errorDetailResolver;
+	}
+
 	public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
 	{
 		if (!context.HttpContext.Request.Path.StartsWithSegments("/api"))
@@ -85,7 +92,7 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 		}
 	}
 
-	private static ProblemDetails BuildProblemDetails(PathString instance, int status, object? value)
+	private ProblemDetails BuildProblemDetails(PathString instance, int status, object? value)
 	{
 		if (value is ValidationProblemDetails validationProblemDetails)
 		{
@@ -105,7 +112,8 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 
 		if (value is ProblemDetails problemDetails)
 		{
-			var existingErrorCode = TryGetExtensionString(problemDetails.Extensions, "errorCode");
+			var existingErrorCode = TryGetExtensionString(problemDetails.Extensions, "errorCode")
+				?? TryGetExtensionString(problemDetails.Extensions, "code");
 			var normalizedStatus = ApiProblemDetailsMapper.NormalizeStatusCode(status, existingErrorCode);
 			var hasValidationErrorsInExtensions = status == StatusCodes.Status400BadRequest &&
 			                                      problemDetails.Extensions.ContainsKey("errors");
@@ -113,7 +121,7 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 			problemDetails.Status = normalizedStatus;
 			problemDetails.Title ??= ApiProblemDetailsMapper.GetDefaultTitle(normalizedStatus, hasValidationErrorsInExtensions);
 			problemDetails.Instance ??= instance;
-			problemDetails.Detail = ApiProblemDetailsErrorMessages.NormalizeBusinessDetail(
+			problemDetails.Detail = _errorDetailResolver.ResolveDetail(
 				problemDetails.Detail,
 				existingErrorCode,
 				ApiProblemDetailsMapper.GetDefaultDetail(normalizedStatus, hasValidationErrorsInExtensions));
@@ -125,7 +133,7 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 		var normalizedStatusCode = ApiProblemDetailsMapper.NormalizeStatusCode(status, errorCode);
 		var defaultTitle = ApiProblemDetailsMapper.GetDefaultTitle(normalizedStatusCode, hasValidationErrors);
 		var defaultDetail = ApiProblemDetailsMapper.GetDefaultDetail(normalizedStatusCode, hasValidationErrors);
-		var normalizedDetail = ApiProblemDetailsErrorMessages.NormalizeBusinessDetail(detail, errorCode, defaultDetail);
+		var normalizedDetail = _errorDetailResolver.ResolveDetail(detail, errorCode, defaultDetail);
 		var normalized = new ProblemDetails
 		{
 			Type = $"https://httpstatuses.com/{normalizedStatusCode}",

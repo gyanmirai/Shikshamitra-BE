@@ -20,13 +20,16 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 {
 	private readonly RequestDelegate _next;
 	private readonly ILogger<ApiProblemDetailsMiddleware> _logger;
+	private readonly IApiProblemDetailsErrorDetailResolver _errorDetailResolver;
 
 	public ApiProblemDetailsMiddleware(
 		RequestDelegate next,
-		ILogger<ApiProblemDetailsMiddleware> logger)
+		ILogger<ApiProblemDetailsMiddleware> logger,
+		IApiProblemDetailsErrorDetailResolver errorDetailResolver)
 	{
 		_next = next;
 		_logger = logger;
+		_errorDetailResolver = errorDetailResolver;
 	}
 
 	public async Task InvokeAsync(HttpContext context)
@@ -87,7 +90,7 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 		       contentType.Contains("application/problem+json", StringComparison.OrdinalIgnoreCase);
 	}
 
-	private static ProblemDetails MapException(HttpContext context, Exception exception)
+	private ProblemDetails MapException(HttpContext context, Exception exception)
 	{
 		return exception switch
 		{
@@ -140,12 +143,12 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 		};
 	}
 
-	private static ProblemDetails BuildBusinessProblem(HttpContext context, BusinessException exception)
+	private ProblemDetails BuildBusinessProblem(HttpContext context, BusinessException exception)
 	{
 		var statusCode = ApiProblemDetailsMapper.ResolveBusinessStatusCode(exception.Code);
 		var title = ApiProblemDetailsMapper.GetDefaultTitle(statusCode);
 		var defaultDetail = ApiProblemDetailsMapper.GetDefaultDetail(statusCode);
-		var normalizedDetail = ApiProblemDetailsErrorMessages.NormalizeBusinessDetail(
+		var normalizedDetail = _errorDetailResolver.ResolveDetail(
 			exception.Message,
 			exception.Code,
 			defaultDetail);

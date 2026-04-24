@@ -22,7 +22,7 @@ public class AttendanceImportController(IAttendanceImportAppService attendanceIm
 {
 	[HttpPost("preview")]
 	[Consumes("multipart/form-data")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_ImportAttendance.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_BiometricAttendance.Add)]
 	[ProducesResponseType(typeof(AttendanceImportPreviewResponseDto), StatusCodes.Status200OK)]
 	public async Task<ActionResult<AttendanceImportPreviewResponseDto>> PreviewAsync([FromForm] AttendanceImportUploadRequest request)
 	{
@@ -41,7 +41,7 @@ public class AttendanceImportController(IAttendanceImportAppService attendanceIm
 	}
 
 	[HttpPost("confirm")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_ImportAttendance.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_BiometricAttendance.Add)]
 	[ProducesResponseType(typeof(AttendanceImportConfirmResponseDto), StatusCodes.Status200OK)]
 	public async Task<ActionResult<AttendanceImportConfirmResponseDto>> ConfirmAsync(
 		[FromBody, Required] AttendanceImportConfirmRequestDto input)
@@ -51,7 +51,7 @@ public class AttendanceImportController(IAttendanceImportAppService attendanceIm
 	}
 
 	[HttpGet("template")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_ImportAttendance.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_BiometricAttendance.View)]
 	[ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
 	public async Task<IActionResult> DownloadTemplateAsync()
 	{

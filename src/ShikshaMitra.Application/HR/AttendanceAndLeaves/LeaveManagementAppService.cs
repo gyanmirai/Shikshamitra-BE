@@ -17,7 +17,6 @@ using Volo.Abp.Domain.Entities;
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_LeaveManagement.View)]
 public class LeaveManagementAppService(
 	IEmployeeLeaveRepository employeeLeaveRepository,
 	IEmployeeRepository employeeRepository,
@@ -136,7 +135,6 @@ public class LeaveManagementAppService(
 		return MapToDetailsDto(leave);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_LeaveManagement.Add)]
 	public async Task<LeaveRequestCreatedDto> CreateAsync(
 		Guid academicYearId,
 		LeaveRequestCreateDto input,
@@ -200,7 +198,6 @@ public class LeaveManagementAppService(
 		};
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_LeaveManagement.Add)]
 	public async Task<LeaveActionResultDto> ApproveAsync(Guid leaveRequestId, LeaveApprovalRequestDto? input)
 	{
 		var query = await employeeLeaveRepository.WithDetailsAsync(x => x.Employee);
@@ -239,7 +236,6 @@ public class LeaveManagementAppService(
 		};
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_LeaveManagement.Add)]
 	public async Task<LeaveActionResultDto> RejectAsync(Guid leaveRequestId, LeaveRejectionRequestDto input)
 	{
 		var query = await employeeLeaveRepository.WithDetailsAsync(x => x.Employee);
@@ -278,7 +274,6 @@ public class LeaveManagementAppService(
 		};
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_LeaveManagement.Delete)]
 	public async Task<LeaveRequestDeleteDto> DeleteAsync(Guid leaveRequestId)
 	{
 		var query = await employeeLeaveRepository.GetQueryableAsync();

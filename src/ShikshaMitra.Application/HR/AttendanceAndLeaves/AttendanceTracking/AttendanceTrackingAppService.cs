@@ -1,11 +1,14 @@
 ﻿using ShikshaMitra.HR;
 using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Security.UserScope;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -17,20 +20,24 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 /// Uses DB-side paging/filtering for scalability.
 /// </summary>
 [RemoteService(false)]
+[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_AttendanceTracking.View)]
 public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrackingAppService
 {
 	private readonly IEmployeeAttendanceRepository _attendanceRepository;
 	private readonly IEmployeeLeaveRepository _leaveRepository;
 	private readonly IRepository<Employee, Guid> _employeeRepository;
+	private readonly IUserScopeService _userScopeService;
 
 	public AttendanceTrackingAppService(
 		IEmployeeAttendanceRepository attendanceRepository,
 		IEmployeeLeaveRepository leaveRepository,
-		IRepository<Employee, Guid> employeeRepository)
+		IRepository<Employee, Guid> employeeRepository,
+		IUserScopeService userScopeService)
 	{
 		_attendanceRepository = attendanceRepository;
 		_leaveRepository = leaveRepository;
 		_employeeRepository = employeeRepository;
+		_userScopeService = userScopeService;
 	}
 
 	/// <summary>
@@ -38,6 +45,9 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 	/// </summary>
 	public async Task<AttendanceDateWiseResponse> GetDateWiseAsync(GetAttendanceDateWiseInput input)
 	{
+		var scope = await EnsureCanReadAttendanceTrackingAsync();
+		EnsureMediumStageInScope(scope, input.EducationMediumStageId);
+
 		// Parse the date (supports DD-MM-YYYY and ISO formats)
 		var targetDate = ParseDate(input.AttendanceDate);
 		var targetDateOnly = DateOnly.FromDateTime(targetDate);
@@ -55,6 +65,10 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		}
 
 		attendanceQuery = attendanceQuery.Where(a => a.EducationMediumStageId == input.EducationMediumStageId);
+		var attendanceEmployeeIdsForDate = attendanceQuery
+			.Where(a => a.AttendanceDate == targetDateOnly)
+			.Select(a => a.EmployeeId)
+			.Distinct();
 
 		// Get all employees with attendance for this date
 		var attendanceData = from a in attendanceQuery
@@ -83,13 +97,14 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		var targetDateStart = new DateTimeOffset(targetDate.Date, TimeSpan.Zero);
 		var targetDateEnd = targetDateStart.AddDays(1).AddTicks(-1);
 
-		var rejectedLeaveCandidates = await AsyncExecuter.ToListAsync(
-			leaveQuery.Where(l => l.Status == EmployeeLeaveStatusType.Rejected));
-		var rejectedLeaveEmployeeIds = rejectedLeaveCandidates
-			.Where(l => l.StartDate <= targetDateEnd && l.EndDate >= targetDateStart)
+		var rejectedLeaveEmployeeIds = await AsyncExecuter.ToListAsync(
+			leaveQuery.Where(l =>
+				l.Status == EmployeeLeaveStatusType.Rejected &&
+				l.StartDate <= targetDateEnd &&
+				l.EndDate >= targetDateStart &&
+				attendanceEmployeeIdsForDate.Contains(l.EmployeeId))
 			.Select(l => l.EmployeeId)
-			.Distinct()
-			.ToList();
+			.Distinct());
 
 		// Apply status filter if specified
 		if (input.Status.HasValue)
@@ -164,6 +179,9 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 	/// </summary>
 	public async Task<AttendanceEmployeeWiseResponse> GetEmployeeWiseAsync(GetAttendanceEmployeeWiseInput input)
 	{
+		var scope = await EnsureCanReadAttendanceTrackingAsync();
+		EnsureMediumStageInScope(scope, input.EducationMediumStageId);
+
 		// Parse dates (DD-MM-YYYY format)
 		var startDate = ParseDate(input.StartDate);
 		var endDate = ParseDate(input.EndDate);
@@ -207,13 +225,13 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		var startDateTime = new DateTimeOffset(startDate.Date, TimeSpan.Zero);
 		var endDateTime = new DateTimeOffset(endDate.Date.AddDays(1).AddTicks(-1), TimeSpan.Zero);
 
-		var rejectedLeaveCandidates = await AsyncExecuter.ToListAsync(
+		var rejectedLeaves = await AsyncExecuter.ToListAsync(
 			leaveQuery
-				.Where(l => l.EmployeeId == input.EmployeeId &&
-							l.Status == EmployeeLeaveStatusType.Rejected));
-		var rejectedLeaves = rejectedLeaveCandidates
-			.Where(l => l.StartDate <= endDateTime && l.EndDate >= startDateTime)
-			.ToList();
+				.Where(l =>
+					l.EmployeeId == input.EmployeeId &&
+					l.Status == EmployeeLeaveStatusType.Rejected &&
+					l.StartDate <= endDateTime &&
+					l.EndDate >= startDateTime));
 
 		// Build items for each day in the range
 		var items = new List<AttendanceEmployeeWiseItem>();
@@ -371,6 +389,41 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		var parts = new[] { firstName, middleName, lastName }
 			.Where(s => !string.IsNullOrWhiteSpace(s));
 		return string.Join(" ", parts);
+	}
+
+	private async Task<UserScopeContext> EnsureCanReadAttendanceTrackingAsync()
+	{
+		var uid = CurrentUser.Id;
+		if (!uid.HasValue)
+		{
+			throw new BusinessException(HRErrorCodes.AttendanceImportPreviewInvalid);
+		}
+
+		var scope = await _userScopeService.GetUserScopeAsync(uid.Value);
+		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		{
+			return scope;
+		}
+
+		if (scope.MediumStageIds.Count == 0)
+		{
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		}
+
+		return scope;
+	}
+
+	private static void EnsureMediumStageInScope(UserScopeContext scope, Guid educationMediumStageId)
+	{
+		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		{
+			return;
+		}
+
+		if (educationMediumStageId == Guid.Empty || !scope.MediumStageIds.Contains(educationMediumStageId))
+		{
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		}
 	}
 
 	#endregion

@@ -45,6 +45,16 @@ public class RunPayrollResponse
 public class RunPayrollItem
 {
 	/// <summary>
+	/// Employee identifier (UUID)
+	/// </summary>
+	public Guid EmployeeId { get; set; }
+
+	/// <summary>
+	/// Indicates whether payroll is already finalized/locked for this employee in the selected month.
+	/// </summary>
+	public bool IsLocked { get; set; }
+
+	/// <summary>
 	/// Employee full name
 	/// </summary>
 	public string EmployeeName { get; set; } = string.Empty;
@@ -143,6 +153,11 @@ public class RunPayrollRequest
 	/// Payroll month in MMMM-YYYY format (e.g., JANUARY-2025)
 	/// </summary>
 	public string Month { get; set; } = string.Empty;
+
+	/// <summary>
+	/// Optional target employee IDs to finalize a subset. If omitted, payroll runs for all in-scope active employees.
+	/// </summary>
+	public List<Guid>? EmployeeIds { get; set; }
 }
 
 /// <summary>
@@ -206,4 +221,3 @@ public class GetRunPayrollInput
 	/// </summary>
 	public int PageSize { get; set; } = 50;
 }
-

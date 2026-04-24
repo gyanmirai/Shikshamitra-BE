@@ -17,15 +17,15 @@ Manages the tenant-scoped payroll master configuration used by payroll runs and 
 
 ### 1. Day Calculation Settings
 
-1. Admin saves payroll day calculation settings for an academic year using `academicYearId`.
+1. Admin saves payroll day calculation settings via the HTTP API (request body: `dayCalculationType`, optional `manualDays`). The aggregate is **tenant-scoped** today; academic-year scoping in this document is a forward-looking alignment goal when the API and model add `academicYearId`.
 2. System supports a primary calculation mode through `dayCalculationType`.
 3. Supported modes are:
-   - `working-days` (0) — business days excluding weekends/holidays
-   - `total-month-days` (1) — calendar days in the month
-   - `manual-days` (2) — admin-specified number of days
+   - `working-days` (0) — Mon–Fri days in the payroll month minus tenant holidays that fall on weekdays (denominator for LOP proration).
+   - `total-month-days` (1) — calendar days in the month (`DateTime.DaysInMonth`); holidays are **not** subtracted in this mode.
+   - `manual-days` (2) — admin-specified denominator (1–31).
 4. When `working-days` is selected, no extra day count is required.
 5. When `manual-days` is selected, a manual day count must be provided and remain within the allowed month range.
-6. Successful save returns a simple success response and becomes the active calculation basis for payroll processing in that academic year.
+6. Successful save returns a simple success response. The active row is read during **payroll preview**, **payroll lock**, and **salary slip generation** to compute basis days and LOP proration (see payroll operations PRD). If no row exists, the system defaults to **`working-days`** behaviour.
 
 ### 2. Earning Components
 

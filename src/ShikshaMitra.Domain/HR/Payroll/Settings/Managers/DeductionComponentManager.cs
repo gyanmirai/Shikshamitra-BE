@@ -26,6 +26,7 @@ public class DeductionComponentManager : DomainService
 		bool visibleInPayslip,
 		int displayOrder = 0)
 	{
+		name = (name ?? string.Empty).Trim();
 		await CheckNameAvailabilityAsync(name);
 
 		var deductionComponent = new DeductionComponent(
@@ -59,6 +60,7 @@ public class DeductionComponentManager : DomainService
 		bool visibleInPayslip,
 		int displayOrder)
 	{
+		name = (name ?? string.Empty).Trim();
 		if (deductionComponent.Name != name)
 		{
 			await CheckNameAvailabilityAsync(name, deductionComponent.Id);

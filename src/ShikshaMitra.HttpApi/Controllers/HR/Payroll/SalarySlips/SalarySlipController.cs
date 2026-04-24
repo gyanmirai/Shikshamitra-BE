@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using Volo.Abp;
@@ -33,6 +34,7 @@ public class SalarySlipController : AbpControllerBase
 	/// Retrieves employee salary slip for a specific month (OpenAPI contract)
 	/// </summary>
 	[HttpGet]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_GenerateSalarySlip.View)]
 	[ProducesResponseType(typeof(SalarySlipResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -76,6 +78,10 @@ public class SalarySlipController : AbpControllerBase
 			TotalEarning = Convert.ToDouble(dto.TotalEarning),
 			TotalDeduction = Convert.ToDouble(dto.TotalDeduction),
 			NetPay = Convert.ToDouble(dto.NetSalary),
+			PayrollBasisDays = dto.PayrollBasisDays,
+			PayableDays = dto.PayableDays.HasValue ? Convert.ToDouble(dto.PayableDays.Value) : null,
+			ProrationFactor = dto.ProrationFactor.HasValue ? Convert.ToDouble(dto.ProrationFactor.Value) : null,
+			PayrollDayCalculationMode = dto.PayrollDayCalculationMode,
 			Earnings = dto.Earnings.Select(e => new SalaryComponent
 			{
 				Name = e.Name,

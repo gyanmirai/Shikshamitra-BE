@@ -3,6 +3,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Infrastructure.Data;
@@ -158,6 +159,45 @@ public class DeductionComponentApi_Tests : ShikshaMitraApiTestBase
 		var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.Created);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Field_Level_Validation_Errors_For_Invalid_Enum_Input()
+	{
+		var input = new DeductionComponentCreateRequestDto
+		{
+			DeductionComponentName = TestDataHelper.UniqueName("InvalidType"),
+			DeductionType = "UNKNOWN_TYPE",
+			CalculationType = "AMOUNT",
+			Amount = 1500m,
+			VisibleInPayslip = true
+		};
+
+		var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+		response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+		var json = await response.Content.ReadAsStringAsync();
+		using var document = JsonDocument.Parse(json);
+		var root = document.RootElement;
+
+		root.TryGetProperty("status", out var statusElement).ShouldBeTrue();
+		statusElement.GetInt32().ShouldBe((int)response.StatusCode);
+		root.TryGetProperty("title", out var titleElement).ShouldBeTrue();
+		titleElement.GetString().ShouldNotBeNullOrWhiteSpace();
+		root.TryGetProperty("type", out _).ShouldBeTrue();
+		root.TryGetProperty("detail", out _).ShouldBeTrue();
+		root.TryGetProperty("instance", out _).ShouldBeTrue();
+
+		if (response.StatusCode == HttpStatusCode.BadRequest)
+		{
+			root.TryGetProperty("errors", out var errors).ShouldBeTrue();
+			errors.ValueKind.ShouldBe(JsonValueKind.Object);
+			var keys = errors.EnumerateObject()
+				.Select(e => e.Name)
+				.ToList();
+			keys.Any(k => k.Contains("deductionType", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+		}
 	}
 
 	[Fact]

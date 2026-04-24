@@ -1,10 +1,14 @@
-﻿using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
+﻿using ShikshaMitra.HR;
+using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Security.UserScope;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -16,20 +20,24 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 /// Uses DB-side paging/filtering for scalability.
 /// </summary>
 [RemoteService(false)]
+[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_AttendanceTracking.View)]
 public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrackingAppService
 {
 	private readonly IEmployeeAttendanceRepository _attendanceRepository;
 	private readonly IEmployeeLeaveRepository _leaveRepository;
 	private readonly IRepository<Employee, Guid> _employeeRepository;
+	private readonly IUserScopeService _userScopeService;
 
 	public AttendanceTrackingAppService(
 		IEmployeeAttendanceRepository attendanceRepository,
 		IEmployeeLeaveRepository leaveRepository,
-		IRepository<Employee, Guid> employeeRepository)
+		IRepository<Employee, Guid> employeeRepository,
+		IUserScopeService userScopeService)
 	{
 		_attendanceRepository = attendanceRepository;
 		_leaveRepository = leaveRepository;
 		_employeeRepository = employeeRepository;
+		_userScopeService = userScopeService;
 	}
 
 	/// <summary>
@@ -37,6 +45,9 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 	/// </summary>
 	public async Task<AttendanceDateWiseResponse> GetDateWiseAsync(GetAttendanceDateWiseInput input)
 	{
+		var scope = await EnsureCanReadAttendanceTrackingAsync();
+		EnsureMediumStageInScope(scope, input.EducationMediumStageId);
+
 		// Parse the date (supports DD-MM-YYYY and ISO formats)
 		var targetDate = ParseDate(input.AttendanceDate);
 		var targetDateOnly = DateOnly.FromDateTime(targetDate);
@@ -53,6 +64,12 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 			leaveQuery = leaveQuery.Where(l => l.TenantId == CurrentTenant.Id);
 		}
 
+		attendanceQuery = attendanceQuery.Where(a => a.EducationMediumStageId == input.EducationMediumStageId);
+		var attendanceEmployeeIdsForDate = attendanceQuery
+			.Where(a => a.AttendanceDate == targetDateOnly)
+			.Select(a => a.EmployeeId)
+			.Distinct();
+
 		// Get all employees with attendance for this date
 		var attendanceData = from a in attendanceQuery
 							 where a.AttendanceDate == targetDateOnly
@@ -66,31 +83,41 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 								 Employee = e
 							 };
 
+		if (!string.IsNullOrWhiteSpace(input.Search))
+		{
+			var normalizedSearch = input.Search.Trim().ToLowerInvariant();
+			attendanceData = attendanceData.Where(a =>
+				((a.Employee.FirstName ?? string.Empty) + " " + (a.Employee.MiddleName ?? string.Empty) + " " + (a.Employee.LastName ?? string.Empty))
+					.ToLower().Contains(normalizedSearch) ||
+				(a.Employee.EmployeeCode ?? string.Empty).ToLower().Contains(normalizedSearch) ||
+				(a.Employee.MobileNo ?? string.Empty).ToLower().Contains(normalizedSearch));
+		}
+
 		// Get rejected leaves that overlap with the target date
 		var targetDateStart = new DateTimeOffset(targetDate.Date, TimeSpan.Zero);
 		var targetDateEnd = targetDateStart.AddDays(1).AddTicks(-1);
 
 		var rejectedLeaveEmployeeIds = await AsyncExecuter.ToListAsync(
-			leaveQuery
-				.Where(l => l.Status == EmployeeLeaveStatusType.Rejected &&
-							l.StartDate <= targetDateEnd &&
-							l.EndDate >= targetDateStart)
-				.Select(l => l.EmployeeId)
-				.Distinct()
-		);
+			leaveQuery.Where(l =>
+				l.Status == EmployeeLeaveStatusType.Rejected &&
+				l.StartDate <= targetDateEnd &&
+				l.EndDate >= targetDateStart &&
+				attendanceEmployeeIdsForDate.Contains(l.EmployeeId))
+			.Select(l => l.EmployeeId)
+			.Distinct());
 
 		// Apply status filter if specified
 		if (input.Status.HasValue)
 		{
 			attendanceData = input.Status.Value switch
 			{
-				AttendanceTrackingStatus.PRESENT => attendanceData.Where(a =>
+				AttendanceTrackingStatus.Present => attendanceData.Where(a =>
 					a.StatusType == EmployeeAttendanceStatusType.Present),
-				AttendanceTrackingStatus.ABSENT => attendanceData.Where(a =>
+				AttendanceTrackingStatus.Absent => attendanceData.Where(a =>
 					a.StatusType == EmployeeAttendanceStatusType.FullDayLeave),
-				AttendanceTrackingStatus.HALF_DAY => attendanceData.Where(a =>
+				AttendanceTrackingStatus.HalfDay => attendanceData.Where(a =>
 					a.StatusType == EmployeeAttendanceStatusType.HalfDayLeave),
-				AttendanceTrackingStatus.REJECTED_LEAVE => attendanceData.Where(a =>
+				AttendanceTrackingStatus.RejectedLeave => attendanceData.Where(a =>
 					rejectedLeaveEmployeeIds.Contains(a.EmployeeId)),
 				_ => attendanceData
 			};
@@ -116,7 +143,6 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 
 		var summary = new AttendanceSummary
 		{
-			All = allAttendanceForDate.Count,
 			Present = allAttendanceForDate.Count(a => a.StatusType == EmployeeAttendanceStatusType.Present),
 			Absent = allAttendanceForDate.Count(a => a.StatusType == EmployeeAttendanceStatusType.FullDayLeave),
 			HalfDay = allAttendanceForDate.Count(a => a.StatusType == EmployeeAttendanceStatusType.HalfDayLeave),
@@ -130,8 +156,8 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 			FullName = FormatEmployeeName(a.Employee.FirstName, a.Employee.MiddleName, a.Employee.LastName),
 			EmployeeIdentifier = a.Employee.EmployeeCode ?? string.Empty,
 			ContactNo = a.Employee.MobileNo ?? string.Empty,
-			InTime = a.TimeIn?.ToString("HH:mm"),
-			OutTime = a.TimeOut?.ToString("HH:mm"),
+			InTime = a.TimeIn?.ToString("o"),
+			OutTime = a.TimeOut?.ToString("o"),
 			HoursWorked = CalculateHoursWorked(a.TimeIn, a.TimeOut),
 			Remarks = null,
 			Status = MapToTrackingStatus(a.StatusType, rejectedLeaveEmployeeIds.Contains(a.EmployeeId))
@@ -153,13 +179,22 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 	/// </summary>
 	public async Task<AttendanceEmployeeWiseResponse> GetEmployeeWiseAsync(GetAttendanceEmployeeWiseInput input)
 	{
+		var scope = await EnsureCanReadAttendanceTrackingAsync();
+		EnsureMediumStageInScope(scope, input.EducationMediumStageId);
+
 		// Parse dates (DD-MM-YYYY format)
 		var startDate = ParseDate(input.StartDate);
 		var endDate = ParseDate(input.EndDate);
 
 		if (endDate < startDate)
 		{
-			throw new UserFriendlyException("End date must be greater than or equal to start date");
+			throw new BusinessException(HRErrorCodes.AttendanceEndDateBeforeStartDate);
+		}
+
+		const int maxDateRangeDays = 90;
+		if ((endDate - startDate).Days > maxDateRangeDays)
+		{
+			throw new BusinessException(HRErrorCodes.AttendanceDateRangeTooLarge);
 		}
 
 		var startDateOnly = DateOnly.FromDateTime(startDate);
@@ -180,6 +215,7 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		var attendanceRecords = await AsyncExecuter.ToListAsync(
 			attendanceQuery
 				.Where(a => a.EmployeeId == input.EmployeeId &&
+							a.EducationMediumStageId == input.EducationMediumStageId &&
 							a.AttendanceDate >= startDateOnly &&
 							a.AttendanceDate <= endDateOnly)
 				.OrderBy(a => a.AttendanceDate)
@@ -191,11 +227,11 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 
 		var rejectedLeaves = await AsyncExecuter.ToListAsync(
 			leaveQuery
-				.Where(l => l.EmployeeId == input.EmployeeId &&
-							l.Status == EmployeeLeaveStatusType.Rejected &&
-							l.StartDate <= endDateTime &&
-							l.EndDate >= startDateTime)
-		);
+				.Where(l =>
+					l.EmployeeId == input.EmployeeId &&
+					l.Status == EmployeeLeaveStatusType.Rejected &&
+					l.StartDate <= endDateTime &&
+					l.EndDate >= startDateTime));
 
 		// Build items for each day in the range
 		var items = new List<AttendanceEmployeeWiseItem>();
@@ -213,7 +249,7 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 			AttendanceTrackingStatus status;
 			if (hasRejectedLeave)
 			{
-				status = AttendanceTrackingStatus.REJECTED_LEAVE;
+				status = AttendanceTrackingStatus.RejectedLeave;
 				summary.RejectedLeave++;
 			}
 			else if (attendance != null)
@@ -221,13 +257,13 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 				status = MapToTrackingStatus(attendance.StatusType, false);
 				switch (status)
 				{
-					case AttendanceTrackingStatus.PRESENT:
+					case AttendanceTrackingStatus.Present:
 						summary.Present++;
 						break;
-					case AttendanceTrackingStatus.ABSENT:
+					case AttendanceTrackingStatus.Absent:
 						summary.Absent++;
 						break;
-					case AttendanceTrackingStatus.HALF_DAY:
+					case AttendanceTrackingStatus.HalfDay:
 						summary.HalfDay++;
 						break;
 				}
@@ -235,35 +271,56 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 			else
 			{
 				// No attendance record = absent
-				status = AttendanceTrackingStatus.ABSENT;
+				status = AttendanceTrackingStatus.Absent;
 				summary.Absent++;
 			}
 
-			// Always count total days regardless of filter
-			summary.All++;
-
+			var isoDate = BuildDateIsoString(date, attendance?.TimeIn?.Offset);
 			// Apply status filter if specified (skip adding to items but keep in summary counts)
 			if (input.Status.HasValue && status != input.Status.Value)
 			{
 				continue;
 			}
 
-			items.Add(new AttendanceEmployeeWiseItem
+			var item = new AttendanceEmployeeWiseItem
 			{
-				Date = date.ToString("dd-MM-yyyy"),
+				Date = isoDate,
 				Day = date.DayOfWeek.ToString(),
-				InTime = attendance?.TimeIn?.ToString("hh:mm tt"),
-				OutTime = attendance?.TimeOut?.ToString("hh:mm tt"),
-				HoursWorked = FormatHoursWorkedLong(attendance?.TimeIn, attendance?.TimeOut),
+				InTime = attendance?.TimeIn?.ToString("o"),
+				OutTime = attendance?.TimeOut?.ToString("o"),
+				HoursWorked = CalculateHoursWorked(attendance?.TimeIn, attendance?.TimeOut),
 				Description = hasRejectedLeave ? "Leave Rejected" : null,
 				Status = status
-			});
+			};
+
+			if (!string.IsNullOrWhiteSpace(input.Search))
+			{
+				var search = input.Search.Trim().ToLowerInvariant();
+				var matchesSearch = item.Day.ToLowerInvariant().Contains(search) ||
+									item.Date.ToLowerInvariant().Contains(search) ||
+									(item.Description ?? string.Empty).ToLowerInvariant().Contains(search) ||
+									item.Status.ToString().ToLowerInvariant().Contains(search);
+				if (!matchesSearch)
+				{
+					continue;
+				}
+			}
+
+			items.Add(item);
 		}
+
+		var totalCount = items.Count;
+		var skipCount = (input.Page - 1) * input.PageSize;
+		var pagedItems = items.Skip(skipCount).Take(input.PageSize).ToList();
 
 		return new AttendanceEmployeeWiseResponse
 		{
+			TotalCount = totalCount,
+			CurrentPage = input.Page,
+			PageSize = input.PageSize,
+			TotalPages = totalCount == 0 ? 0 : (int)Math.Ceiling((double)totalCount / input.PageSize),
 			AttendanceSummary = summary,
-			Items = items
+			Items = pagedItems
 		};
 	}
 
@@ -290,7 +347,7 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 			return dto.DateTime;
 		}
 
-		throw new UserFriendlyException($"Invalid date format: {dateString}. Expected DD-MM-YYYY or ISO date-time format.");
+		throw new BusinessException(HRErrorCodes.AttendanceInvalidDateFormat);
 	}
 
 	private static string? CalculateHoursWorked(DateTimeOffset? timeIn, DateTimeOffset? timeOut)
@@ -304,29 +361,24 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		return $"{hours:D2}:{minutes:D2}";
 	}
 
-	private static string? FormatHoursWorkedLong(DateTimeOffset? timeIn, DateTimeOffset? timeOut)
-	{
-		if (!timeIn.HasValue || !timeOut.HasValue)
-			return null;
-
-		var duration = timeOut.Value - timeIn.Value;
-		var hours = (int)duration.TotalHours;
-		var minutes = duration.Minutes;
-		return $"{hours:D2}H {minutes:D2}M";
-	}
-
 	private static AttendanceTrackingStatus MapToTrackingStatus(EmployeeAttendanceStatusType statusType, bool hasRejectedLeave)
 	{
 		if (hasRejectedLeave)
-			return AttendanceTrackingStatus.REJECTED_LEAVE;
+			return AttendanceTrackingStatus.RejectedLeave;
 
 		return statusType switch
 		{
-			EmployeeAttendanceStatusType.Present => AttendanceTrackingStatus.PRESENT,
-			EmployeeAttendanceStatusType.FullDayLeave => AttendanceTrackingStatus.ABSENT,
-			EmployeeAttendanceStatusType.HalfDayLeave => AttendanceTrackingStatus.HALF_DAY,
-			_ => AttendanceTrackingStatus.ABSENT
+			EmployeeAttendanceStatusType.Present => AttendanceTrackingStatus.Present,
+			EmployeeAttendanceStatusType.FullDayLeave => AttendanceTrackingStatus.Absent,
+			EmployeeAttendanceStatusType.HalfDayLeave => AttendanceTrackingStatus.HalfDay,
+			_ => AttendanceTrackingStatus.Absent
 		};
+	}
+
+	private static string BuildDateIsoString(DateTime date, TimeSpan? offset)
+	{
+		var dateOffset = new DateTimeOffset(date.Year, date.Month, date.Day, 0, 0, 0, offset ?? TimeSpan.Zero);
+		return dateOffset.ToString("o");
 	}
 
 	/// <summary>
@@ -337,6 +389,41 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		var parts = new[] { firstName, middleName, lastName }
 			.Where(s => !string.IsNullOrWhiteSpace(s));
 		return string.Join(" ", parts);
+	}
+
+	private async Task<UserScopeContext> EnsureCanReadAttendanceTrackingAsync()
+	{
+		var uid = CurrentUser.Id;
+		if (!uid.HasValue)
+		{
+			throw new BusinessException(HRErrorCodes.AttendanceImportPreviewInvalid);
+		}
+
+		var scope = await _userScopeService.GetUserScopeAsync(uid.Value);
+		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		{
+			return scope;
+		}
+
+		if (scope.MediumStageIds.Count == 0)
+		{
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		}
+
+		return scope;
+	}
+
+	private static void EnsureMediumStageInScope(UserScopeContext scope, Guid educationMediumStageId)
+	{
+		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		{
+			return;
+		}
+
+		if (educationMediumStageId == Guid.Empty || !scope.MediumStageIds.Contains(educationMediumStageId))
+		{
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		}
 	}
 
 	#endregion

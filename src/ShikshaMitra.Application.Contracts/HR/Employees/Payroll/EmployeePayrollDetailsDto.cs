@@ -40,11 +40,7 @@ public class PayrollDetailsDto
 
 	public string? PunchId { get; set; }
 
-	public decimal? BasicSalary { get; set; }
-
-	public decimal? TdsPercentage { get; set; }
-
-	public decimal? TdsAmount { get; set; }
+	public decimal? TotalWorkingHourPerMonth { get; set; }
 }
 
 /// <summary>

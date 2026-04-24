@@ -35,13 +35,25 @@ public class PayrollController : AbpControllerBase
 	/// Get employee payroll information (matches OpenAPI Payroll contract)
 	/// </summary>
 	[HttpGet("{employeeId}/payroll")]
-	[ProducesResponseType(typeof(PayrollContract), StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(EmployeePayrollResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
-	public virtual async Task<PayrollContract> GetAsync([FromRoute, Required] Guid employeeId)
+	public virtual async Task<EmployeePayrollResponse> GetAsync([FromRoute, Required] Guid employeeId)
 	{
 		await _authorizationService.CheckEmployeeAccessAsync(employeeId, requireOwnership: true);
 		return await _payrollAppService.GetPayrollContractAsync(employeeId);
+	}
+
+	/// <summary>
+	/// Backward-compatible alias for payroll fetch endpoint.
+	/// </summary>
+	[HttpGet("{employeeId}/get-payroll")]
+	[ProducesResponseType(typeof(EmployeePayrollResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public virtual async Task<EmployeePayrollResponse> GetLegacyAsync([FromRoute, Required] Guid employeeId)
+	{
+		return await GetAsync(employeeId);
 	}
 
 	/// <summary>

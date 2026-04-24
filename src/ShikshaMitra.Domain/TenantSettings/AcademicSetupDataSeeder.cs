@@ -59,18 +59,29 @@ public class AcademicSetupDataSeeder : IDataSeedContributor, ITransientDependenc
 
         try
         {
-            // 1. Create Academic Year
+            // 1. Create Academic Year (skip if already exists)
             var currentYear = DateTime.Now.Year;
             var nextYear = currentYear + 1;
-            var academicYear = await _academicYearManager.CreateAsync(
-                name: $"{currentYear}-{nextYear}",
-                startDate: new DateTime(currentYear, 6, 1), // June 1st
-                endDate: new DateTime(nextYear, 5, 31)      // May 31st
-            );
-            await _academicYearRepository.InsertAsync(academicYear, autoSave: true);
-            _logger.LogInformation("Created Academic Year: {Name} (ID: {Id})", academicYear.Name, academicYear.Id);
+            var yearName = $"{currentYear}-{nextYear}";
+            var existingYear = await _academicYearRepository.FindAsync(x => x.Name == yearName);
+            ShikshaMitra.TenantSettings.AcademicYears.AcademicYear academicYear;
+            if (existingYear != null)
+            {
+                academicYear = existingYear;
+                _logger.LogInformation("Academic Year already exists: {Name} (ID: {Id})", academicYear.Name, academicYear.Id);
+            }
+            else
+            {
+                academicYear = await _academicYearManager.CreateAsync(
+                    name: yearName,
+                    startDate: new DateTime(currentYear, 6, 1),
+                    endDate: new DateTime(nextYear, 5, 31)
+                );
+                await _academicYearRepository.InsertAsync(academicYear, autoSave: true);
+                _logger.LogInformation("Created Academic Year: {Name} (ID: {Id})", academicYear.Name, academicYear.Id);
+            }
 
-            // 2. Create Education Boards
+            // 2. Create Education Boards (skip if already exists)
             var educationBoards = new[]
             {
                 EducationBoardType.CBSE,
@@ -79,14 +90,27 @@ public class AcademicSetupDataSeeder : IDataSeedContributor, ITransientDependenc
 
             foreach (var boardType in educationBoards)
             {
-                var board = await _educationBoardManager.CreateAsync(
-                    academicYearId: academicYear.Id,
-                    educationBoardType: boardType
+                var existingBoard = await _educationBoardRepository.FindAsync(
+                    x => x.Type == boardType && x.AcademicYearId == academicYear.Id
                 );
-                await _educationBoardRepository.InsertAsync(board, autoSave: true);
-                _logger.LogInformation("Created Education Board: {Type} (ID: {Id})", boardType, board.Id);
 
-                // 3. Create Education Mediums for each board
+                EducationBoard board;
+                if (existingBoard != null)
+                {
+                    board = existingBoard;
+                    _logger.LogInformation("Education Board already exists: {Type} (ID: {Id})", boardType, board.Id);
+                }
+                else
+                {
+                    board = await _educationBoardManager.CreateAsync(
+                        academicYearId: academicYear.Id,
+                        educationBoardType: boardType
+                    );
+                    await _educationBoardRepository.InsertAsync(board, autoSave: true);
+                    _logger.LogInformation("Created Education Board: {Type} (ID: {Id})", boardType, board.Id);
+                }
+
+                // 3. Create Education Mediums for each board (skip if already exists)
                 var mediums = new[]
                 {
                     "English Medium",
@@ -96,6 +120,15 @@ public class AcademicSetupDataSeeder : IDataSeedContributor, ITransientDependenc
 
                 foreach (var mediumName in mediums)
                 {
+                    var existingMedium = await _educationMediumRepository.FindAsync(
+                        x => x.EducationBoardId == board.Id && x.Name == mediumName
+                    );
+                    if (existingMedium != null)
+                    {
+                        _logger.LogInformation("Education Medium already exists: {Name} for Board: {BoardType}", mediumName, boardType);
+                        continue;
+                    }
+
                     var medium = await _educationMediumManager.CreateAsync(
                         educationBoardId: board.Id,
                         name: mediumName

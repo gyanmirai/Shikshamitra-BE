@@ -3,6 +3,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Infrastructure.Data;
@@ -17,6 +18,7 @@ namespace ShikshaMitra.HR.Payroll;
 public class EarningComponentApi_Tests : ShikshaMitraApiTestBase
 {
 	private const string BaseUrl = "/api/payroll/earning-components";
+	private const string DeductionBaseUrl = "/api/payroll/deduction-components";
 
 	public EarningComponentApi_Tests(ShikshaMitraApiTestFactory factory)
 		: base(factory)
@@ -165,6 +167,45 @@ public class EarningComponentApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Field_Level_Validation_Errors_For_Invalid_Enum_Input()
+	{
+		var input = new EarningComponentCreateRequestDto
+		{
+			EarningComponentName = TestDataHelper.UniqueName("InvalidType"),
+			EarningType = "UNKNOWN_TYPE",
+			CalculationType = "AMOUNT",
+			Amount = 2500m,
+			VisibleInPayslip = true
+		};
+
+		var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+		response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+		var json = await response.Content.ReadAsStringAsync();
+		using var document = JsonDocument.Parse(json);
+		var root = document.RootElement;
+
+		root.TryGetProperty("status", out var statusElement).ShouldBeTrue();
+		statusElement.GetInt32().ShouldBe((int)response.StatusCode);
+		root.TryGetProperty("title", out var titleElement).ShouldBeTrue();
+		titleElement.GetString().ShouldNotBeNullOrWhiteSpace();
+		root.TryGetProperty("type", out _).ShouldBeTrue();
+		root.TryGetProperty("detail", out _).ShouldBeTrue();
+		root.TryGetProperty("instance", out _).ShouldBeTrue();
+
+		if (response.StatusCode == HttpStatusCode.BadRequest)
+		{
+			root.TryGetProperty("errors", out var errors).ShouldBeTrue();
+			errors.ValueKind.ShouldBe(JsonValueKind.Object);
+			var keys = errors.EnumerateObject()
+				.Select(e => e.Name)
+				.ToList();
+			keys.Any(k => k.Contains("earningType", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Return_Custom_Component_Name_In_List_Response()
 	{
 		var baseComponent = await CreateComponentAsync("BaseForNestedName");
@@ -218,6 +259,67 @@ public class EarningComponentApi_Tests : ShikshaMitraApiTestBase
 
 		var secondCreate = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
 		secondCreate.StatusCode.ShouldBe(HttpStatusCode.Created);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Duplicate_When_Name_Is_Logically_Same_After_Trim()
+	{
+		var baseName = TestDataHelper.UniqueName("PadDup");
+		var firstInput = new EarningComponentCreateRequestDto
+		{
+			EarningComponentName = baseName,
+			EarningType = "FIXED",
+			CalculationType = "AMOUNT",
+			Amount = 1000m,
+			VisibleInPayslip = true
+		};
+
+		var first = await Client.PostAsJsonAsync(BaseUrl, firstInput, JsonOptions);
+		first.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+		var paddedDuplicate = new EarningComponentCreateRequestDto
+		{
+			EarningComponentName = $"  {baseName}  ",
+			EarningType = "FIXED",
+			CalculationType = "AMOUNT",
+			Amount = 2000m,
+			VisibleInPayslip = true
+		};
+
+		var second = await Client.PostAsJsonAsync(BaseUrl, paddedDuplicate, JsonOptions);
+		second.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Allow_Earning_Name_That_Matches_Deduction_Catalog_Name()
+	{
+		var shared = TestDataHelper.UniqueName("SharedAcrossTypes");
+		var deductionInput = new DeductionComponentCreateRequestDto
+		{
+			DeductionComponentName = shared,
+			DeductionType = "FIXED",
+			CalculationType = "AMOUNT",
+			Amount = 500m,
+			VisibleInPayslip = true
+		};
+		var deductionCreate = await Client.PostAsJsonAsync(DeductionBaseUrl, deductionInput, JsonOptions);
+		deductionCreate.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+		var baseForPct = await CreateComponentAsync("BaseForCrossTypePct");
+		var earningInput = new EarningComponentCreateRequestDto
+		{
+			EarningComponentName = shared,
+			EarningType = "FIXED",
+			CalculationType = "PERCENTAGE",
+			Percentage = 15m,
+			SelectedEarningComponentId = baseForPct.Id,
+			VisibleInPayslip = false
+		};
+
+		var earningCreate = await Client.PostAsJsonAsync(BaseUrl, earningInput, JsonOptions);
+		earningCreate.StatusCode.ShouldBe(HttpStatusCode.Created);
 	}
 
 	#endregion

@@ -26,6 +26,7 @@ public class EarningComponentManager : DomainService
 		bool visibleInPayslip,
 		int displayOrder = 0)
 	{
+		name = (name ?? string.Empty).Trim();
 		await CheckNameAvailabilityAsync(name);
 
 		var earningComponent = new EarningComponent(
@@ -59,6 +60,7 @@ public class EarningComponentManager : DomainService
 		bool visibleInPayslip,
 		int displayOrder)
 	{
+		name = (name ?? string.Empty).Trim();
 		if (earningComponent.Name != name)
 		{
 			await CheckNameAvailabilityAsync(name, earningComponent.Id);

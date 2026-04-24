@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using ShikshaMitra.HR.Employees.Payroll;
 
 namespace ShikshaMitra.HR.Payroll.SalaryStructure;
 
@@ -50,20 +49,11 @@ public class UpdateSalaryStructureDto : IValidatableObject
 			);
 		}
 
-		if (component.Amount < 0)
+		if (component.Amount.HasValue && component.Amount.Value < 0)
 		{
 			yield return new ValidationResult(
 				$"{arrayName} component '{component.Name}' cannot have negative amount.",
 				new[] { $"{arrayName}[{index}].{nameof(SalaryComponentDto.Amount)}" }
-			);
-		}
-
-		// Validate DependOn is required when ComponentType is Percentage
-		if (component.ComponentType == SalaryComponentType.Percentage && component.DependOn == null)
-		{
-			yield return new ValidationResult(
-				$"{arrayName} component '{component.Name}' requires DependOn when ComponentType is Percentage.",
-				new[] { $"{arrayName}[{index}].{nameof(SalaryComponentDto.DependOn)}" }
 			);
 		}
 	}

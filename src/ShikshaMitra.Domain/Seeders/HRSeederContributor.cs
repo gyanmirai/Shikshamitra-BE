@@ -1,13 +1,18 @@
 using Microsoft.AspNetCore.Identity;
 using ShikshaMitra.Common;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.TenantSettings;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
@@ -24,6 +29,10 @@ namespace ShikshaMitra.Seeders;
 /// </summary>
 public class HRSeederContributor : BaseSeederContributor
 {
+	private const int ProfileSeedImageCount = 8;
+	private const int SampleEmployeePayrollAttendanceCount = 5;
+	private const int SampleAttendanceDayWindow = 14;
+
 	private readonly IRepository<LeaveType, Guid> _leaveTypeRepository;
 	private readonly LeaveTypeManager _leaveTypeManager;
 	private readonly IRepository<EarningComponent, Guid> _earningComponentRepository;
@@ -33,15 +42,20 @@ public class HRSeederContributor : BaseSeederContributor
 	private readonly IRepository<LeavePolicy, Guid> _leavePolicyRepository;
 	private readonly LeavePolicyManager _leavePolicyManager;
 	private readonly ILeaveTypeRepository _leaveTypeQueryRepository;
+	private readonly IAcademicYearRepository _academicYearRepository;
 	private readonly IRepository<EducationMediumStage, Guid> _educationMediumStageRepository;
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly IEmployeeFamilyMemberRepository _familyMemberRepository;
 	private readonly EmployeeManager _employeeManager;
+	private readonly EmployeeDocumentManager _employeeDocumentManager;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IdentityUserManager _userManager;
 	private readonly IIdentityUserRepository _userRepository;
 	private readonly ILookupNormalizer _lookupNormalizer;
+	private readonly IEmployeeAttendanceRepository _employeeAttendanceRepository;
+	private readonly IEmployeePayrollDetailsRepository _employeePayrollDetailsRepository;
+	private readonly IEmployeePayrollComponentRepository _employeePayrollComponentRepository;
 
 	public HRSeederContributor(
 		ICurrentTenant currentTenant,
@@ -56,15 +70,20 @@ public class HRSeederContributor : BaseSeederContributor
 		IRepository<LeavePolicy, Guid> leavePolicyRepository,
 		LeavePolicyManager leavePolicyManager,
 		ILeaveTypeRepository leaveTypeQueryRepository,
+		IAcademicYearRepository academicYearRepository,
 		IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
 			IRepository<ShiftManagement, Guid> shiftRepository,
 			IEmployeeRepository employeeRepository,
 			IEmployeeFamilyMemberRepository familyMemberRepository,
 			EmployeeManager employeeManager,
+			EmployeeDocumentManager employeeDocumentManager,
 			IIdentityRoleRepository roleRepository,
 			IdentityUserManager userManager,
 			IIdentityUserRepository userRepository,
-			ILookupNormalizer lookupNormalizer)
+			ILookupNormalizer lookupNormalizer,
+			IEmployeeAttendanceRepository employeeAttendanceRepository,
+			IEmployeePayrollDetailsRepository employeePayrollDetailsRepository,
+			IEmployeePayrollComponentRepository employeePayrollComponentRepository)
 			: base(currentTenant, guidGenerator, unitOfWork)
 	{
 		_leaveTypeRepository = leaveTypeRepository;
@@ -76,15 +95,20 @@ public class HRSeederContributor : BaseSeederContributor
 		_leavePolicyRepository = leavePolicyRepository;
 		_leavePolicyManager = leavePolicyManager;
 		_leaveTypeQueryRepository = leaveTypeQueryRepository;
+		_academicYearRepository = academicYearRepository;
 		_educationMediumStageRepository = educationMediumStageRepository;
 		_shiftRepository = shiftRepository;
 		_employeeRepository = employeeRepository;
 		_familyMemberRepository = familyMemberRepository;
 		_employeeManager = employeeManager;
+		_employeeDocumentManager = employeeDocumentManager;
 		_roleRepository = roleRepository;
 		_userManager = userManager;
 		_userRepository = userRepository;
 		_lookupNormalizer = lookupNormalizer;
+		_employeeAttendanceRepository = employeeAttendanceRepository;
+		_employeePayrollDetailsRepository = employeePayrollDetailsRepository;
+		_employeePayrollComponentRepository = employeePayrollComponentRepository;
 	}
 
 	public override async Task SeedAsync(DataSeedContext context)
@@ -100,7 +124,10 @@ public class HRSeederContributor : BaseSeederContributor
 		await SeedLeaveTypesAndPoliciesAsync();
 
 		// Phase 4: Seed employees
-		await SeedEmployeesAsync();
+		var seededEmployeeIds = await SeedEmployeesAsync();
+
+		// Phase 5: Sample per-employee payroll + attendance for employees seeded in this run only.
+		await SeedSampleEmployeePayrollAndAttendanceAsync(seededEmployeeIds);
 	}
 
 	private async Task SeedLeaveTypesAndPoliciesAsync()
@@ -109,18 +136,18 @@ public class HRSeederContributor : BaseSeederContributor
 		if (await _leaveTypeRepository.AnyAsync())
 			return;
 
-		// Get the first available EducationMediumStage
-		var educationMediumStage = (await _educationMediumStageRepository.GetQueryableAsync())
-			.FirstOrDefault();
+		var currentYear = DateTime.Now.Year;
+		var academicYear = await _academicYearRepository
+			.FirstOrDefaultAsync(y => y.Name.StartsWith(currentYear.ToString()))
+			?? await _academicYearRepository.FirstOrDefaultAsync();
 
-		if (educationMediumStage == null)
+		if (academicYear == null)
 		{
-			// Skip seeding if no EducationMediumStage is available
-			// This can happen if academic setup hasn't been seeded yet
+			// Skip seeding if no academic year is available.
 			return;
 		}
 
-		var educationMediumStageId = educationMediumStage.Id;
+		var academicYearId = academicYear.Id;
 
 		// Seed leave types
 		var leaveTypes = new[]
@@ -136,15 +163,15 @@ public class HRSeederContributor : BaseSeederContributor
 
 		foreach (var (type, color, description) in leaveTypes)
 		{
-			var leaveType = await _leaveTypeManager.CreateAsync(educationMediumStageId, type, color, description);
+			var leaveType = await _leaveTypeManager.CreateAsync(academicYearId, type, color, description);
 			await _leaveTypeRepository.InsertAsync(leaveType, autoSave: true);
 		}
 
 		// Seed leave policies
-		await SeedLeavePoliciesAsync(educationMediumStageId);
+		await SeedLeavePoliciesAsync(academicYearId);
 	}
 
-	private async Task SeedLeavePoliciesAsync(Guid educationMediumStageId)
+	private async Task SeedLeavePoliciesAsync(Guid academicYearId)
 	{
 		// Check if already seeded
 		if (await _leavePolicyRepository.AnyAsync())
@@ -153,7 +180,7 @@ public class HRSeederContributor : BaseSeederContributor
 		// Get the leave type IDs by name
 		async Task<Guid?> GetLeaveTypeIdAsync(string typeName)
 		{
-			var leaveType = await _leaveTypeQueryRepository.FindByTypeAsync(educationMediumStageId, typeName);
+			var leaveType = await _leaveTypeQueryRepository.FindByTypeAsync(academicYearId, typeName);
 			return leaveType?.Id;
 		}
 
@@ -175,13 +202,15 @@ public class HRSeederContributor : BaseSeederContributor
 				continue;
 
 			var leavePolicy = await _leavePolicyManager.CreateAsync(
-				educationMediumStageId,
+				academicYearId,
 				policy.PolicyName,
 				leaveTypeId.Value,
+				LeaveAccrualPolicyType.Monthly,
 				policy.MaximumDaysPerYear,
 				policy.PaidType,
 				policy.CarryForward,
 				policy.Encashable,
+				policy.Encashable ? LeaveEncashmentTiming.EndOfYear : null,
 				policy.RequiresApproval,
 				policy.Description
 			);
@@ -195,16 +224,17 @@ public class HRSeederContributor : BaseSeederContributor
 		if (await _earningComponentRepository.AnyAsync())
 			return;
 
+		// Positive template amounts: employee payroll resolution rejects <= 0 when line amount is omitted (see EmployeePayrollAppService).
 		var earningComponents = new[]
 		{
-			new { Name = "Basic Salary", Description = "Base salary component", ComponentType = EarningComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)0m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 1 },
-			new { Name = "House Rent Allowance (HRA)", Description = "Housing allowance - typically 40% of Basic", ComponentType = EarningComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)0m, Percentage = (decimal?)null, DependOn = ComponentDependency.Basic, VisibleInPayslip = true, DisplayOrder = 2 },
-			new { Name = "Dearness Allowance (DA)", Description = "Cost of living adjustment", ComponentType = EarningComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)0m, Percentage = (decimal?)null, DependOn = ComponentDependency.Basic, VisibleInPayslip = true, DisplayOrder = 3 },
+			new { Name = "Basic Salary", Description = "Base salary component", ComponentType = EarningComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)30_000m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 1 },
+			new { Name = "House Rent Allowance (HRA)", Description = "Housing allowance - typically 40% of Basic", ComponentType = EarningComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)12_000m, Percentage = (decimal?)null, DependOn = ComponentDependency.Basic, VisibleInPayslip = true, DisplayOrder = 2 },
+			new { Name = "Dearness Allowance (DA)", Description = "Cost of living adjustment", ComponentType = EarningComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)6_000m, Percentage = (decimal?)null, DependOn = ComponentDependency.Basic, VisibleInPayslip = true, DisplayOrder = 3 },
 			new { Name = "Transport Allowance", Description = "Conveyance allowance", ComponentType = EarningComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)1600m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 4 },
 			new { Name = "Medical Allowance", Description = "Medical reimbursement", ComponentType = EarningComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)1250m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 5 },
-			new { Name = "Special Allowance", Description = "Additional allowance", ComponentType = EarningComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)0m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 6 },
-			new { Name = "Performance Bonus", Description = "Variable performance-based bonus", ComponentType = EarningComponentType.Variable, CalcType = CalculationType.Amount, Amount = (decimal?)0m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 7 },
-			new { Name = "Incentive", Description = "One-time incentive payment", ComponentType = EarningComponentType.Variable, CalcType = CalculationType.Amount, Amount = (decimal?)0m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 8 }
+			new { Name = "Special Allowance", Description = "Additional allowance", ComponentType = EarningComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)9_000m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 6 },
+			new { Name = "Performance Bonus", Description = "Variable performance-based bonus", ComponentType = EarningComponentType.Variable, CalcType = CalculationType.Amount, Amount = (decimal?)5_000m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 7 },
+			new { Name = "Incentive", Description = "One-time incentive payment", ComponentType = EarningComponentType.Variable, CalcType = CalculationType.Amount, Amount = (decimal?)3_000m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 8 }
 		};
 
 		foreach (var component in earningComponents)
@@ -235,11 +265,11 @@ public class HRSeederContributor : BaseSeederContributor
 		{
 			new { Name = "Provident Fund (PF)", Description = "Employee PF contribution - 12% of Basic", ComponentType = DeductionComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)12m, Percentage = (decimal?)null, DependOn = ComponentDependency.Basic, VisibleInPayslip = true, DisplayOrder = 1 },
 			new { Name = "Professional Tax", Description = "State professional tax", ComponentType = DeductionComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)200m, Percentage = (decimal?)null, DependOn = ComponentDependency.Gross, VisibleInPayslip = true, DisplayOrder = 2 },
-			new { Name = "Income Tax (TDS)", Description = "Tax Deducted at Source", ComponentType = DeductionComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)0m, Percentage = (decimal?)null, DependOn = ComponentDependency.Gross, VisibleInPayslip = true, DisplayOrder = 3 },
+			new { Name = "Income Tax (TDS)", Description = "Tax Deducted at Source", ComponentType = DeductionComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)2_500m, Percentage = (decimal?)null, DependOn = ComponentDependency.Gross, VisibleInPayslip = true, DisplayOrder = 3 },
 			new { Name = "Employee State Insurance (ESI)", Description = "ESI contribution - 0.75% of Gross", ComponentType = DeductionComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)0.75m, Percentage = (decimal?)null, DependOn = ComponentDependency.Gross, VisibleInPayslip = true, DisplayOrder = 4 },
-			new { Name = "Loan Repayment", Description = "Employee loan deduction", ComponentType = DeductionComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)0m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 5 },
-			new { Name = "Advance Salary Deduction", Description = "Salary advance recovery", ComponentType = DeductionComponentType.Variable, CalcType = CalculationType.Amount, Amount = (decimal?)0m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 6 },
-			new { Name = "Loss of Pay (LOP)", Description = "Deduction for unauthorized absence", ComponentType = DeductionComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)0m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 7 }
+			new { Name = "Loan Repayment", Description = "Employee loan deduction", ComponentType = DeductionComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)1_500m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 5 },
+			new { Name = "Advance Salary Deduction", Description = "Salary advance recovery", ComponentType = DeductionComponentType.Variable, CalcType = CalculationType.Amount, Amount = (decimal?)500m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 6 },
+			new { Name = "Loss of Pay (LOP)", Description = "Deduction for unauthorized absence", ComponentType = DeductionComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)100m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 7 }
 		};
 
 		foreach (var component in deductionComponents)
@@ -288,28 +318,245 @@ public class HRSeederContributor : BaseSeederContributor
 		}
 	}
 
-	private async Task SeedEmployeesAsync()
+	private async Task<List<Guid>> SeedEmployeesAsync()
 	{
+		var seededEmployeeIds = new List<Guid>();
+
 		// Check if already seeded
 		if (await _employeeRepository.AnyAsync())
-			return;
+			return seededEmployeeIds;
 
 		// Get required dependencies
 		var educationMediumStage = (await _educationMediumStageRepository.GetQueryableAsync()).FirstOrDefault();
 		if (educationMediumStage == null)
-			return; // Skip if no academic setup
+			return seededEmployeeIds; // Skip if no academic setup
 
 		var fullDayShift = (await _shiftRepository.GetQueryableAsync())
 			.FirstOrDefault(s => s.ShiftName == "Full Day Shift");
 
 		// Seed teaching staff
-		await SeedTeachingStaffAsync(educationMediumStage.Id, fullDayShift?.Id);
+		await SeedTeachingStaffAsync(educationMediumStage.Id, fullDayShift?.Id, seededEmployeeIds);
 
 		// Seed non-teaching staff
-		await SeedNonTeachingStaffAsync(educationMediumStage.Id, fullDayShift?.Id);
+		await SeedNonTeachingStaffAsync(educationMediumStage.Id, fullDayShift?.Id, seededEmployeeIds);
+
+		return seededEmployeeIds;
 	}
 
-	private async Task SeedTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId)
+	/// <summary>
+	/// Demo payroll lines + attendance for the first N employees (by employee code). Skips employees that already have payroll components.
+	/// Attendance: last ~14 calendar days, weekdays only; idempotent per employee per day.
+	/// </summary>
+	private async Task SeedSampleEmployeePayrollAndAttendanceAsync(List<Guid> seededEmployeeIds)
+	{
+		if (seededEmployeeIds.Count == 0)
+		{
+			return;
+		}
+
+		var educationMediumStage = (await _educationMediumStageRepository.GetQueryableAsync()).FirstOrDefault();
+		if (educationMediumStage == null)
+		{
+			return;
+		}
+
+		if (!await _earningComponentRepository.AnyAsync() || !await _deductionComponentRepository.AnyAsync())
+		{
+			return;
+		}
+
+		var employeeIds = seededEmployeeIds
+			.Take(SampleEmployeePayrollAttendanceCount)
+			.ToList();
+		if (employeeIds.Count == 0)
+		{
+			return;
+		}
+
+		foreach (var employeeId in employeeIds)
+		{
+			await SeedSamplePayrollForEmployeeIfNeededAsync(employeeId);
+		}
+
+		await SeedSampleAttendanceForEmployeesAsync(
+			employeeIds,
+			educationMediumStage.Id);
+	}
+
+	private async Task SeedSamplePayrollForEmployeeIfNeededAsync(Guid employeeId)
+	{
+		var existingComponents = await _employeePayrollComponentRepository.GetByEmployeeIdAsync(employeeId);
+		if (existingComponents.Count > 0)
+		{
+			return;
+		}
+
+		var payrollDetails = await _employeePayrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
+		if (payrollDetails == null)
+		{
+			var details = new EmployeePayrollDetails(GuidGenerator.Create(), employeeId);
+			details.UpdateDetails(
+				bankName: "State Bank of India",
+				branchName: "Mumbai Main",
+				accountHolderName: "Demo Account Holder",
+				accountNumber: "12345678",
+				ifscCode: "SBIN0001234",
+				pfRule: null,
+				epfNumber: null,
+				uanNumber: null,
+				punchId: null,
+				totalWorkingHourPerMonth: 160m);
+			await _employeePayrollDetailsRepository.InsertAsync(details, autoSave: true);
+		}
+
+		var earningMasters = (await _earningComponentRepository.GetListAsync())
+			.Where(e => e.IsActive)
+			.OrderBy(e => e.DisplayOrder)
+			.ToList();
+		var deductionMasters = (await _deductionComponentRepository.GetListAsync())
+			.Where(d => d.IsActive)
+			.OrderBy(d => d.DisplayOrder)
+			.ToList();
+
+		foreach (var master in earningMasters)
+		{
+			var amount = master.Amount ?? 0m;
+			if (amount <= 0m)
+			{
+				continue;
+			}
+
+			var isFixed = master.CalculationType == CalculationType.Amount;
+			var row = new EmployeePayrollComponent(
+				GuidGenerator.Create(),
+				employeeId,
+				master.Name,
+				master.Id,
+				master.Description,
+				amount,
+				isFixed,
+				isTemp: false,
+				applicableMonth: null,
+				master.CalculationType == CalculationType.Amount
+					? SalaryComponentType.Fixed
+					: SalaryComponentType.Percentage,
+				MapSalaryDependency(master.DependOn),
+				isEarning: true);
+			await _employeePayrollComponentRepository.InsertAsync(row, autoSave: true);
+		}
+
+		foreach (var master in deductionMasters)
+		{
+			var amount = master.Amount ?? 0m;
+			if (amount <= 0m)
+			{
+				continue;
+			}
+
+			var isFixed = master.CalculationType == CalculationType.Amount;
+			var row = new EmployeePayrollComponent(
+				GuidGenerator.Create(),
+				employeeId,
+				master.Name,
+				master.Id,
+				master.Description,
+				amount,
+				isFixed,
+				isTemp: false,
+				applicableMonth: null,
+				master.CalculationType == CalculationType.Amount
+					? SalaryComponentType.Fixed
+					: SalaryComponentType.Percentage,
+				MapSalaryDependency(master.DependOn),
+				isEarning: false);
+			await _employeePayrollComponentRepository.InsertAsync(row, autoSave: true);
+		}
+	}
+
+	private static SalaryComponentDependency? MapSalaryDependency(ComponentDependency dependOn)
+	{
+		return dependOn switch
+		{
+			ComponentDependency.None => SalaryComponentDependency.None,
+			ComponentDependency.Basic => SalaryComponentDependency.Basic,
+			ComponentDependency.Gross => SalaryComponentDependency.Gross,
+			_ => null
+		};
+	}
+
+	private async Task SeedSampleAttendanceForEmployeesAsync(List<Guid> employeeIds, Guid educationMediumStageId)
+	{
+		if (employeeIds.Count == 0)
+		{
+			return;
+		}
+
+		var today = DateOnly.FromDateTime(DateTime.UtcNow);
+		var windowStart = today.AddDays(-SampleAttendanceDayWindow + 1);
+
+		var existingRows = await _employeeAttendanceRepository.GetListAsync(a =>
+			employeeIds.Contains(a.EmployeeId) &&
+			a.AttendanceDate >= windowStart &&
+			a.AttendanceDate <= today);
+		var existingKeys = existingRows
+			.Select(a => (a.EmployeeId, a.AttendanceDate))
+			.ToHashSet();
+
+		var indiaOffset = TimeSpan.FromHours(5.5);
+		var workingDayIndex = 0;
+
+		for (var date = windowStart; date <= today; date = date.AddDays(1))
+		{
+			if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+			{
+				continue;
+			}
+
+			workingDayIndex++;
+			foreach (var employeeId in employeeIds)
+			{
+				if (existingKeys.Contains((employeeId, date)))
+				{
+					continue;
+				}
+
+				var mix = (employeeId.GetHashCode() ^ date.DayOfYear) & 0x7;
+				EmployeeAttendanceStatusType status;
+				DateTimeOffset? timeIn = null;
+				DateTimeOffset? timeOut = null;
+
+				if (workingDayIndex % 9 == 0)
+				{
+					status = EmployeeAttendanceStatusType.FullDayLeave;
+				}
+				else if (workingDayIndex % 5 == 0 || mix == 0)
+				{
+					status = EmployeeAttendanceStatusType.HalfDayLeave;
+					timeIn = new DateTimeOffset(date.Year, date.Month, date.Day, 9, 0, 0, indiaOffset);
+					timeOut = new DateTimeOffset(date.Year, date.Month, date.Day, 13, 30, 0, indiaOffset);
+				}
+				else
+				{
+					status = EmployeeAttendanceStatusType.Present;
+					timeIn = new DateTimeOffset(date.Year, date.Month, date.Day, 9, 0, 0, indiaOffset);
+					timeOut = new DateTimeOffset(date.Year, date.Month, date.Day, 17, 30, 0, indiaOffset);
+				}
+
+				await _employeeAttendanceRepository.InsertAsync(new EmployeeAttendance
+				{
+					TenantId = CurrentTenant.Id,
+					EmployeeId = employeeId,
+					AttendanceDate = date,
+					TimeIn = timeIn,
+					TimeOut = timeOut,
+					StatusType = status,
+					EducationMediumStageId = educationMediumStageId
+				}, autoSave: true);
+			}
+		}
+	}
+
+	private async Task SeedTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId, List<Guid> seededEmployeeIds)
 	{
 		var teachingEmployees = new[]
 		{
@@ -611,7 +858,7 @@ public class HRSeederContributor : BaseSeederContributor
 			if (role == null) continue;
 
 			// Create user first
-			var userId = await CreateUserForEmployeeAsync(emp.FirstName, emp.LastName, emp.Email, emp.Mobile);
+			var userId = await CreateUserForEmployeeAsync(emp.FirstName, emp.LastName, emp.Email, emp.Mobile, emp.RoleName);
 
 			var employee = await _employeeManager.CreateEmployeeAsync(
 				userId: userId,
@@ -648,6 +895,8 @@ public class HRSeederContributor : BaseSeederContributor
 											);
 
 									await _employeeRepository.InsertAsync(employee, autoSave: true);
+									seededEmployeeIds.Add(employee.Id);
+									await SeedEmployeeProfilePictureAsync(employee.Id);
 
 									// Seed family members for married employees
 									if (emp.MaritalStatus == MaritalStatusType.Married)
@@ -657,7 +906,7 @@ public class HRSeederContributor : BaseSeederContributor
 								}
 							}
 
-							private async Task SeedNonTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId)
+							private async Task SeedNonTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId, List<Guid> seededEmployeeIds)
 	{
 		var nonTeachingEmployees = new[]
 		{
@@ -805,6 +1054,35 @@ public class HRSeederContributor : BaseSeederContributor
 							Country = new Country("India", "IN"),
 							PinCode = "400602",
 							IdentificationMark = "Dimple on right cheek"
+						},
+						new
+						{
+							FirstName = "Nilesh",
+							LastName = "Joshi",
+							MiddleName = (string?)null,
+							Email = "clerk@school.edu",
+							Mobile = "9876543231",
+							SecondaryMobile = (string?)null,
+							RoleName = "Clerk",
+							Designation = "Clerk",
+							Department = "Administration",
+							DateOfBirth = new DateOnly(1990, 11, 11),
+							DateOfJoining = new DateOnly(2021, 6, 1),
+							Gender = GenderType.Male,
+							MaritalStatus = MaritalStatusType.Unmarried,
+							FamilyCast = "Joshi",
+							CastType = CastType.General,
+							Religion = "Hindu",
+							BloodGroup = "B+",
+							Qualification = "B.A.",
+							Address1 = "O-108, Admin Arcade",
+							Address2 = "School Campus Road",
+							Address3 = (string?)null,
+							City = "Surat",
+							State = new State("Gujarat", "GJ"),
+							Country = new Country("India", "IN"),
+							PinCode = "395010",
+							IdentificationMark = "Scar on right thumb"
 						}
 					};
 
@@ -814,7 +1092,7 @@ public class HRSeederContributor : BaseSeederContributor
 			if (role == null) continue;
 
 			// Create user first
-			var userId = await CreateUserForEmployeeAsync(emp.FirstName, emp.LastName, emp.Email, emp.Mobile);
+			var userId = await CreateUserForEmployeeAsync(emp.FirstName, emp.LastName, emp.Email, emp.Mobile, emp.RoleName);
 
 			var employee = await _employeeManager.CreateEmployeeAsync(
 				userId: userId,
@@ -851,6 +1129,8 @@ public class HRSeederContributor : BaseSeederContributor
 								);
 
 						await _employeeRepository.InsertAsync(employee, autoSave: true);
+						seededEmployeeIds.Add(employee.Id);
+						await SeedEmployeeProfilePictureAsync(employee.Id);
 
 						// Seed family members for married employees
 						if (emp.MaritalStatus == MaritalStatusType.Married)
@@ -858,6 +1138,22 @@ public class HRSeederContributor : BaseSeederContributor
 							await SeedFamilyMembersAsync(employee.Id, emp.FirstName, emp.Gender);
 						}
 					}
+				}
+
+				private async Task SeedEmployeeProfilePictureAsync(Guid employeeId)
+				{
+					var idx = (employeeId.GetHashCode() & 0x7FFFFFFF) % ProfileSeedImageCount;
+					var resourceName = $"ShikshaMitra.Seeders.Assets.profile-seed-{idx:D2}.png";
+					await using var stream = typeof(HRSeederContributor).Assembly.GetManifestResourceStream(resourceName);
+					if (stream == null)
+					{
+						throw new InvalidOperationException($"Missing embedded profile seed image: {resourceName}");
+					}
+
+					using var memoryStream = new MemoryStream();
+					await stream.CopyToAsync(memoryStream);
+					var bytes = memoryStream.ToArray();
+					await _employeeDocumentManager.UploadProfilePictureAsync(employeeId, $"seed-avatar-{idx}.png", bytes);
 				}
 
 				/// <summary>
@@ -932,7 +1228,12 @@ public class HRSeederContributor : BaseSeederContributor
 					await _familyMemberRepository.InsertAsync(spouse, autoSave: true);
 				}
 
-				private async Task<Guid> CreateUserForEmployeeAsync(string firstName, string lastName, string email, string mobileNo)
+				private async Task<Guid> CreateUserForEmployeeAsync(
+		string firstName,
+		string lastName,
+		string email,
+		string mobileNo,
+		string roleName)
 	{
 		// Validate mobile number
 		if (string.IsNullOrWhiteSpace(mobileNo) || mobileNo.Length < 4)
@@ -945,7 +1246,7 @@ public class HRSeederContributor : BaseSeederContributor
 		var existingUserByEmail = await _userRepository.FindByNormalizedEmailAsync(normalizedEmail);
 		if (existingUserByEmail != null)
 		{
-			// For seeding, we can skip if user already exists
+			await EnsureUserInRoleAsync(existingUserByEmail, roleName);
 			return existingUserByEmail.Id;
 		}
 
@@ -987,7 +1288,34 @@ public class HRSeederContributor : BaseSeederContributor
 			throw new Exception("User was not created successfully during seeding.");
 		}
 
+		await EnsureUserInRoleAsync(createdUser, roleName);
+
 		return user.Id;
+	}
+
+	private async Task EnsureUserInRoleAsync(IdentityUser user, string roleName)
+	{
+		var normalizedRoleName = _lookupNormalizer.NormalizeName(roleName);
+		var role = await _roleRepository.FindByNormalizedNameAsync(normalizedRoleName);
+		if (role == null || string.IsNullOrWhiteSpace(role.Name))
+		{
+			return;
+		}
+
+		var isInRole = await _userManager.IsInRoleAsync(user, role.Name);
+		if (isInRole)
+		{
+			return;
+		}
+
+		var addRoleResult = await _userManager.AddToRoleAsync(user, role.Name);
+		if (!addRoleResult.Succeeded)
+		{
+			throw new Exception(
+				$"Failed to assign role '{role.Name}' to seeded user '{user.UserName}': " +
+				string.Join(", ", addRoleResult.Errors.Select(e => e.Description))
+			);
+		}
 	}
 
 	private async Task<string> GenerateUniqueUsernameAsync(string firstName, string lastName)

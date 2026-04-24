@@ -101,6 +101,11 @@ public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTe
 	public virtual ICollection<HomeworkDivisionSchedule> DivisionSchedules { get; set; } =
 		new List<HomeworkDivisionSchedule>();
 
+	/// <summary>
+	/// Lifecycle status of this homework (Draft → Published → Closed)
+	/// </summary>
+	public HomeworkStatus Status { get; private set; } = HomeworkStatus.Draft;
+
 	// Helper properties
 	public bool HasPublishedDivisions =>
 		DivisionSchedules?.Any(d => d.IsPublished) ?? false;
@@ -255,6 +260,29 @@ public class HomeworkAssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTe
 				schedule.Publish();
 			}
 		}
+	}
+
+	/// <summary>
+	/// Advance the homework through its lifecycle.
+	/// Valid transitions: Draft → Published, Published → Closed.
+	/// </summary>
+	public void ChangeStatus(HomeworkStatus newStatus)
+	{
+		var valid = (Status, newStatus) switch
+		{
+			(HomeworkStatus.Draft, HomeworkStatus.Published) => true,
+			(HomeworkStatus.Published, HomeworkStatus.Closed) => true,
+			_ => false,
+		};
+
+		if (!valid)
+		{
+			throw new Volo.Abp.BusinessException("ShikshaMitra.Homework:InvalidStatusTransition")
+				.WithData("CurrentStatus", Status)
+				.WithData("RequestedStatus", newStatus);
+		}
+
+		Status = newStatus;
 	}
 
 	#endregion

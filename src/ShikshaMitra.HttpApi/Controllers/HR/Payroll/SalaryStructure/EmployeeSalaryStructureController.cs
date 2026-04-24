@@ -6,6 +6,7 @@ using System;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.Domain.Entities;
 
 namespace ShikshaMitra.Controllers.HR.Payroll.SalaryStructure;
 
@@ -33,9 +34,17 @@ public class EmployeeSalaryStructureController : AbpControllerBase
 	/// <returns>The employee's salary structure</returns>
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
-	public async Task<SalaryStructureResponseDto> GetAsync(Guid employeeId)
+	public async Task<ActionResult<SalaryStructureResponseDto>> GetAsync(Guid employeeId)
 	{
-		return await _salaryStructureAppService.GetAsync(employeeId);
+		try
+		{
+			var response = await _salaryStructureAppService.GetAsync(employeeId);
+			return Ok(response);
+		}
+		catch (EntityNotFoundException)
+		{
+			return NotFound();
+		}
 	}
 
 	/// <summary>
@@ -51,12 +60,15 @@ public class EmployeeSalaryStructureController : AbpControllerBase
 		Guid employeeId,
 		[FromBody] UpdateSalaryStructureDto input)
 	{
-		await _salaryStructureAppService.UpdateAsync(employeeId, input);
-
-		return Ok(new
+		try
 		{
-			message = "Salary structure updated successfully"
-		});
+			await _salaryStructureAppService.UpdateAsync(employeeId, input);
+			return Ok();
+		}
+		catch (EntityNotFoundException)
+		{
+			return NotFound();
+		}
 	}
 }
 

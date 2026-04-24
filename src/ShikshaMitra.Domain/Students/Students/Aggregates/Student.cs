@@ -455,6 +455,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Approved;
 		AdmissionApprovalRemarks = null; // Clear any previous rejection remarks
+		Status = StudentLifeCycleStatusEnum.Enrolled;
 	}
 
 	/// <summary>
@@ -470,6 +471,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Rejected;
 		AdmissionApprovalRemarks = remarks;
+		Status = StudentLifeCycleStatusEnum.Admission; // Move back to admission for potential re-application
 	}
 
 	public void MoveToPendingAdmission(string remarks)
@@ -481,6 +483,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Pending;
 		AdmissionApprovalRemarks = remarks;
+		Status = StudentLifeCycleStatusEnum.Admission; // Keep in admission status but mark as pending for re-evaluation
 	}
 
 	public void AssignHouse(Guid houseId)

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Payroll.Settings;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
@@ -19,23 +20,28 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 {
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly IEmployeePayrollComponentRepository _payrollComponentRepository;
+	private readonly IEarningComponentRepository _earningComponentRepository;
+	private readonly IDeductionComponentRepository _deductionComponentRepository;
 	private readonly IGuidGenerator _guidGenerator;
 
 	public EmployeeSalaryStructureAppService(
 		IEmployeeRepository employeeRepository,
 		IEmployeePayrollComponentRepository payrollComponentRepository,
+		IEarningComponentRepository earningComponentRepository,
+		IDeductionComponentRepository deductionComponentRepository,
 		IGuidGenerator guidGenerator)
 	{
 		_employeeRepository = employeeRepository;
 		_payrollComponentRepository = payrollComponentRepository;
+		_earningComponentRepository = earningComponentRepository;
+		_deductionComponentRepository = deductionComponentRepository;
 		_guidGenerator = guidGenerator;
 	}
 
 	/// <inheritdoc />
 	public async Task<SalaryStructureResponseDto> GetAsync(Guid employeeId)
 	{
-		// Validate employee exists (Repository.GetAsync throws if not found)
-		_ = await _employeeRepository.GetAsync(employeeId);
+		await EnsureEmployeeExistsAsync(employeeId);
 
 		var earnings = await _payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
 		var deductions = await _payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);
@@ -50,8 +56,23 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 	/// <inheritdoc />
 	public async Task UpdateAsync(Guid employeeId, UpdateSalaryStructureDto input)
 	{
-		// Validate employee exists (Repository.GetAsync throws if not found)
-		_ = await _employeeRepository.GetAsync(employeeId);
+		await EnsureEmployeeExistsAsync(employeeId);
+
+		var existingEarnings = await _payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
+		var existingDeductions = await _payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);
+		var existingEarningById = existingEarnings.ToDictionary(x => x.Id);
+		var existingDeductionById = existingDeductions.ToDictionary(x => x.Id);
+
+		var earningMasterById = await GetEarningMasterByIdAsync(input.EarningComponents);
+		var deductionMasterById = await GetDeductionMasterByIdAsync(input.DeductionComponents);
+		EnsureAllMasterComponentsExist(
+			input.EarningComponents.Where(x => x.ComponentId.HasValue).Select(x => x.ComponentId!.Value),
+			earningMasterById.Keys,
+			HRErrorCodes.EmployeePayrollInvalidEarningComponent);
+		EnsureAllMasterComponentsExist(
+			input.DeductionComponents.Where(x => x.ComponentId.HasValue).Select(x => x.ComponentId!.Value),
+			deductionMasterById.Keys,
+			HRErrorCodes.EmployeePayrollInvalidDeductionComponent);
 
 		// Delete existing components
 		await _payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: true);
@@ -63,16 +84,32 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 		// Build earning components
 		foreach (var earning in input.EarningComponents)
 		{
+			var existingComponent = earning.Id.HasValue && existingEarningById.TryGetValue(earning.Id.Value, out var existing)
+				? existing
+				: null;
+			var master = earning.ComponentId.HasValue && earningMasterById.TryGetValue(earning.ComponentId.Value, out var earningMaster)
+				? earningMaster
+				: null;
+			var componentType = master is not null
+				? MapCalculationType(master.CalculationType)
+				: existingComponent?.ComponentType ?? SalaryComponentType.Fixed;
+			var dependOn = master is not null
+				? MapDependency(master.DependOn)
+				: existingComponent?.DependOn;
+			var description = master?.Description ?? existingComponent?.Description;
+
 			componentsToInsert.Add(new EmployeePayrollComponent(
-				_guidGenerator.Create(),
+				existingComponent?.Id ?? _guidGenerator.Create(),
 				employeeId,
 				earning.Name,
-				earning.Description,
-				earning.Amount,
+				earning.ComponentId,
+				description,
+				earning.Amount ?? 0m,
 				earning.IsFixed,
 				earning.IsTemp,
-				earning.ComponentType,
-				earning.DependOn,
+				earning.ApplicableMonth ?? existingComponent?.ApplicableMonth,
+				componentType,
+				dependOn,
 				isEarning: true
 			));
 		}
@@ -80,16 +117,32 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 		// Build deduction components
 		foreach (var deduction in input.DeductionComponents)
 		{
+			var existingComponent = deduction.Id.HasValue && existingDeductionById.TryGetValue(deduction.Id.Value, out var existing)
+				? existing
+				: null;
+			var master = deduction.ComponentId.HasValue && deductionMasterById.TryGetValue(deduction.ComponentId.Value, out var deductionMaster)
+				? deductionMaster
+				: null;
+			var componentType = master is not null
+				? MapCalculationType(master.CalculationType)
+				: existingComponent?.ComponentType ?? SalaryComponentType.Fixed;
+			var dependOn = master is not null
+				? MapDependency(master.DependOn)
+				: existingComponent?.DependOn;
+			var description = master?.Description ?? existingComponent?.Description;
+
 			componentsToInsert.Add(new EmployeePayrollComponent(
-				_guidGenerator.Create(),
+				existingComponent?.Id ?? _guidGenerator.Create(),
 				employeeId,
 				deduction.Name,
-				deduction.Description,
-				deduction.Amount,
+				deduction.ComponentId,
+				description,
+				deduction.Amount ?? 0m,
 				deduction.IsFixed,
 				deduction.IsTemp,
-				deduction.ComponentType,
-				deduction.DependOn,
+				deduction.ApplicableMonth ?? existingComponent?.ApplicableMonth,
+				componentType,
+				dependOn,
 				isEarning: false
 			));
 		}
@@ -101,18 +154,105 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 		}
 	}
 
+	private async Task EnsureEmployeeExistsAsync(Guid employeeId)
+	{
+		// Salary structure endpoints only need existence check; avoid loading full employee graph.
+		var employee = await _employeeRepository.FindAsync(employeeId, includeDetails: false);
+		if (employee == null)
+		{
+			// Surface a proper 404 response instead of generic 500 when employee does not exist.
+			throw new EntityNotFoundException(typeof(Employee), employeeId);
+		}
+	}
+
 	private static List<SalaryComponentDto> MapToDto(IEnumerable<EmployeePayrollComponent> components)
 	{
 		return components.Select(c => new SalaryComponentDto
 		{
+			Id = c.Id,
+			ComponentId = c.ComponentId,
 			Name = c.Name,
-			Description = c.Description,
 			Amount = c.Amount,
 			IsFixed = c.IsFixed,
 			IsTemp = c.IsTemp,
-			ComponentType = c.ComponentType,
-			DependOn = c.DependOn
+			ApplicableMonth = c.ApplicableMonth
 		}).ToList();
+	}
+
+	private async Task<Dictionary<Guid, EarningComponent>> GetEarningMasterByIdAsync(IEnumerable<SalaryComponentDto> components)
+	{
+		var ids = components
+			.Where(x => x.ComponentId.HasValue)
+			.Select(x => x.ComponentId!.Value)
+			.Distinct()
+			.ToList();
+
+		if (ids.Count == 0)
+		{
+			return new Dictionary<Guid, EarningComponent>();
+		}
+
+		var masters = await AsyncExecuter.ToListAsync(
+			(await _earningComponentRepository.GetQueryableAsync()).Where(x => ids.Contains(x.Id)));
+		return masters.ToDictionary(x => x.Id);
+	}
+
+	private async Task<Dictionary<Guid, DeductionComponent>> GetDeductionMasterByIdAsync(IEnumerable<SalaryComponentDto> components)
+	{
+		var ids = components
+			.Where(x => x.ComponentId.HasValue)
+			.Select(x => x.ComponentId!.Value)
+			.Distinct()
+			.ToList();
+
+		if (ids.Count == 0)
+		{
+			return new Dictionary<Guid, DeductionComponent>();
+		}
+
+		var masters = await AsyncExecuter.ToListAsync(
+			(await _deductionComponentRepository.GetQueryableAsync()).Where(x => ids.Contains(x.Id)));
+		return masters.ToDictionary(x => x.Id);
+	}
+
+	private static SalaryComponentType MapCalculationType(CalculationType calculationType)
+	{
+		return calculationType == CalculationType.Amount
+			? SalaryComponentType.Fixed
+			: SalaryComponentType.Percentage;
+	}
+
+	private static SalaryComponentDependency? MapDependency(ComponentDependency dependOn)
+	{
+		return dependOn switch
+		{
+			ComponentDependency.None => SalaryComponentDependency.None,
+			ComponentDependency.Basic => SalaryComponentDependency.Basic,
+			ComponentDependency.Gross => SalaryComponentDependency.Gross,
+			_ => null
+		};
+	}
+
+	private static void EnsureAllMasterComponentsExist(
+		IEnumerable<Guid> requestedIds,
+		IEnumerable<Guid> foundIds,
+		string errorCode)
+	{
+		var requested = requestedIds.Distinct().ToList();
+		if (requested.Count == 0)
+		{
+			return;
+		}
+
+		var found = foundIds.ToHashSet();
+		var missing = requested.Where(id => !found.Contains(id)).ToList();
+		if (missing.Count == 0)
+		{
+			return;
+		}
+
+		throw new BusinessException(errorCode)
+			.WithData("missingComponentIds", string.Join(",", missing));
 	}
 }
 

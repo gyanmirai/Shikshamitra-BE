@@ -24,9 +24,11 @@ public class EmployeeManager(
 ) : DomainService
 {
 	/// <summary>Returns the employee or throws <see cref="BusinessException"/> when not found.</summary>
+	/// <remarks><c>includeDetails: false</c> avoids the repository no-tracking "with details" query so callers that
+	/// already loaded the same employee tracked in the same UoW do not get a second detached instance (EF update failure).</remarks>
 	private async Task<Employee> GetEmployeeAsync(Guid employeeId)
 	{
-		return await employeeRepository.FindAsync(employeeId)
+		return await employeeRepository.FindAsync(employeeId, includeDetails: false)
 			?? throw new BusinessException(HRErrorCodes.EmployeeNotFound);
 	}
 
@@ -106,6 +108,25 @@ public class EmployeeManager(
 			roleId,
 			role.Name
 		);
+
+		var roleName = role.Name ?? throw new BusinessException(HRErrorCodes.RoleNameMissing);
+		var isAlreadyInRole = await userManager.IsInRoleAsync(user, roleName);
+		if (!isAlreadyInRole)
+		{
+			var addRoleResult = await userManager.AddToRoleAsync(user, roleName);
+			if (!addRoleResult.Succeeded)
+			{
+				var errors = string.Join(", ", addRoleResult.Errors.Select(e => e.Description));
+				logger.LogError(
+					"[EmployeeManager] Failed to assign role '{RoleName}' to user {UserId}. Errors: {Errors}",
+					roleName,
+					userId,
+					errors
+				);
+				throw new BusinessException(HRErrorCodes.RoleAssignmentFailed)
+					.WithData("details", errors);
+			}
+		}
 
 		// Generate employee code
 		var employeeCode = await employeeCodeGenerator.GenerateAsync(

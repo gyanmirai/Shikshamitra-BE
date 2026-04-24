@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.HR.Employees.FamilyInfo;
@@ -43,8 +43,8 @@ public class FamilyMemberInfo
 	[MaxLength(256)]
 	public string? Occupation { get; set; }
 
-	[Phone]
-	[MaxLength(15)]
+	// Max 20 matches domain rules; [Phone] rejects common Indian mobile formats on model binding.
+	[MaxLength(20)]
 	public string? MobileNo { get; set; }
 
 	[MaxLength(512)]

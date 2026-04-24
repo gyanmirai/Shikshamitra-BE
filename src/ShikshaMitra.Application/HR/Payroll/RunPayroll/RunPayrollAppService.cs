@@ -4,10 +4,12 @@ using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Calendar.Holidays;
+using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.SalarySlips;
+using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.Security.UserScope;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,13 +26,17 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 [RemoteService(false)]
 public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 {
+	private sealed record PayrollTargetEmployee(Guid Id, string? EmployeeCode, string? EmployeeName);
+
 	private readonly IRepository<Employee, Guid> _employeeRepository;
 	private readonly IRepository<EmployeeAttendance, Guid> _attendanceRepository;
 	private readonly IEmployeePayrollDetailsRepository _payrollDetailsRepository;
 	private readonly IEmployeePayrollComponentRepository _payrollComponentRepository;
 	private readonly ISalarySlipRepository _salarySlipRepository;
 	private readonly IRepository<Holiday, Guid> _holidayRepository;
+	private readonly IDayCalculationSettingRepository _dayCalculationSettingRepository;
 	private readonly SalarySlipManager _salarySlipManager;
+	private readonly IUserScopeService _userScopeService;
 	private readonly ILogger<RunPayrollAppService> _logger;
 
 	// Configuration: Batch size for processing employees
@@ -44,7 +50,9 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		IEmployeePayrollComponentRepository payrollComponentRepository,
 		ISalarySlipRepository salarySlipRepository,
 		IRepository<Holiday, Guid> holidayRepository,
+		IDayCalculationSettingRepository dayCalculationSettingRepository,
 		SalarySlipManager salarySlipManager,
+		IUserScopeService userScopeService,
 		ILogger<RunPayrollAppService> logger)
 	{
 		_employeeRepository = employeeRepository;
@@ -53,7 +61,9 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		_payrollComponentRepository = payrollComponentRepository;
 		_salarySlipRepository = salarySlipRepository;
 		_holidayRepository = holidayRepository;
+		_dayCalculationSettingRepository = dayCalculationSettingRepository;
 		_salarySlipManager = salarySlipManager;
+		_userScopeService = userScopeService;
 		_logger = logger;
 	}
 
@@ -79,19 +89,17 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				"Generating payroll preview for {Month} (Year: {Year}, Month: {MonthNum}, Page: {Page}, PageSize: {PageSize})",
 				input.Month, year, month, input.Page, input.PageSize);
 
-			// Check if payroll is already generated (any finalized slip exists)
-			var isGenerated = await _salarySlipRepository.HasFinalizedSlipsForMonthAsync(internalMonthYear);
+			var existingSlips = await _salarySlipRepository.GetByMonthAsync(internalMonthYear);
+			var finalizedEmployeeIds = existingSlips
+				.Where(x => x.Status == SalarySlipStatus.Finalized)
+				.Select(x => x.EmployeeId)
+				.ToHashSet();
+			// Month-level summary retained for backwards compatibility with existing consumers.
+			var isGenerated = finalizedEmployeeIds.Count > 0;
 
-			// Get all active employees
-			var employeeQuery = await _employeeRepository.GetQueryableAsync();
-
-			if (CurrentTenant.Id.HasValue)
-			{
-				employeeQuery = employeeQuery.Where(e => e.TenantId == CurrentTenant.Id);
-			}
-
-			// Filter only active employees
-			employeeQuery = employeeQuery.Where(e => e.EmployeeStatusType == EmployeeStatusType.Active);
+			// Get all active employees in caller scope.
+			// Unknown-stage employees are denied to prevent read-side scope leaks.
+			var employeeQuery = await GetScopedActiveEmployeeQueryAsync(includeUnknownStageEmployees: false);
 
 			// Get total count
 			var totalCount = await AsyncExecuter.CountAsync(employeeQuery);
@@ -118,8 +126,10 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				};
 			}
 
-			// Calculate total working days in the month (business days - holidays)
-			var totalWorkingDays = await CalculateTotalWorkingDaysAsync(year, month);
+			var holidays = await LoadHolidaysForMonthAsync(year, month);
+			var workingWeekdaysMinusHolidays = PayrollMonthCalendar.CountWorkingWeekdaysExcludingHolidayWeekdays(year, month, holidays);
+			var daySetting = await _dayCalculationSettingRepository.FindByTenantAsync(CurrentTenant.Id);
+			var basis = PayrollBasisDays.Resolve(daySetting, year, month, workingWeekdaysMinusHolidays);
 
 			// Get all employee IDs for batch operations
 			var employeeIds = employees.Select(e => e.Id).ToList();
@@ -142,8 +152,9 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				employee,
 				attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
 				payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
-				componentsByEmployee[employee.Id]?.ToList() ?? new List<EmployeePayrollComponent>(),
-				totalWorkingDays
+				componentsByEmployee[employee.Id].ToList(),
+				basis,
+				finalizedEmployeeIds.Contains(employee.Id)
 			)).ToList();
 
 			return new RunPayrollResponse
@@ -156,18 +167,17 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				Items = items
 			};
 		}
-			catch (BusinessException)
-			{
-				// Re-throw business exceptions as-is
-				throw;
-			}
-			catch (Exception ex)
-			{
-				_logger.LogError(ex, "Unexpected error generating payroll preview for month {Month}", input.Month);
-				throw new BusinessException("HR:PayrollPreviewFailed")
-					.WithData("month", input.Month);
-			}
+		catch (BusinessException)
+		{
+			throw;
 		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Unexpected error generating payroll preview for month {Month}", input.Month);
+			throw new BusinessException("HR:PayrollPreviewFailed")
+				.WithData("month", input.Month);
+		}
+	}
 
 	/// <summary>
 	/// Generate and lock payroll for a month
@@ -189,46 +199,55 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		_logger.LogInformation("Starting payroll lock operation for {Month}", request.Month);
 
-		// Check if payroll is already generated
-		var isGenerated = await _salarySlipRepository.HasFinalizedSlipsForMonthAsync(internalMonthYear);
-		if (isGenerated)
-		{
-			_logger.LogInformation("Payroll for {Month} is already locked. Returning idempotent response.", request.Month);
-
-			return new PayrollLockResponse
-			{
-				Message = $"Payroll for {request.Month} is already generated and locked.",
-				Month = request.Month,
-				WasAlreadyLocked = true,
-				EmployeesProcessed = 0
-			};
-		}
-
-		// Get all active employees
-		var employeeQuery = await _employeeRepository.GetQueryableAsync();
-
-		if (CurrentTenant.Id.HasValue)
-		{
-			employeeQuery = employeeQuery.Where(e => e.TenantId == CurrentTenant.Id);
-		}
-
-		var employees = await AsyncExecuter.ToListAsync(
+		// Get all active employees in caller scope.
+		// For write/finalize flow, unknown-stage employees are denied by default.
+		var employeeQuery = await GetScopedActiveEmployeeQueryAsync(includeUnknownStageEmployees: false);
+		var scopedEmployees = await AsyncExecuter.ToListAsync(
 			employeeQuery
-				.Where(e => e.EmployeeStatusType == EmployeeStatusType.Active)
-				.Select(e => new { e.Id, e.EmployeeCode, e.EmployeeName })
+				.Select(e => new PayrollTargetEmployee(e.Id, e.EmployeeCode, e.EmployeeName))
 		);
 
-		if (employees.Count == 0)
+		if (scopedEmployees.Count == 0)
 		{
 			_logger.LogWarning("No active employees found for payroll generation in {Month}", request.Month);
 			throw new BusinessException("HR:NoActiveEmployees")
 				.WithData("month", request.Month);
 		}
 
-		_logger.LogInformation("Generating salary slips for {Count} active employees", employees.Count);
+		var targetEmployees = ResolveTargetEmployees(scopedEmployees, request.EmployeeIds);
+		var existingSlips = await _salarySlipRepository.GetByMonthAsync(internalMonthYear);
+		var finalizedEmployeeIds = existingSlips
+			.Where(x => x.Status == SalarySlipStatus.Finalized)
+			.Select(x => x.EmployeeId)
+			.ToHashSet();
+		var employees = targetEmployees
+			.Where(e => !finalizedEmployeeIds.Contains(e.Id))
+			.ToList();
+		var alreadyFinalizedCount = targetEmployees.Count - employees.Count;
+
+		if (employees.Count == 0)
+		{
+			_logger.LogInformation(
+				"Payroll for {Month} is already locked for the targeted employee set. Returning idempotent response.",
+				request.Month);
+
+			return new PayrollLockResponse
+			{
+				Message = $"Payroll for {request.Month} is already generated and locked for the targeted employees.",
+				Month = request.Month,
+				WasAlreadyLocked = true,
+				EmployeesProcessed = 0,
+				EmployeesSkipped = alreadyFinalizedCount
+			};
+		}
+
+		_logger.LogInformation(
+			"Generating salary slips for {ProcessCount} employees ({SkippedCount} already finalized)",
+			employees.Count,
+			alreadyFinalizedCount);
 
 		var generatedCount = 0;
-		var skippedCount = 0;
+		var skippedCount = alreadyFinalizedCount;
 		var failedCount = 0;
 		var errors = new List<(string EmployeeCode, string EmployeeName, string Error)>();
 		var batchSize = Math.Min(DefaultBatchSize, MaxBatchSize);
@@ -357,70 +376,34 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	#region Private Methods
 
 	/// <summary>
-	/// Parse month from MMMM-YYYY format to year, month number, and internal format
+	/// Parse month from accepted formats to year, month number, and internal YYYY-MM format
 	/// </summary>
 	private (int year, int month, string internalFormat) ParseMonth(string monthYear)
 	{
 		if (string.IsNullOrWhiteSpace(monthYear))
 		{
-			throw new BusinessException("HR:MonthRequired");
+			throw new BusinessException(HRErrorCodes.MonthYearRequired);
 		}
 
-		// Expected format: JANUARY-2025
-		var parts = monthYear.Split('-');
-		if (parts.Length != 2)
+		if (!PayrollMonthNormalizer.TryNormalizeToInternal(monthYear, out var internalFormat))
 		{
-			throw new BusinessException("HR:InvalidMonthFormat")
-				.WithData("providedFormat", monthYear)
-				.WithData("expectedFormat", "MMMM-YYYY");
+			throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat)
+				.WithData("providedMonth", monthYear)
+				.WithData("acceptedFormats", "YYYY-MM, MMMM-YYYY, or date-like values");
 		}
 
-		var monthName = parts[0];
-		var yearStr = parts[1];
-
-		if (!int.TryParse(yearStr, out var year) || year < 1900 || year > 2100)
-		{
-			throw new BusinessException("HR:InvalidYear")
-				.WithData("providedYear", yearStr)
-				.WithData("minYear", 1900)
-				.WithData("maxYear", 2100);
-		}
-
-		// Parse month name
-		if (!DateTime.TryParseExact(monthName, "MMMM", CultureInfo.InvariantCulture,
-			DateTimeStyles.None, out var date))
-		{
-			throw new BusinessException("HR:InvalidMonthName")
-				.WithData("providedMonth", monthName)
-				.WithData("expectedFormat", "JANUARY, FEBRUARY, etc.");
-		}
-
-		var month = date.Month;
-		var internalFormat = $"{year:D4}-{month:D2}"; // YYYY-MM format
-
+		var year = int.Parse(internalFormat[..4]);
+		var month = int.Parse(internalFormat[5..7]);
 		return (year, month, internalFormat);
 	}
 
-	/// <summary>
-	/// Calculate total working days in a month (business days minus holidays)
-	/// Uses HashSet to avoid double-counting overlapping holidays
-	/// </summary>
-	private async Task<int> CalculateTotalWorkingDaysAsync(int year, int month)
+	private async Task<List<Holiday>> LoadHolidaysForMonthAsync(int year, int month)
 	{
 		var firstDay = new DateTime(year, month, 1);
 		var lastDay = new DateTime(year, month, DateTime.DaysInMonth(year, month));
+		var startDate = new DateTimeOffset(firstDay);
+		var endDate = new DateTimeOffset(lastDay.AddDays(1).AddTicks(-1));
 
-		// Count business days (Monday to Friday)
-		var businessDays = 0;
-		for (var date = firstDay; date <= lastDay; date = date.AddDays(1))
-		{
-			if (date.DayOfWeek != DayOfWeek.Saturday && date.DayOfWeek != DayOfWeek.Sunday)
-			{
-				businessDays++;
-			}
-		}
-
-		// Get holidays for this month
 		var holidayQuery = await _holidayRepository.GetQueryableAsync();
 
 		if (CurrentTenant.Id.HasValue)
@@ -428,33 +411,11 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			holidayQuery = holidayQuery.Where(h => h.TenantId == CurrentTenant.Id);
 		}
 
-		var startDate = new DateTimeOffset(firstDay);
-		var endDate = new DateTimeOffset(lastDay.AddDays(1).AddTicks(-1));
-
-		var holidays = await AsyncExecuter.ToListAsync(
+		return await AsyncExecuter.ToListAsync(
 			holidayQuery.Where(h =>
 				h.StartDate <= endDate &&
 				h.EndDate >= startDate)
 		);
-
-		// Use HashSet to track unique holiday dates (avoids double-counting overlapping holidays)
-		var holidayDates = new HashSet<DateTime>();
-		foreach (var holiday in holidays)
-		{
-			var hStart = holiday.StartDate.Date > firstDay ? holiday.StartDate.Date : firstDay;
-			var hEnd = holiday.EndDate.Date < lastDay ? holiday.EndDate.Date : lastDay;
-
-			for (var date = hStart; date <= hEnd; date = date.AddDays(1))
-			{
-				// Only count weekdays, and HashSet ensures no duplicates
-				if (date.DayOfWeek != DayOfWeek.Saturday && date.DayOfWeek != DayOfWeek.Sunday)
-				{
-					holidayDates.Add(date);
-				}
-			}
-		}
-
-		return Math.Max(0, businessDays - holidayDates.Count);
 	}
 
 	/// <summary>
@@ -493,42 +454,49 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		List<EmployeeAttendance> attendanceRecords,
 		EmployeePayrollDetails? payrollDetails,
 		List<EmployeePayrollComponent> components,
-		int totalWorkingDays)
+		PayrollBasisDaysResult basis,
+		bool isLocked)
 	{
-		var basicSalary = payrollDetails?.BasicSalary ?? 0m;
+		var presentDays = attendanceRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.Present);
+		var halfDays = attendanceRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.HalfDayLeave);
+		var payableDays = PayrollProrationCalculator.CalculatePayableDays(presentDays, halfDays);
+		var factor = PayrollProrationCalculator.CalculateProrationFactor(basis.BasisDays, payableDays);
 
-		// Single-pass: compute aggregates and build component line items together
+		var basicSalary = components
+			.Where(c => c.IsEarning && IsBasicSalaryComponentName(c.Name))
+			.Sum(c => c.Amount);
+		basicSalary = PayrollProrationCalculator.ProrateAmount(basicSalary, isTemp: false, factor);
+
 		var grossSalary = 0m;
 		var totalDeduction = 0m;
 		var earningComponents = new List<RunPayrollComponentItem>(components.Count);
 		var deductionComponents = new List<RunPayrollComponentItem>(components.Count);
 		foreach (var component in components)
 		{
+			var prorated = PayrollProrationCalculator.ProrateAmount(component.Amount, component.IsTemp, factor);
 			var item = new RunPayrollComponentItem
 			{
 				Name = component.Name,
-				Amount = (double)component.Amount
+				Amount = (double)prorated
 			};
 			if (component.IsEarning)
 			{
-				grossSalary += component.Amount;
+				grossSalary += prorated;
 				earningComponents.Add(item);
 			}
 			else
 			{
-				totalDeduction += component.Amount;
+				totalDeduction += prorated;
 				deductionComponents.Add(item);
 			}
 		}
 
 		var netPay = grossSalary - totalDeduction;
 
-		// Calculate attendance
-		var presentDays = attendanceRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.Present);
-		var halfDays = attendanceRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.HalfDayLeave);
-
 		return new RunPayrollItem
 		{
+			EmployeeId = employee.Id,
+			IsLocked = isLocked,
 			EmployeeName = FormatEmployeeName(employee),
 			EmployeeIdentifier = employee.EmployeeCode ?? string.Empty,
 			IsTeaching = employee.EmployeeGroup == EmployeeGroupType.Teaching,
@@ -538,10 +506,46 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			NetPay = (double)netPay,
 			PresentDays = presentDays,
 			HalfWorkingDays = halfDays,
-			TotalWorkingDays = totalWorkingDays,
+			TotalWorkingDays = basis.BasisDays,
+			PayableDays = (double)payableDays,
+			ProrationFactor = (double)factor,
+			DayCalculationMode = PayrollDayCalculationApiLabels.ToApiString(basis.EffectiveMode),
+			UsedDefaultDayCalculation = basis.UsedTenantDefault,
 			EarningComponents = earningComponents,
 			DeductionComponents = deductionComponents
 		};
+	}
+
+	private static List<PayrollTargetEmployee> ResolveTargetEmployees(
+		List<PayrollTargetEmployee> scopedEmployees,
+		List<Guid>? requestedEmployeeIds)
+	{
+		if (requestedEmployeeIds == null || requestedEmployeeIds.Count == 0)
+		{
+			return scopedEmployees;
+		}
+
+		var requestedSet = requestedEmployeeIds.Distinct().ToHashSet();
+		var scopedById = scopedEmployees.ToDictionary(e => e.Id, e => e);
+		var outOfScopeIds = requestedSet.Where(id => !scopedById.ContainsKey(id)).ToList();
+		if (outOfScopeIds.Count > 0)
+		{
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope)
+				.WithData("employeeIds", outOfScopeIds);
+		}
+
+		return requestedSet.Select(id => scopedById[id]).ToList();
+	}
+
+	private static bool IsBasicSalaryComponentName(string? name)
+	{
+		if (string.IsNullOrWhiteSpace(name))
+		{
+			return false;
+		}
+
+		return string.Equals(name, "Basic", StringComparison.OrdinalIgnoreCase)
+			|| name.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase);
 	}
 
 	/// <summary>
@@ -558,5 +562,72 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	}
 
 	#endregion
+
+	private async Task<IQueryable<Employee>> GetScopedActiveEmployeeQueryAsync(bool includeUnknownStageEmployees)
+	{
+		var scope = await EnsureCanOperatePayrollAsync();
+		var employeeQuery = await _employeeRepository.GetQueryableAsync();
+
+		if (CurrentTenant.Id.HasValue)
+		{
+			employeeQuery = employeeQuery.Where(e => e.TenantId == CurrentTenant.Id);
+		}
+
+		employeeQuery = employeeQuery.Where(e => e.EmployeeStatusType == EmployeeStatusType.Active);
+		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		{
+			return employeeQuery;
+		}
+
+		var attendanceQuery = await _attendanceRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			attendanceQuery = attendanceQuery.Where(a => a.TenantId == CurrentTenant.Id);
+		}
+
+		var knownStageEmployeeIds = attendanceQuery
+			.Where(a => a.EducationMediumStageId.HasValue)
+			.Select(a => a.EmployeeId)
+			.Distinct();
+
+		var scopedStageEmployeeIds = attendanceQuery
+			.Where(a =>
+				a.EducationMediumStageId.HasValue &&
+				scope.MediumStageIds.Contains(a.EducationMediumStageId!.Value))
+			.Select(a => a.EmployeeId)
+			.Distinct();
+
+		if (includeUnknownStageEmployees)
+		{
+			// Unknown stage records are treated as in-scope for read/list flows to avoid false-deny for newly onboarded staff.
+			return employeeQuery.Where(e => scopedStageEmployeeIds.Contains(e.Id) || !knownStageEmployeeIds.Contains(e.Id));
+		}
+
+		// Deny unknown-stage employees for write/finalize flows.
+		return employeeQuery.Where(e => scopedStageEmployeeIds.Contains(e.Id));
+	}
+
+	private async Task<UserScopeContext> EnsureCanOperatePayrollAsync()
+	{
+		var uid = CurrentUser.Id;
+		if (!uid.HasValue)
+		{
+			throw new BusinessException(HRErrorCodes.AttendanceImportPreviewInvalid);
+		}
+
+		var scope = await _userScopeService.GetUserScopeAsync(uid.Value);
+		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		{
+			return scope;
+		}
+
+		if (scope.MediumStageIds.Count == 0)
+		{
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		}
+
+		return scope;
+	}
+
 }
 

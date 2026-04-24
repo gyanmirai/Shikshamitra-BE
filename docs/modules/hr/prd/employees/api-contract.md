@@ -181,20 +181,21 @@ PersonalInfoResponse {
 
 **Status codes:** 201, 400 (validation or business rule), 403 (missing HR employee-create permission)
 
-**Error response (typical):** HTTP 4xx with JSON body:
+**Error response (typical):** HTTP 4xx with RFC 7807 JSON body (`application/problem+json`):
 
 ```
 {
-  "isSuccess": false,
-  "error": {
-    "code": "VALIDATION_ERROR" | "BUSINESS_ERROR" | ...,
-    "message": "human-readable summary",
-    "fields": { "mobileNo": "...", "email": "..." }
-  }
+  "type": "https://httpstatuses.com/400",
+  "title": "Validation failed",
+  "status": 400,
+  "detail": "human-readable summary",
+  "instance": "/api/employees/...",
+  "errorCode": "VALIDATION_ERROR" | "HR:Employee:010026" | ...,
+  "errors": { "mobileNo": ["..."], "email": ["..."] }
 }
 ```
 
-`fields` is present for many validation failures (per-property messages); it may be omitted when not applicable.
+`errors` is present for validation failures (per-property messages); it may be omitted when not applicable.
 
 ---
 

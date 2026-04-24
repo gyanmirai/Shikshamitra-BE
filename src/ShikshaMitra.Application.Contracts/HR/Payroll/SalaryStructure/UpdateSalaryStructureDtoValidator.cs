@@ -8,5 +8,8 @@ public class UpdateSalaryStructureDtoValidator : AbstractValidator<UpdateSalaryS
 	{
 		RuleFor(x => x.EarningComponents).NotEmpty();
 		RuleFor(x => x.DeductionComponents).NotEmpty();
+
+		RuleForEach(x => x.EarningComponents).SetValidator(new SalaryComponentDtoValidator());
+		RuleForEach(x => x.DeductionComponents).SetValidator(new SalaryComponentDtoValidator());
 	}
 }

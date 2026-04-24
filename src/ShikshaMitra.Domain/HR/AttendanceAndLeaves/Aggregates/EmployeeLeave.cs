@@ -3,7 +3,6 @@ using ShikshaMitra.HR.Employees;
 using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
-using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
@@ -51,35 +50,48 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Status = EmployeeLeaveStatusType.Pending;
 	}
 
-		internal EmployeeLeave UpdateLeaveStatus(EmployeeLeaveStatusType status, string? rejectionReason)
-		{
-			Status = status;
-			RejectionReason = rejectionReason;
-			return this;
-		}
-
-		/// <summary>
-		/// ✅ FIXED: Factory method to create EmployeeLeave with proper initialization
-		/// </summary>
-		public static EmployeeLeave Create(
-			Guid id,
-			Guid tenantId,
-			Guid employeeId,
-			Guid leaveTypeId,
-			DateTimeOffset startDate,
-			DateTimeOffset endDate,
-			string description,
-			bool halfDay = false)
-		{
-			var leave = new EmployeeLeave(id, tenantId, halfDay, startDate, endDate, description, null!);
-
-			// Use reflection only in controlled factory method to set private properties
-			var employeeIdProperty = typeof(EmployeeLeave).GetProperty(nameof(EmployeeId));
-			var leaveTypeIdProperty = typeof(EmployeeLeave).GetProperty(nameof(LeaveTypeId));
-
-			employeeIdProperty?.SetValue(leave, employeeId);
-			leaveTypeIdProperty?.SetValue(leave, leaveTypeId);
-
-			return leave;
-		}
+	internal EmployeeLeave UpdateLeaveStatus(EmployeeLeaveStatusType status, string? rejectionReason)
+	{
+		Status = status;
+		RejectionReason = rejectionReason;
+		return this;
 	}
+
+	/// <summary>
+	/// Soft-cancel: transitions to Cancelled status with audit retention.
+	/// Only allowed from Pending or Reviewed states.
+	/// </summary>
+	internal EmployeeLeave Cancel()
+	{
+		if (Status != EmployeeLeaveStatusType.Pending && Status != EmployeeLeaveStatusType.Reviewed)
+		{
+			throw new BusinessException(HRErrorCodes.LeaveNotCancellable);
+		}
+
+		Status = EmployeeLeaveStatusType.Cancelled;
+		return this;
+	}
+
+	/// <summary>Factory method to create EmployeeLeave with proper initialization.</summary>
+	public static EmployeeLeave Create(
+		Guid id,
+		Guid tenantId,
+		Guid employeeId,
+		Guid leaveTypeId,
+		DateTimeOffset startDate,
+		DateTimeOffset endDate,
+		string description,
+		bool halfDay = false)
+	{
+		var leave = new EmployeeLeave(id, tenantId, halfDay, startDate, endDate, description, null!);
+
+		// Use reflection only in controlled factory method to set private properties
+		var employeeIdProperty = typeof(EmployeeLeave).GetProperty(nameof(EmployeeId));
+		var leaveTypeIdProperty = typeof(EmployeeLeave).GetProperty(nameof(LeaveTypeId));
+
+		employeeIdProperty?.SetValue(leave, employeeId);
+		leaveTypeIdProperty?.SetValue(leave, leaveTypeId);
+
+		return leave;
+	}
+}

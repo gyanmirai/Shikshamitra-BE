@@ -12,7 +12,8 @@
       "commandName": "IISExpress",
       "launchBrowser": true,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "SeedTestLogins": "true"
       }
     },
     "ShikshaMitra.HttpApi.Host (Development)": {
@@ -20,7 +21,8 @@
       "launchBrowser": true,
       "applicationUrl": "https://localhost:44332",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "SeedTestLogins": "true"
       }
     },
     "ShikshaMitra.HttpApi.Host (Staging)": {
@@ -28,7 +30,8 @@
       "launchBrowser": true,
       "applicationUrl": "https://localhost:44332",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Staging"
+        "ASPNETCORE_ENVIRONMENT": "Staging",
+        "SeedTestLogins": "true"
       }
     }
   }

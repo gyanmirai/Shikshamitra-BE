@@ -31,6 +31,7 @@ public class HomeworkAssignmentConfiguration : IEntityTypeConfiguration<Homework
 		builder.Property(x => x.HomeworkTypeId).IsRequired(false);
 		builder.Property(x => x.ChapterIdsJson).IsRequired(false);
 		builder.Property(x => x.AttachmentsJson).IsRequired(false);
+		builder.Property(x => x.Status).IsRequired().HasDefaultValue(HomeworkStatus.Draft);
 
 		// Foreign Keys
 		builder

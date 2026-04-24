@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
+using ShikshaMitra.HR;
 using ShikshaMitra.HR.Employees.Payroll;
 using System;
 using System.Collections.Generic;
@@ -31,6 +32,7 @@ public class EmployeeAppService(
 	IEmployeeCacheManager employeeCacheManager,
 	IEmployeePayrollDetailsRepository payrollDetailsRepository,
 	IEmployeePayrollComponentRepository payrollComponentRepository,
+	IEmployeePayrollAppService employeePayrollAppService,
 	IGuidGenerator guidGenerator,
 	ILogger<EmployeeAppService> logger,
 	IdentityUserManager userManager,
@@ -115,13 +117,13 @@ public class EmployeeAppService(
 		if (string.IsNullOrWhiteSpace(input.Email))
 		{
 			logger.LogWarning("Employee creation failed: Email is required");
-			throw new UserFriendlyException("Email is required for employee creation.");
+			throw new BusinessException(HRErrorCodes.EmployeeEmailRequired);
 		}
 
 		if (string.IsNullOrWhiteSpace(input.MobileNo))
 		{
 			logger.LogWarning("Employee creation failed: Mobile number is required for email: {Email}", input.Email);
-			throw new UserFriendlyException("Mobile number is required for employee creation.");
+			throw new BusinessException(HRErrorCodes.EmployeeMobileRequired);
 		}
 
 		// Validate mobile number length
@@ -132,7 +134,7 @@ public class EmployeeAppService(
 				input.MobileNo.Length,
 				input.Email
 			);
-			throw new UserFriendlyException("Mobile number must be at least 4 digits.");
+			throw new BusinessException(HRErrorCodes.EmployeeMobileTooShort);
 		}
 
 		// Check if email already exists
@@ -145,7 +147,8 @@ public class EmployeeAppService(
 				input.Email,
 				existingUserByEmail.Id
 			);
-			throw new UserFriendlyException($"Email '{input.Email}' is already in use.");
+			throw new BusinessException(HRErrorCodes.EmployeeEmailAlreadyExists)
+				.WithData("email", input.Email);
 		}
 
 		// Use explicit transaction to ensure atomicity
@@ -199,7 +202,8 @@ public class EmployeeAppService(
 						username,
 						errors
 					);
-					throw new UserFriendlyException("Failed to create user: " + errors);
+					throw new BusinessException(HRErrorCodes.EmployeeUserCreationFailed)
+						.WithData("details", errors);
 				}
 
 				logger.LogInformation(
@@ -217,7 +221,7 @@ public class EmployeeAppService(
 						"User verification failed: User with ID {UserId} was not found after creation",
 						userId
 					);
-					throw new BusinessException("User was not created successfully.");
+					throw new BusinessException(HRErrorCodes.EmployeeUserVerificationFailed);
 				}
 
 				logger.LogInformation(
@@ -301,7 +305,7 @@ public class EmployeeAppService(
 				// Return the DTO
 				return ObjectMapper.Map<Employee, EmployeeDto>(employee);
 			}
-			catch (UserFriendlyException ex)
+			catch (BusinessException ex)
 			{
 				logger.LogWarning(
 					ex,
@@ -376,7 +380,7 @@ public class EmployeeAppService(
 			sequence++;
 			if (sequence > 99)
 			{
-				throw new UserFriendlyException("Unable to generate unique username.");
+				throw new BusinessException(HRErrorCodes.EmployeeUsernameGenerationFailed);
 			}
 		}
 	}
@@ -751,9 +755,7 @@ public class EmployeeAppService(
 				EpfNumber = payrollDetails.EpfNumber,
 				UanNumber = payrollDetails.UanNumber,
 				PunchId = payrollDetails.PunchId,
-				BasicSalary = payrollDetails.BasicSalary,
-				TdsPercentage = payrollDetails.TdsPercentage,
-				TdsAmount = payrollDetails.TdsAmount
+				TotalWorkingHourPerMonth = payrollDetails.TotalWorkingHourPerMonth
 			} : new PayrollDetailsDto(),
 			Earnings = (earnings ?? Enumerable.Empty<EmployeePayrollComponent>()).Select(e => new PayrollComponentDto
 			{
@@ -785,7 +787,7 @@ public class EmployeeAppService(
 		// Validate input
 		if (input.PayrollDetails == null)
 		{
-			throw new UserFriendlyException("Payroll details are required.");
+			throw new BusinessException(HRErrorCodes.EmployeePayrollDetailsRequired);
 		}
 
 		// Validate employee exists (throws EntityNotFoundException if not found)
@@ -806,10 +808,7 @@ public class EmployeeAppService(
 				input.PayrollDetails.EpfNumber,
 				input.PayrollDetails.UanNumber,
 				input.PayrollDetails.PunchId,
-				input.PayrollDetails.BasicSalary,
-				input.PayrollDetails.TdsPercentage,
-				input.PayrollDetails.TdsAmount
-			);
+				input.PayrollDetails.TotalWorkingHourPerMonth);
 			await payrollDetailsRepository.InsertAsync(payrollDetails);
 		}
 		else
@@ -824,10 +823,7 @@ public class EmployeeAppService(
 				input.PayrollDetails.EpfNumber,
 				input.PayrollDetails.UanNumber,
 				input.PayrollDetails.PunchId,
-				input.PayrollDetails.BasicSalary,
-				input.PayrollDetails.TdsPercentage,
-				input.PayrollDetails.TdsAmount
-			);
+				input.PayrollDetails.TotalWorkingHourPerMonth);
 			await payrollDetailsRepository.UpdateAsync(payrollDetails);
 		}
 
@@ -840,10 +836,12 @@ public class EmployeeAppService(
 				guidGenerator.Create(),
 				employeeId,
 				earning.Name,
+				componentId: null,
 				earning.Description,
 				earning.Amount,
 				earning.IsFixed,
 				earning.IsTemp,
+				applicableMonth: null,
 				earning.ComponentType,
 				earning.DependOn,
 				isEarning: true
@@ -857,10 +855,12 @@ public class EmployeeAppService(
 				guidGenerator.Create(),
 				employeeId,
 				deduction.Name,
+				componentId: null,
 				deduction.Description,
 				deduction.Amount,
 				deduction.IsFixed,
 				deduction.IsTemp,
+				applicableMonth: null,
 				deduction.ComponentType,
 				deduction.DependOn,
 				isEarning: false
@@ -984,97 +984,12 @@ public class EmployeeAppService(
 	/// <summary>
 	/// Gets the payroll details for an employee (matches OpenAPI Payroll contract).
 	/// </summary>
-	public async Task<PayrollContract> GetPayrollContractAsync(Guid employeeId)
-	{
-		await employeeRepository.GetAsync(employeeId); // Validate employee exists
-
-		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
-		var earnings = await payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
-		var deductions = await payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);
-
-		return new PayrollContract
-		{
-			BankDetails = payrollDetails != null ? new BankDetailsContract
-			{
-				BankName = payrollDetails.BankName,
-				BranchName = payrollDetails.BranchName,
-				AccountHolderName = payrollDetails.AccountHolderName,
-				AccountNumber = payrollDetails.AccountNumber,
-				IfscCode = payrollDetails.IfscCode
-			} : null,
-			SalaryDetails = payrollDetails != null ? new SalaryDetailsContract
-			{
-				PfRuleId = !string.IsNullOrEmpty(payrollDetails.PfRule) && Guid.TryParse(payrollDetails.PfRule, out var pfRuleId) ? pfRuleId : null,
-				EpfNumber = payrollDetails.EpfNumber,
-				UanNumber = payrollDetails.UanNumber,
-				BasicSalary = payrollDetails.BasicSalary,
-				PunchId = payrollDetails.PunchId,
-				TdsPercentage = payrollDetails.TdsPercentage,
-				TdsAmount = payrollDetails.TdsAmount
-			} : null,
-			EarningComponents = earnings?.Select(e => new ComponentAmountContract
-			{
-				ComponentId = e.Id, // Using component ID; ideally should be linked to master component
-				Amount = e.Amount
-			}).ToList() ?? new List<ComponentAmountContract>(),
-			DeductionComponents = deductions?.Select(d => new ComponentAmountContract
-			{
-				ComponentId = d.Id, // Using component ID; ideally should be linked to master component
-				Amount = d.Amount
-			}).ToList() ?? new List<ComponentAmountContract>()
-		};
-	}
+	public Task<EmployeePayrollResponse> GetPayrollContractAsync(Guid employeeId) =>
+		employeePayrollAppService.GetPayrollContractAsync(employeeId);
 
 	/// <summary>
 	/// Updates the payroll details for an employee (matches OpenAPI Payroll contract).
 	/// </summary>
-	public async Task UpdatePayrollContractAsync(Guid employeeId, PayrollContract input)
-	{
-		await employeeRepository.GetAsync(employeeId); // Validate employee exists
-
-		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
-
-		if (payrollDetails == null)
-		{
-			payrollDetails = new EmployeePayrollDetails(guidGenerator.Create(), employeeId);
-			payrollDetails.UpdateDetails(
-				input.BankDetails?.BankName,
-				input.BankDetails?.BranchName,
-				input.BankDetails?.AccountHolderName,
-				input.BankDetails?.AccountNumber,
-				input.BankDetails?.IfscCode,
-				input.SalaryDetails?.PfRuleId?.ToString(),
-				input.SalaryDetails?.EpfNumber,
-				input.SalaryDetails?.UanNumber,
-				input.SalaryDetails?.PunchId,
-				input.SalaryDetails?.BasicSalary,
-				input.SalaryDetails?.TdsPercentage,
-				input.SalaryDetails?.TdsAmount
-			);
-			await payrollDetailsRepository.InsertAsync(payrollDetails);
-		}
-		else
-		{
-			payrollDetails.UpdateDetails(
-				input.BankDetails?.BankName,
-				input.BankDetails?.BranchName,
-				input.BankDetails?.AccountHolderName,
-				input.BankDetails?.AccountNumber,
-				input.BankDetails?.IfscCode,
-				input.SalaryDetails?.PfRuleId?.ToString(),
-				input.SalaryDetails?.EpfNumber,
-				input.SalaryDetails?.UanNumber,
-				input.SalaryDetails?.PunchId,
-				input.SalaryDetails?.BasicSalary,
-				input.SalaryDetails?.TdsPercentage,
-				input.SalaryDetails?.TdsAmount
-			);
-			await payrollDetailsRepository.UpdateAsync(payrollDetails);
-		}
-
-		// Note: Component updates would require linking to master component IDs
-		// For now, keeping existing component logic
-
-		await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
-	}
+	public Task UpdatePayrollContractAsync(Guid employeeId, PayrollContract input) =>
+		employeePayrollAppService.UpdatePayrollContractAsync(employeeId, input);
 }

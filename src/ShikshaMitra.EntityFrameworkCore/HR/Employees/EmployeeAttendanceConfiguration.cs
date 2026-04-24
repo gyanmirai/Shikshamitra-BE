@@ -39,6 +39,9 @@ public class EmployeeAttendanceConfiguration : IEntityTypeConfiguration<Employee
 			.IsRequired(false)
 			.HasColumnType("timestamptz");
 
+		builder.Property(e => e.Remarks)
+			.HasMaxLength(512);
+
 		// Indexes
 		builder.HasIndex(e => new { e.EmployeeId });
 		builder.HasIndex(e => e.EducationMediumStageId); // Index for scope filtering

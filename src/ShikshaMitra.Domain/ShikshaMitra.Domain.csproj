@@ -44,6 +44,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Seeders\Assets\profile-seed-00.png" LogicalName="ShikshaMitra.Seeders.Assets.profile-seed-00.png" />
+    <EmbeddedResource Include="Seeders\Assets\profile-seed-01.png" LogicalName="ShikshaMitra.Seeders.Assets.profile-seed-01.png" />
+    <EmbeddedResource Include="Seeders\Assets\profile-seed-02.png" LogicalName="ShikshaMitra.Seeders.Assets.profile-seed-02.png" />
+    <EmbeddedResource Include="Seeders\Assets\profile-seed-03.png" LogicalName="ShikshaMitra.Seeders.Assets.profile-seed-03.png" />
+    <EmbeddedResource Include="Seeders\Assets\profile-seed-04.png" LogicalName="ShikshaMitra.Seeders.Assets.profile-seed-04.png" />
+    <EmbeddedResource Include="Seeders\Assets\profile-seed-05.png" LogicalName="ShikshaMitra.Seeders.Assets.profile-seed-05.png" />
+    <EmbeddedResource Include="Seeders\Assets\profile-seed-06.png" LogicalName="ShikshaMitra.Seeders.Assets.profile-seed-06.png" />
+    <EmbeddedResource Include="Seeders\Assets\profile-seed-07.png" LogicalName="ShikshaMitra.Seeders.Assets.profile-seed-07.png" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Folder Include="HR\AttendanceAndLeaves\Import\" />
     <Folder Include="HR\Employees\Payroll\Services\" />
     <Folder Include="HR\EventAndHolidays\Repositories\" />

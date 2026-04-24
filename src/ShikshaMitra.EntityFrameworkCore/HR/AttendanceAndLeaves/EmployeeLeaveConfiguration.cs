@@ -23,6 +23,10 @@ public class EmployeeLeaveConfiguration : IEntityTypeConfiguration<EmployeeLeave
 			.IsUnique()
 			.HasDatabaseName("IX_EmployeeLeaves_Tenant_PublicId");
 
+		// Composite index for overlap & balance queries (employee + status + date range)
+		builder.HasIndex(e => new { e.TenantId, e.EmployeeId, e.Status, e.StartDate, e.EndDate })
+			.HasDatabaseName("IX_EmployeeLeaves_Overlap");
+
 		builder.HasOne(e => e.Employee)
 			.WithMany()
 			.HasForeignKey(e => e.EmployeeId)

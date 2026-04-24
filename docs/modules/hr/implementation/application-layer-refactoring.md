@@ -46,7 +46,7 @@ validation that should be handled by the ABP pipeline.
 
 ### Phase 2: FluentValidation
 - Added `Volo.Abp.FluentValidation` package to Application.Contracts.
-- Created 4 validators: `CreateEmployeePersonalInfoDtoValidator`, `LeaveRequestCreateDtoValidator`, `LeaveRequestUpdateRequestValidator`, `CreateUpdateEventDtoValidator`.
+- Created validators: `CreateEmployeePersonalInfoDtoValidator`, `LeaveRequestCreateDtoValidator`, `LeaveManagementRequestValidators` (approve/reject), `CreateUpdateEventDtoValidator`.
 
 ### Phase 3: Authorization
 - Added `[Authorize(Permission)]` class-level attribute to all HR AppServices.
@@ -79,7 +79,7 @@ validation that should be handled by the ABP pipeline.
 - `HR/Employees/Search/IEmployeeSearchAppService.cs`
 - `HR/Employees/PersonalInfo/CreateEmployeePersonalInfoDtoValidator.cs`
 - `HR/AttendanceAndLeaves/LeaveManagementInfo/LeaveRequestCreateDtoValidator.cs`
-- `HR/AttendanceAndLeaves/LeaveManagementInfo/LeaveRequestUpdateRequestValidator.cs`
+- `HR/AttendanceAndLeaves/LeaveManagementInfo/LeaveManagementRequestValidators.cs`
 - `HR/Calendar/Events/CreateUpdateEventDtoValidator.cs`
 
 ### Application (new)

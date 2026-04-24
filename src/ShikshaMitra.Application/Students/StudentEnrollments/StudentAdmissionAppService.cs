@@ -118,7 +118,7 @@ public class StudentAdmissionAppService(
 				}
 
 				// Apply action
-				if (item.Action == AdmissionAction.Approve)
+				if (item.Action == StudentEnrollmentApprovalState.Approved)
 				{
 					student.ApproveAdmission();
 
@@ -131,7 +131,7 @@ public class StudentAdmissionAppService(
 					itemResult.NewStatus = StudentEnrollmentApprovalState.Approved.ToString();
 					itemResult.Message = "Admission approved successfully. Student and parent accounts created and welcome emails sent.";
 				}
-				else if (item.Action == AdmissionAction.Reject)
+				else if (item.Action == StudentEnrollmentApprovalState.Rejected)
 				{
 					student.RejectAdmission(item.Remarks);
 					itemResult.NewStatus = StudentEnrollmentApprovalState.Rejected.ToString();

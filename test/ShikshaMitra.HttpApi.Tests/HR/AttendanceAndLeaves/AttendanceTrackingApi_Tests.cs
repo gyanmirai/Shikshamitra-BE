@@ -1,5 +1,6 @@
 using System;
 using System.Net;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
@@ -19,13 +20,28 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Get_Date_Wise_Attendance()
+	public async Task Should_Get_Date_Wise_Attendance_With_Contract_Params()
 	{
 		var today = DateTime.UtcNow.ToString("dd-MM-yyyy");
+		var mediumStageId = Guid.NewGuid();
 		var response = await Client.GetAsync(
-			$"{BaseUrl}/date-wise?attendanceDate={today}&page=1&pageSize=10");
+			$"{BaseUrl}/date-wise?attendanceDate={today}&status=PRESENT&page=1&pageSize=10&educationMediumStageId={mediumStageId}&search=abc");
 
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.InternalServerError);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var json = await response.Content.ReadAsStringAsync();
+		using var document = JsonDocument.Parse(json);
+		document.RootElement.TryGetProperty("totalCount", out _).ShouldBeTrue();
+		document.RootElement.TryGetProperty("currentPage", out _).ShouldBeTrue();
+		document.RootElement.TryGetProperty("pageSize", out _).ShouldBeTrue();
+		document.RootElement.TryGetProperty("totalPages", out _).ShouldBeTrue();
+		document.RootElement.TryGetProperty("summary", out _).ShouldBeTrue();
+		document.RootElement.TryGetProperty("items", out var items).ShouldBeTrue();
+		if (items.ValueKind == JsonValueKind.Array && items.GetArrayLength() > 0)
+		{
+			items[0].TryGetProperty("status", out var status).ShouldBeTrue();
+			status.ValueKind.ShouldBe(JsonValueKind.Number);
+		}
 	}
 
 	#endregion
@@ -34,19 +50,88 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Get_Employee_Wise_Attendance()
+	public async Task Should_Get_Employee_Wise_Attendance_With_Pagination_Fields()
 	{
 		var employeeId = Guid.NewGuid();
+		var mediumStageId = Guid.NewGuid();
 		var start = DateTime.UtcNow.AddDays(-30).ToString("dd-MM-yyyy");
 		var end = DateTime.UtcNow.ToString("dd-MM-yyyy");
 
 		var response = await Client.GetAsync(
-			$"{BaseUrl}/employee-wise?employeeId={employeeId}&startDate={start}&endDate={end}");
+			$"{BaseUrl}/employee-wise?employeeId={employeeId}&startDate={start}&endDate={end}&page=1&pageSize=10&educationMediumStageId={mediumStageId}&search=mon");
 
-		response.StatusCode.ShouldBeOneOf(
-			HttpStatusCode.OK,
-			HttpStatusCode.NotFound,
-			HttpStatusCode.InternalServerError);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var json = await response.Content.ReadAsStringAsync();
+		using var document = JsonDocument.Parse(json);
+		document.RootElement.TryGetProperty("totalCount", out _).ShouldBeTrue();
+		document.RootElement.TryGetProperty("currentPage", out _).ShouldBeTrue();
+		document.RootElement.TryGetProperty("pageSize", out _).ShouldBeTrue();
+		document.RootElement.TryGetProperty("totalPages", out _).ShouldBeTrue();
+		document.RootElement.TryGetProperty("attendanceSummary", out _).ShouldBeTrue();
+		document.RootElement.TryGetProperty("items", out var items).ShouldBeTrue();
+		if (items.ValueKind == JsonValueKind.Array && items.GetArrayLength() > 0)
+		{
+			items[0].TryGetProperty("status", out var status).ShouldBeTrue();
+			status.ValueKind.ShouldBe(JsonValueKind.Number);
+		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Invalid_Status_With_400_And_Raw_Abp_ValidationErrors()
+	{
+		var today = DateTime.UtcNow.ToString("dd-MM-yyyy");
+		var mediumStageId = Guid.NewGuid();
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/date-wise?attendanceDate={today}&status=INVALID&page=1&pageSize=10&educationMediumStageId={mediumStageId}");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+		var json = await response.Content.ReadAsStringAsync();
+		json.Contains("status", StringComparison.OrdinalIgnoreCase).ShouldBeTrue();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Invalid_Date_Format_With_400()
+	{
+		var mediumStageId = Guid.NewGuid();
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/date-wise?attendanceDate=not-a-date&status=PRESENT&page=1&pageSize=10&educationMediumStageId={mediumStageId}");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Missing_EducationMediumStageId_With_400()
+	{
+		var today = DateTime.UtcNow.ToString("dd-MM-yyyy");
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/date-wise?attendanceDate={today}&status=PRESENT&page=1&pageSize=10");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task HrSwagger_Should_Expose_AttendanceTrackingStatus_As_Numeric_Enum()
+	{
+		var response = await Client.GetAsync("/swagger/v1-hr/swagger.json");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var json = await response.Content.ReadAsStringAsync();
+		using var document = JsonDocument.Parse(json);
+		var statusSchema = document.RootElement
+			.GetProperty("components")
+			.GetProperty("schemas")
+			.GetProperty("ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking.AttendanceTrackingStatus");
+
+		statusSchema.GetProperty("type").GetString().ShouldBe("integer");
+		statusSchema.TryGetProperty("enum", out var enumValues).ShouldBeTrue();
+		enumValues.ValueKind.ShouldBe(JsonValueKind.Array);
+		enumValues.GetArrayLength().ShouldBeGreaterThan(0);
 	}
 
 	#endregion

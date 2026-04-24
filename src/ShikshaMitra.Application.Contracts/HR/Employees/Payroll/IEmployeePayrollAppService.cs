@@ -11,6 +11,6 @@ public interface IEmployeePayrollAppService : IApplicationService
 {
 	Task<EmployeePayrollDetailsDto> GetPayrollDetailsAsync(Guid employeeId);
 	Task UpdatePayrollDetailsAsync(Guid employeeId, UpdateEmployeePayrollDetailsDto input);
-	Task<PayrollContract> GetPayrollContractAsync(Guid employeeId);
+	Task<EmployeePayrollResponse> GetPayrollContractAsync(Guid employeeId);
 	Task UpdatePayrollContractAsync(Guid employeeId, PayrollContract input);
 }

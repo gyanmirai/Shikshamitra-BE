@@ -12,6 +12,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
 using OpenIddict.Validation.AspNetCore;
 using QuestPDF.Infrastructure;
+using ShikshaMitra.Common.Middleware;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Extensions;
 using ShikshaMitra.MultiTenancy;
@@ -156,6 +157,39 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		context.Services.AddControllers(options =>
 		{
 			options.Filters.Add(new IgnoreAntiforgeryTokenAttribute());
+			options.Filters.AddService<ApiProblemDetailsResultFilter>();
+		});
+
+		context.Services.Configure<ApiBehaviorOptions>(options =>
+		{
+			options.InvalidModelStateResponseFactory = actionContext =>
+			{
+				var errors = actionContext.ModelState
+					.Where(kvp => kvp.Value?.Errors.Count > 0)
+					.ToDictionary(
+						kvp => kvp.Key,
+						kvp => kvp.Value!.Errors
+							.Select(e => string.IsNullOrWhiteSpace(e.ErrorMessage) ? "The input was not valid." : e.ErrorMessage)
+							.ToArray(),
+						StringComparer.OrdinalIgnoreCase);
+
+				var problemDetails = new ValidationProblemDetails(actionContext.ModelState)
+				{
+					Status = StatusCodes.Status400BadRequest,
+					Title = "Validation failed",
+					Type = "https://httpstatuses.com/400",
+					Detail = "One or more validation errors occurred.",
+					Instance = actionContext.HttpContext.Request.Path
+				};
+
+				problemDetails.Extensions["errorCode"] = "VALIDATION_ERROR";
+				problemDetails.Extensions["errors"] = errors;
+
+				return new BadRequestObjectResult(problemDetails)
+				{
+					ContentTypes = { "application/problem+json" }
+				};
+			};
 		});
 	}
 
@@ -218,10 +252,10 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 	private static string GetSwaggerModule(string ns)
 	{
 		if (ns.Contains(".HR.") || ns.Contains(".Controllers.HR")) return "v1-hr";
-		if (ns.Contains(".Controllers.Academic")) return "v1-academic";
-		if (ns.Contains(".Controllers.Students") || ns.StartsWith("ShikshaMitra.Students.")) return "v1-students";
-		if (ns.Contains(".Controllers.Finance")) return "v1-finance";
-		if (ns.Contains(".Controllers.Library")) return "v1-library";
+		if (ns.Contains(".Controllers.Academic") || ns.Contains(".Academic.")) return "v1-academic";
+		if (ns.Contains(".Controllers.Students") || ns.Contains(".Students.") || ns.StartsWith("ShikshaMitra.Students.")) return "v1-students";
+		if (ns.Contains(".Controllers.Finance") || ns.Contains(".Finance.")) return "v1-finance";
+		if (ns.Contains(".Controllers.Library") || ns.Contains(".Library.")) return "v1-library";
 		return "v1-admin";
 	}
 
@@ -463,9 +497,8 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 		ConfigureSmtpPassword(context.ServiceProvider);
 
-		// 🔧 DEVELOPMENT TOGGLE: Comment this out to see raw ABP exception details
-		// Uncomment to use custom error formatting
-		// app.UseGlobalExceptionHandling();
+		// Enforce RFC 7807 ProblemDetails for all /api endpoints.
+		app.UseApiProblemDetails();
 
 		if (env.IsDevelopment())
 		{

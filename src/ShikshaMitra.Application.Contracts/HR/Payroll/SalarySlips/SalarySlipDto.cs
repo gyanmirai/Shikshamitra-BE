@@ -62,7 +62,7 @@ public class SalarySlipDto
 	/// <summary>
 	/// Salary slip status
 	/// </summary>
-	public string Status { get; set; } = string.Empty;
+	public SalarySlipStatus Status { get; set; }
 
 	/// <summary>
 	/// Optional remarks
@@ -73,6 +73,26 @@ public class SalarySlipDto
 	/// Processing date
 	/// </summary>
 	public DateTime ProcessedDate { get; set; }
+
+	/// <summary>
+	/// Payroll basis days (denominator) when slip was computed.
+	/// </summary>
+	public int? PayrollBasisDays { get; set; }
+
+	/// <summary>
+	/// Payable days from attendance at computation time.
+	/// </summary>
+	public decimal? PayableDays { get; set; }
+
+	/// <summary>
+	/// LOP proration factor applied (capped at 1).
+	/// </summary>
+	public decimal? ProrationFactor { get; set; }
+
+	/// <summary>
+	/// Day calculation mode: working-days, total-month-days, or manual-days.
+	/// </summary>
+	public string? PayrollDayCalculationMode { get; set; }
 }
 
 /// <summary>

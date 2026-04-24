@@ -202,10 +202,10 @@ public class StudentInquiryAppService(
 		IssueRegistrationFormDto issueFormDto
 	)
 	{
-		// TODO: Form number should be unique in a year across all boards
-
 		// Load the complete aggregate
 		var student = await studentRepository.GetAsync(studentId);
+
+		await studentEnrollmentManager.ValidateFormNumberUniqueAsync(issueFormDto.FormNumber, student.AcademicYearId ?? Guid.Empty);
 
 		// Use aggregate method - it encapsulates business rules
 		student.IssueRegistrationForm(issueFormDto.FormNumber, issueFormDto.Amount);

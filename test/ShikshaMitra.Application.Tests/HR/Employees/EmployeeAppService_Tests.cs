@@ -120,7 +120,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             RoleId = roleId
         };
 
-        await Should.ThrowAsync<UserFriendlyException>(async () =>
+        await Should.ThrowAsync<BusinessException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
         });
@@ -576,8 +576,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         {
             PayrollDetails = new PayrollDetailsDto
             {
-                BasicSalary = 50000,
-                TdsPercentage = 10
+                TotalWorkingHourPerMonth = 160m
             },
             Earnings = new List<PayrollComponentDto>
             {
@@ -619,7 +618,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         var result = await _employeeAppService.GetPayrollDetailsAsync(created.Id);
         result.ShouldNotBeNull();
         result.PayrollDetails.ShouldNotBeNull();
-        result.PayrollDetails.BasicSalary.ShouldBe(50000);
+        result.PayrollDetails.TotalWorkingHourPerMonth.ShouldBe(160m);
         result.Earnings.Count.ShouldBe(2);
         result.Deductions.Count.ShouldBe(1);
     }
@@ -637,7 +636,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         {
             PayrollDetails = new PayrollDetailsDto
             {
-                BasicSalary = 40000
+                TotalWorkingHourPerMonth = 158m
             },
             Earnings = new List<PayrollComponentDto>
             {
@@ -654,7 +653,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         {
             PayrollDetails = new PayrollDetailsDto
             {
-                BasicSalary = 50000
+                TotalWorkingHourPerMonth = 160m
             },
             Earnings = new List<PayrollComponentDto>
             {
@@ -842,7 +841,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         await CreateTestEmployeeAsync("First", "Employee", email: email, mobileNo: "9876543217");
 
         // Act & Assert — second employee with same email should fail
-        await Should.ThrowAsync<UserFriendlyException>(async () =>
+        await Should.ThrowAsync<BusinessException>(async () =>
         {
             await CreateTestEmployeeAsync("Second", "Employee", email: email, mobileNo: "9876543218");
         });
@@ -865,7 +864,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         };
 
         // Act & Assert — app service rejects null email
-        await Should.ThrowAsync<UserFriendlyException>(async () =>
+        await Should.ThrowAsync<BusinessException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
         });
@@ -888,7 +887,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         };
 
         // Act & Assert — app service rejects whitespace mobile
-        await Should.ThrowAsync<UserFriendlyException>(async () =>
+        await Should.ThrowAsync<BusinessException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
         });
@@ -987,7 +986,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     #region Tier 2 — Payroll Validation
 
     [Fact]
-    public async Task Should_Accept_Zero_BasicSalary()
+    public async Task Should_Accept_Zero_TotalWorkingHourPerMonth()
     {
         // Arrange
         var created = await CreateTestEmployeeAsync("Payroll", "ZeroSalary", email: "payroll.zero@test.com", mobileNo: "9876543223");
@@ -996,7 +995,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         {
             PayrollDetails = new PayrollDetailsDto
             {
-                BasicSalary = 0
+                TotalWorkingHourPerMonth = 0m
             },
             Earnings = new List<PayrollComponentDto>
             {
@@ -1013,7 +1012,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
         // Assert
         var result = await _employeeAppService.GetPayrollDetailsAsync(created.Id);
-        result.PayrollDetails.BasicSalary.ShouldBe(0);
+        result.PayrollDetails.TotalWorkingHourPerMonth.ShouldBe(0m);
     }
 
     [Fact]
@@ -1026,7 +1025,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         {
             PayrollDetails = new PayrollDetailsDto
             {
-                BasicSalary = 50000
+                TotalWorkingHourPerMonth = 160m
             },
             Earnings = new List<PayrollComponentDto>
             {
@@ -1059,7 +1058,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         {
             PayrollDetails = new PayrollDetailsDto
             {
-                BasicSalary = 50000
+                TotalWorkingHourPerMonth = 160m
             },
             Earnings = new List<PayrollComponentDto>
             {
@@ -1084,61 +1083,6 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     }
 
     [Fact]
-    public async Task Should_Reject_TDS_Over_100()
-    {
-        // Arrange
-        var created = await CreateTestEmployeeAsync("Payroll", "TDS", email: "payroll.tds@test.com", mobileNo: "9876543226");
-
-        var updateInput = new UpdateEmployeePayrollDetailsDto
-        {
-            PayrollDetails = new PayrollDetailsDto
-            {
-                BasicSalary = 50000,
-                TdsPercentage = 150 // Over 100
-            },
-            Earnings = new List<PayrollComponentDto>(),
-            Deductions = new List<PayrollComponentDto>()
-        };
-
-        // Act & Assert — DTO validation rejects TDS > 100
-        await Should.ThrowAsync<AbpValidationException>(async () =>
-        {
-            await _employeeAppService.UpdatePayrollDetailsAsync(created.Id, updateInput);
-        });
-    }
-
-    [Fact]
-    public async Task Should_Accept_Zero_TDS()
-    {
-        // Arrange
-        var created = await CreateTestEmployeeAsync("Payroll", "ZeroTDS", email: "payroll.zerotds@test.com", mobileNo: "9876543227");
-
-        var updateInput = new UpdateEmployeePayrollDetailsDto
-        {
-            PayrollDetails = new PayrollDetailsDto
-            {
-                BasicSalary = 50000,
-                TdsPercentage = 0
-            },
-            Earnings = new List<PayrollComponentDto>
-            {
-                new PayrollComponentDto { Name = "HRA", ComponentType = SalaryComponentType.Fixed, Amount = 5000, IsFixed = false, IsTemp = false }
-            },
-            Deductions = new List<PayrollComponentDto>
-            {
-                new PayrollComponentDto { Name = "PF", ComponentType = SalaryComponentType.Fixed, Amount = 1000, IsFixed = false, IsTemp = false }
-            }
-        };
-
-        // Act
-        await _employeeAppService.UpdatePayrollDetailsAsync(created.Id, updateInput);
-
-        // Assert
-        var result = await _employeeAppService.GetPayrollDetailsAsync(created.Id);
-        result.PayrollDetails.TdsPercentage.ShouldBe(0);
-    }
-
-    [Fact]
     public async Task Should_Update_Payroll_With_Multiple_Earnings_And_Deductions()
     {
         // Arrange
@@ -1148,8 +1092,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         {
             PayrollDetails = new PayrollDetailsDto
             {
-                BasicSalary = 60000,
-                TdsPercentage = 10
+                TotalWorkingHourPerMonth = 168m
             },
             Earnings = new List<PayrollComponentDto>
             {
@@ -1171,8 +1114,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         var result = await _employeeAppService.GetPayrollDetailsAsync(created.Id);
         result.Earnings.Count.ShouldBe(3);
         result.Deductions.Count.ShouldBe(2);
-        result.PayrollDetails.BasicSalary.ShouldBe(60000);
-        result.PayrollDetails.TdsPercentage.ShouldBe(10);
+        result.PayrollDetails.TotalWorkingHourPerMonth.ShouldBe(168m);
     }
 
     #endregion
@@ -1247,8 +1189,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         {
             PayrollDetails = new PayrollDetailsDto
             {
-                BasicSalary = 75000,
-                TdsPercentage = 15
+                TotalWorkingHourPerMonth = 176m
             },
             Earnings = new List<PayrollComponentDto>
             {
@@ -1262,7 +1203,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         };
         await _employeeAppService.UpdatePayrollDetailsAsync(employeeId, payrollInput);
         var payroll = await _employeeAppService.GetPayrollDetailsAsync(employeeId);
-        payroll.PayrollDetails.BasicSalary.ShouldBe(75000);
+        payroll.PayrollDetails.TotalWorkingHourPerMonth.ShouldBe(176m);
         payroll.Earnings.Count.ShouldBe(2);
         payroll.Deductions.Count.ShouldBe(1);
 
@@ -1323,7 +1264,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         // Update 1: 3 earnings, 2 deductions
         var update1 = new UpdateEmployeePayrollDetailsDto
         {
-            PayrollDetails = new PayrollDetailsDto { BasicSalary = 40000 },
+            PayrollDetails = new PayrollDetailsDto { TotalWorkingHourPerMonth = 158m },
             Earnings = new List<PayrollComponentDto>
             {
                 new PayrollComponentDto { Name = "HRA", ComponentType = SalaryComponentType.Fixed, Amount = 10000, IsFixed = true, IsTemp = false },
@@ -1344,7 +1285,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         // Update 2: Reduce to 1 earning, 1 minimal deduction — complete replacement
         var update2 = new UpdateEmployeePayrollDetailsDto
         {
-            PayrollDetails = new PayrollDetailsDto { BasicSalary = 50000 },
+            PayrollDetails = new PayrollDetailsDto { TotalWorkingHourPerMonth = 160m },
             Earnings = new List<PayrollComponentDto>
             {
                 new PayrollComponentDto { Name = "Consolidated", ComponentType = SalaryComponentType.Fixed, Amount = 50000, IsFixed = true, IsTemp = false }
@@ -1359,12 +1300,12 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         after2.Earnings.Count.ShouldBe(1);
         after2.Earnings[0].Name.ShouldBe("Consolidated");
         after2.Deductions.Count.ShouldBe(1);
-        after2.PayrollDetails.BasicSalary.ShouldBe(50000);
+        after2.PayrollDetails.TotalWorkingHourPerMonth.ShouldBe(160m);
 
         // Update 3: Back to multiple — previous components should be gone
         var update3 = new UpdateEmployeePayrollDetailsDto
         {
-            PayrollDetails = new PayrollDetailsDto { BasicSalary = 60000, TdsPercentage = 20 },
+            PayrollDetails = new PayrollDetailsDto { TotalWorkingHourPerMonth = 172m },
             Earnings = new List<PayrollComponentDto>
             {
                 new PayrollComponentDto { Name = "NewHRA", ComponentType = SalaryComponentType.Fixed, Amount = 15000, IsFixed = true, IsTemp = false },
@@ -1379,7 +1320,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         var after3 = await _employeeAppService.GetPayrollDetailsAsync(created.Id);
         after3.Earnings.Count.ShouldBe(2);
         after3.Deductions.Count.ShouldBe(1);
-        after3.PayrollDetails.TdsPercentage.ShouldBe(20);
+        after3.PayrollDetails.TotalWorkingHourPerMonth.ShouldBe(172m);
         // Verify old "Consolidated" component is gone
         after3.Earnings.ShouldNotContain(e => e.Name == "Consolidated");
     }
@@ -1549,7 +1490,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
         var payrollInput = new UpdateEmployeePayrollDetailsDto
         {
-            PayrollDetails = new PayrollDetailsDto { BasicSalary = 45000, TdsPercentage = 12 },
+            PayrollDetails = new PayrollDetailsDto { TotalWorkingHourPerMonth = 165m },
             Earnings = new List<PayrollComponentDto>
             {
                 new PayrollComponentDto { Name = "HRA", ComponentType = SalaryComponentType.Fixed, Amount = 12000, IsFixed = true, IsTemp = false }
@@ -1577,8 +1518,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
         // Assert — payroll should remain unchanged
         var payrollAfter = await _employeeAppService.GetPayrollDetailsAsync(created.Id);
-        payrollAfter.PayrollDetails.BasicSalary.ShouldBe(45000);
-        payrollAfter.PayrollDetails.TdsPercentage.ShouldBe(12);
+        payrollAfter.PayrollDetails.TotalWorkingHourPerMonth.ShouldBe(165m);
         payrollAfter.Earnings.Count.ShouldBe(1);
         payrollAfter.Earnings[0].Name.ShouldBe("HRA");
     }

@@ -5,18 +5,26 @@ using System.ComponentModel.DataAnnotations;
 namespace ShikshaMitra.HR.Employees.Payroll;
 
 /// <summary>
-/// Main payroll response/request (matches OpenAPI Payroll schema)
+/// PUT body for /api/employees/{employeeId}/payroll (OpenAPI Payroll schema).
 /// </summary>
 public class PayrollContract
 {
 	public BankDetailsContract? BankDetails { get; set; }
 	public SalaryDetailsContract? SalaryDetails { get; set; }
-	public List<ComponentAmountContract>? EarningComponents { get; set; }
-	public List<ComponentAmountContract>? DeductionComponents { get; set; }
+	public List<SalaryComponentContract>? EarningComponents { get; set; }
+	public List<SalaryComponentContract>? DeductionComponents { get; set; }
 }
 
 /// <summary>
-/// Bank details (matches OpenAPI BankDetails schema)
+/// GET response: employee id plus payroll payload (OpenAPI GET payroll schema).
+/// </summary>
+public class EmployeePayrollResponse : PayrollContract
+{
+	public Guid Id { get; set; }
+}
+
+/// <summary>
+/// Bank details (OpenAPI BankDetails schema).
 /// </summary>
 public class BankDetailsContract
 {
@@ -28,63 +36,28 @@ public class BankDetailsContract
 }
 
 /// <summary>
-/// Salary details (matches OpenAPI SalaryDetails schema)
+/// Salary / statutory details (OpenAPI SalaryDetails schema).
 /// </summary>
 public class SalaryDetailsContract
 {
-	/// <summary>
-	/// Provident Fund rule ID
-	/// </summary>
 	public Guid? PfRuleId { get; set; }
-
-	/// <summary>
-	/// Employee Provident Fund number
-	/// </summary>
 	public string? EpfNumber { get; set; }
-
-	/// <summary>
-	/// Universal Account Number
-	/// </summary>
 	public string? UanNumber { get; set; }
-
-	/// <summary>
-	/// Basic salary amount
-	/// </summary>
-	public decimal? BasicSalary { get; set; }
-
-	/// <summary>
-	/// Punch/Attendance ID
-	/// </summary>
 	public string? PunchId { get; set; }
-
-	/// <summary>
-	/// TDS percentage (0-100)
-	/// </summary>
-	[Range(0, 100)]
-	public decimal? TdsPercentage { get; set; }
-
-	/// <summary>
-	/// Calculated TDS amount
-	/// </summary>
-	public decimal? TdsAmount { get; set; }
+	public decimal? TotalWorkingHourPerMonth { get; set; }
 }
 
 /// <summary>
-/// Component with amount (matches OpenAPI ComponentAmount schema)
+/// Earning or deduction line (OpenAPI SalaryComponent schema).
 /// </summary>
-public class ComponentAmountContract
+public class SalaryComponentContract
 {
-	/// <summary>
-	/// ID of the earning/deduction component
-	/// </summary>
-	[Required]
-	public Guid ComponentId { get; set; }
+	public Guid? ComponentId { get; set; }
 
-	/// <summary>
-	/// Amount for this component
-	/// </summary>
 	[Required]
-	[Range(0, double.MaxValue)]
-	public decimal Amount { get; set; }
+	public string Name { get; set; } = string.Empty;
+
+	public decimal? Amount { get; set; }
+
+	public bool? IsFixed { get; set; }
 }
-

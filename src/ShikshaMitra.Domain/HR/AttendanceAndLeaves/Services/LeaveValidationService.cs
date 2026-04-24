@@ -1,7 +1,10 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Employees;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
 
@@ -12,21 +15,89 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 /// </summary>
 public class LeaveValidationService : DomainService
 {
+	private const int MaxReportingHierarchyDepth = 64;
+
 	private readonly IEmployeeLeaveRepository _employeeLeaveRepository;
 	private readonly ILeavePolicyRepository _leavePolicyRepository;
+	private readonly IEmployeeRepository _employeeRepository;
 
 	public LeaveValidationService(
 		IEmployeeLeaveRepository employeeLeaveRepository,
-		ILeavePolicyRepository leavePolicyRepository)
+		ILeavePolicyRepository leavePolicyRepository,
+		IEmployeeRepository employeeRepository)
 	{
 		_employeeLeaveRepository = employeeLeaveRepository;
 		_leavePolicyRepository = leavePolicyRepository;
+		_employeeRepository = employeeRepository;
 	}
 
 	/// <summary>
-	/// Validates leave request according to business rules
+	/// Ensures <paramref name="actorEmployeeId"/> is in the leave requester's reporting-manager chain
+	/// (direct manager or any ancestor manager), and is not the requester.
 	/// </summary>
-	public async Task ValidateLeaveRequestAsync(
+	public async Task EnsureActorMayChangeLeaveStatusAsync(
+		Guid leaveRequesterEmployeeId,
+		Guid actorEmployeeId,
+		CancellationToken cancellationToken = default)
+	{
+		if (leaveRequesterEmployeeId == actorEmployeeId)
+		{
+			throw new BusinessException(HRErrorCodes.LeaveApproverNotInReportingChain);
+		}
+
+		var approverIds = await BuildApproverEmployeeIdSetAsync(leaveRequesterEmployeeId, cancellationToken);
+		if (!approverIds.Contains(actorEmployeeId))
+		{
+			throw new BusinessException(HRErrorCodes.LeaveApproverNotInReportingChain);
+		}
+	}
+
+	private async Task<HashSet<Guid>> BuildApproverEmployeeIdSetAsync(
+		Guid requesterEmployeeId,
+		CancellationToken cancellationToken)
+	{
+		var approvers = new HashSet<Guid>();
+		var requester = await _employeeRepository.FindAsync(requesterEmployeeId, includeDetails: false, cancellationToken);
+		if (requester == null)
+		{
+			return approvers;
+		}
+
+		Guid? walker = requester.ReportingManagerId;
+		var visited = new HashSet<Guid> { requesterEmployeeId };
+		var depth = 0;
+
+		while (walker != null && depth < MaxReportingHierarchyDepth)
+		{
+			depth++;
+			if (!visited.Add(walker.Value))
+			{
+				throw new BusinessException(HRErrorCodes.LeaveReportingManagerCycle);
+			}
+
+			approvers.Add(walker.Value);
+			var next = await _employeeRepository.FindAsync(walker.Value, includeDetails: false, cancellationToken);
+			if (next == null)
+			{
+				break;
+			}
+
+			walker = next.ReportingManagerId;
+		}
+
+		if (depth >= MaxReportingHierarchyDepth && walker != null)
+		{
+			throw new BusinessException(HRErrorCodes.LeaveReportingManagerCycle);
+		}
+
+		return approvers;
+	}
+
+	/// <summary>
+	/// Validates leave request according to business rules.
+	/// Returns the resolved LeavePolicy ID so callers can pass the correct FK.
+	/// </summary>
+	public async Task<Guid> ValidateLeaveRequestAsync(
 		Guid employeeId,
 		Guid leaveTypeId,
 		DateTime startDate,
@@ -44,7 +115,7 @@ public class LeaveValidationService : DomainService
 			throw new BusinessException(HRErrorCodes.LeavePastDate);
 		}
 
-		// 2. Check for overlapping leaves
+		// 2. Check for overlapping leaves (exclude Cancelled leaves handled by repo)
 		var hasOverlap = await _employeeLeaveRepository.HasOverlappingLeaveAsync(
 			employeeId,
 			new DateTimeOffset(startDate),
@@ -56,15 +127,25 @@ public class LeaveValidationService : DomainService
 			throw new BusinessException(HRErrorCodes.LeaveOverlap);
 		}
 
-		// 3. Get leave policy
+		// 3. Get leave policy (leaveTypeId is the LeavePolicy PK)
 		var leavePolicy = await _leavePolicyRepository.FindAsync(x => x.Id == leaveTypeId);
 		if (leavePolicy == null)
 		{
 			throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
 		}
 
-		// 4. Check maximum duration per request (if policy specifies)
-		var requestedDays = (endDate - startDate).Days + 1;
+		// 4. Validate against policy requirements
+		if (!leavePolicy.IsActive)
+		{
+			throw new BusinessException(HRErrorCodes.LeavePolicyInactive);
+		}
+
+		// 5. Check maximum duration per request (business days per PRD)
+		var requestedDays = LeaveDurationCalculator.CountInclusiveBusinessDays(startDate, endDate);
+		if (requestedDays == 0)
+		{
+			throw new BusinessException(HRErrorCodes.LeaveNoBusinessDaysInRange);
+		}
 		const int maxDaysPerRequest = 30; // Default maximum
 
 		if (requestedDays > maxDaysPerRequest)
@@ -72,21 +153,22 @@ public class LeaveValidationService : DomainService
 			throw new BusinessException(HRErrorCodes.LeaveMaxDaysExceeded);
 		}
 
-		// 5. Check annual leave balance
-		var currentYear = DateTime.Today.Year;
+		// 6. Check annual leave balance based on the requested leave year.
+		// Using server "today" year causes incorrect balance checks for future dated requests.
+		var balanceYear = startDate.Year;
 		var approvedDaysThisYear = await _employeeLeaveRepository.GetApprovedLeaveDaysAsync(
 			employeeId,
-			leaveTypeId,
-			currentYear);
+			leavePolicy.Id,
+			balanceYear);
 
-		var remainingBalance = leavePolicy.MaximumDaysPerYear - approvedDaysThisYear;
+		var remainingBalance = leavePolicy.LeaveCount - approvedDaysThisYear;
 
 		if (requestedDays > remainingBalance)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveInsufficientBalance);
 		}
 
-		// 6. Check minimum notice period (2 days advance notice)
+		// 7. Check minimum notice period (2 days advance notice)
 		const int minimumNoticeDays = 2;
 		var daysDifference = (startDate - DateTime.Today).Days;
 
@@ -95,11 +177,7 @@ public class LeaveValidationService : DomainService
 			throw new BusinessException(HRErrorCodes.LeaveNoticePeriod);
 		}
 
-		// 7. Validate against policy requirements
-		if (leavePolicy.RequiresApproval && !leavePolicy.IsActive)
-		{
-			throw new BusinessException(HRErrorCodes.LeavePolicyInactive);
-		}
+		return leavePolicy.Id;
 	}
 
 	/// <summary>
@@ -107,21 +185,7 @@ public class LeaveValidationService : DomainService
 	/// </summary>
 	public int CalculateBusinessDays(DateTime startDate, DateTime endDate)
 	{
-		var businessDays = 0;
-		var currentDate = startDate;
-
-		while (currentDate <= endDate)
-		{
-			// Exclude weekends (Saturday and Sunday)
-			if (currentDate.DayOfWeek != DayOfWeek.Saturday &&
-			    currentDate.DayOfWeek != DayOfWeek.Sunday)
-			{
-				businessDays++;
-			}
-			currentDate = currentDate.AddDays(1);
-		}
-
-		return businessDays;
+		return LeaveDurationCalculator.CountInclusiveBusinessDays(startDate, endDate);
 	}
 
 	/// <summary>
@@ -140,9 +204,9 @@ public class LeaveValidationService : DomainService
 		var currentYear = DateTime.Today.Year;
 		var approvedDays = await _employeeLeaveRepository.GetApprovedLeaveDaysAsync(
 			employeeId,
-			leaveTypeId,
+			leavePolicy.Id,
 			currentYear);
 
-		return Math.Max(0, leavePolicy.MaximumDaysPerYear - approvedDays);
+		return Math.Max(0, leavePolicy.LeaveCount - approvedDays);
 	}
 }

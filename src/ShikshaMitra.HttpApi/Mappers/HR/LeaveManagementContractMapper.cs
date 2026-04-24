@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
@@ -11,13 +10,14 @@ public static class LeaveManagementContractMapper
 		return new LeaveManagementItemResponse
 		{
 			Id = dto.Id,
+			PublicId = dto.PublicId,
 			Name = dto.Name,
-			EmployeeCode = dto.EmployeeCode,
+			EmployeeIdentifier = dto.EmployeeIdentifier,
 			LeaveType = dto.LeaveType,
 			StartDate = dto.StartDate,
 			EndDate = dto.EndDate,
 			TotalDays = dto.TotalDays,
-			Organization = dto.Organization,
+			MediumStageName = dto.MediumStageName,
 			Description = dto.Description,
 			Remarks = dto.Remarks,
 			Status = dto.Status
@@ -42,11 +42,14 @@ public static class LeaveManagementContractMapper
 		return new LeaveRequestDetailsResponse
 		{
 			Id = dto.Id,
+			PublicId = dto.PublicId,
 			MediumStageId = dto.MediumStageId,
+			MediumStageName = dto.MediumStageName,
 			EmployeeId = dto.EmployeeId,
 			EmployeeName = dto.EmployeeName,
 			EmployeeCode = dto.EmployeeCode,
-			LeaveTypeId = dto.LeaveTypeId,
+			LeavePolicyId = dto.LeavePolicyId,
+			LeaveTypeId = dto.LeavePolicyId,
 			LeaveType = dto.LeaveType,
 			StartDate = dto.StartDate,
 			EndDate = dto.EndDate,
@@ -54,9 +57,7 @@ public static class LeaveManagementContractMapper
 			Description = dto.Description,
 			AttachmentUrl = dto.AttachmentUrl,
 			Remarks = dto.Remarks,
-			Status = dto.Status,
-			CreatedAt = dto.CreatedAt,
-			UpdatedAt = dto.UpdatedAt
+			Status = dto.Status
 		};
 	}
 
@@ -65,8 +66,8 @@ public static class LeaveManagementContractMapper
 		return new LeaveRequestCreatedResponse
 		{
 			Id = dto.Id,
-			Status = dto.Status,
-			AppliedAt = dto.AppliedAt
+			PublicId = dto.PublicId,
+			Status = dto.Status
 		};
 	}
 
@@ -75,6 +76,16 @@ public static class LeaveManagementContractMapper
 		return new LeaveRequestDeleteResponse
 		{
 			Id = dto.Id,
+			Message = dto.Message
+		};
+	}
+
+	public static LeaveActionResponse ToActionResponse(LeaveActionResultDto dto)
+	{
+		return new LeaveActionResponse
+		{
+			Id = dto.Id,
+			Status = dto.Status,
 			Message = dto.Message
 		};
 	}

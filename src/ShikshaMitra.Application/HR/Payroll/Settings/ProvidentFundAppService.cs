@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -20,6 +20,7 @@ public class ProvidentFundAppService(IProvidentFundRepository providentFundRepos
 		ArgumentNullException.ThrowIfNull(input);
 
 		await EnsureCodeAvailableAsync(input.Code);
+		await EnsureNameAvailableAsync(input.Name);
 
 		try
 		{
@@ -29,6 +30,11 @@ public class ProvidentFundAppService(IProvidentFundRepository providentFundRepos
 		{
 			throw new BusinessException("ShikshaMitra:ProvidentFundCodeAlreadyExists")
 				.WithData("code", input.Code);
+		}
+		catch (Exception ex) when (IsProvidentFundNameUniqueViolation(ex))
+		{
+			throw new BusinessException("ShikshaMitra:ProvidentFundNameAlreadyExists")
+				.WithData("name", input.Name);
 		}
 	}
 
@@ -42,6 +48,11 @@ public class ProvidentFundAppService(IProvidentFundRepository providentFundRepos
 			await EnsureCodeAvailableAsync(input.Code, id);
 		}
 
+		if (!existing.Name.Equals(input.Name, StringComparison.OrdinalIgnoreCase))
+		{
+			await EnsureNameAvailableAsync(input.Name, id);
+		}
+
 		try
 		{
 			return await base.UpdateAsync(id, input);
@@ -50,6 +61,11 @@ public class ProvidentFundAppService(IProvidentFundRepository providentFundRepos
 		{
 			throw new BusinessException("ShikshaMitra:ProvidentFundCodeAlreadyExists")
 				.WithData("code", input.Code);
+		}
+		catch (Exception ex) when (IsProvidentFundNameUniqueViolation(ex))
+		{
+			throw new BusinessException("ShikshaMitra:ProvidentFundNameAlreadyExists")
+				.WithData("name", input.Name);
 		}
 	}
 
@@ -89,6 +105,15 @@ public class ProvidentFundAppService(IProvidentFundRepository providentFundRepos
 		}
 	}
 
+	private async Task EnsureNameAvailableAsync(string name, Guid? excludeId = null)
+	{
+		if (await _providentFundRepository.IsNameExistsAsync(name, excludeId))
+		{
+			throw new BusinessException("ShikshaMitra:ProvidentFundNameAlreadyExists")
+				.WithData("name", name);
+		}
+	}
+
 	private static bool IsProvidentFundCodeUniqueViolation(Exception exception)
 	{
 		const string indexName = "IX_ProvidentFunds_TenantId_Code";
@@ -108,14 +133,49 @@ public class ProvidentFundAppService(IProvidentFundRepository providentFundRepos
 			}
 
 			if (message.Contains(tableHint, StringComparison.OrdinalIgnoreCase)
-			    && message.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
+				&& message.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
 			{
 				return true;
 			}
 
 			if (message.Contains("23505", StringComparison.Ordinal)
-			    && (message.Contains(tableHint, StringComparison.OrdinalIgnoreCase)
-			        || message.Contains(indexName, StringComparison.OrdinalIgnoreCase)))
+				&& (message.Contains(tableHint, StringComparison.OrdinalIgnoreCase)
+					|| message.Contains(indexName, StringComparison.OrdinalIgnoreCase)))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static bool IsProvidentFundNameUniqueViolation(Exception exception)
+	{
+		const string indexName = "IX_ProvidentFunds_TenantId_Name";
+		const string tableHint = "AppProvidentFunds";
+
+		for (var ex = exception; ex != null; ex = ex.InnerException!)
+		{
+			var message = ex.Message;
+			if (string.IsNullOrEmpty(message))
+			{
+				continue;
+			}
+
+			if (message.Contains(indexName, StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			if (message.Contains(tableHint, StringComparison.OrdinalIgnoreCase)
+				&& message.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			if (message.Contains("23505", StringComparison.Ordinal)
+				&& (message.Contains(tableHint, StringComparison.OrdinalIgnoreCase)
+					|| message.Contains(indexName, StringComparison.OrdinalIgnoreCase)))
 			{
 				return true;
 			}

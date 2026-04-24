@@ -1,12 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
-/// <summary>
-/// EF Core configuration for LeaveType entity
-/// </summary>
 public class LeaveTypeConfiguration : IEntityTypeConfiguration<LeaveType>
 {
 	public void Configure(EntityTypeBuilder<LeaveType> builder)
@@ -15,8 +12,7 @@ public class LeaveTypeConfiguration : IEntityTypeConfiguration<LeaveType>
 
 		builder.ConfigureByConvention();
 
-		// Configure properties
-		builder.Property(x => x.EducationMediumStageId)
+		builder.Property(x => x.AcademicYearId)
 			.IsRequired();
 
 		builder.Property(x => x.Type)
@@ -34,17 +30,16 @@ public class LeaveTypeConfiguration : IEntityTypeConfiguration<LeaveType>
 			.IsRequired()
 			.HasDefaultValue(true);
 
-		// Foreign key configuration (no navigation property configuration to avoid lazy loading issues)
-		// The EducationMediumStageId foreign key is maintained but navigation is not loaded by default
-		builder.Ignore(x => x.EducationMediumStage);
+		builder.HasOne(x => x.AcademicYear)
+			.WithMany()
+			.HasForeignKey(x => x.AcademicYearId)
+			.OnDelete(DeleteBehavior.Restrict);
 
-		// Indexes for performance
-		// Unique index scoped per tenant and organization
-		builder.HasIndex(x => new { x.TenantId, x.EducationMediumStageId, x.Type })
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Type })
 			.IsUnique()
-			.HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_MediumStageId_Type");
+			.HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_AcademicYearId_Type");
 
-		builder.HasIndex(x => new { x.TenantId, x.EducationMediumStageId, x.IsActive })
-			.HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_MediumStageId_IsActive");
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsActive })
+			.HasDatabaseName("IX_EmployeeLeaveTypes_TenantId_AcademicYearId_IsActive");
 	}
 }

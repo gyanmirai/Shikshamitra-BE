@@ -1,4 +1,4 @@
-﻿namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
 /// <summary>
 /// Constants for LeaveType entity
@@ -18,6 +18,6 @@ public static class LeavePolicyConsts
 	public const int MaxPolicyNameLength = 200;
 	public const int MaxLeaveTypeLength = 100;
 	public const int MaxDescriptionLength = 500;
-	public const int MinMaximumDaysPerYear = 1;
-	public const int MaxMaximumDaysPerYear = 365;
+	public const int MinLeaveCount = 0;
+	public const int MaxLeaveCount = 365;
 }

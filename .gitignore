@@ -284,3 +284,4 @@ skills-output.txt
 
 # .NET CLI / tool home when created under the repo (machine-local; not source).
 .dotnet/
+/.claude/settings.local.json

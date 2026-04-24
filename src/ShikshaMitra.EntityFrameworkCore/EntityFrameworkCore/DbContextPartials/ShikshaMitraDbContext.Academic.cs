@@ -6,6 +6,10 @@ using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Academic.HomeworkAssignment;
+using ShikshaMitra.Academic.Syllabus;
+using ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
+using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
+using ShikshaMitra.Academic.Timetable.Timetables;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -18,6 +22,7 @@ public partial class ShikshaMitraDbContext
     public DbSet<ElectiveGroup> ElectiveGroups { get; set; }
     public DbSet<AssignedSubject> StandardSubjectAssignments { get; set; }
     public DbSet<TeacherSubjectAllocation> TeacherSubjectAllocations { get; set; }
+    public DbSet<StudentElectiveSelection> StudentElectiveSelections { get; set; }
 
     // ───────────────────────────────────────────────
     // Academic — Class Teacher
@@ -28,6 +33,7 @@ public partial class ShikshaMitraDbContext
     // Academic — Syllabus
     // ───────────────────────────────────────────────
     public DbSet<AssignedSubjectChapter> SubjectChapters { get; set; }
+    public DbSet<ChapterProgress> ChapterProgresses { get; set; }
 
     // ───────────────────────────────────────────────
     // Academic — Homework & Assignments
@@ -47,4 +53,20 @@ public partial class ShikshaMitraDbContext
     public DbSet<GradingScale> GradingScales { get; set; }
     public DbSet<ExamType> ExamTypes { get; set; }
     public DbSet<Exam> Exams { get; set; }
+
+    // ───────────────────────────────────────────────
+    // Academic — Timetable (Settings)
+    // ───────────────────────────────────────────────
+    public DbSet<WeeklyLectureSlot> WeeklyLectureSlots { get; set; }
+    public DbSet<WeeklyLectureSlotSubject> WeeklyLectureSlotSubjects { get; set; }
+    public DbSet<LectureSlotConfig> LectureSlotConfigs { get; set; }
+    public DbSet<LectureSlotGroup> LectureSlotGroups { get; set; }
+    public DbSet<LectureSlotTimeSlot> LectureSlotTimeSlots { get; set; }
+
+    // ───────────────────────────────────────────────
+    // Academic — Timetable
+    // ───────────────────────────────────────────────
+    public DbSet<Timetable> Timetables { get; set; }
+    public DbSet<TimetableSlot> TimetableSlots { get; set; }
+    public DbSet<TimetableSlotSubject> TimetableSlotSubjects { get; set; }
 }

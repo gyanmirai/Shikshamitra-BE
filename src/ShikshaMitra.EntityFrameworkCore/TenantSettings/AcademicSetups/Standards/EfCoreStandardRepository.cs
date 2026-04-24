@@ -30,7 +30,7 @@ public class EfCoreStandardRepository(IDbContextProvider<ShikshaMitraDbContext> 
 
 		return await dbSet
 			.Where(standard => standard.EducationMediumStageId == educationMediumStageId)
-			.OrderBy(standard => standard.Name)
+			.OrderBy(standard => standard.CreationTime)
 			.ToListAsync();
 	}
 

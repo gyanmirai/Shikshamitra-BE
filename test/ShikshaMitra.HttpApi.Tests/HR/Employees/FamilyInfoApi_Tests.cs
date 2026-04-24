@@ -1,7 +1,9 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.FamilyInfo;
 using ShikshaMitra.Infrastructure.Traits;
@@ -71,6 +73,101 @@ public class FamilyInfoApi_Tests : ShikshaMitraApiTestBase
 			HttpStatusCode.NotFound,
 			HttpStatusCode.InternalServerError,
 			HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Field_Level_Validation_Errors_For_Invalid_Request()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "FamVal");
+
+		var request = new FamilyInfoRequest
+		{
+			FatherDetails = new FamilyMemberInfo
+			{
+				Name = new string('A', 257),
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/family-info", request, JsonOptions);
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
+
+		if (response.StatusCode != HttpStatusCode.BadRequest)
+		{
+			return;
+		}
+
+		var json = await response.Content.ReadAsStringAsync();
+		using var document = JsonDocument.Parse(json);
+		var root = document.RootElement;
+
+		root.GetProperty("status").GetInt32().ShouldBe((int)HttpStatusCode.BadRequest);
+		var errors = root.GetProperty("errors");
+		errors.ValueKind.ShouldBe(JsonValueKind.Object);
+
+		var keys = errors.EnumerateObject()
+			.Select(e => e.Name)
+			.ToList();
+		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+		keys.Any(k => k.Contains("name", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Field_Level_Validation_Errors_For_Nested_Country_State_Required_Fields()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "FamNestedVal");
+
+		var request = new FamilyInfoRequest
+		{
+			FatherDetails = new FamilyMemberInfo
+			{
+				Name = "Father",
+				Country = new CountryInfo
+				{
+					Name = string.Empty,
+					IsoCode = string.Empty
+				},
+				State = new StateInfo
+				{
+					Name = string.Empty,
+					IsoCode = string.Empty
+				}
+			}
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/family-info", request, JsonOptions);
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
+
+		if (response.StatusCode != HttpStatusCode.BadRequest)
+		{
+			return;
+		}
+
+		var json = await response.Content.ReadAsStringAsync();
+		using var document = JsonDocument.Parse(json);
+		var root = document.RootElement;
+
+		root.GetProperty("status").GetInt32().ShouldBe((int)HttpStatusCode.BadRequest);
+		var errors = root.GetProperty("errors");
+		errors.ValueKind.ShouldBe(JsonValueKind.Object);
+
+		var keys = errors.EnumerateObject()
+			.Select(e => e.Name)
+			.ToList();
+
+		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase) &&
+		              k.Contains("country", StringComparison.OrdinalIgnoreCase) &&
+		              k.Contains("name", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase) &&
+		              k.Contains("country", StringComparison.OrdinalIgnoreCase) &&
+		              k.Contains("iso", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase) &&
+		              k.Contains("state", StringComparison.OrdinalIgnoreCase) &&
+		              k.Contains("name", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase) &&
+		              k.Contains("state", StringComparison.OrdinalIgnoreCase) &&
+		              k.Contains("iso", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
 	}
 
 	#endregion

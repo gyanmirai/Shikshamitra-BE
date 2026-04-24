@@ -1,0 +1,143 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees.PersonalInfo;
+using ShikshaMitra.HR.Employees.Search;
+using ShikshaMitra.TenantSettings;
+using Shouldly;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Guids;
+using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Security.Claims;
+using Xunit;
+
+namespace ShikshaMitra.HR.Employees;
+
+public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+{
+	private readonly IEmployeeSearchAppService _employeeSearchAppService;
+	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
+	private readonly IEmployeeRepository _employeeRepository;
+	private readonly IIdentityRoleRepository _roleRepository;
+	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+	private readonly ICurrentTenant _currentTenant;
+	private readonly IGuidGenerator _guidGenerator;
+	private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
+
+	public EmployeeSearchAppService_Tests()
+	{
+		_employeeSearchAppService = GetRequiredService<IEmployeeSearchAppService>();
+		_personalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
+		_employeeRepository = GetRequiredService<IEmployeeRepository>();
+		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
+		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+		_currentTenant = GetRequiredService<ICurrentTenant>();
+		_guidGenerator = GetRequiredService<IGuidGenerator>();
+		_currentPrincipalAccessor = GetRequiredService<ICurrentPrincipalAccessor>();
+	}
+
+	[Fact]
+	public async Task GetFilteredListAsync_Should_Return_Only_Direct_Reportees_For_Reporting_Manager()
+	{
+		var manager = await _personalInfoAppService.CreateAsync(await BuildCreateDtoAsync("mgr.scope"));
+		var reporteeA = await _personalInfoAppService.CreateAsync(await BuildCreateDtoAsync("rpta.scope"));
+		var reporteeB = await _personalInfoAppService.CreateAsync(await BuildCreateDtoAsync("rptb.scope"));
+		var outsider = await _personalInfoAppService.CreateAsync(await BuildCreateDtoAsync("outsider.scope"));
+
+		var employeeA = await _employeeRepository.GetAsync(reporteeA.Id);
+		employeeA.AssignReportingManager(manager.Id);
+		await _employeeRepository.UpdateAsync(employeeA, autoSave: true);
+
+		var employeeB = await _employeeRepository.GetAsync(reporteeB.Id);
+		employeeB.AssignReportingManager(manager.Id);
+		await _employeeRepository.UpdateAsync(employeeB, autoSave: true);
+
+		var principal = BuildPrincipal(manager.Id);
+		using (_currentPrincipalAccessor.Change(principal))
+		{
+			var result = await _employeeSearchAppService.GetFilteredListAsync(new GetEmployeeListInput
+			{
+				SkipCount = 0,
+				MaxResultCount = 50
+			});
+
+			var ids = result.Items.Select(x => x.Id).ToList();
+			ids.ShouldContain(reporteeA.Id);
+			ids.ShouldContain(reporteeB.Id);
+			ids.ShouldNotContain(outsider.Id);
+			ids.ShouldNotContain(manager.Id);
+		}
+	}
+
+	private ClaimsPrincipal BuildPrincipal(Guid userId)
+	{
+		var claims = new List<Claim>
+		{
+			new(AbpClaimTypes.UserId, userId.ToString()),
+			new(AbpClaimTypes.UserName, $"user-{userId:N}"),
+			new(AbpClaimTypes.Email, $"user-{userId:N}@test.local"),
+			new(AbpClaimTypes.TenantId, (_currentTenant.Id ?? Guid.Empty).ToString())
+		};
+
+		return new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
+	}
+
+	private async Task<CreateEmployeePersonalInfoDto> BuildCreateDtoAsync(string prefix)
+	{
+		var roleId = await EnsureRoleExistsAsync();
+		var shiftId = await EnsureShiftExistsAsync();
+		var uniq = Guid.NewGuid().ToString("N")[..8];
+
+		return new CreateEmployeePersonalInfoDto
+		{
+			FirstName = $"{prefix}-{uniq}",
+			LastName = "Employee",
+			MobileNo = $"9{DateTime.UtcNow.Ticks % 1000000000:D9}",
+			Email = $"{prefix}.{uniq}@test.com",
+			DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 5, 15)),
+			GenderType = GenderType.Male,
+			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
+			EmployeeStatusType = EmployeeStatusType.Active,
+			RoleId = roleId,
+			ShiftId = shiftId
+		};
+	}
+
+	private async Task<Guid> EnsureRoleExistsAsync()
+	{
+		var roles = await _roleRepository.GetListAsync();
+		var existing = roles.FirstOrDefault();
+		if (existing != null)
+		{
+			return existing.Id;
+		}
+
+		var id = _guidGenerator.Create();
+		var role = new IdentityRole(id, $"TestRole-{id:N}", _currentTenant.Id);
+		await _roleRepository.InsertAsync(role, autoSave: true);
+		return id;
+	}
+
+	private async Task<Guid> EnsureShiftExistsAsync()
+	{
+		var shifts = await _shiftRepository.GetListAsync();
+		var existing = shifts.FirstOrDefault();
+		if (existing != null)
+		{
+			return existing.Id;
+		}
+
+		var shift = new ShiftManagement
+		{
+			ShiftName = "Test Shift",
+			StartTime = new TimeOnly(8, 0),
+			EndTime = new TimeOnly(16, 0)
+		};
+		await _shiftRepository.InsertAsync(shift, autoSave: true);
+		return shift.Id;
+	}
+}

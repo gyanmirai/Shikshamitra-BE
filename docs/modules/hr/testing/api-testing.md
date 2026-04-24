@@ -2,7 +2,7 @@
 
 API-level tests for the HR module endpoints. These validate the full HTTP pipeline including routing, serialization, authentication, and response contracts.
 
-**Total test coverage: ~191 tests across 31 controllers (all HR endpoints covered)**
+**Total test coverage: ~194 tests across 32 controllers (all HR endpoints covered)**
 
 ## Test Inventory
 
@@ -21,7 +21,7 @@ API-level tests for the HR module endpoints. These validate the full HTTP pipeli
 | DocumentConfigController | `DocumentConfigApi_Tests` | POST create, GET list, GET by ID, PUT, DELETE, 404, reject invalid title, reject out-of-range size, full CRUD lifecycle | Critical, Important, Extended |
 | EmployeeDocumentController | `EmployeeDocumentApi_Tests` | Upload with valid doc config, upload image file (JPEG), GET list, 404, DELETE, download document, fail upload without file, upload PDF, update existing document, search by filename | Critical, Important, Extended |
 
-### HR/Payroll -- 8 controllers, ~40 tests
+### HR/Payroll -- 9 controllers, ~43 tests
 
 | Controller | Test Class | Tests | Tiers |
 |-----------|-----------|-------|-------|
@@ -33,6 +33,7 @@ API-level tests for the HR module endpoints. These validate the full HTTP pipeli
 | EmployeeSalaryStructureController | `EmployeeSalaryStructureApi_Tests` | GET, PUT with components | Critical |
 | RunPayrollController | `RunPayrollApi_Tests` | GET preview, POST lock, invalid format | Critical, Important, Extended |
 | SalarySlipController | `SalarySlipApi_Tests` | GET slip, missing params, invalid format | Important |
+| AttendanceImportLogsController / HrAutomatedAttendanceRunsController | `AttendanceImportLogsApi_Tests` | Payroll logs + HR mirror `/api/hr/attendance/automated-runs` list; GET detail+rows, reject multi-month preview file | Critical, Important |
 
 ### HR/Calendar -- 5 controllers, ~28 tests
 
@@ -44,13 +45,14 @@ API-level tests for the HR module endpoints. These validate the full HTTP pipeli
 | HolidayController | `HolidayApi_Tests` | CRUD, by-type, by-status, 404 | Critical, Important |
 | CalendarViewController | `CalendarViewApi_Tests` | GET view, 404 item details | Critical, Important |
 
-### HR/AttendanceAndLeaves -- 7 controllers, ~20 tests
+### HR/AttendanceAndLeaves -- 8 controllers, ~22 tests
 
 | Controller | Test Class | Tests | Tiers |
 |-----------|-----------|-------|-------|
-| LeaveTypesController | `LeaveTypeApi_Tests` | CRUD, delete | Critical, Important |
-| LeavePoliciesController | `LeavePolicyApi_Tests` | CRUD, delete | Critical, Important |
-| LeaveManagementController | `LeaveManagementApi_Tests` | GET list, GET by ID, invalid ID, delete | Critical, Important |
+| LeaveTypesController | `LeaveTypeApi_Tests` | `/api/hr-leave-types` create + get-by-id, list search with `academicYearId` | Critical, Important |
+| LeavePoliciesController | `LeavePolicyApi_Tests` | `/api/leave-policies` create + get-by-id, list search with `academicYearId` | Critical, Important |
+| AttendanceConfigurationController | `AttendanceConfigurationApi_Tests` | `/api/attendance/configuration` upsert success, overtime validation failure | Critical, Important |
+| LeaveManagementController | `LeaveManagementApi_Tests` | GET list (academicYearId + month-year, `publicId` on items), balances, calendar, Excel export, GET by Guid404, delete404, invalid page/pageSize 400 | Critical, Important |
 | AttendanceTrackingController | `AttendanceTrackingApi_Tests` | Date-wise, employee-wise | Critical, Important |
 | AutomatedNotificationsController | `AutomatedNotificationsApi_Tests` | CRUD | Critical, Important |
 | NotificationInfoController | `NotificationInfoApi_Tests` | GET list, GET by ID | Important |

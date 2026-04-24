@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Application.Contracts.Groups;
 using ShikshaMitra.Application.Contracts.HR.Calendar.CalendarView;
+using ShikshaMitra.HR;
 using ShikshaMitra.HR.Calendar;
 using ShikshaMitra.HR.Calendar.HolidayTypes;
 using ShikshaMitra.HR.Calendar.Events;
@@ -209,7 +210,8 @@ public class CalendarViewAppService : ApplicationService, ICalendarViewAppServic
             return await MapHolidayToDetailsAsync(holiday);
         }
 
-        throw new UserFriendlyException($"Calendar item with ID '{itemId}' not found.");
+        throw new BusinessException(HRErrorCodes.CalendarItemNotFound)
+			.WithData("itemId", itemId);
     }
 
     private async Task<CalendarItemDetailsDto> MapEventToDetailsAsync(Event eventEntity)

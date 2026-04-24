@@ -24,6 +24,8 @@ public class ApiProblemDetailsMapper_Tests
 			.ShouldBe(StatusCodes.Status400BadRequest);
 		ApiProblemDetailsMapper.ResolveBusinessStatusCode(HRErrorCodes.LeaveTargetEmployeeRequired)
 			.ShouldBe(StatusCodes.Status400BadRequest);
+		ApiProblemDetailsMapper.ResolveBusinessStatusCode(HRErrorCodes.LeaveInsufficientBalance)
+			.ShouldBe(StatusCodes.Status400BadRequest);
 	}
 
 	[Fact]
@@ -38,5 +40,10 @@ public class ApiProblemDetailsMapper_Tests
 			StatusCodes.Status403Forbidden,
 			HRErrorCodes.TakeAttendanceMediumStageOutOfScope)
 			.ShouldBe(StatusCodes.Status403Forbidden);
+
+		ApiProblemDetailsMapper.NormalizeStatusCode(
+			StatusCodes.Status403Forbidden,
+			HRErrorCodes.LeaveInsufficientBalance)
+			.ShouldBe(StatusCodes.Status400BadRequest);
 	}
 }

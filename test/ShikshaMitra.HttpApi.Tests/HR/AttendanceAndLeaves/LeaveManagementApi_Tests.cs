@@ -4,7 +4,9 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Common.Middleware;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.HR;
@@ -108,6 +110,8 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 		var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
 		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.LeaveEmployeeNotFound);
+		payload.GetProperty("detail").GetString()
+			.ShouldBe("Current user is not linked to an employee profile, so this leave action is not allowed.");
 	}
 
 	[Fact]
@@ -148,6 +152,8 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, rawPayload);
 		var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
 		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.LeaveTargetEmployeeRequired);
+		payload.GetProperty("detail").GetString()
+			.ShouldBe(ApiProblemDetailsMapper.GetDefaultDetail(StatusCodes.Status400BadRequest));
 	}
 
 	[Fact]
@@ -177,6 +183,8 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 		var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
 		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.LeaveInvalidMonthForAcademicYear);
+		payload.GetProperty("detail").GetString()
+			.ShouldBe("Selected month is outside the given academic year.");
 	}
 
 	[Fact]

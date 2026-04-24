@@ -18,6 +18,7 @@ public static class ApiProblemDetailsMapper
 		{
 			HRErrorCodes.LeaveEmployeeNotFound => StatusCodes.Status403Forbidden,
 			HRErrorCodes.TakeAttendanceMediumStageOutOfScope => StatusCodes.Status403Forbidden,
+			HRErrorCodes.LeaveInsufficientBalance => StatusCodes.Status400BadRequest,
 			HRErrorCodes.LeaveAlreadyCancelled => StatusCodes.Status409Conflict,
 			HRErrorCodes.LeaveConflictTerminalState => StatusCodes.Status409Conflict,
 			HRErrorCodes.LeaveAttachmentNotFound => StatusCodes.Status404NotFound,

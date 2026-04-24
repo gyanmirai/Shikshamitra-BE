@@ -20,7 +20,6 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 /// Uses DB-side paging/filtering for scalability.
 /// </summary>
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_AttendanceTracking.View)]
 public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrackingAppService
 {
 	private readonly IEmployeeAttendanceRepository _attendanceRepository;

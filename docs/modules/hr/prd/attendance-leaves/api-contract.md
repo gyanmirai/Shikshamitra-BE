@@ -49,10 +49,10 @@ All controllers are `[Authorize]`.
 
 | Method | Route | Description |
 |---|---|---|
-| GET | `/api/leave-management` | Paginated leave requests for a calendar month (`month-year` anchor) within an academic year; optional `status`, `leavePolicyId`, `leaveTypeMasterId`, `search` |
+| GET | `/api/leave-management` | Paginated leave requests for an academic year. Optional `month-year`: when set, results are limited to that calendar month (clipped to the year); when omitted, the full academic year date span is used. Optional `status`, `leavePolicyId`, `leaveTypeMasterId`, `search` |
 | GET | `/api/leave-management/balances` | Per active policy: entitled, used (approved business days YTD), remaining (`employeeId` optional; defaults to caller’s employee; respects employee access rules) |
-| GET | `/api/leave-management/calendar` | Requests overlapping `rangeStart`–`rangeEnd` for calendar UI (optional filters) |
-| GET | `/api/leave-management/export` | Excel export for the same month/filters as the list |
+| GET | `/api/leave-management/calendar` | Requests overlapping `rangeStart`–`rangeEnd` for calendar UI (optional filters). Use ISO-8601 date-time with offset (example: `2026-04-01T00:00:00-07:00`). |
+| GET | `/api/leave-management/export` | Excel export using the same date scope and filters as the list (`month-year` optional; full academic year when omitted) |
 | POST | `/api/leave-management?academicYearId=` | Multipart create: `leavePolicyId` (preferred) or legacy `leaveTypeId` (leave **policy** id), `startDate`, `endDate`, `reason`, optional `employeeId` (manager/HR on-behalf), optional attachment |
 | GET | `/api/leave-management/{id}` | Detail (includes `publicId`, `leavePolicyId`; `leaveTypeId` duplicates `leavePolicyId` for backward compatibility) |
 | PATCH | `/api/leave-management/{id}/approve` | Approve |

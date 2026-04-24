@@ -41,6 +41,39 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 		};
 	}
 
+	private static LeaveManagementGetListInput BuildListInputFullAcademicYear(
+		Guid academicYearId,
+		string? search,
+		int page,
+		int pageSize)
+	{
+		return new LeaveManagementGetListInput
+		{
+			AcademicYearId = academicYearId,
+			MonthYearAnchor = null,
+			Search = search,
+			Page = page,
+			PageSize = pageSize
+		};
+	}
+
+	private static LeaveManagementCalendarInput BuildCalendarInput(
+		Guid academicYearId,
+		DateTimeOffset rangeStart,
+		DateTimeOffset rangeEnd,
+		int page = 1,
+		int pageSize = 100)
+	{
+		return new LeaveManagementCalendarInput
+		{
+			AcademicYearId = academicYearId,
+			RangeStart = rangeStart,
+			RangeEnd = rangeEnd,
+			Page = page,
+			PageSize = pageSize
+		};
+	}
+
 	private void SeedAcademicYearForListTests()
 	{
 		WithUnitOfWorkAsync(async () =>
@@ -68,6 +101,17 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 	{
 		var anchor = new DateTime(DateTime.UtcNow.Year, 6, 15);
 		var result = await _leaveManagement.GetListAsync(BuildListInput(TestAcademicYearId, anchor, null, 1, 10));
+
+		result.ShouldNotBeNull();
+		result.TotalCount.ShouldBe(0);
+		result.Items.ShouldNotBeNull();
+		result.Items.Count.ShouldBe(0);
+	}
+
+	[Fact]
+	public async Task GetListAsync_Should_Return_Empty_When_No_Leaves_Full_Academic_Year()
+	{
+		var result = await _leaveManagement.GetListAsync(BuildListInputFullAcademicYear(TestAcademicYearId, null, 1, 10));
 
 		result.ShouldNotBeNull();
 		result.TotalCount.ShouldBe(0);
@@ -147,6 +191,68 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 		var ex = await Should.ThrowAsync<BusinessException>(async () =>
 			await _leaveManagement.GetListAsync(
 				BuildListInput(shortAyId, new DateTime(now.Year, 6, 1), null, 1, 10)));
+
+		ex.Code.ShouldBe(HRErrorCodes.LeaveInvalidMonthForAcademicYear);
+	}
+
+	[Fact]
+	public async Task GetCalendarAsync_Should_Clip_Offset_Range_To_AcademicYear()
+	{
+		var now = DateTime.UtcNow;
+		var shortAyId = Guid.Parse("00000000-0000-0000-0000-000000000022");
+
+		WithUnitOfWorkAsync(async () =>
+		{
+			var dbContext = ServiceProvider.GetRequiredService<ShikshaMitraDbContext>();
+			var stamp = Guid.NewGuid().ToString();
+			await dbContext.Database.ExecuteSqlRawAsync(
+				"INSERT OR IGNORE INTO AppAcademicYears (Id, Name, StartDate, EndDate, IsDeleted, ConcurrencyStamp, ExtraProperties, CreationTime) VALUES ({0}, {1}, {2}, {3}, 0, {4}, {5}, {6})",
+				shortAyId,
+				"Calendar Offset AY",
+				new DateTime(now.Year, 3, 1),
+				new DateTime(now.Year, 3, 31),
+				stamp,
+				"{}",
+				now);
+		}).GetAwaiter().GetResult();
+
+		var result = await _leaveManagement.GetCalendarAsync(BuildCalendarInput(
+			shortAyId,
+			new DateTimeOffset(new DateTime(now.Year, 2, 20, 0, 0, 0), TimeSpan.FromHours(-7)),
+			new DateTimeOffset(new DateTime(now.Year, 4, 5, 23, 59, 59), TimeSpan.FromHours(-7))));
+
+		result.ShouldNotBeNull();
+		result.TotalCount.ShouldBe(0);
+		result.Items.ShouldNotBeNull();
+		result.Items.Count.ShouldBe(0);
+	}
+
+	[Fact]
+	public async Task GetCalendarAsync_Should_Throw_When_Offset_Range_Is_Completely_Outside_AcademicYear()
+	{
+		var now = DateTime.UtcNow;
+		var shortAyId = Guid.Parse("00000000-0000-0000-0000-000000000023");
+
+		WithUnitOfWorkAsync(async () =>
+		{
+			var dbContext = ServiceProvider.GetRequiredService<ShikshaMitraDbContext>();
+			var stamp = Guid.NewGuid().ToString();
+			await dbContext.Database.ExecuteSqlRawAsync(
+				"INSERT OR IGNORE INTO AppAcademicYears (Id, Name, StartDate, EndDate, IsDeleted, ConcurrencyStamp, ExtraProperties, CreationTime) VALUES ({0}, {1}, {2}, {3}, 0, {4}, {5}, {6})",
+				shortAyId,
+				"Calendar Outside Offset AY",
+				new DateTime(now.Year, 3, 1),
+				new DateTime(now.Year, 3, 31),
+				stamp,
+				"{}",
+				now);
+		}).GetAwaiter().GetResult();
+
+		var ex = await Should.ThrowAsync<BusinessException>(async () =>
+			await _leaveManagement.GetCalendarAsync(BuildCalendarInput(
+				shortAyId,
+				new DateTimeOffset(new DateTime(now.Year, 6, 1, 0, 0, 0), TimeSpan.FromHours(-7)),
+				new DateTimeOffset(new DateTime(now.Year, 6, 30, 23, 59, 59), TimeSpan.FromHours(-7)))));
 
 		ex.Code.ShouldBe(HRErrorCodes.LeaveInvalidMonthForAcademicYear);
 	}

@@ -32,6 +32,13 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
         int year);
 
 	/// <summary>
+	/// Get total approved leave days for employee for a leave policy.
+	/// </summary>
+	Task<int> GetApprovedLeaveDaysAsync(
+		Guid employeeId,
+		Guid leaveTypeId);
+
+	/// <summary>
 	/// Paged leave ids for management list: start date in [rangeStart, rangeEnd] (date inclusive), policy academic year, optional filters.
 	/// </summary>
 	Task<(int TotalCount, List<Guid> PageIds)> GetPagedIdsForManagementListAsync(
@@ -47,8 +54,8 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 	/// Paged leave ids overlapping [rangeStart, rangeEnd] for calendar views.
 	/// </summary>
 	Task<(int TotalCount, List<Guid> PageIds)> GetPagedIdsForCalendarAsync(
-		DateTime rangeStart,
-		DateTime rangeEnd,
+		DateTimeOffset rangeStart,
+		DateTimeOffset rangeEnd,
 		LeaveManagementListFilters filters,
 		string? search,
 		int skip,

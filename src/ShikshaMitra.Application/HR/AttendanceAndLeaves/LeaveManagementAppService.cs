@@ -3,6 +3,8 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.HR.Reports;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using System;
@@ -10,9 +12,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Volo.Abp.Identity;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
@@ -24,6 +28,10 @@ public class LeaveManagementAppService(
 	LeaveValidationService leaveValidationService,
 	IAcademicYearRepository academicYearRepository,
 	ILeavePolicyRepository leavePolicyRepository,
+	IRepository<UserScopeAssignment, Guid> userScopeAssignmentRepository,
+	IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
+	IRepository<IdentityUser, Guid> identityUserRepository,
+	IRepository<IdentityRole, Guid> identityRoleRepository,
 	IEmployeeAuthorizationService employeeAuthorizationService,
 	HRExcelService hrExcelService)
 	: ApplicationService, ILeaveManagementAppService
@@ -47,30 +55,41 @@ public class LeaveManagementAppService(
 			throw new BusinessException(HRErrorCodes.LeaveInvalidPageSize);
 		}
 
-		var year = input.MonthYearAnchor.Year;
-		var month = input.MonthYearAnchor.Month;
-		if (month is < 1 or > 12)
-		{
-			throw new BusinessException(HRErrorCodes.LeaveInvalidMonth);
-		}
-
-		if (year is < 1900 or > 2100)
-		{
-			throw new BusinessException(HRErrorCodes.LeaveInvalidYear);
-		}
-
 		var academicYear = await academicYearRepository.FindAsync(input.AcademicYearId)
 			?? throw new EntityNotFoundException(typeof(AcademicYear), input.AcademicYearId);
 
-		var monthStart = new DateTime(year, month, 1).Date;
-		var monthEnd = monthStart.AddMonths(1).AddDays(-1);
 		var ayStart = academicYear.StartDate.Date;
 		var ayEnd = academicYear.EndDate.Date;
-		var rangeStart = monthStart > ayStart ? monthStart : ayStart;
-		var rangeEnd = monthEnd < ayEnd ? monthEnd : ayEnd;
-		if (rangeStart > rangeEnd)
+		DateTime rangeStart;
+		DateTime rangeEnd;
+
+		if (input.MonthYearAnchor is { } anchor)
 		{
-			throw new BusinessException(HRErrorCodes.LeaveInvalidMonthForAcademicYear);
+			var year = anchor.Year;
+			var month = anchor.Month;
+			if (month is < 1 or > 12)
+			{
+				throw new BusinessException(HRErrorCodes.LeaveInvalidMonth);
+			}
+
+			if (year is < 1900 or > 2100)
+			{
+				throw new BusinessException(HRErrorCodes.LeaveInvalidYear);
+			}
+
+			var monthStart = new DateTime(year, month, 1).Date;
+			var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+			rangeStart = monthStart > ayStart ? monthStart : ayStart;
+			rangeEnd = monthEnd < ayEnd ? monthEnd : ayEnd;
+			if (rangeStart > rangeEnd)
+			{
+				throw new BusinessException(HRErrorCodes.LeaveInvalidMonthForAcademicYear);
+			}
+		}
+		else
+		{
+			rangeStart = ayStart;
+			rangeEnd = ayEnd;
 		}
 
 		var skipCount = (input.Page - 1) * input.PageSize;
@@ -132,7 +151,24 @@ public class LeaveManagementAppService(
 			query.Where(x => x.Id == leaveRequestId))
 			?? throw new EntityNotFoundException(typeof(EmployeeLeave), leaveRequestId);
 
-		return MapToDetailsDto(leave);
+		var details = MapToDetailsDto(leave);
+		var academicYearId = leave.LeavePolicy?.AcademicYearId;
+		if (academicYearId.HasValue)
+		{
+			var lookup = await ResolveEmployeeMediumStageLookupAsync([leave], academicYearId.Value);
+			if (leave.Employee?.UserId is Guid userId && lookup.TryGetValue(userId, out var mediumStage))
+			{
+				details.MediumStageId = mediumStage.MediumStageId;
+				details.MediumStageName = mediumStage.MediumStageName;
+			}
+			else
+			{
+				details.MediumStageId = Guid.Empty;
+				details.MediumStageName = string.Empty;
+			}
+		}
+
+		return details;
 	}
 
 	public async Task<LeaveRequestCreatedDto> CreateAsync(
@@ -168,7 +204,7 @@ public class LeaveManagementAppService(
 			?? throw new EntityNotFoundException(typeof(Employee), targetEmployeeId);
 
 		var resolvedPolicyId = await leaveValidationService.ValidateLeaveRequestAsync(
-			targetEmployee.Id, policyId, input.StartDate, input.EndDate);
+			targetEmployee.Id, policyId, input.StartDate, input.EndDate, academicYearId);
 
 		byte[]? attachmentBytes = await ExtractAttachmentBytesAsync(attachment);
 
@@ -196,7 +232,7 @@ public class LeaveManagementAppService(
 
 	public async Task<LeaveActionResultDto> ApproveAsync(Guid leaveRequestId, LeaveApprovalRequestDto? input)
 	{
-		var query = await employeeLeaveRepository.WithDetailsAsync(x => x.Employee);
+		var query = await employeeLeaveRepository.WithDetailsAsync(x => x.Employee, x => x.LeavePolicy);
 
 		var leave = await AsyncExecuter.FirstOrDefaultAsync(
 			query.Where(x => x.Id == leaveRequestId))
@@ -216,6 +252,12 @@ public class LeaveManagementAppService(
 				leave.EmployeeId,
 				actorContext.ActorEmployeeId!.Value);
 		}
+
+		await leaveValidationService.EnsureSufficientLeaveBalanceAsync(
+			leave.EmployeeId,
+			leave.LeaveTypeId,
+			leave.StartDate.DateTime,
+			leave.EndDate.DateTime);
 
 		await employeeLeaveManager.UpdateLeaveRequestStatusAsync(
 			leave,
@@ -327,12 +369,11 @@ public class LeaveManagementAppService(
 			academicYearId,
 			includeInactive: false);
 
-		var year = DateTime.Today.Year;
 		var items = new List<LeaveBalanceItemDto>();
 
 		foreach (var policy in policies)
 		{
-			var used = await employeeLeaveRepository.GetApprovedLeaveDaysAsync(targetId, policy.Id, year);
+			var used = await employeeLeaveRepository.GetApprovedLeaveDaysAsync(targetId, policy.Id);
 			var entitled = policy.LeaveCount;
 			var remaining = Math.Max(0, entitled - used);
 
@@ -382,6 +423,11 @@ public class LeaveManagementAppService(
 			throw new BusinessException(HRErrorCodes.LeaveInvalidMonthForAcademicYear);
 		}
 
+		var rangeStartOffset = new DateTimeOffset(
+			rangeStart.Year, rangeStart.Month, rangeStart.Day, 0, 0, 0, input.RangeStart.Offset);
+		var rangeEndOffset = new DateTimeOffset(
+			rangeEnd.Year, rangeEnd.Month, rangeEnd.Day, 23, 59, 59, 999, input.RangeEnd.Offset);
+
 		var skip = (input.Page - 1) * input.PageSize;
 		var filters = new LeaveManagementListFilters(
 			input.AcademicYearId,
@@ -390,8 +436,8 @@ public class LeaveManagementAppService(
 			input.LeaveTypeMasterId);
 
 		var (totalCount, pageIds) = await employeeLeaveRepository.GetPagedIdsForCalendarAsync(
-			rangeStart,
-			rangeEnd,
+			rangeStartOffset,
+			rangeEndOffset,
 			filters,
 			input.Search,
 			skip,
@@ -408,9 +454,15 @@ public class LeaveManagementAppService(
 
 		var idOrder = pageIds.Select((id, index) => (id, index)).ToDictionary(t => t.id, t => t.index);
 		leaves = leaves.OrderBy(l => idOrder[l.Id]).ToList();
+		var employeeMediumStageLookup = await ResolveEmployeeMediumStageLookupAsync(
+			leaves,
+			input.AcademicYearId);
 
 		var items = leaves.Select(leave => new LeaveManagementCalendarItemDto
 		{
+			MediumStageId = leave.Employee?.UserId is Guid userId && employeeMediumStageLookup.TryGetValue(userId, out var mediumStage)
+				? mediumStage.MediumStageId
+				: null,
 			Id = leave.Id,
 			PublicId = leave.PublicId,
 			EmployeeId = leave.EmployeeId,
@@ -422,7 +474,9 @@ public class LeaveManagementAppService(
 			EndDate = leave.EndDate.DateTime,
 			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
 			Status = leave.Status.ToString().ToUpperInvariant(),
-			MediumStageName = leave.LeavePolicy?.AcademicYear?.Name ?? ""
+			MediumStageName = leave.Employee?.UserId is Guid mediumUserId && employeeMediumStageLookup.TryGetValue(mediumUserId, out var mediumStageName)
+				? mediumStageName.MediumStageName
+				: string.Empty
 		}).ToList();
 
 		return new LeaveManagementCalendarResultDto
@@ -478,6 +532,150 @@ public class LeaveManagementAppService(
 			LeavePolicyId = input.LeavePolicyId,
 			LeaveTypeMasterId = input.LeaveTypeMasterId
 		};
+	}
+
+	private async Task<Dictionary<Guid, (Guid MediumStageId, string MediumStageName)>> ResolveEmployeeMediumStageLookupAsync(
+		IReadOnlyCollection<EmployeeLeave> leaves,
+		Guid academicYearId)
+	{
+		var userIds = leaves
+			.Select(x => x.Employee?.UserId)
+			.Where(x => x.HasValue)
+			.Select(x => x!.Value)
+			.Distinct()
+			.ToList();
+
+		if (userIds.Count == 0)
+		{
+			return new Dictionary<Guid, (Guid MediumStageId, string MediumStageName)>();
+		}
+
+		var scopeAssignments = await AsyncExecuter.ToListAsync(
+			(await userScopeAssignmentRepository.GetQueryableAsync())
+				.Where(x =>
+					x.IsActive &&
+					!x.IsDeleted &&
+					x.UserId.HasValue &&
+					userIds.Contains(x.UserId.Value) &&
+					x.EducationMediumStageId.HasValue &&
+					(x.AcademicYearId == academicYearId || !x.AcademicYearId.HasValue))
+				.Select(x => new
+				{
+					UserId = x.UserId!.Value,
+					MediumStageId = x.EducationMediumStageId!.Value,
+					x.AcademicYearId,
+					x.CreationTime
+				}));
+
+		var selectedByUser = scopeAssignments
+			.GroupBy(x => x.UserId)
+			.Select(g => g
+				.OrderByDescending(x => x.AcademicYearId == academicYearId)
+				.ThenByDescending(x => x.CreationTime)
+				.First())
+			.ToList();
+
+		var selectedByUserMap = selectedByUser.ToDictionary(x => x.UserId, x => x.MediumStageId);
+		var missingUserIds = userIds.Where(x => !selectedByUserMap.ContainsKey(x)).ToList();
+		if (missingUserIds.Count > 0)
+		{
+			var users = await identityUserRepository.GetListAsync(
+				x => missingUserIds.Contains(x.Id),
+				includeDetails: true);
+
+			var roleIds = users
+				.SelectMany(x => x.Roles)
+				.Select(x => x.RoleId)
+				.Distinct()
+				.ToList();
+
+			if (roleIds.Count > 0)
+			{
+				var roles = await identityRoleRepository.GetListAsync(x => roleIds.Contains(x.Id));
+				var roleNamesById = roles
+					.Where(x => roleIds.Contains(x.Id))
+					.ToDictionary(x => x.Id, x => x.Name);
+				var relevantRoleNames = roleNamesById.Values
+					.Where(x => !string.IsNullOrWhiteSpace(x))
+					.Distinct(StringComparer.OrdinalIgnoreCase)
+					.ToList();
+
+				if (relevantRoleNames.Count > 0)
+				{
+					var roleAssignments = await AsyncExecuter.ToListAsync(
+						(await userScopeAssignmentRepository.GetQueryableAsync())
+							.Where(x =>
+								x.IsActive &&
+								!x.IsDeleted &&
+								x.RoleName != null &&
+								relevantRoleNames.Contains(x.RoleName) &&
+								x.EducationMediumStageId.HasValue &&
+								(x.AcademicYearId == academicYearId || !x.AcademicYearId.HasValue))
+							.Select(x => new
+							{
+								x.RoleName,
+								MediumStageId = x.EducationMediumStageId!.Value,
+								x.AcademicYearId,
+								x.CreationTime
+							}));
+
+					var roleAssignmentByRoleName = roleAssignments
+						.GroupBy(x => x.RoleName!, StringComparer.OrdinalIgnoreCase)
+						.ToDictionary(
+							g => g.Key,
+							g => g
+								.OrderByDescending(x => x.AcademicYearId == academicYearId)
+								.ThenByDescending(x => x.CreationTime)
+								.First(),
+							StringComparer.OrdinalIgnoreCase);
+
+					foreach (var user in users)
+					{
+						var mappedRoleNames = user.Roles
+							.Select(x => roleNamesById.TryGetValue(x.RoleId, out var roleName) ? roleName : null)
+							.Where(x => !string.IsNullOrWhiteSpace(x))
+							.Cast<string>()
+							.ToList();
+
+						var resolvedStageIds = mappedRoleNames
+							.Where(roleAssignmentByRoleName.ContainsKey)
+							.Select(x => roleAssignmentByRoleName[x].MediumStageId)
+							.Distinct()
+							.ToList();
+
+						// If multiple stage IDs resolve for the same user, keep it unset
+						// to avoid arbitrary, order-dependent stage attribution.
+						if (resolvedStageIds.Count == 1)
+						{
+							selectedByUserMap[user.Id] = resolvedStageIds[0];
+						}
+					}
+				}
+			}
+		}
+
+		if (selectedByUserMap.Count == 0)
+		{
+			return new Dictionary<Guid, (Guid MediumStageId, string MediumStageName)>();
+		}
+
+		var stageIds = selectedByUserMap.Values.Distinct().ToList();
+		var stages = await AsyncExecuter.ToListAsync(
+			(await educationMediumStageRepository.GetQueryableAsync())
+				.Where(x => stageIds.Contains(x.Id))
+				.Select(x => new { x.Id, x.Name }));
+		var stageNames = stages.ToDictionary(x => x.Id, x => x.Name);
+
+		var lookup = new Dictionary<Guid, (Guid MediumStageId, string MediumStageName)>();
+		foreach (var item in selectedByUserMap)
+		{
+			if (stageNames.TryGetValue(item.Value, out var name))
+			{
+				lookup[item.Key] = (item.Value, name);
+			}
+		}
+
+		return lookup;
 	}
 
 	private async Task EnsureMayCreateLeaveOnBehalfAsync(Guid targetEmployeeId, LeaveActorContext actorContext)

@@ -102,6 +102,7 @@ public class LeaveValidationService : DomainService
 		Guid leaveTypeId,
 		DateTime startDate,
 		DateTime endDate,
+		Guid? academicYearId = null,
 		Guid? excludeLeaveId = null)
 	{
 		// 1. Validate date range
@@ -134,6 +135,11 @@ public class LeaveValidationService : DomainService
 			throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
 		}
 
+		if (academicYearId.HasValue && leavePolicy.AcademicYearId != academicYearId.Value)
+		{
+			throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
+		}
+
 		// 4. Validate against policy requirements
 		if (!leavePolicy.IsActive)
 		{
@@ -153,20 +159,9 @@ public class LeaveValidationService : DomainService
 			throw new BusinessException(HRErrorCodes.LeaveMaxDaysExceeded);
 		}
 
-		// 6. Check annual leave balance based on the requested leave year.
-		// Using server "today" year causes incorrect balance checks for future dated requests.
-		var balanceYear = startDate.Year;
-		var approvedDaysThisYear = await _employeeLeaveRepository.GetApprovedLeaveDaysAsync(
-			employeeId,
-			leavePolicy.Id,
-			balanceYear);
-
-		var remainingBalance = leavePolicy.LeaveCount - approvedDaysThisYear;
-
-		if (requestedDays > remainingBalance)
-		{
-			throw new BusinessException(HRErrorCodes.LeaveInsufficientBalance);
-		}
+		// 6. Check leave balance for the selected leave policy.
+		// Leave policies are academic-year scoped, so policy-level approved days are used.
+		await EnsureSufficientLeaveBalanceAsync(employeeId, leavePolicy, requestedDays);
 
 		// 7. Check minimum notice period (2 days advance notice)
 		const int minimumNoticeDays = 2;
@@ -178,6 +173,27 @@ public class LeaveValidationService : DomainService
 		}
 
 		return leavePolicy.Id;
+	}
+
+	public async Task EnsureSufficientLeaveBalanceAsync(
+		Guid employeeId,
+		Guid leavePolicyId,
+		DateTime startDate,
+		DateTime endDate)
+	{
+		var leavePolicy = await _leavePolicyRepository.FindAsync(x => x.Id == leavePolicyId);
+		if (leavePolicy == null)
+		{
+			throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
+		}
+
+		var requestedDays = LeaveDurationCalculator.CountInclusiveBusinessDays(startDate, endDate);
+		if (requestedDays == 0)
+		{
+			throw new BusinessException(HRErrorCodes.LeaveNoBusinessDaysInRange);
+		}
+
+		await EnsureSufficientLeaveBalanceAsync(employeeId, leavePolicy, requestedDays);
 	}
 
 	/// <summary>
@@ -201,12 +217,24 @@ public class LeaveValidationService : DomainService
 			return 0;
 		}
 
-		var currentYear = DateTime.Today.Year;
 		var approvedDays = await _employeeLeaveRepository.GetApprovedLeaveDaysAsync(
 			employeeId,
-			leavePolicy.Id,
-			currentYear);
+			leavePolicy.Id);
 
 		return Math.Max(0, leavePolicy.LeaveCount - approvedDays);
+	}
+
+	private async Task EnsureSufficientLeaveBalanceAsync(Guid employeeId, LeavePolicy leavePolicy, int requestedDays)
+	{
+		var approvedDaysForPolicy = await _employeeLeaveRepository.GetApprovedLeaveDaysAsync(
+			employeeId,
+			leavePolicy.Id);
+
+		var remainingBalance = leavePolicy.LeaveCount - approvedDaysForPolicy;
+
+		if (requestedDays > remainingBalance)
+		{
+			throw new BusinessException(HRErrorCodes.LeaveInsufficientBalance);
+		}
 	}
 }

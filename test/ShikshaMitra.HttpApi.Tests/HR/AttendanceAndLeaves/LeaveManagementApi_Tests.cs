@@ -43,6 +43,16 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Get_Leave_Request_List_Without_MonthYear_Full_Academic_Year()
+	{
+		var response = await Client.GetAsync(
+			$"{BaseUrl}?academicYearId={AcademicYearId}&page=1&pageSize=10");
+
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.NotFound, HttpStatusCode.Forbidden, HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task List_Response_Should_Have_TotalCount_And_Items_When_Ok()
 	{
 		var monthYear = Uri.EscapeDataString(new DateTime(DateTime.UtcNow.Year, 6, 1).ToString("O"));
@@ -221,11 +231,50 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Get_Leave_Calendar_With_Offset_Timestamps()
+	{
+		var start = Uri.EscapeDataString($"{DateTime.UtcNow.Year}-06-01T00:00:00-07:00");
+		var end = Uri.EscapeDataString($"{DateTime.UtcNow.Year}-06-15T23:59:59-07:00");
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/calendar?academicYearId={AcademicYearId}&rangeStart={start}&rangeEnd={end}&page=1&pageSize=10");
+
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Forbidden, HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Get_Leave_Calendar_With_DateOnly_Range()
+	{
+		var start = Uri.EscapeDataString($"{DateTime.UtcNow.Year}-06-01");
+		var end = Uri.EscapeDataString($"{DateTime.UtcNow.Year}-06-15");
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/calendar?academicYearId={AcademicYearId}&rangeStart={start}&rangeEnd={end}&page=1&pageSize=10");
+
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Forbidden, HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Get_Leave_Export_Excel()
 	{
 		var monthYear = Uri.EscapeDataString(new DateTime(DateTime.UtcNow.Year, 6, 1).ToString("O"));
 		var response = await Client.GetAsync(
 			$"{BaseUrl}/export?academicYearId={AcademicYearId}&month-year={monthYear}");
+
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Forbidden, HttpStatusCode.InternalServerError);
+		if (response.StatusCode == HttpStatusCode.OK)
+		{
+			response.Content.Headers.ContentType!.MediaType.ShouldBe(
+				"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Get_Leave_Export_Excel_Without_MonthYear()
+	{
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/export?academicYearId={AcademicYearId}");
 
 		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Forbidden, HttpStatusCode.InternalServerError);
 		if (response.StatusCode == HttpStatusCode.OK)

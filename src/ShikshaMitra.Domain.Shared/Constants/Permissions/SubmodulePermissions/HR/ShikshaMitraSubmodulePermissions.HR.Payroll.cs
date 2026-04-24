@@ -6,10 +6,10 @@ public static partial class ShikshaMitraSubmodulePermissions
 {
 	public static partial class HR
 	{
-		public static class PayrollManagement_Dashboard
+		public static class PayrollManagement
 		{
-			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Dashboard";
-			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.Dashboard";
+			private const string SubmoduleName = $"{ModuleName}.PayrollManagement";
+			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement";
 
 			public const string View = $"{SubmoduleName}.View";
 
@@ -116,10 +116,10 @@ public static partial class ShikshaMitraSubmodulePermissions
 			};
 		}
 
-		public static class PayrollManagement_SettingsDayCalculation
+		public static class PayrollManagement_SettingsPayrollConfiguration
 		{
-			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Settings.DayCalculation";
-			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.Settings.DayCalculation";
+			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Settings.PayrollConfiguration";
+			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.Settings.PayrollConfiguration";
 
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";

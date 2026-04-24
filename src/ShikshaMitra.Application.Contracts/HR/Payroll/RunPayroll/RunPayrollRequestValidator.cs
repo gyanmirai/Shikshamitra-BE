@@ -28,6 +28,14 @@ public class RunPayrollRequestValidator : AbstractValidator<RunPayrollRequest>
 			.NotEmpty()
 			.Must(BeValidMonthInput)
 			.WithMessage("Month must be in YYYY-MM, MMMM-YYYY, or a common date-like format.");
+
+		RuleForEach(x => x.EmployeeIds)
+			.NotEmpty()
+			.WithMessage("EmployeeIds cannot contain empty GUID values.");
+
+		RuleFor(x => x.EmployeeIds)
+			.Must(ids => ids == null || ids.Count <= 500)
+			.WithMessage("EmployeeIds cannot contain more than 500 entries.");
 	}
 
 	private static bool BeValidMonthInput(string month)

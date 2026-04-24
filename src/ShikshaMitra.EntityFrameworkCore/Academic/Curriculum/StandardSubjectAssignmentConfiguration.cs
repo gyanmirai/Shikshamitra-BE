@@ -34,5 +34,10 @@ public class StandardSubjectAssignmentConfiguration : IEntityTypeConfiguration<A
 			.WithOne()
 			.HasForeignKey(d => d.AssignedSubjectId)
 			.IsRequired();
+
+		builder.HasMany(x => x.Teachers)
+			.WithOne()
+			.HasForeignKey(t => t.AssignedSubjectId)
+			.IsRequired();
 	}
 }

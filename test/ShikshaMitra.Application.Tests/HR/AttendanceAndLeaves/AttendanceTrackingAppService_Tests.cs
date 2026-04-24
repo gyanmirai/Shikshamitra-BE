@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
 using Shouldly;
@@ -19,7 +18,7 @@ public class AttendanceTrackingAppService_Tests : ShikshaMitraApplicationTestBas
 	}
 
 	[Fact]
-	public async Task GetDateWiseAsync_Should_Return_Empty_For_Today()
+	public async Task GetDateWiseAsync_Should_Deny_When_UserScope_Has_No_MediumStages()
 	{
 		var input = new GetAttendanceDateWiseInput
 		{
@@ -30,13 +29,10 @@ public class AttendanceTrackingAppService_Tests : ShikshaMitraApplicationTestBas
 			PageSize = 10
 		};
 
-		var result = await _attendanceTracking.GetDateWiseAsync(input);
+		var ex = await Should.ThrowAsync<BusinessException>(async () =>
+			await _attendanceTracking.GetDateWiseAsync(input));
 
-		result.ShouldNotBeNull();
-		result.Items.ShouldNotBeNull();
-		result.Summary.ShouldNotBeNull();
-		result.CurrentPage.ShouldBe(1);
-		result.PageSize.ShouldBe(10);
+		ex.Code.ShouldBe(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 	}
 
 	[Fact]
@@ -72,7 +68,7 @@ public class AttendanceTrackingAppService_Tests : ShikshaMitraApplicationTestBas
 	}
 
 	[Fact]
-	public async Task GetEmployeeWiseAsync_Should_Return_Empty_For_Unknown_Employee()
+	public async Task GetEmployeeWiseAsync_Should_Deny_When_UserScope_Has_No_MediumStages()
 	{
 		var input = new GetAttendanceEmployeeWiseInput
 		{
@@ -84,13 +80,10 @@ public class AttendanceTrackingAppService_Tests : ShikshaMitraApplicationTestBas
 			PageSize = 10
 		};
 
-		var result = await _attendanceTracking.GetEmployeeWiseAsync(input);
+		var ex = await Should.ThrowAsync<BusinessException>(async () =>
+			await _attendanceTracking.GetEmployeeWiseAsync(input));
 
-		result.ShouldNotBeNull();
-		result.Items.ShouldNotBeNull();
-		result.AttendanceSummary.ShouldNotBeNull();
-		result.CurrentPage.ShouldBe(1);
-		result.PageSize.ShouldBe(10);
+		ex.Code.ShouldBe(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 	}
 
 	[Fact]
@@ -145,7 +138,7 @@ public class AttendanceTrackingAppService_Tests : ShikshaMitraApplicationTestBas
 	}
 
 	[Fact]
-	public async Task GetEmployeeWiseAsync_Should_Return_Iso_Date_Values()
+	public async Task GetEmployeeWiseAsync_Should_Deny_When_UserScope_Has_No_MediumStages_Even_With_Valid_Dates()
 	{
 		var input = new GetAttendanceEmployeeWiseInput
 		{
@@ -157,13 +150,9 @@ public class AttendanceTrackingAppService_Tests : ShikshaMitraApplicationTestBas
 			PageSize = 10
 		};
 
-		var result = await _attendanceTracking.GetEmployeeWiseAsync(input);
+		var ex = await Should.ThrowAsync<BusinessException>(async () =>
+			await _attendanceTracking.GetEmployeeWiseAsync(input));
 
-		result.ShouldNotBeNull();
-		foreach (var item in result.Items)
-		{
-			DateTimeOffset.TryParse(item.Date, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out _)
-				.ShouldBeTrue();
-		}
+		ex.Code.ShouldBe(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 	}
 }

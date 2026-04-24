@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -29,7 +29,6 @@ public class TakeAttendanceAppService(
 {
 	private const int AttendanceRemarksMaxLength = 512;
 
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_TakeAttendance.View)]
 	public async Task<TakeAttendanceDayResponse> GetDayAsync(GetTakeAttendanceDayInput input)
 	{
 		var date = ParseDate(input.AttendanceDate);
@@ -151,7 +150,6 @@ public class TakeAttendanceAppService(
 		};
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_TakeAttendance.Add)]
 	public async Task<TakeAttendanceSaveOutput> SaveDayAsync(TakeAttendanceSaveInput input)
 	{
 		var date = ParseDate(input.AttendanceDate);
@@ -250,7 +248,6 @@ public class TakeAttendanceAppService(
 		return new TakeAttendanceSaveOutput { UpsertedCount = upserted };
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_TakeAttendance.Lock)]
 	public async Task LockDayAsync(string attendanceDate)
 	{
 		var date = ParseDate(attendanceDate).Date;
@@ -272,7 +269,6 @@ public class TakeAttendanceAppService(
 		await staffAttendanceDayLockRepository.InsertAsync(entity, autoSave: true);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_TakeAttendance.Lock)]
 	public async Task UnlockDayAsync(string attendanceDate)
 	{
 		var date = ParseDate(attendanceDate).Date;

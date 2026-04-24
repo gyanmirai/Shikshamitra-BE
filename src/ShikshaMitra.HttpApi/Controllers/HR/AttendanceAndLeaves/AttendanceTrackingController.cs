@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
@@ -40,6 +41,7 @@ public class AttendanceTrackingController : AbpControllerBase
 	/// <param name="search">Search text for employee fields</param>
 	/// <returns>Paginated attendance records with summary</returns>
 	[HttpGet("date-wise")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_MarkAttendance.View)]
 	[ProducesResponseType(typeof(AttendanceDateWiseResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -83,6 +85,7 @@ public class AttendanceTrackingController : AbpControllerBase
 	/// <param name="search">Search text</param>
 	/// <returns>Employee attendance records with summary</returns>
 	[HttpGet("employee-wise")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_MarkAttendance.View)]
 	[ProducesResponseType(typeof(AttendanceEmployeeWiseResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(StatusCodes.Status401Unauthorized)]

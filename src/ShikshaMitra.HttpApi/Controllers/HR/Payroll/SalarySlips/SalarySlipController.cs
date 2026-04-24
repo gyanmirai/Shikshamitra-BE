@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using Volo.Abp;
@@ -33,6 +34,7 @@ public class SalarySlipController : AbpControllerBase
 	/// Retrieves employee salary slip for a specific month (OpenAPI contract)
 	/// </summary>
 	[HttpGet]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_GenerateSalarySlip.View)]
 	[ProducesResponseType(typeof(SalarySlipResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]

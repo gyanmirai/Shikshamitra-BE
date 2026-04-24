@@ -1,14 +1,18 @@
-﻿using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.Services;
+using ShikshaMitra.Security.UserScope;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Caching;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
@@ -20,20 +24,26 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 {
 	private readonly ISalarySlipRepository _salarySlipRepository;
 	private readonly IEmployeeRepository _employeeRepository;
+	private readonly IRepository<EmployeeAttendance, Guid> _employeeAttendanceRepository;
 	private readonly SalarySlipManager _salarySlipManager;
+	private readonly IUserScopeService _userScopeService;
 	private readonly IDistributedCache<SalarySlipDto> _cache;
 	private readonly ILogger<SalarySlipAppService> _logger;
 
 	public SalarySlipAppService(
 		ISalarySlipRepository salarySlipRepository,
 		IEmployeeRepository employeeRepository,
+		IRepository<EmployeeAttendance, Guid> employeeAttendanceRepository,
 		SalarySlipManager salarySlipManager,
+		IUserScopeService userScopeService,
 		IDistributedCache<SalarySlipDto> cache,
 		ILogger<SalarySlipAppService> logger)
 	{
 		_salarySlipRepository = salarySlipRepository;
 		_employeeRepository = employeeRepository;
+		_employeeAttendanceRepository = employeeAttendanceRepository;
 		_salarySlipManager = salarySlipManager;
+		_userScopeService = userScopeService;
 		_cache = cache;
 		_logger = logger;
 	}
@@ -56,6 +66,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 				throw new BusinessException(HRErrorCodes.PayrollEmployeeIdRequired);
 			}
 
+			await EnsureEmployeeScopeAllowedAsync(employeeId);
 			_salarySlipManager.ValidateMonthYearFormat(monthYear);
 
 			// Check cache first
@@ -135,6 +146,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 			throw new BusinessException(HRErrorCodes.PayrollEmployeeIdRequired);
 		}
 
+		await EnsureEmployeeScopeAllowedAsync(input.EmployeeId);
 		_salarySlipManager.ValidateMonthYearFormat(input.MonthYear);
 
 		// Generate or regenerate salary slip (Manager validates employee existence)
@@ -167,6 +179,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		_logger.LogInformation("GetSalarySlipById request - Id: {Id}", id);
 
 		var salarySlip = await _salarySlipRepository.GetAsync(id);
+		await EnsureEmployeeScopeAllowedAsync(salarySlip.EmployeeId);
 		var employee = await _employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
 
 		var dto = await MapToSalarySlipDtoAsync(salarySlip, employee);
@@ -185,6 +198,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		_logger.LogInformation("UpdateSalarySlip request - Id: {Id}", id);
 
 		var salarySlip = await _salarySlipRepository.GetAsync(id);
+		await EnsureEmployeeScopeAllowedAsync(salarySlip.EmployeeId);
 
 		// Update remarks
 		salarySlip.UpdateRemarks(input.Remarks);
@@ -213,6 +227,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		_logger.LogInformation("FinalizeSalarySlip request - Id: {Id}", id);
 
 		var salarySlip = await _salarySlipRepository.GetAsync(id);
+		await EnsureEmployeeScopeAllowedAsync(salarySlip.EmployeeId);
 
 		// Finalize the salary slip
 		salarySlip.Finalize();
@@ -241,6 +256,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		_logger.LogInformation("DeleteSalarySlip request - Id: {Id}", id);
 
 		var salarySlip = await _salarySlipRepository.GetAsync(id);
+		await EnsureEmployeeScopeAllowedAsync(salarySlip.EmployeeId);
 
 		if (salarySlip.Status == SalarySlipStatus.Finalized)
 		{
@@ -313,5 +329,62 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 	{
 		var tenantPrefix = tenantId.HasValue ? tenantId.Value.ToString() : "host";
 		return $"SalarySlip:{tenantPrefix}:{employeeId}:{monthYear}";
+	}
+
+	private async Task EnsureEmployeeScopeAllowedAsync(Guid employeeId)
+	{
+		var scope = await EnsureCanOperatePayrollAsync();
+		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		{
+			return;
+		}
+
+		var employeeStageId = await ResolveEmployeeStageAsync(employeeId);
+		if (!employeeStageId.HasValue)
+		{
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		}
+
+		if (!scope.MediumStageIds.Contains(employeeStageId.Value))
+		{
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		}
+	}
+
+	private async Task<UserScopeContext> EnsureCanOperatePayrollAsync()
+	{
+		var uid = CurrentUser.Id;
+		if (!uid.HasValue)
+		{
+			throw new BusinessException(HRErrorCodes.AttendanceImportPreviewInvalid);
+		}
+
+		var scope = await _userScopeService.GetUserScopeAsync(uid.Value);
+		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		{
+			return scope;
+		}
+
+		if (scope.MediumStageIds.Count == 0)
+		{
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		}
+
+		return scope;
+	}
+
+	private async Task<Guid?> ResolveEmployeeStageAsync(Guid employeeId)
+	{
+		var attendanceQuery = await _employeeAttendanceRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			attendanceQuery = attendanceQuery.Where(a => a.TenantId == CurrentTenant.Id);
+		}
+
+		return await AsyncExecuter.FirstOrDefaultAsync(
+			attendanceQuery
+				.Where(a => a.EmployeeId == employeeId && a.EducationMediumStageId.HasValue)
+				.OrderByDescending(a => a.AttendanceDate)
+				.Select(a => a.EducationMediumStageId));
 	}
 }

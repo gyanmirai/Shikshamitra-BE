@@ -7,6 +7,7 @@ using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.Security.UserScope;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,6 +26,8 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 [RemoteService(false)]
 public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 {
+	private sealed record PayrollTargetEmployee(Guid Id, string? EmployeeCode, string? EmployeeName);
+
 	private readonly IRepository<Employee, Guid> _employeeRepository;
 	private readonly IRepository<EmployeeAttendance, Guid> _attendanceRepository;
 	private readonly IEmployeePayrollDetailsRepository _payrollDetailsRepository;
@@ -33,6 +36,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	private readonly IRepository<Holiday, Guid> _holidayRepository;
 	private readonly IDayCalculationSettingRepository _dayCalculationSettingRepository;
 	private readonly SalarySlipManager _salarySlipManager;
+	private readonly IUserScopeService _userScopeService;
 	private readonly ILogger<RunPayrollAppService> _logger;
 
 	// Configuration: Batch size for processing employees
@@ -48,6 +52,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		IRepository<Holiday, Guid> holidayRepository,
 		IDayCalculationSettingRepository dayCalculationSettingRepository,
 		SalarySlipManager salarySlipManager,
+		IUserScopeService userScopeService,
 		ILogger<RunPayrollAppService> logger)
 	{
 		_employeeRepository = employeeRepository;
@@ -58,6 +63,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		_holidayRepository = holidayRepository;
 		_dayCalculationSettingRepository = dayCalculationSettingRepository;
 		_salarySlipManager = salarySlipManager;
+		_userScopeService = userScopeService;
 		_logger = logger;
 	}
 
@@ -83,19 +89,17 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				"Generating payroll preview for {Month} (Year: {Year}, Month: {MonthNum}, Page: {Page}, PageSize: {PageSize})",
 				input.Month, year, month, input.Page, input.PageSize);
 
-			// Check if payroll is already generated (any finalized slip exists)
-			var isGenerated = await _salarySlipRepository.HasFinalizedSlipsForMonthAsync(internalMonthYear);
+			var existingSlips = await _salarySlipRepository.GetByMonthAsync(internalMonthYear);
+			var finalizedEmployeeIds = existingSlips
+				.Where(x => x.Status == SalarySlipStatus.Finalized)
+				.Select(x => x.EmployeeId)
+				.ToHashSet();
+			// Month-level summary retained for backwards compatibility with existing consumers.
+			var isGenerated = finalizedEmployeeIds.Count > 0;
 
-			// Get all active employees
-			var employeeQuery = await _employeeRepository.GetQueryableAsync();
-
-			if (CurrentTenant.Id.HasValue)
-			{
-				employeeQuery = employeeQuery.Where(e => e.TenantId == CurrentTenant.Id);
-			}
-
-			// Filter only active employees
-			employeeQuery = employeeQuery.Where(e => e.EmployeeStatusType == EmployeeStatusType.Active);
+			// Get all active employees in caller scope.
+			// Unknown-stage employees are denied to prevent read-side scope leaks.
+			var employeeQuery = await GetScopedActiveEmployeeQueryAsync(includeUnknownStageEmployees: false);
 
 			// Get total count
 			var totalCount = await AsyncExecuter.CountAsync(employeeQuery);
@@ -148,8 +152,9 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				employee,
 				attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
 				payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
-				componentsByEmployee[employee.Id]?.ToList() ?? new List<EmployeePayrollComponent>(),
-				basis
+				componentsByEmployee[employee.Id].ToList(),
+				basis,
+				finalizedEmployeeIds.Contains(employee.Id)
 			)).ToList();
 
 			return new RunPayrollResponse
@@ -194,46 +199,55 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		_logger.LogInformation("Starting payroll lock operation for {Month}", request.Month);
 
-		// Check if payroll is already generated
-		var isGenerated = await _salarySlipRepository.HasFinalizedSlipsForMonthAsync(internalMonthYear);
-		if (isGenerated)
-		{
-			_logger.LogInformation("Payroll for {Month} is already locked. Returning idempotent response.", request.Month);
-
-			return new PayrollLockResponse
-			{
-				Message = $"Payroll for {request.Month} is already generated and locked.",
-				Month = request.Month,
-				WasAlreadyLocked = true,
-				EmployeesProcessed = 0
-			};
-		}
-
-		// Get all active employees
-		var employeeQuery = await _employeeRepository.GetQueryableAsync();
-
-		if (CurrentTenant.Id.HasValue)
-		{
-			employeeQuery = employeeQuery.Where(e => e.TenantId == CurrentTenant.Id);
-		}
-
-		var employees = await AsyncExecuter.ToListAsync(
+		// Get all active employees in caller scope.
+		// For write/finalize flow, unknown-stage employees are denied by default.
+		var employeeQuery = await GetScopedActiveEmployeeQueryAsync(includeUnknownStageEmployees: false);
+		var scopedEmployees = await AsyncExecuter.ToListAsync(
 			employeeQuery
-				.Where(e => e.EmployeeStatusType == EmployeeStatusType.Active)
-				.Select(e => new { e.Id, e.EmployeeCode, e.EmployeeName })
+				.Select(e => new PayrollTargetEmployee(e.Id, e.EmployeeCode, e.EmployeeName))
 		);
 
-		if (employees.Count == 0)
+		if (scopedEmployees.Count == 0)
 		{
 			_logger.LogWarning("No active employees found for payroll generation in {Month}", request.Month);
 			throw new BusinessException("HR:NoActiveEmployees")
 				.WithData("month", request.Month);
 		}
 
-		_logger.LogInformation("Generating salary slips for {Count} active employees", employees.Count);
+		var targetEmployees = ResolveTargetEmployees(scopedEmployees, request.EmployeeIds);
+		var existingSlips = await _salarySlipRepository.GetByMonthAsync(internalMonthYear);
+		var finalizedEmployeeIds = existingSlips
+			.Where(x => x.Status == SalarySlipStatus.Finalized)
+			.Select(x => x.EmployeeId)
+			.ToHashSet();
+		var employees = targetEmployees
+			.Where(e => !finalizedEmployeeIds.Contains(e.Id))
+			.ToList();
+		var alreadyFinalizedCount = targetEmployees.Count - employees.Count;
+
+		if (employees.Count == 0)
+		{
+			_logger.LogInformation(
+				"Payroll for {Month} is already locked for the targeted employee set. Returning idempotent response.",
+				request.Month);
+
+			return new PayrollLockResponse
+			{
+				Message = $"Payroll for {request.Month} is already generated and locked for the targeted employees.",
+				Month = request.Month,
+				WasAlreadyLocked = true,
+				EmployeesProcessed = 0,
+				EmployeesSkipped = alreadyFinalizedCount
+			};
+		}
+
+		_logger.LogInformation(
+			"Generating salary slips for {ProcessCount} employees ({SkippedCount} already finalized)",
+			employees.Count,
+			alreadyFinalizedCount);
 
 		var generatedCount = 0;
-		var skippedCount = 0;
+		var skippedCount = alreadyFinalizedCount;
 		var failedCount = 0;
 		var errors = new List<(string EmployeeCode, string EmployeeName, string Error)>();
 		var batchSize = Math.Min(DefaultBatchSize, MaxBatchSize);
@@ -440,7 +454,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		List<EmployeeAttendance> attendanceRecords,
 		EmployeePayrollDetails? payrollDetails,
 		List<EmployeePayrollComponent> components,
-		PayrollBasisDaysResult basis)
+		PayrollBasisDaysResult basis,
+		bool isLocked)
 	{
 		var presentDays = attendanceRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.Present);
 		var halfDays = attendanceRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.HalfDayLeave);
@@ -480,6 +495,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		return new RunPayrollItem
 		{
+			EmployeeId = employee.Id,
+			IsLocked = isLocked,
 			EmployeeName = FormatEmployeeName(employee),
 			EmployeeIdentifier = employee.EmployeeCode ?? string.Empty,
 			IsTeaching = employee.EmployeeGroup == EmployeeGroupType.Teaching,
@@ -497,6 +514,27 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			EarningComponents = earningComponents,
 			DeductionComponents = deductionComponents
 		};
+	}
+
+	private static List<PayrollTargetEmployee> ResolveTargetEmployees(
+		List<PayrollTargetEmployee> scopedEmployees,
+		List<Guid>? requestedEmployeeIds)
+	{
+		if (requestedEmployeeIds == null || requestedEmployeeIds.Count == 0)
+		{
+			return scopedEmployees;
+		}
+
+		var requestedSet = requestedEmployeeIds.Distinct().ToHashSet();
+		var scopedById = scopedEmployees.ToDictionary(e => e.Id, e => e);
+		var outOfScopeIds = requestedSet.Where(id => !scopedById.ContainsKey(id)).ToList();
+		if (outOfScopeIds.Count > 0)
+		{
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope)
+				.WithData("employeeIds", outOfScopeIds);
+		}
+
+		return requestedSet.Select(id => scopedById[id]).ToList();
 	}
 
 	private static bool IsBasicSalaryComponentName(string? name)
@@ -524,5 +562,72 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	}
 
 	#endregion
+
+	private async Task<IQueryable<Employee>> GetScopedActiveEmployeeQueryAsync(bool includeUnknownStageEmployees)
+	{
+		var scope = await EnsureCanOperatePayrollAsync();
+		var employeeQuery = await _employeeRepository.GetQueryableAsync();
+
+		if (CurrentTenant.Id.HasValue)
+		{
+			employeeQuery = employeeQuery.Where(e => e.TenantId == CurrentTenant.Id);
+		}
+
+		employeeQuery = employeeQuery.Where(e => e.EmployeeStatusType == EmployeeStatusType.Active);
+		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		{
+			return employeeQuery;
+		}
+
+		var attendanceQuery = await _attendanceRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			attendanceQuery = attendanceQuery.Where(a => a.TenantId == CurrentTenant.Id);
+		}
+
+		var knownStageEmployeeIds = attendanceQuery
+			.Where(a => a.EducationMediumStageId.HasValue)
+			.Select(a => a.EmployeeId)
+			.Distinct();
+
+		var scopedStageEmployeeIds = attendanceQuery
+			.Where(a =>
+				a.EducationMediumStageId.HasValue &&
+				scope.MediumStageIds.Contains(a.EducationMediumStageId!.Value))
+			.Select(a => a.EmployeeId)
+			.Distinct();
+
+		if (includeUnknownStageEmployees)
+		{
+			// Unknown stage records are treated as in-scope for read/list flows to avoid false-deny for newly onboarded staff.
+			return employeeQuery.Where(e => scopedStageEmployeeIds.Contains(e.Id) || !knownStageEmployeeIds.Contains(e.Id));
+		}
+
+		// Deny unknown-stage employees for write/finalize flows.
+		return employeeQuery.Where(e => scopedStageEmployeeIds.Contains(e.Id));
+	}
+
+	private async Task<UserScopeContext> EnsureCanOperatePayrollAsync()
+	{
+		var uid = CurrentUser.Id;
+		if (!uid.HasValue)
+		{
+			throw new BusinessException(HRErrorCodes.AttendanceImportPreviewInvalid);
+		}
+
+		var scope = await _userScopeService.GetUserScopeAsync(uid.Value);
+		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		{
+			return scope;
+		}
+
+		if (scope.MediumStageIds.Count == 0)
+		{
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		}
+
+		return scope;
+	}
+
 }
 

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.HR;
@@ -161,7 +161,6 @@ public class LeaveManagementController : AbpControllerBase
 			EndDate = endDate,
 			Reason = reason
 		};
-		var file = attachment?.File;
 		var created = file is null
 			? await _leaveManagementAppService.CreateAsync(academicYearId, createDto)
 			: await _leaveManagementAppService.CreateAsync(academicYearId, createDto, file);

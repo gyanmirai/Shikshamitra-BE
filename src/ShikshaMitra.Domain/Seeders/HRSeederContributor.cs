@@ -14,6 +14,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
@@ -56,6 +57,7 @@ public class HRSeederContributor : BaseSeederContributor
 	private readonly IEmployeeAttendanceRepository _employeeAttendanceRepository;
 	private readonly IEmployeePayrollDetailsRepository _employeePayrollDetailsRepository;
 	private readonly IEmployeePayrollComponentRepository _employeePayrollComponentRepository;
+	private readonly ILogger<HRSeederContributor> _logger;
 
 	public HRSeederContributor(
 		ICurrentTenant currentTenant,
@@ -83,7 +85,8 @@ public class HRSeederContributor : BaseSeederContributor
 			ILookupNormalizer lookupNormalizer,
 			IEmployeeAttendanceRepository employeeAttendanceRepository,
 			IEmployeePayrollDetailsRepository employeePayrollDetailsRepository,
-			IEmployeePayrollComponentRepository employeePayrollComponentRepository)
+			IEmployeePayrollComponentRepository employeePayrollComponentRepository,
+			ILogger<HRSeederContributor> logger)
 			: base(currentTenant, guidGenerator, unitOfWork)
 	{
 		_leaveTypeRepository = leaveTypeRepository;
@@ -109,25 +112,34 @@ public class HRSeederContributor : BaseSeederContributor
 		_employeeAttendanceRepository = employeeAttendanceRepository;
 		_employeePayrollDetailsRepository = employeePayrollDetailsRepository;
 		_employeePayrollComponentRepository = employeePayrollComponentRepository;
+		_logger = logger;
 	}
 
 	public override async Task SeedAsync(DataSeedContext context)
 	{
+		_logger.LogInformation("[HRSeeder] Start seeding for TenantId={TenantId}", CurrentTenant.Id);
+
 		// Phase 1: Seed payroll components
 		await SeedEarningComponentsAsync();
 		await SeedDeductionComponentsAsync();
+		_logger.LogInformation("[HRSeeder] Phase 1 complete (payroll components)");
 
 		// Phase 2: Seed shift management (required for employees)
 		await SeedShiftManagementAsync();
+		_logger.LogInformation("[HRSeeder] Phase 2 complete (shift management)");
 
 		// Phase 3: Seed leave types and policies
 		await SeedLeaveTypesAndPoliciesAsync();
+		_logger.LogInformation("[HRSeeder] Phase 3 complete (leave types/policies)");
 
 		// Phase 4: Seed employees
 		var seededEmployeeIds = await SeedEmployeesAsync();
+		_logger.LogInformation("[HRSeeder] Phase 4 complete (employees seeded={Count})", seededEmployeeIds.Count);
 
 		// Phase 5: Sample per-employee payroll + attendance for employees seeded in this run only.
 		await SeedSampleEmployeePayrollAndAttendanceAsync(seededEmployeeIds);
+		_logger.LogInformation("[HRSeeder] Phase 5 complete (sample payroll/attendance)");
+		_logger.LogInformation("[HRSeeder] Finished seeding for TenantId={TenantId}", CurrentTenant.Id);
 	}
 
 	private async Task SeedLeaveTypesAndPoliciesAsync()
@@ -385,9 +397,11 @@ public class HRSeederContributor : BaseSeederContributor
 
 	private async Task SeedSamplePayrollForEmployeeIfNeededAsync(Guid employeeId)
 	{
+		var hasPendingChanges = false;
 		var existingComponents = await _employeePayrollComponentRepository.GetByEmployeeIdAsync(employeeId);
 		if (existingComponents.Count > 0)
 		{
+			_logger.LogDebug("[HRSeeder] Skip payroll seed for EmployeeId={EmployeeId} (already exists)", employeeId);
 			return;
 		}
 
@@ -406,7 +420,8 @@ public class HRSeederContributor : BaseSeederContributor
 				uanNumber: null,
 				punchId: null,
 				totalWorkingHourPerMonth: 160m);
-			await _employeePayrollDetailsRepository.InsertAsync(details, autoSave: true);
+			await _employeePayrollDetailsRepository.InsertAsync(details, autoSave: false);
+			hasPendingChanges = true;
 		}
 
 		var earningMasters = (await _earningComponentRepository.GetListAsync())
@@ -442,7 +457,8 @@ public class HRSeederContributor : BaseSeederContributor
 					: SalaryComponentType.Percentage,
 				MapSalaryDependency(master.DependOn),
 				isEarning: true);
-			await _employeePayrollComponentRepository.InsertAsync(row, autoSave: true);
+			await _employeePayrollComponentRepository.InsertAsync(row, autoSave: false);
+			hasPendingChanges = true;
 		}
 
 		foreach (var master in deductionMasters)
@@ -469,7 +485,13 @@ public class HRSeederContributor : BaseSeederContributor
 					: SalaryComponentType.Percentage,
 				MapSalaryDependency(master.DependOn),
 				isEarning: false);
-			await _employeePayrollComponentRepository.InsertAsync(row, autoSave: true);
+			await _employeePayrollComponentRepository.InsertAsync(row, autoSave: false);
+			hasPendingChanges = true;
+		}
+
+		if (hasPendingChanges)
+		{
+			await CurrentUnitOfWork.SaveChangesAsync();
 		}
 	}
 
@@ -504,6 +526,7 @@ public class HRSeederContributor : BaseSeederContributor
 
 		var indiaOffset = TimeSpan.FromHours(5.5);
 		var workingDayIndex = 0;
+		var insertedCount = 0;
 
 		for (var date = windowStart; date <= today; date = date.AddDays(1))
 		{
@@ -551,9 +574,20 @@ public class HRSeederContributor : BaseSeederContributor
 					TimeOut = timeOut,
 					StatusType = status,
 					EducationMediumStageId = educationMediumStageId
-				}, autoSave: true);
+				}, autoSave: false);
+				insertedCount++;
 			}
 		}
+
+		if (insertedCount > 0)
+		{
+			await CurrentUnitOfWork.SaveChangesAsync();
+		}
+
+		_logger.LogInformation(
+			"[HRSeeder] Attendance sample seeded rows={InsertedCount} for employees={EmployeeCount}",
+			insertedCount,
+			employeeIds.Count);
 	}
 
 	private async Task SeedTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId, List<Guid> seededEmployeeIds)
@@ -1142,6 +1176,7 @@ public class HRSeederContributor : BaseSeederContributor
 
 				private async Task SeedEmployeeProfilePictureAsync(Guid employeeId)
 				{
+					_logger.LogDebug("[HRSeeder] Upload profile picture start EmployeeId={EmployeeId}", employeeId);
 					var idx = (employeeId.GetHashCode() & 0x7FFFFFFF) % ProfileSeedImageCount;
 					var resourceName = $"ShikshaMitra.Seeders.Assets.profile-seed-{idx:D2}.png";
 					await using var stream = typeof(HRSeederContributor).Assembly.GetManifestResourceStream(resourceName);
@@ -1154,6 +1189,7 @@ public class HRSeederContributor : BaseSeederContributor
 					await stream.CopyToAsync(memoryStream);
 					var bytes = memoryStream.ToArray();
 					await _employeeDocumentManager.UploadProfilePictureAsync(employeeId, $"seed-avatar-{idx}.png", bytes);
+					_logger.LogDebug("[HRSeeder] Upload profile picture done EmployeeId={EmployeeId}", employeeId);
 				}
 
 				/// <summary>

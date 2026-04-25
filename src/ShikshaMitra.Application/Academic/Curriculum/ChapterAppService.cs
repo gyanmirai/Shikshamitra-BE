@@ -86,6 +86,10 @@ public class ChapterAppService(
 				updateChapterDto.ChapterName,
 				updateChapterDto.Description
 			);
+			chapter.UpdateDates(
+				updateChapterDto.ChapterStartTime,
+				updateChapterDto.ChapterEndTime
+			);
 			await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
 
 			var dto = ObjectMapper.Map<AssignedSubjectChapter, ChapterDto>(chapter);

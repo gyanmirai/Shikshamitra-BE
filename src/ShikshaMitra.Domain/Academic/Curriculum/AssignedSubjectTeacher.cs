@@ -1,11 +1,10 @@
 ﻿using System;
-using System.ComponentModel.DataAnnotations.Schema;
-using ShikshaMitra.HR.Employees;
 using Volo.Abp.Domain.Entities;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class AssignedSubjectTeacher : Entity
+public class AssignedSubjectTeacher : Entity, IMultiTenant
 {
 	#region Properties
 	public virtual Guid? TenantId { get; private set; }
@@ -29,11 +28,12 @@ public class AssignedSubjectTeacher : Entity
 	#region Constructors
 	private AssignedSubjectTeacher() { }
 
-	public AssignedSubjectTeacher(Guid id, Guid subjectId, Guid teacherId, SubjectTeacherType teacherType)
+	public AssignedSubjectTeacher(Guid assignedSubjectId, Guid subjectId, Guid teacherId, SubjectTeacherType teacherType, Guid? tenantId = null)
 	{
-		AssignedSubjectId = subjectId;
+		AssignedSubjectId = assignedSubjectId;
 		TeacherId = teacherId;
 		TeacherType = teacherType;
+		TenantId = tenantId;
 	}
 
 	public override object?[] GetKeys() => new object?[] { AssignedSubjectId, TeacherId };

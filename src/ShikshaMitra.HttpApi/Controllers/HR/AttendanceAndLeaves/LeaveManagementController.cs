@@ -139,11 +139,12 @@ public class LeaveManagementController : AbpControllerBase
 		[FromQuery, Required] Guid academicYearId,
 		[FromForm] Guid? leavePolicyId,
 		[FromForm] Guid? leaveTypeId,
+		[FromForm] Guid? forEmployeeId,
 		[FromForm] Guid? employeeId,
 		[FromForm, Required] DateTime startDate,
 		[FromForm, Required] DateTime endDate,
 		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
-		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
+		[FromForm(Name = "File")] IFormFile? file = null)
 	{
 		if (!leavePolicyId.HasValue && (!leaveTypeId.HasValue || leaveTypeId.Value == Guid.Empty))
 		{
@@ -154,13 +155,15 @@ public class LeaveManagementController : AbpControllerBase
 		{
 			LeavePolicyId = leavePolicyId,
 			LeaveTypeId = leaveTypeId ?? Guid.Empty,
-			ForEmployeeId = employeeId,
+			// Support both names for backward compatibility.
+			ForEmployeeId = forEmployeeId ?? employeeId,
 			StartDate = startDate,
 			EndDate = endDate,
 			Reason = reason
 		};
-		var attachmentObj = attachment?.File != null ? attachment.File : null;
-		var created = await _leaveManagementAppService.CreateAsync(academicYearId, createDto, attachmentObj);
+		var created = file is null
+			? await _leaveManagementAppService.CreateAsync(academicYearId, createDto)
+			: await _leaveManagementAppService.CreateAsync(academicYearId, createDto, file);
 		return StatusCode(StatusCodes.Status201Created, LeaveManagementContractMapper.ToCreatedResponse(created));
 	}
 

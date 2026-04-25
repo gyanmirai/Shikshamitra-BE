@@ -11,6 +11,8 @@ public interface ILeaveManagementAppService
 
 	Task<LeaveRequestDetailsDto> GetAsync(Guid leaveRequestId);
 
+	Task<LeaveRequestCreatedDto> CreateAsync(Guid academicYearId, LeaveRequestCreateDto input);
+
 	Task<LeaveRequestCreatedDto> CreateAsync(Guid academicYearId, LeaveRequestCreateDto input, object? attachment);
 
 	Task<LeaveActionResultDto> ApproveAsync(Guid leaveRequestId, LeaveApprovalRequestDto? input);

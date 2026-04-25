@@ -177,6 +177,13 @@ public class LeaveManagementAppService(
 
 	public async Task<LeaveRequestCreatedDto> CreateAsync(
 		Guid academicYearId,
+		LeaveRequestCreateDto input)
+	{
+		return await CreateAsync(academicYearId, input, attachment: null);
+	}
+
+	public async Task<LeaveRequestCreatedDto> CreateAsync(
+		Guid academicYearId,
 		LeaveRequestCreateDto input,
 		object? attachment)
 	{

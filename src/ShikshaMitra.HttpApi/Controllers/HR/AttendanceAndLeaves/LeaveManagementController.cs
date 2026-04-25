@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.HR;
@@ -144,7 +144,7 @@ public class LeaveManagementController : AbpControllerBase
 		[FromForm, Required] DateTime startDate,
 		[FromForm, Required] DateTime endDate,
 		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
-		[FromForm(Name = "File")] IFormFile? file = null)
+		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
 	{
 		if (!leavePolicyId.HasValue && (!leaveTypeId.HasValue || leaveTypeId.Value == Guid.Empty))
 		{

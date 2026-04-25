@@ -45,7 +45,9 @@ public class ShikshaMitraDomainModule : AbpModule
 		Configure<AbpLocalizationOptions>(options =>
 		{
 			options.Languages.Add(new LanguageInfo("en", "en", "English"));
+			options.Languages.Add(new LanguageInfo("en-US", "en-US", "English (US)"));
 			options.Languages.Add(new LanguageInfo("hi", "hi", "Hindi"));
+			options.Languages.Add(new LanguageInfo("hi-IN", "hi-IN", "Hindi (India)"));
 		});
 
 		Configure<AbpMultiTenancyOptions>(options => { options.IsEnabled = MultiTenancyConsts.IsEnabled; });

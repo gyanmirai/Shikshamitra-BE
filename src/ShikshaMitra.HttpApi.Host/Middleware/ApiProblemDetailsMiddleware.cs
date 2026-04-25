@@ -151,7 +151,8 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 		var normalizedDetail = _errorDetailResolver.ResolveDetail(
 			exception.Message,
 			exception.Code,
-			defaultDetail);
+			defaultDetail,
+			ToDictionary(exception.Data));
 
 		return CreateProblemDetails(
 			context,
@@ -159,7 +160,8 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 			title,
 			normalizedDetail,
 			exception.Code,
-			null);
+			null,
+			ToDictionary(exception.Data));
 	}
 
 	private static ProblemDetails BuildValidationProblem(HttpContext context, AbpValidationException exception)
@@ -209,7 +211,8 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 		string title,
 		string? detail,
 		string? errorCode,
-		Dictionary<string, string[]>? errors)
+		Dictionary<string, string[]>? errors,
+		Dictionary<string, object?>? errorData = null)
 	{
 		var problem = new ProblemDetails
 		{
@@ -230,7 +233,34 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 			problem.Extensions["errors"] = errors;
 		}
 
+		if (errorData is { Count: > 0 })
+		{
+			problem.Extensions["data"] = errorData;
+		}
+
 		return problem;
+	}
+
+	private static Dictionary<string, object?>? ToDictionary(System.Collections.IDictionary? source)
+	{
+		if (source == null || source.Count == 0)
+		{
+			return null;
+		}
+
+		var result = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+		foreach (System.Collections.DictionaryEntry entry in source)
+		{
+			var key = entry.Key?.ToString();
+			if (string.IsNullOrWhiteSpace(key))
+			{
+				continue;
+			}
+
+			result[key] = entry.Value;
+		}
+
+		return result.Count == 0 ? null : result;
 	}
 
 	private static async Task WriteProblemDetailsAsync(HttpContext context, ProblemDetails problem)

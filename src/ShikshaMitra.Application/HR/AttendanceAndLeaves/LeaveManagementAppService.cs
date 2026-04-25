@@ -218,14 +218,12 @@ public class LeaveManagementAppService(
 			leave.Attachment = attachmentBytes;
 		}
 
-		await employeeLeaveRepository.InsertAsync(leave);
-
-		var reloaded = await employeeLeaveRepository.GetAsync(leave.Id);
+		await employeeLeaveRepository.InsertAsync(leave, autoSave: true);
 
 		return new LeaveRequestCreatedDto
 		{
-			Id = reloaded.Id,
-			PublicId = reloaded.PublicId,
+			Id = leave.Id,
+			PublicId = leave.PublicId,
 			Status = "PENDING"
 		};
 	}

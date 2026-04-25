@@ -144,7 +144,7 @@ public class LeaveManagementController : AbpControllerBase
 		[FromForm, Required] DateTime startDate,
 		[FromForm, Required] DateTime endDate,
 		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
-		[FromForm(Name = "File")] IFormFile? file = null)
+		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
 	{
 		if (!leavePolicyId.HasValue && (!leaveTypeId.HasValue || leaveTypeId.Value == Guid.Empty))
 		{
@@ -161,6 +161,7 @@ public class LeaveManagementController : AbpControllerBase
 			EndDate = endDate,
 			Reason = reason
 		};
+		var file = attachment?.File;
 		var created = file is null
 			? await _leaveManagementAppService.CreateAsync(academicYearId, createDto)
 			: await _leaveManagementAppService.CreateAsync(academicYearId, createDto, file);

@@ -10,6 +10,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
+using Volo.Abp.Identity;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -22,6 +23,7 @@ public class SubjectAssignmentAppService(
 	IRepository<Subject, Guid> subjectRepository,
 	IRepository<ElectiveGroup, Guid> electiveGroupRepository,
 	IGuidGenerator guidGenerator,
+	IIdentityUserRepository userRepository,
 	ILogger<SubjectAssignmentAppService> logger
 ) : ApplicationService, ISubjectAssignmentAppService
 {
@@ -224,6 +226,17 @@ public class SubjectAssignmentAppService(
 			electiveGroup = await electiveGroupRepository.FindAsync(assignment.ElectiveGroupId.Value);
 		}
 
+		// Load teacher info in bulk
+		var allTeacherIds = groupAssignments
+			.SelectMany(a => a.Teachers)
+			.Select(t => t.TeacherId)
+			.Distinct()
+			.ToList();
+		var teachersDict = allTeacherIds.Count > 0
+			? (await userRepository.GetListByIdsAsync(allTeacherIds))
+				.ToDictionary(u => u.Id, u => $"{u.Name} {u.Surname}".Trim())
+			: new Dictionary<Guid, string>();
+
 		var first = groupAssignments.First();
 
 		return new SubjectAssignmentDto
@@ -237,8 +250,8 @@ public class SubjectAssignmentAppService(
 			Subjects = groupAssignments.Select(a =>
 			{
 				subjectsDict.TryGetValue(a.SubjectId, out var subj);
-				var primaryTeacher = a.Teachers.FirstOrDefault(t => t.TeacherType == SubjectTeacherType.Primary);
-				var secondaryTeacherIds = a.Teachers.Where(t => t.TeacherType == SubjectTeacherType.Secondary).Select(t => t.TeacherId).ToList();
+				var primaryTeacherEntry = a.Teachers.FirstOrDefault(t => t.TeacherType == SubjectTeacherType.Primary);
+				var secondaryTeacherEntries = a.Teachers.Where(t => t.TeacherType == SubjectTeacherType.Secondary).ToList();
 				return new SubjectAssignmentDetailResponseDto
 				{
 					AssignedSubjectId = a.Id,
@@ -248,8 +261,16 @@ public class SubjectAssignmentAppService(
 					Color = subj?.Color,
 					SubjectType = a.SubjectType,
 					ElectiveGroupId = a.ElectiveGroupId,
-					PrimaryTeacherId = primaryTeacher?.TeacherId,
-					SecondaryTeacherIds = secondaryTeacherIds,
+					PrimaryTeacher = primaryTeacherEntry == null ? null : new TeacherInfoDto
+					{
+						Id = primaryTeacherEntry.TeacherId.ToString(),
+						Name = teachersDict.GetValueOrDefault(primaryTeacherEntry.TeacherId, string.Empty)
+					},
+					SecondaryTeachers = secondaryTeacherEntries.Select(t => new TeacherInfoDto
+					{
+						Id = t.TeacherId.ToString(),
+						Name = teachersDict.GetValueOrDefault(t.TeacherId, string.Empty)
+					}).ToList(),
 					LearningGoals = a.LearningGoals,
 					Prerequisites = a.Prerequisites,
 					Description = a.Description,

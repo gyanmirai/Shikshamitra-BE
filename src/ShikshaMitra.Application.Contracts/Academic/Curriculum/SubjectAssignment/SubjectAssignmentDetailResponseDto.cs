@@ -15,8 +15,8 @@ public class SubjectAssignmentDetailResponseDto
         public string? Color { get; set; }
         public SubjectType SubjectType { get; set; }
         public Guid? ElectiveGroupId { get; set; }
-        public Guid? PrimaryTeacherId { get; set; }
-        public List<Guid> SecondaryTeacherIds { get; set; } = [];
+        public TeacherInfoDto? PrimaryTeacher { get; set; }
+        public List<TeacherInfoDto> SecondaryTeachers { get; set; } = [];
         public string? LearningGoals { get; set; }
         public string? Prerequisites { get; set; }
         public string? Description { get; set; }

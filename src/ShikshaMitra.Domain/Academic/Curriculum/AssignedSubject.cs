@@ -152,7 +152,7 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		{
 			Teachers.Remove(currentPrimary);
 		}
-		Teachers.Add(new AssignedSubjectTeacher(Id, SubjectId, teacherId, SubjectTeacherType.Primary));
+		Teachers.Add(new AssignedSubjectTeacher(Id, SubjectId, teacherId, SubjectTeacherType.Primary, TenantId));
 	}
 
 	public void SetSecondaryTeachers(IEnumerable<Guid> teacherIds)
@@ -168,7 +168,7 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		foreach (var teacherId in teacherIds)
 		{
 			Teachers.Add(
-				new AssignedSubjectTeacher(Id, SubjectId, teacherId, SubjectTeacherType.Secondary)
+				new AssignedSubjectTeacher(Id, SubjectId, teacherId, SubjectTeacherType.Secondary, TenantId)
 			);
 		}
 	}

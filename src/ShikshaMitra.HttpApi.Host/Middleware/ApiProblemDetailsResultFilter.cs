@@ -114,6 +114,7 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 		{
 			var existingErrorCode = TryGetExtensionString(problemDetails.Extensions, "errorCode")
 				?? TryGetExtensionString(problemDetails.Extensions, "code");
+			var extensionData = TryGetExtensionDictionary(problemDetails.Extensions, "data");
 			var normalizedStatus = ApiProblemDetailsMapper.NormalizeStatusCode(status, existingErrorCode);
 			var hasValidationErrorsInExtensions = status == StatusCodes.Status400BadRequest &&
 			                                      problemDetails.Extensions.ContainsKey("errors");
@@ -124,16 +125,17 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 			problemDetails.Detail = _errorDetailResolver.ResolveDetail(
 				problemDetails.Detail,
 				existingErrorCode,
-				ApiProblemDetailsMapper.GetDefaultDetail(normalizedStatus, hasValidationErrorsInExtensions));
+				ApiProblemDetailsMapper.GetDefaultDetail(normalizedStatus, hasValidationErrorsInExtensions),
+				extensionData);
 			return problemDetails;
 		}
 
-		var (title, detail, errorCode, errors) = ParseErrorPayload(value);
+		var (title, detail, errorCode, errors, errorData) = ParseErrorPayload(value);
 		var hasValidationErrors = errors?.Count > 0;
 		var normalizedStatusCode = ApiProblemDetailsMapper.NormalizeStatusCode(status, errorCode);
 		var defaultTitle = ApiProblemDetailsMapper.GetDefaultTitle(normalizedStatusCode, hasValidationErrors);
 		var defaultDetail = ApiProblemDetailsMapper.GetDefaultDetail(normalizedStatusCode, hasValidationErrors);
-		var normalizedDetail = _errorDetailResolver.ResolveDetail(detail, errorCode, defaultDetail);
+		var normalizedDetail = _errorDetailResolver.ResolveDetail(detail, errorCode, defaultDetail, errorData);
 		var normalized = new ProblemDetails
 		{
 			Type = $"https://httpstatuses.com/{normalizedStatusCode}",
@@ -157,31 +159,37 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 			normalized.Extensions["errors"] = errors;
 		}
 
+		if (errorData is { Count: > 0 })
+		{
+			normalized.Extensions["data"] = errorData;
+		}
+
 		return normalized;
 	}
 
-	private static (string? title, string? detail, string? errorCode, Dictionary<string, string[]>? errors) ParseErrorPayload(object? value)
+	private static (string? title, string? detail, string? errorCode, Dictionary<string, string[]>? errors, Dictionary<string, object?>? errorData) ParseErrorPayload(object? value)
 	{
 		if (value is null)
 		{
-			return (null, null, null, null);
+			return (null, null, null, null, null);
 		}
 
 		if (value is string text)
 		{
 			if (text.Contains("<html", StringComparison.OrdinalIgnoreCase))
 			{
-				return (null, null, null, null);
+				return (null, null, null, null, null);
 			}
 
-			return (null, text, null, null);
+			return (null, text, null, null, null);
 		}
 
 		var reflected = ParseErrorPayloadFromObject(value);
 		if (!string.IsNullOrWhiteSpace(reflected.title) ||
 		    !string.IsNullOrWhiteSpace(reflected.detail) ||
 		    !string.IsNullOrWhiteSpace(reflected.errorCode) ||
-		    reflected.errors is { Count: > 0 })
+		    reflected.errors is { Count: > 0 } ||
+		    reflected.errorData is { Count: > 0 })
 		{
 			return reflected;
 		}
@@ -192,13 +200,14 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 			var root = document.RootElement;
 			if (root.ValueKind != JsonValueKind.Object)
 			{
-				return (null, root.ToString(), null, null);
+				return (null, root.ToString(), null, null, null);
 			}
 
 			var title = TryGetString(root, "title");
 			var detail = TryGetString(root, "detail") ?? TryGetString(root, "message");
 			var errorCode = TryGetString(root, "errorCode");
 			var errors = ExtractErrors(root);
+			var errorData = ExtractObjectData(root, "data");
 
 			if (root.TryGetProperty("error", out var errorElement) && errorElement.ValueKind == JsonValueKind.Object)
 			{
@@ -208,23 +217,26 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 				{
 					errors = ExtractValidationErrors(errorElement);
 				}
+
+				errorData ??= ExtractObjectData(errorElement, "data");
 			}
 
-			return (title, detail, errorCode, errors);
+			return (title, detail, errorCode, errors, errorData);
 		}
 		catch
 		{
-			return (null, value.ToString(), null, null);
+			return (null, value.ToString(), null, null, null);
 		}
 	}
 
-	private static (string? title, string? detail, string? errorCode, Dictionary<string, string[]>? errors) ParseErrorPayloadFromObject(object value)
+	private static (string? title, string? detail, string? errorCode, Dictionary<string, string[]>? errors, Dictionary<string, object?>? errorData) ParseErrorPayloadFromObject(object value)
 	{
 		var title = GetObjectString(value, "Title");
 		var detail = GetObjectString(value, "Detail") ?? GetObjectString(value, "Message");
 		var errorCode = GetObjectString(value, "ErrorCode") ?? GetObjectString(value, "Code");
 		var errors = ExtractObjectErrors(GetObjectProperty(value, "Errors"))
 		            ?? ExtractObjectValidationErrors(GetObjectProperty(value, "ValidationErrors"));
+		var errorData = ExtractObjectData(GetObjectProperty(value, "Data"));
 
 		var errorObject = GetObjectProperty(value, "Error");
 		if (errorObject is not null)
@@ -233,9 +245,10 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 			detail ??= GetObjectString(errorObject, "Details") ?? GetObjectString(errorObject, "Message");
 			errors ??= ExtractObjectErrors(GetObjectProperty(errorObject, "Errors"))
 			        ?? ExtractObjectValidationErrors(GetObjectProperty(errorObject, "ValidationErrors"));
+			errorData ??= ExtractObjectData(GetObjectProperty(errorObject, "Data"));
 		}
 
-		return (title, detail, errorCode, errors);
+		return (title, detail, errorCode, errors, errorData);
 	}
 
 	private static string? TryGetExtensionString(IDictionary<string, object?> extensions, string key)
@@ -246,6 +259,16 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 		}
 
 		return rawValue.ToString();
+	}
+
+	private static Dictionary<string, object?>? TryGetExtensionDictionary(IDictionary<string, object?> extensions, string key)
+	{
+		if (!extensions.TryGetValue(key, out var rawValue) || rawValue is null)
+		{
+			return null;
+		}
+
+		return ExtractObjectData(rawValue);
 	}
 
 	private static string? TryGetString(JsonElement element, string propertyName)
@@ -347,6 +370,40 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 			: result.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Distinct(StringComparer.Ordinal).ToArray(), StringComparer.OrdinalIgnoreCase);
 	}
 
+	private static Dictionary<string, object?>? ExtractObjectData(JsonElement root, string propertyName)
+	{
+		if (!root.TryGetProperty(propertyName, out var dataElement) || dataElement.ValueKind != JsonValueKind.Object)
+		{
+			return null;
+		}
+
+		return ExtractObjectData(dataElement);
+	}
+
+	private static Dictionary<string, object?>? ExtractObjectData(JsonElement element)
+	{
+		if (element.ValueKind != JsonValueKind.Object)
+		{
+			return null;
+		}
+
+		var result = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+		foreach (var property in element.EnumerateObject())
+		{
+			result[property.Name] = property.Value.ValueKind switch
+			{
+				JsonValueKind.String => property.Value.GetString(),
+				JsonValueKind.Number => property.Value.ToString(),
+				JsonValueKind.True => true,
+				JsonValueKind.False => false,
+				JsonValueKind.Null => null,
+				_ => property.Value.ToString()
+			};
+		}
+
+		return result.Count == 0 ? null : result;
+	}
+
 	private static object? GetObjectProperty(object instance, string propertyName)
 	{
 		var property = instance.GetType().GetProperty(
@@ -442,6 +499,38 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 		return result.Count == 0
 			? null
 			: result.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Distinct(StringComparer.Ordinal).ToArray(), StringComparer.OrdinalIgnoreCase);
+	}
+
+	private static Dictionary<string, object?>? ExtractObjectData(object? rawData)
+	{
+		if (rawData is null)
+		{
+			return null;
+		}
+
+		if (rawData is JsonElement element)
+		{
+			return ExtractObjectData(element);
+		}
+
+		if (rawData is IDictionary dictionary)
+		{
+			var result = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+			foreach (DictionaryEntry entry in dictionary)
+			{
+				var key = entry.Key?.ToString();
+				if (string.IsNullOrWhiteSpace(key))
+				{
+					continue;
+				}
+
+				result[key] = entry.Value;
+			}
+
+			return result.Count == 0 ? null : result;
+		}
+
+		return null;
 	}
 
 	private static List<string> ToMessages(object? value)

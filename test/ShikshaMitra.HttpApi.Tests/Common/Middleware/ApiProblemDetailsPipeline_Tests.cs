@@ -195,6 +195,67 @@ public class ApiProblemDetailsPipeline_Tests
 			.ShouldBe(ApiProblemDetailsMapper.GetDefaultDetail(StatusCodes.Status400BadRequest));
 	}
 
+	[Fact]
+	public async Task Middleware_Should_Use_Known_Hr_Code_Fallback_When_Localization_Is_Missing()
+	{
+		var resolver = CreateResolver(new Dictionary<string, string>());
+		var middleware = new ApiProblemDetailsMiddleware(
+			_ => throw new BusinessException(
+				HRErrorCodes.PayrollAlreadyLocked,
+				GenericInternalDetail),
+			NullLogger<ApiProblemDetailsMiddleware>.Instance,
+			resolver);
+
+		var context = new DefaultHttpContext();
+		context.Request.Path = "/api/test";
+		context.Response.Body = new MemoryStream();
+
+		await middleware.InvokeAsync(context);
+
+		context.Response.StatusCode.ShouldBe(StatusCodes.Status400BadRequest);
+		context.Response.Body.Position = 0;
+		using var document = await JsonDocument.ParseAsync(context.Response.Body);
+		document.RootElement.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.PayrollAlreadyLocked);
+		var detail = document.RootElement.GetProperty("detail").GetString();
+		detail.ShouldNotBeNullOrWhiteSpace();
+		detail.ShouldContain("Payroll");
+		detail.ShouldContain("Locked");
+		detail.ShouldNotBe(ApiProblemDetailsMapper.GetDefaultDetail(StatusCodes.Status400BadRequest));
+	}
+
+	[Fact]
+	public async Task Middleware_Should_Fallback_To_Specific_Detail_For_LeaveInvalidMonth_When_Localization_Missing()
+	{
+		var resolver = CreateResolver(new Dictionary<string, string>());
+		var middleware = new ApiProblemDetailsMiddleware(
+			_ => throw new BusinessException(
+					HRErrorCodes.LeaveInvalidMonthForAcademicYear,
+					GenericInternalDetail)
+				.WithData("requestedMonth", "2026-05")
+				.WithData("academicYearName", "2026-2027")
+				.WithData("academicYearStart", "2026-06-01")
+				.WithData("academicYearEnd", "2027-05-31"),
+			NullLogger<ApiProblemDetailsMiddleware>.Instance,
+			resolver);
+
+		var context = new DefaultHttpContext();
+		context.Request.Path = "/api/test";
+		context.Response.Body = new MemoryStream();
+
+		await middleware.InvokeAsync(context);
+
+		context.Response.StatusCode.ShouldBe(StatusCodes.Status400BadRequest);
+		context.Response.Body.Position = 0;
+		using var document = await JsonDocument.ParseAsync(context.Response.Body);
+		document.RootElement.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.LeaveInvalidMonthForAcademicYear);
+		var detail = document.RootElement.GetProperty("detail").GetString();
+		detail.ShouldNotBeNullOrWhiteSpace();
+		detail.ShouldContain("2026-05");
+		detail.ShouldContain("2026-06-01");
+		detail.ShouldContain("2027-05-31");
+		detail.ShouldNotBe(ApiProblemDetailsMapper.GetDefaultDetail(StatusCodes.Status400BadRequest));
+	}
+
 	private static ApiProblemDetailsErrorDetailResolver CreateResolver(IDictionary<string, string> values)
 	{
 		return new ApiProblemDetailsErrorDetailResolver(new FakeStringLocalizer(values));

@@ -163,7 +163,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
 		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.LeaveTargetEmployeeRequired);
 		payload.GetProperty("detail").GetString()
-			.ShouldBe(ApiProblemDetailsMapper.GetDefaultDetail(StatusCodes.Status400BadRequest));
+			.ShouldBe("Target employee is required for this leave operation.");
 	}
 
 	[Fact]
@@ -181,9 +181,11 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Return_400_With_HR_Leave_020026_When_Month_Is_Outside_Academic_Year()
 	{
-		var (_, academicYearEnd) = await GetAcademicYearDateRangeAsync(AcademicYearId);
+		var (academicYearStart, academicYearEnd) = await GetAcademicYearDateRangeAsync(AcademicYearId);
 		var outsideMonth = new DateTime(academicYearEnd.Year, academicYearEnd.Month, 1).AddMonths(2);
 		var monthYear = Uri.EscapeDataString(outsideMonth.ToString("O"));
+		Client.DefaultRequestHeaders.Remove("Accept-Language");
+		Client.DefaultRequestHeaders.Add("Accept-Language", "en-US");
 
 		var response = await Client.GetAsync(
 			$"{BaseUrl}?academicYearId={AcademicYearId}&month-year={monthYear}&page=1&pageSize=20");
@@ -193,8 +195,28 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 		var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
 		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.LeaveInvalidMonthForAcademicYear);
-		payload.GetProperty("detail").GetString()
-			.ShouldBe("Selected month is outside the given academic year.");
+		var detail = payload.GetProperty("detail").GetString();
+		detail.ShouldNotBeNullOrWhiteSpace();
+		detail.ShouldContain(outsideMonth.ToString("yyyy-MM"));
+		detail.ShouldContain(academicYearStart.ToString("yyyy-MM-dd"));
+		detail.ShouldContain(academicYearEnd.ToString("yyyy-MM-dd"));
+		detail.ShouldNotBe(ApiProblemDetailsMapper.GetDefaultDetail(StatusCodes.Status400BadRequest));
+		Client.DefaultRequestHeaders.Remove("Accept-Language");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_200_For_InRange_Month()
+	{
+		var (academicYearStart, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
+		var inRangeMonth = new DateTime(academicYearStart.Year, academicYearStart.Month, 1);
+		var monthYear = Uri.EscapeDataString(inRangeMonth.ToString("O"));
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}?academicYearId={AcademicYearId}&month-year={monthYear}&page=1&pageSize=20");
+
+		var rawPayload = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
 	}
 
 	[Fact]

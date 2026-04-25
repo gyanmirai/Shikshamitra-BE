@@ -83,7 +83,11 @@ public class LeaveManagementAppService(
 			rangeEnd = monthEnd < ayEnd ? monthEnd : ayEnd;
 			if (rangeStart > rangeEnd)
 			{
-				throw new BusinessException(HRErrorCodes.LeaveInvalidMonthForAcademicYear);
+				throw new BusinessException(HRErrorCodes.LeaveInvalidMonthForAcademicYear)
+					.WithData("requestedMonth", anchor.ToString("yyyy-MM"))
+					.WithData("academicYearName", academicYear.Name ?? string.Empty)
+					.WithData("academicYearStart", ayStart.ToString("yyyy-MM-dd"))
+					.WithData("academicYearEnd", ayEnd.ToString("yyyy-MM-dd"));
 			}
 		}
 		else
@@ -420,7 +424,11 @@ public class LeaveManagementAppService(
 		var rangeEnd = re < ayEnd ? re : ayEnd;
 		if (rangeStart > rangeEnd)
 		{
-			throw new BusinessException(HRErrorCodes.LeaveInvalidMonthForAcademicYear);
+			throw new BusinessException(HRErrorCodes.LeaveInvalidMonthForAcademicYear)
+				.WithData("requestedMonth", rs.ToString("yyyy-MM"))
+				.WithData("academicYearName", academicYear.Name ?? string.Empty)
+				.WithData("academicYearStart", ayStart.ToString("yyyy-MM-dd"))
+				.WithData("academicYearEnd", ayEnd.ToString("yyyy-MM-dd"));
 		}
 
 		var rangeStartOffset = new DateTimeOffset(

@@ -11,8 +11,10 @@ using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
@@ -27,12 +29,17 @@ namespace ShikshaMitra.Seeders;
 /// </summary>
 public class StudentSeederContributor : BaseSeederContributor
 {
+	private const int StudentsPerDivision = 36;
+	private const int InsertBatchSize = 100;
+
 	private readonly IRepository<Student, Guid> _studentRepository;
 	private readonly IAcademicYearRepository _academicYearRepository;
 	private readonly IRepository<EducationBoard, Guid> _eduBoardRepository;
 	private readonly IEducationMediumRepository _educationMediumRepository;
+	private readonly IEducationMediumStageRepository _educationMediumStageRepository;
 	private readonly IStandardRepository _standardRepository;
 	private readonly IDivisionRepository _divisionRepository;
+	private readonly ILogger<StudentSeederContributor> _logger;
 
 	// Diverse Indian names (15 boys, 15 girls)
 	private readonly string[] _firstNamesBoys =
@@ -62,6 +69,14 @@ public class StudentSeederContributor : BaseSeederContributor
 	private readonly string[] _cities = ["Surat", "Ahmedabad", "Vadodara", "Rajkot", "Bhavnagar"];
 	private readonly string[] _localities = ["Athwa", "Adajan", "Vesu", "Pal", "Rander", "Parvat Patiya"];
 	private readonly string[] _bloodGroups = ["A+", "B+", "O+", "AB+", "A-", "B-", "O-", "AB-"];
+	private readonly string[] _castNames = ["General", "OBC", "SC", "ST", "EWS"];
+	private readonly string[] _phonePrefixes = ["98", "99", "97", "96", "95", "94", "93", "92", "91", "90"];
+	private readonly string[] _landmarks =
+	[
+		"City Hospital", "Central Park", "Bus Stand", "Railway Station",
+		"Shopping Mall", "Temple", "Market", "Police Station", "Post Office",
+		"School", "Garden", "Circle"
+	];
 
 	public StudentSeederContributor(
 		ICurrentTenant currentTenant,
@@ -71,23 +86,32 @@ public class StudentSeederContributor : BaseSeederContributor
 		IAcademicYearRepository academicYearRepository,
 		IRepository<EducationBoard, Guid> eduBoardRepository,
 		IEducationMediumRepository educationMediumRepository,
+		IEducationMediumStageRepository educationMediumStageRepository,
 		IStandardRepository standardRepository,
-		IDivisionRepository divisionRepository)
+		IDivisionRepository divisionRepository,
+		ILogger<StudentSeederContributor> logger)
 		: base(currentTenant, guidGenerator, unitOfWork)
 	{
 		_studentRepository = studentRepository;
 		_academicYearRepository = academicYearRepository;
 		_eduBoardRepository = eduBoardRepository;
 		_educationMediumRepository = educationMediumRepository;
+		_educationMediumStageRepository = educationMediumStageRepository;
 		_standardRepository = standardRepository;
 		_divisionRepository = divisionRepository;
+		_logger = logger;
 	}
 
 	public override async Task SeedAsync(DataSeedContext context)
 	{
 		// Check if students already seeded
 		if (await _studentRepository.GetCountAsync() > 0)
+		{
+			_logger.LogInformation("[StudentSeeder] Students already exist, skipping. TenantId={TenantId}", CurrentTenant.Id);
 			return;
+		}
+
+		_logger.LogInformation("[StudentSeeder] Start seeding for TenantId={TenantId}", CurrentTenant.Id);
 
 		// Get current academic year
 		var currentYear = DateTime.Now.Year;
@@ -102,58 +126,140 @@ public class StudentSeederContributor : BaseSeederContributor
 
 		if (currentAcademicYear == null)
 		{
+			_logger.LogWarning("[StudentSeeder] No academic year found. Skipping student seeding.");
 			return; // No academic year found
 		}
 
-		var boards = await _eduBoardRepository.GetListAsync();
+		_logger.LogInformation(
+			"[StudentSeeder] Using AcademicYearId={AcademicYearId}, AcademicYearName={AcademicYearName}",
+			currentAcademicYear.Id,
+			currentAcademicYear.Name
+		);
+
+		// Load all required entities once to avoid nested N+1 queries.
+		var boards = await _eduBoardRepository.GetListAsync(b => b.AcademicYearId == currentAcademicYear.Id);
+		if (!boards.Any())
+		{
+			_logger.LogWarning("[StudentSeeder] No education boards found for AcademicYearId={AcademicYearId}.", currentAcademicYear.Id);
+			return;
+		}
+
+		var boardIdSet = boards.Select(x => x.Id).ToHashSet();
+		var allMediums = await _educationMediumRepository.GetListAsync();
+		var mediums = allMediums.Where(m => boardIdSet.Contains(m.EducationBoardId)).ToList();
+		var mediumIdSet = mediums.Select(x => x.Id).ToHashSet();
+
+		var allStages = await _educationMediumStageRepository.GetListAsync();
+		var stages = allStages.Where(s => mediumIdSet.Contains(s.EducationMediumId)).ToList();
+		var stageIdSet = stages.Select(x => x.Id).ToHashSet();
+
+		var allStandards = await _standardRepository.GetListAsync();
+		var class10Standards = allStandards
+			.Where(s => stageIdSet.Contains(s.EducationMediumStageId) &&
+						s.Name.Equals("Class 10", StringComparison.OrdinalIgnoreCase))
+			.ToList();
+		var class10StandardIdSet = class10Standards.Select(x => x.Id).ToHashSet();
+
+		var allDivisions = await _divisionRepository.GetListAsync();
+		var divisions = allDivisions.Where(d => class10StandardIdSet.Contains(d.StandardId)).ToList();
+
+		var mediumsByBoard = mediums.GroupBy(x => x.EducationBoardId).ToDictionary(x => x.Key, x => x.ToList());
+		var stagesByMedium = stages.GroupBy(x => x.EducationMediumId).ToDictionary(x => x.Key, x => x.ToList());
+		var standardsByStage = class10Standards.GroupBy(x => x.EducationMediumStageId).ToDictionary(x => x.Key, x => x.ToList());
+		var divisionsByStandard = divisions.GroupBy(x => x.StandardId).ToDictionary(x => x.Key, x => x.ToList());
+
+		_logger.LogInformation(
+			"[StudentSeeder] Data loaded: Boards={Boards}, Mediums={Mediums}, Stages={Stages}, Class10Standards={Standards}, Divisions={Divisions}",
+			boards.Count,
+			mediums.Count,
+			stages.Count,
+			class10Standards.Count,
+			divisions.Count
+		);
 
 		int totalStudentsCreated = 0;
-		foreach ( var board in boards ) {
-			// Seed students only for Class 10
-			var mediums = await _educationMediumRepository.GetListAsync(x => x.EducationBoardId == board.Id);
+		var pendingStudents = new List<Student>(InsertBatchSize);
 
-			foreach (var medium in mediums)
+		foreach (var board in boards)
+		{
+			if (!mediumsByBoard.TryGetValue(board.Id, out var mediumsForBoard))
 			{
-				// Get Class 10 standard for this medium directly from repository
-				var allStandards = await _standardRepository.GetListAsync();
-				var class10Standards = allStandards
-					.Where(s => s.EducationMediumStage.EducationMediumId == medium.Id
-								&& s.Name == "Class 10")
-					.ToList();
+				_logger.LogDebug("[StudentSeeder] No mediums found for BoardId={BoardId}", board.Id);
+				continue;
+			}
 
-				foreach (var standard in class10Standards)
+			foreach (var medium in mediumsForBoard)
+			{
+				if (!stagesByMedium.TryGetValue(medium.Id, out var mediumStages))
 				{
-					// Get all divisions for Class 10
-					var divisions = await _divisionRepository.GetListAsync(d => d.StandardId == standard.Id);
+					continue;
+				}
 
-					foreach (var division in divisions)
+				foreach (var stage in mediumStages)
+				{
+					if (!standardsByStage.TryGetValue(stage.Id, out var standardsForStage))
 					{
-						// Create 36 students per division (80% of 45 capacity)
-						var studentsInDivision = 36;
+						continue;
+					}
 
-						for (int i = 0; i < studentsInDivision; i++)
+					foreach (var standard in standardsForStage)
+					{
+						if (!divisionsByStandard.TryGetValue(standard.Id, out var divisionsForStandard))
 						{
-							await CreateStudentAsync(
-								medium.Id,
-								standard.Id,
-								division.Id,
-								currentAcademicYear.Id,
-								board.Id,
-								totalStudentsCreated + 1,
-								i + 1 // Roll number within division
-							);
+							continue;
+						}
 
-							totalStudentsCreated++;
+						foreach (var division in divisionsForStandard)
+						{
+							for (int i = 0; i < StudentsPerDivision; i++)
+							{
+								var student = CreateStudent(
+									medium.Id,
+									standard.Id,
+									division.Id,
+									currentAcademicYear.Id,
+									board.Id,
+									totalStudentsCreated + 1,
+									i + 1 // Roll number within division
+								);
+
+								pendingStudents.Add(student);
+								totalStudentsCreated++;
+
+								if (pendingStudents.Count >= InsertBatchSize)
+								{
+									await FlushStudentBatchAsync(pendingStudents, totalStudentsCreated);
+								}
+							}
 						}
 					}
 				}
 			}
 		}
 
-		await CurrentUnitOfWork.SaveChangesAsync();
+		if (pendingStudents.Count > 0)
+		{
+			await FlushStudentBatchAsync(pendingStudents, totalStudentsCreated);
+		}
+
+		_logger.LogInformation("[StudentSeeder] Completed seeding. TotalStudentsCreated={TotalStudentsCreated}", totalStudentsCreated);
 	}
 
-	private async Task CreateStudentAsync(
+	private async Task FlushStudentBatchAsync(List<Student> pendingStudents, int totalStudentsCreated)
+	{
+		await _studentRepository.InsertManyAsync(pendingStudents, autoSave: false);
+		await CurrentUnitOfWork.SaveChangesAsync();
+
+		_logger.LogInformation(
+			"[StudentSeeder] Checkpoint persisted. BatchSize={BatchSize}, TotalPersisted={TotalPersisted}",
+			pendingStudents.Count,
+			totalStudentsCreated
+		);
+
+		pendingStudents.Clear();
+	}
+
+	private Student CreateStudent(
 		Guid mediumId,
 		Guid standardId,
 		Guid divisionId,
@@ -219,8 +325,6 @@ public class StudentSeederContributor : BaseSeederContributor
 
 		// Cast categories: 0=General, 1=OBC, 2=SC, 3=ST, 4=EWS
 		var castCategory = (CastCategoryEnum)(globalCounter % 5);
-		var castNames = new[] { "General", "OBC", "SC", "ST", "EWS" };
-
 		// Mother tongue: 0=Gujarati, 1=Hindi, 2=English, 3=Marathi (adjust if different)
 		var motherTongue = (MotherTongueEnum)(globalCounter % 4);
 
@@ -233,7 +337,7 @@ public class StudentSeederContributor : BaseSeederContributor
 			null, // PanNo
 			null, // PenNo
 			religion,
-			castNames[(int)castCategory],
+			_castNames[(int)castCategory],
 			castCategory,
 			"Indian",
 			city,
@@ -288,7 +392,7 @@ public class StudentSeederContributor : BaseSeederContributor
 		// Approve admission (sets status to Approved)
 		student.ApproveAdmission();
 
-		await _studentRepository.InsertAsync(student, autoSave: false);
+		return student;
 	}
 
 	#region Helper Methods
@@ -300,20 +404,13 @@ public class StudentSeederContributor : BaseSeederContributor
 
 	private string GeneratePhoneNumber(Random random)
 	{
-		var prefixes = new[] { "98", "99", "97", "96", "95", "94", "93", "92", "91", "90" };
-		var prefix = prefixes[random.Next(prefixes.Length)];
+		var prefix = _phonePrefixes[random.Next(_phonePrefixes.Length)];
 		return $"+91-{prefix}{random.Next(10000000, 99999999)}";
 	}
 
 	private string GenerateLandmark(Random random)
 	{
-		var landmarks = new[]
-		{
-			"City Hospital", "Central Park", "Bus Stand", "Railway Station",
-			"Shopping Mall", "Temple", "Market", "Police Station", "Post Office",
-			"School", "Garden", "Circle"
-		};
-		return landmarks[random.Next(landmarks.Length)];
+		return _landmarks[random.Next(_landmarks.Length)];
 	}
 
 	#endregion

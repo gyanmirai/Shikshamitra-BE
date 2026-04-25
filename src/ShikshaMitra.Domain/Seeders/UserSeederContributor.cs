@@ -1,7 +1,7 @@
-﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
 using Volo.Abp.Data;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
@@ -12,6 +12,9 @@ namespace ShikshaMitra.Seeders;
 
 public class UserSeederContributor : BaseSeederContributor
 {
+	private const string SeedFlagKey = "SeedTestLogins";
+
+	private readonly IConfiguration _configuration;
 	private readonly IdentityUserManager _userManager;
 	private readonly IIdentityUserRepository _userRepository;
 	private readonly IIdentityRoleRepository _roleRepository;
@@ -21,12 +24,14 @@ public class UserSeederContributor : BaseSeederContributor
 		ICurrentTenant currentTenant,
 		IGuidGenerator guidGenerator,
 		IUnitOfWork unitOfWork,
+		IConfiguration configuration,
 		IdentityUserManager userManager,
 		IIdentityUserRepository userRepository,
 		IIdentityRoleRepository roleRepository,
 		ILookupNormalizer lookupNormalizer)
 		: base(currentTenant, guidGenerator, unitOfWork)
 	{
+		_configuration = configuration;
 		_userManager = userManager;
 		_userRepository = userRepository;
 		_roleRepository = roleRepository;
@@ -35,9 +40,15 @@ public class UserSeederContributor : BaseSeederContributor
 
 	public override async Task SeedAsync(DataSeedContext context)
 	{
+		// TestLoginSeederContributor already seeds these users when this flag is enabled.
+		// Skipping here prevents duplicate username collisions (e.g. teacher1).
+		if (_configuration.GetValue<bool>(SeedFlagKey, false))
+		{
+			return;
+		}
+
 		var tenantId = CurrentTenant.Id;
 
-		// Define users (using auto-generated GUIDs to avoid conflicts)
 		var users = new List<(string UserName, string Email, string Name, string Surname, string RoleName)>
 		{
 			("teacher1", "teacher1@school.com", "John", "Doe", "Teacher"),
@@ -48,14 +59,24 @@ public class UserSeederContributor : BaseSeederContributor
 
 		foreach (var userInfo in users)
 		{
-			// Check if user already exists by username
-			var existingUser = await _userRepository.FindByNormalizedUserNameAsync(_lookupNormalizer.NormalizeName(userInfo.UserName));
+			var existingUser = await _userRepository.FindByNormalizedUserNameAsync(
+				_lookupNormalizer.NormalizeName(userInfo.UserName)
+			);
 			if (existingUser != null)
 			{
+				await EnsureRoleMembershipAsync(existingUser, userInfo.RoleName);
 				continue;
 			}
 
-			// Create user with auto-generated ID
+			var existingByEmail = await _userRepository.FindByNormalizedEmailAsync(
+				_lookupNormalizer.NormalizeEmail(userInfo.Email)
+			);
+			if (existingByEmail != null)
+			{
+				await EnsureRoleMembershipAsync(existingByEmail, userInfo.RoleName);
+				continue;
+			}
+
 			var user = new IdentityUser(
 				GuidGenerator.Create(),
 				userInfo.UserName,
@@ -67,21 +88,35 @@ public class UserSeederContributor : BaseSeederContributor
 			user.Surname = userInfo.Surname;
 			user.SetEmailConfirmed(true);
 
-			// Use the manager to create user with password
 			var result = await _userManager.CreateAsync(user, "Temp@123");
 			if (!result.Succeeded)
 			{
+				// Another seeder may have created the same user between existence check and create.
+				// Keep seeding idempotent by continuing.
 				continue;
 			}
 
-			// Assign role
-			var role = await _roleRepository.FindByNormalizedNameAsync(_lookupNormalizer.NormalizeName(userInfo.RoleName));
-			if (role != null)
-			{
-				await _userManager.AddToRoleAsync(user, role.Name);
-			}
+			await EnsureRoleMembershipAsync(user, userInfo.RoleName);
 		}
 
 		await CurrentUnitOfWork.SaveChangesAsync();
+	}
+
+	private async Task EnsureRoleMembershipAsync(IdentityUser user, string roleName)
+	{
+		var normalizedRoleName = _lookupNormalizer.NormalizeName(roleName);
+		var role = await _roleRepository.FindByNormalizedNameAsync(normalizedRoleName);
+		if (role == null || string.IsNullOrWhiteSpace(role.Name))
+		{
+			return;
+		}
+
+		var managedUser = await _userManager.FindByIdAsync(user.Id.ToString()) ?? user;
+		if (await _userManager.IsInRoleAsync(managedUser, role.Name))
+		{
+			return;
+		}
+
+		await _userManager.AddToRoleAsync(managedUser, role.Name);
 	}
 }

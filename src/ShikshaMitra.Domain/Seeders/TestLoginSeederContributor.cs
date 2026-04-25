@@ -215,6 +215,15 @@ public class TestLoginSeederContributor : BaseSeederContributor
 			return byEmail;
 		}
 
+		// Prefer direct username match before alias lookups to avoid selecting a different
+		// alias account and then failing SetUserNameAsync with duplicate-username errors.
+		var normalizedUserName = _lookupNormalizer.NormalizeName(spec.UserName);
+		var byUserName = await _userRepository.FindByNormalizedUserNameAsync(normalizedUserName);
+		if (byUserName != null)
+		{
+			return byUserName;
+		}
+
 		foreach (var aliasEmail in spec.AliasEmails)
 		{
 			var normalizedAliasEmail = _lookupNormalizer.NormalizeEmail(aliasEmail);
@@ -223,13 +232,6 @@ public class TestLoginSeederContributor : BaseSeederContributor
 			{
 				return byAliasEmail;
 			}
-		}
-
-		var normalizedUserName = _lookupNormalizer.NormalizeName(spec.UserName);
-		var byUserName = await _userRepository.FindByNormalizedUserNameAsync(normalizedUserName);
-		if (byUserName != null)
-		{
-			return byUserName;
 		}
 
 		foreach (var aliasUserName in spec.AliasUserNames)
@@ -255,8 +257,18 @@ public class TestLoginSeederContributor : BaseSeederContributor
 		}
 		else
 		{
-			var token = await _userManager.GeneratePasswordResetTokenAsync(managedUser);
-			result = await _userManager.ResetPasswordAsync(managedUser, token, password);
+			// Avoid token-provider dependency in DbMigrator context.
+			// Some environments don't register the "Default" token provider, which breaks
+			// GeneratePasswordResetTokenAsync during seeding.
+			var removeResult = await _userManager.RemovePasswordAsync(managedUser);
+			if (!removeResult.Succeeded)
+			{
+				throw new Exception(
+					$"Failed to remove existing password for seeded test user '{managedUser.Email}': " +
+					string.Join(", ", removeResult.Errors));
+			}
+
+			result = await _userManager.AddPasswordAsync(managedUser, password);
 		}
 
 		if (!result.Succeeded)

@@ -144,7 +144,7 @@ public class LeaveManagementController : AbpControllerBase
 		[FromForm, Required] DateTime startDate,
 		[FromForm, Required] DateTime endDate,
 		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
-		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
+		[FromForm(Name = "File")] IFormFile? file = null)
 	{
 		if (!leavePolicyId.HasValue && (!leaveTypeId.HasValue || leaveTypeId.Value == Guid.Empty))
 		{

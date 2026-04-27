@@ -14,4 +14,5 @@ public static class TimetableErrorCodes
     public const string TimetableSlotNotFound = "Academic:Timetable:030005";
     public const string InvalidSlotConfiguration = "Academic:Timetable:030006";
     public const string StandardNotFound = "Academic:Timetable:040001";
+    public const string LectureSlotNotCreated = "Academic:Timetable:040002";
 }

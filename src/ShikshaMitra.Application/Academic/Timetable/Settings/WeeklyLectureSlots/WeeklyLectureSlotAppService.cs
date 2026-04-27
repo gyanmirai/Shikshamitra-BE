@@ -25,47 +25,55 @@ public class WeeklyLectureSlotAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsWeeklyLectures.View)]
     public async Task<PagedResultDto<WeeklyLectureSlotListDto>> GetListAsync(GetWeeklyLectureSlotsInput input)
     {
+        // Load all standards under the requested medium for name lookup
         var standardQueryable = await standardRepository.GetQueryableAsync();
-        var standards = await AsyncExecuter.ToListAsync(
+        var allStandards = await AsyncExecuter.ToListAsync(
             standardQueryable.Where(s => s.EducationMediumStage.EducationMediumId == input.AcademicMediumId));
 
+        var standardIds = allStandards.Select(s => s.Id).ToList();
+
+        // Query only slots that exist for those standards
+        var queryable = await weeklyLectureSlotRepository.WithDetailsAsync();
+        var allSlots = await AsyncExecuter.ToListAsync(
+            queryable.Where(w => standardIds.Contains(w.StandardId)));
+
+        // Apply optional search filter on standard name
         if (!string.IsNullOrWhiteSpace(input.Search))
         {
-            standards = standards.Where(s => s.Name.Contains(input.Search, StringComparison.OrdinalIgnoreCase)).ToList();
+            var matchingStandardIds = allStandards
+                .Where(s => s.Name.Contains(input.Search, StringComparison.OrdinalIgnoreCase))
+                .Select(s => s.Id)
+                .ToHashSet();
+            allSlots = allSlots.Where(w => matchingStandardIds.Contains(w.StandardId)).ToList();
         }
 
-        var totalCount = standards.Count;
-        var pagedStandards = standards
+        var totalCount = allSlots.Count;
+        var standardsDict = allStandards.ToDictionary(s => s.Id, s => s.Name);
+
+        var pagedSlots = allSlots
+            .OrderBy(w => standardsDict.GetValueOrDefault(w.StandardId, string.Empty))
             .Skip(input.SkipCount)
             .Take(input.MaxResultCount)
             .ToList();
 
-        var queryable = await weeklyLectureSlotRepository.WithDetailsAsync();
-        var slots = await AsyncExecuter.ToListAsync(
-            queryable.Where(w => pagedStandards.Select(s => s.Id).Contains(w.StandardId)));
-
         var subjects = await subjectRepository.GetListAsync();
         var electiveGroups = await electiveGroupRepository.GetListAsync();
 
-        var items = pagedStandards.Select(standard =>
+        var items = pagedSlots.Select(slot => new WeeklyLectureSlotListDto
         {
-            var slot = slots.FirstOrDefault(s => s.StandardId == standard.Id);
-            return new WeeklyLectureSlotListDto
+            Id = slot.Id,
+            StandardId = slot.StandardId,
+            StandardName = standardsDict.GetValueOrDefault(slot.StandardId, string.Empty),
+            TotalLectures = slot.GetTotalLectures(),
+            Subjects = slot.Subjects.Select(sub => new WeeklyLectureSubjectSummaryDto
             {
-                Id = slot?.Id ?? Guid.Empty,
-                StandardId = standard.Id,
-                StandardName = standard.Name,
-                TotalLectures = slot?.GetTotalLectures() ?? 0,
-                Subjects = slot?.Subjects.Select(sub => new WeeklyLectureSubjectSummaryDto
-                {
-                    SubjectId = sub.SubjectId,
-                    SubjectName = sub.SubjectId.HasValue
-                        ? subjects.FirstOrDefault(s => s.Id == sub.SubjectId.Value)?.Name ?? string.Empty
-                        : electiveGroups.FirstOrDefault(eg => eg.Id == sub.ElectiveGroupId)?.Name ?? string.Empty,
-                    ElectiveGroupId = sub.ElectiveGroupId,
-                    WeeklyLectures = sub.WeeklyLectures
-                }).ToList() ?? []
-            };
+                SubjectId = sub.SubjectId,
+                SubjectName = sub.SubjectId.HasValue
+                    ? subjects.FirstOrDefault(s => s.Id == sub.SubjectId.Value)?.Name ?? string.Empty
+                    : electiveGroups.FirstOrDefault(eg => eg.Id == sub.ElectiveGroupId)?.Name ?? string.Empty,
+                ElectiveGroupId = sub.ElectiveGroupId,
+                WeeklyLectures = sub.WeeklyLectures
+            }).ToList()
         }).ToList();
 
         return new PagedResultDto<WeeklyLectureSlotListDto>(totalCount, items);

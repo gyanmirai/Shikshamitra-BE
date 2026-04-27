@@ -51,8 +51,7 @@ public class GetAssignmentV2ListFilterDto
     [Required]
     public Guid SubjectId { get; set; }
 
-    [Required]
-    public DateTime AssignmentDate { get; set; }
+    public DateTime? AssignmentDate { get; set; }
 
     public int Page { get; set; } = 1;
 

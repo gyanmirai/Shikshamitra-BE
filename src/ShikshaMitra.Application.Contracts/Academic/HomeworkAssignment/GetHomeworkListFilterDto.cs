@@ -14,8 +14,7 @@ public class GetHomeworkListFilterDto
     [Required]
     public Guid SubjectId { get; set; }
 
-    [Required]
-    public DateTime HomeworkDate { get; set; }
+    public DateTime? HomeworkDate { get; set; }
 
     public int Page { get; set; } = 1;
 

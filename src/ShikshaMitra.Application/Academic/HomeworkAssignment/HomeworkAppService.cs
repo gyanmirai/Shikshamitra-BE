@@ -118,7 +118,7 @@ public class HomeworkAppService(
             // Only homeworks with a schedule for the requested division
             .Where(h => h.DivisionSchedules.Any(s =>
                 s.DivisionId == filter.DivisionId
-                && (!s.PublishDate.HasValue || s.PublishDate.Value <= filter.HomeworkDate)));
+                && (!filter.HomeworkDate.HasValue || !s.PublishDate.HasValue || s.PublishDate.Value <= filter.HomeworkDate.Value)));
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
@@ -278,10 +278,6 @@ public class HomeworkAppService(
     {
         var homework = await homeworkRepository.FindAsync(homeworkId)
             ?? throw new BusinessException("ShikshaMitra.Homework:NotFound").WithData("Id", homeworkId);
-
-        if (homework.Status != HomeworkStatus.Draft)
-            throw new BusinessException("ShikshaMitra.Homework:CannotDeletePublished")
-                .WithData("HomeworkId", homeworkId);
 
         await homeworkRepository.DeleteAsync(homework, autoSave: true);
     }

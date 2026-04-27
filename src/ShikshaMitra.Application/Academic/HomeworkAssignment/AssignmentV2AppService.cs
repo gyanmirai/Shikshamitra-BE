@@ -105,7 +105,7 @@ public class AssignmentV2AppService(
             .Where(a => a.SubjectId == filter.SubjectId)
             .Where(a => a.DivisionSchedules.Any(s =>
                 s.DivisionId == filter.DivisionId
-                && (!s.PublishDate.HasValue || s.PublishDate.Value <= filter.AssignmentDate)));
+                && (!filter.AssignmentDate.HasValue || !s.PublishDate.HasValue || s.PublishDate.Value <= filter.AssignmentDate.Value)));
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
@@ -253,10 +253,6 @@ public class AssignmentV2AppService(
     {
         var assignment = await assignmentRepository.FindAsync(assignmentId)
             ?? throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", assignmentId);
-
-        if (assignment.Status != AssignmentStatus.Draft)
-            throw new BusinessException("ShikshaMitra.Assignment:CannotDeletePublished")
-                .WithData("AssignmentId", assignmentId);
 
         await assignmentRepository.DeleteAsync(assignment, autoSave: true);
     }

@@ -58,12 +58,23 @@ public class LectureSlotAppService(
             Id = config.Id,
             StandardId = config.StandardId,
             StandardName = standardsDict.GetValueOrDefault(config.StandardId, string.Empty),
-            SlotConfigurations = config.SlotGroups.Select(g => new SlotConfigurationSummaryDto
-            {
-                FromDay = g.WeekRangeStart,
-                ToDay = g.WeekRangeEnd,
-                TotalSlots = g.TotalSlots
-            }).ToList()
+            SlotConfigurations = config.SlotGroups
+                .OrderBy(g => g.TimeSlots.Count > 0 ? g.TimeSlots.Min(ts => ts.StartTime) : TimeOnly.MaxValue)
+                .Select(g => new SlotConfigurationSummaryDto
+                {
+                    FromDay = g.WeekRangeStart,
+                    ToDay = g.WeekRangeEnd,
+                    TotalSlots = g.TotalSlots,
+                    TimeSlots = g.TimeSlots
+                        .OrderBy(ts => ts.StartTime)
+                        .Select(ts => new TimeSlotDetailDto
+                        {
+                            StartTime = new DateTimeOffset(DateOnly.MinValue.ToDateTime(ts.StartTime), TimeSpan.Zero),
+                            EndTime = new DateTimeOffset(DateOnly.MinValue.ToDateTime(ts.EndTime), TimeSpan.Zero),
+                            SlotType = ts.SlotType,
+                            BreakType = ts.BreakType
+                        }).ToList()
+                }).ToList()
         }).ToList();
 
         return new PagedResultDto<LectureSlotListDto>(totalCount, items);

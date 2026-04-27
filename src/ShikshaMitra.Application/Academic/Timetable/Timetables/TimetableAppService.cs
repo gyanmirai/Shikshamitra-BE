@@ -151,6 +151,13 @@ public class TimetableAppService(
     public async Task<TimetableManagementResponseDto> GetManagementByStandardAsync(
         Guid standardId, GetTimetableManagementInput input)
     {
+        var lectureSlotConfig = await lectureSlotConfigRepository.FindByStandardIdAsync(standardId);
+        if (lectureSlotConfig is null)
+        {
+            throw new BusinessException(TimetableErrorCodes.LectureSlotNotCreated)
+                .WithData("message", "Please first create lecture slot for selected standard");
+        }
+
         var standard = await standardRepository.GetAsync(standardId);
         var divisionQueryable = await divisionRepository.GetQueryableAsync();
         var divisions = await AsyncExecuter.ToListAsync(

@@ -22,40 +22,48 @@ public class LectureSlotAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.View)]
     public async Task<PagedResultDto<LectureSlotListDto>> GetByMediumAsync(GetLectureSlotsByMediumInput input)
     {
+        // Load all standards under the requested medium for name lookup
         var standardQueryable = await standardRepository.GetQueryableAsync();
-        var standards = await AsyncExecuter.ToListAsync(
+        var allStandards = await AsyncExecuter.ToListAsync(
             standardQueryable.Where(s => s.EducationMediumStage.EducationMediumId == input.AcademicMediumId));
 
+        var standardIds = allStandards.Select(s => s.Id).ToList();
+
+        // Query configs (which represent "created lecture slots") for those standards
+        var configsQueryable = await lectureSlotConfigRepository.WithDetailsAsync();
+        var allConfigs = await AsyncExecuter.ToListAsync(
+            configsQueryable.Where(c => standardIds.Contains(c.StandardId)));
+
+        // Apply optional search filter on standard name
         if (!string.IsNullOrWhiteSpace(input.Search))
         {
-            standards = standards.Where(s => s.Name.Contains(input.Search, StringComparison.OrdinalIgnoreCase)).ToList();
+            var matchingStandardIds = allStandards
+                .Where(s => s.Name.Contains(input.Search, StringComparison.OrdinalIgnoreCase))
+                .Select(s => s.Id)
+                .ToHashSet();
+            allConfigs = allConfigs.Where(c => matchingStandardIds.Contains(c.StandardId)).ToList();
         }
 
-        var totalCount = standards.Count;
-        var pagedStandards = standards
+        var totalCount = allConfigs.Count;
+        var pagedConfigs = allConfigs
+            .OrderBy(c => allStandards.First(s => s.Id == c.StandardId).Name)
             .Skip(input.SkipCount)
             .Take(input.MaxResultCount)
             .ToList();
 
-        var queryable = await lectureSlotConfigRepository.WithDetailsAsync();
-        var configs = await AsyncExecuter.ToListAsync(
-            queryable.Where(c => pagedStandards.Select(s => s.Id).Contains(c.StandardId)));
+        var standardsDict = allStandards.ToDictionary(s => s.Id, s => s.Name);
 
-        var items = configs.Select(config =>
+        var items = pagedConfigs.Select(config => new LectureSlotListDto
         {
-            var standard = pagedStandards.First(s => s.Id == config.StandardId);
-            return new LectureSlotListDto
+            Id = config.Id,
+            StandardId = config.StandardId,
+            StandardName = standardsDict.GetValueOrDefault(config.StandardId, string.Empty),
+            SlotConfigurations = config.SlotGroups.Select(g => new SlotConfigurationSummaryDto
             {
-                Id = config.Id,
-                StandardId = config.StandardId,
-                StandardName = standard.Name,
-                SlotConfigurations = config.SlotGroups.Select(g => new SlotConfigurationSummaryDto
-                {
-                    FromDay = g.WeekRangeStart,
-                    ToDay = g.WeekRangeEnd,
-                    TotalSlots = g.TotalSlots
-                }).ToList()
-            };
+                FromDay = g.WeekRangeStart,
+                ToDay = g.WeekRangeEnd,
+                TotalSlots = g.TotalSlots
+            }).ToList()
         }).ToList();
 
         return new PagedResultDto<LectureSlotListDto>(totalCount, items);
@@ -192,17 +200,21 @@ public class LectureSlotAppService(
         PreviousStandardId = config.PreviousStandardId,
         CreatedAt = config.CreationTime,
         UpdatedAt = config.LastModificationTime,
-        SlotConfigurations = config.SlotGroups.Select(g => new SlotConfigurationDetailDto
-        {
-            TotalSlots = g.TotalSlots,
-            WeekRange = [g.WeekRangeStart, g.WeekRangeEnd],
-            TimeSlots = g.TimeSlots.Select(ts => new TimeSlotDetailDto
+        SlotConfigurations = config.SlotGroups
+            .OrderBy(g => g.TimeSlots.Count > 0 ? g.TimeSlots.Min(ts => ts.StartTime) : TimeOnly.MaxValue)
+            .Select(g => new SlotConfigurationDetailDto
             {
-                StartTime = new DateTimeOffset(DateOnly.MinValue.ToDateTime(ts.StartTime), TimeSpan.Zero),
-                EndTime = new DateTimeOffset(DateOnly.MinValue.ToDateTime(ts.EndTime), TimeSpan.Zero),
-                SlotType = ts.SlotType,
-                BreakType = ts.BreakType
+                TotalSlots = g.TotalSlots,
+                WeekRange = [g.WeekRangeStart, g.WeekRangeEnd],
+                TimeSlots = g.TimeSlots
+                    .OrderBy(ts => ts.StartTime)
+                    .Select(ts => new TimeSlotDetailDto
+                    {
+                        StartTime = new DateTimeOffset(DateOnly.MinValue.ToDateTime(ts.StartTime), TimeSpan.Zero),
+                        EndTime = new DateTimeOffset(DateOnly.MinValue.ToDateTime(ts.EndTime), TimeSpan.Zero),
+                        SlotType = ts.SlotType,
+                        BreakType = ts.BreakType
+                    }).ToList()
             }).ToList()
-        }).ToList()
     };
 }

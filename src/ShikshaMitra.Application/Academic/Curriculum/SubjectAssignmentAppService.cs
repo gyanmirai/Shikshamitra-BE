@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
+using ShikshaMitra.Academic.Timetable.Timetables;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -24,7 +26,9 @@ public class SubjectAssignmentAppService(
 	IRepository<ElectiveGroup, Guid> electiveGroupRepository,
 	IGuidGenerator guidGenerator,
 	IIdentityUserRepository userRepository,
-	ILogger<SubjectAssignmentAppService> logger
+	ILogger<SubjectAssignmentAppService> logger,
+	IWeeklyLectureSlotRepository weeklyLectureSlotRepository,
+	ITimetableRepository timetableRepository
 ) : ApplicationService, ISubjectAssignmentAppService
 {
 	public async Task CreateAsync(
@@ -124,16 +128,41 @@ public class SubjectAssignmentAppService(
 		var electiveGroupsDict = (await electiveGroupRepository.GetListAsync(g => electiveGroupIds.Contains(g.Id)))
 								 .ToDictionary(g => g.Id);
 
+		// Fetch weekly lecture slot for this class to compute total/occupied/unoccupied slots
+		var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(classId);
+		// subjectId -> allocated weekly lectures
+		var weeklyLecturesBySubject = weeklySlot?.Subjects
+			.Where(s => s.SubjectId.HasValue)
+			.ToDictionary(s => s.SubjectId!.Value, s => s.WeeklyLectures)
+			?? new Dictionary<Guid, int>();
+		var weeklyLecturesByElective = weeklySlot?.Subjects
+			.Where(s => s.ElectiveGroupId.HasValue)
+			.ToDictionary(s => s.ElectiveGroupId!.Value, s => s.WeeklyLectures)
+			?? new Dictionary<Guid, int>();
+
+		// Count already-placed timetable slots per subject for this class
+		var timetables = await timetableRepository.GetByStandardIdAsync(classId);
+		var occupiedBySubject = timetables
+			.SelectMany(t => t.Slots)
+			.SelectMany(s => s.Subjects)
+			.GroupBy(ss => ss.SubjectId)
+			.ToDictionary(g => g.Key, g => g.Count());
+
 		foreach (var coreAssignment in coreSubjects)
 		{
 			subjectsDict.TryGetValue(coreAssignment.SubjectId, out var subject);
+			var totalSlots = weeklyLecturesBySubject.GetValueOrDefault(coreAssignment.SubjectId, 0);
+			var occupiedSlots = occupiedBySubject.GetValueOrDefault(coreAssignment.SubjectId, 0);
 
 			groupedAssignments.Add(new SubjectAssignmentGroupDto
 			{
 				Id = coreAssignment.Id,
 				SubjectType = coreAssignment.SubjectType,
 				Status = coreAssignment.Status,
-				Color = subject?.Color, // Use subject color for core
+				Color = subject?.Color,
+				TotalSlots = totalSlots,
+				OccupiedSlots = occupiedSlots,
+				UnoccupiedSlots = totalSlots - occupiedSlots,
 				Subjects = new List<SubjectLiteDto>
 				{
 					new SubjectLiteDto
@@ -141,8 +170,8 @@ public class SubjectAssignmentAppService(
 						SubjectType = coreAssignment.SubjectType,
 						SubjectId = coreAssignment.SubjectId,
 						SubjectName = subject?.Name,
-						SubjectCode = coreAssignment.SubjectCode, // Or subject.Code?
-                        Color = subject?.Color
+						SubjectCode = coreAssignment.SubjectCode,
+						Color = subject?.Color
 					}
 				}
 			});
@@ -152,6 +181,8 @@ public class SubjectAssignmentAppService(
 		{
 			var first = group.First();
 			electiveGroupsDict.TryGetValue(first.ElectiveGroupId.Value, out var electiveGroup);
+			var electiveTotalSlots = weeklyLecturesByElective.GetValueOrDefault(first.ElectiveGroupId.Value, 0);
+			var electiveOccupiedSlots = group.Sum(a => occupiedBySubject.GetValueOrDefault(a.SubjectId, 0));
 
 			groupedAssignments.Add(new SubjectAssignmentGroupDto
 			{
@@ -161,6 +192,9 @@ public class SubjectAssignmentAppService(
 				ElectiveGroupId = first.ElectiveGroupId,
 				ElectiveGroupName = electiveGroup?.Name,
 				Color = electiveGroup?.Color,
+				TotalSlots = electiveTotalSlots,
+				OccupiedSlots = electiveOccupiedSlots,
+				UnoccupiedSlots = electiveTotalSlots - electiveOccupiedSlots,
 				Subjects = group.Select(a =>
 				{
 					subjectsDict.TryGetValue(a.SubjectId, out var subj);

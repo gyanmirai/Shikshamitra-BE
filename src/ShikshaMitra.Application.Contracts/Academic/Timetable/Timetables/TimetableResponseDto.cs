@@ -30,4 +30,7 @@ public class TimetableSubjectResponseDto
     public string? TeacherName { get; set; }
     public Guid? RoomId { get; set; }
     public string? RoomName { get; set; }
+    public int TotalSlots { get; set; }
+    public int OccupiedSlots { get; set; }
+    public int UnoccupiedSlots { get; set; }
 }

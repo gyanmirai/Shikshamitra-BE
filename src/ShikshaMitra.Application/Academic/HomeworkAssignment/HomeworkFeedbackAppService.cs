@@ -63,10 +63,10 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 	)
 	{
 		// 1. Validate homework exists and belongs to medium
-		var homework = await _homeworkRepository
-			.FirstOrDefaultAsync(h =>
-				h.Id == filter.HomeworkId && h.EducationMediumId == academicMediumId
-			);
+		var homeworkQuery = await _homeworkRepository.WithDetailsAsync(h => h.DivisionSchedules);
+		var homework = await _asyncExecuter.FirstOrDefaultAsync(
+			homeworkQuery.Where(h => h.Id == filter.HomeworkId && h.EducationMediumId == academicMediumId)
+		);
 
 		if (homework == null)
 		{
@@ -75,14 +75,17 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		}
 
 		// 2. Validate homework is assigned to the requested division
-		// V1 homework must have DivisionId
-		if (!homework.DivisionId.HasValue)
+		// Support both V1 (direct DivisionId) and V2 (DivisionSchedules collection)
+		var isAssignedToDivision = (homework.DivisionId.HasValue && homework.DivisionId.Value == filter.DivisionId)
+			|| homework.DivisionSchedules.Any(ds => ds.DivisionId == filter.DivisionId);
+
+		if (!homework.DivisionId.HasValue && !homework.DivisionSchedules.Any())
 		{
 			throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
 				.WithData("Message", "Homework does not have a division assigned");
 		}
 
-		if (homework.DivisionId.Value != filter.DivisionId)
+		if (!isAssignedToDivision)
 		{
 			throw new BusinessException("ShikshaMitra.Homework:NotAssignedToDivision")
 				.WithData("DivisionId", filter.DivisionId);

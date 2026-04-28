@@ -70,8 +70,11 @@ public class WeeklyLectureSlotAppService(
                 SubjectId = sub.SubjectId,
                 SubjectName = sub.SubjectId.HasValue
                     ? subjects.FirstOrDefault(s => s.Id == sub.SubjectId.Value)?.Name ?? string.Empty
-                    : electiveGroups.FirstOrDefault(eg => eg.Id == sub.ElectiveGroupId)?.Name ?? string.Empty,
+                    : string.Empty,
                 ElectiveGroupId = sub.ElectiveGroupId,
+                ElectiveGroupName = sub.ElectiveGroupId.HasValue
+                    ? electiveGroups.FirstOrDefault(eg => eg.Id == sub.ElectiveGroupId.Value)?.Name
+                    : null,
                 WeeklyLectures = sub.WeeklyLectures
             }).ToList()
         }).ToList();
@@ -85,6 +88,7 @@ public class WeeklyLectureSlotAppService(
         var slot = await weeklyLectureSlotRepository.GetAsync(id);
         var standard = await standardRepository.GetAsync(slot.StandardId);
         var subjects = await subjectRepository.GetListAsync();
+        var electiveGroups = await electiveGroupRepository.GetListAsync();
 
         return new WeeklyLectureSlotDto
         {
@@ -96,6 +100,8 @@ public class WeeklyLectureSlotAppService(
             {
                 var subject = sub.SubjectId.HasValue
                     ? subjects.FirstOrDefault(s => s.Id == sub.SubjectId.Value) : null;
+                var electiveGroup = sub.ElectiveGroupId.HasValue
+                    ? electiveGroups.FirstOrDefault(eg => eg.Id == sub.ElectiveGroupId.Value) : null;
                 return new WeeklyLectureSubjectDetailDto
                 {
                     SubjectId = sub.SubjectId,
@@ -103,6 +109,7 @@ public class WeeklyLectureSlotAppService(
                     SubjectCode = null,
                     SubjectColor = subject?.Color,
                     ElectiveGroupId = sub.ElectiveGroupId,
+                    ElectiveGroupName = electiveGroup?.Name,
                     WeeklyLectures = sub.WeeklyLectures
                 };
             }).ToList()

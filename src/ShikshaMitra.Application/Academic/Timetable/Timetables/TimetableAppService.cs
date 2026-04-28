@@ -107,8 +107,8 @@ public class TimetableAppService(
                     timetable.Id,
                     day,
                     slotDto.Sequence,
-                    TimeOnly.FromDateTime(slotDto.StartTime.DateTime),
-                    TimeOnly.FromDateTime(slotDto.EndTime.DateTime),
+                    slotDto.StartTime,
+                    slotDto.EndTime,
                     slotDto.Type,
                     slotDto.BreakType,
                     slotDto.SubjectType,
@@ -205,8 +205,8 @@ public class TimetableAppService(
     public async Task AssignTeachersAsync(AssignTeachersDto input)
     {
         var day = Enum.Parse<TimetableDayOfWeek>(input.Day, ignoreCase: true);
-        var startTime = TimeOnly.FromDateTime(input.StartTime.DateTime);
-        var endTime = TimeOnly.FromDateTime(input.EndTime.DateTime);
+        var startTime = input.StartTime;
+        var endTime = input.EndTime;
 
         var teacherIds = input.Subjects.Select(s => s.TeacherId).ToList();
         await timetableManager.CheckTeacherConflictAsync(
@@ -232,8 +232,8 @@ public class TimetableAppService(
     public async Task AssignRoomsAsync(AssignRoomsDto input)
     {
         var day = Enum.Parse<TimetableDayOfWeek>(input.Day, ignoreCase: true);
-        var startTime = TimeOnly.FromDateTime(input.StartTime.DateTime);
-        var endTime = TimeOnly.FromDateTime(input.EndTime.DateTime);
+        var startTime = input.StartTime;
+        var endTime = input.EndTime;
 
         var roomIds = input.Subjects.Select(s => s.RoomId).ToList();
         await timetableManager.CheckRoomConflictAsync(

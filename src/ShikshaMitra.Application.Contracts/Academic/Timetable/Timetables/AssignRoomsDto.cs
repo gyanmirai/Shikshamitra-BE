@@ -9,8 +9,8 @@ public class AssignRoomsDto
     public Guid StandardId { get; set; }
     public Guid DivisionId { get; set; }
     public string Day { get; set; } = string.Empty;
-    public DateTimeOffset StartTime { get; set; }
-    public DateTimeOffset EndTime { get; set; }
+    public TimeOnly StartTime { get; set; }
+    public TimeOnly EndTime { get; set; }
     public SubjectType SubjectType { get; set; }
     public Guid? ElectiveGroupId { get; set; }
     public List<RoomAssignmentItemDto> Subjects { get; set; } = [];

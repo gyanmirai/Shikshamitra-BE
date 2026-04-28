@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
+using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
@@ -22,6 +23,7 @@ public class TimetableAppService(
     ITimetableRepository timetableRepository,
     TimetableManager timetableManager,
     ILectureSlotConfigRepository lectureSlotConfigRepository,
+    IWeeklyLectureSlotRepository weeklyLectureSlotRepository,
     IRepository<Standard, Guid> standardRepository,
     IRepository<Division, Guid> divisionRepository,
     IRepository<Subject, Guid> subjectRepository,
@@ -41,6 +43,23 @@ public class TimetableAppService(
         var subjects = await subjectRepository.GetListAsync();
         var electiveGroups = await electiveGroupRepository.GetListAsync();
         var rooms = await roomRepository.GetListAsync();
+
+        // Compute occupied slots per subject across all days in this timetable
+        var occupiedBySubject = timetable.Slots
+            .SelectMany(s => s.Subjects)
+            .GroupBy(ss => ss.SubjectId)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        // Get weekly lecture allocations (total slots) per subject for this standard
+        var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(timetable.StandardId);
+        var totalSlotsBySubject = weeklySlot?.Subjects
+            .Where(s => s.SubjectId.HasValue)
+            .ToDictionary(s => s.SubjectId!.Value, s => s.WeeklyLectures)
+            ?? new Dictionary<Guid, int>();
+        var totalSlotsByElective = weeklySlot?.Subjects
+            .Where(s => s.ElectiveGroupId.HasValue)
+            .ToDictionary(s => s.ElectiveGroupId!.Value, s => s.WeeklyLectures)
+            ?? new Dictionary<Guid, int>();
 
         var response = new TimetableResponseDto();
 
@@ -65,15 +84,22 @@ public class TimetableAppService(
                     var subject = subjects.FirstOrDefault(s => s.Id == sub.SubjectId);
                     var room = sub.RoomId.HasValue
                         ? rooms.FirstOrDefault(r => r.Id == sub.RoomId.Value) : null;
+                    var totalSlots = totalSlotsBySubject.GetValueOrDefault(sub.SubjectId, 0);
+                    if (totalSlots == 0 && slot.ElectiveGroupId.HasValue)
+                        totalSlots = totalSlotsByElective.GetValueOrDefault(slot.ElectiveGroupId.Value, 0);
+                    var occupiedSlots = occupiedBySubject.GetValueOrDefault(sub.SubjectId, 0);
                     return new TimetableSubjectResponseDto
                     {
                         Id = sub.SubjectId,
                         Name = subject?.Name ?? string.Empty,
                         Color = subject?.Color,
                         TeacherId = sub.TeacherId,
-                        TeacherName = null, // Would require Identity lookup — left for controller/mapper
+                        TeacherName = null,
                         RoomId = sub.RoomId,
-                        RoomName = room?.RoomName
+                        RoomName = room?.RoomName,
+                        TotalSlots = totalSlots,
+                        OccupiedSlots = occupiedSlots,
+                        UnoccupiedSlots = totalSlots - occupiedSlots
                     };
                 }).ToList()
             }).ToList();

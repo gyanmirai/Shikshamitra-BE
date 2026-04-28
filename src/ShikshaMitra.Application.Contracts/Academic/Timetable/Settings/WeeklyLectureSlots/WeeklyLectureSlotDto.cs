@@ -19,5 +19,6 @@ public class WeeklyLectureSubjectDetailDto
     public string? SubjectCode { get; set; }
     public string? SubjectColor { get; set; }
     public Guid? ElectiveGroupId { get; set; }
+    public string? ElectiveGroupName { get; set; }
     public int WeeklyLectures { get; set; }
 }

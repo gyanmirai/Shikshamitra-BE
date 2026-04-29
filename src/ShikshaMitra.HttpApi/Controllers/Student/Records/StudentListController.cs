@@ -2,9 +2,6 @@
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Students.Records;
 using ShikshaMitra.Students.StudentEnrollments;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 

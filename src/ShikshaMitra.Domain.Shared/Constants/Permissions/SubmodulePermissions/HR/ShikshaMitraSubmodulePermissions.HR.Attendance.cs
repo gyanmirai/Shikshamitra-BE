@@ -6,10 +6,10 @@ public static partial class ShikshaMitraSubmodulePermissions
 {
 	public static partial class HR
 	{
-		public static class AttendanceAndLeave_AttendanceTracking
+		public static class AttendanceAndLeave_Dashboard
 		{
-			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.AttendanceTracking";
-			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.AttendanceTracking";
+			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.Dashboard";
+			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.Dashboard";
 
 			public const string View = $"{SubmoduleName}.View";
 
@@ -44,25 +44,6 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.BiometricAttendance";
 			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.BiometricAttendance";
-
-			public const string View = $"{SubmoduleName}.View";
-			public const string Add = $"{SubmoduleName}.Add";
-			public const string Delete = $"{SubmoduleName}.Delete";
-
-			public static readonly string[] All = { View, Add, Delete };
-			public static readonly Dictionary<string, string> DisplayNames = new()
-			{
-				{ SubmoduleName, SubmoduleDisplayName },
-				{ View, $"{SubmoduleDisplayName}.View" },
-				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Delete, $"{SubmoduleDisplayName}.Delete" }
-			};
-		}
-
-		public static class AttendanceAndLeave_SettingShiftManagement
-		{
-			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.Setting.ShiftManagement";
-			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.Setting.ShiftManagement";
 
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";

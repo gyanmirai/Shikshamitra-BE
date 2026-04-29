@@ -105,6 +105,33 @@ public class TimetableAppService(
             }).ToList();
         }
 
+        // Build per-subject weekly summary
+        var allSubjectIds = timetable.Slots
+            .SelectMany(s => s.Subjects)
+            .Select(ss => ss.SubjectId)
+            .Distinct()
+            .ToList();
+
+        response.SubjectSummary = allSubjectIds.Select(subjectId =>
+        {
+            var subject = subjects.FirstOrDefault(s => s.Id == subjectId);
+            var totalSlots = totalSlotsBySubject.GetValueOrDefault(subjectId, 0);
+            var slotForElective = timetable.Slots
+                .FirstOrDefault(s => s.Subjects.Any(ss => ss.SubjectId == subjectId) && s.ElectiveGroupId.HasValue);
+            if (totalSlots == 0 && slotForElective?.ElectiveGroupId.HasValue == true)
+                totalSlots = totalSlotsByElective.GetValueOrDefault(slotForElective.ElectiveGroupId!.Value, 0);
+            var occupied = occupiedBySubject.GetValueOrDefault(subjectId, 0);
+            return new TimetableSubjectSummaryDto
+            {
+                Id = subjectId,
+                Name = subject?.Name ?? string.Empty,
+                Color = subject?.Color,
+                TotalSlots = totalSlots,
+                OccupiedSlots = occupied,
+                UnoccupiedSlots = totalSlots - occupied
+            };
+        }).ToList();
+
         return response;
     }
 

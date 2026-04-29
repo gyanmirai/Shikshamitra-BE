@@ -6,6 +6,17 @@ namespace ShikshaMitra.Academic.Timetable.Timetables;
 public class TimetableResponseDto
 {
     public Dictionary<string, List<TimetableSlotResponseDto>> Days { get; set; } = [];
+    public List<TimetableSubjectSummaryDto> SubjectSummary { get; set; } = [];
+}
+
+public class TimetableSubjectSummaryDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Color { get; set; }
+    public int TotalSlots { get; set; }
+    public int OccupiedSlots { get; set; }
+    public int UnoccupiedSlots { get; set; }
 }
 
 public class TimetableSlotResponseDto

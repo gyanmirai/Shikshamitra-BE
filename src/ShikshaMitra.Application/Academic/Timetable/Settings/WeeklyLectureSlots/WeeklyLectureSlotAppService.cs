@@ -57,7 +57,8 @@ public class WeeklyLectureSlotAppService(
             .ToList();
 
         var subjects = await subjectRepository.GetListAsync();
-        var electiveGroups = await electiveGroupRepository.GetListAsync();
+        var electiveGroupQueryable = await electiveGroupRepository.WithDetailsAsync(eg => eg.Subjects);
+        var electiveGroups = await AsyncExecuter.ToListAsync(electiveGroupQueryable);
 
         var items = pagedSlots.Select(slot => new WeeklyLectureSlotListDto
         {
@@ -65,17 +66,27 @@ public class WeeklyLectureSlotAppService(
             StandardId = slot.StandardId,
             StandardName = standardsDict.GetValueOrDefault(slot.StandardId, string.Empty),
             TotalLectures = slot.GetTotalLectures(),
-            Subjects = slot.Subjects.Select(sub => new WeeklyLectureSubjectSummaryDto
+            Subjects = slot.Subjects.Select(sub =>
             {
-                SubjectId = sub.SubjectId,
-                SubjectName = sub.SubjectId.HasValue
-                    ? subjects.FirstOrDefault(s => s.Id == sub.SubjectId.Value)?.Name ?? string.Empty
-                    : string.Empty,
-                ElectiveGroupId = sub.ElectiveGroupId,
-                ElectiveGroupName = sub.ElectiveGroupId.HasValue
-                    ? electiveGroups.FirstOrDefault(eg => eg.Id == sub.ElectiveGroupId.Value)?.Name
-                    : null,
-                WeeklyLectures = sub.WeeklyLectures
+                var eg = sub.ElectiveGroupId.HasValue
+                    ? electiveGroups.FirstOrDefault(x => x.Id == sub.ElectiveGroupId.Value) : null;
+                return new WeeklyLectureSubjectSummaryDto
+                {
+                    SubjectId = sub.SubjectId,
+                    SubjectName = sub.SubjectId.HasValue
+                        ? subjects.FirstOrDefault(s => s.Id == sub.SubjectId.Value)?.Name ?? string.Empty
+                        : string.Empty,
+                    ElectiveGroupId = sub.ElectiveGroupId,
+                    ElectiveGroupName = eg?.Name,
+                    ElectiveGroupColor = eg?.Color,
+                    ElectiveGroupSubjects = eg?.Subjects.Select(c => new ElectiveGroupSubjectDto
+                    {
+                        Id = c.SubjectId,
+                        Name = subjects.FirstOrDefault(s => s.Id == c.SubjectId)?.Name ?? string.Empty,
+                        Color = subjects.FirstOrDefault(s => s.Id == c.SubjectId)?.Color
+                    }).ToList() ?? [],
+                    WeeklyLectures = sub.WeeklyLectures
+                };
             }).ToList()
         }).ToList();
 
@@ -88,7 +99,8 @@ public class WeeklyLectureSlotAppService(
         var slot = await weeklyLectureSlotRepository.GetAsync(id);
         var standard = await standardRepository.GetAsync(slot.StandardId);
         var subjects = await subjectRepository.GetListAsync();
-        var electiveGroups = await electiveGroupRepository.GetListAsync();
+        var electiveGroupQueryable = await electiveGroupRepository.WithDetailsAsync(eg => eg.Subjects);
+        var electiveGroups = await AsyncExecuter.ToListAsync(electiveGroupQueryable);
 
         return new WeeklyLectureSlotDto
         {
@@ -110,6 +122,13 @@ public class WeeklyLectureSlotAppService(
                     SubjectColor = subject?.Color,
                     ElectiveGroupId = sub.ElectiveGroupId,
                     ElectiveGroupName = electiveGroup?.Name,
+                    ElectiveGroupColor = electiveGroup?.Color,
+                    ElectiveGroupSubjects = electiveGroup?.Subjects.Select(c => new ElectiveGroupSubjectDto
+                    {
+                        Id = c.SubjectId,
+                        Name = subjects.FirstOrDefault(s => s.Id == c.SubjectId)?.Name ?? string.Empty,
+                        Color = subjects.FirstOrDefault(s => s.Id == c.SubjectId)?.Color
+                    }).ToList() ?? [],
                     WeeklyLectures = sub.WeeklyLectures
                 };
             }).ToList()

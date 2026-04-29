@@ -20,5 +20,14 @@ public class WeeklyLectureSubjectDetailDto
     public string? SubjectColor { get; set; }
     public Guid? ElectiveGroupId { get; set; }
     public string? ElectiveGroupName { get; set; }
+    public string? ElectiveGroupColor { get; set; }
+    public List<ElectiveGroupSubjectDto> ElectiveGroupSubjects { get; set; } = [];
     public int WeeklyLectures { get; set; }
+}
+
+public class ElectiveGroupSubjectDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Color { get; set; }
 }

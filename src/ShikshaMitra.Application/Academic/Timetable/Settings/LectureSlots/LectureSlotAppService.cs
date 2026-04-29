@@ -69,8 +69,8 @@ public class LectureSlotAppService(
                         .OrderBy(ts => ts.StartTime)
                         .Select(ts => new TimeSlotDetailDto
                         {
-                            StartTime = new DateTimeOffset(DateOnly.MinValue.ToDateTime(ts.StartTime), TimeSpan.Zero),
-                            EndTime = new DateTimeOffset(DateOnly.MinValue.ToDateTime(ts.EndTime), TimeSpan.Zero),
+                            StartTime = ts.StartTime,
+                            EndTime = ts.EndTime,
                             SlotType = ts.SlotType,
                             BreakType = ts.BreakType
                         }).ToList()
@@ -192,8 +192,8 @@ public class LectureSlotAppService(
                 group.AddTimeSlot(new LectureSlotTimeSlot(
                     GuidGenerator.Create(),
                     group.Id,
-                    TimeOnly.FromDateTime(ts.StartTime.DateTime),
-                    TimeOnly.FromDateTime(ts.EndTime.DateTime),
+                    ts.StartTime,
+                    ts.EndTime,
                     ts.SlotType,
                     ts.BreakType));
             }
@@ -221,8 +221,8 @@ public class LectureSlotAppService(
                     .OrderBy(ts => ts.StartTime)
                     .Select(ts => new TimeSlotDetailDto
                     {
-                        StartTime = new DateTimeOffset(DateOnly.MinValue.ToDateTime(ts.StartTime), TimeSpan.Zero),
-                        EndTime = new DateTimeOffset(DateOnly.MinValue.ToDateTime(ts.EndTime), TimeSpan.Zero),
+                        StartTime = ts.StartTime,
+                        EndTime = ts.EndTime,
                         SlotType = ts.SlotType,
                         BreakType = ts.BreakType
                     }).ToList()

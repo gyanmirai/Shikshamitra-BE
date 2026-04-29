@@ -121,6 +121,8 @@ public class TimetableAppService(
             if (totalSlots == 0 && slotForElective?.ElectiveGroupId.HasValue == true)
                 totalSlots = totalSlotsByElective.GetValueOrDefault(slotForElective.ElectiveGroupId!.Value, 0);
             var occupied = occupiedBySubject.GetValueOrDefault(subjectId, 0);
+            // If no weekly allocation is configured, treat total as occupied (nothing is "unoccupied")
+            if (totalSlots == 0) totalSlots = occupied;
             return new TimetableSubjectSummaryDto
             {
                 Id = subjectId,
@@ -128,7 +130,7 @@ public class TimetableAppService(
                 Color = subject?.Color,
                 TotalSlots = totalSlots,
                 OccupiedSlots = occupied,
-                UnoccupiedSlots = totalSlots - occupied
+                UnoccupiedSlots = Math.Max(0, totalSlots - occupied)
             };
         }).ToList();
 

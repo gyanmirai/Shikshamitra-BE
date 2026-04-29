@@ -24,8 +24,8 @@ public class SlotConfigurationDetailDto
 
 public class TimeSlotDetailDto
 {
-    public DateTimeOffset StartTime { get; set; }
-    public DateTimeOffset EndTime { get; set; }
+    public TimeOnly StartTime { get; set; }
+    public TimeOnly EndTime { get; set; }
     public SlotType SlotType { get; set; }
     public BreakType? BreakType { get; set; }
 }

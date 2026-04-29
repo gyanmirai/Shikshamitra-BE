@@ -390,9 +390,36 @@ public class HRSeederContributor : BaseSeederContributor
 			await SeedSamplePayrollForEmployeeIfNeededAsync(employeeId);
 		}
 
+		await ActivateEmployeesWithPayrollStructureAsync(employeeIds);
+
 		await SeedSampleAttendanceForEmployeesAsync(
 			employeeIds,
 			educationMediumStage.Id);
+	}
+
+	private async Task ActivateEmployeesWithPayrollStructureAsync(List<Guid> employeeIds)
+	{
+		foreach (var employeeId in employeeIds)
+		{
+			var employee = await _employeeRepository.FindAsync(employeeId);
+			if (employee == null || employee.EmployeeStatusType == EmployeeStatusType.Active)
+			{
+				continue;
+			}
+
+			var payrollComponents = await _employeePayrollComponentRepository.GetByEmployeeIdAsync(employeeId);
+			if (payrollComponents.Count == 0)
+			{
+				continue;
+			}
+
+			var updated = await _employeeManager.UpdateEmployeeStatusAsync(
+				employeeId,
+				EmployeeStatusType.Active,
+				"Auto-activated by HR seeder after payroll structure seed");
+
+			await _employeeRepository.UpdateAsync(updated, autoSave: true);
+		}
 	}
 
 	private async Task SeedSamplePayrollForEmployeeIfNeededAsync(Guid employeeId)
@@ -901,7 +928,7 @@ public class HRSeederContributor : BaseSeederContributor
 				lastName: emp.LastName,
 				middleName: emp.MiddleName,
 				shortName: $"{emp.FirstName[0]}.{emp.LastName}",
-				employeeStatusType: EmployeeStatusType.Active,
+				employeeStatusType: EmployeeStatusType.Inactive,
 				dateOfBirth: emp.DateOfBirth,
 				familyCast: emp.FamilyCast,
 				castType: emp.CastType,
@@ -1135,7 +1162,7 @@ public class HRSeederContributor : BaseSeederContributor
 				lastName: emp.LastName,
 				middleName: emp.MiddleName,
 				shortName: $"{emp.FirstName[0]}.{emp.LastName}",
-				employeeStatusType: EmployeeStatusType.Active,
+				employeeStatusType: EmployeeStatusType.Inactive,
 				dateOfBirth: emp.DateOfBirth,
 				familyCast: emp.FamilyCast,
 				castType: emp.CastType,

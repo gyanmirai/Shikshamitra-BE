@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.Status;
+using ShikshaMitra.HR.Payroll;
+using ShikshaMitra.HR.Payroll.SalaryStructure;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -38,6 +41,31 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 		var body = await response.Content.ReadFromJsonAsync<EmployeeStatusUpdateResponse>(JsonOptions);
 		body.ShouldNotBeNull();
 		body.CurrentStatus.ShouldBe(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Block_Activating_Employee_Without_Salary_Structure()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusActiveNoPayroll");
+		var toInactive = new EmployeeStatusUpdateRequest
+		{
+			EmployeeStatusType = 1,
+			Remarks = "Seed inactive first",
+		};
+		(await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", toInactive, JsonOptions))
+			.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var toActive = new EmployeeStatusUpdateRequest
+		{
+			EmployeeStatusType = 0,
+			Remarks = "Try activate",
+		};
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", toActive, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var body = await response.Content.ReadAsStringAsync();
+		body.ShouldContain("HR:Employee:010201");
 	}
 
 	[Fact]
@@ -109,6 +137,43 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 		var r1 = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", inactiveReq, JsonOptions);
 		r1.StatusCode.ShouldBe(HttpStatusCode.OK);
 
+		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, "CycleEarn");
+		var deductionComponent = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "CycleDed");
+		var salaryStructure = new UpdateSalaryStructureDto
+		{
+			EarningComponents = new List<SalaryComponentDto>
+			{
+				new()
+				{
+					Id = Guid.NewGuid(),
+					ComponentId = earningComponent.Id,
+					Name = "Basic",
+					Amount = 20000m,
+					IsFixed = true,
+					IsTemp = false,
+					ApplicableMonth = null,
+				}
+			},
+			DeductionComponents = new List<SalaryComponentDto>
+			{
+				new()
+				{
+					Id = Guid.NewGuid(),
+					ComponentId = deductionComponent.Id,
+					Name = "PF",
+					Amount = 1200m,
+					IsFixed = true,
+					IsTemp = false,
+					ApplicableMonth = null,
+				}
+			},
+		};
+		var salaryResp = await Client.PutAsJsonAsync(
+			$"/api/payroll/employees/{empId}/salary-structure",
+			salaryStructure,
+			JsonOptions);
+		salaryResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+
 		var activeReq = new EmployeeStatusUpdateRequest { EmployeeStatusType = 0, Remarks = "Reactivated" };
 		var r2 = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", activeReq, JsonOptions);
 		r2.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -116,6 +181,61 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 		body.ShouldNotBeNull();
 		body.CurrentStatus.ShouldBe(0);
 		body.PreviousStatus.ShouldBe(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Allow_Activating_Employee_After_Salary_Structure_Is_Configured()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusActiveWithPayroll");
+
+		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, "StatusEarn");
+		var deductionComponent = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "StatusDed");
+
+		var salaryStructure = new UpdateSalaryStructureDto
+		{
+			EarningComponents = new List<SalaryComponentDto>
+			{
+				new()
+				{
+					Id = Guid.NewGuid(),
+					ComponentId = earningComponent.Id,
+					Name = "Basic",
+					Amount = 20000m,
+					IsFixed = true,
+					IsTemp = false,
+					ApplicableMonth = null,
+				}
+			},
+			DeductionComponents = new List<SalaryComponentDto>
+			{
+				new()
+				{
+					Id = Guid.NewGuid(),
+					ComponentId = deductionComponent.Id,
+					Name = "PF",
+					Amount = 1200m,
+					IsFixed = true,
+					IsTemp = false,
+					ApplicableMonth = null,
+				}
+			},
+		};
+
+		var salaryResp = await Client.PutAsJsonAsync(
+			$"/api/payroll/employees/{empId}/salary-structure",
+			salaryStructure,
+			JsonOptions);
+		salaryResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var toInactive = new EmployeeStatusUpdateRequest { EmployeeStatusType = 1, Remarks = "Inactive" };
+		(await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", toInactive, JsonOptions))
+			.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var toActive = new EmployeeStatusUpdateRequest { EmployeeStatusType = 0, Remarks = "Active now" };
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", toActive, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
 
 	[Fact]

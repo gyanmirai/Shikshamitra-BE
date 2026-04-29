@@ -24,18 +24,6 @@ public interface ISalarySlipRepository : IRepository<SalarySlip, Guid>
 		CancellationToken cancellationToken = default);
 
 	/// <summary>
-	/// Checks if a salary slip exists for an employee in a specific month
-	/// </summary>
-	/// <param name="employeeId">Employee identifier</param>
-	/// <param name="monthYear">Month and year in YYYY-MM format</param>
-	/// <param name="cancellationToken">Cancellation token</param>
-	/// <returns>True if exists, false otherwise</returns>
-	Task<bool> ExistsAsync(
-		Guid employeeId,
-		string monthYear,
-		CancellationToken cancellationToken = default);
-
-	/// <summary>
 	/// Checks if any finalized salary slip exists for a specific month
 	/// </summary>
 	/// <param name="monthYear">Month and year in YYYY-MM format</param>

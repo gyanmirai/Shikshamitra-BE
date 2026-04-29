@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR.Employees.Payroll;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -13,6 +15,7 @@ namespace ShikshaMitra.HR.Employees;
 [Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 public class EmployeeStatusAppService(
 	IEmployeeRepository employeeRepository,
+	IEmployeePayrollComponentRepository payrollComponentRepository,
 	IEmployeeAuthorizationService employeeAuthorizationService,
 	IEmployeeCacheManager employeeCacheManager,
 	EmployeeManager employeeManager,
@@ -36,6 +39,11 @@ public class EmployeeStatusAppService(
 				CurrentStatus = input.EmployeeStatusType,
 				UpdatedAt = employee.StatusLastChangedAt ?? DateTimeOffset.UtcNow
 			};
+		}
+
+		if (input.EmployeeStatusType == EmployeeStatusType.Active)
+		{
+			await EnsurePayrollStructureExistsAsync(employee.Id);
 		}
 
 		statusTransitionValidator.Validate(
@@ -71,5 +79,16 @@ public class EmployeeStatusAppService(
 			CurrentStatus = input.EmployeeStatusType,
 			UpdatedAt = employee.StatusLastChangedAt ?? DateTimeOffset.UtcNow
 		};
+	}
+
+	private async Task EnsurePayrollStructureExistsAsync(Guid employeeId)
+	{
+		var payrollComponents = await payrollComponentRepository.GetByEmployeeIdAsync(employeeId);
+		if (payrollComponents.Count == 0)
+		{
+			throw new BusinessException(HRErrorCodes.EmployeePayrollStructureRequired)
+				.WithData("employeeId", employeeId)
+				.WithData("required", "salary-structure");
+		}
 	}
 }

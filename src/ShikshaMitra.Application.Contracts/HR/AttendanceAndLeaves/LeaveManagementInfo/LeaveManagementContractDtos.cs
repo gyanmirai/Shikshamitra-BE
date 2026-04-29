@@ -11,9 +11,14 @@ public class LeaveManagementItemResponse
 	[Required]
 	public int PublicId { get; set; }
 	[Required]
+	public Guid EmployeeId { get; set; }
+	[Required]
 	public string Name { get; set; } = string.Empty;
 	[Required]
 	public string EmployeeIdentifier { get; set; } = string.Empty;
+	[Required]
+	public string SubmittedByName { get; set; } = string.Empty;
+	public string? SubmittedByEmployeeCode { get; set; }
 	[Required]
 	public string LeaveType { get; set; } = string.Empty;
 	[Required]
@@ -71,6 +76,9 @@ public class LeaveRequestDetailsResponse
 	public string EmployeeName { get; set; } = string.Empty;
 	[Required]
 	public string EmployeeCode { get; set; } = string.Empty;
+	[Required]
+	public string SubmittedByName { get; set; } = string.Empty;
+	public string? SubmittedByEmployeeCode { get; set; }
 	[Required]
 	public Guid LeavePolicyId { get; set; }
 	/// <summary>Same value as <see cref="LeavePolicyId"/> (legacy JSON name).</summary>

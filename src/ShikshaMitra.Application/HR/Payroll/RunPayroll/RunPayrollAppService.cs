@@ -11,6 +11,7 @@ using ShikshaMitra.Security.UserScope;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -28,11 +29,30 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 {
 	private sealed record PayrollTargetEmployee(Guid Id, string? EmployeeCode, string? EmployeeName);
 
+	private static class ReviewStatuses
+	{
+		public const string Pending = "PENDING";
+		public const string Reviewed = "REVIEWED";
+		public const string Locked = "LOCKED";
+	}
+
+	private static class IssueCodes
+	{
+		public const string MissingSalaryStructure = "MISSING_SALARY_STRUCTURE";
+		public const string NoAttendance = "NO_ATTENDANCE";
+		public const string LowAttendance = "LOW_ATTENDANCE";
+		public const string NegativeNetPay = "NEGATIVE_NET_PAY";
+		public const string NoPreviousMonthComparison = "NO_PREVIOUS_MONTH_COMPARISON";
+		public const string LargeSalaryVariance = "LARGE_SALARY_VARIANCE";
+	}
+
 	private readonly IRepository<Employee, Guid> _employeeRepository;
 	private readonly IRepository<EmployeeAttendance, Guid> _attendanceRepository;
 	private readonly IEmployeePayrollDetailsRepository _payrollDetailsRepository;
 	private readonly IEmployeePayrollComponentRepository _payrollComponentRepository;
 	private readonly ISalarySlipRepository _salarySlipRepository;
+	private readonly IRepository<PayrollRunReview, Guid> _payrollRunReviewRepository;
+	private readonly IRepository<PayrollRunItemSnapshot, Guid> _payrollRunItemSnapshotRepository;
 	private readonly IRepository<Holiday, Guid> _holidayRepository;
 	private readonly IDayCalculationSettingRepository _dayCalculationSettingRepository;
 	private readonly SalarySlipManager _salarySlipManager;
@@ -49,6 +69,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		IEmployeePayrollDetailsRepository payrollDetailsRepository,
 		IEmployeePayrollComponentRepository payrollComponentRepository,
 		ISalarySlipRepository salarySlipRepository,
+		IRepository<PayrollRunReview, Guid> payrollRunReviewRepository,
+		IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
 		IRepository<Holiday, Guid> holidayRepository,
 		IDayCalculationSettingRepository dayCalculationSettingRepository,
 		SalarySlipManager salarySlipManager,
@@ -60,6 +82,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		_payrollDetailsRepository = payrollDetailsRepository;
 		_payrollComponentRepository = payrollComponentRepository;
 		_salarySlipRepository = salarySlipRepository;
+		_payrollRunReviewRepository = payrollRunReviewRepository;
+		_payrollRunItemSnapshotRepository = payrollRunItemSnapshotRepository;
 		_holidayRepository = holidayRepository;
 		_dayCalculationSettingRepository = dayCalculationSettingRepository;
 		_salarySlipManager = salarySlipManager;
@@ -75,7 +99,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		// Validate input
 		if (input.PageSize <= 0 || input.PageSize > 100)
 		{
-			throw new BusinessException("HR:InvalidPageSize")
+			throw new BusinessException(HRErrorCodes.PayrollInvalidPageSize)
 				.WithData("pageSize", input.PageSize)
 				.WithData("maxPageSize", 100);
 		}
@@ -89,73 +113,71 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				"Generating payroll preview for {Month} (Year: {Year}, Month: {MonthNum}, Page: {Page}, PageSize: {PageSize})",
 				input.Month, year, month, input.Page, input.PageSize);
 
+			// Get all active employees in caller scope.
+			var employeeQuery = await GetScopedActiveEmployeeQueryAsync(includeUnknownStageEmployees: false);
+			var scopedEmployees = await AsyncExecuter.ToListAsync(
+				employeeQuery
+					.OrderBy(e => e.FirstName)
+					.ThenBy(e => e.LastName));
+			var scopedEmployeeIds = scopedEmployees.Select(e => e.Id).ToHashSet();
+
 			var existingSlips = await _salarySlipRepository.GetByMonthAsync(internalMonthYear);
 			var finalizedEmployeeIds = existingSlips
 				.Where(x => x.Status == SalarySlipStatus.Finalized)
 				.Select(x => x.EmployeeId)
 				.ToHashSet();
-			// Month-level summary retained for backwards compatibility with existing consumers.
 			var isGenerated = finalizedEmployeeIds.Count > 0;
 
-			// Get all active employees in caller scope.
-			// Unknown-stage employees are denied to prevent read-side scope leaks.
-			var employeeQuery = await GetScopedActiveEmployeeQueryAsync(includeUnknownStageEmployees: false);
+			var persistedSnapshots = await GetSnapshotsByMonthAsync(internalMonthYear);
+			var inScopeSnapshots = persistedSnapshots
+				.Where(x => scopedEmployeeIds.Contains(x.EmployeeId))
+				.OrderBy(x => x.EmployeeName)
+				.ToList();
 
-			// Get total count
-			var totalCount = await AsyncExecuter.CountAsync(employeeQuery);
-
-			// Get paginated employees
-			var employees = await AsyncExecuter.ToListAsync(
-				employeeQuery
-					.OrderBy(e => e.FirstName)
-					.ThenBy(e => e.LastName)
-					.Skip(input.Page * input.PageSize)
-					.Take(input.PageSize)
-			);
-
-			if (employees.Count == 0)
+			if (input.ForceRefresh || inScopeSnapshots.Count == 0)
 			{
-				return new RunPayrollResponse
-				{
-					IsGenerated = isGenerated,
-					TotalCount = totalCount,
-					CurrentPage = input.Page,
-					PageSize = input.PageSize,
-					TotalPages = (int)Math.Ceiling((double)totalCount / input.PageSize),
-					Items = new List<RunPayrollItem>()
-				};
+				var previousMonthNetPayByEmployee = (await _salarySlipRepository.GetByMonthAsync(GetPreviousMonth(internalMonthYear)))
+					.Where(x => x.Status == SalarySlipStatus.Finalized)
+					.GroupBy(x => x.EmployeeId)
+					.ToDictionary(g => g.Key, g => (decimal?)g.OrderByDescending(x => x.ProcessedDate).First().NetSalary);
+				var reviewByEmployee = await GetReviewsByEmployeeAsync(internalMonthYear);
+				var holidays = await LoadHolidaysForMonthAsync(year, month);
+				var workingWeekdaysMinusHolidays = PayrollMonthCalendar.CountWorkingWeekdaysExcludingHolidayWeekdays(year, month, holidays);
+				var daySetting = await _dayCalculationSettingRepository.FindByTenantAsync(CurrentTenant.Id);
+				var basis = PayrollBasisDays.Resolve(daySetting, year, month, workingWeekdaysMinusHolidays);
+
+				var employeeIds = scopedEmployees.Select(e => e.Id).ToList();
+				var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
+				var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
+				var attendanceByEmployee = await GetAttendanceRecordsAsync(employeeIds, startDate, endDate);
+				var payrollDetailsByEmployee = await _payrollDetailsRepository.GetByEmployeeIdsAsync(employeeIds);
+				var componentsByEmployee = await _payrollComponentRepository.GetByEmployeeIdsAsync(employeeIds);
+
+				var computedItems = scopedEmployees.Select(employee => BuildPayrollItem(
+					employee,
+					attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
+					payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
+					componentsByEmployee[employee.Id].ToList(),
+					basis,
+					finalizedEmployeeIds.Contains(employee.Id),
+					reviewByEmployee.GetValueOrDefault(employee.Id),
+					previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id)
+				)).ToList();
+
+				await UpsertSnapshotsAsync(internalMonthYear, computedItems);
+				persistedSnapshots = await GetSnapshotsByMonthAsync(internalMonthYear);
+				inScopeSnapshots = persistedSnapshots
+					.Where(x => scopedEmployeeIds.Contains(x.EmployeeId))
+					.OrderBy(x => x.EmployeeName)
+					.ToList();
 			}
 
-			var holidays = await LoadHolidaysForMonthAsync(year, month);
-			var workingWeekdaysMinusHolidays = PayrollMonthCalendar.CountWorkingWeekdaysExcludingHolidayWeekdays(year, month, holidays);
-			var daySetting = await _dayCalculationSettingRepository.FindByTenantAsync(CurrentTenant.Id);
-			var basis = PayrollBasisDays.Resolve(daySetting, year, month, workingWeekdaysMinusHolidays);
-
-			// Get all employee IDs for batch operations
-			var employeeIds = employees.Select(e => e.Id).ToList();
-			var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
-			var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
-
-			// BATCH LOAD: Get all data in parallel to avoid N+1 queries
-			var attendanceTask = GetAttendanceRecordsAsync(employeeIds, startDate, endDate);
-			var payrollDetailsTask = _payrollDetailsRepository.GetByEmployeeIdsAsync(employeeIds);
-			var payrollComponentsTask = _payrollComponentRepository.GetByEmployeeIdsAsync(employeeIds);
-
-			await Task.WhenAll(attendanceTask, payrollDetailsTask, payrollComponentsTask);
-
-			var attendanceByEmployee = await attendanceTask;
-			var payrollDetailsByEmployee = await payrollDetailsTask;
-			var componentsByEmployee = await payrollComponentsTask;
-
-			// Build payroll items (no additional DB calls - all data pre-loaded)
-			var items = employees.Select(employee => BuildPayrollItem(
-				employee,
-				attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
-				payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
-				componentsByEmployee[employee.Id].ToList(),
-				basis,
-				finalizedEmployeeIds.Contains(employee.Id)
-			)).ToList();
+			var totalCount = inScopeSnapshots.Count;
+			var items = inScopeSnapshots
+				.Skip(input.Page * input.PageSize)
+				.Take(input.PageSize)
+				.Select(MapSnapshotToItem)
+				.ToList();
 
 			return new RunPayrollResponse
 			{
@@ -171,10 +193,18 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		{
 			throw;
 		}
+		catch (Exception ex) when (IsSnapshotSchemaMissing(ex))
+		{
+			_logger.LogError(ex, "Payroll snapshot schema missing for month {Month}. Migration required.", input.Month);
+			throw new BusinessException(HRErrorCodes.PayrollSnapshotMigrationRequired)
+				.WithData("month", input.Month)
+				.WithData("requiredTable", "HR_PayrollRunItems")
+				.WithData("requiredMigration", "20260428034756_PayrollRunItemSnapshots");
+		}
 		catch (Exception ex)
 		{
 			_logger.LogError(ex, "Unexpected error generating payroll preview for month {Month}", input.Month);
-			throw new BusinessException("HR:PayrollPreviewFailed")
+			throw new BusinessException(HRErrorCodes.PayrollPreviewFailed)
 				.WithData("month", input.Month);
 		}
 	}
@@ -210,7 +240,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		if (scopedEmployees.Count == 0)
 		{
 			_logger.LogWarning("No active employees found for payroll generation in {Month}", request.Month);
-			throw new BusinessException("HR:NoActiveEmployees")
+			throw new BusinessException(HRErrorCodes.PayrollNoEmployees)
 				.WithData("month", request.Month);
 		}
 
@@ -224,6 +254,27 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			.Where(e => !finalizedEmployeeIds.Contains(e.Id))
 			.ToList();
 		var alreadyFinalizedCount = targetEmployees.Count - employees.Count;
+
+		var snapshotByEmployee = (await GetSnapshotsByMonthAsync(internalMonthYear))
+			.ToDictionary(x => x.EmployeeId, x => x);
+		var reviewedEmployeeIds = snapshotByEmployee.Values
+			.Where(x => x.ReviewStatus == ReviewStatuses.Reviewed || x.IsLocked)
+			.Select(x => x.EmployeeId)
+			.ToHashSet();
+		if (reviewedEmployeeIds.Count == 0)
+		{
+			reviewedEmployeeIds = (await GetReviewsByEmployeeAsync(internalMonthYear)).Keys.ToHashSet();
+		}
+		var unreviewedEmployeeIds = employees
+			.Where(e => !reviewedEmployeeIds.Contains(e.Id))
+			.Select(e => e.Id)
+			.ToList();
+		if (unreviewedEmployeeIds.Count > 0)
+		{
+			throw new BusinessException(HRErrorCodes.PayrollReviewRequiredBeforeLock)
+				.WithData("month", request.Month)
+				.WithData("employeeIds", unreviewedEmployeeIds);
+		}
 
 		if (employees.Count == 0)
 		{
@@ -285,12 +336,22 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 							"Salary slip for employee {EmployeeCode} is already finalized, skipping",
 							employee.EmployeeCode);
 						skippedCount++;
+						if (snapshotByEmployee.TryGetValue(employee.Id, out var snapshot))
+						{
+							snapshot.MarkLocked();
+							await _payrollRunItemSnapshotRepository.UpdateAsync(snapshot, autoSave: false);
+						}
 					}
 					else
 					{
 						salarySlip.Finalize();
 						await _salarySlipRepository.UpdateAsync(salarySlip, autoSave: false);
 						generatedCount++;
+						if (snapshotByEmployee.TryGetValue(employee.Id, out var snapshot))
+						{
+							snapshot.MarkLocked();
+							await _payrollRunItemSnapshotRepository.UpdateAsync(snapshot, autoSave: false);
+						}
 					}
 				}
 				catch (BusinessException bex)
@@ -326,7 +387,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				catch (Exception ex)
 				{
 					_logger.LogError(ex, "Error saving batch {BatchNum}. Rolling back batch changes.", batchNum);
-					throw new BusinessException("HR:PayrollBatchSaveFailed")
+					throw new BusinessException(HRErrorCodes.PayrollBatchSaveFailed)
 						.WithData("batchNumber", batchNum)
 						.WithData("totalBatches", totalBatches)
 						.WithData("month", request.Month);
@@ -343,7 +404,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 					employees.Count, request.Month);
 
 				var firstError = errors.FirstOrDefault();
-				throw new BusinessException("HR:PayrollGenerationCompleteFailure")
+				throw new BusinessException(HRErrorCodes.PayrollGenerationCompleteFailure)
 					.WithData("month", request.Month)
 					.WithData("totalEmployees", employees.Count)
 					.WithData("firstError", firstError.Error)
@@ -372,6 +433,206 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				Errors = failedCount > 0 ? errors.Select(e => $"{e.EmployeeCode}: {e.Error}").ToList() : null
 			};
 		}
+
+	public async Task<PayrollLockResponse> MarkReviewedAsync(PayrollRunReviewRequest request)
+	{
+		var (_, _, internalMonthYear) = ParseMonth(request.Month);
+		var employeeIds = NormalizeReviewEmployeeIds(request.EmployeeIds);
+		var actorUserId = CurrentUser.Id ?? throw new BusinessException(HRErrorCodes.AttendanceImportPreviewInvalid);
+
+		var targetEmployees = await ResolveScopedTargetEmployeesAsync(employeeIds);
+		await EnsureReviewCanChangeAsync(internalMonthYear, request.Month, targetEmployees);
+
+		var existingByEmployee = await GetReviewsByEmployeeAsync(internalMonthYear);
+		var snapshotByEmployee = (await GetSnapshotsByMonthAsync(internalMonthYear))
+			.ToDictionary(x => x.EmployeeId, x => x);
+		var reviewedAt = Clock.Now;
+		var updated = 0;
+
+		foreach (var employee in targetEmployees)
+		{
+			if (existingByEmployee.TryGetValue(employee.Id, out var existingReview))
+			{
+				existingReview.Refresh(actorUserId, reviewedAt);
+				await _payrollRunReviewRepository.UpdateAsync(existingReview, autoSave: false);
+			}
+			else
+			{
+				await _payrollRunReviewRepository.InsertAsync(
+					new PayrollRunReview(
+						GuidGenerator.Create(),
+						CurrentTenant.Id,
+						internalMonthYear,
+						employee.Id,
+						actorUserId,
+						reviewedAt),
+					autoSave: false);
+			}
+
+			if (snapshotByEmployee.TryGetValue(employee.Id, out var snapshot) && !snapshot.IsLocked)
+			{
+				snapshot.MarkReviewed(actorUserId, reviewedAt);
+				await _payrollRunItemSnapshotRepository.UpdateAsync(snapshot, autoSave: false);
+			}
+			updated++;
+		}
+
+		await UnitOfWorkManager.Current!.SaveChangesAsync();
+		return new PayrollLockResponse
+		{
+			Message = $"Marked {updated} payroll row(s) as reviewed.",
+			Month = request.Month,
+			EmployeesProcessed = updated
+		};
+	}
+
+	public async Task<PayrollLockResponse> UnmarkReviewedAsync(PayrollRunReviewRequest request)
+	{
+		var (_, _, internalMonthYear) = ParseMonth(request.Month);
+		var employeeIds = NormalizeReviewEmployeeIds(request.EmployeeIds);
+		var targetEmployees = await ResolveScopedTargetEmployeesAsync(employeeIds);
+		await EnsureReviewCanChangeAsync(internalMonthYear, request.Month, targetEmployees);
+
+		var existingByEmployee = await GetReviewsByEmployeeAsync(internalMonthYear);
+		var snapshotByEmployee = (await GetSnapshotsByMonthAsync(internalMonthYear))
+			.ToDictionary(x => x.EmployeeId, x => x);
+		var removed = 0;
+		foreach (var employee in targetEmployees)
+		{
+			if (!existingByEmployee.TryGetValue(employee.Id, out var existingReview))
+			{
+				continue;
+			}
+
+			await _payrollRunReviewRepository.DeleteAsync(existingReview, autoSave: false);
+			if (snapshotByEmployee.TryGetValue(employee.Id, out var snapshot))
+			{
+				snapshot.MarkPending();
+				await _payrollRunItemSnapshotRepository.UpdateAsync(snapshot, autoSave: false);
+			}
+			removed++;
+		}
+
+		await UnitOfWorkManager.Current!.SaveChangesAsync();
+		return new PayrollLockResponse
+		{
+			Message = $"Removed review from {removed} payroll row(s).",
+			Month = request.Month,
+			EmployeesProcessed = removed
+		};
+	}
+
+	private async Task<List<PayrollRunItemSnapshot>> GetSnapshotsByMonthAsync(string monthYear)
+	{
+		var query = await _payrollRunItemSnapshotRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			query = query.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+		else
+		{
+			query = query.Where(x => x.TenantId == null);
+		}
+
+		return await AsyncExecuter.ToListAsync(query.Where(x => x.MonthYear == monthYear));
+	}
+
+	private async Task UpsertSnapshotsAsync(string monthYear, List<RunPayrollItem> items)
+	{
+		var existingByEmployee = (await GetSnapshotsByMonthAsync(monthYear))
+			.ToDictionary(x => x.EmployeeId, x => x);
+
+		foreach (var item in items)
+		{
+			var issuesJson = JsonSerializer.Serialize(item.IssueCodes ?? new List<string>());
+			var earningsJson = JsonSerializer.Serialize(item.EarningComponents ?? new List<RunPayrollComponentItem>());
+			var deductionsJson = JsonSerializer.Serialize(item.DeductionComponents ?? new List<RunPayrollComponentItem>());
+
+			if (existingByEmployee.TryGetValue(item.EmployeeId, out var existing))
+			{
+				ApplySnapshotValues(existing, item, issuesJson, earningsJson, deductionsJson);
+				await _payrollRunItemSnapshotRepository.UpdateAsync(existing, autoSave: false);
+				continue;
+			}
+
+			var snapshot = new PayrollRunItemSnapshot(
+				GuidGenerator.Create(),
+				CurrentTenant.Id,
+				monthYear,
+				item.EmployeeId);
+			ApplySnapshotValues(snapshot, item, issuesJson, earningsJson, deductionsJson);
+			await _payrollRunItemSnapshotRepository.InsertAsync(snapshot, autoSave: false);
+		}
+
+		await UnitOfWorkManager.Current!.SaveChangesAsync();
+	}
+
+	private static void ApplySnapshotValues(
+		PayrollRunItemSnapshot snapshot,
+		RunPayrollItem item,
+		string issuesJson,
+		string earningsJson,
+		string deductionsJson)
+	{
+		snapshot.IsLocked = item.IsLocked;
+		snapshot.ReviewStatus = item.ReviewStatus;
+		snapshot.ReviewedByUserId = item.ReviewedByUserId;
+		snapshot.ReviewedAt = item.ReviewedAt;
+		snapshot.EmployeeName = item.EmployeeName;
+		snapshot.EmployeeIdentifier = item.EmployeeIdentifier;
+		snapshot.IsTeaching = item.IsTeaching;
+		snapshot.BasicSalary = (decimal)item.BasicSalary;
+		snapshot.GrossSalary = (decimal)item.GrossSalary;
+		snapshot.TotalDeduction = (decimal)item.TotalDeduction;
+		snapshot.NetPay = (decimal)item.NetPay;
+		snapshot.PreviousMonthNetPay = item.PreviousMonthNetPay.HasValue ? (decimal)item.PreviousMonthNetPay.Value : null;
+		snapshot.NetPayDelta = item.NetPayDelta.HasValue ? (decimal)item.NetPayDelta.Value : null;
+		snapshot.NetPayDeltaPercent = item.NetPayDeltaPercent.HasValue ? (decimal)item.NetPayDeltaPercent.Value : null;
+		snapshot.IssueCodesJson = issuesJson;
+		snapshot.PresentDays = (decimal)item.PresentDays;
+		snapshot.HalfWorkingDays = (decimal)item.HalfWorkingDays;
+		snapshot.TotalWorkingDays = (decimal)item.TotalWorkingDays;
+		snapshot.PayableDays = (decimal)item.PayableDays;
+		snapshot.ProrationFactor = (decimal)item.ProrationFactor;
+		snapshot.DayCalculationMode = item.DayCalculationMode;
+		snapshot.UsedDefaultDayCalculation = item.UsedDefaultDayCalculation;
+		snapshot.EarningComponentsJson = earningsJson;
+		snapshot.DeductionComponentsJson = deductionsJson;
+	}
+
+	private static RunPayrollItem MapSnapshotToItem(PayrollRunItemSnapshot row)
+	{
+		return new RunPayrollItem
+		{
+			EmployeeId = row.EmployeeId,
+			IsLocked = row.IsLocked,
+			ReviewStatus = row.ReviewStatus,
+			ReviewedByUserId = row.ReviewedByUserId,
+			ReviewedAt = row.ReviewedAt,
+			EmployeeName = row.EmployeeName,
+			EmployeeIdentifier = row.EmployeeIdentifier,
+			IsTeaching = row.IsTeaching,
+			BasicSalary = (double)row.BasicSalary,
+			GrossSalary = (double)row.GrossSalary,
+			TotalDeduction = (double)row.TotalDeduction,
+			NetPay = (double)row.NetPay,
+			PreviousMonthNetPay = row.PreviousMonthNetPay.HasValue ? (double)row.PreviousMonthNetPay.Value : null,
+			NetPayDelta = row.NetPayDelta.HasValue ? (double)row.NetPayDelta.Value : null,
+			NetPayDeltaPercent = row.NetPayDeltaPercent.HasValue ? (double)row.NetPayDeltaPercent.Value : null,
+			IssueCodes = JsonSerializer.Deserialize<List<string>>(row.IssueCodesJson) ?? new List<string>(),
+			PresentDays = (double)row.PresentDays,
+			HalfWorkingDays = (double)row.HalfWorkingDays,
+			TotalWorkingDays = (double)row.TotalWorkingDays,
+			PayableDays = (double)row.PayableDays,
+			ProrationFactor = (double)row.ProrationFactor,
+			DayCalculationMode = row.DayCalculationMode,
+			UsedDefaultDayCalculation = row.UsedDefaultDayCalculation,
+			EarningComponents = JsonSerializer.Deserialize<List<RunPayrollComponentItem>>(row.EarningComponentsJson)
+				?? new List<RunPayrollComponentItem>(),
+			DeductionComponents = JsonSerializer.Deserialize<List<RunPayrollComponentItem>>(row.DeductionComponentsJson)
+				?? new List<RunPayrollComponentItem>()
+		};
+	}
 
 	#region Private Methods
 
@@ -455,64 +716,46 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		EmployeePayrollDetails? payrollDetails,
 		List<EmployeePayrollComponent> components,
 		PayrollBasisDaysResult basis,
-		bool isLocked)
+		bool isLocked,
+		PayrollRunReview? review,
+		decimal? previousMonthNetPay)
 	{
 		var presentDays = attendanceRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.Present);
 		var halfDays = attendanceRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.HalfDayLeave);
-		var payableDays = PayrollProrationCalculator.CalculatePayableDays(presentDays, halfDays);
-		var factor = PayrollProrationCalculator.CalculateProrationFactor(basis.BasisDays, payableDays);
-
-		var basicSalary = components
-			.Where(c => c.IsEarning && IsBasicSalaryComponentName(c.Name))
-			.Sum(c => c.Amount);
-		basicSalary = PayrollProrationCalculator.ProrateAmount(basicSalary, isTemp: false, factor);
-
-		var grossSalary = 0m;
-		var totalDeduction = 0m;
-		var earningComponents = new List<RunPayrollComponentItem>(components.Count);
-		var deductionComponents = new List<RunPayrollComponentItem>(components.Count);
-		foreach (var component in components)
-		{
-			var prorated = PayrollProrationCalculator.ProrateAmount(component.Amount, component.IsTemp, factor);
-			var item = new RunPayrollComponentItem
-			{
-				Name = component.Name,
-				Amount = (double)prorated
-			};
-			if (component.IsEarning)
-			{
-				grossSalary += prorated;
-				earningComponents.Add(item);
-			}
-			else
-			{
-				totalDeduction += prorated;
-				deductionComponents.Add(item);
-			}
-		}
-
-		var netPay = grossSalary - totalDeduction;
+		var computation = PayrollComputation.Calculate(presentDays, halfDays, basis.BasisDays, components);
+		var netPay = computation.NetPay;
+		var netPayDelta = previousMonthNetPay.HasValue ? netPay - previousMonthNetPay.Value : (decimal?)null;
+		var netPayDeltaPercent = previousMonthNetPay.HasValue && previousMonthNetPay.Value != 0
+			? netPayDelta / previousMonthNetPay.Value * 100m
+			: (decimal?)null;
 
 		return new RunPayrollItem
 		{
 			EmployeeId = employee.Id,
 			IsLocked = isLocked,
+			ReviewStatus = isLocked ? ReviewStatuses.Locked : review == null ? ReviewStatuses.Pending : ReviewStatuses.Reviewed,
+			ReviewedByUserId = review?.ReviewedByUserId,
+			ReviewedAt = review?.ReviewedAt,
 			EmployeeName = FormatEmployeeName(employee),
 			EmployeeIdentifier = employee.EmployeeCode ?? string.Empty,
 			IsTeaching = employee.EmployeeGroup == EmployeeGroupType.Teaching,
-			BasicSalary = (double)basicSalary,
-			GrossSalary = (double)grossSalary,
-			TotalDeduction = (double)totalDeduction,
+			BasicSalary = (double)computation.BasicSalary,
+			GrossSalary = (double)computation.GrossSalary,
+			TotalDeduction = (double)computation.TotalDeduction,
 			NetPay = (double)netPay,
+			PreviousMonthNetPay = previousMonthNetPay.HasValue ? (double)previousMonthNetPay.Value : null,
+			NetPayDelta = netPayDelta.HasValue ? (double)netPayDelta.Value : null,
+			NetPayDeltaPercent = netPayDeltaPercent.HasValue ? (double)netPayDeltaPercent.Value : null,
+			IssueCodes = BuildIssueCodes(payrollDetails, components, basis.BasisDays, computation.PayableDays, netPay, previousMonthNetPay, netPayDeltaPercent),
 			PresentDays = presentDays,
 			HalfWorkingDays = halfDays,
 			TotalWorkingDays = basis.BasisDays,
-			PayableDays = (double)payableDays,
-			ProrationFactor = (double)factor,
+			PayableDays = (double)computation.PayableDays,
+			ProrationFactor = (double)computation.ProrationFactor,
 			DayCalculationMode = PayrollDayCalculationApiLabels.ToApiString(basis.EffectiveMode),
 			UsedDefaultDayCalculation = basis.UsedTenantDefault,
-			EarningComponents = earningComponents,
-			DeductionComponents = deductionComponents
+			EarningComponents = computation.Earnings.Select(ToRunPayrollComponentItem).ToList(),
+			DeductionComponents = computation.Deductions.Select(ToRunPayrollComponentItem).ToList()
 		};
 	}
 
@@ -537,15 +780,146 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		return requestedSet.Select(id => scopedById[id]).ToList();
 	}
 
-	private static bool IsBasicSalaryComponentName(string? name)
+	private async Task<List<PayrollTargetEmployee>> ResolveScopedTargetEmployeesAsync(List<Guid>? requestedEmployeeIds)
 	{
-		if (string.IsNullOrWhiteSpace(name))
+		var scopedEmployees = await AsyncExecuter.ToListAsync(
+			(await GetScopedActiveEmployeeQueryAsync(includeUnknownStageEmployees: false))
+				.Select(e => new PayrollTargetEmployee(e.Id, e.EmployeeCode, e.EmployeeName))
+		);
+
+		return ResolveTargetEmployees(scopedEmployees, requestedEmployeeIds);
+	}
+
+	private async Task EnsureReviewCanChangeAsync(
+		string internalMonthYear,
+		string requestMonth,
+		List<PayrollTargetEmployee> targetEmployees)
+	{
+		var existingSlips = await _salarySlipRepository.GetByMonthAsync(internalMonthYear);
+		var lockedIds = existingSlips
+			.Where(x => x.Status == SalarySlipStatus.Finalized)
+			.Select(x => x.EmployeeId)
+			.ToHashSet();
+		var lockedRequestedIds = targetEmployees
+			.Where(e => lockedIds.Contains(e.Id))
+			.Select(e => e.Id)
+			.ToList();
+		if (lockedRequestedIds.Count > 0)
 		{
-			return false;
+			throw new BusinessException(HRErrorCodes.PayrollReviewCannotChangeLocked)
+				.WithData("month", requestMonth)
+				.WithData("employeeIds", lockedRequestedIds);
+		}
+	}
+
+	private static RunPayrollComponentItem ToRunPayrollComponentItem(PayrollComputedLineItem item) =>
+		new()
+		{
+			Name = item.Source.Name,
+			Amount = (double)item.Amount
+		};
+
+	private async Task<Dictionary<Guid, PayrollRunReview>> GetReviewsByEmployeeAsync(string monthYear)
+	{
+		var query = await _payrollRunReviewRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			query = query.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+		else
+		{
+			query = query.Where(x => x.TenantId == null);
 		}
 
-		return string.Equals(name, "Basic", StringComparison.OrdinalIgnoreCase)
-			|| name.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase);
+		return (await AsyncExecuter.ToListAsync(query.Where(x => x.MonthYear == monthYear)))
+			.GroupBy(x => x.EmployeeId)
+			.ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.ReviewedAt).First());
+	}
+
+	private static string GetPreviousMonth(string internalMonthYear)
+	{
+		var year = int.Parse(internalMonthYear[..4]);
+		var month = int.Parse(internalMonthYear[5..7]);
+		return new DateTime(year, month, 1).AddMonths(-1).ToString("yyyy-MM");
+	}
+
+	private static List<Guid> NormalizeReviewEmployeeIds(List<Guid>? employeeIds)
+	{
+		var normalized = employeeIds?
+			.Where(id => id != Guid.Empty)
+			.Distinct()
+			.ToList() ?? new List<Guid>();
+		if (normalized.Count == 0)
+		{
+			throw new BusinessException(HRErrorCodes.PayrollReviewEmployeeIdsRequired);
+		}
+
+		return normalized;
+	}
+
+	private static List<string> BuildIssueCodes(
+		EmployeePayrollDetails? payrollDetails,
+		List<EmployeePayrollComponent> components,
+		double basisDays,
+		decimal payableDays,
+		decimal netPay,
+		decimal? previousMonthNetPay,
+		decimal? netPayDeltaPercent)
+	{
+		var issues = new List<string>();
+
+		if (payrollDetails == null || components.Count == 0)
+		{
+			issues.Add(IssueCodes.MissingSalaryStructure);
+		}
+
+		if (basisDays > 0 && payableDays <= 0)
+		{
+			issues.Add(IssueCodes.NoAttendance);
+		}
+		else if (basisDays > 0 && payableDays < (decimal)basisDays)
+		{
+			issues.Add(IssueCodes.LowAttendance);
+		}
+
+		if (netPay < 0)
+		{
+			issues.Add(IssueCodes.NegativeNetPay);
+		}
+
+		if (!previousMonthNetPay.HasValue)
+		{
+			issues.Add(IssueCodes.NoPreviousMonthComparison);
+		}
+		else if (netPayDeltaPercent.HasValue && Math.Abs(netPayDeltaPercent.Value) >= 10m)
+		{
+			issues.Add(IssueCodes.LargeSalaryVariance);
+		}
+
+		return issues;
+	}
+
+	private static bool IsSnapshotSchemaMissing(Exception ex)
+	{
+		var current = ex;
+		while (current != null)
+		{
+			var message = current.Message ?? string.Empty;
+			if (
+				message.Contains("HR_PayrollRunItems", StringComparison.OrdinalIgnoreCase) &&
+				(
+					message.Contains("does not exist", StringComparison.OrdinalIgnoreCase) ||
+					message.Contains("Invalid object name", StringComparison.OrdinalIgnoreCase) ||
+					message.Contains("no such table", StringComparison.OrdinalIgnoreCase)
+				))
+			{
+				return true;
+			}
+
+			current = current.InnerException!;
+		}
+
+		return false;
 	}
 
 	/// <summary>
@@ -585,17 +959,22 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			attendanceQuery = attendanceQuery.Where(a => a.TenantId == CurrentTenant.Id);
 		}
 
-		var knownStageEmployeeIds = attendanceQuery
-			.Where(a => a.EducationMediumStageId.HasValue)
-			.Select(a => a.EmployeeId)
-			.Distinct();
+		// Materialize the employee IDs to avoid complex subquery translation issues in EF Core
+		var knownStageEmployeeIds = await AsyncExecuter.ToListAsync(
+			attendanceQuery
+				.Where(a => a.EducationMediumStageId.HasValue)
+				.Select(a => a.EmployeeId)
+				.Distinct()
+		);
 
-		var scopedStageEmployeeIds = attendanceQuery
-			.Where(a =>
-				a.EducationMediumStageId.HasValue &&
-				scope.MediumStageIds.Contains(a.EducationMediumStageId!.Value))
-			.Select(a => a.EmployeeId)
-			.Distinct();
+		var scopedStageEmployeeIds = await AsyncExecuter.ToListAsync(
+			attendanceQuery
+				.Where(a =>
+					a.EducationMediumStageId.HasValue &&
+					scope.MediumStageIds.Contains(a.EducationMediumStageId!.Value))
+				.Select(a => a.EmployeeId)
+				.Distinct()
+		);
 
 		if (includeUnknownStageEmployees)
 		{

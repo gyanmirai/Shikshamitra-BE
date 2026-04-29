@@ -48,6 +48,7 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 		string? search,
 		int skip,
 		int take,
+		Guid? employeeId = null,
 		CancellationToken cancellationToken = default);
 
 	/// <summary>
@@ -60,5 +61,6 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 		string? search,
 		int skip,
 		int take,
+		Guid? employeeId = null,
 		CancellationToken cancellationToken = default);
 }

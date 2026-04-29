@@ -60,6 +60,36 @@ public class LeaveManagementController : AbpControllerBase
 	}
 
 	/// <summary>
+	/// Get only the signed-in employee leave requests.
+	/// </summary>
+	[HttpGet("my")]
+	[ProducesResponseType(typeof(LeaveManagementListResponse), StatusCodes.Status200OK)]
+	public virtual async Task<LeaveManagementListResponse> GetMyListAsync(
+		[FromQuery, Required] Guid academicYearId,
+		[FromQuery(Name = "month-year")] DateTime? monthYear,
+		[FromQuery] string? search = null,
+		[FromQuery, Range(1, int.MaxValue)] int page = 1,
+		[FromQuery, Range(10, 100)] int pageSize = 10,
+		[FromQuery] string? status = null,
+		[FromQuery] Guid? leavePolicyId = null,
+		[FromQuery] Guid? leaveTypeMasterId = null)
+	{
+		var input = new LeaveManagementGetListInput
+		{
+			AcademicYearId = academicYearId,
+			MonthYearAnchor = monthYear,
+			Search = search,
+			Page = page,
+			PageSize = pageSize,
+			Status = ParseStatus(status),
+			LeavePolicyId = leavePolicyId,
+			LeaveTypeMasterId = leaveTypeMasterId
+		};
+		var result = await _leaveManagementAppService.GetMyListAsync(input);
+		return LeaveManagementContractMapper.ToListResponse(result, page, pageSize);
+	}
+
+	/// <summary>
 	/// Per-policy leave balances for an employee (defaults to the signed-in user's employee).
 	/// </summary>
 	[HttpGet("balances")]
@@ -69,6 +99,17 @@ public class LeaveManagementController : AbpControllerBase
 		[FromQuery] Guid? employeeId = null)
 	{
 		return await _leaveManagementAppService.GetBalancesAsync(academicYearId, employeeId);
+	}
+
+	/// <summary>
+	/// Per-policy leave balances for the signed-in employee only.
+	/// </summary>
+	[HttpGet("my/balances")]
+	[ProducesResponseType(typeof(LeaveBalanceListDto), StatusCodes.Status200OK)]
+	public virtual async Task<LeaveBalanceListDto> GetMyBalancesAsync(
+		[FromQuery, Required] Guid academicYearId)
+	{
+		return await _leaveManagementAppService.GetMyBalancesAsync(academicYearId);
 	}
 
 	/// <summary>
@@ -169,6 +210,42 @@ public class LeaveManagementController : AbpControllerBase
 	}
 
 	/// <summary>
+	/// Create leave request for the signed-in employee only (no on-behalf support).
+	/// </summary>
+	[HttpPost("my")]
+	[Consumes("multipart/form-data")]
+	[ProducesResponseType(typeof(LeaveRequestCreatedResponse), StatusCodes.Status201Created)]
+	public virtual async Task<ActionResult<LeaveRequestCreatedResponse>> CreateMyAsync(
+		[FromQuery, Required] Guid academicYearId,
+		[FromForm] Guid? leavePolicyId,
+		[FromForm] Guid? leaveTypeId,
+		[FromForm, Required] DateTime startDate,
+		[FromForm, Required] DateTime endDate,
+		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
+		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
+	{
+		if (!leavePolicyId.HasValue && (!leaveTypeId.HasValue || leaveTypeId.Value == Guid.Empty))
+		{
+			throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
+		}
+
+		var createDto = new LeaveRequestCreateDto
+		{
+			LeavePolicyId = leavePolicyId,
+			LeaveTypeId = leaveTypeId ?? Guid.Empty,
+			StartDate = startDate,
+			EndDate = endDate,
+			Reason = reason
+		};
+
+		var file = attachment?.File;
+		var created = file is null
+			? await _leaveManagementAppService.CreateMyAsync(academicYearId, createDto)
+			: await _leaveManagementAppService.CreateMyAsync(academicYearId, createDto, file);
+		return StatusCode(StatusCodes.Status201Created, LeaveManagementContractMapper.ToCreatedResponse(created));
+	}
+
+	/// <summary>
 	/// Get leave request by ID
 	/// </summary>
 	[HttpGet("{id:guid}")]
@@ -177,6 +254,18 @@ public class LeaveManagementController : AbpControllerBase
 	public virtual async Task<LeaveRequestDetailsResponse> GetAsync([FromRoute, Required] Guid id)
 	{
 		var details = await _leaveManagementAppService.GetAsync(id);
+		return LeaveManagementContractMapper.ToDetailsResponse(details);
+	}
+
+	/// <summary>
+	/// Get own leave request by ID.
+	/// </summary>
+	[HttpGet("my/{id:guid}")]
+	[ProducesResponseType(typeof(LeaveRequestDetailsResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public virtual async Task<LeaveRequestDetailsResponse> GetMyAsync([FromRoute, Required] Guid id)
+	{
+		var details = await _leaveManagementAppService.GetMyAsync(id);
 		return LeaveManagementContractMapper.ToDetailsResponse(details);
 	}
 
@@ -192,6 +281,17 @@ public class LeaveManagementController : AbpControllerBase
 	}
 
 	/// <summary>
+	/// Download own leave attachment metadata (JSON).
+	/// </summary>
+	[HttpGet("my/{id:guid}/attachment")]
+	[ProducesResponseType(typeof(LeaveAttachmentDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public virtual async Task<LeaveAttachmentDto> GetMyAttachmentAsync([FromRoute, Required] Guid id)
+	{
+		return await _leaveManagementAppService.GetMyAttachmentAsync(id);
+	}
+
+	/// <summary>
 	/// Download leave attachment as a file
 	/// </summary>
 	[HttpGet("{id:guid}/attachment/download")]
@@ -200,6 +300,18 @@ public class LeaveManagementController : AbpControllerBase
 	public virtual async Task<IActionResult> DownloadAttachmentAsync([FromRoute, Required] Guid id)
 	{
 		var attachment = await _leaveManagementAppService.GetAttachmentAsync(id);
+		return File(attachment.FileContent, attachment.ContentType, attachment.FileName);
+	}
+
+	/// <summary>
+	/// Download own leave attachment as a file.
+	/// </summary>
+	[HttpGet("my/{id:guid}/attachment/download")]
+	[ProducesResponseType(StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public virtual async Task<IActionResult> DownloadMyAttachmentAsync([FromRoute, Required] Guid id)
+	{
+		var attachment = await _leaveManagementAppService.GetMyAttachmentAsync(id);
 		return File(attachment.FileContent, attachment.ContentType, attachment.FileName);
 	}
 
@@ -237,6 +349,17 @@ public class LeaveManagementController : AbpControllerBase
 	public virtual async Task<LeaveRequestDeleteResponse> DeleteAsync([FromRoute, Required] Guid id)
 	{
 		var deleted = await _leaveManagementAppService.DeleteAsync(id);
+		return LeaveManagementContractMapper.ToDeleteResponse(deleted);
+	}
+
+	/// <summary>
+	/// Cancel own leave request.
+	/// </summary>
+	[HttpDelete("my/{id:guid}")]
+	[ProducesResponseType(typeof(LeaveRequestDeleteResponse), StatusCodes.Status200OK)]
+	public virtual async Task<LeaveRequestDeleteResponse> DeleteMyAsync([FromRoute, Required] Guid id)
+	{
+		var deleted = await _leaveManagementAppService.DeleteMyAsync(id);
 		return LeaveManagementContractMapper.ToDeleteResponse(deleted);
 	}
 

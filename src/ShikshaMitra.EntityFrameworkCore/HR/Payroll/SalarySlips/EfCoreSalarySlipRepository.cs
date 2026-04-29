@@ -48,25 +48,6 @@ public class EfCoreSalarySlipRepository
 	}
 
 	/// <summary>
-	/// Checks if a salary slip exists for an employee in a specific month
-	/// Optimized query that doesn't load the entire entity
-	/// </summary>
-	public async Task<bool> ExistsAsync(
-		Guid employeeId,
-		string monthYear,
-		CancellationToken cancellationToken = default)
-	{
-		var dbSet = await GetDbSetAsync();
-
-		return await dbSet
-			.AsNoTracking()
-			.Where(x => x.TenantId == _currentTenant.Id &&
-			            x.EmployeeId == employeeId &&
-			            x.MonthYear == monthYear)
-			.AnyAsync(cancellationToken);
-	}
-
-	/// <summary>
 	/// Checks if any finalized salary slip exists for a specific month
 	/// </summary>
 	public async Task<bool> HasFinalizedSlipsForMonthAsync(

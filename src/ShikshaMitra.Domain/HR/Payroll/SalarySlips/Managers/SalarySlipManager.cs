@@ -8,7 +8,6 @@ using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -58,14 +57,14 @@ public class SalarySlipManager : DomainService
 		bool forceRegenerate = false,
 		CancellationToken cancellationToken = default)
 	{
-		ValidateMonthYearFormat(monthYear);
+		var normalizedMonthYear = NormalizeMonthYear(monthYear);
 
 		_logger.LogInformation("Generating salary slip for Employee: {EmployeeId}, Month: {MonthYear}",
-			employeeId, monthYear);
+			employeeId, normalizedMonthYear);
 
-		var employee = await _employeeRepository.GetAsync(employeeId, cancellationToken: cancellationToken);
+		await _employeeRepository.GetAsync(employeeId, cancellationToken: cancellationToken);
 
-		var existingSlip = await _salarySlipRepository.GetByEmployeeAndMonthAsync(employeeId, monthYear, cancellationToken);
+		var existingSlip = await _salarySlipRepository.GetByEmployeeAndMonthAsync(employeeId, normalizedMonthYear, cancellationToken);
 
 		if (existingSlip != null && existingSlip.Status == SalarySlipStatus.Finalized)
 		{
@@ -74,25 +73,19 @@ public class SalarySlipManager : DomainService
 				throw new BusinessException(HRErrorCodes.SalarySlipAlreadyFinalized);
 			}
 			_logger.LogInformation("Finalized salary slip already exists for Employee: {EmployeeId}, Month: {MonthYear}",
-				employeeId, monthYear);
+				employeeId, normalizedMonthYear);
 			return existingSlip;
 		}
 
 		if (existingSlip != null && !forceRegenerate)
 		{
 			_logger.LogInformation("Salary slip already exists for Employee: {EmployeeId}, Month: {MonthYear}",
-				employeeId, monthYear);
+				employeeId, normalizedMonthYear);
 			return existingSlip;
 		}
 
-		if (!DateTime.TryParseExact(monthYear + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture,
-			DateTimeStyles.None, out var monthStart))
-		{
-			throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat);
-		}
-
-		var year = monthStart.Year;
-		var month = monthStart.Month;
+		var year = int.Parse(normalizedMonthYear[..4]);
+		var month = int.Parse(normalizedMonthYear[5..7]);
 		var holidays = await GetHolidaysForMonthAsync(year, month);
 		var workingWeekdaysMinusHolidays = PayrollMonthCalendar.CountWorkingWeekdaysExcludingHolidayWeekdays(year, month, holidays);
 		var daySetting = await _dayCalculationSettingRepository.FindByTenantAsync(CurrentTenant.Id, cancellationToken);
@@ -103,34 +96,16 @@ public class SalarySlipManager : DomainService
 		var attendance = await GetAttendanceForEmployeeMonthAsync(employeeId, startDate, endDate);
 		var presentDays = attendance.Count(a => a.StatusType == EmployeeAttendanceStatusType.Present);
 		var halfDays = attendance.Count(a => a.StatusType == EmployeeAttendanceStatusType.HalfDayLeave);
-		var payableDays = PayrollProrationCalculator.CalculatePayableDays(presentDays, halfDays);
-		var factor = PayrollProrationCalculator.CalculateProrationFactor(basis.BasisDays, payableDays);
+		var components = await _payrollComponentRepository.GetByEmployeeIdAsync(employeeId, cancellationToken);
+		var computation = PayrollComputation.Calculate(presentDays, halfDays, basis.BasisDays, components);
 
-		var earnings = await _payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId, cancellationToken);
-		var deductions = await _payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId, cancellationToken);
-
-		if (earnings.Count == 0 && deductions.Count == 0)
+		if (components.Count == 0)
 		{
 			_logger.LogWarning("No payroll components found for Employee: {EmployeeId}. Generating empty salary slip.", employeeId);
 		}
 
-		var earningLineItems = earnings.Select(e => new SalarySlipLineItem(
-			e.Name,
-			PayrollProrationCalculator.ProrateAmount(e.Amount, e.IsTemp, factor),
-			e.Description,
-			e.IsFixed,
-			e.IsTemp,
-			e.ComponentType,
-			e.DependOn ?? SalaryComponentDependency.None)).ToList();
-
-		var deductionLineItems = deductions.Select(d => new SalarySlipLineItem(
-			d.Name,
-			PayrollProrationCalculator.ProrateAmount(d.Amount, d.IsTemp, factor),
-			d.Description,
-			d.IsFixed,
-			d.IsTemp,
-			d.ComponentType,
-			d.DependOn ?? SalaryComponentDependency.None)).ToList();
+		var earningLineItems = computation.Earnings.Select(PayrollComputation.ToSalarySlipLineItem).ToList();
+		var deductionLineItems = computation.Deductions.Select(PayrollComputation.ToSalarySlipLineItem).ToList();
 
 		if (existingSlip == null)
 		{
@@ -138,28 +113,36 @@ public class SalarySlipManager : DomainService
 				GuidGenerator.Create(),
 				CurrentTenant.Id,
 				employeeId,
-				monthYear,
+				normalizedMonthYear,
 				earningLineItems,
 				deductionLineItems);
 
-			salarySlip.SetPayrollComputationSnapshot(basis.BasisDays, payableDays, factor, basis.EffectiveMode);
+			salarySlip.SetPayrollComputationSnapshot(
+				basis.BasisDays,
+				computation.PayableDays,
+				computation.ProrationFactor,
+				basis.EffectiveMode);
 
 			await _salarySlipRepository.InsertAsync(salarySlip, cancellationToken: cancellationToken);
 
 			_logger.LogInformation("Salary slip created for Employee: {EmployeeId}, Month: {MonthYear}, " +
 				"TotalEarning: {TotalEarning}, TotalDeduction: {TotalDeduction}, NetSalary: {NetSalary}",
-				employeeId, monthYear, salarySlip.TotalEarning, salarySlip.TotalDeduction, salarySlip.NetSalary);
+				employeeId, normalizedMonthYear, salarySlip.TotalEarning, salarySlip.TotalDeduction, salarySlip.NetSalary);
 
 			return salarySlip;
 		}
 
 		existingSlip.UpdateLineItems(earningLineItems, deductionLineItems);
-		existingSlip.SetPayrollComputationSnapshot(basis.BasisDays, payableDays, factor, basis.EffectiveMode);
+		existingSlip.SetPayrollComputationSnapshot(
+			basis.BasisDays,
+			computation.PayableDays,
+			computation.ProrationFactor,
+			basis.EffectiveMode);
 		await _salarySlipRepository.UpdateAsync(existingSlip, cancellationToken: cancellationToken);
 
 		_logger.LogInformation("Salary slip regenerated for Employee: {EmployeeId}, Month: {MonthYear}, " +
 			"TotalEarning: {TotalEarning}, TotalDeduction: {TotalDeduction}, NetSalary: {NetSalary}",
-			employeeId, monthYear, existingSlip.TotalEarning, existingSlip.TotalDeduction, existingSlip.NetSalary);
+			employeeId, normalizedMonthYear, existingSlip.TotalEarning, existingSlip.TotalDeduction, existingSlip.NetSalary);
 
 		return existingSlip;
 	}
@@ -204,15 +187,21 @@ public class SalarySlipManager : DomainService
 	/// </summary>
 	public void ValidateMonthYearFormat(string monthYear)
 	{
+		NormalizeMonthYear(monthYear);
+	}
+
+	private static string NormalizeMonthYear(string monthYear)
+	{
 		if (string.IsNullOrWhiteSpace(monthYear))
 		{
 			throw new BusinessException(HRErrorCodes.MonthYearRequired);
 		}
 
-		if (!DateTime.TryParseExact(monthYear + "-01", "yyyy-MM-dd", null,
-			DateTimeStyles.None, out _))
+		if (!PayrollMonthNormalizer.TryNormalizeToInternal(monthYear, out var normalizedMonthYear))
 		{
 			throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat);
 		}
+
+		return normalizedMonthYear;
 	}
 }

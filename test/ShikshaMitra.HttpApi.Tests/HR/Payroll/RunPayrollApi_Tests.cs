@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -15,71 +16,85 @@ namespace ShikshaMitra.HR.Payroll;
 public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 {
 	private const string BaseUrl = "/api/payroll/run";
+	private const string ReviewUrl = "/api/payroll/run/reviews";
+	private const string PayrollMonth = "APRIL-2026";
 
 	public RunPayrollApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
 
-	#region Tier 0 — Critical
-
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Get_Payroll_Preview()
+	public async Task Should_Get_Payroll_Preview_Without_500()
 	{
-		var response = await Client.GetAsync($"{BaseUrl}?month=APRIL-2026&page=0&pageSize=50");
-
+		var response = await Client.GetAsync($"{BaseUrl}?month={PayrollMonth}&page=0&pageSize=50");
 		response.StatusCode.ShouldBeOneOf(
 			HttpStatusCode.OK,
-			HttpStatusCode.Forbidden,
-			HttpStatusCode.InternalServerError);
+			HttpStatusCode.BadRequest,
+			HttpStatusCode.Forbidden);
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Get_Payroll_Preview_With_YYYY_MM_Format()
+	public async Task Should_Lock_Payroll_Without_500()
 	{
-		var response = await Client.GetAsync($"{BaseUrl}?month=2026-04&page=0&pageSize=50");
-		response.StatusCode.ShouldBeOneOf(
-			HttpStatusCode.OK,
-			HttpStatusCode.Forbidden,
-			HttpStatusCode.InternalServerError);
-	}
-
-	#endregion
-
-	#region Tier 2 — Extended (destructive)
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Extended)]
-	[Trait(TestTraits.Destructive, "true")]
-	public async Task Should_Lock_Payroll()
-	{
-		var request = new RunPayrollRequest
-		{
-			Month = "APRIL-2026",
-		};
-
-		var response = await Client.PostAsJsonAsync(BaseUrl, request, JsonOptions);
+		var response = await Client.PostAsJsonAsync(
+			BaseUrl,
+			new RunPayrollRequest { Month = PayrollMonth },
+			JsonOptions);
 
 		response.StatusCode.ShouldBeOneOf(
 			HttpStatusCode.OK,
 			HttpStatusCode.BadRequest,
-			HttpStatusCode.Forbidden,
-			HttpStatusCode.InternalServerError);
+			HttpStatusCode.Forbidden);
 	}
 
-	#endregion
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Mark_Review_Without_500()
+	{
+		var response = await Client.PostAsJsonAsync(
+			ReviewUrl,
+			new PayrollRunReviewRequest
+			{
+				Month = PayrollMonth,
+				EmployeeIds = new List<System.Guid> { System.Guid.NewGuid() }
+			},
+			JsonOptions);
 
-	#region Tier 1 — Important
+		response.StatusCode.ShouldBeOneOf(
+			HttpStatusCode.OK,
+			HttpStatusCode.BadRequest,
+			HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Unmark_Review_Without_500()
+	{
+		var response = await Client.SendAsync(new HttpRequestMessage(HttpMethod.Delete, ReviewUrl)
+		{
+			Content = JsonContent.Create(
+				new PayrollRunReviewRequest
+				{
+					Month = PayrollMonth,
+					EmployeeIds = new List<System.Guid> { System.Guid.NewGuid() }
+				},
+				options: JsonOptions)
+		});
+
+		response.StatusCode.ShouldBeOneOf(
+			HttpStatusCode.OK,
+			HttpStatusCode.BadRequest,
+			HttpStatusCode.Forbidden);
+	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Return_Error_For_Invalid_Month_Format()
 	{
 		var response = await Client.GetAsync($"{BaseUrl}?month=invalid-format&page=0&pageSize=50");
-
 		response.StatusCode.ShouldBeOneOf(
 			HttpStatusCode.BadRequest,
-			HttpStatusCode.Forbidden,
-			HttpStatusCode.InternalServerError);
+			HttpStatusCode.Forbidden);
 	}
 
 	[Fact]
@@ -92,8 +107,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		var json = await response.Content.ReadAsStringAsync();
 		using var document = JsonDocument.Parse(json);
 		document.RootElement.GetProperty("paths").TryGetProperty("/api/payroll/run", out _).ShouldBeTrue();
+		document.RootElement.GetProperty("paths").TryGetProperty("/api/payroll/run/reviews", out _).ShouldBeTrue();
 		document.RootElement.GetProperty("paths").TryGetProperty("/api/hr/attendance/automated-runs/{batchId}/lock", out _).ShouldBeTrue();
 	}
-
-	#endregion
 }

@@ -1,9 +1,28 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ShikshaMitra.HR.Calendar.Holidays;
+using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.SalarySlips;
 
 namespace ShikshaMitra.HR.Payroll.Services;
+
+public sealed record PayrollComputedLineItem(
+	EmployeePayrollComponent Source,
+	decimal Amount);
+
+public sealed record PayrollComputationResult(
+	int PresentDays,
+	int HalfWorkingDays,
+	decimal PayableDays,
+	decimal ProrationFactor,
+	decimal BasicSalary,
+	decimal GrossSalary,
+	decimal TotalDeduction,
+	decimal NetPay,
+	List<PayrollComputedLineItem> Earnings,
+	List<PayrollComputedLineItem> Deductions);
 
 public sealed record PayrollBasisDaysResult(
 	int BasisDays,
@@ -111,6 +130,77 @@ public static class PayrollProrationCalculator
 		}
 
 		return Math.Round(amount * factor, 2, MidpointRounding.AwayFromZero);
+	}
+}
+
+public static class PayrollComputation
+{
+	public static PayrollComputationResult Calculate(
+		int presentDays,
+		int halfWorkingDays,
+		int basisDays,
+		IReadOnlyList<EmployeePayrollComponent> components)
+	{
+		var payableDays = PayrollProrationCalculator.CalculatePayableDays(presentDays, halfWorkingDays);
+		var factor = PayrollProrationCalculator.CalculateProrationFactor(basisDays, payableDays);
+		var earnings = new List<PayrollComputedLineItem>();
+		var deductions = new List<PayrollComputedLineItem>();
+		var grossSalary = 0m;
+		var totalDeduction = 0m;
+
+		foreach (var component in components)
+		{
+			var proratedAmount = PayrollProrationCalculator.ProrateAmount(component.Amount, component.IsTemp, factor);
+			var lineItem = new PayrollComputedLineItem(component, proratedAmount);
+			if (component.IsEarning)
+			{
+				earnings.Add(lineItem);
+				grossSalary += proratedAmount;
+			}
+			else
+			{
+				deductions.Add(lineItem);
+				totalDeduction += proratedAmount;
+			}
+		}
+
+		var basicSalaryBase = components
+			.Where(c => c.IsEarning && IsBasicSalaryComponentName(c.Name))
+			.Sum(c => c.Amount);
+		var basicSalary = PayrollProrationCalculator.ProrateAmount(basicSalaryBase, isTemp: false, factor);
+
+		return new PayrollComputationResult(
+			presentDays,
+			halfWorkingDays,
+			payableDays,
+			factor,
+			basicSalary,
+			grossSalary,
+			totalDeduction,
+			grossSalary - totalDeduction,
+			earnings,
+			deductions);
+	}
+
+	public static SalarySlipLineItem ToSalarySlipLineItem(PayrollComputedLineItem item) =>
+		new(
+			item.Source.Name,
+			item.Amount,
+			item.Source.Description,
+			item.Source.IsFixed,
+			item.Source.IsTemp,
+			item.Source.ComponentType,
+			item.Source.DependOn ?? SalaryComponentDependency.None);
+
+	private static bool IsBasicSalaryComponentName(string? name)
+	{
+		if (string.IsNullOrWhiteSpace(name))
+		{
+			return false;
+		}
+
+		return string.Equals(name, "Basic", StringComparison.OrdinalIgnoreCase)
+			|| name.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase);
 	}
 }
 

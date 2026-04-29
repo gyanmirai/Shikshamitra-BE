@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Cors;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -15,6 +16,7 @@ using QuestPDF.Infrastructure;
 using ShikshaMitra.Common.Middleware;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Extensions;
+using ShikshaMitra.HealthChecks;
 using ShikshaMitra.MultiTenancy;
 using System;
 using System.Collections.Generic;
@@ -108,6 +110,8 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		ConfigureSwaggerServices(context, configuration);
 
 		ConfigureExceptionHandling(context, hostingEnvironment);
+		services.AddHealthChecks()
+			.AddCheck<PayrollSnapshotSchemaHealthCheck>("payroll_snapshot_schema");
 	}
 
 	private void ConfigureFormOptions(ServiceConfigurationContext context, IConfiguration configuration)
@@ -545,6 +549,13 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 		app.UseAuditing();
 		app.UseAbpSerilogEnrichers();
+		app.UseEndpoints(endpoints =>
+		{
+			endpoints.MapHealthChecks("/health/payroll-snapshot", new HealthCheckOptions
+			{
+				Predicate = registration => registration.Name == "payroll_snapshot_schema"
+			});
+		});
 		app.UseConfiguredEndpoints();
 	}
 

@@ -44,13 +44,15 @@ public class RunPayrollController : AbpControllerBase
 	public virtual async Task<RunPayrollResponse> GetPreviewAsync(
 		[FromQuery, Required] string month,
 		[FromQuery, Range(0, int.MaxValue)] int page = 0,
-		[FromQuery, Range(10, 100)] int pageSize = 50)
+		[FromQuery, Range(10, 100)] int pageSize = 50,
+		[FromQuery] bool forceRefresh = false)
 	{
 		return await _runPayrollAppService.GetPreviewAsync(new GetRunPayrollInput
 		{
 			Month = month,
 			Page = page,
-			PageSize = pageSize
+			PageSize = pageSize,
+			ForceRefresh = forceRefresh
 		});
 	}
 
@@ -70,6 +72,32 @@ public class RunPayrollController : AbpControllerBase
 		[FromBody, Required] RunPayrollRequest request)
 	{
 		return await _runPayrollAppService.LockPayrollAsync(request);
+	}
+
+	/// <summary>
+	/// Marks selected payroll rows as reviewed before lock.
+	/// </summary>
+	[HttpPost("reviews")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.Add)]
+	[ProducesResponseType(typeof(PayrollLockResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	public virtual async Task<PayrollLockResponse> MarkReviewedAsync(
+		[FromBody, Required] PayrollRunReviewRequest request)
+	{
+		return await _runPayrollAppService.MarkReviewedAsync(request);
+	}
+
+	/// <summary>
+	/// Removes review markers from selected payroll rows before lock.
+	/// </summary>
+	[HttpDelete("reviews")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.Add)]
+	[ProducesResponseType(typeof(PayrollLockResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	public virtual async Task<PayrollLockResponse> UnmarkReviewedAsync(
+		[FromBody, Required] PayrollRunReviewRequest request)
+	{
+		return await _runPayrollAppService.UnmarkReviewedAsync(request);
 	}
 }
 

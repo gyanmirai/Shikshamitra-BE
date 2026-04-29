@@ -55,6 +55,21 @@ public class RunPayrollItem
 	public bool IsLocked { get; set; }
 
 	/// <summary>
+	/// Review state for lock gating: PENDING, REVIEWED, or LOCKED.
+	/// </summary>
+	public string ReviewStatus { get; set; } = "PENDING";
+
+	/// <summary>
+	/// User who most recently marked this payroll row reviewed.
+	/// </summary>
+	public Guid? ReviewedByUserId { get; set; }
+
+	/// <summary>
+	/// Timestamp when this payroll row was most recently reviewed.
+	/// </summary>
+	public DateTime? ReviewedAt { get; set; }
+
+	/// <summary>
 	/// Employee full name
 	/// </summary>
 	public string EmployeeName { get; set; } = string.Empty;
@@ -88,6 +103,26 @@ public class RunPayrollItem
 	/// Net pay (Gross - Deductions)
 	/// </summary>
 	public double NetPay { get; set; }
+
+	/// <summary>
+	/// Finalized net pay from the previous month, if available.
+	/// </summary>
+	public double? PreviousMonthNetPay { get; set; }
+
+	/// <summary>
+	/// Current net pay minus previous month finalized net pay.
+	/// </summary>
+	public double? NetPayDelta { get; set; }
+
+	/// <summary>
+	/// Net pay variance percentage compared with previous month.
+	/// </summary>
+	public double? NetPayDeltaPercent { get; set; }
+
+	/// <summary>
+	/// Deterministic issue codes detected for fast payroll review.
+	/// </summary>
+	public List<string> IssueCodes { get; set; } = new();
 
 	/// <summary>
 	/// Number of present days in the month
@@ -161,6 +196,15 @@ public class RunPayrollRequest
 }
 
 /// <summary>
+/// Request to mark or unmark monthly payroll review rows.
+/// </summary>
+public class PayrollRunReviewRequest
+{
+	public string Month { get; set; } = string.Empty;
+	public List<Guid> EmployeeIds { get; set; } = new();
+}
+
+/// <summary>
 /// Response after locking payroll
 /// </summary>
 public class PayrollLockResponse
@@ -220,4 +264,9 @@ public class GetRunPayrollInput
 	/// Page size
 	/// </summary>
 	public int PageSize { get; set; } = 50;
+
+	/// <summary>
+	/// Forces recomputation and snapshot refresh for the month.
+	/// </summary>
+	public bool ForceRefresh { get; set; }
 }

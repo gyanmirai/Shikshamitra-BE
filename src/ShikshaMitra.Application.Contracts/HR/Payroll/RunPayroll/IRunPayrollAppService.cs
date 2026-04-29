@@ -21,5 +21,15 @@ public interface IRunPayrollAppService : IApplicationService
 	/// <param name="request">Request with month</param>
 	/// <returns>Lock confirmation response</returns>
 	Task<PayrollLockResponse> LockPayrollAsync(RunPayrollRequest request);
+
+	/// <summary>
+	/// Marks selected employee payroll rows as reviewed for the month.
+	/// </summary>
+	Task<PayrollLockResponse> MarkReviewedAsync(PayrollRunReviewRequest request);
+
+	/// <summary>
+	/// Removes review markers for selected employee payroll rows before lock.
+	/// </summary>
+	Task<PayrollLockResponse> UnmarkReviewedAsync(PayrollRunReviewRequest request);
 }
 

@@ -38,7 +38,7 @@ public class StudentEnrollmentEntranceExamAppService(
 	public async Task<PagedResultDto<EntranceExamStudentDto>> GetListAsync(GetEntranceExamStudentsInput input)
 	{
 		var studentQueryable = await studentRepository.GetQueryableAsync();
-		studentQueryable = studentQueryable.Where(x => x.AdditionalDetail.EntranceExamStartDateTime >= input.StartDate && x.AdditionalDetail.EntranceExamStartDateTime <= input.EndDate);
+		studentQueryable = studentQueryable.Where(x => x.AcademicMediumId == input.EducationMediumId && x.AdditionalDetail.EntranceExamStartDateTime >= input.StartDate && x.AdditionalDetail.EntranceExamStartDateTime <= input.EndDate && x.Status == StudentLifeCycleStatusEnum.EntranceExam);
 
 		if (!input.SearchTerm.IsNullOrWhiteSpace())
 		{
@@ -61,6 +61,8 @@ public class StudentEnrollmentEntranceExamAppService(
 		}
 
 		studentQueryable = studentQueryable.Skip(input.SkipCount).Take(input.MaxResultCount);
+
+		var students = await AsyncExecuter.ToListAsync(studentQueryable);
 
 		var results = await AsyncExecuter.ToListAsync(studentQueryable.Select(x => new EntranceExamStudentDto
 		{

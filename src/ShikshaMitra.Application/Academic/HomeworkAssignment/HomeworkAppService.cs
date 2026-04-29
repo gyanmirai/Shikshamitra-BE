@@ -25,6 +25,7 @@ public class HomeworkAppService(
     IDivisionRepository divisionRepository,
     IRepository<Standard, Guid> standardRepository,
     IRepository<Subject, Guid> subjectRepository,
+    IRepository<AssignedSubject, Guid> assignedSubjectRepository,
     IRepository<AssignedSubjectChapter, Guid> chapterRepository,
     IHomeworkTypeRepository homeworkTypeRepository,
     IRepository<IdentityUser, Guid> userRepository,
@@ -157,7 +158,24 @@ public class HomeworkAppService(
         var allUserIds = creatorIds.Union(updaterIds).Distinct().ToList();
 
         var standards = await standardRepository.GetListAsync(s => standardIds.Contains(s.Id));
-        var subjects = await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id));
+        // Build subjectLookup keyed by h.SubjectId (may be Subject.Id or AssignedSubject.Id)
+        var directSubjects = await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id));
+        var subjectLookupByHomeworkId = directSubjects.ToDictionary(s => s.Id, s => s.Name);
+        var missingSubjectIds = subjectIds.Where(id => !subjectLookupByHomeworkId.ContainsKey(id)).ToList();
+        if (missingSubjectIds.Count > 0)
+        {
+            // Fallback: some SubjectIds might actually be AssignedSubject.Id values
+            var fallbackAssigned = await assignedSubjectRepository.GetListAsync(a => missingSubjectIds.Contains(a.Id));
+            if (fallbackAssigned.Count > 0)
+            {
+                var resolvedSubjectIds = fallbackAssigned.Select(a => a.SubjectId).Distinct().ToList();
+                var resolvedSubjects = await subjectRepository.GetListAsync(s => resolvedSubjectIds.Contains(s.Id));
+                var resolvedBySubjectId = resolvedSubjects.ToDictionary(s => s.Id, s => s.Name);
+                foreach (var a in fallbackAssigned)
+                    if (resolvedBySubjectId.TryGetValue(a.SubjectId, out var resolvedName))
+                        subjectLookupByHomeworkId[a.Id] = resolvedName; // key = AssignedSubject.Id
+            }
+        }
         var chapters = chapterIds.Any()
             ? await chapterRepository.GetListAsync(c => chapterIds.Contains(c.Id))
             : new List<AssignedSubjectChapter>();
@@ -170,7 +188,7 @@ public class HomeworkAppService(
             : new List<IdentityUser>();
 
         var standardLookup = standards.ToDictionary(s => s.Id, s => s.Name);
-        var subjectLookup = subjects.ToDictionary(s => s.Id, s => s.Name);
+        var subjectLookup = subjectLookupByHomeworkId;
         var chapterLookup = chapters.ToDictionary(c => c.Id, c => c.ChapterName);
         var hwTypeLookup = hwTypes.ToDictionary(t => t.Id, t => t.Name);
         var divisionLookup = divisions.ToDictionary(d => d.Id, d => d.Name);
@@ -335,6 +353,13 @@ public class HomeworkAppService(
         standardName = standard?.Name ?? string.Empty;
 
         var subject = await subjectRepository.FindAsync(h.SubjectId);
+        if (subject == null)
+        {
+            // Fallback: SubjectId might actually be an AssignedSubject.Id
+            var assignedSubject = await assignedSubjectRepository.FindAsync(h.SubjectId);
+            if (assignedSubject != null)
+                subject = await subjectRepository.FindAsync(assignedSubject.SubjectId);
+        }
         subjectName = subject?.Name ?? string.Empty;
 
         if (h.ChapterId.HasValue)

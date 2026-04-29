@@ -8,10 +8,14 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
 public interface ILeaveManagementAppService
 {
 	Task<PagedLeaveManagementResultDto> GetListAsync(LeaveManagementGetListInput input);
+	Task<PagedLeaveManagementResultDto> GetMyListAsync(LeaveManagementGetListInput input);
 
 	Task<LeaveRequestDetailsDto> GetAsync(Guid leaveRequestId);
+	Task<LeaveRequestDetailsDto> GetMyAsync(Guid leaveRequestId);
 
 	Task<LeaveRequestCreatedDto> CreateAsync(Guid academicYearId, LeaveRequestCreateDto input);
+	Task<LeaveRequestCreatedDto> CreateMyAsync(Guid academicYearId, LeaveRequestCreateDto input);
+	Task<LeaveRequestCreatedDto> CreateMyAsync(Guid academicYearId, LeaveRequestCreateDto input, object? attachment);
 
 	Task<LeaveRequestCreatedDto> CreateAsync(Guid academicYearId, LeaveRequestCreateDto input, object? attachment);
 
@@ -20,10 +24,13 @@ public interface ILeaveManagementAppService
 	Task<LeaveActionResultDto> RejectAsync(Guid leaveRequestId, LeaveRejectionRequestDto input);
 
 	Task<LeaveRequestDeleteDto> DeleteAsync(Guid leaveRequestId);
+	Task<LeaveRequestDeleteDto> DeleteMyAsync(Guid leaveRequestId);
 
 	Task<LeaveAttachmentDto> GetAttachmentAsync(Guid leaveRequestId);
+	Task<LeaveAttachmentDto> GetMyAttachmentAsync(Guid leaveRequestId);
 
 	Task<LeaveBalanceListDto> GetBalancesAsync(Guid academicYearId, Guid? forEmployeeId);
+	Task<LeaveBalanceListDto> GetMyBalancesAsync(Guid academicYearId);
 
 	Task<LeaveManagementCalendarResultDto> GetCalendarAsync(LeaveManagementCalendarInput input);
 
@@ -106,8 +113,11 @@ public class LeaveManagementDto
 {
 	public Guid Id { get; set; }
 	public int PublicId { get; set; }
+	public Guid EmployeeId { get; set; }
 	public string Name { get; set; } = string.Empty;
 	public string EmployeeIdentifier { get; set; } = string.Empty;
+	public string SubmittedByName { get; set; } = string.Empty;
+	public string? SubmittedByEmployeeCode { get; set; }
 	public string LeaveType { get; set; } = string.Empty;
 	public DateTime StartDate { get; set; }
 	public DateTime EndDate { get; set; }
@@ -133,6 +143,8 @@ public class LeaveRequestDetailsDto
 	public Guid EmployeeId { get; set; }
 	public string EmployeeName { get; set; } = string.Empty;
 	public string EmployeeCode { get; set; } = string.Empty;
+	public string SubmittedByName { get; set; } = string.Empty;
+	public string? SubmittedByEmployeeCode { get; set; }
 	/// <summary>Leave policy id (legacy name: was exposed as leave type id).</summary>
 	public Guid LeavePolicyId { get; set; }
 	public string LeaveType { get; set; } = string.Empty;

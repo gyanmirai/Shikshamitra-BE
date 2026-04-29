@@ -3,7 +3,7 @@ using System.Globalization;
 
 namespace ShikshaMitra.HR.Payroll;
 
-internal static class PayrollMonthNormalizer
+public static class PayrollMonthNormalizer
 {
 	private static readonly string[] MonthFormats =
 	[

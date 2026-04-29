@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR;
+using ShikshaMitra.HR.Employees.Payroll;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -24,6 +25,7 @@ namespace ShikshaMitra.HR.Employees.PersonalInfo;
 [Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 public class EmployeePersonalInfoAppService(
 	IEmployeeRepository employeeRepository,
+	IEmployeePayrollComponentRepository payrollComponentRepository,
 	IEmployeeFamilyMemberRepository familyMemberRepository,
 	EmployeeManager employeeManager,
 	EmployeeDocumentManager employeeDocumentManager,
@@ -209,6 +211,11 @@ public class EmployeePersonalInfoAppService(
 
 	public async Task<EmployeePersonalInfoDto> UpdateAsync(Guid id, UpdateEmployeePersonalInfoDto input)
 	{
+		if (input.EmployeeStatusType == EmployeeStatusType.Active)
+		{
+			await EnsurePayrollStructureExistsAsync(id);
+		}
+
 		// Update employee using EmployeeManager
 		var employee = await employeeManager.UpdateEmployeeAsync(
 			employeeId: id,
@@ -249,6 +256,17 @@ public class EmployeePersonalInfoAppService(
 
 		// Return the mapped DTO
 		return MapToDto(employee);
+	}
+
+	private async Task EnsurePayrollStructureExistsAsync(Guid employeeId)
+	{
+		var payrollComponents = await payrollComponentRepository.GetByEmployeeIdAsync(employeeId);
+		if (payrollComponents.Count == 0)
+		{
+			throw new BusinessException(HRErrorCodes.EmployeePayrollStructureRequired)
+				.WithData("employeeId", employeeId)
+				.WithData("required", "salary-structure");
+		}
 	}
 
 	public async Task<EmployeeDto> GetByUserIdAsync(Guid userId)

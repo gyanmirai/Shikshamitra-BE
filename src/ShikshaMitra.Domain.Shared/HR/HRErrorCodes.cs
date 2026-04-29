@@ -146,6 +146,15 @@ public static class HRErrorCodes
 	public const string PayrollNoStructureAssigned = "HR:Payroll:030008";
 	public const string PayrollEmployeeIdRequired = "HR:Payroll:030009";
 	public const string SalarySlipFetchFailed = "HR:Payroll:030010";
+	public const string PayrollPreviewFailed = "HR:Payroll:030011";
+	public const string PayrollReviewRequiredBeforeLock = "HR:Payroll:030013";
+	public const string PayrollReviewEmployeeIdsRequired = "HR:Payroll:030014";
+	public const string PayrollReviewCannotChangeLocked = "HR:Payroll:030015";
+	public const string PayrollInvalidPageSize = "HR:Payroll:030016";
+	public const string PayrollBatchSaveFailed = "HR:Payroll:030017";
+	public const string PayrollGenerationCompleteFailure = "HR:Payroll:030018";
+	public const string PayrollSnapshotMigrationRequired = "HR:Payroll:030019";
+	public const string PayrollStructureLegacyEndpointDeprecated = "HR:Payroll:030020";
 
 	// ── Calendar: 04xxxx ─────────────────────────────────────────
 

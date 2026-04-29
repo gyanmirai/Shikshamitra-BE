@@ -14,6 +14,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Identity;
 using Volo.Abp;
+using Volo.Abp.Authorization;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
@@ -37,6 +38,19 @@ public class LeaveManagementAppService(
 	: ApplicationService, ILeaveManagementAppService
 {
 	public async Task<PagedLeaveManagementResultDto> GetListAsync(LeaveManagementGetListInput input)
+	{
+		return await GetListInternalAsync(input, scopedEmployeeId: null);
+	}
+
+	public async Task<PagedLeaveManagementResultDto> GetMyListAsync(LeaveManagementGetListInput input)
+	{
+		var actorEmployeeId = await ResolveCurrentActorEmployeeIdStrictAsync();
+		return await GetListInternalAsync(input, actorEmployeeId);
+	}
+
+	private async Task<PagedLeaveManagementResultDto> GetListInternalAsync(
+		LeaveManagementGetListInput input,
+		Guid? scopedEmployeeId)
 	{
 		if (input.Page < 1)
 		{
@@ -110,7 +124,8 @@ public class LeaveManagementAppService(
 			filters,
 			input.Search,
 			skipCount,
-			input.PageSize);
+			input.PageSize,
+			scopedEmployeeId);
 
 		var detailQuery = await employeeLeaveRepository.WithDetailsAsync(
 			x => x.Employee,
@@ -123,22 +138,34 @@ public class LeaveManagementAppService(
 
 		var idOrder = pageIds.Select((id, index) => (id, index)).ToDictionary(t => t.id, t => t.index);
 		leaveRequests = leaveRequests.OrderBy(l => idOrder[l.Id]).ToList();
+		var submitterLookup = await ResolveSubmitterLookupForLeavesAsync(leaveRequests);
 
-		var items = leaveRequests.Select(leave => new LeaveManagementDto
+		var items = new List<LeaveManagementDto>();
+		foreach (var leave in leaveRequests)
 		{
-			Id = leave.Id,
-			PublicId = leave.PublicId,
-			Name = leave.Employee?.EmployeeNameWithFather ?? "Unknown",
-			EmployeeIdentifier = leave.Employee?.EmployeeCode ?? "Unknown",
-			LeaveType = leave.LeavePolicy?.LeaveType?.Type ?? "Unknown",
-			StartDate = leave.StartDate.DateTime,
-			EndDate = leave.EndDate.DateTime,
-			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
-			MediumStageName = leave.LeavePolicy?.AcademicYear?.Name ?? "",
-			Description = leave.Description ?? "",
-			Remarks = leave.RejectionReason,
-			Status = leave.Status.ToString().ToUpperInvariant()
-		}).ToList();
+			var submitter = submitterLookup.TryGetValue(leave.Id, out var resolvedSubmitter)
+				? resolvedSubmitter
+				: ("System", (string?)null);
+
+			items.Add(new LeaveManagementDto
+			{
+				Id = leave.Id,
+				PublicId = leave.PublicId,
+				EmployeeId = leave.EmployeeId,
+				Name = leave.Employee?.EmployeeNameWithFather ?? "Unknown",
+				EmployeeIdentifier = leave.Employee?.EmployeeCode ?? "Unknown",
+				SubmittedByName = submitter.Item1,
+				SubmittedByEmployeeCode = submitter.Item2,
+				LeaveType = leave.LeavePolicy?.LeaveType?.Type ?? "Unknown",
+				StartDate = leave.StartDate.DateTime,
+				EndDate = leave.EndDate.DateTime,
+				TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
+				MediumStageName = leave.LeavePolicy?.AcademicYear?.Name ?? "",
+				Description = leave.Description ?? "",
+				Remarks = leave.RejectionReason,
+				Status = leave.Status.ToString().ToUpperInvariant()
+			});
+		}
 
 		return new PagedLeaveManagementResultDto { TotalCount = totalCount, Items = items };
 	}
@@ -155,7 +182,7 @@ public class LeaveManagementAppService(
 			query.Where(x => x.Id == leaveRequestId))
 			?? throw new EntityNotFoundException(typeof(EmployeeLeave), leaveRequestId);
 
-		var details = MapToDetailsDto(leave);
+		var details = await MapToDetailsDtoAsync(leave);
 		var academicYearId = leave.LeavePolicy?.AcademicYearId;
 		if (academicYearId.HasValue)
 		{
@@ -175,11 +202,44 @@ public class LeaveManagementAppService(
 		return details;
 	}
 
+	public async Task<LeaveRequestDetailsDto> GetMyAsync(Guid leaveRequestId)
+	{
+		var actorEmployeeId = await ResolveCurrentActorEmployeeIdStrictAsync();
+		var details = await GetAsync(leaveRequestId);
+		EnsureLeaveBelongsToActor(details.EmployeeId, actorEmployeeId);
+		return details;
+	}
+
 	public async Task<LeaveRequestCreatedDto> CreateAsync(
 		Guid academicYearId,
 		LeaveRequestCreateDto input)
 	{
 		return await CreateAsync(academicYearId, input, attachment: null);
+	}
+
+	public async Task<LeaveRequestCreatedDto> CreateMyAsync(
+		Guid academicYearId,
+		LeaveRequestCreateDto input)
+	{
+		return await CreateMyAsync(academicYearId, input, attachment: null);
+	}
+
+	public async Task<LeaveRequestCreatedDto> CreateMyAsync(
+		Guid academicYearId,
+		LeaveRequestCreateDto input,
+		object? attachment)
+	{
+		var actorEmployeeId = await ResolveCurrentActorEmployeeIdStrictAsync();
+		var selfRequest = new LeaveRequestCreateDto
+		{
+			ForEmployeeId = actorEmployeeId,
+			LeavePolicyId = input.LeavePolicyId,
+			LeaveTypeId = input.LeaveTypeId,
+			StartDate = input.StartDate,
+			EndDate = input.EndDate,
+			Reason = input.Reason
+		};
+		return await CreateAsync(academicYearId, selfRequest, attachment);
 	}
 
 	public async Task<LeaveRequestCreatedDto> CreateAsync(
@@ -341,6 +401,26 @@ public class LeaveManagementAppService(
 		return new LeaveRequestDeleteDto { Id = leave.Id };
 	}
 
+	public async Task<LeaveRequestDeleteDto> DeleteMyAsync(Guid leaveRequestId)
+	{
+		var actorEmployeeId = await ResolveCurrentActorEmployeeIdStrictAsync();
+
+		var query = await employeeLeaveRepository.GetQueryableAsync();
+		var leave = await AsyncExecuter.FirstOrDefaultAsync(
+			query.Where(x => x.Id == leaveRequestId))
+			?? throw new EntityNotFoundException(typeof(EmployeeLeave), leaveRequestId);
+
+		EnsureLeaveBelongsToActor(leave.EmployeeId, actorEmployeeId);
+
+		if (leave.Status == EmployeeLeaveStatusType.Cancelled)
+		{
+			throw new BusinessException(HRErrorCodes.LeaveAlreadyCancelled);
+		}
+
+		await employeeLeaveManager.CancelAsync(leave);
+		return new LeaveRequestDeleteDto { Id = leave.Id };
+	}
+
 	public async Task<LeaveAttachmentDto> GetAttachmentAsync(Guid leaveRequestId)
 	{
 		var query = await employeeLeaveRepository.GetQueryableAsync();
@@ -363,16 +443,34 @@ public class LeaveManagementAppService(
 		};
 	}
 
+	public async Task<LeaveAttachmentDto> GetMyAttachmentAsync(Guid leaveRequestId)
+	{
+		var actorEmployeeId = await ResolveCurrentActorEmployeeIdStrictAsync();
+
+		var query = await employeeLeaveRepository.GetQueryableAsync();
+		var leave = await AsyncExecuter.FirstOrDefaultAsync(
+			query.Where(x => x.Id == leaveRequestId))
+			?? throw new EntityNotFoundException(typeof(EmployeeLeave), leaveRequestId);
+
+		EnsureLeaveBelongsToActor(leave.EmployeeId, actorEmployeeId);
+
+		return await GetAttachmentAsync(leaveRequestId);
+	}
+
 	public async Task<LeaveBalanceListDto> GetBalancesAsync(Guid academicYearId, Guid? forEmployeeId)
 	{
 		await academicYearRepository.GetAsync(academicYearId);
 
 		var actorContext = await ResolveLeaveActorContextAsync();
-		var targetId = forEmployeeId
-			?? actorContext.ActorEmployeeId
-			?? throw new BusinessException(HRErrorCodes.LeaveTargetEmployeeRequired);
+		var targetId = forEmployeeId ?? actorContext.ActorEmployeeId;
+		if (!targetId.HasValue)
+		{
+			// Some privileged users may not have a linked employee record.
+			// In that case, no target can be resolved unless an explicit employee id is supplied.
+			return new LeaveBalanceListDto { Items = [] };
+		}
 
-		await employeeAuthorizationService.CheckEmployeeAccessAsync(targetId, requireOwnership: false);
+		await employeeAuthorizationService.CheckEmployeeAccessAsync(targetId.Value, requireOwnership: false);
 
 		var policies = await leavePolicyRepository.GetListByAcademicYearIdAsync(
 			academicYearId,
@@ -382,7 +480,7 @@ public class LeaveManagementAppService(
 
 		foreach (var policy in policies)
 		{
-			var used = await employeeLeaveRepository.GetApprovedLeaveDaysAsync(targetId, policy.Id);
+			var used = await employeeLeaveRepository.GetApprovedLeaveDaysAsync(targetId.Value, policy.Id);
 			var entitled = policy.LeaveCount;
 			var remaining = Math.Max(0, entitled - used);
 
@@ -399,6 +497,12 @@ public class LeaveManagementAppService(
 		}
 
 		return new LeaveBalanceListDto { Items = items };
+	}
+
+	public async Task<LeaveBalanceListDto> GetMyBalancesAsync(Guid academicYearId)
+	{
+		var actorEmployeeId = await ResolveCurrentActorEmployeeIdStrictAsync();
+		return await GetBalancesAsync(academicYearId, actorEmployeeId);
 	}
 
 	public async Task<LeaveManagementCalendarResultDto> GetCalendarAsync(LeaveManagementCalendarInput input)
@@ -724,6 +828,21 @@ public class LeaveManagementAppService(
 		return new LeaveActorContext(isAdminBypass, actorEmployee?.Id);
 	}
 
+	private async Task<Guid> ResolveCurrentActorEmployeeIdStrictAsync()
+	{
+		var actorContext = await ResolveLeaveActorContextAsync();
+		return actorContext.ActorEmployeeId
+			?? throw new BusinessException(HRErrorCodes.LeaveEmployeeNotFound);
+	}
+
+	private static void EnsureLeaveBelongsToActor(Guid leaveEmployeeId, Guid actorEmployeeId)
+	{
+		if (leaveEmployeeId != actorEmployeeId)
+		{
+			throw new AbpAuthorizationException("Access denied: You can only access your own leave requests.");
+		}
+	}
+
 	private bool IsAdminBypassUser()
 	{
 		return CurrentUser.IsInRole("admin")
@@ -732,8 +851,16 @@ public class LeaveManagementAppService(
 
 	private readonly record struct LeaveActorContext(bool IsAdminBypass, Guid? ActorEmployeeId);
 
-	private static LeaveRequestDetailsDto MapToDetailsDto(EmployeeLeave leave)
+	private async Task<LeaveRequestDetailsDto> MapToDetailsDtoAsync(EmployeeLeave leave)
 	{
+		var submitterLookup = await ResolveSubmitterLookupByCreatorIdsAsync(
+			leave.CreatorId.HasValue
+				? [leave.CreatorId.Value]
+				: []);
+		var submitter = leave.CreatorId.HasValue && submitterLookup.TryGetValue(leave.CreatorId.Value, out var resolvedSubmitter)
+			? resolvedSubmitter
+			: ("System", (string?)null);
+
 		var policyId = leave.LeaveTypeId;
 		return new LeaveRequestDetailsDto
 		{
@@ -744,6 +871,8 @@ public class LeaveManagementAppService(
 			EmployeeId = leave.EmployeeId,
 			EmployeeName = leave.Employee?.EmployeeNameWithFather ?? "Unknown",
 			EmployeeCode = leave.Employee?.EmployeeCode ?? "Unknown",
+			SubmittedByName = submitter.Item1,
+			SubmittedByEmployeeCode = submitter.Item2,
 			LeavePolicyId = policyId,
 			LeaveType = leave.LeavePolicy?.LeaveType?.Type ?? "Unknown",
 			StartDate = leave.StartDate.DateTime,
@@ -754,6 +883,81 @@ public class LeaveManagementAppService(
 			Remarks = leave.RejectionReason,
 			Status = leave.Status.ToString().ToUpperInvariant()
 		};
+	}
+
+	private async Task<Dictionary<Guid, (string Name, string? EmployeeCode)>> ResolveSubmitterLookupForLeavesAsync(
+		IReadOnlyCollection<EmployeeLeave> leaves)
+	{
+		var creatorIds = leaves
+			.Where(x => x.CreatorId.HasValue)
+			.Select(x => x.CreatorId!.Value)
+			.Distinct()
+			.ToList();
+
+		var byCreatorId = await ResolveSubmitterLookupByCreatorIdsAsync(creatorIds);
+
+		var result = new Dictionary<Guid, (string Name, string? EmployeeCode)>();
+		foreach (var leave in leaves)
+		{
+			if (leave.CreatorId.HasValue && byCreatorId.TryGetValue(leave.CreatorId.Value, out var submitter))
+			{
+				result[leave.Id] = submitter;
+			}
+			else
+			{
+				result[leave.Id] = ("System", null);
+			}
+		}
+
+		return result;
+	}
+
+	private async Task<Dictionary<Guid, (string Name, string? EmployeeCode)>> ResolveSubmitterLookupByCreatorIdsAsync(
+		IReadOnlyCollection<Guid> creatorIds)
+	{
+		if (creatorIds.Count == 0)
+		{
+			return new Dictionary<Guid, (string Name, string? EmployeeCode)>();
+		}
+
+		var employees = await AsyncExecuter.ToListAsync(
+			(await employeeRepository.GetQueryableAsync())
+				.Where(x => x.UserId.HasValue && creatorIds.Contains(x.UserId.Value))
+				.Select(x => new
+				{
+					UserId = x.UserId!.Value,
+					Name = x.EmployeeNameWithFather,
+					x.EmployeeCode
+				}));
+		var employeeByUserId = employees.ToDictionary(
+			x => x.UserId,
+			x => (Name: x.Name, EmployeeCode: (string?)x.EmployeeCode));
+
+		var users = await identityUserRepository.GetListAsync(x => creatorIds.Contains(x.Id));
+		var userDisplayById = users.ToDictionary(
+			x => x.Id,
+			x =>
+				!string.IsNullOrWhiteSpace(x.Name)
+					? x.Name!
+					: !string.IsNullOrWhiteSpace(x.UserName)
+						? x.UserName!
+						: x.Email ?? "Unknown");
+
+		var result = new Dictionary<Guid, (string Name, string? EmployeeCode)>();
+		foreach (var creatorId in creatorIds)
+		{
+			if (employeeByUserId.TryGetValue(creatorId, out var employeeInfo))
+			{
+				result[creatorId] = employeeInfo;
+				continue;
+			}
+
+			result[creatorId] = userDisplayById.TryGetValue(creatorId, out var userName)
+				? (userName, null)
+				: ("Unknown", null);
+		}
+
+		return result;
 	}
 
 	private static void EnsureNotTerminalForApproverAction(EmployeeLeaveStatusType status)

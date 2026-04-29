@@ -64,6 +64,7 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.AcademicBoardName, opt => opt.MapFrom(src => src.AcademicBoard.Type.ToString()))
 			.ForMember(dest => dest.AcademicMediumName, opt => opt.MapFrom(src => src.AcademicMedium.Name))
 			.ForMember(dest => dest.Standard, opt => opt.MapFrom(src => src.Standard.Name))
+			.ForMember(dest => dest.Division, opt => opt.MapFrom(src => src.Division.Name))
 			.ForMember(dest => dest.DateOfBirth, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.DateOfBirth : null))
 			.ForMember(dest => dest.Age, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.DateOfBirth : null))
 			.ForMember(dest => dest.DateOfInquiry, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.DateOfInquiry : null))

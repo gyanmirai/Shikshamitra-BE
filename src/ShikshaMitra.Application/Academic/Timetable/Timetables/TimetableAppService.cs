@@ -84,10 +84,6 @@ public class TimetableAppService(
                     var subject = subjects.FirstOrDefault(s => s.Id == sub.SubjectId);
                     var room = sub.RoomId.HasValue
                         ? rooms.FirstOrDefault(r => r.Id == sub.RoomId.Value) : null;
-                    var totalSlots = totalSlotsBySubject.GetValueOrDefault(sub.SubjectId, 0);
-                    if (totalSlots == 0 && slot.ElectiveGroupId.HasValue)
-                        totalSlots = totalSlotsByElective.GetValueOrDefault(slot.ElectiveGroupId.Value, 0);
-                    var occupiedSlots = occupiedBySubject.GetValueOrDefault(sub.SubjectId, 0);
                     return new TimetableSubjectResponseDto
                     {
                         Id = sub.SubjectId,
@@ -96,14 +92,38 @@ public class TimetableAppService(
                         TeacherId = sub.TeacherId,
                         TeacherName = null,
                         RoomId = sub.RoomId,
-                        RoomName = room?.RoomName,
-                        TotalSlots = totalSlots,
-                        OccupiedSlots = occupiedSlots,
-                        UnoccupiedSlots = totalSlots - occupiedSlots
+                        RoomName = room?.RoomName
                     };
                 }).ToList()
             }).ToList();
         }
+
+        // Build per-subject weekly summary
+        var allSubjectIds = timetable.Slots
+            .SelectMany(s => s.Subjects)
+            .Select(ss => ss.SubjectId)
+            .Distinct()
+            .ToList();
+
+        response.SubjectSummary = allSubjectIds.Select(subjectId =>
+        {
+            var subject = subjects.FirstOrDefault(s => s.Id == subjectId);
+            var totalSlots = totalSlotsBySubject.GetValueOrDefault(subjectId, 0);
+            var slotForElective = timetable.Slots
+                .FirstOrDefault(s => s.Subjects.Any(ss => ss.SubjectId == subjectId) && s.ElectiveGroupId.HasValue);
+            if (totalSlots == 0 && slotForElective?.ElectiveGroupId.HasValue == true)
+                totalSlots = totalSlotsByElective.GetValueOrDefault(slotForElective.ElectiveGroupId!.Value, 0);
+            var occupied = occupiedBySubject.GetValueOrDefault(subjectId, 0);
+            return new TimetableSubjectSummaryDto
+            {
+                Id = subjectId,
+                Name = subject?.Name ?? string.Empty,
+                Color = subject?.Color,
+                TotalSlots = totalSlots,
+                OccupiedSlots = occupied,
+                UnoccupiedSlots = totalSlots - occupied
+            };
+        }).ToList();
 
         return response;
     }

@@ -48,11 +48,11 @@ public class ExamSubjectConfiguration : IEntityTypeConfiguration<ExamSubject>
         builder.ConfigureByConvention();
 
         builder.Property(x => x.SubjectId).IsRequired();
-        builder.Property(x => x.ExamDate).IsRequired();
-        builder.Property(x => x.StartTime).IsRequired();
-        builder.Property(x => x.EndTime).IsRequired();
-        builder.Property(x => x.TotalMarks).IsRequired();
-        builder.Property(x => x.PassingMarks).IsRequired();
+        builder.Property(x => x.ExamDate).IsRequired(false);
+        builder.Property(x => x.StartTime).IsRequired(false);
+        builder.Property(x => x.EndTime).IsRequired(false);
+        builder.Property(x => x.TotalMarks).IsRequired(false);
+        builder.Property(x => x.PassingMarks).IsRequired(false);
         builder.Property(x => x.Notes).HasMaxLength(1000);
 
         builder.HasMany(x => x.RoomAssignments)
@@ -80,8 +80,8 @@ public class ExamSubjectDivisionConfiguration : IEntityTypeConfiguration<ExamSub
 
         builder.Property(e => e.RoomIds)
             .HasConversion(
-                v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions)null),
-                v => System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<System.Guid>>(v, (System.Text.Json.JsonSerializerOptions)null)
+                v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions) null),
+                v => System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<System.Guid>>(v, (System.Text.Json.JsonSerializerOptions) null)
             );
     }
 }

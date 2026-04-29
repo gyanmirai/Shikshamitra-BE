@@ -730,10 +730,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime>("EndTime")
+                    b.Property<DateTime?>("EndTime")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime>("ExamDate")
+                    b.Property<DateTime?>("ExamDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("ExamId")
@@ -743,16 +743,16 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
-                    b.Property<double>("PassingMarks")
+                    b.Property<double?>("PassingMarks")
                         .HasColumnType("double precision");
 
-                    b.Property<DateTime>("StartTime")
+                    b.Property<DateTime?>("StartTime")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("SubjectId")
                         .HasColumnType("uuid");
 
-                    b.Property<double>("TotalMarks")
+                    b.Property<double?>("TotalMarks")
                         .HasColumnType("double precision");
 
                     b.HasKey("Id");

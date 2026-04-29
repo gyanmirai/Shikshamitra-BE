@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
+using ShikshaMitra.Common;
 
 namespace ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
 
@@ -15,5 +17,6 @@ public class TimeSlotDto
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }
     public SlotType SlotType { get; set; }
+    [JsonConverter(typeof(NullableEnumConverter<BreakType>))]
     public BreakType? BreakType { get; set; }
 }

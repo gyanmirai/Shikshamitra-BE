@@ -19,9 +19,10 @@ public class ExamController(
 {
     [HttpPost("basic-details")]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_ScheduleExam.Add)]
-    public async Task CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input)
+    public async Task<IActionResult> CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input)
     {
-        await examAppService.CreateBasicDetailsAsync(input);
+        var id = await examAppService.CreateBasicDetailsAsync(input);
+        return Ok(new { id });
     }
 
     [HttpPut("{examId}/basic-details")]

@@ -276,7 +276,7 @@ public class SubjectAssignmentAppService(
 
 	public async Task<SubjectAssignmentDto> GetAsync(Guid assignmentId)
 	{
-		var baseQuery = await assignmentRepository.WithDetailsAsync(a => a.Teachers, a => a.Documents);
+		var baseQuery = await assignmentRepository.WithDetailsAsync(a => a.Teachers, a => a.Documents, a => a.Subject);
 
 		var assignment = await AsyncExecuter.FirstOrDefaultAsync(
 			baseQuery.Where(a => a.Id == assignmentId)
@@ -293,11 +293,6 @@ public class SubjectAssignmentAppService(
 		{
 			groupAssignments = new List<AssignedSubject> { assignment };
 		}
-
-		// Load subject lookups
-		var subjectIds = groupAssignments.Select(a => a.SubjectId).Distinct().ToList();
-		var subjectsDict = (await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id)))
-			.ToDictionary(s => s.Id);
 
 		ElectiveGroup? electiveGroup = null;
 		if (assignment.ElectiveGroupId.HasValue)
@@ -325,19 +320,18 @@ public class SubjectAssignmentAppService(
 			SubjectType = first.SubjectType,
 			ElectiveGroupId = first.ElectiveGroupId,
 			ElectiveGroupName = electiveGroup?.Name,
-			Color = electiveGroup?.Color ?? (subjectsDict.TryGetValue(first.SubjectId, out var fs) ? fs.Color : null),
+			Color = electiveGroup?.Color ?? first.Subject?.Color,
 			Subjects = groupAssignments.Select(a =>
 			{
-				subjectsDict.TryGetValue(a.SubjectId, out var subj);
 				var primaryTeacherEntry = a.Teachers.FirstOrDefault(t => t.TeacherType == SubjectTeacherType.Primary);
 				var secondaryTeacherEntries = a.Teachers.Where(t => t.TeacherType == SubjectTeacherType.Secondary).ToList();
 				return new SubjectAssignmentDetailResponseDto
 				{
 					AssignedSubjectId = a.Id,
 					SubjectId = a.SubjectId,
-					SubjectName = subj?.Name,
+					SubjectName = a.Subject?.Name,
 					SubjectCode = a.SubjectCode,
-					Color = subj?.Color,
+					Color = a.Subject?.Color,
 					SubjectType = a.SubjectType,
 					ElectiveGroupId = a.ElectiveGroupId,
 					PrimaryTeacher = primaryTeacherEntry == null ? null : new TeacherInfoDto
@@ -584,6 +578,13 @@ public class SubjectAssignmentAppService(
 		}
 
 		await assignmentRepository.DeleteManyAsync(groupAssignments, autoSave: true);
+
+		var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(assignment.StandardId);
+		if (weeklySlot != null)
+		{
+			weeklySlot.RemoveSubject(assignment.SubjectId, assignment.ElectiveGroupId);
+			await weeklyLectureSlotRepository.UpdateAsync(weeklySlot, autoSave: true);
+		}
 	}
 
 	public async Task<List<CoreElectiveSubjectResponseDto>> GetCoreElectiveSubjectsAsync(Guid academicMediumId)

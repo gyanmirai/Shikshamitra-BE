@@ -10,7 +10,7 @@ namespace ShikshaMitra.Academic.Examination.Exams;
 
 public interface IExamAppService : IApplicationService
 {
-    Task CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input);
+    Task<Guid> CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input);
 
     Task UpdateBasicDetailsAsync(Guid examId, ExamBasicDetailsRequestDto input);
 

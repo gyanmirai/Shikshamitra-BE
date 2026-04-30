@@ -1,6 +1,5 @@
 ﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
-using ShikshaMitra.Finance.Fees.Settings;
-using ShikshaMitra.Finance.Setting.FeeStructure;
+using ShikshaMitra.Finance.Setting;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -41,7 +40,7 @@ public class FeeStructureMetadata : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid academicYearId,
 		Guid boardId,
 		Guid mediumId,
-		Guid receiptBookId,
+		Guid? receiptBookId,
 		string name) : base(id)
 	{
 		TenantId = tenantId;
@@ -50,7 +49,7 @@ public class FeeStructureMetadata : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		AcademicMediumId = mediumId;
 		ReceiptBookId = receiptBookId;
 		Name = name;
-		Status = FeeStructureMetadataStatus.Locked;
+		Status = FeeStructureMetadataStatus.Unlocked;
 	}
 
 	public void Update(string name, Guid boardId, Guid mediumId, Guid receiptBookId)

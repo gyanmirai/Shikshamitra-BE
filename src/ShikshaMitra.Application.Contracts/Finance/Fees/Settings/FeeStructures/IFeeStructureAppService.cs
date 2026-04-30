@@ -1,8 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
-using ShikshaMitra.Finance.Fees.Settings.FeeStructure.Dtos;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
@@ -15,4 +14,5 @@ public interface IFeeStructureAppService : IApplicationService
 	Task UpdateStatusAsync(Guid feeStructureId, FeeStructureStatusUpdateRequest input);
 	Task SaveStandardFeeStructuresAsync(Guid feeStructureId, StandardFeeStructureSaveRequest input);
 	Task<StandardFeeStructureResponse> GetStandardFeeStructureAsync(Guid standardId);
+	Task GenerateFeeStructuresAsync(Guid academicYearId);
 }

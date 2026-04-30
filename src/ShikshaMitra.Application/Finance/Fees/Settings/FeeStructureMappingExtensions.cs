@@ -1,5 +1,6 @@
-﻿using ShikshaMitra.Finance.Fees.Settings.FeeStructure.Dtos;
-using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+﻿using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -18,7 +19,7 @@ internal static class FeeStructureMappingExtensions
             BoardName = metadata.AcademicBoard?.Type.ToString(),
             MediumId = metadata.AcademicMediumId!.Value,
             MediumName = metadata.AcademicMedium?.Name,
-            ReceiptBookId = metadata.ReceiptBookId!.Value,
+            ReceiptBookId = metadata.ReceiptBookId ?? Guid.Empty,
             ReceiptBookName = metadata.ReceiptBook?.Name,
             Status = metadata.Status
         };
@@ -26,32 +27,4 @@ internal static class FeeStructureMappingExtensions
     internal static List<FeeStructureDetailsResponse> ToDetailsResponseList(
         this IEnumerable<FeeStructureMetadata> items) =>
         items.Select(x => x.ToDetailsResponse()).ToList();
-
-    internal static StandardFeeStructureResponse ToResponse(this StandardFeeStructureQueryResult result) =>
-        new()
-        {
-            StandardId = result.Standard.Id,
-            StandardName = result.Standard.Name,
-            StandardFeeStructures = result.Structures.Select(fs => new StandardFeeStructureResponseItem
-            {
-                Id = fs.Id,
-                Name = fs.Name,
-                FeeHeads = fs.FeeStructureDetails.Select(d =>
-                {
-                    result.FeeHeadDict.TryGetValue(d.FeeHeadId, out var fh);
-                    var categoryName = fh != null && result.CategoryDict.TryGetValue(fh.FeeCategoryId, out var cn)
-                        ? cn
-                        : string.Empty;
-                    return new FeeHeadAssignmentResponse
-                    {
-                        FeeHeadId = d.FeeHeadId,
-                        FeeHeadName = fh?.Name ?? string.Empty,
-                        CategoryName = categoryName,
-                        Amount = (decimal)d.Amount,
-                        IsOneTime = d.IsOneTime,
-                        IsOptional = d.IsOptional
-                    };
-                }).ToList()
-            }).ToList()
-        };
 }

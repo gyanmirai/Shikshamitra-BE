@@ -1,9 +1,9 @@
-﻿using ShikshaMitra.Finance.Setting.FeeStructure;
+﻿using ShikshaMitra.Finance.Setting;
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
 
-namespace ShikshaMitra.Finance.Fees.Settings.FeeStructure.Dtos;
+namespace ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 
 public class FeeStructureCreateResponse
 {
@@ -20,8 +20,8 @@ public class FeeStructureDetailsResponse : EntityDto<Guid>
     public string BoardName { get; set; }
     public Guid MediumId { get; set; }
     public string MediumName { get; set; }
-    public Guid ReceiptBookId { get; set; }
-    public string ReceiptBookName { get; set; }
+    public Guid? ReceiptBookId { get; set; }
+    public string? ReceiptBookName { get; set; }
     public FeeStructureMetadataStatus Status { get; set; }
 }
 
@@ -52,7 +52,7 @@ public class FeeHeadAssignmentResponse
     public Guid FeeHeadId { get; set; }
     public string FeeHeadName { get; set; }
     public string CategoryName { get; set; }
-    public decimal Amount { get; set; }
+    public double Amount { get; set; }
     public bool IsOneTime { get; set; }
     public bool IsOptional { get; set; }
 }

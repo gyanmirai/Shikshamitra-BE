@@ -1,18 +1,15 @@
-﻿using System;
+﻿using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using System;
 using System.Collections.Generic;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
-namespace ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+namespace ShikshaMitra.Domain.Finance.Fees.Settings;
 
 public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 
-	public Guid AcademicYearId { get; private set; }
-	public Guid AcademicBoardId { get; private set; }
-	public Guid AcademicMediumId { get; private set; }
-	public Guid ReceiptBookId { get; private set; }
 	public Guid StandardId { get; private set; }
 	public Guid FeeStructureMetadataId { get; private set; }
 
@@ -28,19 +25,11 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? tenantId,
 		Guid feeStructureMetadataId,
 		Guid standardId,
-		Guid academicYearId,
-		Guid boardId,
-		Guid mediumId,
-		Guid receiptBookId,
 		string name) : base(id)
 	{
 		TenantId = tenantId;
 		FeeStructureMetadataId = feeStructureMetadataId;
 		StandardId = standardId;
-		AcademicYearId = academicYearId;
-		AcademicBoardId = boardId;
-		AcademicMediumId = mediumId;
-		ReceiptBookId = receiptBookId;
 		Name = name;
 		FeeStructureDetails = new List<FeeStructureDetail>();
 	}

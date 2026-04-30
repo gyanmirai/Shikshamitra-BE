@@ -27,7 +27,7 @@ public class ExamAppService(
 	IRepository<Division, Guid> divisionRepository,
 	ExamManager examManager) : ApplicationService, IExamAppService
 {
-	public async Task CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input)
+	public async Task<Guid> CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input)
 	{
 		var exam = examManager.Create(
 			input.ExamTypeId,
@@ -38,6 +38,7 @@ public class ExamAppService(
 		);
 
 		await examRepository.InsertAsync(exam);
+		return exam.Id;
 	}
 
 	public async Task UpdateBasicDetailsAsync(Guid examId, ExamBasicDetailsRequestDto input)

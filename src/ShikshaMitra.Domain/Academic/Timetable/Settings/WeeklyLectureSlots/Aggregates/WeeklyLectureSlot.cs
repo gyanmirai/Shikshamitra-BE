@@ -51,5 +51,15 @@ public class WeeklyLectureSlot : FullAuditedAggregateRoot<Guid>, IMultiTenant
             AddSubject(id, subjectId, electiveGroupId, weeklyLectures);
         }
     }
+
+    public void RemoveSubject(Guid? subjectId, Guid? electiveGroupId)
+    {
+        var entry = electiveGroupId.HasValue
+            ? Subjects.FirstOrDefault(s => s.ElectiveGroupId == electiveGroupId)
+            : Subjects.FirstOrDefault(s => s.SubjectId == subjectId);
+
+        if (entry != null)
+            Subjects.Remove(entry);
+    }
     #endregion
 }

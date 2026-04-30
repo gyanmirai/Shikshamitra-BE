@@ -3,6 +3,7 @@ using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Exams;
+using ShikshaMitra.Academic.Examination.SeatAllocation;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Academic.HomeworkAssignment;
@@ -53,6 +54,7 @@ public partial class ShikshaMitraDbContext
     public DbSet<GradingScale> GradingScales { get; set; }
     public DbSet<ExamType> ExamTypes { get; set; }
     public DbSet<Exam> Exams { get; set; }
+    public DbSet<ExamSeatAllocation> ExamSeatAllocations { get; set; }
 
     // ───────────────────────────────────────────────
     // Academic — Timetable (Settings)

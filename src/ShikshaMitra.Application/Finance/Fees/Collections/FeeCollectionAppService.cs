@@ -22,7 +22,6 @@ using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Users;
-using FeeStructureEntity = ShikshaMitra.Finance.Fees.Settings.FeeStructures.FeeStructure;
 
 namespace ShikshaMitra.Finance.Fees.FeeCollection;
 
@@ -39,7 +38,7 @@ public class FeeCollectionAppService(
     IRepository<StudentFeeRecord, Guid> studentFeeRecordRepository,
     IRepository<Student, Guid> studentRepository,
     IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
-    IRepository<FeeStructureEntity, Guid> feeStructureRepository,
+    IRepository<FeeStructure, Guid> feeStructureRepository,
     IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository,
     IRepository<FeeCategory, Guid> feeCategoryRepository,
     IConcessionRequestRepository concessionRequestRepository,

@@ -9,7 +9,6 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
 // Alias to resolve the clash between the 'FeeStructure' namespace and the 'FeeStructure' class.
-using FeeStructureEntity = ShikshaMitra.Finance.Fees.Settings.FeeStructures.FeeStructure;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Settings;
@@ -24,7 +23,7 @@ public class StudentFeeStructureAppService : ApplicationService, IStudentFeeStru
 {
 	private readonly IRepository<StudentFeeStructure, Guid> _studentFeeStructureRepository;
 	private readonly IRepository<Student, Guid> _studentRepository;
-	private readonly IRepository<FeeStructureEntity, Guid> _feeStructureRepository;
+	private readonly IRepository<FeeStructure, Guid> _feeStructureRepository;
 	private readonly IRepository<FeeStructureDetail, Guid> _feeStructureDetailRepository;
 	private readonly IRepository<FeeHead, Guid> _feeHeadRepository;
 	private readonly IRepository<FeeCategory, Guid> _feeCategoryRepository;
@@ -33,7 +32,7 @@ public class StudentFeeStructureAppService : ApplicationService, IStudentFeeStru
 	public StudentFeeStructureAppService(
 		IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 		IRepository<Student, Guid> studentRepository,
-		IRepository<FeeStructureEntity, Guid> feeStructureRepository,
+		IRepository<FeeStructure, Guid> feeStructureRepository,
 		IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository,
 		IRepository<FeeHead, Guid> feeHeadRepository,
 		IRepository<FeeCategory, Guid> feeCategoryRepository,

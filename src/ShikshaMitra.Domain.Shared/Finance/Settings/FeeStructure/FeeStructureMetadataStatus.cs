@@ -1,4 +1,4 @@
-﻿namespace ShikshaMitra.Finance.Setting.FeeStructure;
+﻿namespace ShikshaMitra.Finance.Setting;
 
 public enum FeeStructureMetadataStatus
 {

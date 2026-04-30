@@ -2,10 +2,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
-using ShikshaMitra.Finance.Fees.Settings.FeeStructure;
-using ShikshaMitra.Finance.Fees.Settings.FeeStructure.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using ShikshaMitra.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Settings;
 
@@ -58,10 +57,10 @@ public class FeeStructureController(IFeeStructureAppService feeStructureAppServi
 	/// <summary>
 	/// Save Standard Fee Structures (Bulk)
 	/// </summary>
-	[HttpPut("{feeStructureId}/standard-fee-structures")]
-	public async Task SaveStandardFeeStructuresAsync(Guid feeStructureId, [FromBody] StandardFeeStructureSaveRequest input)
+	[HttpPut("{feeStructureMetadataId}/standard-fee-structures")]
+	public async Task SaveStandardFeeStructuresAsync(Guid feeStructureMetadataId, [FromBody] StandardFeeStructureSaveRequest input)
 	{
-		await feeStructureAppService.SaveStandardFeeStructuresAsync(feeStructureId, input);
+		await feeStructureAppService.SaveStandardFeeStructuresAsync(feeStructureMetadataId, input);
 	}
 
 	/// <summary>
@@ -71,5 +70,15 @@ public class FeeStructureController(IFeeStructureAppService feeStructureAppServi
 	public async Task<StandardFeeStructureResponse> GetStandardFeeStructureAsync(Guid standardId)
 	{
 		return await feeStructureAppService.GetStandardFeeStructureAsync(standardId);
+	}
+
+	// create API to generate fee structures for all the mediums in given academic year based on the default fee structure of the school
+	/// <summary>
+	/// Generate Fee Structures for all Mediums in a Given Academic Year
+	/// </summary>
+	[HttpPost("generate")]
+	public async Task GenerateFeeStructuresAsync([FromQuery] Guid academicYearId)
+	{
+		await feeStructureAppService.GenerateFeeStructuresAsync(academicYearId);
 	}
 }

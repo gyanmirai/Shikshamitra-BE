@@ -1,13 +1,13 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
-using ShikshaMitra.Finance.Fees.Settings.FeeStructure;
-using ShikshaMitra.Finance.Fees.Settings.FeeStructure.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using ShikshaMitra.Finance.Setting;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.Standards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,8 +16,6 @@ using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
-
-using FeeStructureMetadataStatus = ShikshaMitra.Finance.Setting.FeeStructure.FeeStructureMetadataStatus;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
 
@@ -29,8 +27,9 @@ public class FeeStructureAppService(
 	IAcademicYearRepository academicYearRepository,
 	IEducationBoardRepository educationBoardRepository,
 	IEducationMediumRepository educationMediumRepository,
-	IGuidGenerator guidGenerator,
-	FeeStructureDomainService feeStructureDomainService
+	IRepository<Standard, Guid> standardRepository,
+	IRepository<FeeStructure, Guid> feeStructureRepository,
+	IGuidGenerator guidGenerator
 ) : ApplicationService, IFeeStructureAppService
 {
 	// ── Create ────────────────────────────────────────────────────────────────
@@ -141,28 +140,97 @@ public class FeeStructureAppService(
 	// ── Save per-standard fee structures ──────────────────────────────────────
 
 	public async Task SaveStandardFeeStructuresAsync(
-		Guid feeStructureId,
+		Guid feeStructureMetadataId,
 		StandardFeeStructureSaveRequest input)
 	{
-		var metadata = await feeStructureMetadataRepository.GetAsync(feeStructureId);
+		var metadata = await feeStructureMetadataRepository.GetAsync(feeStructureMetadataId) ?? throw new BusinessException(message: "Fee structure metadata not found.");
 
-		var plans = input.StandardFeeStructures?
-			.Select(s => new StandardFeeStructurePlan(
-				s.Name,
-				s.FeeHeads?
-					.Select(fh => new FeeHeadEntry(fh.FeeHeadId, (double)fh.Amount, fh.IsOneTime, fh.IsOptional))
-					.ToList() ?? []))
-			.ToList() ?? [];
+		// validate that standard's medium is same as fee structure metadata's medium
+		var standard = await standardRepository.GetAsync(input.StandardId) ?? throw new BusinessException(message: "Standard not found.");
 
-		await feeStructureDomainService.SaveStandardFeeStructuresAsync(
-			metadata,
-			input.StandardId,
-			CurrentTenant.Id,
-			plans);
+		if (standard.EducationMediumStage.EducationMediumId != metadata.AcademicMediumId)
+			throw new BusinessException(message: "Standard's medium does not match the fee structure metadata's medium.");
+
+		// create object for each standard fee structure and save
+		foreach (var standardFeeStructure in input.StandardFeeStructures)
+		{
+			var feeStructure = new FeeStructure(
+				guidGenerator.Create(),
+				CurrentTenant.Id,
+				metadata.Id,
+				input.StandardId,
+				standardFeeStructure.Name);
+
+			foreach (var feeComponent in standardFeeStructure.FeeHeads)
+			{
+				feeStructure.AddDetail(new FeeStructureDetail(
+					guidGenerator.Create(),
+					CurrentTenant.Id,
+					feeStructure.Id,
+					feeComponent.FeeHeadId,
+					feeComponent.Amount,
+					feeComponent.IsOneTime,
+					feeComponent.IsOptional));
+			}
+
+			await feeStructureRepository.InsertAsync(feeStructure);
+		}
 	}
 
 	// ── Get standard fee structure ────────────────────────────────────────────
 
-	public async Task<StandardFeeStructureResponse> GetStandardFeeStructureAsync(Guid standardId) =>
-		(await feeStructureDomainService.GetStandardFeeStructuresAsync(standardId)).ToResponse();
+	public async Task<StandardFeeStructureResponse> GetStandardFeeStructureAsync(Guid standardId)
+	{
+		var standard = await standardRepository.GetAsync(standardId) ?? throw new BusinessException(message: "Standard not found.");
+
+		var feeStructures = await feeStructureRepository.GetListAsync(x => x.StandardId == standardId);
+
+		var response = new StandardFeeStructureResponse
+		{
+			StandardId = standardId,
+			StandardName = standard.Name,
+			StandardFeeStructures = feeStructures.Select(fs => new StandardFeeStructureResponseItem
+			{
+				Id = fs.Id,
+				Name = fs.Name,
+				FeeHeads = fs.FeeStructureDetails.Select(fd => new FeeHeadAssignmentResponse
+				{
+					FeeHeadId = fd.FeeHeadId,
+					Amount = fd.Amount,
+					IsOneTime = fd.IsOneTime,
+					IsOptional = fd.IsOptional
+				}).ToList()
+			}).ToList()
+		};
+
+		return response;
+	}
+
+	public async Task GenerateFeeStructuresAsync(Guid academicYearId)
+	{
+		// validate that academic year exists
+		var academicYear = await academicYearRepository.GetAsync(academicYearId);
+
+		// for each board + medium combination, generate fee structure if not already generated
+		var educationBoards = await educationBoardRepository.GetListAsync(x => x.AcademicYearId == academicYearId);
+
+		foreach (var board in educationBoards)
+		{
+			foreach (var medium in board.EducationMediums)
+			{
+				var existingMetadata = await feeStructureMetadataRepository.FirstOrDefaultAsync(x => x.AcademicMediumId == medium.Id && x.AcademicYearId == academicYearId && x.AcademicBoardId == board.Id);
+				if (existingMetadata != null)
+					continue;
+				var metadata = new FeeStructureMetadata(
+					guidGenerator.Create(),
+					CurrentTenant.Id,
+					academicYearId,
+					board.Id,
+					medium.Id,
+					null,
+					name: $"{academicYear.Name} - {board.Type.ToString()} - {medium.Name}");
+				await feeStructureMetadataRepository.InsertAsync(metadata, autoSave: true);
+			}
+		}
+	}
 }

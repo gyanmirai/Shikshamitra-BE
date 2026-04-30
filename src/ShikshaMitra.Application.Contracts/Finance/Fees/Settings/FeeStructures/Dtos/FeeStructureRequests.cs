@@ -1,9 +1,9 @@
-﻿using ShikshaMitra.Finance.Setting.FeeStructure;
+﻿using ShikshaMitra.Finance.Setting;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-namespace ShikshaMitra.Finance.Fees.Settings.FeeStructure.Dtos;
+namespace ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 
 public class FeeStructureCreateRequest
 {
@@ -51,7 +51,7 @@ public class FeeHeadAssignmentRequest
 {
 	[Required]
 	public Guid FeeHeadId { get; set; }
-	public decimal Amount { get; set; }
+	public double Amount { get; set; }
 	public bool IsOneTime { get; set; }
 	public bool IsOptional { get; set; }
 }

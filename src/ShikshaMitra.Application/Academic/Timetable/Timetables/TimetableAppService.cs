@@ -28,30 +28,40 @@ public class TimetableAppService(
     IRepository<Division, Guid> divisionRepository,
     IRepository<Subject, Guid> subjectRepository,
     IRepository<ElectiveGroup, Guid> electiveGroupRepository,
-    IRepository<Room, Guid> roomRepository
+    IRepository<Room, Guid> roomRepository,
+    IRepository<AssignedSubject, Guid> assignedSubjectRepository
 ) : ApplicationService, ITimetableAppService
 {
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
     public async Task<TimetableResponseDto> GetByStandardAndDivisionAsync(Guid standardId, Guid divisionId)
     {
         var timetable = await timetableRepository.FindByStandardAndDivisionAsync(standardId, divisionId);
-        if (timetable is null)
-        {
-            return new TimetableResponseDto();
-        }
+        var slotConfig = await lectureSlotConfigRepository.FindByStandardIdAsync(standardId);
 
-        var subjects = await subjectRepository.GetListAsync();
-        var electiveGroups = await electiveGroupRepository.GetListAsync();
-        var rooms = await roomRepository.GetListAsync();
+        var savedSlotsByDay = timetable?.Slots
+            .GroupBy(s => s.Day)
+            .ToDictionary(g => g.Key, g => g.ToList())
+            ?? new Dictionary<TimetableDayOfWeek, List<TimetableSlot>>();
+
+        var hasSavedData = savedSlotsByDay.Any(kv => kv.Value.Count > 0);
+
+        // Weekly lecture slot is needed for totalSlots in subject summary
+        var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(standardId);
+
+        var assignedSubjects = await assignedSubjectRepository.GetListAsync(a => a.StandardId == standardId);
+        var needsSubjectData = hasSavedData || assignedSubjects.Count > 0;
+
+        var subjects = needsSubjectData ? await subjectRepository.GetListAsync() : [];
+        var electiveGroups = needsSubjectData ? await electiveGroupRepository.GetListAsync() : [];
+        var rooms = hasSavedData ? await roomRepository.GetListAsync() : [];
 
         // Compute occupied slots per subject across all days in this timetable
-        var occupiedBySubject = timetable.Slots
-            .SelectMany(s => s.Subjects)
-            .GroupBy(ss => ss.SubjectId)
-            .ToDictionary(g => g.Key, g => g.Count());
+        var occupiedBySubject = hasSavedData
+            ? timetable!.Slots.SelectMany(s => s.Subjects).GroupBy(ss => ss.SubjectId)
+                .ToDictionary(g => g.Key, g => g.Count())
+            : new Dictionary<Guid, int>();
 
-        // Get weekly lecture allocations (total slots) per subject for this standard
-        var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(timetable.StandardId);
+        // For slot-level subject TotalSlots/OccupiedSlots display (existing per-slot logic)
         var totalSlotsBySubject = weeklySlot?.Subjects
             .Where(s => s.SubjectId.HasValue)
             .ToDictionary(s => s.SubjectId!.Value, s => s.WeeklyLectures)
@@ -63,76 +73,174 @@ public class TimetableAppService(
 
         var response = new TimetableResponseDto();
 
-        var slotsByDay = timetable.Slots.GroupBy(s => s.Day);
-        foreach (var dayGroup in slotsByDay)
+        // Always return all 6 days. Days with saved data use saved data;
+        // days without saved data use slot config time slots as placeholders (empty subjects).
+        foreach (var day in Enum.GetValues<TimetableDayOfWeek>())
         {
-            var dayName = dayGroup.Key.ToString().ToUpperInvariant();
-            response.Days[dayName] = dayGroup.OrderBy(s => s.Sequence).Select(slot => new TimetableSlotResponseDto
+            var dayName = day.ToString().ToUpperInvariant();
+
+            if (savedSlotsByDay.TryGetValue(day, out var savedSlots) && savedSlots.Count > 0)
             {
-                Sequence = slot.Sequence,
-                StartTime = slot.StartTime.ToString("HH:mm"),
-                EndTime = slot.EndTime.ToString("HH:mm"),
-                Type = slot.SlotType,
-                BreakType = slot.BreakType,
-                SubjectType = slot.SubjectType,
-                ElectiveGroupId = slot.ElectiveGroupId,
-                ElectiveGroupName = slot.ElectiveGroupId.HasValue
-                    ? electiveGroups.FirstOrDefault(eg => eg.Id == slot.ElectiveGroupId.Value)?.Name
-                    : null,
-                Subjects = slot.Subjects.Select(sub =>
+                response.Days[dayName] = savedSlots.OrderBy(s => s.Sequence).Select(slot => new TimetableSlotResponseDto
                 {
-                    var subject = subjects.FirstOrDefault(s => s.Id == sub.SubjectId);
-                    var room = sub.RoomId.HasValue
-                        ? rooms.FirstOrDefault(r => r.Id == sub.RoomId.Value) : null;
-                    var totalSlots = totalSlotsBySubject.GetValueOrDefault(sub.SubjectId, 0);
-                    if (totalSlots == 0 && slot.ElectiveGroupId.HasValue)
-                        totalSlots = totalSlotsByElective.GetValueOrDefault(slot.ElectiveGroupId.Value, 0);
-                    var occupiedSlots = occupiedBySubject.GetValueOrDefault(sub.SubjectId, 0);
-                    return new TimetableSubjectResponseDto
+                    Sequence = slot.Sequence,
+                    StartTime = slot.StartTime.ToString("HH:mm"),
+                    EndTime = slot.EndTime.ToString("HH:mm"),
+                    Type = slot.SlotType,
+                    BreakType = slot.BreakType,
+                    SubjectType = slot.SubjectType,
+                    ElectiveGroupId = slot.ElectiveGroupId,
+                    ElectiveGroupName = slot.ElectiveGroupId.HasValue
+                        ? electiveGroups.FirstOrDefault(eg => eg.Id == slot.ElectiveGroupId.Value)?.Name
+                        : null,
+                    Subjects = slot.Subjects.Select(sub =>
                     {
-                        Id = sub.SubjectId,
-                        Name = subject?.Name ?? string.Empty,
-                        Color = subject?.Color,
-                        TeacherId = sub.TeacherId,
-                        TeacherName = null,
-                        RoomId = sub.RoomId,
-                        RoomName = room?.RoomName,
-                        TotalSlots = totalSlots,
-                        OccupiedSlots = occupiedSlots,
-                        UnoccupiedSlots = totalSlots - occupiedSlots
-                    };
-                }).ToList()
-            }).ToList();
+                        var subject = subjects.FirstOrDefault(s => s.Id == sub.SubjectId);
+                        var room = sub.RoomId.HasValue
+                            ? rooms.FirstOrDefault(r => r.Id == sub.RoomId.Value) : null;
+                        var totalSlots = totalSlotsBySubject.GetValueOrDefault(sub.SubjectId, 0);
+                        if (totalSlots == 0 && slot.ElectiveGroupId.HasValue)
+                            totalSlots = totalSlotsByElective.GetValueOrDefault(slot.ElectiveGroupId.Value, 0);
+                        var occupiedSlots = occupiedBySubject.GetValueOrDefault(sub.SubjectId, 0);
+                        return new TimetableSubjectResponseDto
+                        {
+                            Id = sub.SubjectId,
+                            Name = subject?.Name ?? string.Empty,
+                            Color = subject?.Color,
+                            TeacherId = sub.TeacherId,
+                            TeacherName = null,
+                            RoomId = sub.RoomId,
+                            RoomName = room?.RoomName,
+                            TotalSlots = totalSlots,
+                            OccupiedSlots = occupiedSlots,
+                            UnoccupiedSlots = totalSlots - occupiedSlots
+                        };
+                    }).ToList()
+                }).ToList();
+            }
+            else
+            {
+                // No saved data for this day — build placeholder from slot config
+                var dayIndex = (int) day;
+                var slotGroup = slotConfig?.SlotGroups
+                    .FirstOrDefault(g => g.WeekRangeStart <= dayIndex && dayIndex <= g.WeekRangeEnd);
+
+                response.Days[dayName] = slotGroup?.TimeSlots
+                    .OrderBy(ts => ts.StartTime)
+                    .Select((ts, index) => new TimetableSlotResponseDto
+                    {
+                        Sequence = index + 1,
+                        StartTime = ts.StartTime.ToString("HH:mm"),
+                        EndTime = ts.EndTime.ToString("HH:mm"),
+                        Type = ts.SlotType,
+                        BreakType = ts.BreakType,
+                        SubjectType = null,
+                        ElectiveGroupId = null,
+                        ElectiveGroupName = null,
+                        Subjects = []
+                    }).ToList() ?? [];
+            }
         }
 
-        // Build per-subject weekly summary
-        var allSubjectIds = timetable.Slots
-            .SelectMany(s => s.Subjects)
-            .Select(ss => ss.SubjectId)
-            .Distinct()
-            .ToList();
+        // Compute overall slot summary across all days
+        var totalSlots = response.Days.Values.Sum(slots => slots.Count);
+        var occupiedSlots = response.Days.Values.Sum(slots => slots.Count(s => s.Subjects.Count > 0));
+        response.TotalSlots = totalSlots;
+        response.OccupiedSlots = occupiedSlots;
+        response.UnoccupiedSlots = totalSlots - occupiedSlots;
 
-        response.SubjectSummary = allSubjectIds.Select(subjectId =>
+        // Build subject summary from assigned subjects (always populated, even if no weekly slot plan).
+        // totalSlots comes from weeklySlot when configured; otherwise 0.
+        // occupiedSlots = 0 when no timetable saved yet → unoccupiedSlots = totalSlots.
+        if (assignedSubjects.Count > 0)
         {
-            var subject = subjects.FirstOrDefault(s => s.Id == subjectId);
-            var totalSlots = totalSlotsBySubject.GetValueOrDefault(subjectId, 0);
-            var slotForElective = timetable.Slots
-                .FirstOrDefault(s => s.Subjects.Any(ss => ss.SubjectId == subjectId) && s.ElectiveGroupId.HasValue);
-            if (totalSlots == 0 && slotForElective?.ElectiveGroupId.HasValue == true)
-                totalSlots = totalSlotsByElective.GetValueOrDefault(slotForElective.ElectiveGroupId!.Value, 0);
-            var occupied = occupiedBySubject.GetValueOrDefault(subjectId, 0);
-            // If no weekly allocation is configured, treat total as occupied (nothing is "unoccupied")
-            if (totalSlots == 0) totalSlots = occupied;
-            return new TimetableSubjectSummaryDto
-            {
-                Id = subjectId,
-                Name = subject?.Name ?? string.Empty,
-                Color = subject?.Color,
-                TotalSlots = totalSlots,
-                OccupiedSlots = occupied,
-                UnoccupiedSlots = Math.Max(0, totalSlots - occupied)
-            };
-        }).ToList();
+            var coreOccupied = timetable?.Slots
+                .Where(s => s.ElectiveGroupId == null)
+                .SelectMany(s => s.Subjects)
+                .GroupBy(ss => ss.SubjectId)
+                .ToDictionary(g => g.Key, g => g.Count())
+                ?? new Dictionary<Guid, int>();
+
+            var electiveOccupied = timetable?.Slots
+                .Where(s => s.ElectiveGroupId.HasValue)
+                .GroupBy(s => s.ElectiveGroupId!.Value)
+                .ToDictionary(g => g.Key, g => g.Count())
+                ?? new Dictionary<Guid, int>();
+
+            // Core subjects: one entry per distinct subjectId with no electiveGroupId
+            var coreEntries = assignedSubjects
+                .Where(a => a.ElectiveGroupId == null)
+                .GroupBy(a => a.SubjectId)
+                .Select(g =>
+                {
+                    var assigned = g.First();
+                    var subject = subjects.FirstOrDefault(s => s.Id == assigned.SubjectId);
+                    var weeklyEntry = weeklySlot?.Subjects.FirstOrDefault(w => w.SubjectId == assigned.SubjectId);
+                    var total = weeklyEntry?.WeeklyLectures ?? 0;
+                    var occupied = coreOccupied.GetValueOrDefault(assigned.SubjectId, 0);
+                    return new TimetableSubjectSummaryDto
+                    {
+                        Id = weeklyEntry?.Id ?? assigned.Id,
+                        SubjectType = SubjectType.Core,
+                        ElectiveGroupId = null,
+                        ElectiveGroupName = null,
+                        Color = subject?.Color,
+                        TotalSlots = total,
+                        OccupiedSlots = occupied,
+                        UnoccupiedSlots = total - occupied,
+                        Subjects =
+                        [
+                            new TimetableSummarySubjectDto
+                            {
+                                SubjectType = SubjectType.Core,
+                                SubjectId = assigned.SubjectId,
+                                SubjectName = subject?.Name ?? string.Empty,
+                                SubjectCode = assigned.SubjectCode,
+                                Color = subject?.Color
+                            }
+                        ]
+                    };
+                }).ToList();
+
+            // Elective subjects: one entry per distinct electiveGroupId
+            var electiveEntries = assignedSubjects
+                .Where(a => a.ElectiveGroupId.HasValue)
+                .GroupBy(a => a.ElectiveGroupId!.Value)
+                .Select(g =>
+                {
+                    var groupId = g.Key;
+                    var group = electiveGroups.FirstOrDefault(eg => eg.Id == groupId);
+                    var weeklyEntry = weeklySlot?.Subjects.FirstOrDefault(w => w.ElectiveGroupId == groupId);
+                    var total = weeklyEntry?.WeeklyLectures ?? 0;
+                    var occupied = electiveOccupied.GetValueOrDefault(groupId, 0);
+                    var groupSubjects = g.Select(a =>
+                    {
+                        var subject = subjects.FirstOrDefault(s => s.Id == a.SubjectId);
+                        return new TimetableSummarySubjectDto
+                        {
+                            SubjectType = SubjectType.Elective,
+                            SubjectId = a.SubjectId,
+                            SubjectName = subject?.Name ?? string.Empty,
+                            SubjectCode = a.SubjectCode,
+                            Color = subject?.Color
+                        };
+                    }).ToList();
+                    return new TimetableSubjectSummaryDto
+                    {
+                        Id = weeklyEntry?.Id ?? groupId,
+                        SubjectType = SubjectType.Elective,
+                        ElectiveGroupId = groupId,
+                        ElectiveGroupName = group?.Name,
+                        Color = group?.Color,
+                        TotalSlots = total,
+                        OccupiedSlots = occupied,
+                        UnoccupiedSlots = total - occupied,
+                        Subjects = groupSubjects
+                    };
+                }).ToList();
+
+            response.SubjectSummary = [.. coreEntries, .. electiveEntries];
+        }
 
         return response;
     }

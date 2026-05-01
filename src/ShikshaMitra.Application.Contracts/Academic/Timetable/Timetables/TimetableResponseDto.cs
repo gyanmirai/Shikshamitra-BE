@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ShikshaMitra.Academic.Curriculum;
 
 namespace ShikshaMitra.Academic.Timetable.Timetables;
 
@@ -7,16 +8,31 @@ public class TimetableResponseDto
 {
     public Dictionary<string, List<TimetableSlotResponseDto>> Days { get; set; } = [];
     public List<TimetableSubjectSummaryDto> SubjectSummary { get; set; } = [];
+    public int TotalSlots { get; set; }
+    public int OccupiedSlots { get; set; }
+    public int UnoccupiedSlots { get; set; }
 }
 
 public class TimetableSubjectSummaryDto
 {
     public Guid Id { get; set; }
-    public string Name { get; set; } = string.Empty;
+    public SubjectType SubjectType { get; set; }
+    public Guid? ElectiveGroupId { get; set; }
+    public string? ElectiveGroupName { get; set; }
     public string? Color { get; set; }
     public int TotalSlots { get; set; }
     public int OccupiedSlots { get; set; }
     public int UnoccupiedSlots { get; set; }
+    public List<TimetableSummarySubjectDto> Subjects { get; set; } = [];
+}
+
+public class TimetableSummarySubjectDto
+{
+    public SubjectType SubjectType { get; set; }
+    public Guid SubjectId { get; set; }
+    public string SubjectName { get; set; } = string.Empty;
+    public string? SubjectCode { get; set; }
+    public string? Color { get; set; }
 }
 
 public class TimetableSlotResponseDto

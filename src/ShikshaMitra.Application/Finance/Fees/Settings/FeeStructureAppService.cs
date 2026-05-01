@@ -151,6 +151,16 @@ public class FeeStructureAppService(
 		if (standard.EducationMediumStage.EducationMediumId != metadata.AcademicMediumId)
 			throw new BusinessException(message: "Standard's medium does not match the fee structure metadata's medium.");
 
+		// delete existing fee structures for the standard + fee structure metadata combination
+		var existingFeeStructures = await feeStructureRepository.GetListAsync(x => x.StandardId == input.StandardId && x.FeeStructureMetadataId == feeStructureMetadataId);
+		if (existingFeeStructures.Any())
+		{
+			foreach (var existingFeeStructure in existingFeeStructures)
+			{
+				await feeStructureRepository.DeleteAsync(existingFeeStructure);
+			}
+		}
+
 		// create object for each standard fee structure and save
 		foreach (var standardFeeStructure in input.StandardFeeStructures)
 		{
@@ -196,6 +206,8 @@ public class FeeStructureAppService(
 				FeeHeads = fs.FeeStructureDetails.Select(fd => new FeeHeadAssignmentResponse
 				{
 					FeeHeadId = fd.FeeHeadId,
+					FeeHeadName = fd.FeeHead.Name,
+					CategoryName = fd.FeeHead.FeeCategory.Name,
 					Amount = fd.Amount,
 					IsOneTime = fd.IsOneTime,
 					IsOptional = fd.IsOptional

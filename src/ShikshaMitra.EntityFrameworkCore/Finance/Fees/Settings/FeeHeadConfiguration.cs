@@ -11,5 +11,14 @@ public class FeeHeadConfiguration : IEntityTypeConfiguration<FeeHead>
 	{
 		builder.ToTable("FeeHeads", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+
+		// add navigation for fee category
+		builder.HasOne(fh => fh.FeeCategory)
+			.WithMany()
+			.HasForeignKey(fh => fh.FeeCategoryId)
+			.OnDelete(DeleteBehavior.Restrict);
+
+		builder.Navigation(fh => fh.FeeCategory)
+			.AutoInclude();
 	}
 }

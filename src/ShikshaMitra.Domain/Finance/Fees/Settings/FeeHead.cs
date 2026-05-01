@@ -20,6 +20,8 @@ public class FeeHead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     public bool IsActive { get; private set; }
 
+	public FeeCategory FeeCategory { get; private set; }
+
     protected FeeHead() { }
 
     public FeeHead(Guid id, Guid? tenantId, Guid academicYearId, Guid feeCategoryId, string name, string description, bool isActive = true) : base(id)

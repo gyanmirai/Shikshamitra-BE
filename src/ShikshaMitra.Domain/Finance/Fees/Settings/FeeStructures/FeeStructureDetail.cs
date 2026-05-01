@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
+using System;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -13,6 +14,8 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
     public double Amount { get; private set; }
     public bool IsOneTime { get; private set; }
     public bool IsOptional { get; private set; }
+
+	public FeeHead FeeHead { get; private set; }
 
 	protected FeeStructureDetail() { }
 

@@ -1586,7 +1586,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTimeOffset?>("GradedDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("HomeworkAssignmentId")
+                    b.Property<Guid?>("HomeworkAssignmentId")
                         .HasColumnType("uuid");
 
                     b.Property<bool>("IsDeleted")
@@ -2583,6 +2583,8 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("FeeCategoryId");
 
                     b.ToTable("FeeHeads", (string)null);
                 });
@@ -3673,6 +3675,8 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("FeeHeadId");
 
                     b.HasIndex("FeeStructureId");
 
@@ -12255,8 +12259,7 @@ namespace ShikshaMitra.Migrations
                     b.HasOne("ShikshaMitra.Academic.HomeworkAssignment.HomeworkAssignmentEntity", "HomeworkAssignment")
                         .WithMany()
                         .HasForeignKey("HomeworkAssignmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Assignment");
 
@@ -12347,6 +12350,17 @@ namespace ShikshaMitra.Migrations
                         });
 
                     b.Navigation("Tags");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Domain.Finance.Fees.Settings.FeeHead", b =>
+                {
+                    b.HasOne("ShikshaMitra.Domain.Finance.Fees.Settings.FeeCategory", "FeeCategory")
+                        .WithMany()
+                        .HasForeignKey("FeeCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("FeeCategory");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Domain.Finance.Fees.Settings.ReceiptBook", b =>
@@ -12452,11 +12466,19 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.Settings.FeeStructures.FeeStructureDetail", b =>
                 {
+                    b.HasOne("ShikshaMitra.Domain.Finance.Fees.Settings.FeeHead", "FeeHead")
+                        .WithMany()
+                        .HasForeignKey("FeeHeadId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("ShikshaMitra.Domain.Finance.Fees.Settings.FeeStructure", null)
                         .WithMany("FeeStructureDetails")
                         .HasForeignKey("FeeStructureId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("FeeHead");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.Settings.FeeStructures.FeeStructureMetadata", b =>

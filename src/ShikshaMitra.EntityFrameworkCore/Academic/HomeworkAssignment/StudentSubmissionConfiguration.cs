@@ -18,7 +18,7 @@ public class StudentSubmissionConfiguration : IEntityTypeConfiguration<StudentSu
 		builder.HasKey(x => x.Id);
 
 		// Properties
-		builder.Property(x => x.HomeworkAssignmentId).IsRequired();
+		builder.Property(x => x.HomeworkAssignmentId).IsRequired(false); // Null for assignment submissions
 		builder.Property(x => x.AssignmentId).IsRequired(false); // Nullable for backward compatibility
 		builder.Property(x => x.StudentId).IsRequired();
 		builder.Property(x => x.DivisionId).IsRequired();
@@ -38,7 +38,8 @@ public class StudentSubmissionConfiguration : IEntityTypeConfiguration<StudentSu
 			.HasOne(x => x.HomeworkAssignment)
 			.WithMany()
 			.HasForeignKey(x => x.HomeworkAssignmentId)
-			.OnDelete(DeleteBehavior.Cascade);
+			.OnDelete(DeleteBehavior.Cascade)
+			.IsRequired(false);
 
 		builder
 			.HasOne(x => x.Assignment)

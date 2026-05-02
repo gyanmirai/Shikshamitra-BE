@@ -8,8 +8,8 @@ public class StudentSubmissionEntity : FullAuditedEntity<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; set; }
 
-	// For Homework submissions
-	public Guid HomeworkAssignmentId { get; set; }
+	// For Homework submissions (null when this is an assignment submission)
+	public Guid? HomeworkAssignmentId { get; set; }
 	public HomeworkAssignmentEntity HomeworkAssignment { get; set; }
 
 	// For Assignment submissions (nullable for backward compatibility)
@@ -95,7 +95,7 @@ public class StudentSubmissionEntity : FullAuditedEntity<Guid>, IMultiTenant
 			throw new ArgumentException("Use the other constructor for homework submissions");
 		}
 
-		HomeworkAssignmentId = Guid.Empty; // Empty for assignment submissions
+		HomeworkAssignmentId = null; // Null for assignment submissions
 		AssignmentId = assignmentId;
 		StudentId = studentId;
 		DivisionId = divisionId;

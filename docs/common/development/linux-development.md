@@ -148,6 +148,43 @@ dotnet build ShikshaMitra.sln
 
 ---
 
+## 5. Setting `ASPNETCORE_ENVIRONMENT`
+
+### Option A — Prefix a single command (recommended)
+
+```bash
+ASPNETCORE_ENVIRONMENT=Development dotnet run --no-launch-profile
+```
+
+### Option B — Export for the current terminal session
+
+```bash
+export ASPNETCORE_ENVIRONMENT=Development
+dotnet run --no-launch-profile   # all commands in this session inherit it
+```
+
+### Option C — Set permanently in `~/.bashrc`
+
+```bash
+echo 'export ASPNETCORE_ENVIRONMENT=Development' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### Switching between Local and Staging DB
+
+The API always runs on `https://localhost:44332` locally. The only thing that changes is the connection string in `appsettings.Development.json`:
+
+| Target | `ConnectionStrings.Default` |
+|--------|-----------------------------|
+| Local DB | `Host=localhost;Port=5432;Database=shikshamitra_local;...` |
+| Staging DB | `Host=stage-gyanmirai.postgres.database.azure.com;Port=5432;Database=stg_gyanmirai;User ID=postgresadmin;Password=...` |
+
+`ASPNETCORE_ENVIRONMENT` stays `Development` in both cases when running locally.
+
+> **Swagger OAuth with Staging DB:** `https://localhost:44332/swagger/oauth2-redirect.html` is registered as an allowed redirect URI in the staging OpenIddict DB, so Swagger authentication works even when pointed at staging. If you re-run DbMigrator against staging, use `ASPNETCORE_ENVIRONMENT=Staging`.
+
+---
+
 ## Quick Reference
 
 | Task | Command |
@@ -155,8 +192,9 @@ dotnet build ShikshaMitra.sln
 | Build | `dotnet build ShikshaMitra.sln` |
 | Add migration | `DOTNET_ROLL_FORWARD=LatestMajor dotnet ef migrations add vXX --project src/ShikshaMitra.EntityFrameworkCore --startup-project src/ShikshaMitra.HttpApi.Host` |
 | Apply migration | `DOTNET_ROLL_FORWARD=LatestMajor dotnet ef database update --project src/ShikshaMitra.EntityFrameworkCore --startup-project src/ShikshaMitra.HttpApi.Host` |
-| Run DbMigrator | `DOTNET_ROLL_FORWARD=LatestMajor dotnet run --project src/ShikshaMitra.DbMigrator --no-launch-profile` |
-| Run API server | `DOTNET_ROLL_FORWARD=LatestMajor dotnet run --project src/ShikshaMitra.HttpApi.Host` |
+| Run DbMigrator (local) | `DOTNET_ROLL_FORWARD=LatestMajor dotnet run --project src/ShikshaMitra.DbMigrator --no-launch-profile` |
+| Run DbMigrator (staging) | `ASPNETCORE_ENVIRONMENT=Staging DOTNET_ROLL_FORWARD=LatestMajor dotnet run --project src/ShikshaMitra.DbMigrator --no-launch-profile` |
+| Run API server | `ASPNETCORE_ENVIRONMENT=Development DOTNET_ROLL_FORWARD=LatestMajor dotnet run --project src/ShikshaMitra.HttpApi.Host` |
 
 ---
 

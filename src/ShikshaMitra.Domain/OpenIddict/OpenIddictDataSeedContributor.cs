@@ -372,6 +372,10 @@ public class OpenIddictDataSeedContributor(
 					{
 						application.RedirectUris.Add(new Uri("http://localhost:3000/auth/openiddict"));
 					}
+					if (uri.ToString().Contains("stg-gyanmirai-be.azurewebsites.net/swagger/oauth2-redirect.html"))
+					{
+						application.RedirectUris.Add(new Uri("https://localhost:44332/swagger/oauth2-redirect.html"));
+					}
 				}
 			}
 		}

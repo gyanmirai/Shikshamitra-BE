@@ -11,5 +11,6 @@ public class ExamTableItemDto
     public string StandardName { get; set; }
     public List<string> Divisions { get; set; } = new();
     public Guid? CreatedBy { get; set; }
+    public string? CreatorName { get; set; }
     public ExamStatus Status { get; set; }
 }

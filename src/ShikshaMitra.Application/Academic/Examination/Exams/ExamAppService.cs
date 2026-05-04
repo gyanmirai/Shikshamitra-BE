@@ -14,17 +14,19 @@ using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Identity;
 
 namespace ShikshaMitra.Academic.Examination.Exams;
 
 [RemoteService(false)]
 public class ExamAppService(
-	IRepository<Exam, Guid> examRepository,
+	IExamRepository examRepository,
 	IRepository<Subject, Guid> subjectRepository,
 	IRepository<ExamType, Guid> examTypeRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
 	IRepository<Division, Guid> divisionRepository,
+	IRepository<IdentityUser, Guid> identityUserRepository,
 	ExamManager examManager) : ApplicationService, IExamAppService
 {
 	public async Task<Guid> CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input)
@@ -223,6 +225,13 @@ public class ExamAppService(
 		var divisions = await divisionRepository.GetListAsync(x => allDivisionIds.Contains(x.Id));
 		var divisionDict = divisions.ToDictionary(x => x.Id, x => x.Name);
 
+		// Fetch creator names
+		var creatorIds = queryResult.Select(x => x.exam.CreatorId).Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
+		var creatorUsers = await identityUserRepository.GetListAsync(x => creatorIds.Contains(x.Id));
+		var creatorNameById = creatorUsers.ToDictionary(
+			x => x.Id,
+			x => !string.IsNullOrWhiteSpace(x.Name) ? x.Name! : !string.IsNullOrWhiteSpace(x.UserName) ? x.UserName! : x.Email ?? "Unknown");
+
 		var items = queryResult.Select(x => new ExamTableItemDto
 		{
 			ExamId = x.exam.Id,
@@ -230,6 +239,7 @@ public class ExamAppService(
 			ExamTypeName = x.examType.Name,
 			StandardName = x.standard.Name,
 			CreatedBy = x.exam.CreatorId,
+			CreatorName = x.exam.CreatorId.HasValue ? creatorNameById.GetValueOrDefault(x.exam.CreatorId.Value) : null,
 			Status = x.exam.Status,
 			Divisions = x.exam.ExamDivisions.Select(d => divisionDict.GetValueOrDefault(d.DivisionId) ?? string.Empty).ToList()
 		}).ToList();

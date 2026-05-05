@@ -90,7 +90,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 				s.DivisionId == filter.DivisionId
 				&& s.StandardId == filter.ClassId
 				&& s.AcademicMediumId == academicMediumId
-				&& s.Status == StudentLifeCycleStatusEnum.Admission
+				&& s.Status == StudentLifeCycleStatusEnum.Enrolled
 				&& s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved
 				&& !s.IsDeleted
 			)

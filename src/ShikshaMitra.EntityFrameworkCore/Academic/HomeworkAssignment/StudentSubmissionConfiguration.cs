@@ -29,6 +29,7 @@ public class StudentSubmissionConfiguration : IEntityTypeConfiguration<StudentSu
 		builder.Property(x => x.Remarks).HasMaxLength(1000);
 		builder.Property(x => x.SubmittedContent).HasMaxLength(int.MaxValue);
 		builder.Property(x => x.SubmittedDocumentUrl).HasMaxLength(500);
+		builder.Property(x => x.OriginalFileName).HasMaxLength(500);
 
 		builder.Property(x => x.Marks).HasColumnType("decimal(18,2)");
 		builder.Property(x => x.TotalMarks).HasColumnType("decimal(18,2)");

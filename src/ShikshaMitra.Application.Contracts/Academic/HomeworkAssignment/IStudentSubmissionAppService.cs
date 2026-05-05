@@ -8,11 +8,23 @@ public interface IStudentSubmissionAppService : IApplicationService
 {
     Task<SubmissionUploadResponseDto> UploadHomeworkSubmissionAsync(
         UploadHomeworkSubmissionDto input,
-        string blobName
+        string blobName,
+        string? originalFileName
     );
 
     Task<SubmissionUploadResponseDto> UploadAssignmentSubmissionAsync(
         UploadAssignmentSubmissionDto input,
-        string blobName
+        string blobName,
+        string? originalFileName
+    );
+
+    Task<AssessmentListDto<HomeworkAssessmentItemDto>> GetHomeworkAssessmentsAsync(
+        Guid homeworkId,
+        GetAssessmentsInput input
+    );
+
+    Task<AssessmentListDto<AssignmentAssessmentItemDto>> GetAssignmentAssessmentsAsync(
+        Guid assignmentId,
+        GetAssessmentsInput input
     );
 }

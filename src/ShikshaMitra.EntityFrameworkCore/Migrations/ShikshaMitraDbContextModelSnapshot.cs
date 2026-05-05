@@ -1606,6 +1606,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<decimal?>("Marks")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("OriginalFileName")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("Remarks")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");

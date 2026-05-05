@@ -82,50 +82,58 @@ public class SubjectAssignmentAppService(
 
 			await assignmentRepository.InsertManyAsync(assignedSubjects, autoSave: true);
 
-			// Auto-add new subjects to the weekly lecture slot for this class (with 0 weekly lectures)
+			// Auto-add new subjects to the weekly lecture slot for this class (with 0 weekly lectures).
+			// If no slot exists yet, create one first.
 			var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(
 				createSubjectAssignmentDto.ClassId
 			);
-			if (weeklySlot != null)
+			if (weeklySlot == null)
 			{
-				var existingSubjectIds = weeklySlot.Subjects
-					.Where(s => s.SubjectId.HasValue)
-					.Select(s => s.SubjectId!.Value)
-					.ToHashSet();
-				var existingElectiveIds = weeklySlot.Subjects
-					.Where(s => s.ElectiveGroupId.HasValue)
-					.Select(s => s.ElectiveGroupId!.Value)
-					.ToHashSet();
+				weeklySlot = new WeeklyLectureSlot(
+					guidGenerator.Create(),
+					CurrentTenant.Id,
+					createSubjectAssignmentDto.ClassId
+				);
+				weeklySlot = await weeklyLectureSlotRepository.InsertAsync(weeklySlot, autoSave: true);
+			}
 
-				var addedElectiveGroups = new HashSet<Guid>();
-				var anyAdded = false;
+			var existingSubjectIds = weeklySlot.Subjects
+				.Where(s => s.SubjectId.HasValue)
+				.Select(s => s.SubjectId!.Value)
+				.ToHashSet();
+			var existingElectiveIds = weeklySlot.Subjects
+				.Where(s => s.ElectiveGroupId.HasValue)
+				.Select(s => s.ElectiveGroupId!.Value)
+				.ToHashSet();
 
-				foreach (var assigned in assignedSubjects)
+			var addedElectiveGroups = new HashSet<Guid>();
+			var anyAdded = false;
+
+			foreach (var assigned in assignedSubjects)
+			{
+				if (assigned.SubjectType == SubjectType.Elective && assigned.ElectiveGroupId.HasValue)
 				{
-					if (assigned.SubjectType == SubjectType.Elective && assigned.ElectiveGroupId.HasValue)
+					var egId = assigned.ElectiveGroupId.Value;
+					if (!existingElectiveIds.Contains(egId) && addedElectiveGroups.Add(egId))
 					{
-						var egId = assigned.ElectiveGroupId.Value;
-						if (!existingElectiveIds.Contains(egId) && addedElectiveGroups.Add(egId))
-						{
-							weeklySlot.AddSubject(guidGenerator.Create(), null, egId, 0);
-							existingElectiveIds.Add(egId);
-							anyAdded = true;
-						}
-					}
-					else
-					{
-						if (!existingSubjectIds.Contains(assigned.SubjectId))
-						{
-							weeklySlot.AddSubject(guidGenerator.Create(), assigned.SubjectId, null, 0);
-							existingSubjectIds.Add(assigned.SubjectId);
-							anyAdded = true;
-						}
+						weeklySlot.AddSubject(guidGenerator.Create(), null, egId, 0);
+						existingElectiveIds.Add(egId);
+						anyAdded = true;
 					}
 				}
-
-				if (anyAdded)
-					await weeklyLectureSlotRepository.UpdateAsync(weeklySlot, autoSave: true);
+				else
+				{
+					if (!existingSubjectIds.Contains(assigned.SubjectId))
+					{
+						weeklySlot.AddSubject(guidGenerator.Create(), assigned.SubjectId, null, 0);
+						existingSubjectIds.Add(assigned.SubjectId);
+						anyAdded = true;
+					}
+				}
 			}
+
+			if (anyAdded)
+				await weeklyLectureSlotRepository.UpdateAsync(weeklySlot, autoSave: true);
 		}
 		catch (Exception ex)
 		{

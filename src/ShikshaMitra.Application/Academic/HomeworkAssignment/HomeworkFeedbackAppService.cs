@@ -98,7 +98,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 				s.DivisionId == filter.DivisionId
 				&& s.StandardId == filter.ClassId
 				&& s.AcademicMediumId == academicMediumId
-				&& s.Status == StudentLifeCycleStatusEnum.Admission
+				&& s.Status == StudentLifeCycleStatusEnum.Enrolled
 				&& s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved
 				&& !s.IsDeleted
 			)

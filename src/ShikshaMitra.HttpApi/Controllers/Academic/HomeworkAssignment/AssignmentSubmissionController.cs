@@ -33,7 +33,7 @@ public class AssignmentSubmissionController(
     )
     {
         var blobName = await UploadFileAsync(file, "assignment-submission");
-        var result = await service.UploadAssignmentSubmissionAsync(input, blobName);
+        var result = await service.UploadAssignmentSubmissionAsync(input, blobName, file.FileName);
         return StatusCode(201, result);
     }
 

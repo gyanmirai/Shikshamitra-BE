@@ -42,6 +42,7 @@ public class StudentSubmissionEntity : FullAuditedEntity<Guid>, IMultiTenant
 	public decimal? TotalMarks { get; set; }
 
 	public string? SubmittedDocumentUrl { get; set; }
+	public string? OriginalFileName { get; set; }
 	public string? SubmittedContent { get; set; }
 
 	public Guid? ReviewedBy { get; set; }

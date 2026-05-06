@@ -61,9 +61,9 @@ public class SubjectAssignmentAppService(
 					assignedSubject.SetPrimaryTeacher(subject.PrimaryTeacherId.Value);
 				}
 
-				if (subject.SecondaryTeacherId != null)
+				if (subject.SecondaryTeacherIds != null)
 				{
-					assignedSubject.SetSecondaryTeachers(subject.SecondaryTeacherId);
+					assignedSubject.SetSecondaryTeachers(subject.SecondaryTeacherIds);
 				}
 
 				// Set documents
@@ -412,9 +412,9 @@ public class SubjectAssignmentAppService(
 				{
 					existingSubject.SetPrimaryTeacher(inputSubject.PrimaryTeacherId.Value);
 				}
-				if (inputSubject.SecondaryTeacherId != null)
+				if (inputSubject.SecondaryTeacherIds != null)
 				{
-					existingSubject.SetSecondaryTeachers(inputSubject.SecondaryTeacherId);
+					existingSubject.SetSecondaryTeachers(inputSubject.SecondaryTeacherIds);
 				}
 
 				// Update documents: clear and re-add
@@ -456,8 +456,8 @@ public class SubjectAssignmentAppService(
 				if (inputSubject.PrimaryTeacherId.HasValue)
 					newSubject.SetPrimaryTeacher(inputSubject.PrimaryTeacherId.Value);
 
-				if (inputSubject.SecondaryTeacherId != null)
-					newSubject.SetSecondaryTeachers(inputSubject.SecondaryTeacherId);
+				if (inputSubject.SecondaryTeacherIds != null)
+					newSubject.SetSecondaryTeachers(inputSubject.SecondaryTeacherIds);
 
 				if (inputSubject.Documents != null)
 				{

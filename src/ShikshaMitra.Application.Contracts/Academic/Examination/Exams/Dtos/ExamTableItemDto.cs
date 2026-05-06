@@ -1,7 +1,14 @@
 using System;
 using System.Collections.Generic;
+using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Academic.Examination.Exams.Dtos;
+
+public class ExamListResultDto : PagedResultDto<ExamTableItemDto>
+{
+    public int PendingCount { get; set; }
+    public int PublishedCount { get; set; }
+}
 
 public class ExamTableItemDto
 {

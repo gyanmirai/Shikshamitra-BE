@@ -84,7 +84,7 @@ public class ExamController(
 
     [HttpGet]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_ScheduleExam.View)]
-    public async Task<PagedResultDto<ExamTableItemDto>> GetListAsync([FromQuery] GetExamsInput input)
+    public async Task<ExamListResultDto> GetListAsync([FromQuery] GetExamsInput input)
     {
         return await examAppService.GetListAsync(input);
     }

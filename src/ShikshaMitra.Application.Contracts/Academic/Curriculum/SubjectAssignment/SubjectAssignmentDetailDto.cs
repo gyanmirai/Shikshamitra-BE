@@ -27,7 +27,7 @@ public class SubjectAssignmentDetailDto
 	/// <summary>
 	/// Secondary teacher IDs
 	/// </summary>
-	public List<Guid>? SecondaryTeacherId { get; set; } = new List<Guid>();
+	public List<Guid>? SecondaryTeacherIds { get; set; } = new List<Guid>();
 
 	/// <summary>
 	/// Learning goals/objectives (HTML content)

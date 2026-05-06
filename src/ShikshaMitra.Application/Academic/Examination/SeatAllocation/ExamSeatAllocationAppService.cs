@@ -106,8 +106,10 @@ public class ExamSeatAllocationAppService(
 
     public async Task<SeatStudentPagedResponseDto> GetStudentsForDivisionAsync(Guid examId, Guid divisionId, GetSeatStudentsInput input)
     {
+        var exam = await examRepository.GetAsync(examId);
+
         var studentsQuery = await studentRepository.GetQueryableAsync();
-        var query = studentsQuery.Where(s => s.DivisionId == divisionId && s.StandardId == input.StandardId);
+        var query = studentsQuery.Where(s => s.DivisionId == divisionId && s.StandardId == exam.StandardId);
 
         if (!string.IsNullOrWhiteSpace(input.Search))
         {

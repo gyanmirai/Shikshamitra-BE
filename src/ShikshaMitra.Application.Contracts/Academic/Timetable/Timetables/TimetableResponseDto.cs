@@ -16,6 +16,7 @@ public class TimetableResponseDto
 public class TimetableSubjectSummaryDto
 {
     public Guid Id { get; set; }
+    public Guid SubjectAssignmentId { get; set; }
     public SubjectType SubjectType { get; set; }
     public Guid? ElectiveGroupId { get; set; }
     public string? ElectiveGroupName { get; set; }
@@ -28,6 +29,7 @@ public class TimetableSubjectSummaryDto
 
 public class TimetableSummarySubjectDto
 {
+    public Guid SubjectAssignmentId { get; set; }
     public SubjectType SubjectType { get; set; }
     public Guid SubjectId { get; set; }
     public string SubjectName { get; set; } = string.Empty;
@@ -50,7 +52,8 @@ public class TimetableSlotResponseDto
 
 public class TimetableSubjectResponseDto
 {
-    public Guid Id { get; set; }
+    public Guid SubjectAssignmentId { get; set; }
+    public Guid SubjectId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Color { get; set; }
     public Guid? TeacherId { get; set; }

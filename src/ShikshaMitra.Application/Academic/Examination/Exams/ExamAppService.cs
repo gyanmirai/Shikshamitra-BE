@@ -8,6 +8,7 @@ using System.Linq;
 
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -27,6 +28,8 @@ public class ExamAppService(
 	IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
 	IRepository<Division, Guid> divisionRepository,
 	IRepository<IdentityUser, Guid> identityUserRepository,
+	IRepository<AssignedSubject, Guid> assignmentRepository,
+	IRepository<ElectiveGroup, Guid> electiveGroupRepository,
 	ExamManager examManager) : ApplicationService, IExamAppService
 {
 	public async Task<Guid> CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input)
@@ -96,17 +99,76 @@ public class ExamAppService(
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
 
+		var subjectIds = exam.ExamSubjects.Select(s => s.SubjectId).Distinct().ToList();
+
+		// Fetch subject Name + Color
+		var subjectDict = subjectIds.Count > 0
+			? (await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id))).ToDictionary(s => s.Id)
+			: new Dictionary<Guid, Subject>();
+
+		// Fetch assigned subjects for this standard → SubjectCode + ElectiveGroupId
+		var assignedDict = (await assignmentRepository.GetListAsync(
+				a => a.StandardId == exam.StandardId && subjectIds.Contains(a.SubjectId)))
+			.GroupBy(a => a.SubjectId)
+			.ToDictionary(g => g.Key, g => g.First());
+
+		// Fetch elective group metadata (Name, Color)
+		var electiveGroupIds = assignedDict.Values
+			.Where(a => a.ElectiveGroupId.HasValue)
+			.Select(a => a.ElectiveGroupId!.Value)
+			.Distinct()
+			.ToList();
+		var electiveGroupDict = electiveGroupIds.Count > 0
+			? (await electiveGroupRepository.GetListAsync(eg => electiveGroupIds.Contains(eg.Id))).ToDictionary(eg => eg.Id)
+			: new Dictionary<Guid, ElectiveGroup>();
+
+		// Build elective group → subjects map from the exam's own assigned subjects
+		var electiveGroupSubjectsMap = assignedDict.Values
+			.Where(a => a.ElectiveGroupId.HasValue)
+			.GroupBy(a => a.ElectiveGroupId!.Value)
+			.ToDictionary(
+				g => g.Key,
+				g => g.Select(a =>
+				{
+					subjectDict.TryGetValue(a.SubjectId, out var s);
+					return new ExamElectiveGroupSubjectDto
+					{
+						SubjectId = a.SubjectId,
+						SubjectName = s?.Name,
+						Color = s?.Color
+					};
+				}).ToList()
+			);
+
 		return new ExamScheduleResponseDto
 		{
-			Subjects = exam.ExamSubjects.Select(s => new ExamSubjectScheduleDto
+			Subjects = exam.ExamSubjects.Select(s =>
 			{
-				SubjectId = s.SubjectId,
-				ExamDate = s.ExamDate,
-				StartTime = s.StartTime,
-				EndTime = s.EndTime,
-				TotalMarks = s.TotalMarks,
-				PassingMarks = s.PassingMarks,
-				Notes = s.Notes
+				subjectDict.TryGetValue(s.SubjectId, out var subject);
+				assignedDict.TryGetValue(s.SubjectId, out var assigned);
+				ElectiveGroup? eg = null;
+				if (assigned?.ElectiveGroupId.HasValue == true)
+					electiveGroupDict.TryGetValue(assigned.ElectiveGroupId!.Value, out eg);
+
+				return new ExamScheduleSubjectDto
+				{
+					SubjectId = s.SubjectId,
+					SubjectName = subject?.Name,
+					SubjectCode = assigned?.SubjectCode,
+					Color = subject?.Color,
+					ElectiveGroupId = assigned?.ElectiveGroupId,
+					ElectiveGroupName = eg?.Name,
+					ElectiveGroupColor = eg?.Color,
+					ElectiveGroupSubjects = eg != null && assigned?.ElectiveGroupId.HasValue == true
+						? electiveGroupSubjectsMap.GetValueOrDefault(assigned.ElectiveGroupId!.Value, [])
+						: [],
+					Notes = s.Notes,
+					ExamDate = s.ExamDate,
+					StartTime = s.StartTime,
+					EndTime = s.EndTime,
+					TotalMarks = s.TotalMarks,
+					PassingMarks = s.PassingMarks
+				};
 			}).ToList()
 		};
 	}
@@ -194,19 +256,24 @@ public class ExamAppService(
 		await examRepository.DeleteAsync(exam);
 	}
 
-	public async Task<PagedResultDto<ExamTableItemDto>> GetListAsync(GetExamsInput input)
+	public async Task<ExamListResultDto> GetListAsync(GetExamsInput input)
 	{
-		var examQuery = await examRepository.GetQueryableAsync();
+		var examQuery = await examRepository.WithDetailsAsync();
 		var standardQuery = await standardRepository.GetQueryableAsync();
 		var stageQuery = await educationMediumStageRepository.GetQueryableAsync();
 		var examTypeQuery = await examTypeRepository.GetQueryableAsync();
 
-		var query = from exam in examQuery
-					join standard in standardQuery on exam.StandardId equals standard.Id
-					join stage in stageQuery on standard.EducationMediumStageId equals stage.Id
-					join examType in examTypeQuery on exam.ExamTypeId equals examType.Id
-					where stage.EducationMediumId == input.AcademicMediumId && exam.Status == input.Status
-					select new { exam, standard, examType };
+		var baseQuery = from exam in examQuery
+						join standard in standardQuery on exam.StandardId equals standard.Id
+						join stage in stageQuery on standard.EducationMediumStageId equals stage.Id
+						join examType in examTypeQuery on exam.ExamTypeId equals examType.Id
+						where stage.EducationMediumId == input.AcademicMediumId
+						select new { exam, standard, examType };
+
+		var pendingCount = await AsyncExecuter.CountAsync(baseQuery.Where(x => x.exam.Status == ExamStatus.Pending));
+		var publishedCount = await AsyncExecuter.CountAsync(baseQuery.Where(x => x.exam.Status == ExamStatus.Published));
+
+		var query = baseQuery.Where(x => x.exam.Status == input.Status);
 
 		if (input.SubjectId.HasValue)
 		{
@@ -244,6 +311,12 @@ public class ExamAppService(
 			Divisions = x.exam.ExamDivisions.Select(d => divisionDict.GetValueOrDefault(d.DivisionId) ?? string.Empty).ToList()
 		}).ToList();
 
-		return new PagedResultDto<ExamTableItemDto>(totalCount, items);
+		return new ExamListResultDto
+		{
+			TotalCount = totalCount,
+			Items = items,
+			PendingCount = pendingCount,
+			PublishedCount = publishedCount
+		};
 	}
 }

@@ -49,6 +49,9 @@ public class TimetableAppService(
         var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(standardId);
 
         var assignedSubjects = await assignedSubjectRepository.GetListAsync(a => a.StandardId == standardId);
+        var assignedSubjectBySubjectId = assignedSubjects
+            .GroupBy(a => a.SubjectId)
+            .ToDictionary(g => g.Key, g => g.First().Id);
         var needsSubjectData = hasSavedData || assignedSubjects.Count > 0;
 
         var subjects = needsSubjectData ? await subjectRepository.GetListAsync() : [];
@@ -104,7 +107,8 @@ public class TimetableAppService(
                         var occupiedSlots = occupiedBySubject.GetValueOrDefault(sub.SubjectId, 0);
                         return new TimetableSubjectResponseDto
                         {
-                            Id = sub.SubjectId,
+                            SubjectAssignmentId = assignedSubjectBySubjectId.GetValueOrDefault(sub.SubjectId),
+                            SubjectId = sub.SubjectId,
                             Name = subject?.Name ?? string.Empty,
                             Color = subject?.Color,
                             TeacherId = sub.TeacherId,
@@ -181,6 +185,7 @@ public class TimetableAppService(
                     return new TimetableSubjectSummaryDto
                     {
                         Id = weeklyEntry?.Id ?? assigned.Id,
+                        SubjectAssignmentId = assigned.Id,
                         SubjectType = SubjectType.Core,
                         ElectiveGroupId = null,
                         ElectiveGroupName = null,
@@ -192,6 +197,7 @@ public class TimetableAppService(
                         [
                             new TimetableSummarySubjectDto
                             {
+                                SubjectAssignmentId = assigned.Id,
                                 SubjectType = SubjectType.Core,
                                 SubjectId = assigned.SubjectId,
                                 SubjectName = subject?.Name ?? string.Empty,
@@ -218,6 +224,7 @@ public class TimetableAppService(
                         var subject = subjects.FirstOrDefault(s => s.Id == a.SubjectId);
                         return new TimetableSummarySubjectDto
                         {
+                            SubjectAssignmentId = a.Id,
                             SubjectType = SubjectType.Elective,
                             SubjectId = a.SubjectId,
                             SubjectName = subject?.Name ?? string.Empty,
@@ -228,6 +235,7 @@ public class TimetableAppService(
                     return new TimetableSubjectSummaryDto
                     {
                         Id = weeklyEntry?.Id ?? groupId,
+                        SubjectAssignmentId = g.First().Id,
                         SubjectType = SubjectType.Elective,
                         ElectiveGroupId = groupId,
                         ElectiveGroupName = group?.Name,

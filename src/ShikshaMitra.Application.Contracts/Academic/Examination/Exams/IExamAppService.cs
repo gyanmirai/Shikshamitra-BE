@@ -28,5 +28,5 @@ public interface IExamAppService : IApplicationService
 
     Task DeleteAsync(Guid examId);
 
-    Task<PagedResultDto<ExamTableItemDto>> GetListAsync(GetExamsInput input);
+    Task<ExamListResultDto> GetListAsync(GetExamsInput input);
 }

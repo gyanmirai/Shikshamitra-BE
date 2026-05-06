@@ -1,16 +1,23 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Entities;
+using Volo.Abp.Users;
 
 namespace ShikshaMitra.HR.Employees.ReportingManager;
 
 [RemoteService(false)]
-public class ReportingManagerAppService(IEmployeeRepository employeeRepository)
+public class ReportingManagerAppService(
+	IEmployeeRepository employeeRepository,
+	ICurrentUser currentUser)
 	: ApplicationService, IReportingManagerAppService
 {
+	private const int MaxHierarchyDepth = 64;
+
 	public async Task<EmployeeReportingResponseDto> AssignReportingManagerAsync(
 		Guid employeeId,
 		AssignReportingManagerDto input)
@@ -53,18 +60,34 @@ public class ReportingManagerAppService(IEmployeeRepository employeeRepository)
 
 	public async Task<EmployeesByManagerResponseDto> GetEmployeesByManagerAsync(Guid managerId)
 	{
+		if (!await IsAdminBypassAsync())
+		{
+			var actorEmployee = await ResolveCurrentEmployeeAsync();
+			if (actorEmployee == null || actorEmployee.Id != managerId)
+			{
+				throw new AbpAuthorizationException("Access denied: You can only view your own reporting hierarchy.");
+			}
+		}
+
 		// Validate manager exists
 		var manager = await employeeRepository.GetAsync(managerId)
 			?? throw new EntityNotFoundException(typeof(Employee), managerId);
 
-		// Get employees under this manager
-		var employees = await employeeRepository.GetEmployeesByManagerAsync(managerId);
+		var employees = await GetEmployeesByManagerHierarchyAsync(managerId);
 
 		return new EmployeesByManagerResponseDto
 		{
 			Manager = MapToEmployeeBasic(manager),
 			Employees = employees.Select(MapToEmployeeBasic).ToList()
 		};
+	}
+
+	public async Task<EmployeesByManagerResponseDto> GetMyEmployeesByManagerAsync()
+	{
+		var actorEmployee = await ResolveCurrentEmployeeAsync()
+			?? throw new AbpAuthorizationException("Access denied: Employee profile not found.");
+
+		return await GetEmployeesByManagerAsync(actorEmployee.Id);
 	}
 
 	private async Task ValidateNoCircularReportingAsync(Guid employeeId, Guid newManagerId)
@@ -109,5 +132,50 @@ public class ReportingManagerAppService(IEmployeeRepository employeeRepository)
 			FullName = employee.EmployeeName,
 			Designation = employee.Designation
 		};
+	}
+
+	private async Task<List<Employee>> GetEmployeesByManagerHierarchyAsync(Guid managerId)
+	{
+		var result = new List<Employee>();
+		var visited = new HashSet<Guid> { managerId };
+		var queue = new Queue<Guid>();
+		queue.Enqueue(managerId);
+		var depth = 0;
+
+		while (queue.Count > 0 && depth < MaxHierarchyDepth)
+		{
+			depth++;
+			var currentManager = queue.Dequeue();
+			var directReports = await employeeRepository.GetEmployeesByManagerAsync(currentManager);
+
+			foreach (var employee in directReports)
+			{
+				if (!visited.Add(employee.Id))
+				{
+					continue;
+				}
+
+				result.Add(employee);
+				queue.Enqueue(employee.Id);
+			}
+		}
+
+		return result;
+	}
+
+	private async Task<Employee?> ResolveCurrentEmployeeAsync()
+	{
+		var userId = currentUser.Id;
+		if (!userId.HasValue)
+		{
+			return null;
+		}
+
+		return await employeeRepository.GetEmployeeByUserIdAsync(userId.Value);
+	}
+
+	private Task<bool> IsAdminBypassAsync()
+	{
+		return Task.FromResult(currentUser.IsInRole("admin") || currentUser.IsInRole("Administrator"));
 	}
 }

@@ -49,6 +49,7 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 		int skip,
 		int take,
 		Guid? employeeId = null,
+		IReadOnlyCollection<Guid>? employeeIds = null,
 		CancellationToken cancellationToken = default);
 
 	/// <summary>
@@ -62,5 +63,6 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 		int skip,
 		int take,
 		Guid? employeeId = null,
+		IReadOnlyCollection<Guid>? employeeIds = null,
 		CancellationToken cancellationToken = default);
 }

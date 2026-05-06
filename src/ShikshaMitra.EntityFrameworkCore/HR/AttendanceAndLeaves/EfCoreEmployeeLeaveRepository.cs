@@ -106,6 +106,7 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 		int skip,
 		int take,
 		Guid? employeeId = null,
+		IReadOnlyCollection<Guid>? employeeIds = null,
 		CancellationToken cancellationToken = default)
 	{
 		var dbContext = await GetDbContextAsync();
@@ -116,7 +117,7 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 		if (dbContext.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true)
 			{
 				return await FilterManagementListSqliteAsync(
-					dbSet, rs, re, filters, search, skip, take, employeeId, cancellationToken);
+					dbSet, rs, re, filters, search, skip, take, employeeId, employeeIds, cancellationToken);
 			}
 
 		var filterStart = new DateTimeOffset(DateTime.SpecifyKind(rs, DateTimeKind.Utc));
@@ -129,6 +130,10 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 			if (employeeId.HasValue)
 			{
 				query = query.Where(x => x.EmployeeId == employeeId.Value);
+			}
+			else if (employeeIds is { Count: > 0 })
+			{
+				query = query.Where(x => employeeIds.Contains(x.EmployeeId));
 			}
 
 		if (!string.IsNullOrWhiteSpace(search))
@@ -166,6 +171,7 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 		int skip,
 		int take,
 		Guid? employeeId = null,
+		IReadOnlyCollection<Guid>? employeeIds = null,
 		CancellationToken cancellationToken = default)
 	{
 		var dbContext = await GetDbContextAsync();
@@ -184,6 +190,7 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 					skip,
 					take,
 					employeeId,
+					employeeIds,
 					cancellationToken);
 			}
 
@@ -195,6 +202,10 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 			if (employeeId.HasValue)
 			{
 				query = query.Where(x => x.EmployeeId == employeeId.Value);
+			}
+			else if (employeeIds is { Count: > 0 })
+			{
+				query = query.Where(x => employeeIds.Contains(x.EmployeeId));
 			}
 
 		if (!string.IsNullOrWhiteSpace(search))
@@ -263,6 +274,7 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 		int skip,
 		int take,
 		Guid? employeeId,
+		IReadOnlyCollection<Guid>? employeeIds,
 		CancellationToken cancellationToken)
 	{
 		var rows = await dbSet
@@ -310,6 +322,10 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 			{
 				filtered = filtered.Where(r => r.EmployeeId == employeeId.Value).ToList();
 			}
+			else if (employeeIds is { Count: > 0 })
+			{
+				filtered = filtered.Where(r => employeeIds.Contains(r.EmployeeId)).ToList();
+			}
 
 		if (!string.IsNullOrWhiteSpace(search))
 		{
@@ -335,6 +351,7 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 		int skip,
 		int take,
 		Guid? employeeId,
+		IReadOnlyCollection<Guid>? employeeIds,
 		CancellationToken cancellationToken)
 	{
 		var rows = await dbSet
@@ -381,6 +398,10 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 			if (employeeId.HasValue)
 			{
 				filtered = filtered.Where(r => r.EmployeeId == employeeId.Value).ToList();
+			}
+			else if (employeeIds is { Count: > 0 })
+			{
+				filtered = filtered.Where(r => employeeIds.Contains(r.EmployeeId)).ToList();
 			}
 
 		if (!string.IsNullOrWhiteSpace(search))

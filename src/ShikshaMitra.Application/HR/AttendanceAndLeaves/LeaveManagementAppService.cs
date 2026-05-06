@@ -37,20 +37,25 @@ public class LeaveManagementAppService(
 	HRExcelService hrExcelService)
 	: ApplicationService, ILeaveManagementAppService
 {
+	private const int MaxHierarchyDepth = 64;
+
 	public async Task<PagedLeaveManagementResultDto> GetListAsync(LeaveManagementGetListInput input)
 	{
-		return await GetListInternalAsync(input, scopedEmployeeId: null);
+		var actorContext = await ResolveLeaveActorContextAsync();
+		var scopedEmployeeIds = await ResolveScopedEmployeeIdsAsync(actorContext);
+		return await GetListInternalAsync(input, scopedEmployeeId: null, scopedEmployeeIds);
 	}
 
 	public async Task<PagedLeaveManagementResultDto> GetMyListAsync(LeaveManagementGetListInput input)
 	{
 		var actorEmployeeId = await ResolveCurrentActorEmployeeIdStrictAsync();
-		return await GetListInternalAsync(input, actorEmployeeId);
+		return await GetListInternalAsync(input, actorEmployeeId, scopedEmployeeIds: null);
 	}
 
 	private async Task<PagedLeaveManagementResultDto> GetListInternalAsync(
 		LeaveManagementGetListInput input,
-		Guid? scopedEmployeeId)
+		Guid? scopedEmployeeId,
+		IReadOnlyCollection<Guid>? scopedEmployeeIds)
 	{
 		if (input.Page < 1)
 		{
@@ -125,7 +130,8 @@ public class LeaveManagementAppService(
 			input.Search,
 			skipCount,
 			input.PageSize,
-			scopedEmployeeId);
+			scopedEmployeeId,
+			scopedEmployeeIds);
 
 		var detailQuery = await employeeLeaveRepository.WithDetailsAsync(
 			x => x.Employee,
@@ -181,6 +187,7 @@ public class LeaveManagementAppService(
 		var leave = await AsyncExecuter.FirstOrDefaultAsync(
 			query.Where(x => x.Id == leaveRequestId))
 			?? throw new EntityNotFoundException(typeof(EmployeeLeave), leaveRequestId);
+		await EnsureActorCanAccessEmployeeAsync(leave.EmployeeId);
 
 		var details = await MapToDetailsDtoAsync(leave);
 		var academicYearId = leave.LeavePolicy?.AcademicYearId;
@@ -428,6 +435,7 @@ public class LeaveManagementAppService(
 		var leave = await AsyncExecuter.FirstOrDefaultAsync(
 			query.Where(x => x.Id == leaveRequestId))
 			?? throw new EntityNotFoundException(typeof(EmployeeLeave), leaveRequestId);
+		await EnsureActorCanAccessEmployeeAsync(leave.EmployeeId);
 
 		if (leave.Attachment is not { Length: > 0 })
 		{
@@ -470,7 +478,7 @@ public class LeaveManagementAppService(
 			return new LeaveBalanceListDto { Items = [] };
 		}
 
-		await employeeAuthorizationService.CheckEmployeeAccessAsync(targetId.Value, requireOwnership: false);
+		await EnsureActorCanAccessEmployeeAsync(targetId.Value);
 
 		var policies = await leavePolicyRepository.GetListByAcademicYearIdAsync(
 			academicYearId,
@@ -545,6 +553,9 @@ public class LeaveManagementAppService(
 		var rangeEndOffset = new DateTimeOffset(
 			rangeEnd.Year, rangeEnd.Month, rangeEnd.Day, 23, 59, 59, 999, input.RangeEnd.Offset);
 
+		var actorContext = await ResolveLeaveActorContextAsync();
+		var scopedEmployeeIds = await ResolveScopedEmployeeIdsAsync(actorContext);
+
 		var skip = (input.Page - 1) * input.PageSize;
 		var filters = new LeaveManagementListFilters(
 			input.AcademicYearId,
@@ -558,7 +569,9 @@ public class LeaveManagementAppService(
 			filters,
 			input.Search,
 			skip,
-			input.PageSize);
+			input.PageSize,
+			employeeId: null,
+			employeeIds: scopedEmployeeIds);
 
 		var detailQuery = await employeeLeaveRepository.WithDetailsAsync(
 			x => x.Employee,
@@ -850,6 +863,63 @@ public class LeaveManagementAppService(
 	}
 
 	private readonly record struct LeaveActorContext(bool IsAdminBypass, Guid? ActorEmployeeId);
+
+	private async Task EnsureActorCanAccessEmployeeAsync(Guid targetEmployeeId)
+	{
+		var actorContext = await ResolveLeaveActorContextAsync();
+		if (actorContext.IsAdminBypass)
+		{
+			return;
+		}
+
+		if (!actorContext.ActorEmployeeId.HasValue)
+		{
+			throw new AbpAuthorizationException("Access denied: You do not have leave access.");
+		}
+
+		var scopedEmployeeIds = await ResolveScopedEmployeeIdsAsync(actorContext);
+		if (scopedEmployeeIds is { Count: > 0 } && scopedEmployeeIds.Contains(targetEmployeeId))
+		{
+			return;
+		}
+
+		throw new AbpAuthorizationException("Access denied: You can only access your own or reporting employees' leave requests.");
+	}
+
+	private async Task<IReadOnlyCollection<Guid>?> ResolveScopedEmployeeIdsAsync(LeaveActorContext actorContext)
+	{
+		if (actorContext.IsAdminBypass)
+		{
+			return null;
+		}
+
+		if (!actorContext.ActorEmployeeId.HasValue)
+		{
+			return [];
+		}
+
+		var scoped = new HashSet<Guid> { actorContext.ActorEmployeeId.Value };
+		var queue = new Queue<Guid>();
+		queue.Enqueue(actorContext.ActorEmployeeId.Value);
+		var depth = 0;
+
+		while (queue.Count > 0 && depth < MaxHierarchyDepth)
+		{
+			depth++;
+			var currentManagerId = queue.Dequeue();
+			var children = await employeeRepository.GetEmployeesByManagerAsync(currentManagerId);
+
+			foreach (var child in children)
+			{
+				if (scoped.Add(child.Id))
+				{
+					queue.Enqueue(child.Id);
+				}
+			}
+		}
+
+		return scoped;
+	}
 
 	private async Task<LeaveRequestDetailsDto> MapToDetailsDtoAsync(EmployeeLeave leave)
 	{

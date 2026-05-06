@@ -69,4 +69,15 @@ public class ReportingManagerController : AbpControllerBase
 		var result = await _reportingManagerAppService.GetEmployeesByManagerAsync(managerId);
 		return ReportingManagerContractMapper.ToEmployeesUnderManagerResponse(result);
 	}
+
+	/// <summary>
+	/// Get employees under the signed-in manager (full hierarchy).
+	/// </summary>
+	[HttpGet("reporting-manager/my/employees")]
+	[ProducesResponseType(typeof(EmployeesUnderManagerResponse), StatusCodes.Status200OK)]
+	public virtual async Task<EmployeesUnderManagerResponse> GetMyEmployeesUnderManagerAsync()
+	{
+		var result = await _reportingManagerAppService.GetMyEmployeesByManagerAsync();
+		return ReportingManagerContractMapper.ToEmployeesUnderManagerResponse(result);
+	}
 }

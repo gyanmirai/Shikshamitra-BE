@@ -29,4 +29,6 @@ public interface IExamAppService : IApplicationService
     Task DeleteAsync(Guid examId);
 
     Task<ExamListResultDto> GetListAsync(GetExamsInput input);
+
+    Task ChangeStatusAsync(Guid examId, ExamStatus status);
 }

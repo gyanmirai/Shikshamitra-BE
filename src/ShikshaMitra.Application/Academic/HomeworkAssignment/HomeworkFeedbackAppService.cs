@@ -131,6 +131,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			var dto = new HomeworkSubmissionDto
 			{
 				Id = submission?.Id.ToString() ?? Guid.Empty.ToString(),
+				StudentId = student.Id,
 				RollNumber = student.RollNo?.ToString() ?? string.Empty,
 				GrNumber = student.GrNo?.ToString() ?? string.Empty,
 				StudentName =
@@ -144,7 +145,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 				TotalMarks = submission?.TotalMarks,
 				Feedback = submission?.Feedback,
 				Remarks = submission?.Remarks,
-				Status = (int)(submission?.Status ?? SubmissionStatus.NeedsReview),
+				Status = (int) (submission?.Status ?? SubmissionStatus.NeedsReview),
 				SubmittedContent = submission?.SubmittedContent
 			};
 
@@ -167,7 +168,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			ClassId = filter.ClassId.ToString(),
 			DivisionId = filter.DivisionId.ToString(),
 			SubjectId = filter.SubjectId.ToString(),
-			SubmissionType = (int)homework.SubmissionType,
+			SubmissionType = (int) homework.SubmissionType,
 			Data = submissionDtos
 		};
 	}
@@ -183,9 +184,10 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		GiveFeedbackDto input
 	)
 	{
-		// 1. Validate homework
-		var homework = await _homeworkRepository.FirstOrDefaultAsync(h =>
-			h.Id == homeworkId && h.EducationMediumId == academicMediumId
+		// 1. Validate homework (load with DivisionSchedules to support V2 homeworks)
+		var homeworkQuery = await _homeworkRepository.WithDetailsAsync(h => h.DivisionSchedules);
+		var homework = await _asyncExecuter.FirstOrDefaultAsync(
+			homeworkQuery.Where(h => h.Id == homeworkId && h.EducationMediumId == academicMediumId)
 		);
 
 		if (homework == null)
@@ -200,13 +202,6 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		// 3. Validate feedback data
 		_submissionManager.ValidateFeedback(input.Marks, input.TotalMarks);
 
-		// V1 homework must have DivisionId and DueDate
-		if (!homework.DivisionId.HasValue || !homework.DueDate.HasValue)
-		{
-			throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
-				.WithData("Message", "Homework does not have division or due date assigned");
-		}
-
 		// 4. Get or create submission
 		var submission = await _submissionRepository.GetSubmissionByStudentAndHomeworkAsync(
 			studentId,
@@ -215,12 +210,38 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 
 		if (submission == null)
 		{
+			// Resolve divisionId and dueDate — V1 uses entity fields, V2 uses DivisionSchedules
+			Guid divisionId;
+			DateTime dueDate;
+
+			if (homework.DivisionId.HasValue && homework.DueDate.HasValue)
+			{
+				// V1 homework
+				divisionId = homework.DivisionId.Value;
+				dueDate = homework.DueDate.Value;
+			}
+			else
+			{
+				// V2 homework — look up the schedule for the student's division
+				var studentDivisionId = student.DivisionId
+					?? throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
+						.WithData("Message", "Student has no division assigned");
+
+				var schedule = homework.DivisionSchedules
+					?.FirstOrDefault(s => s.DivisionId == studentDivisionId)
+					?? throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
+						.WithData("Message", "Homework is not assigned to the student's division");
+
+				divisionId = schedule.DivisionId;
+				dueDate = schedule.DueDate;
+			}
+
 			// Create new submission
 			submission = await _submissionManager.CreateOrGetSubmissionAsync(
 				homeworkId,
 				studentId,
-				homework.DivisionId.Value,
-				homework.DueDate.Value,
+				divisionId,
+				dueDate,
 				CurrentTenant.Id
 			);
 		}
@@ -266,9 +287,10 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		UpdateSubmissionStatusDto input
 	)
 	{
-		// 1. Validate homework
-		var homework = await _homeworkRepository.FirstOrDefaultAsync(h =>
-			h.Id == homeworkId && h.EducationMediumId == academicMediumId
+		// 1. Validate homework (load with DivisionSchedules to support V2 homeworks)
+		var homeworkQuery = await _homeworkRepository.WithDetailsAsync(h => h.DivisionSchedules);
+		var homework = await _asyncExecuter.FirstOrDefaultAsync(
+			homeworkQuery.Where(h => h.Id == homeworkId && h.EducationMediumId == academicMediumId)
 		);
 
 		if (homework == null)
@@ -277,14 +299,10 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 				.WithData("HomeworkId", homeworkId);
 		}
 
-		// V1 homework must have DivisionId and DueDate
-		if (!homework.DivisionId.HasValue || !homework.DueDate.HasValue)
-		{
-			throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
-				.WithData("Message", "Homework does not have division or due date assigned");
-		}
+		// 2. Get student to resolve division for V2 homeworks
+		var student = await _studentRepository.GetAsync(studentId);
 
-		// 2. Get or create submission
+		// 3. Get or create submission
 		var submission = await _submissionRepository.GetSubmissionByStudentAndHomeworkAsync(
 			studentId,
 			homeworkId
@@ -292,12 +310,38 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 
 		if (submission == null)
 		{
+			// Resolve divisionId and dueDate — V1 uses entity fields, V2 uses DivisionSchedules
+			Guid divisionId;
+			DateTime dueDate;
+
+			if (homework.DivisionId.HasValue && homework.DueDate.HasValue)
+			{
+				// V1 homework
+				divisionId = homework.DivisionId.Value;
+				dueDate = homework.DueDate.Value;
+			}
+			else
+			{
+				// V2 homework — look up the schedule for the student's division
+				var studentDivisionId = student.DivisionId
+					?? throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
+						.WithData("Message", "Student has no division assigned");
+
+				var schedule = homework.DivisionSchedules
+					?.FirstOrDefault(s => s.DivisionId == studentDivisionId)
+					?? throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
+						.WithData("Message", "Homework is not assigned to the student's division");
+
+				divisionId = schedule.DivisionId;
+				dueDate = schedule.DueDate;
+			}
+
 			// Create new submission
 			submission = await _submissionManager.CreateOrGetSubmissionAsync(
 				homeworkId,
 				studentId,
-				homework.DivisionId.Value,
-				homework.DueDate.Value,
+				divisionId,
+				dueDate,
 				CurrentTenant.Id
 			);
 		}

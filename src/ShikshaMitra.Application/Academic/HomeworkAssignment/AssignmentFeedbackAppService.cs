@@ -120,6 +120,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 			var dto = new HomeworkSubmissionDto
 			{
 				Id = submission?.Id.ToString() ?? Guid.Empty.ToString(),
+				StudentId = student.Id,
 				RollNumber = student.RollNo?.ToString() ?? string.Empty,
 				GrNumber = student.GrNo?.ToString() ?? string.Empty,
 				StudentName =
@@ -133,7 +134,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 				TotalMarks = submission?.TotalMarks,
 				Feedback = submission?.Feedback,
 				Remarks = submission?.Remarks,
-				Status = (int)(submission?.Status ?? SubmissionStatus.NeedsReview),
+				Status = (int) (submission?.Status ?? SubmissionStatus.NeedsReview),
 				SubmittedContent = submission?.SubmittedContent
 			};
 

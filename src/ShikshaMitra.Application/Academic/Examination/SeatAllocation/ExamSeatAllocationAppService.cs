@@ -242,7 +242,7 @@ public class ExamSeatAllocationAppService(
     {
         var examQuery = await examRepository.GetQueryableAsync();
         var exams = await AsyncExecuter.ToListAsync(
-            examQuery.Where(e => e.StandardId == input.StandardId));
+            examQuery.Where(e => e.StandardId == input.StandardId && e.Status == ExamStatus.Published));
 
         if (!string.IsNullOrWhiteSpace(input.Search))
         {
@@ -269,8 +269,17 @@ public class ExamSeatAllocationAppService(
             : new List<Division>();
         var divisionsDict = divisions.ToDictionary(d => d.Id);
 
-        // Students in this standard
-        var totalStudents = await studentRepository.CountAsync(s => s.StandardId == input.StandardId);
+        // Students per division — needed to compute accurate per-exam totals
+        var studentsInDivisions = allDivisionIds.Count > 0
+            ? await studentRepository.GetListAsync(s =>
+                s.StandardId == input.StandardId &&
+                s.DivisionId.HasValue &&
+                allDivisionIds.Contains(s.DivisionId!.Value))
+            : new List<Student>();
+        var studentCountByDivision = studentsInDivisions
+            .Where(s => s.DivisionId.HasValue)
+            .GroupBy(s => s.DivisionId!.Value)
+            .ToDictionary(g => g.Key, g => g.Count());
 
         // Allocations per exam
         var allocCounts = await seatAllocationRepository.GetListAsync(a => examIds.Contains(a.ExamId));
@@ -283,6 +292,8 @@ public class ExamSeatAllocationAppService(
                 .Where(d => divisionsDict.ContainsKey(d.DivisionId))
                 .Select(d => divisionsDict[d.DivisionId].Name)
                 .ToList();
+            var examDivisionIds = exam.ExamDivisions.Select(d => d.DivisionId).ToList();
+            var totalStudents = examDivisionIds.Sum(divId => studentCountByDivision.GetValueOrDefault(divId, 0));
             var allocated = allocByExam.GetValueOrDefault(exam.Id, 0);
             var pending = totalStudents - allocated;
             var status = allocated == 0 ? 0 : (allocated < totalStudents ? 1 : 2);

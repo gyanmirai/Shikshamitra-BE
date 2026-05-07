@@ -8,6 +8,7 @@ public class ExamListResultDto : PagedResultDto<ExamTableItemDto>
 {
     public int PendingCount { get; set; }
     public int PublishedCount { get; set; }
+    public int CompletedCount { get; set; }
 }
 
 public class ExamTableItemDto

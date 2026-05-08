@@ -21,7 +21,6 @@ internal static class FeeStructureMappingExtensions
             MediumName = metadata.AcademicMedium?.Name,
             ReceiptBookId = metadata.ReceiptBookId ?? Guid.Empty,
             ReceiptBookName = metadata.ReceiptBook?.Name,
-            Status = metadata.Status
         };
 
     internal static List<FeeStructureDetailsResponse> ToDetailsResponseList(

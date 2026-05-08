@@ -1,5 +1,6 @@
 ﻿using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
 
@@ -21,4 +22,7 @@ public interface IFeeStructureAppService : IApplicationService
 
     /// <summary>Locks a fee structure, preventing further modifications.</summary>
     Task LockAsync(Guid id);
+
+    /// <summary>Returns an ordered list of month-year pairs spanning the given academic year's start and end dates.</summary>
+    Task<List<AcademicYearMonthItem>> GetMonthsByAcademicYearAsync(Guid academicYearId);
 }

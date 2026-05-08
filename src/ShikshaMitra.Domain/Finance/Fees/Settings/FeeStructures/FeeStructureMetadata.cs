@@ -22,8 +22,6 @@ public class FeeStructureMetadata : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public string? Name { get; private set; }
 
-	public FeeStructureMetadataStatus Status { get; private set; } = FeeStructureMetadataStatus.Unlocked;
-
 	// Navigation Properties
 	public AcademicYear AcademicYear { get; private set; }
 	public EducationBoard AcademicBoard { get; private set; }
@@ -49,30 +47,5 @@ public class FeeStructureMetadata : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		AcademicMediumId = mediumId;
 		ReceiptBookId = receiptBookId;
 		Name = name;
-		Status = FeeStructureMetadataStatus.Unlocked;
-	}
-
-	public void Update(string name, Guid boardId, Guid mediumId, Guid receiptBookId)
-	{
-		Name = name;
-		AcademicBoardId = boardId;
-		AcademicMediumId = mediumId;
-		ReceiptBookId = receiptBookId;
-	}
-
-	public void Lock() => Status = FeeStructureMetadataStatus.Locked;
-
-	public void Unlock() => Status = FeeStructureMetadataStatus.Unlocked;
-
-	/// <summary>
-	/// Enforces the invariant that a standard's board and medium match this fee structure's configuration.
-	/// </summary>
-	public void EnsureStandardIsCompatible(Standard standard)
-	{
-		var standardBoardId = standard.EducationMediumStage.EducationMedium.EducationBoardId;
-		var standardMediumId = standard.EducationMediumStage.EducationMediumId;
-
-		if (AcademicBoardId != standardBoardId || AcademicMediumId != standardMediumId)
-			throw new BusinessException(message: "The standard's board and medium do not match the fee structure.");
 	}
 }

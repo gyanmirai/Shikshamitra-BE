@@ -1,18 +1,24 @@
-﻿using System;
+﻿using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
+using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
-using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
-using ShikshaMitra.Finance.Fees.Settings.Dtos;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
 
 public interface IFeeStructureAppService : IApplicationService
 {
-	Task<FeeStructureDetailsResponse> CreateAsync(Guid academicYearId, FeeStructureCreateRequest input);
-	Task<FeeStructureListResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null);
-	Task<MessageResponse> UpdateAsync(Guid feeStructureId, FeeStructureUpdateRequest input);
-	Task UpdateStatusAsync(Guid feeStructureId, FeeStructureStatusUpdateRequest input);
-	Task SaveStandardFeeStructuresAsync(Guid feeStructureId, StandardFeeStructureSaveRequest input);
-	Task<StandardFeeStructureResponse> GetStandardFeeStructureAsync(Guid standardId);
-	Task GenerateFeeStructuresAsync(Guid academicYearId);
+    /// <summary>Creates fee structures for a standard under the given fee structure metadata.</summary>
+    Task<FeeStructureCreateResponse> CreateAsync(Guid feeStructureMetadataId, StandardFeeStructureSaveRequest input);
+
+    /// <summary>Replaces the fee head assignments of an existing, unlocked fee structure.</summary>
+    Task UpdateAsync(Guid id, StandardFeeStructureRequest input);
+
+    /// <summary>Soft-deletes an unlocked fee structure and its details.</summary>
+    Task DeleteAsync(Guid id);
+
+    /// <summary>Returns all fee structures (with details) for a given standard.</summary>
+    Task<StandardFeeStructureResponse> GetByStandardAsync(Guid standardId);
+
+    /// <summary>Locks a fee structure, preventing further modifications.</summary>
+    Task LockAsync(Guid id);
 }

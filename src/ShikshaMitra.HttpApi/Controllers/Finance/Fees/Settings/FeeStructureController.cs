@@ -1,11 +1,12 @@
 ﻿
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
+using System;
+using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
-using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using ShikshaMitra.Finance.Fees.Settings;
-using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Settings;
 
@@ -15,71 +16,59 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Settings;
 [Authorize]
 public class FeeStructureController(IFeeStructureAppService feeStructureAppService) : AbpController
 {
-	/// <summary>
-	/// Create a new Fee Structure
-	/// </summary>
-	[HttpPost]
-	public Task<FeeStructureDetailsResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] FeeStructureCreateRequest input)
-	{
-		return feeStructureAppService.CreateAsync(academicYearId, input);
-	}
+    /// <summary>
+    /// Create fee structures for a standard under the given fee structure metadata.
+    /// </summary>
+    /// <param name="feeStructureMetadataId">The parent fee structure metadata identifier (UUID)</param>
+    /// <param name="input">Standard and its fee head assignments</param>
+    /// <returns>Created fee structure with generated Id and Name</returns>
+    [HttpPost]
+    public Task<FeeStructureCreateResponse> CreateAsync(
+        [FromQuery] Guid feeStructureMetadataId,
+        [FromBody] StandardFeeStructureSaveRequest input)
+    {
+        return feeStructureAppService.CreateAsync(feeStructureMetadataId, input);
+    }
 
-	/// <summary>
-	/// Get Fee Structures list
-	/// </summary>
-	[HttpGet]
-	public Task<FeeStructureListResponse> GetListAsync(
-		[FromQuery] Guid academicYearId,
-		[FromQuery] int page = 1,
-		[FromQuery] int pageSize = 10,
-		[FromQuery] string search = null)
-	{
-		return feeStructureAppService.GetListAsync(academicYearId, page, pageSize, search);
-	}
+    /// <summary>
+    /// Replace fee head assignments of an existing, unlocked fee structure.
+    /// </summary>
+    /// <param name="id">Fee structure identifier (UUID)</param>
+    /// <param name="input">Updated fee head assignments</param>
+    [HttpPut("{id}")]
+    public Task UpdateAsync(Guid id, [FromBody] StandardFeeStructureRequest input)
+    {
+        return feeStructureAppService.UpdateAsync(id, input);
+    }
 
-	/// <summary>
-	/// Update Fee Structure Status
-	/// </summary>
-	[HttpPatch("{feeStructureId}/status")]
-	public async Task UpdateStatusAsync(Guid feeStructureId, [FromBody] FeeStructureStatusUpdateRequest input)
-	{
-		await feeStructureAppService.UpdateStatusAsync(feeStructureId, input);
-	}
+    /// <summary>
+    /// Soft-delete an unlocked fee structure and all its details.
+    /// </summary>
+    /// <param name="id">Fee structure identifier (UUID)</param>
+    [HttpDelete("{id}")]
+    public Task DeleteAsync(Guid id)
+    {
+        return feeStructureAppService.DeleteAsync(id);
+    }
 
-	/// <summary>
-	/// Update Fee Structure
-	/// </summary>
-	[HttpPut("{feeStructureId}")]
-	public async Task<MessageResponse> UpdateAsync(Guid feeStructureId, [FromBody] FeeStructureUpdateRequest input)
-	{
-		return await feeStructureAppService.UpdateAsync(feeStructureId, input);
-	}
+    /// <summary>
+    /// Get all fee structures (with fee head details) for a given standard.
+    /// </summary>
+    /// <param name="standardId">Standard identifier (UUID)</param>
+    /// <returns>Standard with its list of fee structures and fee head assignments</returns>
+    [HttpGet]
+    public Task<StandardFeeStructureResponse> GetByStandardAsync([FromQuery] Guid standardId)
+    {
+        return feeStructureAppService.GetByStandardAsync(standardId);
+    }
 
-	/// <summary>
-	/// Save Standard Fee Structures (Bulk)
-	/// </summary>
-	[HttpPut("{feeStructureMetadataId}/standard-fee-structures")]
-	public async Task SaveStandardFeeStructuresAsync(Guid feeStructureMetadataId, [FromBody] StandardFeeStructureSaveRequest input)
-	{
-		await feeStructureAppService.SaveStandardFeeStructuresAsync(feeStructureMetadataId, input);
-	}
-
-	/// <summary>
-	/// Get Fee Structure for a Particular Standard
-	/// </summary>
-	[HttpGet("standards/{standardId}")]
-	public async Task<StandardFeeStructureResponse> GetStandardFeeStructureAsync(Guid standardId)
-	{
-		return await feeStructureAppService.GetStandardFeeStructureAsync(standardId);
-	}
-
-	// create API to generate fee structures for all the mediums in given academic year based on the default fee structure of the school
-	/// <summary>
-	/// Generate Fee Structures for all Mediums in a Given Academic Year
-	/// </summary>
-	[HttpPost("generate")]
-	public async Task GenerateFeeStructuresAsync([FromQuery] Guid academicYearId)
-	{
-		await feeStructureAppService.GenerateFeeStructuresAsync(academicYearId);
-	}
+    /// <summary>
+    /// Lock a fee structure, preventing any further modifications or deletion.
+    /// </summary>
+    /// <param name="id">Fee structure identifier (UUID)</param>
+    [HttpPatch("{id}/lock")]
+    public Task LockAsync(Guid id)
+    {
+        return feeStructureAppService.LockAsync(id);
+    }
 }

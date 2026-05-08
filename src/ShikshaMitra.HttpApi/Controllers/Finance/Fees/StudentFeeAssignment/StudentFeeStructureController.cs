@@ -13,30 +13,25 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.StudentFeeAssignment;
 [Area("Finance")]
 [Route("api/student-fee-structure")]
 [Authorize]
-public class StudentFeeStructureController : AbpController
+public class StudentFeeStructureController(
+	IStudentFeeStructureAppService _studentFeeStructureAppService
+) : AbpController
 {
-	private readonly IStudentFeeStructureAppService _studentFeeStructureAppService;
-
-	public StudentFeeStructureController(IStudentFeeStructureAppService studentFeeStructureAppService)
-	{
-		_studentFeeStructureAppService = studentFeeStructureAppService;
-	}
-
 	/// <summary>
 	/// Assign fee structure to a student
 	/// </summary>
 	[HttpPost("assign")]
-	public Task<StudentFeeStructureResponseDto> AssignAsync([FromBody] AssignStudentFeeStructureDto input)
+	public async Task AssignAsync([FromBody] AssignStudentFeeStructureDto input)
 	{
-		return _studentFeeStructureAppService.AssignAsync(input);
+		await _studentFeeStructureAppService.AssignAsync(input);
 	}
 
 	/// <summary>
 	/// Get assigned fee structure of student
 	/// </summary>
-	[HttpGet("student/{studentId}")]
-	public Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId)
-	{
-		return _studentFeeStructureAppService.GetByStudentIdAsync(studentId);
-	}
+	//[HttpGet("student/{studentId}")]
+	//public Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId)
+	//{
+	//	//return _studentFeeStructureAppService.GetByStudentIdAsync(studentId);
+	//}
 }

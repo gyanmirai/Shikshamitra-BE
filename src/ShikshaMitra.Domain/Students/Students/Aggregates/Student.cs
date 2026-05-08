@@ -33,6 +33,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public StudentLifeCycleStatusEnum Status { get; private set; }
 	public StudentEnrollmentApprovalState AdmissionApprovalStatus { get; private set; }
 	public string? AdmissionApprovalRemarks { get; private set; }
+	public Guid? FeeStructureId { get; set; }
 
 	// Navigation properties to aggregate parts (1:1 relationships)
 	public StudentAdditionalDetail? AdditionalDetail { get; private set; }
@@ -541,6 +542,11 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		FamilyDetail ??= new StudentFamilyDetail(Id, TenantId);
 		FamilyDetail.UpdateFamilyInformation(fatherDetails, motherDetails, guardianDetails, siblingStudentIds);
 		AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.Family);
+	}
+
+	public void AssignFeeStructure(Guid feeStructureId)
+	{
+		FeeStructureId = feeStructureId;
 	}
 
 	private void EnsureAdditionalDetailExists()

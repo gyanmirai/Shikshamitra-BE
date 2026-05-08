@@ -3669,6 +3669,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<bool>("IsOptional")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsRefundable")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("LastModificationTime");
@@ -3676,6 +3679,12 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("LastModifierId")
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
+
+                    b.Property<int?>("PayableMonth")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PayableYear")
+                        .HasColumnType("integer");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
@@ -3751,9 +3760,6 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<Guid?>("ReceiptBookId")
                         .HasColumnType("uuid");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")

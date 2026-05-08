@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.Finance.Collections;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -24,4 +25,7 @@ public class FeeHeadAssignmentRequest
 	public double Amount { get; set; }
 	public bool IsOneTime { get; set; }
 	public bool IsOptional { get; set; }
+	public bool IsRefundable { get; set; }
+	public MonthEnum PayableMonth { get; set; }
+	public int PayableYear { get; set; }
 }

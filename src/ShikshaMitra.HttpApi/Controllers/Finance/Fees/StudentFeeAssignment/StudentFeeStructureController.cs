@@ -1,9 +1,9 @@
-﻿using System;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
+using System;
+using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -14,7 +14,7 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.StudentFeeAssignment;
 [Route("api/student-fee-structure")]
 [Authorize]
 public class StudentFeeStructureController(
-	IStudentFeeStructureAppService _studentFeeStructureAppService
+	IStudentFeeStructureAppService studentFeeStructureAppService
 ) : AbpController
 {
 	/// <summary>
@@ -23,7 +23,7 @@ public class StudentFeeStructureController(
 	[HttpPost("assign")]
 	public async Task AssignAsync([FromBody] AssignStudentFeeStructureDto input)
 	{
-		await _studentFeeStructureAppService.AssignAsync(input);
+		await studentFeeStructureAppService.AssignAsync(input);
 	}
 
 	/// <summary>
@@ -34,4 +34,10 @@ public class StudentFeeStructureController(
 	//{
 	//	//return _studentFeeStructureAppService.GetByStudentIdAsync(studentId);
 	//}
+
+	[HttpGet]
+	public Task GetAsync()
+	{
+		throw new NotImplementedException();
+	}
 }

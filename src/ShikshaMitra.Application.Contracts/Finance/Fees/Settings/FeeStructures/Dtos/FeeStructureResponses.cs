@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Finance.Setting;
+﻿using ShikshaMitra.Finance.Collections;
+using ShikshaMitra.Finance.Setting;
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
@@ -22,7 +23,6 @@ public class FeeStructureDetailsResponse : EntityDto<Guid>
     public string MediumName { get; set; }
     public Guid? ReceiptBookId { get; set; }
     public string? ReceiptBookName { get; set; }
-    public FeeStructureMetadataStatus Status { get; set; }
 }
 
 public class FeeStructureMetadataListResponse
@@ -44,7 +44,8 @@ public class StandardFeeStructureResponse
 public class StandardFeeStructureResponseItem : EntityDto<Guid>
 {
     public string Name { get; set; }
-    public List<FeeHeadAssignmentResponse> FeeHeads { get; set; }
+	public FeeStructureStatus Status { get; set; }
+	public List<FeeHeadAssignmentResponse> FeeHeads { get; set; }
 }
 
 public class FeeHeadAssignmentResponse
@@ -55,4 +56,13 @@ public class FeeHeadAssignmentResponse
     public double Amount { get; set; }
     public bool IsOneTime { get; set; }
     public bool IsOptional { get; set; }
+	public bool IsRefundable { get; set; }
+	public MonthEnum? PayableMonth { get; set; }
+	public int? PayableYear { get; set; }
+}
+
+public class AcademicYearMonthItem
+{
+    public MonthEnum Month { get; set; }
+    public int Year { get; set; }
 }

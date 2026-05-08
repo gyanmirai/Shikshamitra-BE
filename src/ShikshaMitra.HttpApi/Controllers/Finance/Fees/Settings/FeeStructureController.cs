@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
@@ -70,5 +71,16 @@ public class FeeStructureController(IFeeStructureAppService feeStructureAppServi
     public Task LockAsync(Guid id)
     {
         return feeStructureAppService.LockAsync(id);
+    }
+
+    /// <summary>
+    /// Returns an ordered list of month-year pairs spanning the given academic year's start and end dates.
+    /// </summary>
+    /// <param name="academicYearId">Academic year identifier (UUID)</param>
+    /// <returns>Ordered list of month and year pairs from the academic year's start month to end month</returns>
+    [HttpGet("academic-year-months")]
+    public Task<List<AcademicYearMonthItem>> GetMonthsByAcademicYearAsync([FromQuery] Guid academicYearId)
+    {
+        return feeStructureAppService.GetMonthsByAcademicYearAsync(academicYearId);
     }
 }

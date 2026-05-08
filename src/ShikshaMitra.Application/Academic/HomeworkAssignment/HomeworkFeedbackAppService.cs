@@ -140,7 +140,9 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 				HomeworkType = homeworkTypeName,
 				SubmissionType = homework.SubmissionType.ToString(),
 				SubmissionDate = submission?.SubmissionDate?.ToString("dd-MM-yyyy"),
-				DueDate = homework.DueDate?.ToString("dd-MM-yyyy") ?? string.Empty,
+				DueDate = homework.DueDate?.ToString("dd-MM-yyyy")
+					?? homework.DivisionSchedules.FirstOrDefault(ds => ds.DivisionId == filter.DivisionId)?.DueDate.ToString("dd-MM-yyyy")
+					?? string.Empty,
 				Marks = submission?.Marks,
 				TotalMarks = submission?.TotalMarks,
 				Feedback = submission?.Feedback,

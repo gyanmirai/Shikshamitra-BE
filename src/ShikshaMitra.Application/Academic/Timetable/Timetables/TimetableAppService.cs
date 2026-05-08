@@ -96,6 +96,9 @@ public class TimetableAppService(
                     ElectiveGroupName = slot.ElectiveGroupId.HasValue
                         ? electiveGroups.FirstOrDefault(eg => eg.Id == slot.ElectiveGroupId.Value)?.Name
                         : null,
+                    ElectiveGroupColor = slot.ElectiveGroupId.HasValue
+                        ? electiveGroups.FirstOrDefault(eg => eg.Id == slot.ElectiveGroupId.Value)?.Color
+                        : null,
                     Subjects = slot.Subjects.Select(sub =>
                     {
                         var subject = subjects.FirstOrDefault(s => s.Id == sub.SubjectId);

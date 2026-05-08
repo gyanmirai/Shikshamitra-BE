@@ -157,6 +157,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 			ClassId = filter.ClassId.ToString(),
 			DivisionId = filter.DivisionId.ToString(),
 			SubjectId = filter.SubjectId.ToString(),
+			DueDate = divisionSchedule.DueDate.ToString("dd-MM-yyyy"),
 			Data = submissionDtos
 		};
 	}

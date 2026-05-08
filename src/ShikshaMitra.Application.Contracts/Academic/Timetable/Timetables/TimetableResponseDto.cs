@@ -47,6 +47,7 @@ public class TimetableSlotResponseDto
     public Curriculum.SubjectType? SubjectType { get; set; }
     public Guid? ElectiveGroupId { get; set; }
     public string? ElectiveGroupName { get; set; }
+    public string? ElectiveGroupColor { get; set; }
     public List<TimetableSubjectResponseDto> Subjects { get; set; } = [];
 }
 

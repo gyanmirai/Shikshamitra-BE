@@ -88,4 +88,11 @@ public class ExamController(
     {
         return await examAppService.GetListAsync(input);
     }
+
+    [HttpPut("{examId}/status")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_ScheduleExam.Add)]
+    public async Task ChangeStatusAsync(Guid examId, [FromBody] ChangeExamStatusDto input)
+    {
+        await examAppService.ChangeStatusAsync(examId, input.Status);
+    }
 }

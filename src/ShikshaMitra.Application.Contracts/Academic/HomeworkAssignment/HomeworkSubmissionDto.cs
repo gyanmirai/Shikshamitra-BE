@@ -8,6 +8,7 @@ namespace ShikshaMitra.Academic.HomeworkAssignment;
 public class HomeworkSubmissionDto
 {
 	public string Id { get; set; } = string.Empty;
+	public Guid StudentId { get; set; }
 	public string RollNumber { get; set; } = string.Empty;
 	public string GrNumber { get; set; } = string.Empty;
 	public string StudentName { get; set; } = string.Empty;

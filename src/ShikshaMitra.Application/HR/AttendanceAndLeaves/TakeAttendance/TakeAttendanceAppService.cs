@@ -448,20 +448,20 @@ public class TakeAttendanceAppService(
 
 	private static DateTime ParseDate(string dateString)
 	{
+		if (DateTimeOffset.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto))
+		{
+			return DateTime.SpecifyKind(dto.Date, DateTimeKind.Unspecified);
+		}
+
 		if (DateTime.TryParseExact(dateString, "dd-MM-yyyy", CultureInfo.InvariantCulture,
 				DateTimeStyles.None, out var result))
 		{
-			return result;
+			return DateTime.SpecifyKind(result, DateTimeKind.Unspecified);
 		}
 
 		if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.None, out result))
 		{
-			return result;
-		}
-
-		if (DateTimeOffset.TryParse(dateString, out var dto))
-		{
-			return dto.DateTime;
+			return DateTime.SpecifyKind(result, DateTimeKind.Unspecified);
 		}
 
 		throw new BusinessException(HRErrorCodes.AttendanceInvalidDateFormat);

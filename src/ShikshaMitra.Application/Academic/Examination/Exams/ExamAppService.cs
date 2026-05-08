@@ -256,6 +256,13 @@ public class ExamAppService(
 		await examRepository.DeleteAsync(exam);
 	}
 
+	public async Task ChangeStatusAsync(Guid examId, ExamStatus status)
+	{
+		var exam = await examRepository.GetAsync(examId);
+		exam.ChangeStatus(status);
+		await examRepository.UpdateAsync(exam);
+	}
+
 	public async Task<ExamListResultDto> GetListAsync(GetExamsInput input)
 	{
 		var examQuery = await examRepository.WithDetailsAsync();
@@ -272,6 +279,7 @@ public class ExamAppService(
 
 		var pendingCount = await AsyncExecuter.CountAsync(baseQuery.Where(x => x.exam.Status == ExamStatus.Pending));
 		var publishedCount = await AsyncExecuter.CountAsync(baseQuery.Where(x => x.exam.Status == ExamStatus.Published));
+		var completedCount = await AsyncExecuter.CountAsync(baseQuery.Where(x => x.exam.Status == ExamStatus.Completed));
 
 		var query = baseQuery.Where(x => x.exam.Status == input.Status);
 
@@ -316,7 +324,8 @@ public class ExamAppService(
 			TotalCount = totalCount,
 			Items = items,
 			PendingCount = pendingCount,
-			PublishedCount = publishedCount
+			PublishedCount = publishedCount,
+			CompletedCount = completedCount
 		};
 	}
 }

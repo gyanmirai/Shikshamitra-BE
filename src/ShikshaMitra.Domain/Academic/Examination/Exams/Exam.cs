@@ -101,9 +101,15 @@ public class Exam : FullAuditedAggregateRoot<Guid>, IMultiTenant
         }
     }
 
-    public void UpdateExamDetails(string examName, Guid examTypeId, Guid standardId) {
+    public void UpdateExamDetails(string examName, Guid examTypeId, Guid standardId)
+    {
         ExamName = Check.NotNullOrWhiteSpace(examName, nameof(examName));
         ExamTypeId = examTypeId;
         StandardId = standardId;
+    }
+
+    public void ChangeStatus(ExamStatus newStatus)
+    {
+        Status = newStatus;
     }
 }

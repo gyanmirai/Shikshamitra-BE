@@ -2635,6 +2635,9 @@ namespace ShikshaMitra.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("IsDeleted");
 
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("LastModificationTime");
@@ -3774,9 +3777,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime>("AssignedOn")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -3821,9 +3821,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("LastModifierId")
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
-
-                    b.Property<Guid>("StandardId")
-                        .HasColumnType("uuid");
 
                     b.Property<Guid>("StudentId")
                         .HasColumnType("uuid");
@@ -8068,6 +8065,9 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
+
+                    b.Property<Guid?>("FeeStructureId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("FirstName")
                         .HasColumnType("text");

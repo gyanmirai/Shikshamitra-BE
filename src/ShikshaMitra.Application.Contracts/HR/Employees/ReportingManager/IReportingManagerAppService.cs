@@ -27,4 +27,9 @@ public interface IReportingManagerAppService : IApplicationService
 	/// <param name="managerId">The ID of the manager.</param>
 	/// <returns>The response containing manager details and list of employees under them.</returns>
 	Task<EmployeesByManagerResponseDto> GetEmployeesByManagerAsync(Guid managerId);
+
+	/// <summary>
+	/// Gets all employees reporting to the current signed-in manager.
+	/// </summary>
+	Task<EmployeesByManagerResponseDto> GetMyEmployeesByManagerAsync();
 }

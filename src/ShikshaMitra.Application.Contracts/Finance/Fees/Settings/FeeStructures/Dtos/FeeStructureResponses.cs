@@ -25,7 +25,7 @@ public class FeeStructureDetailsResponse : EntityDto<Guid>
     public FeeStructureMetadataStatus Status { get; set; }
 }
 
-public class FeeStructureListResponse
+public class FeeStructureMetadataListResponse
 {
     public long TotalCount { get; set; }
     public int CurrentPage { get; set; }

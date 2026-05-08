@@ -14,4 +14,8 @@ public static class ShikshaMitraDomainErrorCodes
 	// Reporting Manager error codes
 	public const string EmployeeCannotReportToSelf = "ShikshaMitra:00004";
 	public const string CircularReportingNotAllowed = "ShikshaMitra:00005";
+
+	// Fee Structure error codes
+	public const string FeeStructureAlreadyLocked = "ShikshaMitra:00006";
+	public const string FeeStructureIsLocked = "ShikshaMitra:00007";
 }

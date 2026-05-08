@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <Import Project="..\..\common.props" />
 
@@ -55,6 +55,7 @@
   </ItemGroup>
 
   <ItemGroup>
+
     <Folder Include="HR\AttendanceAndLeaves\Import\" />
     <Folder Include="HR\Employees\Payroll\Services\" />
     <Folder Include="HR\EventAndHolidays\Repositories\" />

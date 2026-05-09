@@ -11,6 +11,9 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Settings;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Students;
+using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.Standards;
@@ -30,6 +33,9 @@ public class ExamAppService(
 	IRepository<IdentityUser, Guid> identityUserRepository,
 	IRepository<AssignedSubject, Guid> assignmentRepository,
 	IRepository<ElectiveGroup, Guid> electiveGroupRepository,
+	IRepository<ExamMark, Guid> examMarkRepository,
+	IRepository<Student, Guid> studentRepository,
+	IRepository<GradingScale, Guid> gradingScaleRepository,
 	ExamManager examManager) : ApplicationService, IExamAppService
 {
 	public async Task<Guid> CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input)
@@ -326,6 +332,184 @@ public class ExamAppService(
 			PendingCount = pendingCount,
 			PublishedCount = publishedCount,
 			CompletedCount = completedCount
+		};
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.View)]
+	public async Task<GetExamMarksResponseDto> GetMarksAsync(GetExamMarksInput input)
+	{
+		var exam = await examRepository.GetAsync(input.ExamId, includeDetails: true);
+
+		var examSubject = exam.ExamSubjects.FirstOrDefault(s => s.SubjectId == input.SubjectId)
+			?? throw new UserFriendlyException("Subject not found in this exam");
+
+		// Students in this division (enrolled + approved)
+		var allStudents = await studentRepository.GetListAsync(s =>
+			s.DivisionId == input.DivisionId
+			&& s.Status == StudentLifeCycleStatusEnum.Enrolled
+			&& s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved
+			&& !s.IsDeleted);
+
+		// Apply search filter
+		if (!string.IsNullOrWhiteSpace(input.Search))
+		{
+			var q = input.Search.Trim().ToLower();
+			allStudents = allStudents.Where(s =>
+				($"{s.FirstName} {s.MiddleName} {s.LastName}").ToLower().Contains(q)
+				|| (s.GrNo?.ToString() ?? string.Empty).Contains(q)
+				|| (s.RollNo?.ToString() ?? string.Empty).Contains(q)).ToList();
+		}
+
+		allStudents = allStudents.OrderBy(s => s.RollNo).ToList();
+
+		var totalCount = allStudents.Count;
+		var totalPages = (int) Math.Ceiling(totalCount / (double) input.PageSize);
+		var pagedStudents = allStudents.Skip((input.Page - 1) * input.PageSize).Take(input.PageSize).ToList();
+
+		// Existing marks for this exam+subject+division
+		var existingMarks = await examMarkRepository.GetListAsync(m =>
+			m.ExamId == input.ExamId && m.SubjectId == input.SubjectId && m.DivisionId == input.DivisionId);
+		var marksLookup = existingMarks.ToDictionary(m => m.StudentId);
+
+		var isPublished = existingMarks.Any() && existingMarks.All(m => m.IsPublished);
+
+		// Grading scales
+		var gradingScales = await gradingScaleRepository.WithDetailsAsync();
+		var gradeRanges = (await AsyncExecuter.ToListAsync(gradingScales))
+			.SelectMany(gs => gs.GradeRanges)
+			.OrderByDescending(gr => gr.MinMarks)
+			.ToList();
+
+		string? GetGrade(double? marks, double totalMarks)
+		{
+			if (marks == null || totalMarks == 0) return null;
+			var pct = (marks.Value / totalMarks) * 100;
+			return gradeRanges.FirstOrDefault(gr => pct >= gr.MinMarks && pct <= gr.MaxMarks)?.Grade;
+		}
+
+		var items = pagedStudents.Select(student =>
+		{
+			marksLookup.TryGetValue(student.Id, out var mark);
+			var assigned = mark != null;
+			return new StudentExamMarksItemDto
+			{
+				StudentId = student.Id,
+				StudentName = $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim(),
+				GrNo = student.GrNo?.ToString(),
+				RollNo = student.RollNo?.ToString(),
+				ObtainedMarks = mark?.MarksObtained,
+				TotalMarks = examSubject.TotalMarks,
+				Grade = assigned ? GetGrade(mark!.MarksObtained, examSubject.TotalMarks ?? 0) : null,
+				Feedback = mark?.Feedback,
+				Status = assigned ? 1 : 0
+			};
+		}).ToList();
+
+		return new GetExamMarksResponseDto
+		{
+			ExamId = exam.Id,
+			IsMarksPublish = isPublished,
+			CurrentPage = input.Page,
+			PageSize = input.PageSize,
+			TotalCount = totalCount,
+			TotalPages = totalPages,
+			Items = items
+		};
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+	public async Task<UpdateStudentMarksResponseDto> UpdateStudentMarksAsync(Guid examId, Guid studentId, Guid subjectId, UpdateStudentMarksDto input)
+	{
+		var exam = await examRepository.GetAsync(examId, includeDetails: true);
+
+		var examSubject = exam.ExamSubjects.FirstOrDefault(s => s.SubjectId == subjectId)
+			?? throw new UserFriendlyException("Subject not found in this exam");
+
+		// Verify student exists
+		var student = await studentRepository.GetAsync(studentId);
+
+		// Check if marks are already published
+		var existing = (await examMarkRepository.GetListAsync(m =>
+			m.ExamId == examId && m.StudentId == studentId && m.SubjectId == subjectId))
+			.FirstOrDefault();
+
+		if (existing?.IsPublished == true)
+			throw new BusinessException("Academic:Exam:MarksAlreadyPublished", "Cannot update marks as they have already been published");
+
+		// Grading
+		var gradingScales = await gradingScaleRepository.WithDetailsAsync();
+		var gradeRanges = (await AsyncExecuter.ToListAsync(gradingScales))
+			.SelectMany(gs => gs.GradeRanges)
+			.OrderByDescending(gr => gr.MinMarks)
+			.ToList();
+
+		string? GetGrade(double marks, double totalMarks)
+		{
+			if (totalMarks == 0) return null;
+			var pct = (marks / totalMarks) * 100;
+			return gradeRanges.FirstOrDefault(gr => pct >= gr.MinMarks && pct <= gr.MaxMarks)?.Grade;
+		}
+
+		if (existing != null)
+		{
+			existing.Update(input.Marks, isAbsent: false, input.Feedback);
+			await examMarkRepository.UpdateAsync(existing, autoSave: true);
+		}
+		else
+		{
+			var mark = new ExamMark(
+				GuidGenerator.Create(),
+				examId,
+				studentId,
+				subjectId,
+				student.DivisionId!.Value,
+				input.Marks,
+				isAbsent: false,
+				input.Feedback,
+				CurrentTenant.Id);
+			await examMarkRepository.InsertAsync(mark, autoSave: true);
+		}
+
+		var grade = GetGrade(input.Marks, examSubject.TotalMarks ?? input.TotalMarks);
+
+		return new UpdateStudentMarksResponseDto
+		{
+			Message = "Marks updated successfully",
+			Marks = input.Marks,
+			TotalMarks = examSubject.TotalMarks ?? input.TotalMarks,
+			Grade = grade,
+			Feedback = input.Feedback
+		};
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+	public async Task<PublishMarksResponseDto> PublishMarksAsync(Guid examId, Guid divisionId)
+	{
+		var exam = await examRepository.GetAsync(examId);
+
+		var existingMarks = await examMarkRepository.GetListAsync(m =>
+			m.ExamId == examId && m.DivisionId == divisionId);
+
+		if (existingMarks.Count == 0)
+			throw new UserFriendlyException("No marks found for this exam and division");
+
+		if (existingMarks.All(m => m.IsPublished))
+			throw new BusinessException("Academic:Exam:MarksAlreadyPublished", "Marks have already been published for this exam and division");
+
+		foreach (var mark in existingMarks)
+			mark.Publish();
+
+		await examMarkRepository.UpdateManyAsync(existingMarks, autoSave: true);
+
+		var studentCount = existingMarks.Select(m => m.StudentId).Distinct().Count();
+
+		return new PublishMarksResponseDto
+		{
+			Message = "Marks published successfully for the division",
+			ExamId = examId,
+			DivisionId = divisionId,
+			PublishedAt = DateTime.UtcNow,
+			StudentsCount = studentCount
 		};
 	}
 }

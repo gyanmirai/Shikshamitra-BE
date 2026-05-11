@@ -1,5 +1,33 @@
 # Linux development notes
 
+## Copilot Testing Workflow — Activation Code: `957400 Authorization`
+
+When the user shares a curl command copied from the browser (which includes cookies, `authorization: Bearer ...`, and other headers), Copilot should:
+
+1. **Strip** the `authorization: Bearer ...` header entirely
+2. **Strip** all `-b '...'` cookie headers
+3. **Replace** the hostname with `https://localhost:44332`
+4. **Add** `-k` flag (skip SSL verification)
+5. **Do NOT add any Authorization header** — the `DevAutoAuthMiddleware` handles auth automatically
+
+**This workflow is only activated when the user says: `957400 Authorization logic`**
+
+### Example transformation
+
+**Original (from browser):**
+```bash
+curl 'https://stg-gyanmirai-be.azurewebsites.net/api/app/academic-year' \
+  -H 'authorization: Bearer eyJhbGci...' \
+  -b 'ARRAffinitySameSite=abc...'
+```
+
+**Transformed (for local testing):**
+```bash
+curl -sk 'https://localhost:44332/api/app/academic-year'
+```
+
+---
+
 ## Environment
 
 - **OS:** Pop!_OS / Ubuntu 24.04 (x64)
@@ -127,6 +155,70 @@ DOTNET_ROLL_FORWARD=LatestMajor dotnet ef database update \
 This uses `ShikshaMitraDbContextFactory` which reads directly from `DbMigrator/appsettings.json` — no launchSettings involved.
 
 > **Note:** This only applies schema changes. It does **not** run data seeders (OpenIddict apps, admin user, etc.). Use DbMigrator for initial setup.
+
+---
+
+## 3. Testing APIs Without a Token (Dev Auto-Auth Middleware)
+
+During local development, the server automatically injects a Bearer token and tenant header into every request that has no `Authorization` header. You never need to manually obtain or pass a token.
+
+### How it works
+
+- Middleware: `src/ShikshaMitra.HttpApi.Host/Middleware/DevAutoAuthMiddleware.cs`
+- Only active when `ASPNETCORE_ENVIRONMENT=Development` (already set in `launchSettings.json`)
+- Authenticates as `admin` in the `ddvs` tenant on every unauthenticated request
+- Token is cached in memory and refreshed automatically before expiry
+
+### Start the server
+
+```bash
+cd src/ShikshaMitra.HttpApi.Host && dotnet run
+# or from repo root:
+dotnet run --project src/ShikshaMitra.HttpApi.Host
+```
+
+Default URL: `https://localhost:44332`
+
+### Test any endpoint — no token needed
+
+```bash
+curl -sk https://localhost:44332/api/app/academic-year
+```
+
+That's it. No `Authorization` header required. You will get a real `200` response authenticated as the `ddvs` admin.
+
+### Configuration (appsettings.Development.json)
+
+```json
+"DevAutoAuth": {
+  "Username": "admin",
+  "Password": "Temp@123",
+  "Tenant": "ddvs",
+  "ClientId": "ShikshaMitra_App"
+}
+```
+
+To change the user or tenant, edit `src/ShikshaMitra.HttpApi.Host/appsettings.Development.json` and restart the server.
+
+### Skip auto-auth for a specific request
+
+Pass your own `Authorization` header and the middleware will step aside:
+
+```bash
+TOKEN=$(curl -sk https://localhost:44332/connect/token \
+  -H "__tenant: ddvs" \
+  -d "grant_type=password&username=admin&password=Temp%40123&client_id=ShikshaMitra_App&scope=openid+profile+email+roles+offline_access+ShikshaMitra" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+curl -sk https://localhost:44332/api/app/academic-year \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Notes
+
+- The middleware skips `/connect/*` paths (token endpoint) to avoid recursion
+- It has no effect in `Staging` or `Production` — only `Development`
+- `__tenant` is sent as an **HTTP header** to the token endpoint (not a form field)
 
 ---
 

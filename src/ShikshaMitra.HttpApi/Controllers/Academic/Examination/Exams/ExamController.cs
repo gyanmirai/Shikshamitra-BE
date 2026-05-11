@@ -95,4 +95,25 @@ public class ExamController(
     {
         await examAppService.ChangeStatusAsync(examId, input.Status);
     }
+
+    [HttpGet("marks")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.View)]
+    public async Task<GetExamMarksResponseDto> GetMarksAsync([FromQuery] GetExamMarksInput input)
+    {
+        return await examAppService.GetMarksAsync(input);
+    }
+
+    [HttpPatch("{examId}/students/{studentId}/marks")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+    public async Task<UpdateStudentMarksResponseDto> UpdateStudentMarksAsync(Guid examId, Guid studentId, [FromQuery] Guid subjectId, [FromBody] UpdateStudentMarksDto input)
+    {
+        return await examAppService.UpdateStudentMarksAsync(examId, studentId, subjectId, input);
+    }
+
+    [HttpPatch("{examId}/publish-marks")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+    public async Task<PublishMarksResponseDto> PublishMarksAsync(Guid examId, [FromQuery] Guid divisionId)
+    {
+        return await examAppService.PublishMarksAsync(examId, divisionId);
+    }
 }

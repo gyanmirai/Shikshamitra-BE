@@ -16,7 +16,7 @@ public class ChapterProgressController(
 ) : AbpController
 {
 	[HttpGet]
-	[Route("api/subjects")]
+	[Route("api/class-management/chapter-progress/subjects")]
 	[ProducesResponseType(typeof(List<ClassDivisionSubjectDto>), 200)]
 	[ProducesResponseType(400)]
 	[ProducesResponseType(401)]
@@ -51,7 +51,7 @@ public class ChapterProgressController(
 	}
 
 	[HttpGet]
-	[Route("api/chapters/progress")]
+	[Route("api/class-management/chapter-progress")]
 	[ProducesResponseType(typeof(PaginatedChapterProgressResponseDto), 200)]
 	[ProducesResponseType(400)]
 	[ProducesResponseType(401)]
@@ -96,7 +96,7 @@ public class ChapterProgressController(
 	}
 
 	[HttpPut]
-	[Route("api/chapters/{chapterId}/progress")]
+	[Route("api/class-management/chapters/{chapterId}/progress")]
 	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
 	[ProducesResponseType(400)]
 	[ProducesResponseType(401)]

@@ -10,7 +10,7 @@ using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Academic.ClassManagement;
 
-[Route("api/class-teachers/assignments")]
+[Route("api/class-management/class-teacher-assignments")]
 [Authorize]
 [ApiController]
 public class ClassTeacherAssignmentController(

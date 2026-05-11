@@ -16,7 +16,7 @@ public class TeacherAssignmentController(
 ) : AbpController
 {
 	[HttpGet]
-	[Route("api/teachers/assignments")]
+	[Route("api/class-management/teacher-assignments")]
 	[ProducesResponseType(typeof(TeacherAssignmentGridResponseDto), 200)]
 	[ProducesResponseType(400)]
 	[ProducesResponseType(401)]
@@ -45,7 +45,7 @@ public class TeacherAssignmentController(
 	}
 
 	[HttpPut]
-	[Route("api/teachers/assignments")]
+	[Route("api/class-management/teacher-assignments")]
 	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
 	[ProducesResponseType(400)]
 	[ProducesResponseType(401)]
@@ -58,7 +58,7 @@ public class TeacherAssignmentController(
 	}
 
 	[HttpGet]
-	[Route("api/teachers")]
+	[Route("api/class-management/teachers")]
 	[ProducesResponseType(typeof(List<TeacherInfoDto>), 200)]
 	[ProducesResponseType(400)]
 	[ProducesResponseType(401)]

@@ -9,7 +9,7 @@ using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Academic.ClassManagement;
 
-[Route("api/electives/assignments")]
+[Route("api/class-management/student-elective-assignments")]
 [Authorize]
 [ApiController]
 public class StudentElectiveAssignmentController(

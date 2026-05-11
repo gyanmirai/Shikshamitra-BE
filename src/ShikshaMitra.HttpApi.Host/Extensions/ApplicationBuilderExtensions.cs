@@ -9,4 +9,13 @@ public static class ApplicationBuilderExtensions
 	{
 		return app.UseMiddleware<ApiProblemDetailsMiddleware>();
 	}
+
+	/// <summary>
+	/// Registers <see cref="DevAutoAuthMiddleware"/> for the current pipeline.
+	/// Only call this inside an <c>IsDevelopment()</c> guard.
+	/// </summary>
+	public static IApplicationBuilder UseDevAutoAuth(this IApplicationBuilder app)
+	{
+		return app.UseMiddleware<DevAutoAuthMiddleware>();
+	}
 }

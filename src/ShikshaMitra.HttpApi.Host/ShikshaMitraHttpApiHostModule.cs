@@ -23,6 +23,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Volo.Abp;
@@ -97,6 +98,17 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		var hostingEnvironment = context.Services.GetHostingEnvironment();
 		var services = context.Services;
 		services.AddHttpClient();
+
+		if (hostingEnvironment.IsDevelopment())
+		{
+			// DevAutoAuthMiddleware uses this named client to call the local OpenIddict token
+			// endpoint, which may use a self-signed certificate in development.
+			services.AddHttpClient("DevAutoAuth")
+				.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+				{
+					ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+				});
+		}
 
 		ConfigureAuthentication(context);
 		ConfigureBundles();
@@ -520,6 +532,12 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		app.UseStaticFiles();
 		app.UseRouting();
 		app.UseCors();
+
+		if (env.IsDevelopment())
+		{
+			app.UseDevAutoAuth();
+		}
+
 		app.UseAuthentication();
 		app.UseAbpOpenIddictValidation();
 

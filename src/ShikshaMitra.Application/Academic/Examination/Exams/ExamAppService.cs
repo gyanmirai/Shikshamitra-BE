@@ -374,7 +374,7 @@ public class ExamAppService(
 		var isPublished = existingMarks.Any() && existingMarks.All(m => m.IsPublished);
 
 		// Grading scales
-		var gradingScales = await gradingScaleRepository.WithDetailsAsync();
+		var gradingScales = await gradingScaleRepository.WithDetailsAsync(gs => gs.GradeRanges);
 		var gradeRanges = (await AsyncExecuter.ToListAsync(gradingScales))
 			.SelectMany(gs => gs.GradeRanges)
 			.OrderByDescending(gr => gr.MinMarks)
@@ -437,7 +437,7 @@ public class ExamAppService(
 			throw new BusinessException("Academic:Exam:MarksAlreadyPublished", "Cannot update marks as they have already been published");
 
 		// Grading
-		var gradingScales = await gradingScaleRepository.WithDetailsAsync();
+		var gradingScales = await gradingScaleRepository.WithDetailsAsync(gs => gs.GradeRanges);
 		var gradeRanges = (await AsyncExecuter.ToListAsync(gradingScales))
 			.SelectMany(gs => gs.GradeRanges)
 			.OrderByDescending(gr => gr.MinMarks)

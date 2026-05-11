@@ -63,6 +63,21 @@ public static class ShikshaMitraSubModulePermissions
 	public const string FinanceReports = $"{ShikshaMitraModulePermissions.Finance}.Reports";
 	public const string FinanceNotification = $"{ShikshaMitraModulePermissions.Finance}.Notification";
 	public const string FinanceSettings = $"{ShikshaMitraModulePermissions.Finance}.Settings";
+	public const string Fees = $"{ShikshaMitraModulePermissions.Finance}.Fees";
+	public const string FeesSettings = $"{ShikshaMitraModulePermissions.Finance}.Fees.Settings";
+	public const string Accounts = $"{ShikshaMitraModulePermissions.Finance}.Accounts";
+	public const string IncomeAndExpense = $"{ShikshaMitraModulePermissions.Finance}.IncomeAndExpense";
+	public const string AccountsSettings = $"{ShikshaMitraModulePermissions.Finance}.Accounts.Settings";
+	public const string FinanceSettingsFeeCategory = $"{ShikshaMitraModulePermissions.Finance}.Settings.FeeCategory";
+	public const string FinanceSettingsFeeHead = $"{ShikshaMitraModulePermissions.Finance}.Settings.FeeHead";
+	public const string FinanceSettingsReceiptBook = $"{ShikshaMitraModulePermissions.Finance}.Settings.ReceiptBook";
+	public const string FinanceSettingsPaymentTerms = $"{ShikshaMitraModulePermissions.Finance}.Settings.PaymentTerms";
+	public const string FinanceSettingsFeeStructure = $"{ShikshaMitraModulePermissions.Finance}.Settings.FeeStructure";
+	public const string FinanceSettingsConcessionType = $"{ShikshaMitraModulePermissions.Finance}.Settings.ConcessionType";
+	public const string FinanceSettingsChargeCategory = $"{ShikshaMitraModulePermissions.Finance}.Settings.ChargeCategory";
+	public const string FinanceSettingsExpenseCategory = $"{ShikshaMitraModulePermissions.Finance}.Settings.ExpenseCategory";
+	public const string FinanceSettingsIncomeCategory = $"{ShikshaMitraModulePermissions.Finance}.Settings.IncomeCategory";
+	public const string FinanceSettingsBankAccount = $"{ShikshaMitraModulePermissions.Finance}.Settings.BankAccount";
 
 	// Communication module submodules
 	public const string CommunicationDashboard = $"{ShikshaMitraModulePermissions.Communication}.Dashboard";
@@ -202,6 +217,21 @@ public static class ShikshaMitraSubModulePermissions
 		FinanceReports,
 		FinanceNotification,
 		FinanceSettings,
+		Fees,
+		FeesSettings,
+		Accounts,
+		IncomeAndExpense,
+		AccountsSettings,
+		FinanceSettingsFeeCategory,
+		FinanceSettingsFeeHead,
+		FinanceSettingsReceiptBook,
+		FinanceSettingsPaymentTerms,
+		FinanceSettingsFeeStructure,
+		FinanceSettingsConcessionType,
+		FinanceSettingsChargeCategory,
+		FinanceSettingsExpenseCategory,
+		FinanceSettingsIncomeCategory,
+		FinanceSettingsBankAccount,
 		CommunicationDashboard,
 		Announcements,
 		CommunicationNotification,
@@ -335,6 +365,21 @@ public static class ShikshaMitraSubModulePermissions
 		{ FinanceReports, $"{DisplayNamePrefix}.FinanceReports" },
 		{ FinanceNotification, $"{DisplayNamePrefix}.FinanceNotification" },
 		{ FinanceSettings, $"{DisplayNamePrefix}.FinanceSettings" },
+		{ Fees, $"{DisplayNamePrefix}.Fees" },
+		{ FeesSettings, $"{DisplayNamePrefix}.FeesSettings" },
+		{ Accounts, $"{DisplayNamePrefix}.Accounts" },
+		{ IncomeAndExpense, $"{DisplayNamePrefix}.IncomeAndExpense" },
+		{ AccountsSettings, $"{DisplayNamePrefix}.AccountsSettings" },
+		{ FinanceSettingsFeeCategory, $"{DisplayNamePrefix}.FinanceSettingsFeeCategory" },
+		{ FinanceSettingsFeeHead, $"{DisplayNamePrefix}.FinanceSettingsFeeHead" },
+		{ FinanceSettingsReceiptBook, $"{DisplayNamePrefix}.FinanceSettingsReceiptBook" },
+		{ FinanceSettingsPaymentTerms, $"{DisplayNamePrefix}.FinanceSettingsPaymentTerms" },
+		{ FinanceSettingsFeeStructure, $"{DisplayNamePrefix}.FinanceSettingsFeeStructure" },
+		{ FinanceSettingsConcessionType, $"{DisplayNamePrefix}.FinanceSettingsConcessionType" },
+		{ FinanceSettingsChargeCategory, $"{DisplayNamePrefix}.FinanceSettingsChargeCategory" },
+		{ FinanceSettingsExpenseCategory, $"{DisplayNamePrefix}.FinanceSettingsExpenseCategory" },
+		{ FinanceSettingsIncomeCategory, $"{DisplayNamePrefix}.FinanceSettingsIncomeCategory" },
+		{ FinanceSettingsBankAccount, $"{DisplayNamePrefix}.FinanceSettingsBankAccount" },
 
 		// Communication module submodules
 		{ CommunicationDashboard, $"{DisplayNamePrefix}.CommunicationDashboard" },

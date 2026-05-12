@@ -104,6 +104,27 @@ public class EfCoreEmployeePayrollComponentRepository
 			.ToListAsync(cancellationToken);
 	}
 
+	public async Task<List<EmployeePayrollComponent>> GetByComponentIdAsync(
+		Guid componentId,
+		bool isEarning,
+		CancellationToken cancellationToken = default)
+	{
+		var dbContext = await GetDbContextAsync();
+		var query = from component in dbContext.EmployeePayrollComponents
+					join employee in dbContext.Set<Employee>() on component.EmployeeId equals employee.Id
+					where component.ComponentId == componentId && component.IsEarning == isEarning
+					select new { Component = component, EmployeeTenantId = employee.TenantId };
+
+		var rows = await query.ToListAsync(cancellationToken);
+		var currentTenantId = CurrentTenant.Id;
+		if (currentTenantId.HasValue)
+		{
+			rows = rows.Where(x => x.EmployeeTenantId == currentTenantId).ToList();
+		}
+
+		return rows.Select(x => x.Component).ToList();
+	}
+
 	public async Task DeleteByEmployeeIdAsync(
 		Guid employeeId,
 		bool isEarning,

@@ -22,6 +22,8 @@ public class EmployeePersonalInfoDto : EntityDto<Guid>
 	/// </summary>
 	public string FullName { get; set; } = string.Empty;
 
+	public Guid? UserId { get; set; }
+
 	#endregion
 
 	#region Basic Information

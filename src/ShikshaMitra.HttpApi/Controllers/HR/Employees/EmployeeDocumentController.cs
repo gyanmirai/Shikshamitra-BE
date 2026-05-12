@@ -62,7 +62,7 @@ public class EmployeeDocumentController(
 	public async Task<EmployeeDocumentListResponse> GetListAsync(
 		[FromRoute, Required] Guid employeeId,
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
-		[FromQuery, Range(1, 100)] int pageSize = 10,
+		[FromQuery, Range(1, 500)] int pageSize = 10,
 		[FromQuery] string? search = null)
 	{
 		await authorizationService.CheckEmployeeAccessAsync(employeeId);

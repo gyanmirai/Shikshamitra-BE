@@ -16,6 +16,15 @@ namespace ShikshaMitra.Controllers.HR.AttendanceAndLeaves;
 [Authorize]
 public class AttendanceConfigurationController(IAttendanceConfigurationAppService attendanceConfigurationAppService) : AbpControllerBase
 {
+	[HttpGet]
+	[ProducesResponseType(typeof(AttendanceConfigurationResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	public virtual async Task<AttendanceConfigurationResponse> GetAsync(
+		[FromQuery, Required] Guid academicYearId)
+	{
+		return await attendanceConfigurationAppService.GetAsync(academicYearId);
+	}
+
 	[HttpPost]
 	[ProducesResponseType(typeof(AttendanceConfigurationResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]

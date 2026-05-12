@@ -513,13 +513,13 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 		ConfigureSmtpPassword(context.ServiceProvider);
 
-		// Enforce RFC 7807 ProblemDetails for all /api endpoints.
-		app.UseApiProblemDetails();
-
 		if (env.IsDevelopment())
 		{
 			app.UseDeveloperExceptionPage();
 		}
+
+		// Enforce RFC 7807 ProblemDetails for all /api endpoints.
+		app.UseApiProblemDetails();
 
 		app.UseAbpRequestLocalization();
 

@@ -47,4 +47,7 @@ public class AttendanceConfigurationResponse
 {
 	public bool Success { get; set; }
 	public string Message { get; set; } = string.Empty;
+	public AttendanceDailyRulesRequest? DailyRules { get; set; }
+	public AttendanceLateEarlyRulesRequest? LateEarlyRules { get; set; }
+	public AttendanceOvertimeRulesRequest? Overtime { get; set; }
 }

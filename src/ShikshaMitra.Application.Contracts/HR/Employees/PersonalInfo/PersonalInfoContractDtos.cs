@@ -128,6 +128,8 @@ public class PersonalInfoResponse : PersonalInfoRequest
 	[Required]
 	public string FullName { get; set; } = string.Empty;
 
+	public Guid? UserId { get; set; }
+
 	/// <summary>
 	/// True when the employee has a profile picture stored in blob storage.
 	/// Use GET /api/employees/{id}/profile-picture to download.

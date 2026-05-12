@@ -30,7 +30,7 @@ public class LeavePoliciesController : AbpControllerBase
 	public virtual async Task<LeavePolicyListResponse> GetListAsync(
 		[FromQuery, Required] Guid academicYearId,
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
-		[FromQuery, Range(1, 100)] int pageSize = 10,
+		[FromQuery, Range(1, 500)] int pageSize = 10,
 		[FromQuery] string? search = null,
 		CancellationToken cancellationToken = default)
 	{

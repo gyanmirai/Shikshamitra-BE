@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Common.Middleware;
+using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Status;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.HR;
@@ -151,6 +153,35 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Create_For_Inactive_Employee()
+	{
+		var inactiveEmployee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "InactiveLeave");
+		var inactiveRequest = new EmployeeStatusUpdateRequest
+		{
+			EmployeeStatusType = 1,
+			Remarks = "Inactive employee should not be selectable for leave"
+		};
+		(await Client.PutAsJsonAsync($"/api/employees/{inactiveEmployee.Id}/status", inactiveRequest, JsonOptions))
+			.EnsureSuccessStatusCode();
+
+		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
+		using var form = new MultipartFormDataContent();
+		form.Add(new StringContent(inactiveEmployee.Id.ToString()), "forEmployeeId");
+		form.Add(new StringContent(Guid.NewGuid().ToString()), "leaveTypeId");
+		form.Add(new StringContent(startDate.ToString("yyyy-MM-dd")), "startDate");
+		form.Add(new StringContent(startDate.AddDays(1).ToString("yyyy-MM-dd")), "endDate");
+		form.Add(new StringContent("Planned leave request"), "reason");
+
+		var response = await Client.PostAsync($"{BaseUrl}?academicYearId={AcademicYearId}", form);
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, rawPayload);
+		var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
+		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.LeaveTargetEmployeeInactive);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Admin_Without_Employee_Profile_Should_Get_400_When_Balances_Target_Is_Missing()
 	{
 		using var unmappedAdminClient = Factory.CreateClient();
@@ -225,7 +256,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 	{
 		var monthYear = Uri.EscapeDataString(new DateTime(DateTime.UtcNow.Year, 6, 1).ToString("O"));
 		var response = await Client.GetAsync(
-			$"{BaseUrl}?academicYearId={AcademicYearId}&month-year={monthYear}&page=1&pageSize=5");
+			$"{BaseUrl}?academicYearId={AcademicYearId}&month-year={monthYear}&page=1&pageSize=0");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 	}

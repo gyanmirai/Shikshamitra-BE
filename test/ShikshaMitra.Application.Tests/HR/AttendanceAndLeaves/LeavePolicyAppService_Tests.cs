@@ -87,6 +87,41 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 	}
 
 	[Fact]
+	public async Task Should_Update_Accrual_Policy_Type()
+	{
+		var academicYearId = await GetAcademicYearIdAsync();
+		var leaveType = await CreateLeaveTypeAsync($"LT-{Guid.NewGuid():N}");
+
+		var created = await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
+		{
+			PolicyTitle = $"Policy-{Guid.NewGuid():N}",
+			LeaveType = leaveType.Id,
+			AccrualPolicyType = "Monthly",
+			LeaveCount = 12,
+			PaidType = "Paid",
+			CarryForward = false,
+			EncashmentAllowed = false,
+			RequiresApproval = true
+		});
+
+		var updated = await _leavePolicyAppService.UpdateLeavePolicyAsync(created.Id, new LeavePolicyUpdateRequest
+		{
+			PolicyTitle = created.PolicyTitle,
+			LeaveType = leaveType.Id,
+			AccrualPolicyType = "Yearly",
+			LeaveCount = created.LeaveCount,
+			PaidType = created.PaidType,
+			CarryForward = created.CarryForward,
+			EncashmentAllowed = false,
+			RequiresApproval = created.RequiresApproval
+		});
+
+		updated.AccrualPolicyType.ShouldBe("Yearly");
+		var detail = await _leavePolicyAppService.GetLeavePolicyByIdAsync(created.Id);
+		detail.AccrualPolicyType.ShouldBe("Yearly");
+	}
+
+	[Fact]
 	public async Task Should_Require_Encashment_Timing_When_Encashment_Enabled()
 	{
 		var academicYearId = await GetAcademicYearIdAsync();

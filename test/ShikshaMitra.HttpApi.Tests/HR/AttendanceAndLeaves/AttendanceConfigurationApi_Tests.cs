@@ -33,6 +33,32 @@ public class AttendanceConfigurationApi_Tests : ShikshaMitraApiTestBase
 		body.ShouldNotBeNull();
 		body.Success.ShouldBeTrue();
 		body.Message.ShouldBe("Attendance configuration saved successfully");
+		body.DailyRules.ShouldNotBeNull();
+		body.DailyRules.HoursBasedPayPercentage.ShouldBe(80);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Get_Saved_Attendance_Configuration()
+	{
+		var request = BuildValidRequest();
+		request.DailyRules.HoursBasedPayPercentage = 72;
+
+		var saveResponse = await Client.PostAsJsonAsync($"{Url}?academicYearId={AcademicYearId}", request, JsonOptions);
+		saveResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var getResponse = await Client.GetAsync($"{Url}?academicYearId={AcademicYearId}");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var body = await getResponse.Content.ReadFromJsonAsync<AttendanceConfigurationResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Success.ShouldBeTrue();
+		body.DailyRules.ShouldNotBeNull();
+		body.DailyRules.HoursBasedPayPercentage.ShouldBe(72);
+		body.LateEarlyRules.ShouldNotBeNull();
+		body.LateEarlyRules.PenaltyType.ShouldBe("deduct_half_day");
+		body.Overtime.ShouldNotBeNull();
+		body.Overtime.Rate.ShouldBe("1.5x");
 	}
 
 	[Fact]

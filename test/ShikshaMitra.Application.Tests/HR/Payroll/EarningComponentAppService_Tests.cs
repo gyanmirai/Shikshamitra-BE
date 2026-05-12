@@ -1,10 +1,18 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.TenantSettings;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Guids;
+using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
 using Volo.Abp.Validation;
 using Xunit;
 
@@ -17,11 +25,25 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
 {
     private readonly IEarningComponentAppService _earningComponentAppService;
     private readonly IDeductionComponentAppService _deductionComponentAppService;
+    private readonly IEmployeePersonalInfoAppService _employeePersonalInfoAppService;
+    private readonly IEmployeePayrollAppService _employeePayrollAppService;
+    private readonly IEmployeePayrollComponentRepository _employeePayrollComponentRepository;
+    private readonly IIdentityRoleRepository _roleRepository;
+    private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+    private readonly ICurrentTenant _currentTenant;
+    private readonly IGuidGenerator _guidGenerator;
 
     public EarningComponentAppService_Tests()
     {
         _earningComponentAppService = GetRequiredService<IEarningComponentAppService>();
         _deductionComponentAppService = GetRequiredService<IDeductionComponentAppService>();
+        _employeePersonalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
+        _employeePayrollAppService = GetRequiredService<IEmployeePayrollAppService>();
+        _employeePayrollComponentRepository = GetRequiredService<IEmployeePayrollComponentRepository>();
+        _roleRepository = GetRequiredService<IIdentityRoleRepository>();
+        _shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+        _currentTenant = GetRequiredService<ICurrentTenant>();
+        _guidGenerator = GetRequiredService<IGuidGenerator>();
     }
 
     #region Create Tests
@@ -405,6 +427,169 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         result.ShouldNotBeNull();
         result.Name.ShouldBe("Same Name Component");
         result.Description.ShouldBe("Updated description only");
+    }
+
+    [Fact]
+    public async Task Should_Propagate_Update_To_Linked_Employee_Earning_Components_Only()
+    {
+        var employee = await CreateEmployeeAsync("earning-sync");
+        var originalComponentName = $"Linked Basic Salary {Guid.NewGuid():N}";
+        var master = await CreateTestEarningComponentAsync(originalComponentName);
+        var unlinkedEmployeeRowId = Guid.NewGuid();
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(),
+            employee.Id,
+            master.Name,
+            master.Id,
+            master.Description,
+            master.Amount ?? 0m,
+            isFixed: true,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: true), autoSave: true);
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            unlinkedEmployeeRowId,
+            employee.Id,
+            master.Name,
+            componentId: null,
+            "Custom employee value",
+            999m,
+            isFixed: true,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: true), autoSave: true);
+
+        await _earningComponentAppService.UpdateAsync(master.Id, new UpdateEarningComponentDto
+        {
+            Name = "Updated Basic Salary",
+            Description = "Updated from master",
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 25000m,
+            VisibleInPayslip = true,
+            DisplayOrder = 1
+        });
+
+        var rows = await _employeePayrollComponentRepository.GetEarningsByEmployeeIdAsync(employee.Id);
+        var linked = rows.Single(x => x.ComponentId == master.Id);
+        linked.Name.ShouldBe("Updated Basic Salary");
+        linked.Description.ShouldBe("Updated from master");
+        linked.Amount.ShouldBe(25000m);
+
+        var unlinked = rows.Single(x => x.Id == unlinkedEmployeeRowId);
+        unlinked.Name.ShouldBe(originalComponentName);
+        unlinked.Description.ShouldBe("Custom employee value");
+        unlinked.Amount.ShouldBe(999m);
+    }
+
+    [Fact]
+    public async Task Should_Propagate_Percentage_Update_To_Linked_Employee_Earning_Components()
+    {
+        var employee = await CreateEmployeeAsync("earning-percentage-sync");
+        var baseComponent = await CreateTestEarningComponentAsync($"Base For Percentage {Guid.NewGuid():N}");
+        var percentageComponent = await _earningComponentAppService.CreateAsync(new CreateEarningComponentDto
+        {
+            Name = $"HRA Percentage {Guid.NewGuid():N}",
+            Description = "Percentage earning",
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 10m,
+            SelectedEarningComponentId = baseComponent.Id,
+            VisibleInPayslip = true,
+            DisplayOrder = 2
+        });
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(),
+            employee.Id,
+            percentageComponent.Name,
+            percentageComponent.Id,
+            percentageComponent.Description,
+            percentageComponent.Percentage ?? 0m,
+            isFixed: false,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Percentage,
+            dependOn: SalaryComponentDependency.Basic,
+            isEarning: true), autoSave: true);
+
+        await _earningComponentAppService.UpdateAsync(percentageComponent.Id, new UpdateEarningComponentDto
+        {
+            Name = "Updated HRA Percentage",
+            Description = "Updated percentage earning",
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 15m,
+            SelectedEarningComponentId = baseComponent.Id,
+            VisibleInPayslip = true,
+            DisplayOrder = 2
+        });
+
+        var linked = (await _employeePayrollComponentRepository.GetEarningsByEmployeeIdAsync(employee.Id))
+            .Single(x => x.ComponentId == percentageComponent.Id);
+        linked.Name.ShouldBe("Updated HRA Percentage");
+        linked.Amount.ShouldBe(15m);
+        linked.IsFixed.ShouldBeFalse();
+        linked.ComponentType.ShouldBe(SalaryComponentType.Percentage);
+        linked.DependOn.ShouldBe(SalaryComponentDependency.Basic);
+    }
+
+    [Fact]
+    public async Task Should_Save_Percentage_Master_Components_Without_Explicit_Line_Amount()
+    {
+        var employee = await CreateEmployeeAsync("earning-percentage-payroll");
+        var baseEarning = await CreateTestEarningComponentAsync($"Base Payroll Percentage {Guid.NewGuid():N}");
+        var percentageEarning = await _earningComponentAppService.CreateAsync(new CreateEarningComponentDto
+        {
+            Name = $"Payroll HRA Percentage {Guid.NewGuid():N}",
+            Description = "Percentage earning used by payroll save",
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 12m,
+            SelectedEarningComponentId = baseEarning.Id,
+            VisibleInPayslip = true,
+            DisplayOrder = 2
+        });
+
+        await _employeePayrollAppService.UpdatePayrollContractAsync(employee.Id, new PayrollContract
+        {
+            BankDetails = new BankDetailsContract
+            {
+                BankName = "State Bank of India",
+                BranchName = "Main",
+                AccountHolderName = employee.FullName,
+                AccountNumber = "1234567890",
+                IfscCode = "SBIN0001234"
+            },
+            SalaryDetails = new SalaryDetailsContract
+            {
+                TotalWorkingHourPerMonth = 176m
+            },
+            EarningComponents =
+            [
+                new SalaryComponentContract
+                {
+                    ComponentId = percentageEarning.Id,
+                    Name = percentageEarning.Name
+                }
+            ]
+        });
+
+        var saved = (await _employeePayrollComponentRepository.GetEarningsByEmployeeIdAsync(employee.Id))
+            .Single(x => x.ComponentId == percentageEarning.Id);
+        saved.Amount.ShouldBe(12m);
+        saved.ComponentType.ShouldBe(SalaryComponentType.Percentage);
+        saved.IsFixed.ShouldBeFalse();
     }
 
     #endregion
@@ -1074,6 +1259,59 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         };
 
         return await _earningComponentAppService.CreateAsync(input);
+    }
+
+    private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync(string suffix)
+    {
+        var roleId = await EnsureRoleExistsAsync();
+        var shiftId = await EnsureShiftExistsAsync();
+        var unique = Guid.NewGuid().ToString("N")[..6];
+
+        return await _employeePersonalInfoAppService.CreateAsync(new CreateEmployeePersonalInfoDto
+        {
+            FirstName = $"Emp{unique}",
+            LastName = suffix,
+            MobileNo = $"91{Random.Shared.Next(10000000, 99999999)}",
+            Email = $"{suffix}.{Guid.NewGuid():N}@test.com",
+            DateOfBirth = new DateOnly(1990, 5, 15),
+            GenderType = GenderType.Male,
+            DateOfJoining = new DateOnly(2024, 1, 1),
+            EmployeeStatusType = EmployeeStatusType.Active,
+            RoleId = roleId,
+            ShiftId = shiftId
+        });
+    }
+
+    private async Task<Guid> EnsureRoleExistsAsync()
+    {
+        var existing = (await _roleRepository.GetListAsync()).FirstOrDefault();
+        if (existing != null)
+        {
+            return existing.Id;
+        }
+
+        var id = _guidGenerator.Create();
+        await _roleRepository.InsertAsync(new IdentityRole(id, $"TestRole-{id:N}", _currentTenant.Id), autoSave: true);
+        return id;
+    }
+
+    private async Task<Guid> EnsureShiftExistsAsync()
+    {
+        var existing = (await _shiftRepository.GetListAsync()).FirstOrDefault();
+        if (existing != null)
+        {
+            return existing.Id;
+        }
+
+        var shift = new ShiftManagement
+        {
+            ShiftName = "Earning Component Test Shift",
+            StartTime = new TimeOnly(8, 0),
+            EndTime = new TimeOnly(16, 0)
+        };
+
+        await _shiftRepository.InsertAsync(shift, autoSave: true);
+        return shift.Id;
     }
 
     #endregion

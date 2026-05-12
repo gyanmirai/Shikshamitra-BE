@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
+using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Payroll;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -22,6 +24,8 @@ public class EarningComponentAppService : CrudAppService<
 	UpdateEarningComponentDto>, IEarningComponentAppService
 {
 	private readonly EarningComponentManager _earningComponentManager;
+	private readonly IEmployeePayrollComponentRepository _employeePayrollComponentRepository;
+	private readonly IEmployeeCacheManager _employeeCacheManager;
 	private readonly IDistributedCache<PagedResultDto<EarningComponentDto>> _cache;
 
 	private string GetBaseCacheKey() =>
@@ -33,10 +37,14 @@ public class EarningComponentAppService : CrudAppService<
 	public EarningComponentAppService(
 		IRepository<EarningComponent, Guid> repository,
 		EarningComponentManager earningComponentManager,
+		IEmployeePayrollComponentRepository employeePayrollComponentRepository,
+		IEmployeeCacheManager employeeCacheManager,
 		IDistributedCache<PagedResultDto<EarningComponentDto>> cache)
 		: base(repository)
 	{
 		_earningComponentManager = earningComponentManager;
+		_employeePayrollComponentRepository = employeePayrollComponentRepository;
+		_employeeCacheManager = employeeCacheManager;
 		_cache = cache;
 	}
 
@@ -68,6 +76,7 @@ public class EarningComponentAppService : CrudAppService<
 		}
 
 		await ClearCacheAsync();
+		await SyncLinkedEmployeeEarningComponentsAsync(earningComponent);
 
 		return ObjectMapper.Map<EarningComponent, EarningComponentDto>(earningComponent);
 	}
@@ -103,6 +112,7 @@ public class EarningComponentAppService : CrudAppService<
 		}
 
 		await ClearCacheAsync();
+		await SyncLinkedEmployeeEarningComponentsAsync(earningComponent);
 
 		return ObjectMapper.Map<EarningComponent, EarningComponentDto>(earningComponent);
 	}
@@ -270,6 +280,62 @@ public class EarningComponentAppService : CrudAppService<
 		}
 
 		return false;
+	}
+
+	private async Task SyncLinkedEmployeeEarningComponentsAsync(EarningComponent earningComponent)
+	{
+		var linkedRows = await _employeePayrollComponentRepository.GetByComponentIdAsync(
+			earningComponent.Id,
+			isEarning: true);
+
+		if (linkedRows.Count == 0)
+		{
+			return;
+		}
+
+		foreach (var row in linkedRows)
+		{
+			row.UpdateComponent(
+				earningComponent.Name,
+				earningComponent.Description,
+				ResolveComponentAmount(earningComponent, row.Amount),
+				earningComponent.CalculationType == CalculationType.Amount,
+				row.IsTemp,
+				earningComponent.CalculationType == CalculationType.Amount
+					? SalaryComponentType.Fixed
+					: SalaryComponentType.Percentage,
+				MapDependency(earningComponent.DependOn));
+
+			await _employeePayrollComponentRepository.UpdateAsync(row, autoSave: false);
+		}
+
+		if (UnitOfWorkManager.Current != null)
+		{
+			await UnitOfWorkManager.Current.SaveChangesAsync();
+		}
+
+		foreach (var employeeId in linkedRows.Select(x => x.EmployeeId).Distinct())
+		{
+			await _employeeCacheManager.InvalidateEmployeeAsync(employeeId);
+		}
+	}
+
+	private static SalaryComponentDependency? MapDependency(ComponentDependency dependOn)
+	{
+		return dependOn switch
+		{
+			ComponentDependency.None => SalaryComponentDependency.None,
+			ComponentDependency.Basic => SalaryComponentDependency.Basic,
+			ComponentDependency.Gross => SalaryComponentDependency.Gross,
+			_ => null
+		};
+	}
+
+	private static decimal ResolveComponentAmount(EarningComponent earningComponent, decimal fallbackAmount)
+	{
+		return earningComponent.CalculationType == CalculationType.Amount
+			? earningComponent.Amount ?? fallbackAmount
+			: earningComponent.Percentage ?? fallbackAmount;
 	}
 
 	private IQueryable<EarningComponent> ApplySorting(IQueryable<EarningComponent> queryable, string sorting)

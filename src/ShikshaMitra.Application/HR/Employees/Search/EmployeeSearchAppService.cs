@@ -130,6 +130,7 @@ public class EmployeeSearchAppService(
 		return new EmployeeSummary
 		{
 			Id = employee.Id,
+			UserId = employee.UserId,
 			RoleName = employee.Role?.Name,
 			FullName = employee.EmployeeName,
 			ThumbnailPicture = employee.ProfilePictureBlobName,

@@ -332,6 +332,7 @@ public class EmployeePersonalInfoAppService(
 			Id = employee.Id,
 			EmployeeCode = employee.EmployeeCode,
 			FullName = employee.EmployeeName,
+			UserId = employee.UserId,
 			FirstName = employee.FirstName ?? string.Empty,
 			LastName = employee.LastName ?? string.Empty,
 			MiddleName = employee.MiddleName,

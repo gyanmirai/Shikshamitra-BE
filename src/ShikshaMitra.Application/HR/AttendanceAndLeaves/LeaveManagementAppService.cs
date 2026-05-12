@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -42,6 +43,12 @@ public class LeaveManagementAppService(
 	public async Task<PagedLeaveManagementResultDto> GetListAsync(LeaveManagementGetListInput input)
 	{
 		var actorContext = await ResolveLeaveActorContextAsync();
+		if (input.EmployeeId.HasValue)
+		{
+			await EnsureActorCanAccessEmployeeAsync(input.EmployeeId.Value);
+			return await GetListInternalAsync(input, input.EmployeeId.Value, scopedEmployeeIds: null);
+		}
+
 		var scopedEmployeeIds = await ResolveScopedEmployeeIdsAsync(actorContext);
 		return await GetListInternalAsync(input, scopedEmployeeId: null, scopedEmployeeIds);
 	}
@@ -280,6 +287,11 @@ public class LeaveManagementAppService(
 
 		var targetEmployee = await employeeRepository.FindAsync(targetEmployeeId)
 			?? throw new EntityNotFoundException(typeof(Employee), targetEmployeeId);
+
+		if ((targetEmployee.EmployeeStatusType ?? EmployeeStatusType.Active) != EmployeeStatusType.Active)
+		{
+			throw new BusinessException(HRErrorCodes.LeaveTargetEmployeeInactive);
+		}
 
 		var resolvedPolicyId = await leaveValidationService.ValidateLeaveRequestAsync(
 			targetEmployee.Id, policyId, input.StartDate, input.EndDate, academicYearId);
@@ -659,6 +671,7 @@ public class LeaveManagementAppService(
 			PageSize = pageSize,
 			UseExportBatching = true,
 			Status = input.Status,
+			EmployeeId = input.EmployeeId,
 			LeavePolicyId = input.LeavePolicyId,
 			LeaveTypeMasterId = input.LeaveTypeMasterId
 		};

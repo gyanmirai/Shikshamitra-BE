@@ -51,6 +51,8 @@ public class LeaveManagementGetListInput
 	/// <summary>When true, allows larger page sizes for batched export (internal use).</summary>
 	public bool UseExportBatching { get; set; }
 	public EmployeeLeaveStatusType? Status { get; set; }
+	/// <summary>Optional HR/admin profile filter. When set, returns only this employee's requests after access checks.</summary>
+	public Guid? EmployeeId { get; set; }
 	/// <summary>Leave policy aggregate id (FK on leave request).</summary>
 	public Guid? LeavePolicyId { get; set; }
 	/// <summary>Leave type master id (from leave policy's leave type).</summary>

@@ -33,7 +33,7 @@ public class RunPayrollController : AbpControllerBase
 	/// </summary>
 	/// <param name="month">Payroll month (supports YYYY-MM, MMMM-YYYY, and common date-like formats)</param>
 	/// <param name="page">Page index (0-based), defaults to 0</param>
-	/// <param name="pageSize">Number of items per page (10-100), defaults to 50</param>
+	/// <param name="pageSize">Number of items per page (1-500), defaults to 50</param>
 	/// <returns>Payroll preview with employee payroll items</returns>
 	/// <response code="200">Payroll preview retrieved successfully</response>
 	/// <response code="400">Invalid month format or other validation errors</response>
@@ -44,7 +44,7 @@ public class RunPayrollController : AbpControllerBase
 	public virtual async Task<RunPayrollResponse> GetPreviewAsync(
 		[FromQuery, Required] string month,
 		[FromQuery, Range(0, int.MaxValue)] int page = 0,
-		[FromQuery, Range(10, 100)] int pageSize = 50,
+		[FromQuery, Range(1, 500)] int pageSize = 50,
 		[FromQuery] bool forceRefresh = false)
 	{
 		return await _runPayrollAppService.GetPreviewAsync(new GetRunPayrollInput

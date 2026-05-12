@@ -22,6 +22,8 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 [Authorize]
 public class EmployeesController : AbpControllerBase
 {
+	private const int MaxEmployeePageSize = 500;
+
 	private readonly IEmployeeSearchAppService _searchAppService;
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
 	private readonly IEmployeeAuthorizationService _authorizationService;
@@ -45,12 +47,12 @@ public class EmployeesController : AbpControllerBase
 		[FromQuery] Guid? mediumStageId = null,
 		[FromQuery] string? status = null,
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
-		[FromQuery, Range(10, 50)] int pageSize = 10,
+		[FromQuery, Range(1, MaxEmployeePageSize)] int pageSize = 10,
 		[FromQuery] bool? isTeaching = null,
 		[FromQuery] Guid? roleId = null,
 		[FromQuery] string? search = null)
 	{
-		pageSize = Math.Min(pageSize, 50);
+		pageSize = Math.Min(pageSize, MaxEmployeePageSize);
 
 		var input = new GetEmployeeListInput
 		{
@@ -85,6 +87,7 @@ public class EmployeesController : AbpControllerBase
 		return new EmployeeDetails
 		{
 			Id = employee.Id,
+			UserId = employee.UserId,
 			RoleName = employee.Role?.Name,
 			FullName = employee.EmployeeName,
 			ThumbnailPicture = employee.ProfilePictureBlobName,

@@ -39,10 +39,11 @@ public class LeaveManagementController : AbpControllerBase
 		[FromQuery(Name = "month-year")] DateTime? monthYear,
 		[FromQuery] string? search = null,
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
-		[FromQuery, Range(10, 100)] int pageSize = 10,
+		[FromQuery, Range(1, 500)] int pageSize = 10,
 		[FromQuery] string? status = null,
 		[FromQuery] Guid? leavePolicyId = null,
-		[FromQuery] Guid? leaveTypeMasterId = null)
+		[FromQuery] Guid? leaveTypeMasterId = null,
+		[FromQuery] Guid? employeeId = null)
 	{
 		var input = new LeaveManagementGetListInput
 		{
@@ -52,6 +53,7 @@ public class LeaveManagementController : AbpControllerBase
 			Page = page,
 			PageSize = pageSize,
 			Status = ParseStatus(status),
+			EmployeeId = employeeId,
 			LeavePolicyId = leavePolicyId,
 			LeaveTypeMasterId = leaveTypeMasterId
 		};
@@ -69,7 +71,7 @@ public class LeaveManagementController : AbpControllerBase
 		[FromQuery(Name = "month-year")] DateTime? monthYear,
 		[FromQuery] string? search = null,
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
-		[FromQuery, Range(10, 100)] int pageSize = 10,
+		[FromQuery, Range(1, 500)] int pageSize = 10,
 		[FromQuery] string? status = null,
 		[FromQuery] Guid? leavePolicyId = null,
 		[FromQuery] Guid? leaveTypeMasterId = null)

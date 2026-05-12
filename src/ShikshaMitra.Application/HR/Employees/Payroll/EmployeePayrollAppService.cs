@@ -190,17 +190,19 @@ public class EmployeePayrollAppService(
 		ValidatePayrollContract(input);
 
 		await employeeRepository.GetAsync(employeeId);
+		var existingEarnings = await payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
+		var existingDeductions = await payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);
 
 		var earningMasters = new List<(EarningComponent Master, SalaryComponentContract Line)>();
 		foreach (var line in input.EarningComponents ?? [])
 		{
-			earningMasters.Add((await ResolveEarningMasterAsync(line), line));
+			earningMasters.Add((await ResolveEarningMasterAsync(line, existingEarnings), line));
 		}
 
 		var deductionMasters = new List<(DeductionComponent Master, SalaryComponentContract Line)>();
 		foreach (var line in input.DeductionComponents ?? [])
 		{
-			deductionMasters.Add((await ResolveDeductionMasterAsync(line), line));
+			deductionMasters.Add((await ResolveDeductionMasterAsync(line, existingDeductions), line));
 		}
 
 		var earningIds = earningMasters.Select(x => x.Master.Id).ToHashSet();
@@ -213,7 +215,7 @@ public class EmployeePayrollAppService(
 
 		foreach (var (master, line) in earningMasters)
 		{
-			var amount = line.Amount ?? master.Amount ?? 0m;
+			var amount = line.Amount ?? ResolveEarningComponentAmount(master);
 			if (amount <= 0)
 			{
 				throw new BusinessException(HRErrorCodes.EmployeePayrollComponentAmountInvalid)
@@ -225,7 +227,7 @@ public class EmployeePayrollAppService(
 
 		foreach (var (master, line) in deductionMasters)
 		{
-			var amount = line.Amount ?? master.Amount ?? 0m;
+			var amount = line.Amount ?? ResolveDeductionComponentAmount(master);
 			if (amount <= 0)
 			{
 				throw new BusinessException(HRErrorCodes.EmployeePayrollComponentAmountInvalid)
@@ -276,7 +278,7 @@ public class EmployeePayrollAppService(
 
 		foreach (var (master, line) in earningMasters)
 		{
-			var amount = line.Amount ?? master.Amount ?? 0m;
+			var amount = line.Amount ?? ResolveEarningComponentAmount(master);
 			var isFixed = line.IsFixed ?? (master.CalculationType == CalculationType.Amount);
 
 			var earningComponent = new EmployeePayrollComponent(
@@ -300,7 +302,7 @@ public class EmployeePayrollAppService(
 
 		foreach (var (master, line) in deductionMasters)
 		{
-			var amount = line.Amount ?? master.Amount ?? 0m;
+			var amount = line.Amount ?? ResolveDeductionComponentAmount(master);
 			var isFixed = line.IsFixed ?? (master.CalculationType == CalculationType.Amount);
 
 			var deductionComponent = new EmployeePayrollComponent(
@@ -325,7 +327,9 @@ public class EmployeePayrollAppService(
 		await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
 	}
 
-	private async Task<EarningComponent> ResolveEarningMasterAsync(SalaryComponentContract line)
+	private async Task<EarningComponent> ResolveEarningMasterAsync(
+		SalaryComponentContract line,
+		IEnumerable<EmployeePayrollComponent> existingEarnings)
 	{
 		if (line.ComponentId is { } cid && cid != Guid.Empty)
 		{
@@ -335,6 +339,19 @@ public class EmployeePayrollAppService(
 			}
 			catch (Volo.Abp.Domain.Entities.EntityNotFoundException)
 			{
+				var existingPayrollRow = existingEarnings.FirstOrDefault(x => x.Id == cid);
+				if (existingPayrollRow?.ComponentId is { } masterId && masterId != Guid.Empty)
+				{
+					try
+					{
+						return await earningComponentRepository.GetAsync(masterId);
+					}
+					catch (Volo.Abp.Domain.Entities.EntityNotFoundException)
+					{
+						// Fall through to the existing business error with the submitted id.
+					}
+				}
+
 				throw new BusinessException(HRErrorCodes.EmployeePayrollInvalidEarningComponent)
 					.WithData("componentId", cid);
 			}
@@ -353,7 +370,9 @@ public class EmployeePayrollAppService(
 		return matches[0];
 	}
 
-	private async Task<DeductionComponent> ResolveDeductionMasterAsync(SalaryComponentContract line)
+	private async Task<DeductionComponent> ResolveDeductionMasterAsync(
+		SalaryComponentContract line,
+		IEnumerable<EmployeePayrollComponent> existingDeductions)
 	{
 		if (line.ComponentId is { } cid && cid != Guid.Empty)
 		{
@@ -363,6 +382,19 @@ public class EmployeePayrollAppService(
 			}
 			catch (Volo.Abp.Domain.Entities.EntityNotFoundException)
 			{
+				var existingPayrollRow = existingDeductions.FirstOrDefault(x => x.Id == cid);
+				if (existingPayrollRow?.ComponentId is { } masterId && masterId != Guid.Empty)
+				{
+					try
+					{
+						return await deductionComponentRepository.GetAsync(masterId);
+					}
+					catch (Volo.Abp.Domain.Entities.EntityNotFoundException)
+					{
+						// Fall through to the existing business error with the submitted id.
+					}
+				}
+
 				throw new BusinessException(HRErrorCodes.EmployeePayrollInvalidDeductionComponent)
 					.WithData("componentId", cid);
 			}
@@ -390,6 +422,20 @@ public class EmployeePayrollAppService(
 			ComponentDependency.Gross => SalaryComponentDependency.Gross,
 			_ => null
 		};
+	}
+
+	private static decimal ResolveEarningComponentAmount(EarningComponent master)
+	{
+		return master.CalculationType == CalculationType.Amount
+			? master.Amount ?? 0m
+			: master.Percentage ?? 0m;
+	}
+
+	private static decimal ResolveDeductionComponentAmount(DeductionComponent master)
+	{
+		return master.CalculationType == CalculationType.Amount
+			? master.Amount ?? 0m
+			: master.Percentage ?? 0m;
 	}
 
 	private async Task<Dictionary<string, Guid>> GetEarningComponentIdsByNameAsync(

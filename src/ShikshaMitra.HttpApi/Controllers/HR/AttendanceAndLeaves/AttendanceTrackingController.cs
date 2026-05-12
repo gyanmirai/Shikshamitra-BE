@@ -36,7 +36,7 @@ public class AttendanceTrackingController : AbpControllerBase
 	/// <param name="attendanceDate">Attendance date (DD-MM-YYYY format or ISO date-time)</param>
 	/// <param name="status">Attendance status filter (PRESENT, ABSENT, HALF_DAY, REJECTED_LEAVE)</param>
 	/// <param name="page">Page number (1-based)</param>
-	/// <param name="pageSize">Page size (10-100)</param>
+	/// <param name="pageSize">Page size (1-500)</param>
 	/// <param name="educationMediumStageId">Education medium stage id</param>
 	/// <param name="search">Search text for employee fields</param>
 	/// <returns>Paginated attendance records with summary</returns>
@@ -49,7 +49,7 @@ public class AttendanceTrackingController : AbpControllerBase
 		[FromQuery, Required] string attendanceDate,
 		[FromQuery, Required] string status,
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
-		[FromQuery, Range(10, 100)] int pageSize = 10,
+		[FromQuery, Range(1, 500)] int pageSize = 10,
 		[FromQuery, Required] Guid educationMediumStageId = default,
 		[FromQuery] string? search = null)
 	{
@@ -80,7 +80,7 @@ public class AttendanceTrackingController : AbpControllerBase
 	/// <param name="endDate">End date (DD-MM-YYYY format)</param>
 	/// <param name="status">Optional attendance status filter</param>
 	/// <param name="page">Page number (1-based)</param>
-	/// <param name="pageSize">Page size (10-100)</param>
+	/// <param name="pageSize">Page size (1-500)</param>
 	/// <param name="educationMediumStageId">Education medium stage id</param>
 	/// <param name="search">Search text</param>
 	/// <returns>Employee attendance records with summary</returns>
@@ -95,7 +95,7 @@ public class AttendanceTrackingController : AbpControllerBase
 		[FromQuery, Required] string endDate,
 		[FromQuery] string? status = null,
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
-		[FromQuery, Range(10, 100)] int pageSize = 10,
+		[FromQuery, Range(1, 500)] int pageSize = 10,
 		[FromQuery, Required] Guid educationMediumStageId = default,
 		[FromQuery] string? search = null)
 	{

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.Employees.Status;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -80,6 +81,33 @@ public class EmployeeListApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Exclude_Inactive_Employees_When_Filtering_Active_Status()
+	{
+		var marker = $"ActiveOnly{Guid.NewGuid():N}"[..18];
+		var activeEmployee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"{marker}Active");
+		var inactiveEmployee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"{marker}Inactive");
+
+		var inactiveRequest = new EmployeeStatusUpdateRequest
+		{
+			EmployeeStatusType = 1,
+			Remarks = "Inactive employee should be excluded from active picker queries"
+		};
+		(await Client.PutAsJsonAsync($"{BaseUrl}/{inactiveEmployee.Id}/status", inactiveRequest, JsonOptions))
+			.EnsureSuccessStatusCode();
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}?status=Active&search={Uri.EscapeDataString(marker)}&page=1&pageSize=10");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<EmployeeListResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Items.ShouldContain(e => e.Id == activeEmployee.Id);
+		body.Items.ShouldNotContain(e => e.Id == inactiveEmployee.Id);
+		body.Items.ShouldAllBe(e => e.Status == 0);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Filter_By_IsTeaching()
 	{
 		await EmployeeTestHelper.CreateEmployeeAsync(Client, "TeachFilter");
@@ -144,6 +172,28 @@ public class EmployeeListApi_Tests : ShikshaMitraApiTestBase
 		var body2 = await page2.Content.ReadFromJsonAsync<EmployeeListResponse>(JsonOptions);
 		body2.ShouldNotBeNull();
 		body2.Items.ShouldNotBeNull();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Return_All_Employees_When_PageSize_Matches_TotalCount()
+	{
+		var marker = $"AllPage{Guid.NewGuid():N}"[..15];
+		const int employeeCount = 21;
+
+		for (var i = 0; i < employeeCount; i++)
+			await EmployeeTestHelper.CreateEmployeeAsync(Client, $"{marker}{i}");
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}?search={Uri.EscapeDataString(marker)}&page=1&pageSize={employeeCount}");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<EmployeeListResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.PageSize.ShouldBe(employeeCount);
+		body.TotalCount.ShouldBeGreaterThanOrEqualTo(employeeCount);
+		body.Items.Count.ShouldBe(employeeCount);
+		body.Items.ShouldAllBe(e => e.FullName != null && e.FullName.Contains(marker));
 	}
 
 	[Fact]

@@ -170,12 +170,16 @@ public class TakeAttendanceAppService(
 			throw new BusinessException(HRErrorCodes.TakeAttendanceEmptyEntries);
 		}
 
-		var requestedEmployeeIds = input.Entries.Select(x => x.EmployeeId).Distinct().ToList();
+		var parsedEntries = input.Entries
+			.Select(entry => new ParsedTakeAttendanceEntry(entry, ParseWireStatus(entry.StatusWire)))
+			.ToList();
+		var requestedEmployeeIds = parsedEntries.Select(x => x.Entry.EmployeeId).Distinct().ToList();
 		var employeeStageMap = await ResolveEmployeeStagesAsync(requestedEmployeeIds);
 		var upserted = 0;
-		foreach (var entry in input.Entries)
+		foreach (var parsedEntry in parsedEntries)
 		{
-			var status = ParseWireStatus(entry.StatusWire);
+			var entry = parsedEntry.Entry;
+			var status = parsedEntry.Status;
 			var normalizedRemarks = TruncateForStorage(entry.Remarks, AttendanceRemarksMaxLength);
 			DateTimeOffset? tIn = null;
 			DateTimeOffset? tOut = null;
@@ -428,6 +432,10 @@ public class TakeAttendanceAppService(
 			"ABSENT" => EmployeeAttendanceStatusType.FullDayLeave,
 			_ => throw new BusinessException(HRErrorCodes.TakeAttendanceInvalidStatusWire)
 		};
+
+	private sealed record ParsedTakeAttendanceEntry(
+		TakeAttendanceSaveEntryDto Entry,
+		EmployeeAttendanceStatusType Status);
 
 	private static string FormatName(string? first, string? middle, string? last)
 	{

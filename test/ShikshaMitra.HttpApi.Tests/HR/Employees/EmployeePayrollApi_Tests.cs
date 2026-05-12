@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll;
+using ShikshaMitra.HR.Payroll.SalaryStructure;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -91,6 +93,151 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 			HttpStatusCode.NotFound,
 			HttpStatusCode.InternalServerError,
 			HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Accept_Payroll_Update_With_Empty_PfRuleId_From_Form()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayEmptyPf");
+		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, "PayEmptyPfE1");
+		var deductionComponent = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "PayEmptyPfD1");
+
+		var json = $$"""
+		{
+		  "bankDetails": {
+		    "bankName": "HDFC Bank",
+		    "branchName": "Main Branch",
+		    "accountHolderName": "Payroll Form Employee",
+		    "accountNumber": "1234567890",
+		    "ifscCode": "HDFC0001234"
+		  },
+		  "salaryDetails": {
+		    "pfRuleId": "",
+		    "epfNumber": "",
+		    "uanNumber": "",
+		    "punchId": "PAYEMPTY",
+		    "totalWorkingHourPerMonth": 160
+		  },
+		  "earningComponents": [
+		    {
+		      "componentId": "{{earningComponent.Id}}",
+		      "name": "{{earningComponent.Name}}",
+		      "amount": 5000,
+		      "isFixed": true
+		    }
+		  ],
+		  "deductionComponents": [
+		    {
+		      "componentId": "{{deductionComponent.Id}}",
+		      "name": "{{deductionComponent.Name}}",
+		      "amount": 1200,
+		      "isFixed": true
+		    }
+		  ]
+		}
+		""";
+
+		var response = await Client.PutAsync(
+			$"{BaseUrl}/{empId}/payroll",
+			new StringContent(json, Encoding.UTF8, "application/json"));
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Update_Payroll_When_Form_Sends_Employee_Component_Row_Id()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayRowId");
+		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, "PayRowIdE1");
+		var deductionComponent = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "PayRowIdD1");
+
+		var salaryStructure = new UpdateSalaryStructureDto
+		{
+			EarningComponents = new List<SalaryComponentDto>
+			{
+				new()
+				{
+					ComponentId = earningComponent.Id,
+					Name = earningComponent.Name,
+					Amount = 5000m,
+					IsFixed = true
+				},
+			},
+			DeductionComponents = new List<SalaryComponentDto>
+			{
+				new()
+				{
+					ComponentId = deductionComponent.Id,
+					Name = deductionComponent.Name,
+					Amount = 1200m,
+					IsFixed = true
+				},
+			},
+		};
+
+		var salaryResponse = await Client.PutAsJsonAsync(
+			$"/api/payroll/employees/{empId}/salary-structure",
+			salaryStructure,
+			JsonOptions);
+		salaryResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var getSalaryResponse = await Client.GetAsync($"/api/payroll/employees/{empId}/salary-structure");
+		getSalaryResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var savedStructure = await getSalaryResponse.Content.ReadFromJsonAsync<SalaryStructureResponseDto>(JsonOptions);
+		savedStructure.ShouldNotBeNull();
+		savedStructure.EarningComponents.Count.ShouldBe(1);
+		savedStructure.DeductionComponents.Count.ShouldBe(1);
+
+		var request = new PayrollContract
+		{
+			BankDetails = new BankDetailsContract
+			{
+				BankName = "HDFC Bank",
+				BranchName = "Main Branch",
+				AccountHolderName = "Payroll Row Employee",
+				AccountNumber = "1234567890",
+				IfscCode = "HDFC0001234",
+			},
+			SalaryDetails = new SalaryDetailsContract
+			{
+				TotalWorkingHourPerMonth = 160m,
+				PunchId = "ROWID1",
+			},
+			EarningComponents = new List<SalaryComponentContract>
+			{
+				new()
+				{
+					ComponentId = savedStructure.EarningComponents[0].Id,
+					Name = savedStructure.EarningComponents[0].Name,
+					Amount = 5500m,
+					IsFixed = true
+				},
+			},
+			DeductionComponents = new List<SalaryComponentContract>
+			{
+				new()
+				{
+					ComponentId = savedStructure.DeductionComponents[0].Id,
+					Name = savedStructure.DeductionComponents[0].Name,
+					Amount = 1300m,
+					IsFixed = true
+				},
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var getPayrollResponse = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
+		var payroll = await getPayrollResponse.Content.ReadFromJsonAsync<EmployeePayrollResponse>(JsonOptions);
+		payroll.ShouldNotBeNull();
+		payroll.EarningComponents![0].ComponentId.ShouldBe(earningComponent.Id);
+		payroll.EarningComponents[0].Amount.ShouldBe(5500m);
+		payroll.DeductionComponents![0].ComponentId.ShouldBe(deductionComponent.Id);
+		payroll.DeductionComponents[0].Amount.ShouldBe(1300m);
 	}
 
 	[Fact]
@@ -220,7 +367,10 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 		};
 
 		var invalidResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", invalidUpdate, JsonOptions);
-		invalidResponse.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		invalidResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		invalidResponse.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+		var invalidBody = await invalidResponse.Content.ReadAsStringAsync();
+		invalidBody.ShouldNotContain("<html", Case.Insensitive);
 
 		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
 		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);

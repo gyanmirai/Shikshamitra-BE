@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -83,6 +84,36 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		{
 			var payload = await response.Content.ReadAsStringAsync();
 			payload.Contains("educationMediumStageId", StringComparison.OrdinalIgnoreCase).ShouldBeFalse();
+		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task SaveDay_Should_Reject_Invalid_StatusWire()
+	{
+		var employeeId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "AttendanceWire");
+		var request = new TakeAttendanceSaveInput
+		{
+			AttendanceDate = DateTime.UtcNow.ToString("dd-MM-yyyy"),
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = employeeId,
+					StatusWire = "Pending"
+				}
+			]
+		};
+
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", request, JsonOptions);
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+
+		if (response.StatusCode == HttpStatusCode.BadRequest)
+		{
+			var payload = await response.Content.ReadAsStringAsync();
+			using var doc = JsonDocument.Parse(payload);
+			doc.RootElement.GetProperty("status").GetInt32().ShouldBe(400);
+			doc.RootElement.GetProperty("title").GetString().ShouldNotBeNullOrWhiteSpace();
 		}
 	}
 }

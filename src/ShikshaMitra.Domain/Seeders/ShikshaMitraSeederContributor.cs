@@ -70,6 +70,10 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 					// Seed deterministic test-login accounts (feature-flagged; DDVS only)
 					var testLoginSeeder = scope.ServiceProvider.GetRequiredService<Seeders.TestLoginSeederContributor>();
 					await testLoginSeeder.SeedAsync(context);
+
+					// Seed deterministic HR manual test data (feature-flagged; DDVS only)
+					var hrManualTestDataSeeder = scope.ServiceProvider.GetRequiredService<Seeders.HrManualTestDataSeederContributor>();
+					await hrManualTestDataSeeder.SeedAsync(context);
 				}
 			}
 		}

@@ -95,6 +95,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "HR.Employee.ICard", new SubmoduleInfo(Employee_ICard.All, Employee_ICard.DisplayNames) },
 			{ "HR.Employee.Setting.DocumentTypes", new SubmoduleInfo(Employee_SettingDocumentTypes.All, Employee_SettingDocumentTypes.DisplayNames) },
 			{ "HR.PayrollManagement", new SubmoduleInfo(PayrollManagement.All, PayrollManagement.DisplayNames) },
+			{ "HR.PayrollManagement.Overview", new SubmoduleInfo(PayrollManagement_Overview.All, PayrollManagement_Overview.DisplayNames) },
 			{ "HR.PayrollManagement.Dashboard", new SubmoduleInfo(PayrollManagement_Dashboard.All, PayrollManagement_Dashboard.DisplayNames) },
 			{ "HR.PayrollManagement.RunPayroll", new SubmoduleInfo(PayrollManagement_RunPayroll.All, PayrollManagement_RunPayroll.DisplayNames) },
 			{ "HR.PayrollManagement.GenerateSalarySlip", new SubmoduleInfo(PayrollManagement_GenerateSalarySlip.All, PayrollManagement_GenerateSalarySlip.DisplayNames) },

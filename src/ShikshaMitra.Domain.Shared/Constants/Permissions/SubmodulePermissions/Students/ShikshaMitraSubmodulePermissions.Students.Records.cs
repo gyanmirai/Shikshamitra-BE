@@ -61,20 +61,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleName = $"{ModuleName}.Records.StudentManagement";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Records.StudentManagement";
 
-			public const string StudentManagementView = $"{SubmoduleName}.StudentManagement.View";
-			public const string StudentManagementAdd = $"{SubmoduleName}.StudentManagement.Add";
-			public const string StudentManagementDelete = $"{SubmoduleName}.StudentManagement.Delete";
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = {
-
-				StudentManagementView, StudentManagementAdd, StudentManagementDelete
-			};
+			public static readonly string[] All = { View, Add, Delete };
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ StudentManagementView, $"{SubmoduleDisplayName}.StudentManagement.View" },
-				{ StudentManagementAdd, $"{SubmoduleDisplayName}.StudentManagement.Add" },
-				{ StudentManagementDelete, $"{SubmoduleDisplayName}.StudentManagement.Delete" },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" },
 			};
 		}
 
@@ -85,6 +82,28 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Records.Certificates";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Records.Certificates";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+
+			public static readonly string[] All = { View, Add, Delete };
+
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+			};
+		}
+
+		/// <summary>
+		/// Student Records - Reports permissions
+		/// </summary>
+		public static class Records_Reports
+		{
+			private const string SubmoduleName = $"{ModuleName}.Records.Reports";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Records.Reports";
 
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";

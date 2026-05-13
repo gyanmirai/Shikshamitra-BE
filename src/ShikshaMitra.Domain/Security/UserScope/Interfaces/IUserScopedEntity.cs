@@ -7,11 +7,10 @@ namespace ShikshaMitra.Security.UserScope;
 /// Entities implementing this interface will have automatic scope-based filtering applied via EF Core global query filters.
 /// </summary>
 /// <remarks>
-/// The NULL = ALL principle applies:
-/// - If AcademicYearId is NULL in UserScopeAssignment, user has access to ALL academic years
-/// - If EducationBoardId is NULL in UserScopeAssignment, user has access to ALL boards
-/// - If DivisionId is NULL in UserScopeAssignment, user has access to ALL divisions in the specified Standard
-/// - And so on for other hierarchy levels
+/// UserScopeContext applies effective wildcard access:
+/// - A parent-level assignment grants access to children inside that parent scope.
+/// - A null parent on a child-specific assignment does not grant access to every parent.
+/// - A null DivisionId with a StandardId grants all divisions in that standard.
 /// </remarks>
 public interface IUserScopedEntity
 {

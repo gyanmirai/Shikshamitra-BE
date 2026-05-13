@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
+using ShikshaMitra.HR;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
@@ -57,6 +58,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	private readonly IDayCalculationSettingRepository _dayCalculationSettingRepository;
 	private readonly SalarySlipManager _salarySlipManager;
 	private readonly IUserScopeService _userScopeService;
+	private readonly HrUserScopeAccessService _hrScopeAccessService;
 	private readonly ILogger<RunPayrollAppService> _logger;
 
 	// Configuration: Batch size for processing employees
@@ -75,6 +77,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		IDayCalculationSettingRepository dayCalculationSettingRepository,
 		SalarySlipManager salarySlipManager,
 		IUserScopeService userScopeService,
+		HrUserScopeAccessService hrScopeAccessService,
 		ILogger<RunPayrollAppService> logger)
 	{
 		_employeeRepository = employeeRepository;
@@ -88,6 +91,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		_dayCalculationSettingRepository = dayCalculationSettingRepository;
 		_salarySlipManager = salarySlipManager;
 		_userScopeService = userScopeService;
+		_hrScopeAccessService = hrScopeAccessService;
 		_logger = logger;
 	}
 
@@ -948,7 +952,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		}
 
 		employeeQuery = employeeQuery.Where(e => e.EmployeeStatusType == EmployeeStatusType.Active);
-		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		if (HrUserScopeAccess.HasHrWideAccess(scope))
 		{
 			return employeeQuery;
 		}
@@ -959,22 +963,27 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			attendanceQuery = attendanceQuery.Where(a => a.TenantId == CurrentTenant.Id);
 		}
 
-		// Materialize the employee IDs to avoid complex subquery translation issues in EF Core
-		var knownStageEmployeeIds = await AsyncExecuter.ToListAsync(
+		// Materialize the employee-stage map to keep scope checks root-aware without complex EF translation.
+		var employeeStageRows = await AsyncExecuter.ToListAsync(
 			attendanceQuery
 				.Where(a => a.EducationMediumStageId.HasValue)
-				.Select(a => a.EmployeeId)
-				.Distinct()
+				.Select(a => new { a.EmployeeId, a.EducationMediumStageId })
 		);
 
-		var scopedStageEmployeeIds = await AsyncExecuter.ToListAsync(
-			attendanceQuery
-				.Where(a =>
-					a.EducationMediumStageId.HasValue &&
-					scope.MediumStageIds.Contains(a.EducationMediumStageId!.Value))
-				.Select(a => a.EmployeeId)
-				.Distinct()
-		);
+		var employeeStageMap = employeeStageRows
+			.GroupBy(x => x.EmployeeId)
+			.ToDictionary(
+				x => x.Key,
+				x => (IReadOnlyCollection<Guid>)x
+					.Select(row => row.EducationMediumStageId!.Value)
+					.Distinct()
+					.ToList());
+		var knownStageEmployeeIds = employeeStageMap.Keys.ToList();
+		var scopedStageEmployeeIds = await _hrScopeAccessService.FilterEmployeeIdsByStagesAsync(
+			knownStageEmployeeIds,
+			employeeStageMap,
+			scope,
+			includeUnknownStageEmployees: false);
 
 		if (includeUnknownStageEmployees)
 		{
@@ -995,12 +1004,12 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		}
 
 		var scope = await _userScopeService.GetUserScopeAsync(uid.Value);
-		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		if (HrUserScopeAccess.HasHrWideAccess(scope))
 		{
 			return scope;
 		}
 
-		if (scope.MediumStageIds.Count == 0)
+		if (!HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
 		{
 			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 		}

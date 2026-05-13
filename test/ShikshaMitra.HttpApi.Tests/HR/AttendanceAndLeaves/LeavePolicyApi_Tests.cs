@@ -39,6 +39,39 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Update_Accrual_Policy_Type()
+	{
+		var leaveType = await CreateLeaveTypeAsync();
+		var created = await CreateLeavePolicyAsync(leaveType.Id);
+
+		var response = await Client.PutAsJsonAsync($"{LeavePoliciesUrl}/{created.Id}", new LeavePolicyUpdateRequest
+		{
+			PolicyTitle = created.PolicyTitle,
+			LeaveType = leaveType.Id,
+			AccrualPolicyType = "Yearly",
+			LeaveCount = created.LeaveCount,
+			PaidType = created.PaidType,
+			CarryForward = created.CarryForward,
+			EncashmentAllowed = created.EncashmentAllowed,
+			EncashmentTiming = created.EncashmentTiming,
+			RequiresApproval = created.RequiresApproval,
+			Description = created.Description
+		}, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var updated = await response.Content.ReadFromJsonAsync<LeavePolicyDetailResponse>(JsonOptions);
+		updated.ShouldNotBeNull();
+		updated.AccrualPolicyType.ShouldBe("Yearly");
+
+		var detailResponse = await Client.GetAsync($"{LeavePoliciesUrl}/{created.Id}");
+		detailResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var detail = await detailResponse.Content.ReadFromJsonAsync<LeavePolicyDetailResponse>(JsonOptions);
+		detail.ShouldNotBeNull();
+		detail.AccrualPolicyType.ShouldBe("Yearly");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Filter_Leave_Policies_By_Search()
 	{
 		var leaveType = await CreateLeaveTypeAsync();

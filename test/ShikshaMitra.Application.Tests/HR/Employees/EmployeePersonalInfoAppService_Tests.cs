@@ -16,6 +16,7 @@ namespace ShikshaMitra.HR.Employees;
 public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
+	private readonly IEmployeeStatusAppService _employeeStatusAppService;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IIdentityUserRepository _userRepository;
 	private readonly IdentityUserManager _userManager;
@@ -26,6 +27,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 	public EmployeePersonalInfoAppService_Tests()
 	{
 		_personalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
+		_employeeStatusAppService = GetRequiredService<IEmployeeStatusAppService>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
 		_userRepository = GetRequiredService<IIdentityUserRepository>();
 		_userManager = GetRequiredService<IdentityUserManager>();
@@ -92,6 +94,60 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 		(role.Name is not null).ShouldBeTrue();
 		var inRole = await _userManager.IsInRoleAsync(user, role.Name!);
 		inRole.ShouldBeTrue();
+	}
+
+	[Fact]
+	public async Task UpdateAsync_Should_Update_Basic_Info_Without_Requiring_Payroll_Structure()
+	{
+		var created = await _personalInfoAppService.CreateAsync(
+			await BuildCreateDtoAsync($"basic.update.{Guid.NewGuid():N}@test.com"));
+		var updatedEmail = $"basic.updated.{Guid.NewGuid():N}@test.com";
+
+		var result = await _personalInfoAppService.UpdateAsync(created.Id, new UpdateEmployeePersonalInfoDto
+		{
+			FirstName = created.FirstName,
+			LastName = created.LastName,
+			MobileNo = created.MobileNo,
+			Email = updatedEmail,
+			DateOfBirth = created.DateOfBirth,
+			GenderType = created.GenderType,
+			DateOfJoining = created.DateOfJoining,
+			EmployeeStatusType = EmployeeStatusType.Active,
+			RoleId = created.RoleId,
+			ShiftId = created.ShiftId
+		});
+
+		result.Email.ShouldBe(updatedEmail);
+		result.EmployeeStatusType.ShouldBe(EmployeeStatusType.Active);
+	}
+
+	[Fact]
+	public async Task UpdateAsync_Should_Preserve_Existing_Inactive_Status()
+	{
+		var created = await _personalInfoAppService.CreateAsync(
+			await BuildCreateDtoAsync($"inactive.update.{Guid.NewGuid():N}@test.com"));
+		await _employeeStatusAppService.ChangeStatusAsync(created.Id, new ChangeEmployeeStatusDto
+		{
+			EmployeeStatusType = EmployeeStatusType.Inactive,
+			Remarks = "Temporarily inactive"
+		});
+
+		var result = await _personalInfoAppService.UpdateAsync(created.Id, new UpdateEmployeePersonalInfoDto
+		{
+			FirstName = "Updated",
+			LastName = created.LastName,
+			MobileNo = created.MobileNo,
+			Email = $"inactive.updated.{Guid.NewGuid():N}@test.com",
+			DateOfBirth = created.DateOfBirth,
+			GenderType = created.GenderType,
+			DateOfJoining = created.DateOfJoining,
+			EmployeeStatusType = EmployeeStatusType.Active,
+			RoleId = created.RoleId,
+			ShiftId = created.ShiftId
+		});
+
+		result.FirstName.ShouldBe("Updated");
+		result.EmployeeStatusType.ShouldBe(EmployeeStatusType.Inactive);
 	}
 
 	#region Helpers

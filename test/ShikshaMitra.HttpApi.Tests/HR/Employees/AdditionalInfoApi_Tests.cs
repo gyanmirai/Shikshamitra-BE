@@ -44,6 +44,24 @@ public class AdditionalInfoApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Get_Empty_Additional_Info_For_Employee_Without_Record()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "AddInfoEmpty");
+
+		var response = await Client.GetAsync($"{BaseUrl}/{empId}/additional-info");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<AdditionalInfoContract>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.BplCardNo.ShouldBeNull();
+		body.SecondLanguage.ShouldBeNull();
+		body.PersonWithDisability.ShouldBeFalse();
+		body.IsLibraryMember.ShouldBeFalse();
+		body.IsTransportMember.ShouldBeFalse();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Create_Additional_Info_Via_Put()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "AddInfoPut");

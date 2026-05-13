@@ -23,8 +23,18 @@ public class CreateDeductionComponentDtoValidator : AbstractValidator<CreateDedu
 		RuleFor(x => x.Amount)
 			.NotNull()
 			.GreaterThanOrEqualTo(0)
-			.When(x => x.CalculationType == Settings.CalculationType.Amount)
-			.WithMessage("Amount is required when calculationType is AMOUNT.");
+			.When(x =>
+				x.ComponentType == DeductionComponentType.Fixed
+				&& x.CalculationType == Settings.CalculationType.Amount)
+			.WithMessage("Amount is required when deductionType is FIXED and calculationType is AMOUNT.");
+
+		RuleFor(x => x.Amount)
+			.GreaterThanOrEqualTo(0)
+			.When(x =>
+				x.Amount.HasValue
+				&& !(x.ComponentType == DeductionComponentType.Fixed
+				     && x.CalculationType == Settings.CalculationType.Amount))
+			.WithMessage("Amount must be a non-negative number.");
 
 		RuleFor(x => x.Percentage)
 			.NotNull()

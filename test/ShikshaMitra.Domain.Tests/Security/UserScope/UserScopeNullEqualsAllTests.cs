@@ -118,4 +118,208 @@ public class UserScopeNullEqualsAllTests
         scope.DivisionIds.Count.ShouldBe(2);
         scope.HasWildcardDivision.ShouldBeFalse();
     }
+
+    [Fact]
+    public void UserScopeAssignment_WithSpecificChildIds_ShouldNotGrantWildcardParentAccess()
+    {
+        // Arrange - mirrors HR bulk payload where board/medium are empty, but stage and standard are selected.
+        var assignment = new UserScopeAssignment(
+            id: Guid.NewGuid(),
+            tenantId: Guid.NewGuid(),
+            userId: Guid.NewGuid(),
+            academicYearId: Guid.NewGuid(),
+            educationBoardId: null,
+            educationMediumId: null,
+            educationMediumStageId: Guid.NewGuid(),
+            standardId: Guid.NewGuid(),
+            divisionId: null);
+
+        // Assert
+        assignment.GrantsAllBoardsInAcademicYear().ShouldBeFalse();
+        assignment.GrantsAllMediumsInBoard().ShouldBeFalse();
+        assignment.GrantsAllMediumStagesInMedium().ShouldBeFalse();
+        assignment.GrantsAllStandardsInMediumStage().ShouldBeFalse();
+        assignment.GrantsAllDivisionsInStandard().ShouldBeTrue();
+    }
+
+    [Fact]
+    public void UserScopeAssignment_WithAcademicYearOnly_ShouldGrantAllBoardsForThatYear()
+    {
+        // Arrange
+        var assignment = new UserScopeAssignment(
+            id: Guid.NewGuid(),
+            tenantId: Guid.NewGuid(),
+            userId: Guid.NewGuid(),
+            academicYearId: Guid.NewGuid());
+
+        // Assert
+        assignment.GrantsAllAcademicYears().ShouldBeFalse();
+        assignment.GrantsAllBoardsInAcademicYear().ShouldBeTrue();
+        assignment.GrantsAllMediumsInBoard().ShouldBeFalse();
+    }
+
+    [Fact]
+    public void UserScopeAssignment_WithAllScopeIdsNull_ShouldGrantOrganizationWildcard()
+    {
+        // Arrange
+        var assignment = new UserScopeAssignment(
+            id: Guid.NewGuid(),
+            tenantId: Guid.NewGuid(),
+            userId: Guid.NewGuid());
+
+        // Assert
+        assignment.GrantsAllAcademicYears().ShouldBeTrue();
+        assignment.GrantsAllBoardsInAcademicYear().ShouldBeFalse();
+    }
+
+    [Fact]
+    public void EffectiveScope_WithOrganizationAssignment_ShouldExpandAllWildcardFlags()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var assignment = new UserScopeAssignment(
+            id: Guid.NewGuid(),
+            tenantId: Guid.NewGuid(),
+            userId: userId);
+
+        // Act
+        var scope = UserScopeContext.CreateEffective(userId, assignment.TenantId, new[] { assignment });
+
+        // Assert
+        scope.HasWildcardAcademicYear.ShouldBeTrue();
+        scope.HasWildcardBoard.ShouldBeTrue();
+        scope.HasWildcardMedium.ShouldBeTrue();
+        scope.HasWildcardMediumStage.ShouldBeTrue();
+        scope.HasWildcardStandard.ShouldBeTrue();
+        scope.HasWildcardDivision.ShouldBeTrue();
+        scope.WildcardBoardAcademicYearIds.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void EffectiveScope_WithAcademicYearAssignment_ShouldKeepYearConstraintAndExpandLowerWildcards()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var academicYearId = Guid.NewGuid();
+        var assignment = new UserScopeAssignment(
+            id: Guid.NewGuid(),
+            tenantId: Guid.NewGuid(),
+            userId: userId,
+            academicYearId: academicYearId);
+
+        // Act
+        var scope = UserScopeContext.CreateEffective(userId, assignment.TenantId, new[] { assignment });
+
+        // Assert
+        scope.AcademicYearIds.ShouldBe(new[] { academicYearId });
+        scope.HasWildcardAcademicYear.ShouldBeFalse();
+        scope.HasWildcardBoard.ShouldBeTrue();
+        scope.HasWildcardMedium.ShouldBeTrue();
+        scope.HasWildcardMediumStage.ShouldBeTrue();
+        scope.HasWildcardStandard.ShouldBeTrue();
+        scope.HasWildcardDivision.ShouldBeTrue();
+        scope.WildcardBoardAcademicYearIds.ShouldBe(new[] { academicYearId });
+        scope.HasTenantWideScope().ShouldBeFalse();
+        scope.HasAcademicYearWideScope(academicYearId).ShouldBeTrue();
+        scope.CanAccessMediumStage(Guid.NewGuid(), academicYearId: academicYearId).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void EffectiveScope_WithBoardAssignment_ShouldExpandBelowBoardOnly()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var academicYearId = Guid.NewGuid();
+        var boardId = Guid.NewGuid();
+        var assignment = new UserScopeAssignment(
+            id: Guid.NewGuid(),
+            tenantId: Guid.NewGuid(),
+            userId: userId,
+            academicYearId: academicYearId,
+            educationBoardId: boardId);
+
+        // Act
+        var scope = UserScopeContext.CreateEffective(userId, assignment.TenantId, new[] { assignment });
+
+        // Assert
+        scope.AcademicYearIds.ShouldBe(new[] { academicYearId });
+        scope.BoardIds.ShouldBe(new[] { boardId });
+        scope.HasWildcardBoard.ShouldBeFalse();
+        scope.HasWildcardMedium.ShouldBeTrue();
+        scope.HasWildcardMediumStage.ShouldBeTrue();
+        scope.HasWildcardStandard.ShouldBeTrue();
+        scope.HasWildcardDivision.ShouldBeTrue();
+        scope.WildcardMediumBoardIds.ShouldBe(new[] { boardId });
+        scope.HasTenantWideScope().ShouldBeFalse();
+        scope.CanAccessMediumStage(Guid.NewGuid()).ShouldBeFalse();
+        scope.CanAccessMediumStage(Guid.NewGuid(), boardId: boardId).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void EffectiveScope_WithMediumAssignment_ShouldExpandBelowMediumOnly()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var academicYearId = Guid.NewGuid();
+        var boardId = Guid.NewGuid();
+        var mediumId = Guid.NewGuid();
+        var assignment = new UserScopeAssignment(
+            id: Guid.NewGuid(),
+            tenantId: Guid.NewGuid(),
+            userId: userId,
+            academicYearId: academicYearId,
+            educationBoardId: boardId,
+            educationMediumId: mediumId);
+
+        // Act
+        var scope = UserScopeContext.CreateEffective(userId, assignment.TenantId, new[] { assignment });
+
+        // Assert
+        scope.BoardIds.ShouldBe(new[] { boardId });
+        scope.MediumIds.ShouldBe(new[] { mediumId });
+        scope.HasWildcardMedium.ShouldBeFalse();
+        scope.HasWildcardMediumStage.ShouldBeTrue();
+        scope.HasWildcardStandard.ShouldBeTrue();
+        scope.HasWildcardDivision.ShouldBeTrue();
+        scope.WildcardMediumStageMediumIds.ShouldBe(new[] { mediumId });
+        scope.HasTenantWideScope().ShouldBeFalse();
+        scope.CanAccessMediumStage(Guid.NewGuid()).ShouldBeFalse();
+        scope.CanAccessMediumStage(Guid.NewGuid(), mediumId: mediumId).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void EffectiveScope_WithReportedHrPayloadShape_ShouldNotExpandParentWildcards()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var academicYearId = Guid.NewGuid();
+        var mediumStageId = Guid.NewGuid();
+        var standardId = Guid.NewGuid();
+        var assignment = new UserScopeAssignment(
+            id: Guid.NewGuid(),
+            tenantId: Guid.NewGuid(),
+            userId: userId,
+            academicYearId: academicYearId,
+            educationBoardId: null,
+            educationMediumId: null,
+            educationMediumStageId: mediumStageId,
+            standardId: standardId,
+            divisionId: null);
+
+        // Act
+        var scope = UserScopeContext.CreateEffective(userId, assignment.TenantId, new[] { assignment });
+
+        // Assert
+        scope.AcademicYearIds.ShouldBe(new[] { academicYearId });
+        scope.BoardIds.ShouldBeEmpty();
+        scope.MediumIds.ShouldBeEmpty();
+        scope.MediumStageIds.ShouldBe(new[] { mediumStageId });
+        scope.StandardIds.ShouldBe(new[] { standardId });
+        scope.HasWildcardBoard.ShouldBeFalse();
+        scope.HasWildcardMedium.ShouldBeFalse();
+        scope.HasWildcardMediumStage.ShouldBeFalse();
+        scope.HasWildcardStandard.ShouldBeFalse();
+        scope.HasWildcardDivision.ShouldBeTrue();
+        scope.WildcardDivisionStandardIds.ShouldBe(new[] { standardId });
+    }
 }

@@ -22,6 +22,7 @@ public class EmployeeReportAppService(
 	IEmployeeRepository employeeRepository,
 	IRepository<EmployeeAttendance, Guid> employeeAttendanceRepository,
 	IUserScopeService userScopeService,
+	HrUserScopeAccessService hrScopeAccessService,
 	HRPdfService hrPdfService,
 	HRExcelService hrExcelService)
 	: ApplicationService, IEmployeeReportAppService
@@ -76,7 +77,7 @@ public class EmployeeReportAppService(
 
 		query = query.WhereIf(genderType != null, e => e.GenderType == genderType);
 
-		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		if (HrUserScopeAccess.HasHrWideAccess(scope))
 		{
 			return query;
 		}
@@ -87,12 +88,23 @@ public class EmployeeReportAppService(
 			attendanceQuery = attendanceQuery.Where(a => a.TenantId == CurrentTenant.Id);
 		}
 
-		var scopedStageEmployeeIds = attendanceQuery
-			.Where(a =>
-				a.EducationMediumStageId.HasValue &&
-				scope.MediumStageIds.Contains(a.EducationMediumStageId!.Value))
-			.Select(a => a.EmployeeId)
-			.Distinct();
+		var employeeStageRows = await AsyncExecuter.ToListAsync(
+			attendanceQuery
+				.Where(a => a.EducationMediumStageId.HasValue)
+				.Select(a => new { a.EmployeeId, a.EducationMediumStageId }));
+		var employeeStageMap = employeeStageRows
+			.GroupBy(x => x.EmployeeId)
+			.ToDictionary(
+				x => x.Key,
+				x => (IReadOnlyCollection<Guid>)x
+					.Select(row => row.EducationMediumStageId!.Value)
+					.Distinct()
+					.ToList());
+		var scopedStageEmployeeIds = await hrScopeAccessService.FilterEmployeeIdsByStagesAsync(
+			employeeStageMap.Keys.ToList(),
+			employeeStageMap,
+			scope,
+			includeUnknownStageEmployees: false);
 
 		// Deny unknown-stage employees for scoped users to avoid cross-scope exposure.
 		return query.Where(e => scopedStageEmployeeIds.Contains(e.Id));
@@ -107,12 +119,12 @@ public class EmployeeReportAppService(
 		}
 
 		var scope = await userScopeService.GetUserScopeAsync(uid.Value);
-		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		if (HrUserScopeAccess.HasHrWideAccess(scope))
 		{
 			return scope;
 		}
 
-		if (scope.MediumStageIds.Count == 0)
+		if (!HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
 		{
 			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 		}

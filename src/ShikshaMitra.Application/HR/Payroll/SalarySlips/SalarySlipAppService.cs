@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
+using ShikshaMitra.HR;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.Services;
@@ -27,6 +28,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 	private readonly IRepository<EmployeeAttendance, Guid> _employeeAttendanceRepository;
 	private readonly SalarySlipManager _salarySlipManager;
 	private readonly IUserScopeService _userScopeService;
+	private readonly HrUserScopeAccessService _hrScopeAccessService;
 	private readonly IDistributedCache<SalarySlipDto> _cache;
 	private readonly ILogger<SalarySlipAppService> _logger;
 
@@ -36,6 +38,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		IRepository<EmployeeAttendance, Guid> employeeAttendanceRepository,
 		SalarySlipManager salarySlipManager,
 		IUserScopeService userScopeService,
+		HrUserScopeAccessService hrScopeAccessService,
 		IDistributedCache<SalarySlipDto> cache,
 		ILogger<SalarySlipAppService> logger)
 	{
@@ -44,6 +47,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		_employeeAttendanceRepository = employeeAttendanceRepository;
 		_salarySlipManager = salarySlipManager;
 		_userScopeService = userScopeService;
+		_hrScopeAccessService = hrScopeAccessService;
 		_cache = cache;
 		_logger = logger;
 	}
@@ -334,7 +338,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 	private async Task EnsureEmployeeScopeAllowedAsync(Guid employeeId)
 	{
 		var scope = await EnsureCanOperatePayrollAsync();
-		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		if (HrUserScopeAccess.HasHrWideAccess(scope))
 		{
 			return;
 		}
@@ -345,7 +349,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 		}
 
-		if (!scope.MediumStageIds.Contains(employeeStageId.Value))
+		if (!await _hrScopeAccessService.CanAccessEmployeeStageAsync(scope, employeeStageId.Value))
 		{
 			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 		}
@@ -360,12 +364,12 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		}
 
 		var scope = await _userScopeService.GetUserScopeAsync(uid.Value);
-		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		if (HrUserScopeAccess.HasHrWideAccess(scope))
 		{
 			return scope;
 		}
 
-		if (scope.MediumStageIds.Count == 0)
+		if (!HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
 		{
 			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 		}

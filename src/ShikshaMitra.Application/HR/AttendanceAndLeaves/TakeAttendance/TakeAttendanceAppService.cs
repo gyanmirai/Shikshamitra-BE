@@ -24,6 +24,7 @@ public class TakeAttendanceAppService(
 	IEmployeeAttendanceRepository employeeAttendanceRepository,
 	IStaffAttendanceDayLockRepository staffAttendanceDayLockRepository,
 	IUserScopeService userScopeService,
+	HrUserScopeAccessService hrScopeAccessService,
 	IRepository<ShiftManagement, Guid> shiftRepository)
 	: ApplicationService, ITakeAttendanceAppService
 {
@@ -80,7 +81,7 @@ public class TakeAttendanceAppService(
 
 		var allEmployeeIds = await AsyncExecuter.ToListAsync(empQuery.Select(e => e.Id));
 		var employeeStageMap = await ResolveEmployeeStagesAsync(allEmployeeIds);
-		var scopedEmployeeIds = FilterEmployeeIdsByScope(allEmployeeIds, employeeStageMap, scope);
+		var scopedEmployeeIds = await FilterEmployeeIdsByScopeAsync(allEmployeeIds, employeeStageMap, scope);
 		empQuery = empQuery.Where(e => scopedEmployeeIds.Contains(e.Id));
 
 		var attBaseQuery = await employeeAttendanceRepository.GetQueryableAsync();
@@ -215,7 +216,7 @@ public class TakeAttendanceAppService(
 			}
 			resolvedStageId = ResolveScopedStageFallback(scope, resolvedStageId);
 
-			EnsureEmployeeScopeAllowed(scope, resolvedStageId);
+			await EnsureEmployeeScopeAllowedAsync(scope, resolvedStageId);
 
 			if (existing != null)
 			{
@@ -295,12 +296,12 @@ public class TakeAttendanceAppService(
 		}
 
 		var scope = await userScopeService.GetUserScopeAsync(uid.Value);
-		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		if (HrUserScopeAccess.HasHrWideAccess(scope))
 		{
 			return scope;
 		}
 
-		if (scope.MediumStageIds.Count == 0)
+		if (!HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
 		{
 			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 		}
@@ -308,27 +309,16 @@ public class TakeAttendanceAppService(
 		return scope;
 	}
 
-	private static List<Guid> FilterEmployeeIdsByScope(
+	private Task<List<Guid>> FilterEmployeeIdsByScopeAsync(
 		List<Guid> employeeIds,
 		Dictionary<Guid, Guid?> employeeStageMap,
 		UserScopeContext scope)
 	{
-		if (scope.IsAdmin || scope.HasWildcardMediumStage)
-		{
-			return employeeIds;
-		}
-
-		return employeeIds
-			.Where(id =>
-			{
-				if (!employeeStageMap.TryGetValue(id, out var stageId) || !stageId.HasValue)
-				{
-					return scope.MediumStageIds.Count == 1;
-				}
-
-				return scope.MediumStageIds.Contains(stageId.Value);
-			})
-			.ToList();
+		return hrScopeAccessService.FilterEmployeeIdsByStageAsync(
+			employeeIds,
+			employeeStageMap,
+			scope,
+			includeUnknownStageEmployees: scope.MediumStageIds.Count == 1);
 	}
 
 	private static TakeAttendanceStatus MapDomainStatus(EmployeeAttendanceStatusType s) =>
@@ -340,22 +330,19 @@ public class TakeAttendanceAppService(
 			_ => TakeAttendanceStatus.NotMarked
 		};
 
-	private void EnsureEmployeeScopeAllowed(UserScopeContext scope, Guid? employeeStageId)
+	private async Task EnsureEmployeeScopeAllowedAsync(UserScopeContext scope, Guid? employeeStageId)
 	{
-		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		if (await hrScopeAccessService.CanAccessEmployeeStageAsync(scope, employeeStageId))
 		{
 			return;
 		}
 
-		if (!employeeStageId.HasValue || !scope.MediumStageIds.Contains(employeeStageId.Value))
-		{
-			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
-		}
+		throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 	}
 
 	private static Guid? ResolveScopedStageFallback(UserScopeContext scope, Guid? employeeStageId)
 	{
-		if (employeeStageId.HasValue || scope.IsAdmin || scope.HasWildcardMediumStage)
+		if (employeeStageId.HasValue || HrUserScopeAccess.HasHrWideAccess(scope))
 		{
 			return employeeStageId;
 		}
@@ -365,7 +352,7 @@ public class TakeAttendanceAppService(
 
 	private static void EnsureTenantWideDayLockAllowed(UserScopeContext scope)
 	{
-		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		if (HrUserScopeAccess.HasHrWideAccess(scope))
 		{
 			return;
 		}

@@ -52,6 +52,8 @@ public class SalaryDetailsContract
 /// </summary>
 public class SalaryComponentContract
 {
+	public Guid? Id { get; set; }
+
 	public Guid? ComponentId { get; set; }
 
 	[Required]
@@ -60,4 +62,6 @@ public class SalaryComponentContract
 	public decimal? Amount { get; set; }
 
 	public bool? IsFixed { get; set; }
+
+	public bool? IsTemp { get; set; }
 }

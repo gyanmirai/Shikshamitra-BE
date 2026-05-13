@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -194,6 +195,110 @@ public class EmployeeSalaryStructureApi_Tests : ShikshaMitraApiTestBase
 		payload.DeductionComponents.Count.ShouldBe(1);
 		payload.EarningComponents[0].ApplicableMonth.ShouldBeNull();
 		payload.DeductionComponents[0].ApplicableMonth.ShouldBeNull();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_ReSubmit_Temporary_Component_When_ComponentId_Is_Row_Id()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "SalTempRowId");
+		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, "SalTempMaster");
+		var deductionComponent = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "SalTempDed");
+		var tempApplicableMonth = new DateTime(2027, 8, 1, 0, 0, 0, DateTimeKind.Utc);
+
+		var firstUpdate = new UpdateSalaryStructureDto
+		{
+			EarningComponents = new List<SalaryComponentDto>
+			{
+				new()
+				{
+					ComponentId = earningComponent.Id,
+					Name = earningComponent.Name,
+					Amount = 10000m,
+					IsFixed = true,
+					IsTemp = false,
+				},
+				new()
+				{
+					Name = "Temp earning 1",
+					Amount = 1222m,
+					IsFixed = false,
+					IsTemp = true,
+					ApplicableMonth = tempApplicableMonth,
+				}
+			},
+			DeductionComponents = new List<SalaryComponentDto>
+			{
+				new()
+				{
+					ComponentId = deductionComponent.Id,
+					Name = deductionComponent.Name,
+					Amount = 220m,
+					IsFixed = true,
+					IsTemp = false,
+				}
+			}
+		};
+
+		var firstResponse = await Client.PutAsJsonAsync(Url(empId), firstUpdate, JsonOptions);
+		firstResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var getResponse = await Client.GetAsync(Url(empId));
+		var saved = await getResponse.Content.ReadFromJsonAsync<SalaryStructureResponseDto>(JsonOptions);
+		saved.ShouldNotBeNull();
+		saved.EarningComponents.Count(x => x.IsTemp).ShouldBe(1);
+		var temp = saved.EarningComponents.First(x => x.IsTemp);
+		temp.ComponentId.ShouldBeNull();
+
+		temp.ComponentId = temp.Id;
+		var secondUpdate = new UpdateSalaryStructureDto
+		{
+			EarningComponents = saved.EarningComponents,
+			DeductionComponents = saved.DeductionComponents
+		};
+
+		var secondResponse = await Client.PutAsJsonAsync(Url(empId), secondUpdate, JsonOptions);
+		secondResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var verifyResponse = await Client.GetAsync(Url(empId));
+		var verified = await verifyResponse.Content.ReadFromJsonAsync<SalaryStructureResponseDto>(JsonOptions);
+		verified.ShouldNotBeNull();
+		verified.EarningComponents.Count(x => x.IsTemp).ShouldBe(1);
+		var verifiedTemp = verified.EarningComponents.First(x => x.IsTemp);
+		verifiedTemp.Name.ShouldBe("Temp earning 1");
+		verifiedTemp.Amount.ShouldBe(1222m);
+		verifiedTemp.ComponentId.ShouldBeNull();
+		verifiedTemp.ApplicableMonth.ShouldBe(tempApplicableMonth);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Temporary_Component_With_Forged_ComponentId()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "SalForgedTemp");
+
+		var updateDto = new UpdateSalaryStructureDto
+		{
+			EarningComponents = new List<SalaryComponentDto>
+			{
+				new()
+				{
+					ComponentId = Guid.NewGuid(),
+					Name = "Forged temp earning",
+					Amount = 1000m,
+					IsFixed = false,
+					IsTemp = true,
+					ApplicableMonth = new DateTime(2027, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+				}
+			},
+			DeductionComponents = new List<SalaryComponentDto>()
+		};
+
+		var response = await Client.PutAsJsonAsync(Url(empId), updateDto, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var body = await response.Content.ReadAsStringAsync();
+		body.ShouldNotContain("<html", Case.Insensitive);
 	}
 
 	#endregion

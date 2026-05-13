@@ -53,7 +53,7 @@ public class DeductionComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SetName(name);
 		Description = description;
 		ComponentType = componentType;
-		SetCalculationFields(calculationType, amount, percentage, selectedDeductionComponentId);
+		SetCalculationFields(componentType, calculationType, amount, percentage, selectedDeductionComponentId);
 		DependOn = dependOn;
 		VisibleInPayslip = visibleInPayslip;
 		DisplayOrder = displayOrder;
@@ -75,7 +75,7 @@ public class DeductionComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SetName(name);
 		Description = description;
 		ComponentType = componentType;
-		SetCalculationFields(calculationType, amount, percentage, selectedDeductionComponentId);
+		SetCalculationFields(componentType, calculationType, amount, percentage, selectedDeductionComponentId);
 		DependOn = dependOn;
 		VisibleInPayslip = visibleInPayslip;
 		DisplayOrder = displayOrder;
@@ -94,6 +94,7 @@ public class DeductionComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	private void SetCalculationFields(
+		DeductionComponentType componentType,
 		CalculationType calculationType,
 		decimal? amount,
 		decimal? percentage,
@@ -103,13 +104,19 @@ public class DeductionComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		if (calculationType == CalculationType.Amount)
 		{
-			if (!amount.HasValue || amount.Value < 0)
+			if (componentType == DeductionComponentType.Fixed && !amount.HasValue)
 			{
 				throw new BusinessException("ShikshaMitra:InvalidAmount")
-					.WithData("message", "Amount must be a non-negative number when calculationType is AMOUNT.");
+					.WithData("message", "Amount is required when deductionType is FIXED and calculationType is AMOUNT.");
 			}
 
-			Amount = amount.Value;
+			if (amount is < 0)
+			{
+				throw new BusinessException("ShikshaMitra:InvalidAmount")
+					.WithData("message", "Amount must be a non-negative number.");
+			}
+
+			Amount = amount;
 			Percentage = null;
 			SelectedDeductionComponentId = null;
 		}

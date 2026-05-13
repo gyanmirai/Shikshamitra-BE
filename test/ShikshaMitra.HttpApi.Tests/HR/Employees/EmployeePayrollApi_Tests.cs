@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -238,6 +239,210 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 		payroll.EarningComponents[0].Amount.ShouldBe(5500m);
 		payroll.DeductionComponents![0].ComponentId.ShouldBe(deductionComponent.Id);
 		payroll.DeductionComponents[0].Amount.ShouldBe(1300m);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_ReSubmit_Payroll_With_Custom_Temporary_Earning_Component()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayTemp");
+		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, "PayTempE1");
+		var deductionComponent = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "PayTempD1");
+
+		var request = new PayrollContract
+		{
+			BankDetails = new BankDetailsContract
+			{
+				BankName = "HDFC Bank",
+				BranchName = "Main Branch",
+				AccountHolderName = "Payroll Temp Employee",
+				AccountNumber = "1234567890",
+				IfscCode = "HDFC0001234",
+			},
+			SalaryDetails = new SalaryDetailsContract
+			{
+				TotalWorkingHourPerMonth = 160m,
+				PunchId = "TEMP1",
+			},
+			EarningComponents = new List<SalaryComponentContract>
+			{
+				new()
+				{
+					ComponentId = earningComponent.Id,
+					Name = earningComponent.Name,
+					Amount = 5000m,
+					IsFixed = true
+				},
+				new()
+				{
+					Name = "Temp earning",
+					Amount = 10000m,
+					IsFixed = false
+				}
+			},
+			DeductionComponents = new List<SalaryComponentContract>
+			{
+				new()
+				{
+					ComponentId = deductionComponent.Id,
+					Name = deductionComponent.Name,
+					Amount = 1200m,
+					IsFixed = true
+				}
+			}
+		};
+
+		var firstResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		firstResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var saved = await getResponse.Content.ReadFromJsonAsync<EmployeePayrollResponse>(JsonOptions);
+		saved.ShouldNotBeNull();
+		saved.EarningComponents.ShouldNotBeNull();
+
+		var secondResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", saved, JsonOptions);
+		secondResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var verifyResponse = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
+		var verified = await verifyResponse.Content.ReadFromJsonAsync<EmployeePayrollResponse>(JsonOptions);
+		verified.ShouldNotBeNull();
+		verified.EarningComponents!.ShouldContain(x => x.Name == "Temp earning" && x.IsTemp == true);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Invalid_Deduction_ComponentId()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayBadDed");
+
+		var request = new PayrollContract
+		{
+			DeductionComponents = new List<SalaryComponentContract>
+			{
+				new()
+				{
+					ComponentId = Guid.NewGuid(),
+					Name = "Forged deduction",
+					Amount = 100m,
+					IsFixed = true
+				}
+			}
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var body = await response.Content.ReadAsStringAsync();
+		body.ShouldNotContain("<html", Case.Insensitive);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Not_Link_Temporary_Component_By_Master_Name_On_RoundTrip()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayTempName");
+		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, "PayTempSameName");
+		var deductionComponent = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "PayTempNameDed");
+
+		var request = new PayrollContract
+		{
+			BankDetails = new BankDetailsContract
+			{
+				BankName = "HDFC Bank",
+				BranchName = "Payroll Branch",
+				AccountHolderName = "Temp Name Employee",
+				AccountNumber = "1234567890",
+				IfscCode = "HDFC0001234"
+			},
+			EarningComponents = new List<SalaryComponentContract>
+			{
+				new()
+				{
+					ComponentId = earningComponent.Id,
+					Name = earningComponent.Name,
+					Amount = 5000m,
+					IsFixed = true
+				},
+				new()
+				{
+					Name = earningComponent.Name,
+					Amount = 750m,
+					IsFixed = false,
+					IsTemp = true
+				}
+			},
+			DeductionComponents = new List<SalaryComponentContract>
+			{
+				new()
+				{
+					ComponentId = deductionComponent.Id,
+					Name = deductionComponent.Name,
+					Amount = 120m,
+					IsFixed = true
+				}
+			}
+		};
+
+		var firstResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		firstResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
+		var saved = await getResponse.Content.ReadFromJsonAsync<EmployeePayrollResponse>(JsonOptions);
+		saved.ShouldNotBeNull();
+		saved.EarningComponents!.ShouldContain(x =>
+			x.Name == earningComponent.Name &&
+			x.Amount == 750m &&
+			x.IsTemp == true &&
+			x.ComponentId == null);
+
+		var secondResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", saved, JsonOptions);
+		secondResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var verifyResponse = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
+		var verified = await verifyResponse.Content.ReadFromJsonAsync<EmployeePayrollResponse>(JsonOptions);
+		verified.ShouldNotBeNull();
+		verified.EarningComponents!.ShouldContain(x =>
+			x.Name == earningComponent.Name &&
+			x.Amount == 750m &&
+			x.IsTemp == true &&
+			x.ComponentId == null);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Forged_ComponentId_Even_When_Custom_Row_Id_Is_Valid()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayForgedWithRow");
+
+		var firstRequest = new PayrollContract
+		{
+			EarningComponents = new List<SalaryComponentContract>
+			{
+				new()
+				{
+					Name = "One time allowance",
+					Amount = 900m,
+					IsFixed = false,
+					IsTemp = true
+				}
+			}
+		};
+
+		var firstResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", firstRequest, JsonOptions);
+		firstResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
+		var saved = await getResponse.Content.ReadFromJsonAsync<EmployeePayrollResponse>(JsonOptions);
+		saved.ShouldNotBeNull();
+		var customRow = saved.EarningComponents!.Single(x => x.IsTemp == true);
+		customRow.ComponentId = Guid.NewGuid();
+
+		var forgedResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", saved, JsonOptions);
+
+		forgedResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var body = await forgedResponse.Content.ReadAsStringAsync();
+		body.ShouldNotContain("<html", Case.Insensitive);
 	}
 
 	[Fact]

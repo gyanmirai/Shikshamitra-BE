@@ -213,4 +213,42 @@ public class UserScopeAssignment : FullAuditedAggregateRoot<Guid>, IMultiTenant,
         if (AcademicYearId.HasValue) return ScopeLevel.AcademicYear;
         return ScopeLevel.Organization;
     }
+
+    public bool GrantsAllAcademicYears() =>
+        !AcademicYearId.HasValue
+        && !EducationBoardId.HasValue
+        && !EducationMediumId.HasValue
+        && !EducationMediumStageId.HasValue
+        && !StandardId.HasValue
+        && !DivisionId.HasValue;
+
+    public bool GrantsAllBoardsInAcademicYear() =>
+        AcademicYearId.HasValue
+        && !EducationBoardId.HasValue
+        && !EducationMediumId.HasValue
+        && !EducationMediumStageId.HasValue
+        && !StandardId.HasValue
+        && !DivisionId.HasValue;
+
+    public bool GrantsAllMediumsInBoard() =>
+        EducationBoardId.HasValue
+        && !EducationMediumId.HasValue
+        && !EducationMediumStageId.HasValue
+        && !StandardId.HasValue
+        && !DivisionId.HasValue;
+
+    public bool GrantsAllMediumStagesInMedium() =>
+        EducationMediumId.HasValue
+        && !EducationMediumStageId.HasValue
+        && !StandardId.HasValue
+        && !DivisionId.HasValue;
+
+    public bool GrantsAllStandardsInMediumStage() =>
+        EducationMediumStageId.HasValue
+        && !StandardId.HasValue
+        && !DivisionId.HasValue;
+
+    public bool GrantsAllDivisionsInStandard() =>
+        StandardId.HasValue
+        && !DivisionId.HasValue;
 }

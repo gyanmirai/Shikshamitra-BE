@@ -52,33 +52,75 @@ public static class UserScopeQueryExtensions
 		// IMPORTANT: Academic Year is enforced as a TOP-LEVEL FILTER across all checks.
 		// User must have access to the entity's academic year (or wildcard) to see it at all.
 		var baseFilter = queryable.Where(e =>
+			// Academic-year-wide and organization-wide scopes have effective access to every
+			// hierarchy row inside the academic-year filter applied below.
+			userScope.HasWildcardAcademicYear ||
+			(e.AcademicYearId.HasValue &&
+			 userScope.WildcardBoardAcademicYearIds.Contains(e.AcademicYearId.Value)) ||
+
 			// Division level (most specific)
-			// Wildcard: ALL divisions WITHIN assigned standards
+			// Wildcard: ALL divisions WITHIN any provable assigned parent scope
 			// Specific: exact division match
 			(e.DivisionId.HasValue && (
 				(userScope.HasWildcardDivision &&
-				 e.StandardId.HasValue &&
-				 userScope.StandardIds.Contains(e.StandardId.Value)) ||
+				 (
+					(e.StandardId.HasValue &&
+					 (userScope.StandardIds.Contains(e.StandardId.Value) ||
+					  userScope.WildcardDivisionStandardIds.Contains(e.StandardId.Value))) ||
+					(userScope.HasWildcardStandard &&
+					 e.EducationMediumStageId.HasValue &&
+					 userScope.WildcardStandardMediumStageIds.Contains(e.EducationMediumStageId.Value)) ||
+					(userScope.HasWildcardMediumStage &&
+					 e.EducationMediumId.HasValue &&
+					 userScope.WildcardMediumStageMediumIds.Contains(e.EducationMediumId.Value)) ||
+					(userScope.HasWildcardMedium &&
+					 e.EducationBoardId.HasValue &&
+					 userScope.WildcardMediumBoardIds.Contains(e.EducationBoardId.Value)) ||
+					userScope.HasWildcardAcademicYear ||
+					(e.AcademicYearId.HasValue &&
+					 userScope.WildcardBoardAcademicYearIds.Contains(e.AcademicYearId.Value))
+				 )) ||
 				userScope.DivisionIds.Contains(e.DivisionId.Value)
 			)) ||
 
 			// Standard/Class level
-			// Wildcard: ALL standards WITHIN assigned medium stages
+			// Wildcard: ALL standards WITHIN any provable assigned parent scope
 			// Specific: exact standard match
 			(e.StandardId.HasValue && (
 				(userScope.HasWildcardStandard &&
-				 e.EducationMediumStageId.HasValue &&
-				 userScope.MediumStageIds.Contains(e.EducationMediumStageId.Value)) ||
+				 (
+					(e.EducationMediumStageId.HasValue &&
+					 (userScope.MediumStageIds.Contains(e.EducationMediumStageId.Value) ||
+					  userScope.WildcardStandardMediumStageIds.Contains(e.EducationMediumStageId.Value))) ||
+					(userScope.HasWildcardMediumStage &&
+					 e.EducationMediumId.HasValue &&
+					 userScope.WildcardMediumStageMediumIds.Contains(e.EducationMediumId.Value)) ||
+					(userScope.HasWildcardMedium &&
+					 e.EducationBoardId.HasValue &&
+					 userScope.WildcardMediumBoardIds.Contains(e.EducationBoardId.Value)) ||
+					userScope.HasWildcardAcademicYear ||
+					(e.AcademicYearId.HasValue &&
+					 userScope.WildcardBoardAcademicYearIds.Contains(e.AcademicYearId.Value))
+				 )) ||
 				userScope.StandardIds.Contains(e.StandardId.Value)
 			)) ||
 
 			// Medium Stage level
-			// Wildcard: ALL stages WITHIN assigned mediums
+			// Wildcard: ALL stages WITHIN any provable assigned parent scope
 			// Specific: exact stage match
 			(e.EducationMediumStageId.HasValue && (
 				(userScope.HasWildcardMediumStage &&
-				 e.EducationMediumId.HasValue &&
-				 userScope.MediumIds.Contains(e.EducationMediumId.Value)) ||
+				 (
+					(e.EducationMediumId.HasValue &&
+					 (userScope.MediumIds.Contains(e.EducationMediumId.Value) ||
+					  userScope.WildcardMediumStageMediumIds.Contains(e.EducationMediumId.Value))) ||
+					(userScope.HasWildcardMedium &&
+					 e.EducationBoardId.HasValue &&
+					 userScope.WildcardMediumBoardIds.Contains(e.EducationBoardId.Value)) ||
+					userScope.HasWildcardAcademicYear ||
+					(e.AcademicYearId.HasValue &&
+					 userScope.WildcardBoardAcademicYearIds.Contains(e.AcademicYearId.Value))
+				 )) ||
 				userScope.MediumStageIds.Contains(e.EducationMediumStageId.Value)
 			)) ||
 
@@ -87,8 +129,13 @@ public static class UserScopeQueryExtensions
 			// Specific: exact medium match
 			(e.EducationMediumId.HasValue && (
 				(userScope.HasWildcardMedium &&
-				 e.EducationBoardId.HasValue &&
-				 userScope.BoardIds.Contains(e.EducationBoardId.Value)) ||
+				 (
+					(e.EducationBoardId.HasValue &&
+					 userScope.WildcardMediumBoardIds.Contains(e.EducationBoardId.Value)) ||
+					userScope.HasWildcardAcademicYear ||
+					(e.AcademicYearId.HasValue &&
+					 userScope.WildcardBoardAcademicYearIds.Contains(e.AcademicYearId.Value))
+				 )) ||
 				userScope.MediumIds.Contains(e.EducationMediumId.Value)
 			)) ||
 
@@ -96,7 +143,9 @@ public static class UserScopeQueryExtensions
 			// Wildcard: ALL boards (no parent constraint)
 			// Specific: exact board match
 			(e.EducationBoardId.HasValue && (
-				userScope.HasWildcardBoard ||
+				userScope.HasWildcardAcademicYear ||
+				(e.AcademicYearId.HasValue &&
+				 userScope.WildcardBoardAcademicYearIds.Contains(e.AcademicYearId.Value)) ||
 				userScope.BoardIds.Contains(e.EducationBoardId.Value)
 			))
 		);
@@ -164,33 +213,69 @@ public static class UserScopeQueryExtensions
 			}
 		}
 
-		// Check each level of the hierarchy from most specific to least specific
-		// Wildcards grant access to ALL entities at that level WITHIN parent constraints
+		// Academic-year-wide and organization-wide scopes have effective access to every
+		// hierarchy row inside the academic-year filter checked above.
+		if (HasBoardWideAccess(entity, userScope))
+			return true;
+
+		// Check each level of the hierarchy from most specific to least specific.
+		// Wildcards grant access to all entities at that level when the row carries enough
+		// parent information to prove it is inside the assigned parent scope.
 
 		// 1. Division level (most granular)
-		// Wildcard: division within assigned standards, OR specific match
+		// Wildcard: division within any provable assigned parent scope, OR specific match
 		if (entity.DivisionId.HasValue && (
 			(userScope.HasWildcardDivision &&
-			 entity.StandardId.HasValue &&
-			 userScope.StandardIds.Contains(entity.StandardId.Value)) ||
+			 (
+				(entity.StandardId.HasValue &&
+				 (userScope.StandardIds.Contains(entity.StandardId.Value) ||
+				  userScope.WildcardDivisionStandardIds.Contains(entity.StandardId.Value))) ||
+				(userScope.HasWildcardStandard &&
+				 entity.EducationMediumStageId.HasValue &&
+				 userScope.WildcardStandardMediumStageIds.Contains(entity.EducationMediumStageId.Value)) ||
+				(userScope.HasWildcardMediumStage &&
+				 entity.EducationMediumId.HasValue &&
+				 userScope.WildcardMediumStageMediumIds.Contains(entity.EducationMediumId.Value)) ||
+				(userScope.HasWildcardMedium &&
+				 entity.EducationBoardId.HasValue &&
+				 userScope.WildcardMediumBoardIds.Contains(entity.EducationBoardId.Value)) ||
+				HasBoardWideAccess(entity, userScope)
+			 )) ||
 			userScope.DivisionIds.Contains(entity.DivisionId.Value)))
 			return true;
 
 		// 2. Standard/Class level
-		// Wildcard: standard within assigned stages, OR specific match
+		// Wildcard: standard within any provable assigned parent scope, OR specific match
 		if (entity.StandardId.HasValue && (
 			(userScope.HasWildcardStandard &&
-			 entity.EducationMediumStageId.HasValue &&
-			 userScope.MediumStageIds.Contains(entity.EducationMediumStageId.Value)) ||
+			 (
+				(entity.EducationMediumStageId.HasValue &&
+				 (userScope.MediumStageIds.Contains(entity.EducationMediumStageId.Value) ||
+				  userScope.WildcardStandardMediumStageIds.Contains(entity.EducationMediumStageId.Value))) ||
+				(userScope.HasWildcardMediumStage &&
+				 entity.EducationMediumId.HasValue &&
+				 userScope.WildcardMediumStageMediumIds.Contains(entity.EducationMediumId.Value)) ||
+				(userScope.HasWildcardMedium &&
+				 entity.EducationBoardId.HasValue &&
+				 userScope.WildcardMediumBoardIds.Contains(entity.EducationBoardId.Value)) ||
+				HasBoardWideAccess(entity, userScope)
+			 )) ||
 			userScope.StandardIds.Contains(entity.StandardId.Value)))
 			return true;
 
 		// 3. Medium Stage level
-		// Wildcard: stage within assigned mediums, OR specific match
+		// Wildcard: stage within any provable assigned parent scope, OR specific match
 		if (entity.EducationMediumStageId.HasValue && (
 			(userScope.HasWildcardMediumStage &&
-			 entity.EducationMediumId.HasValue &&
-			 userScope.MediumIds.Contains(entity.EducationMediumId.Value)) ||
+			 (
+				(entity.EducationMediumId.HasValue &&
+				 (userScope.MediumIds.Contains(entity.EducationMediumId.Value) ||
+				  userScope.WildcardMediumStageMediumIds.Contains(entity.EducationMediumId.Value))) ||
+				(userScope.HasWildcardMedium &&
+				 entity.EducationBoardId.HasValue &&
+				 userScope.WildcardMediumBoardIds.Contains(entity.EducationBoardId.Value)) ||
+				HasBoardWideAccess(entity, userScope)
+			 )) ||
 			userScope.MediumStageIds.Contains(entity.EducationMediumStageId.Value)))
 			return true;
 
@@ -198,19 +283,32 @@ public static class UserScopeQueryExtensions
 		// Wildcard: medium within assigned boards, OR specific match
 		if (entity.EducationMediumId.HasValue && (
 			(userScope.HasWildcardMedium &&
-			 entity.EducationBoardId.HasValue &&
-			 userScope.BoardIds.Contains(entity.EducationBoardId.Value)) ||
+			 (
+				(entity.EducationBoardId.HasValue &&
+				 userScope.WildcardMediumBoardIds.Contains(entity.EducationBoardId.Value)) ||
+				HasBoardWideAccess(entity, userScope)
+			 )) ||
 			userScope.MediumIds.Contains(entity.EducationMediumId.Value)))
 			return true;
 
 		// 5. Board level (top of hierarchy)
 		// Wildcard: all boards (no parent), OR specific match
 		if (entity.EducationBoardId.HasValue && (
-			userScope.HasWildcardBoard ||
+			HasBoardWideAccess(entity, userScope) ||
 			userScope.BoardIds.Contains(entity.EducationBoardId.Value)))
 			return true;
 
 		return false;
+	}
+
+	private static bool HasBoardWideAccess<TEntity>(TEntity entity, UserScopeContext userScope)
+		where TEntity : IUserScopedEntity
+	{
+		if (userScope.HasWildcardAcademicYear)
+			return true;
+
+		return entity.AcademicYearId.HasValue &&
+			userScope.WildcardBoardAcademicYearIds.Contains(entity.AcademicYearId.Value);
 	}
 
 	/// <summary>

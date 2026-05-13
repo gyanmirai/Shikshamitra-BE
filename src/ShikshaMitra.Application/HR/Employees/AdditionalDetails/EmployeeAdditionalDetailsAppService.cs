@@ -29,7 +29,12 @@ public class EmployeeAdditionalDetailsAppService(
 		var additionalDetails = await additionalDetailsRepository.GetByEmployeeIdAsync(employeeId);
 		if (additionalDetails == null)
 		{
-			throw new EntityNotFoundException(typeof(EmployeeAdditionalDetails), employeeId);
+			return new EmployeeAdditionalDetailsDto
+			{
+				EmployeeId = employeeId,
+				CreatedAt = employee.CreationTime,
+				LastModifiedAt = employee.LastModificationTime ?? employee.CreationTime
+			};
 		}
 
 		return MapToDto(additionalDetails);

@@ -179,65 +179,7 @@ public class UserScopeService : DomainService, IUserScopeService
 
     private UserScopeContext BuildScopeFromAssignments(Guid userId, List<UserScopeAssignment> assignments)
     {
-        var scope = new UserScopeContext
-        {
-            UserId = userId,
-            TenantId = CurrentTenant.Id,
-            IsAdmin = false,
-            CalculatedAt = DateTime.UtcNow,
-            FromCache = false
-        };
-
-        foreach (var assignment in assignments.Where(a => a.IsActive))
-        {
-            // Implement NULL = ALL principle:
-            // - If a field is NULL, user has access to ALL entities at that level
-            // - If a field has a value, user has access to that specific entity and its children
-
-            // Academic Year: NULL = ALL years
-            if (assignment.AcademicYearId.HasValue)
-                scope.AcademicYearIds.Add(assignment.AcademicYearId.Value);
-            else
-                scope.HasWildcardAcademicYear = true;
-
-            // Education Board: NULL = ALL boards
-            if (assignment.EducationBoardId.HasValue)
-                scope.BoardIds.Add(assignment.EducationBoardId.Value);
-            else
-                scope.HasWildcardBoard = true;
-
-            // Education Medium: NULL = ALL mediums (within assigned board or all if board is also wildcard)
-            if (assignment.EducationMediumId.HasValue)
-                scope.MediumIds.Add(assignment.EducationMediumId.Value);
-            else
-                scope.HasWildcardMedium = true;
-
-            // Education Medium Stage: NULL = ALL stages (within assigned medium/board hierarchy)
-            if (assignment.EducationMediumStageId.HasValue)
-                scope.MediumStageIds.Add(assignment.EducationMediumStageId.Value);
-            else
-                scope.HasWildcardMediumStage = true;
-
-            // Standard/Class: NULL = ALL standards (within assigned stage/medium/board hierarchy)
-            if (assignment.StandardId.HasValue)
-                scope.StandardIds.Add(assignment.StandardId.Value);
-            else
-                scope.HasWildcardStandard = true;
-
-            // Division/Section: NULL = ALL divisions (within assigned standard hierarchy)
-            if (assignment.DivisionId.HasValue)
-                scope.DivisionIds.Add(assignment.DivisionId.Value);
-            else
-                scope.HasWildcardDivision = true;
-        }
-
-        // Remove duplicates
-        scope.AcademicYearIds = scope.AcademicYearIds.Distinct().ToList();
-        scope.BoardIds = scope.BoardIds.Distinct().ToList();
-        scope.MediumIds = scope.MediumIds.Distinct().ToList();
-        scope.MediumStageIds = scope.MediumStageIds.Distinct().ToList();
-        scope.StandardIds = scope.StandardIds.Distinct().ToList();
-        scope.DivisionIds = scope.DivisionIds.Distinct().ToList();
+        var scope = UserScopeContext.CreateEffective(userId, CurrentTenant.Id, assignments);
 
         _logger.LogDebug(
             "Built scope for user {UserId}: Wildcards=[AY:{WildcardYear},B:{WildcardBoard},M:{WildcardMedium},MS:{WildcardStage},S:{WildcardStd},D:{WildcardDiv}], IDs=[Boards:{Boards},Standards:{Standards},Divisions:{Divisions}]",
@@ -294,7 +236,7 @@ public class UserScopeService : DomainService, IUserScopeService
 
     private string GetCacheKey(Guid userId)
     {
-        return $"UserScope:{CurrentTenant.Id}:{userId}";
+        return $"UserScope:v2:{CurrentTenant.Id}:{userId}";
     }
 
     #endregion

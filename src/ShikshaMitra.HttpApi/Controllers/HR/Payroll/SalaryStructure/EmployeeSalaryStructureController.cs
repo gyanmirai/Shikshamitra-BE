@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.SalaryStructure;
 using System;
 using System.Threading.Tasks;
@@ -20,10 +21,14 @@ namespace ShikshaMitra.Controllers.HR.Payroll.SalaryStructure;
 public class EmployeeSalaryStructureController : AbpControllerBase
 {
 	private readonly IEmployeeSalaryStructureAppService _salaryStructureAppService;
+	private readonly IEmployeeAuthorizationService _authorizationService;
 
-	public EmployeeSalaryStructureController(IEmployeeSalaryStructureAppService salaryStructureAppService)
+	public EmployeeSalaryStructureController(
+		IEmployeeSalaryStructureAppService salaryStructureAppService,
+		IEmployeeAuthorizationService authorizationService)
 	{
 		_salaryStructureAppService = salaryStructureAppService;
+		_authorizationService = authorizationService;
 	}
 
 	/// <summary>
@@ -38,6 +43,7 @@ public class EmployeeSalaryStructureController : AbpControllerBase
 	{
 		try
 		{
+			await _authorizationService.CheckEmployeeAccessAsync(employeeId, requireOwnership: true);
 			var response = await _salaryStructureAppService.GetAsync(employeeId);
 			return Ok(response);
 		}
@@ -62,6 +68,7 @@ public class EmployeeSalaryStructureController : AbpControllerBase
 	{
 		try
 		{
+			await _authorizationService.CheckSensitiveFieldAccessAsync(employeeId);
 			await _salaryStructureAppService.UpdateAsync(employeeId, input);
 			return Ok();
 		}

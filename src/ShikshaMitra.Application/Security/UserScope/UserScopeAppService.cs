@@ -841,34 +841,34 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
         foreach (var assignment in assignments.Where(a => a.IsActive))
         {
-            // Full board access: AcademicYear specified, Board is null
-            if (assignment.AcademicYearId.HasValue && !assignment.EducationBoardId.HasValue)
+            // Full board access: academic year-level assignment, not a child-specific assignment with omitted parents.
+            if (assignment.GrantsAllBoardsInAcademicYear())
             {
-                analysis.AcademicYearFullBoardAccess.Add(assignment.AcademicYearId.Value);
+                analysis.AcademicYearFullBoardAccess.Add(assignment.AcademicYearId.GetValueOrDefault());
             }
 
-            // Full medium access: Board specified, Medium is null
-            if (assignment.EducationBoardId.HasValue && !assignment.EducationMediumId.HasValue)
+            // Full medium access: board-level assignment.
+            if (assignment.GrantsAllMediumsInBoard())
             {
-                analysis.BoardFullMediumAccess.Add(assignment.EducationBoardId.Value);
+                analysis.BoardFullMediumAccess.Add(assignment.EducationBoardId.GetValueOrDefault());
             }
 
-            // Full medium stage access: Medium specified, MediumStage is null
-            if (assignment.EducationMediumId.HasValue && !assignment.EducationMediumStageId.HasValue)
+            // Full medium stage access: medium-level assignment.
+            if (assignment.GrantsAllMediumStagesInMedium())
             {
-                analysis.MediumFullMediumStageAccess.Add(assignment.EducationMediumId.Value);
+                analysis.MediumFullMediumStageAccess.Add(assignment.EducationMediumId.GetValueOrDefault());
             }
 
-            // Full standard access: MediumStage specified, Standard is null
-            if (assignment.EducationMediumStageId.HasValue && !assignment.StandardId.HasValue)
+            // Full standard access: medium-stage-level assignment.
+            if (assignment.GrantsAllStandardsInMediumStage())
             {
-                analysis.MediumStageFullStandardAccess.Add(assignment.EducationMediumStageId.Value);
+                analysis.MediumStageFullStandardAccess.Add(assignment.EducationMediumStageId.GetValueOrDefault());
             }
 
-            // Full division access: Standard specified, Division is null
-            if (assignment.StandardId.HasValue && !assignment.DivisionId.HasValue)
+            // Full division access: standard-level assignment.
+            if (assignment.GrantsAllDivisionsInStandard())
             {
-                analysis.StandardFullDivisionAccess.Add(assignment.StandardId.Value);
+                analysis.StandardFullDivisionAccess.Add(assignment.StandardId.GetValueOrDefault());
             }
         }
 

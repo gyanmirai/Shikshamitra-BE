@@ -568,6 +568,79 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
     }
 
     [Fact]
+    public async Task Should_Not_Require_Amount_For_Fixed_Percentage_Mode()
+    {
+        // Arrange
+        var input = new CreateDeductionComponentDto
+        {
+            Name = "Fixed Percent Without Amount Deduction",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Amount = null,
+            Percentage = 12m,
+            SelectedDeductionComponentId = Guid.NewGuid()
+        };
+
+        // Act
+        var result = await _deductionComponentAppService.CreateAsync(input);
+
+        // Assert
+        result.CalculationType.ShouldBe(CalculationType.Percentage);
+        result.Amount.ShouldBeNull();
+        result.Percentage.ShouldBe(12m);
+    }
+
+    [Fact]
+    public async Task Should_Not_Require_Amount_For_Variable_Amount_Mode()
+    {
+        // Arrange
+        var input = new CreateDeductionComponentDto
+        {
+            Name = "Variable Amount Without Default Deduction",
+            ComponentType = DeductionComponentType.Variable,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = null
+        };
+
+        // Act
+        var result = await _deductionComponentAppService.CreateAsync(input);
+
+        // Assert
+        result.ComponentType.ShouldBe(DeductionComponentType.Variable);
+        result.CalculationType.ShouldBe(CalculationType.Amount);
+        result.Amount.ShouldBeNull();
+        result.Percentage.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Should_Not_Require_Amount_When_Updating_To_Variable_Amount_Mode()
+    {
+        // Arrange
+        var created = await CreateTestDeductionComponentAsync("Update Variable Without Amount Deduction");
+
+        var updateInput = new UpdateDeductionComponentDto
+        {
+            Name = "Update Variable Without Amount Deduction",
+            ComponentType = DeductionComponentType.Variable,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = null,
+            VisibleInPayslip = true
+        };
+
+        // Act
+        var result = await _deductionComponentAppService.UpdateAsync(created.Id, updateInput);
+
+        // Assert
+        result.ComponentType.ShouldBe(DeductionComponentType.Variable);
+        result.CalculationType.ShouldBe(CalculationType.Amount);
+        result.Amount.ShouldBeNull();
+        result.Percentage.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Should_Reject_Percentage_Over_100()
     {
         // Arrange

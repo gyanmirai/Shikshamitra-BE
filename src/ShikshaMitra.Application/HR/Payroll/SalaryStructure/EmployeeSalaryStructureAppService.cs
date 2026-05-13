@@ -63,14 +63,25 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 		var existingEarningById = existingEarnings.ToDictionary(x => x.Id);
 		var existingDeductionById = existingDeductions.ToDictionary(x => x.Id);
 
-		var earningMasterById = await GetEarningMasterByIdAsync(input.EarningComponents);
-		var deductionMasterById = await GetDeductionMasterByIdAsync(input.DeductionComponents);
+		EnsureCustomComponentIdsAreValid(
+			input.EarningComponents,
+			existingEarningById,
+			HRErrorCodes.EmployeePayrollInvalidEarningComponent);
+		EnsureCustomComponentIdsAreValid(
+			input.DeductionComponents,
+			existingDeductionById,
+			HRErrorCodes.EmployeePayrollInvalidDeductionComponent);
+
+		var earningMasterById = await GetEarningMasterByIdAsync(
+			input.EarningComponents.Where(x => ShouldResolveMasterComponent(x)));
+		var deductionMasterById = await GetDeductionMasterByIdAsync(
+			input.DeductionComponents.Where(x => ShouldResolveMasterComponent(x)));
 		EnsureAllMasterComponentsExist(
-			input.EarningComponents.Where(x => x.ComponentId.HasValue).Select(x => x.ComponentId!.Value),
+			input.EarningComponents.Where(ShouldResolveMasterComponent).Select(x => x.ComponentId!.Value),
 			earningMasterById.Keys,
 			HRErrorCodes.EmployeePayrollInvalidEarningComponent);
 		EnsureAllMasterComponentsExist(
-			input.DeductionComponents.Where(x => x.ComponentId.HasValue).Select(x => x.ComponentId!.Value),
+			input.DeductionComponents.Where(ShouldResolveMasterComponent).Select(x => x.ComponentId!.Value),
 			deductionMasterById.Keys,
 			HRErrorCodes.EmployeePayrollInvalidDeductionComponent);
 
@@ -84,10 +95,9 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 		// Build earning components
 		foreach (var earning in input.EarningComponents)
 		{
-			var existingComponent = earning.Id.HasValue && existingEarningById.TryGetValue(earning.Id.Value, out var existing)
-				? existing
-				: null;
-			var master = earning.ComponentId.HasValue && earningMasterById.TryGetValue(earning.ComponentId.Value, out var earningMaster)
+			var existingComponent = FindExistingComponent(earning, existingEarningById);
+			var master = ShouldResolveMasterComponent(earning)
+				&& earningMasterById.TryGetValue(earning.ComponentId!.Value, out var earningMaster)
 				? earningMaster
 				: null;
 			var componentType = master is not null
@@ -102,7 +112,7 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 				existingComponent?.Id ?? _guidGenerator.Create(),
 				employeeId,
 				earning.Name,
-				earning.ComponentId,
+				master?.Id,
 				description,
 				earning.Amount ?? 0m,
 				earning.IsFixed,
@@ -117,10 +127,9 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 		// Build deduction components
 		foreach (var deduction in input.DeductionComponents)
 		{
-			var existingComponent = deduction.Id.HasValue && existingDeductionById.TryGetValue(deduction.Id.Value, out var existing)
-				? existing
-				: null;
-			var master = deduction.ComponentId.HasValue && deductionMasterById.TryGetValue(deduction.ComponentId.Value, out var deductionMaster)
+			var existingComponent = FindExistingComponent(deduction, existingDeductionById);
+			var master = ShouldResolveMasterComponent(deduction)
+				&& deductionMasterById.TryGetValue(deduction.ComponentId!.Value, out var deductionMaster)
 				? deductionMaster
 				: null;
 			var componentType = master is not null
@@ -135,7 +144,7 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 				existingComponent?.Id ?? _guidGenerator.Create(),
 				employeeId,
 				deduction.Name,
-				deduction.ComponentId,
+				master?.Id,
 				description,
 				deduction.Amount ?? 0m,
 				deduction.IsFixed,
@@ -177,6 +186,59 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 			IsTemp = c.IsTemp,
 			ApplicableMonth = c.ApplicableMonth
 		}).ToList();
+	}
+
+	private static EmployeePayrollComponent? FindExistingComponent(
+		SalaryComponentDto component,
+		IReadOnlyDictionary<Guid, EmployeePayrollComponent> existingById)
+	{
+		if (component.Id.HasValue && existingById.TryGetValue(component.Id.Value, out var byId))
+		{
+			return byId;
+		}
+
+		if (component.ComponentId.HasValue && existingById.TryGetValue(component.ComponentId.Value, out var byComponentId))
+		{
+			return byComponentId;
+		}
+
+		return null;
+	}
+
+	private static bool ShouldResolveMasterComponent(SalaryComponentDto component)
+	{
+		return component.ComponentId.HasValue
+			&& component.ComponentId.Value != Guid.Empty
+			&& !component.IsTemp
+			&& component.ComponentId != component.Id;
+	}
+
+	private static void EnsureCustomComponentIdsAreValid(
+		IEnumerable<SalaryComponentDto> components,
+		IReadOnlyDictionary<Guid, EmployeePayrollComponent> existingById,
+		string errorCode)
+	{
+		foreach (var component in components)
+		{
+			if (!component.ComponentId.HasValue || component.ComponentId.Value == Guid.Empty ||
+			    ShouldResolveMasterComponent(component))
+			{
+				continue;
+			}
+
+			var matchesExistingCustomRow = existingById.TryGetValue(component.ComponentId.Value, out var existing) &&
+				(existing.IsTemp || existing.ComponentId is null || existing.ComponentId == Guid.Empty);
+			var matchesSubmittedExistingCustomRow = component.Id.HasValue &&
+				component.ComponentId.Value == component.Id.Value &&
+				existingById.TryGetValue(component.Id.Value, out existing) &&
+				(existing.IsTemp || existing.ComponentId is null || existing.ComponentId == Guid.Empty);
+
+			if (!matchesExistingCustomRow && !matchesSubmittedExistingCustomRow)
+			{
+				throw new BusinessException(errorCode)
+					.WithData("componentId", component.ComponentId.Value);
+			}
+		}
 	}
 
 	private async Task<Dictionary<Guid, EarningComponent>> GetEarningMasterByIdAsync(IEnumerable<SalaryComponentDto> components)

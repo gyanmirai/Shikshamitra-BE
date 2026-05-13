@@ -26,17 +26,20 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 	private readonly IEmployeeLeaveRepository _leaveRepository;
 	private readonly IRepository<Employee, Guid> _employeeRepository;
 	private readonly IUserScopeService _userScopeService;
+	private readonly HrUserScopeAccessService _hrScopeAccessService;
 
 	public AttendanceTrackingAppService(
 		IEmployeeAttendanceRepository attendanceRepository,
 		IEmployeeLeaveRepository leaveRepository,
 		IRepository<Employee, Guid> employeeRepository,
-		IUserScopeService userScopeService)
+		IUserScopeService userScopeService,
+		HrUserScopeAccessService hrScopeAccessService)
 	{
 		_attendanceRepository = attendanceRepository;
 		_leaveRepository = leaveRepository;
 		_employeeRepository = employeeRepository;
 		_userScopeService = userScopeService;
+		_hrScopeAccessService = hrScopeAccessService;
 	}
 
 	/// <summary>
@@ -45,7 +48,7 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 	public async Task<AttendanceDateWiseResponse> GetDateWiseAsync(GetAttendanceDateWiseInput input)
 	{
 		var scope = await EnsureCanReadAttendanceTrackingAsync();
-		EnsureMediumStageInScope(scope, input.EducationMediumStageId);
+		await EnsureMediumStageInScopeAsync(scope, input.EducationMediumStageId);
 
 		// Parse the date (supports DD-MM-YYYY and ISO formats)
 		var targetDate = ParseDate(input.AttendanceDate);
@@ -179,7 +182,7 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 	public async Task<AttendanceEmployeeWiseResponse> GetEmployeeWiseAsync(GetAttendanceEmployeeWiseInput input)
 	{
 		var scope = await EnsureCanReadAttendanceTrackingAsync();
-		EnsureMediumStageInScope(scope, input.EducationMediumStageId);
+		await EnsureMediumStageInScopeAsync(scope, input.EducationMediumStageId);
 
 		// Parse dates (DD-MM-YYYY format)
 		var startDate = ParseDate(input.StartDate);
@@ -399,12 +402,12 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		}
 
 		var scope = await _userScopeService.GetUserScopeAsync(uid.Value);
-		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		if (HrUserScopeAccess.HasHrWideAccess(scope))
 		{
 			return scope;
 		}
 
-		if (scope.MediumStageIds.Count == 0)
+		if (!HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
 		{
 			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 		}
@@ -412,17 +415,14 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		return scope;
 	}
 
-	private static void EnsureMediumStageInScope(UserScopeContext scope, Guid educationMediumStageId)
+	private async Task EnsureMediumStageInScopeAsync(UserScopeContext scope, Guid educationMediumStageId)
 	{
-		if (scope.IsAdmin || scope.HasWildcardMediumStage)
+		if (await _hrScopeAccessService.CanAccessEmployeeStageAsync(scope, educationMediumStageId))
 		{
 			return;
 		}
 
-		if (educationMediumStageId == Guid.Empty || !scope.MediumStageIds.Contains(educationMediumStageId))
-		{
-			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
-		}
+		throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 	}
 
 	#endregion

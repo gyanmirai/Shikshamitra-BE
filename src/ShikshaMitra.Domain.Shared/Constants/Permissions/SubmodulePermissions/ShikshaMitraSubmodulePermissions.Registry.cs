@@ -17,6 +17,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{ Students.Default, new ModuleInfo(Students.DisplayNames, Students.Submodules) },
 		{ Academics.Default, new ModuleInfo(Academics.DisplayNames, Academics.Submodules) },
 		{ HR.Default, new ModuleInfo(HR.DisplayNames, HR.Submodules) },
-		{ ClassManagement.Default, new ModuleInfo(ClassManagement.DisplayNames, ClassManagement.Submodules) }
+		{ ClassManagement.Default, new ModuleInfo(ClassManagement.DisplayNames, ClassManagement.Submodules) },
+		{ Finance.Default, new ModuleInfo(Finance.DisplayNames, Finance.Submodules) },
+		{ Communication.Default, new ModuleInfo(Communication.DisplayNames, Communication.Submodules) },
+		{ Calendar.Default, new ModuleInfo(Calendar.DisplayNames, Calendar.Submodules) },
+		{ Library.Default, new ModuleInfo(Library.DisplayNames, Library.Submodules) },
+		{ Transport.Default, new ModuleInfo(Transport.DisplayNames, Transport.Submodules) }
 	};
 }

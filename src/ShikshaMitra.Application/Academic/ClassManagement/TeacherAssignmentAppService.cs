@@ -181,9 +181,9 @@ public class TeacherAssignmentAppService(
 				);
 			}
 			catch (Exception ex) when (ex.Message.Contains("42P01") ||
-			                           ex.Message.Contains("does not exist") ||
-			                           ex.InnerException?.Message.Contains("42P01") == true ||
-			                           ex.InnerException?.Message.Contains("does not exist") == true)
+									   ex.Message.Contains("does not exist") ||
+									   ex.InnerException?.Message.Contains("42P01") == true ||
+									   ex.InnerException?.Message.Contains("does not exist") == true)
 			{
 				logger.LogWarning(
 					ex,
@@ -234,9 +234,7 @@ public class TeacherAssignmentAppService(
 					{
 						try
 						{
-							users = await AsyncExecuter.ToListAsync(
-								identityUserManager.Users.Where(u => userIds.Contains(u.Id))
-							);
+							users = await userRepository.GetListByIdsAsync(userIds);
 						}
 						catch (Exception ex)
 						{
@@ -516,9 +514,9 @@ public class TeacherAssignmentAppService(
 				);
 			}
 			catch (Exception ex) when (ex.Message.Contains("42P01") ||
-			                           ex.Message.Contains("does not exist") ||
-			                           ex.InnerException?.Message.Contains("42P01") == true ||
-			                           ex.InnerException?.Message.Contains("does not exist") == true)
+									   ex.Message.Contains("does not exist") ||
+									   ex.InnerException?.Message.Contains("42P01") == true ||
+									   ex.InnerException?.Message.Contains("does not exist") == true)
 			{
 				logger.LogError(
 					ex,

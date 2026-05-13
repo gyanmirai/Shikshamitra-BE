@@ -23,7 +23,7 @@ public class ClassTeacherAssignmentAppService(
 	IRepository<Division, Guid> divisionRepository,
 	IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
 	IRepository<Employee, Guid> employeeRepository,
-	IdentityUserManager identityUserManager,
+	IIdentityUserRepository userRepository,
 	IGuidGenerator guidGenerator,
 	ILogger<ClassTeacherAssignmentAppService> logger
 ) : ApplicationService, IClassTeacherAssignmentAppService
@@ -83,10 +83,9 @@ public class ClassTeacherAssignmentAppService(
 		var teacherIds = classTeachers.Select(ct => ct.TeacherId).Distinct().ToList();
 		var employees = await employeeRepository.GetListAsync(e => teacherIds.Contains(e.Id));
 
-		// Get only the required users using IdentityUserManager queryable
 		var userIds = employees.Where(e => e.UserId.HasValue).Select(e => e.UserId!.Value).Distinct().ToList();
 		var users = userIds.Any()
-			? await AsyncExecuter.ToListAsync(identityUserManager.Users.Where(u => userIds.Contains(u.Id)))
+			? await userRepository.GetListByIdsAsync(userIds)
 			: new List<IdentityUser>();
 
 		var result = new List<ClassTeacherRowDto>();
@@ -167,24 +166,24 @@ public class ClassTeacherAssignmentAppService(
 			var standardIds = standards.Select(s => s.Id).ToHashSet();
 
 			var missingStandards = classIds.Where(id => !standardIds.Contains(id)).ToList();
-		if (missingStandards.Any())
-		{
-			throw new BusinessException("ClassManagement:StandardNotFound")
-				.WithData("ClassIds", string.Join(", ", missingStandards));
-		}
+			if (missingStandards.Any())
+			{
+				throw new BusinessException("ClassManagement:StandardNotFound")
+					.WithData("ClassIds", string.Join(", ", missingStandards));
+			}
 
-		// Verify all divisions exist
-		var divisions = await divisionRepository.GetListAsync(d => divisionIds.Contains(d.Id));
-		var divisionIdsFound = divisions.Select(d => d.Id).ToHashSet();
+			// Verify all divisions exist
+			var divisions = await divisionRepository.GetListAsync(d => divisionIds.Contains(d.Id));
+			var divisionIdsFound = divisions.Select(d => d.Id).ToHashSet();
 
-		var missingDivisions = divisionIds.Where(id => !divisionIdsFound.Contains(id)).ToList();
-		if (missingDivisions.Any())
-		{
-			throw new BusinessException("ClassManagement:DivisionNotFound")
-				.WithData("DivisionIds", string.Join(", ", missingDivisions));
-		}
+			var missingDivisions = divisionIds.Where(id => !divisionIdsFound.Contains(id)).ToList();
+			if (missingDivisions.Any())
+			{
+				throw new BusinessException("ClassManagement:DivisionNotFound")
+					.WithData("DivisionIds", string.Join(", ", missingDivisions));
+			}
 
-		// Get all education medium stages
+			// Get all education medium stages
 			var educationMediumStageIds = standards.Select(s => s.EducationMediumStageId).Distinct().ToList();
 			var educationMediumStages = await educationMediumStageRepository.GetListAsync(
 				ems => educationMediumStageIds.Contains(ems.Id)

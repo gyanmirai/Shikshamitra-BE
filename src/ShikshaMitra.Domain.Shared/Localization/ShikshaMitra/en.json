@@ -264,6 +264,7 @@
     "HR:Payroll:030010": "An error occurred while fetching the salary slip. Please try again.",
     "HR:Payroll:030019": "Payroll snapshot schema is not applied. Run DB migration 20260428034756_PayrollRunItemSnapshots and try again.",
     "HR:Payroll:030020": "This payroll structure endpoint is deprecated. Use /api/payroll/employees/{employeeId}/salary-structure.",
-    "HR:Calendar:040005": "Calendar item with ID '{itemId}' was not found."
+    "HR:Calendar:040005": "Calendar item with ID '{itemId}' was not found.",
+    "ShikshaMitra:DueFee:10001": "Due fees have already been generated for this student."
   }
 }

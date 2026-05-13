@@ -5,7 +5,7 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Finance.Fees.FeeCollection;
 
-public class Fee : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 	public Guid StudentId { get; private set; }
@@ -19,9 +19,9 @@ public class Fee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public double OutstandingAmount { get; private set; }
 	public FeeStatus Status { get; set; }
 
-	private Fee() { /* For ORM */ }
+	private DueFee() { /* For ORM */ }
 
-	public Fee(
+	public DueFee(
 		Guid id,
 		Guid? tenantId,
 		Guid studentId,

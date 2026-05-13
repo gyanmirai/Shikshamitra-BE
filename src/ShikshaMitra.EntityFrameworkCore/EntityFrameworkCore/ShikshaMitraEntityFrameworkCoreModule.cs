@@ -15,6 +15,7 @@ using ShikshaMitra.EntityFrameworkCore.HR.Calendar.Events;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Students;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 using Volo.Abp.Uow;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
 using Volo.Abp.BackgroundJobs.EntityFrameworkCore;
@@ -87,6 +88,7 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
             options.AddRepository<Student, EfCoreStudentRepository>();
             options.AddRepository<ConcessionRequest, EfCoreConcessionRequestRepository>();
             options.AddRepository<StaffAttendanceDayLock, EfCoreStaffAttendanceDayLockRepository>();
+            options.AddRepository<DueFee, EfCoreDueFeeRepository>();
         });
 
         // Register custom repository extensions

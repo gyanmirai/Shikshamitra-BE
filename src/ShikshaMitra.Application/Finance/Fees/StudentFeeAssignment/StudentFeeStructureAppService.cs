@@ -8,6 +8,9 @@ using Volo.Abp.Domain.Repositories;
 
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using ShikshaMitra.TenantSettings.AcademicYears;
 
 namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
@@ -15,7 +18,11 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 [RemoteService(false)]
 public class StudentFeeStructureAppService(
 	IRepository<Student, Guid> studentRepository,
-	IRepository<FeeStructure, Guid> feeStructureRepository
+	IRepository<FeeStructure, Guid> feeStructureRepository,
+	IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository,
+	IRepository<AcademicYear, Guid> academicYearRepository,
+	IRepository<DueFee, Guid> dueFeeRepository,
+	DueFeeManager dueFeeManager
 ) : ApplicationService, IStudentFeeStructureAppService
 {
 	public async Task AssignAsync(AssignStudentFeeStructureDto input)
@@ -34,7 +41,25 @@ public class StudentFeeStructureAppService(
 		// assign the fee structure to the student
 		student.AssignFeeStructure(input.StandardFeeStructureId);
 
-		// TODO: Generate student due fees based on the assigned fee structure and optional fee heads
+		// ── Load FeeStructureMetadata to reach the AcademicYear ──────────────
+		var metadata = await feeStructureMetadataRepository.GetAsync(feeStructure.FeeStructureMetadataId);
+
+		// ── Load AcademicYear for month-range computation ─────────────────────
+		var academicYear = await academicYearRepository.GetAsync(metadata.AcademicYearId!.Value);
+
+		// ── Generate DueFee records via domain manager ────────────────────────
+		var dueFees = await dueFeeManager.GenerateForStudentAsync(
+			student.Id,
+			feeStructure,
+			academicYear,
+			input.SelectedOptionalFeeHeadIds);
+
+		// ── Bulk insert — autoSave: false to commit everything atomically ─────
+		foreach (var dueFee in dueFees)
+			await dueFeeRepository.InsertAsync(dueFee, autoSave: false);
+
+		// ── Single atomic commit: student assignment + all due fees ───────────
+		await CurrentUnitOfWork.SaveChangesAsync();
 	}
 
 	//public async Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId)

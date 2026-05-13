@@ -61,6 +61,7 @@ public partial class ShikshaMitraDbContext
 	// ───────────────────────────────────────────────
 	// Finance — Fee Collection
 	// ───────────────────────────────────────────────
+	public DbSet<DueFee> DueFees { get; set; }
 	public DbSet<FeeRecordMetadata> FeeRecordMetadatas { get; set; }
 	public DbSet<FeeCollectionRecord> FeeCollectionRecords { get; set; }
 	public DbSet<ChargeCollectionRecord> ChargeCollectionRecords { get; set; }

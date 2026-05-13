@@ -135,6 +135,7 @@ public static class ShikshaMitraSubModulePermissions
 	// Security module submodules
 	public const string SecurityDashboard = $"{ShikshaMitraModulePermissions.Security}.Dashboard";
 	public const string RoleAndPermission = $"{ShikshaMitraModulePermissions.Security}.RoleAndPermission";
+	public const string AbpIdentityRolesAndPermissions = "AbpIdentity.RolesAndPermissions";
 
 	// Hostel module submodules
 	public const string HostelDashboard = $"{ShikshaMitraModulePermissions.Hostel}.Dashboard";
@@ -277,6 +278,7 @@ public static class ShikshaMitraSubModulePermissions
 		ResourceManagementSettings,
 		SecurityDashboard,
 		RoleAndPermission,
+		AbpIdentityRolesAndPermissions,
 		HostelDashboard,
 		NewRequest,
 		HostelManagement,
@@ -437,6 +439,7 @@ public static class ShikshaMitraSubModulePermissions
 		// Security module submodules
 		{ SecurityDashboard, $"{DisplayNamePrefix}.SecurityDashboard" },
 		{ RoleAndPermission, $"{DisplayNamePrefix}.RoleAndPermission" },
+		{ AbpIdentityRolesAndPermissions, $"{DisplayNamePrefix}.AbpIdentityRolesAndPermissions" },
 
 		// Hostel module submodules
 		{ HostelDashboard, $"{DisplayNamePrefix}.HostelDashboard" },

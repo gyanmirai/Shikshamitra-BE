@@ -30,8 +30,13 @@ public class DeductionComponentUpdateRequestDtoValidator : AbstractValidator<Ded
 		RuleFor(x => x.Amount)
 			.NotNull()
 			.GreaterThanOrEqualTo(0)
-			.When(x => IsAmountCalculation(x.CalculationType))
-			.WithMessage("Amount is required when calculationType is AMOUNT.");
+			.When(IsFixedAmountCalculation)
+			.WithMessage("Amount is required when deductionType is FIXED and calculationType is AMOUNT.");
+
+		RuleFor(x => x.Amount)
+			.GreaterThanOrEqualTo(0)
+			.When(x => x.Amount.HasValue && !IsFixedAmountCalculation(x))
+			.WithMessage("Amount must be a non-negative number.");
 
 		RuleFor(x => x.Percentage)
 			.NotNull()
@@ -58,4 +63,8 @@ public class DeductionComponentUpdateRequestDtoValidator : AbstractValidator<Ded
 
 	private static bool IsPercentageCalculation(string? value) =>
 		string.Equals(value?.Trim(), "PERCENTAGE", StringComparison.OrdinalIgnoreCase);
+
+	private static bool IsFixedAmountCalculation(DeductionComponentUpdateRequestDto value) =>
+		string.Equals(value.DeductionType?.Trim(), "FIXED", StringComparison.OrdinalIgnoreCase)
+		&& IsAmountCalculation(value.CalculationType);
 }

@@ -163,6 +163,82 @@ public class DeductionComponentApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Create_Variable_Amount_Deduction_Without_Amount()
+	{
+		var input = new DeductionComponentCreateRequestDto
+		{
+			DeductionComponentName = TestDataHelper.UniqueName("VariableNoDefault"),
+			DeductionType = "VARIABLE",
+			CalculationType = "AMOUNT",
+			Amount = null,
+			VisibleInPayslip = true,
+		};
+
+		var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Created);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Create_Percentage_Deduction_Without_Amount()
+	{
+		var baseComponent = await CreateComponentAsync("BaseForPercentNoAmount");
+		var input = new DeductionComponentCreateRequestDto
+		{
+			DeductionComponentName = TestDataHelper.UniqueName("PercentNoAmount"),
+			DeductionType = "FIXED",
+			CalculationType = "PERCENTAGE",
+			Amount = null,
+			Percentage = 12m,
+			SelectedDeductionComponentId = baseComponent.Id,
+			VisibleInPayslip = true,
+		};
+
+		var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Created);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Fixed_Amount_Deduction_Without_Amount()
+	{
+		var input = new DeductionComponentCreateRequestDto
+		{
+			DeductionComponentName = TestDataHelper.UniqueName("FixedNoAmount"),
+			DeductionType = "FIXED",
+			CalculationType = "AMOUNT",
+			Amount = null,
+			VisibleInPayslip = true,
+		};
+
+		var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Update_To_Variable_Amount_Deduction_Without_Amount()
+	{
+		var created = await CreateComponentAsync("UpdateVariableNoAmount");
+		var updateDto = new DeductionComponentUpdateRequestDto
+		{
+			DeductionComponentName = TestDataHelper.UniqueName("UpdatedVariableNoAmount"),
+			DeductionType = "VARIABLE",
+			CalculationType = "AMOUNT",
+			Amount = null,
+			VisibleInPayslip = true,
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{created.Id}", updateDto, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Return_Field_Level_Validation_Errors_For_Invalid_Enum_Input()
 	{
 		var input = new DeductionComponentCreateRequestDto

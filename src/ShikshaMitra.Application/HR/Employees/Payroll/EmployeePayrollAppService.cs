@@ -224,7 +224,7 @@ public class EmployeePayrollAppService(
 		foreach (var resolved in earningLines)
 		{
 			var amount = ResolveEarningLineAmount(resolved);
-			if (!amount.HasValue || amount <= 0)
+			if (!IsPercentageComponent(resolved) && (!amount.HasValue || amount <= 0))
 			{
 				throw new BusinessException(HRErrorCodes.EmployeePayrollComponentAmountInvalid)
 					.WithData("componentId", resolved.Master?.Id)
@@ -236,7 +236,7 @@ public class EmployeePayrollAppService(
 		foreach (var resolved in deductionLines)
 		{
 			var amount = ResolveDeductionLineAmount(resolved);
-			if (!amount.HasValue || amount <= 0)
+			if (!IsPercentageComponent(resolved) && (!amount.HasValue || amount <= 0))
 			{
 				throw new BusinessException(HRErrorCodes.EmployeePayrollComponentAmountInvalid)
 					.WithData("componentId", resolved.Master?.Id)
@@ -543,6 +543,16 @@ public class EmployeePayrollAppService(
 			?? (resolved.Master is not null
 				? ResolveDeductionComponentAmount(resolved.Master)
 				: resolved.ExistingPayrollComponent?.Amount);
+	}
+
+	private static bool IsPercentageComponent(ResolvedPayrollLine<EarningComponent> resolved)
+	{
+		return resolved.Master?.CalculationType == CalculationType.Percentage;
+	}
+
+	private static bool IsPercentageComponent(ResolvedPayrollLine<DeductionComponent> resolved)
+	{
+		return resolved.Master?.CalculationType == CalculationType.Percentage;
 	}
 
 	private async Task<Dictionary<string, Guid>> GetEarningComponentIdsByNameAsync(

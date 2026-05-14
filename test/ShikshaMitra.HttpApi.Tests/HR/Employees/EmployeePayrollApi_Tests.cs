@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll;
 using ShikshaMitra.HR.Payroll.SalaryStructure;
+using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -822,6 +823,66 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
 		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
 		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Save_ReAdded_Percentage_Deduction_When_Amount_Is_Zero()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayPctReAdd");
+		var deductionName = $"PayPctDed-{Guid.NewGuid():N}";
+		var createResponse = await Client.PostAsJsonAsync(
+			"/api/payroll/deduction-components",
+			new DeductionComponentCreateRequestDto
+			{
+				DeductionComponentName = deductionName,
+				DeductionType = "FIXED",
+				CalculationType = "PERCENTAGE",
+				Percentage = 12m,
+				SelectedDeductionComponentId = Guid.NewGuid(),
+				VisibleInPayslip = true,
+			},
+			JsonOptions);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+		var deductionComponent = await createResponse.Content.ReadFromJsonAsync<ComponentCreateResponseDto>(JsonOptions);
+		deductionComponent.ShouldNotBeNull();
+
+		var firstResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", new PayrollContract
+		{
+			DeductionComponents = new List<SalaryComponentContract>
+			{
+				new() { ComponentId = deductionComponent.Id, Name = deductionName },
+			},
+		}, JsonOptions);
+		firstResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var removeResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", new PayrollContract
+		{
+			DeductionComponents = new List<SalaryComponentContract>(),
+		}, JsonOptions);
+		removeResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var reAddResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", new PayrollContract
+		{
+			DeductionComponents = new List<SalaryComponentContract>
+			{
+				new()
+				{
+					ComponentId = deductionComponent.Id,
+					Name = deductionName,
+					Amount = 0m,
+					IsFixed = true,
+				},
+			},
+		}, JsonOptions);
+		reAddResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payrollResponse = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
+		payrollResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var payroll = await payrollResponse.Content.ReadFromJsonAsync<EmployeePayrollResponse>(JsonOptions);
+		var savedDeduction = payroll!.DeductionComponents!.Single(x => x.ComponentId == deductionComponent.Id);
+		savedDeduction.Amount.ShouldBe(12m);
+		savedDeduction.IsFixed.ShouldBe(false);
 	}
 
 	[Fact]

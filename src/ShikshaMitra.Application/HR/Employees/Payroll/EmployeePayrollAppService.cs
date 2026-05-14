@@ -289,9 +289,9 @@ public class EmployeePayrollAppService(
 			var line = resolved.Line;
 			var master = resolved.Master;
 			var amount = ResolveEarningLineAmount(resolved)!.Value;
-			var isFixed = line.IsFixed
-				?? resolved.ExistingPayrollComponent?.IsFixed
-				?? (master?.CalculationType == CalculationType.Amount);
+			var isFixed = master is not null
+				? master.CalculationType == CalculationType.Amount
+				: line.IsFixed ?? resolved.ExistingPayrollComponent?.IsFixed ?? false;
 
 			var earningComponent = new EmployeePayrollComponent(
 				guidGenerator.Create(),
@@ -319,9 +319,9 @@ public class EmployeePayrollAppService(
 			var line = resolved.Line;
 			var master = resolved.Master;
 			var amount = ResolveDeductionLineAmount(resolved)!.Value;
-			var isFixed = line.IsFixed
-				?? resolved.ExistingPayrollComponent?.IsFixed
-				?? (master?.CalculationType == CalculationType.Amount);
+			var isFixed = master is not null
+				? master.CalculationType == CalculationType.Amount
+				: line.IsFixed ?? resolved.ExistingPayrollComponent?.IsFixed ?? false;
 
 			var deductionComponent = new EmployeePayrollComponent(
 				guidGenerator.Create(),
@@ -521,6 +521,11 @@ public class EmployeePayrollAppService(
 
 	private static decimal? ResolveEarningLineAmount(ResolvedPayrollLine<EarningComponent> resolved)
 	{
+		if (resolved.Master?.CalculationType == CalculationType.Percentage && (!resolved.Line.Amount.HasValue || resolved.Line.Amount <= 0))
+		{
+			return ResolveEarningComponentAmount(resolved.Master);
+		}
+
 		return resolved.Line.Amount
 			?? (resolved.Master is not null
 				? ResolveEarningComponentAmount(resolved.Master)
@@ -529,6 +534,11 @@ public class EmployeePayrollAppService(
 
 	private static decimal? ResolveDeductionLineAmount(ResolvedPayrollLine<DeductionComponent> resolved)
 	{
+		if (resolved.Master?.CalculationType == CalculationType.Percentage && (!resolved.Line.Amount.HasValue || resolved.Line.Amount <= 0))
+		{
+			return ResolveDeductionComponentAmount(resolved.Master);
+		}
+
 		return resolved.Line.Amount
 			?? (resolved.Master is not null
 				? ResolveDeductionComponentAmount(resolved.Master)

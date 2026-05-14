@@ -40,9 +40,9 @@ public class CreateUpdateEmployeeDto
 
 
 	// Value Objects
-	public ContactDetailsDto FatherDetails { get; set; }
-	public ContactDetailsDto MotherDetails { get; set; }
-	public ContactDetailsDto SpouseDetails { get; set; }
+	public ContactDetailsDto? FatherDetails { get; set; }
+	public ContactDetailsDto? MotherDetails { get; set; }
+	public ContactDetailsDto? SpouseDetails { get; set; }
 	public BankDetailsDto BankDetails { get; set; }
 
 	public List<CreateUpdateWorkExperienceDto> WorkExperiences { get; set; } = [];

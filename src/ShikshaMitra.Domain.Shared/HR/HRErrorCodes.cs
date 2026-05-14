@@ -107,6 +107,7 @@ public static class HRErrorCodes
 	public const string TakeAttendanceMediumStageOutOfScope = "HR:Attendance:020306";
 	public const string TakeAttendanceEmptyEntries = "HR:Attendance:020307";
 	public const string TakeAttendanceInvalidStatusWire = "HR:Attendance:020308";
+	public const string TakeAttendanceEmployeeNotActiveOnDate = "HR:Attendance:020309";
 
 	// Leave — File validation
 	public const string LeaveFileTooLarge = "HR:Leave:020101";

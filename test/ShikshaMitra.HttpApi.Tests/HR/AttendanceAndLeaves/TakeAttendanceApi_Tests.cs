@@ -1,10 +1,12 @@
 using System;
 using System.Net;
+using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -43,6 +45,40 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 			first.TryGetProperty("status", out var status).ShouldBeTrue();
 			status.ValueKind.ShouldBe(JsonValueKind.Number);
 		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Not_Show_Employee_Before_Joining_Date_In_Day_Attendance()
+	{
+		var uniqueName = $"FutureJoiner{Guid.NewGuid():N}";
+		var personalInfo = EmployeeTestHelper.BuildPersonalInfoRequest(uniqueName);
+		personalInfo.FirstName = uniqueName;
+		personalInfo.Doj = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc);
+		var jsonData = JsonSerializer.Serialize(personalInfo, JsonOptions);
+
+		using var content = new MultipartFormDataContent();
+		content.Add(new StringContent(jsonData), "data");
+
+		var createResponse = await Client.PostAsync("/api/employees/personal-info", content);
+		createResponse.EnsureSuccessStatusCode();
+		var created = await createResponse.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to create future-joining employee");
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/day?attendanceDate=15-04-2026&skipCount=0&maxResultCount=20&search={Uri.EscapeDataString(uniqueName)}");
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Forbidden);
+		if (response.StatusCode != HttpStatusCode.OK)
+		{
+			return;
+		}
+
+		var payload = await response.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize day attendance response");
+
+		payload.Items.ShouldNotContain(x => x.EmployeeId == created.Id);
+		payload.TotalCount.ShouldBe(0);
+		payload.Summary.NotMarked.ShouldBe(0);
 	}
 
 	[Fact]

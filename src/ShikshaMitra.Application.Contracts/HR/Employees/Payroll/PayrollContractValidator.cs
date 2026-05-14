@@ -178,8 +178,8 @@ public class SalaryComponentContractValidator : AbstractValidator<SalaryComponen
 			.WithMessage($"Component ID in {listName} must be a valid non-empty GUID when supplied.");
 
 		RuleFor(x => x.Amount)
-			.GreaterThan(0)
-			.WithMessage($"Component amount in {listName} must be greater than zero when supplied.")
+			.GreaterThanOrEqualTo(0)
+			.WithMessage($"Component amount in {listName} cannot be negative when supplied.")
 			.LessThanOrEqualTo(MaxComponentAmount)
 			.WithMessage($"Component amount in {listName} must not exceed {MaxComponentAmount}.")
 			.When(x => x.Amount.HasValue);

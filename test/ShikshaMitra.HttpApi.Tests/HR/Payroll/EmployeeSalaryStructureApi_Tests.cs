@@ -273,6 +273,95 @@ public class EmployeeSalaryStructureApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Add_New_Dropdown_Components_With_Null_Id_When_ReSubmitting_Salary_Structure()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "SalNullIdReAdd");
+		var existingEarning = await PayrollTestHelper.CreateEarningComponentAsync(Client, "SalNullIdExistingEarn");
+		var existingDeduction = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "SalNullIdExistingDed");
+		var newEarning = await PayrollTestHelper.CreateEarningComponentAsync(Client, "SalNullIdNewEarn");
+		var newDeduction = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "SalNullIdNewDed");
+
+		var firstUpdate = new UpdateSalaryStructureDto
+		{
+			EarningComponents = new List<SalaryComponentDto>
+			{
+				new()
+				{
+					ComponentId = existingEarning.Id,
+					Name = existingEarning.Name,
+					Amount = 10000m,
+					IsFixed = true,
+					IsTemp = false,
+					ApplicableMonth = null,
+				}
+			},
+			DeductionComponents = new List<SalaryComponentDto>
+			{
+				new()
+				{
+					ComponentId = existingDeduction.Id,
+					Name = existingDeduction.Name,
+					Amount = 1000m,
+					IsFixed = true,
+					IsTemp = false,
+					ApplicableMonth = null,
+				}
+			}
+		};
+
+		var firstResponse = await Client.PutAsJsonAsync(Url(empId), firstUpdate, JsonOptions);
+		firstResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var savedResponse = await Client.GetAsync(Url(empId));
+		var saved = await savedResponse.Content.ReadFromJsonAsync<SalaryStructureResponseDto>(JsonOptions);
+		saved.ShouldNotBeNull();
+
+		var secondUpdate = new UpdateSalaryStructureDto
+		{
+			EarningComponents = new List<SalaryComponentDto>
+			{
+				saved.EarningComponents.Single(),
+				new()
+				{
+					Id = null,
+					ComponentId = newEarning.Id,
+					Name = newEarning.Name,
+					Amount = 200m,
+					IsFixed = true,
+					IsTemp = false,
+					ApplicableMonth = null,
+				}
+			},
+			DeductionComponents = new List<SalaryComponentDto>
+			{
+				saved.DeductionComponents.Single(),
+				new()
+				{
+					Id = null,
+					ComponentId = newDeduction.Id,
+					Name = newDeduction.Name,
+					Amount = 200m,
+					IsFixed = true,
+					IsTemp = false,
+					ApplicableMonth = null,
+				}
+			}
+		};
+
+		var secondResponse = await Client.PutAsJsonAsync(Url(empId), secondUpdate, JsonOptions);
+		secondResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var verifyResponse = await Client.GetAsync(Url(empId));
+		var verified = await verifyResponse.Content.ReadFromJsonAsync<SalaryStructureResponseDto>(JsonOptions);
+		verified.ShouldNotBeNull();
+		verified.EarningComponents.Count.ShouldBe(2);
+		verified.DeductionComponents.Count.ShouldBe(2);
+		verified.EarningComponents.ShouldContain(x => x.ComponentId == newEarning.Id && x.Id.HasValue && x.Amount == 200m);
+		verified.DeductionComponents.ShouldContain(x => x.ComponentId == newDeduction.Id && x.Id.HasValue && x.Amount == 200m);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Reject_Temporary_Component_With_Forged_ComponentId()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "SalForgedTemp");

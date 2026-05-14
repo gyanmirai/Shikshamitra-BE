@@ -224,7 +224,7 @@ public class EmployeePayrollAppService(
 		foreach (var resolved in earningLines)
 		{
 			var amount = ResolveEarningLineAmount(resolved);
-			if (!amount.HasValue || amount <= 0)
+			if (!IsPercentageComponent(resolved) && (!amount.HasValue || amount <= 0))
 			{
 				throw new BusinessException(HRErrorCodes.EmployeePayrollComponentAmountInvalid)
 					.WithData("componentId", resolved.Master?.Id)
@@ -236,7 +236,7 @@ public class EmployeePayrollAppService(
 		foreach (var resolved in deductionLines)
 		{
 			var amount = ResolveDeductionLineAmount(resolved);
-			if (!amount.HasValue || amount <= 0)
+			if (!IsPercentageComponent(resolved) && (!amount.HasValue || amount <= 0))
 			{
 				throw new BusinessException(HRErrorCodes.EmployeePayrollComponentAmountInvalid)
 					.WithData("componentId", resolved.Master?.Id)
@@ -289,9 +289,9 @@ public class EmployeePayrollAppService(
 			var line = resolved.Line;
 			var master = resolved.Master;
 			var amount = ResolveEarningLineAmount(resolved)!.Value;
-			var isFixed = line.IsFixed
-				?? resolved.ExistingPayrollComponent?.IsFixed
-				?? (master?.CalculationType == CalculationType.Amount);
+			var isFixed = master is not null
+				? master.CalculationType == CalculationType.Amount
+				: line.IsFixed ?? resolved.ExistingPayrollComponent?.IsFixed ?? false;
 
 			var earningComponent = new EmployeePayrollComponent(
 				guidGenerator.Create(),
@@ -319,9 +319,9 @@ public class EmployeePayrollAppService(
 			var line = resolved.Line;
 			var master = resolved.Master;
 			var amount = ResolveDeductionLineAmount(resolved)!.Value;
-			var isFixed = line.IsFixed
-				?? resolved.ExistingPayrollComponent?.IsFixed
-				?? (master?.CalculationType == CalculationType.Amount);
+			var isFixed = master is not null
+				? master.CalculationType == CalculationType.Amount
+				: line.IsFixed ?? resolved.ExistingPayrollComponent?.IsFixed ?? false;
 
 			var deductionComponent = new EmployeePayrollComponent(
 				guidGenerator.Create(),
@@ -521,6 +521,11 @@ public class EmployeePayrollAppService(
 
 	private static decimal? ResolveEarningLineAmount(ResolvedPayrollLine<EarningComponent> resolved)
 	{
+		if (resolved.Master?.CalculationType == CalculationType.Percentage && (!resolved.Line.Amount.HasValue || resolved.Line.Amount <= 0))
+		{
+			return ResolveEarningComponentAmount(resolved.Master);
+		}
+
 		return resolved.Line.Amount
 			?? (resolved.Master is not null
 				? ResolveEarningComponentAmount(resolved.Master)
@@ -529,10 +534,25 @@ public class EmployeePayrollAppService(
 
 	private static decimal? ResolveDeductionLineAmount(ResolvedPayrollLine<DeductionComponent> resolved)
 	{
+		if (resolved.Master?.CalculationType == CalculationType.Percentage && (!resolved.Line.Amount.HasValue || resolved.Line.Amount <= 0))
+		{
+			return ResolveDeductionComponentAmount(resolved.Master);
+		}
+
 		return resolved.Line.Amount
 			?? (resolved.Master is not null
 				? ResolveDeductionComponentAmount(resolved.Master)
 				: resolved.ExistingPayrollComponent?.Amount);
+	}
+
+	private static bool IsPercentageComponent(ResolvedPayrollLine<EarningComponent> resolved)
+	{
+		return resolved.Master?.CalculationType == CalculationType.Percentage;
+	}
+
+	private static bool IsPercentageComponent(ResolvedPayrollLine<DeductionComponent> resolved)
+	{
+		return resolved.Master?.CalculationType == CalculationType.Percentage;
 	}
 
 	private async Task<Dictionary<string, Guid>> GetEarningComponentIdsByNameAsync(

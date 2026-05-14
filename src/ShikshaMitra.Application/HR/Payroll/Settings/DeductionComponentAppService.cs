@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
+using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Payroll;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -22,6 +24,8 @@ public class DeductionComponentAppService : CrudAppService<
 	UpdateDeductionComponentDto>, IDeductionComponentAppService
 {
 	private readonly DeductionComponentManager _deductionComponentManager;
+	private readonly IEmployeePayrollComponentRepository _employeePayrollComponentRepository;
+	private readonly IEmployeeCacheManager _employeeCacheManager;
 	private readonly IDistributedCache<PagedResultDto<DeductionComponentDto>> _cache;
 
 	private string GetBaseCacheKey() =>
@@ -33,10 +37,14 @@ public class DeductionComponentAppService : CrudAppService<
 	public DeductionComponentAppService(
 		IRepository<DeductionComponent, Guid> repository,
 		DeductionComponentManager deductionComponentManager,
+		IEmployeePayrollComponentRepository employeePayrollComponentRepository,
+		IEmployeeCacheManager employeeCacheManager,
 		IDistributedCache<PagedResultDto<DeductionComponentDto>> cache)
 		: base(repository)
 	{
 		_deductionComponentManager = deductionComponentManager;
+		_employeePayrollComponentRepository = employeePayrollComponentRepository;
+		_employeeCacheManager = employeeCacheManager;
 		_cache = cache;
 	}
 
@@ -103,6 +111,7 @@ public class DeductionComponentAppService : CrudAppService<
 		}
 
 		await ClearCacheAsync();
+		await SyncLinkedEmployeeDeductionComponentsAsync(deductionComponent);
 
 		return ObjectMapper.Map<DeductionComponent, DeductionComponentDto>(deductionComponent);
 	}
@@ -269,6 +278,62 @@ public class DeductionComponentAppService : CrudAppService<
 		}
 
 		return false;
+	}
+
+	private async Task SyncLinkedEmployeeDeductionComponentsAsync(DeductionComponent deductionComponent)
+	{
+		var linkedRows = await _employeePayrollComponentRepository.GetByComponentIdAsync(
+			deductionComponent.Id,
+			isEarning: false);
+
+		if (linkedRows.Count == 0)
+		{
+			return;
+		}
+
+		foreach (var row in linkedRows)
+		{
+			row.UpdateComponent(
+				deductionComponent.Name,
+				deductionComponent.Description,
+				ResolveComponentAmount(deductionComponent, row.Amount),
+				deductionComponent.CalculationType == CalculationType.Amount,
+				row.IsTemp,
+				deductionComponent.CalculationType == CalculationType.Amount
+					? SalaryComponentType.Fixed
+					: SalaryComponentType.Percentage,
+				MapDependency(deductionComponent.DependOn));
+
+			await _employeePayrollComponentRepository.UpdateAsync(row, autoSave: false);
+		}
+
+		if (UnitOfWorkManager.Current != null)
+		{
+			await UnitOfWorkManager.Current.SaveChangesAsync();
+		}
+
+		foreach (var employeeId in linkedRows.Select(x => x.EmployeeId).Distinct())
+		{
+			await _employeeCacheManager.InvalidateEmployeeAsync(employeeId);
+		}
+	}
+
+	private static SalaryComponentDependency? MapDependency(ComponentDependency dependOn)
+	{
+		return dependOn switch
+		{
+			ComponentDependency.None => SalaryComponentDependency.None,
+			ComponentDependency.Basic => SalaryComponentDependency.Basic,
+			ComponentDependency.Gross => SalaryComponentDependency.Gross,
+			_ => null
+		};
+	}
+
+	private static decimal ResolveComponentAmount(DeductionComponent deductionComponent, decimal fallbackAmount)
+	{
+		return deductionComponent.CalculationType == CalculationType.Amount
+			? deductionComponent.Amount ?? fallbackAmount
+			: deductionComponent.Percentage ?? fallbackAmount;
 	}
 
 	private IQueryable<DeductionComponent> ApplySorting(IQueryable<DeductionComponent> queryable, string sorting)

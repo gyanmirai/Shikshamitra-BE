@@ -44,6 +44,10 @@ public class TakeAttendanceAppService(
 
 		var empQuery = await employeeRepository.GetQueryableAsync();
 		empQuery = empQuery.Where(e => e.EmployeeStatusType == EmployeeStatusType.Active);
+		var attendanceDateEndExclusive = date.Date.AddDays(1);
+		empQuery = empQuery.Where(e =>
+			(e.DateOfJoining.HasValue && e.DateOfJoining.Value <= dateOnly) ||
+			(!e.DateOfJoining.HasValue && e.CreationTime < attendanceDateEndExclusive));
 
 		if (CurrentTenant.Id.HasValue)
 		{
@@ -196,7 +200,8 @@ public class TakeAttendanceAppService(
 				tOut = parsedOut;
 			}
 
-			await employeeRepository.GetAsync(entry.EmployeeId);
+			var employee = await employeeRepository.GetAsync(entry.EmployeeId);
+			EnsureEmployeeCanTakeAttendanceOnDate(employee, dateOnly);
 
 			var attQuery = await employeeAttendanceRepository.GetQueryableAsync();
 			if (CurrentTenant.Id.HasValue)
@@ -439,6 +444,24 @@ public class TakeAttendanceAppService(
 
 		var trimmed = value.Trim();
 		return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
+	}
+
+	private static void EnsureEmployeeCanTakeAttendanceOnDate(
+		Employee employee,
+		DateOnly attendanceDate)
+	{
+		var effectiveStartDate = employee.DateOfJoining
+			?? DateOnly.FromDateTime(employee.CreationTime.Date);
+
+		if (effectiveStartDate <= attendanceDate)
+		{
+			return;
+		}
+
+		throw new BusinessException(HRErrorCodes.TakeAttendanceEmployeeNotActiveOnDate)
+			.WithData("employeeId", employee.Id)
+			.WithData("attendanceDate", attendanceDate)
+			.WithData("effectiveStartDate", effectiveStartDate);
 	}
 
 	private static DateTime ParseDate(string dateString)

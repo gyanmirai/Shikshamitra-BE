@@ -435,9 +435,9 @@ public class EmployeeAppService(
 		await authorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 
 		// Convert the input to domain model and update the employee family members
-		ContactDetails? fatherDetails = ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input.FatherDetails);
-		ContactDetails? motherDetails = ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input.MotherDetails);
-		ContactDetails? spouseDetails = ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input.SpouseDetails);
+		ContactDetails? fatherDetails = MapContactDetails(input.FatherDetails);
+		ContactDetails? motherDetails = MapContactDetails(input.MotherDetails);
+		ContactDetails? spouseDetails = MapContactDetails(input.SpouseDetails);
 
 		await employeeManager.UpdateFamilyInfoByEmployeeIdAsync(employeeId, fatherDetails, motherDetails, spouseDetails);
 
@@ -449,6 +449,13 @@ public class EmployeeAppService(
 
 		// Return the DTO
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
+	}
+
+	private ContactDetails? MapContactDetails(ContactDetailsDto? input)
+	{
+		return input == null
+			? null
+			: ObjectMapper.Map<ContactDetailsDto, ContactDetails>(input);
 	}
 
 	public async Task UploadDocumentsAsync(Guid employeeId, List<DocumentDto> documents)

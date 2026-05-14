@@ -107,6 +107,9 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 				? MapDependency(master.DependOn)
 				: existingComponent?.DependOn;
 			var description = master?.Description ?? existingComponent?.Description;
+			var isFixed = master is not null
+				? master.CalculationType == CalculationType.Amount
+				: earning.IsFixed;
 
 			componentsToInsert.Add(new EmployeePayrollComponent(
 				existingComponent?.Id ?? _guidGenerator.Create(),
@@ -114,8 +117,8 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 				earning.Name,
 				master?.Id,
 				description,
-				earning.Amount ?? 0m,
-				earning.IsFixed,
+				ResolveEarningAmount(earning, master),
+				isFixed,
 				earning.IsTemp,
 				earning.ApplicableMonth ?? existingComponent?.ApplicableMonth,
 				componentType,
@@ -139,6 +142,9 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 				? MapDependency(master.DependOn)
 				: existingComponent?.DependOn;
 			var description = master?.Description ?? existingComponent?.Description;
+			var isFixed = master is not null
+				? master.CalculationType == CalculationType.Amount
+				: deduction.IsFixed;
 
 			componentsToInsert.Add(new EmployeePayrollComponent(
 				existingComponent?.Id ?? _guidGenerator.Create(),
@@ -146,8 +152,8 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 				deduction.Name,
 				master?.Id,
 				description,
-				deduction.Amount ?? 0m,
-				deduction.IsFixed,
+				ResolveDeductionAmount(deduction, master),
+				isFixed,
 				deduction.IsTemp,
 				deduction.ApplicableMonth ?? existingComponent?.ApplicableMonth,
 				componentType,
@@ -293,6 +299,36 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 			ComponentDependency.Gross => SalaryComponentDependency.Gross,
 			_ => null
 		};
+	}
+
+	private static decimal ResolveEarningAmount(SalaryComponentDto line, EarningComponent? master)
+	{
+		if (master is null)
+		{
+			return line.Amount ?? 0m;
+		}
+
+		if (master.CalculationType == CalculationType.Percentage && (!line.Amount.HasValue || line.Amount <= 0))
+		{
+			return master.Percentage ?? 0m;
+		}
+
+		return line.Amount ?? master.Amount ?? 0m;
+	}
+
+	private static decimal ResolveDeductionAmount(SalaryComponentDto line, DeductionComponent? master)
+	{
+		if (master is null)
+		{
+			return line.Amount ?? 0m;
+		}
+
+		if (master.CalculationType == CalculationType.Percentage && (!line.Amount.HasValue || line.Amount <= 0))
+		{
+			return master.Percentage ?? 0m;
+		}
+
+		return line.Amount ?? master.Amount ?? 0m;
 	}
 
 	private static void EnsureAllMasterComponentsExist(

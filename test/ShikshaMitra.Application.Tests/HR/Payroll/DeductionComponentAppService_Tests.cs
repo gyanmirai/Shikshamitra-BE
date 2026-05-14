@@ -1,10 +1,18 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.TenantSettings;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Guids;
+using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
 using Volo.Abp.Validation;
 using Xunit;
 
@@ -16,10 +24,22 @@ namespace ShikshaMitra.HR.Payroll;
 public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
     private readonly IDeductionComponentAppService _deductionComponentAppService;
+    private readonly IEmployeePersonalInfoAppService _employeePersonalInfoAppService;
+    private readonly IEmployeePayrollComponentRepository _employeePayrollComponentRepository;
+    private readonly IIdentityRoleRepository _roleRepository;
+    private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+    private readonly ICurrentTenant _currentTenant;
+    private readonly IGuidGenerator _guidGenerator;
 
     public DeductionComponentAppService_Tests()
     {
         _deductionComponentAppService = GetRequiredService<IDeductionComponentAppService>();
+        _employeePersonalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
+        _employeePayrollComponentRepository = GetRequiredService<IEmployeePayrollComponentRepository>();
+        _roleRepository = GetRequiredService<IIdentityRoleRepository>();
+        _shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+        _currentTenant = GetRequiredService<ICurrentTenant>();
+        _guidGenerator = GetRequiredService<IGuidGenerator>();
     }
 
     #region Create Tests
@@ -345,6 +365,126 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         result.ShouldNotBeNull();
         result.Name.ShouldBe("Same Name Deduction");
         result.Description.ShouldBe("Updated description only");
+    }
+
+    [Fact]
+    public async Task Should_Propagate_Update_To_Linked_Employee_Deduction_Components_Only()
+    {
+        var employee = await CreateEmployeeAsync("deduction-sync");
+        var originalComponentName = $"Linked TDS {Guid.NewGuid():N}";
+        var master = await CreateTestDeductionComponentAsync(originalComponentName);
+        var unlinkedEmployeeRowId = Guid.NewGuid();
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(),
+            employee.Id,
+            master.Name,
+            master.Id,
+            master.Description,
+            master.Amount ?? 0m,
+            isFixed: true,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: false), autoSave: true);
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            unlinkedEmployeeRowId,
+            employee.Id,
+            master.Name,
+            componentId: null,
+            "Custom employee deduction",
+            999m,
+            isFixed: true,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: false), autoSave: true);
+
+        await _deductionComponentAppService.UpdateAsync(master.Id, new UpdateDeductionComponentDto
+        {
+            Name = "Updated TDS",
+            Description = "Updated from master",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 100m,
+            VisibleInPayslip = true,
+            DisplayOrder = 1
+        });
+
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var rows = await _employeePayrollComponentRepository.GetDeductionsByEmployeeIdAsync(employee.Id);
+            var linked = rows.Single(x => x.ComponentId == master.Id);
+            linked.Name.ShouldBe("Updated TDS");
+            linked.Description.ShouldBe("Updated from master");
+            linked.Amount.ShouldBe(100m);
+
+            var unlinked = rows.Single(x => x.Id == unlinkedEmployeeRowId);
+            unlinked.Name.ShouldBe(originalComponentName);
+            unlinked.Description.ShouldBe("Custom employee deduction");
+            unlinked.Amount.ShouldBe(999m);
+        });
+    }
+
+    [Fact]
+    public async Task Should_Propagate_Percentage_Update_To_Linked_Employee_Deduction_Components()
+    {
+        var employee = await CreateEmployeeAsync("deduction-percentage-sync");
+        var baseComponent = await CreateTestDeductionComponentAsync($"Base Deduction For Percentage {Guid.NewGuid():N}");
+        var percentageComponent = await _deductionComponentAppService.CreateAsync(new CreateDeductionComponentDto
+        {
+            Name = $"PF Percentage {Guid.NewGuid():N}",
+            Description = "Percentage deduction",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 10m,
+            SelectedDeductionComponentId = baseComponent.Id,
+            VisibleInPayslip = true,
+            DisplayOrder = 2
+        });
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(),
+            employee.Id,
+            percentageComponent.Name,
+            percentageComponent.Id,
+            percentageComponent.Description,
+            percentageComponent.Percentage ?? 0m,
+            isFixed: false,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Percentage,
+            dependOn: SalaryComponentDependency.Basic,
+            isEarning: false), autoSave: true);
+
+        await _deductionComponentAppService.UpdateAsync(percentageComponent.Id, new UpdateDeductionComponentDto
+        {
+            Name = "Updated PF Percentage",
+            Description = "Updated percentage deduction",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 12m,
+            SelectedDeductionComponentId = baseComponent.Id,
+            VisibleInPayslip = true,
+            DisplayOrder = 2
+        });
+
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var linked = (await _employeePayrollComponentRepository.GetDeductionsByEmployeeIdAsync(employee.Id))
+                .Single(x => x.ComponentId == percentageComponent.Id);
+            linked.Name.ShouldBe("Updated PF Percentage");
+            linked.Amount.ShouldBe(12m);
+            linked.IsFixed.ShouldBeFalse();
+            linked.ComponentType.ShouldBe(SalaryComponentType.Percentage);
+            linked.DependOn.ShouldBe(SalaryComponentDependency.Basic);
+        });
     }
 
     #endregion
@@ -1038,6 +1178,59 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         };
 
         return await _deductionComponentAppService.CreateAsync(input);
+    }
+
+    private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync(string suffix)
+    {
+        var roleId = await EnsureRoleExistsAsync();
+        var shiftId = await EnsureShiftExistsAsync();
+        var unique = Guid.NewGuid().ToString("N")[..6];
+
+        return await _employeePersonalInfoAppService.CreateAsync(new CreateEmployeePersonalInfoDto
+        {
+            FirstName = $"Emp{unique}",
+            LastName = suffix,
+            MobileNo = $"91{Random.Shared.Next(10000000, 99999999)}",
+            Email = $"{suffix}.{Guid.NewGuid():N}@test.com",
+            DateOfBirth = new DateOnly(1990, 5, 15),
+            GenderType = GenderType.Male,
+            DateOfJoining = new DateOnly(2024, 1, 1),
+            EmployeeStatusType = EmployeeStatusType.Active,
+            RoleId = roleId,
+            ShiftId = shiftId
+        });
+    }
+
+    private async Task<Guid> EnsureRoleExistsAsync()
+    {
+        var existing = (await _roleRepository.GetListAsync()).FirstOrDefault();
+        if (existing != null)
+        {
+            return existing.Id;
+        }
+
+        var id = _guidGenerator.Create();
+        await _roleRepository.InsertAsync(new IdentityRole(id, $"TestRole-{id:N}", _currentTenant.Id), autoSave: true);
+        return id;
+    }
+
+    private async Task<Guid> EnsureShiftExistsAsync()
+    {
+        var existing = (await _shiftRepository.GetListAsync()).FirstOrDefault();
+        if (existing != null)
+        {
+            return existing.Id;
+        }
+
+        var shift = new ShiftManagement
+        {
+            ShiftName = "Deduction Component Test Shift",
+            StartTime = new TimeOnly(8, 0),
+            EndTime = new TimeOnly(16, 0)
+        };
+
+        await _shiftRepository.InsertAsync(shift, autoSave: true);
+        return shift.Id;
     }
 
     #endregion

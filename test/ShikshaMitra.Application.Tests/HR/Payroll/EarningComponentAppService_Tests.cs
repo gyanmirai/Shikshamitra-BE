@@ -592,6 +592,62 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         saved.IsFixed.ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task Should_Save_ReAdded_Percentage_Deduction_When_Line_Amount_Is_Zero()
+    {
+        var employee = await CreateEmployeeAsync("deduction-percentage-readd-payroll");
+        var percentageDeduction = await _deductionComponentAppService.CreateAsync(new CreateDeductionComponentDto
+        {
+            Name = $"Payroll PF Percentage {Guid.NewGuid():N}",
+            Description = "Percentage deduction used by payroll re-add save",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            DependOn = ComponentDependency.Basic,
+            Percentage = 12m,
+            SelectedDeductionComponentId = Guid.NewGuid(),
+            VisibleInPayslip = true,
+            DisplayOrder = 3
+        });
+
+        await _employeePayrollAppService.UpdatePayrollContractAsync(employee.Id, new PayrollContract
+        {
+            DeductionComponents =
+            [
+                new SalaryComponentContract
+                {
+                    ComponentId = percentageDeduction.Id,
+                    Name = percentageDeduction.Name
+                }
+            ]
+        });
+
+        await _employeePayrollAppService.UpdatePayrollContractAsync(employee.Id, new PayrollContract
+        {
+            DeductionComponents = []
+        });
+
+        await _employeePayrollAppService.UpdatePayrollContractAsync(employee.Id, new PayrollContract
+        {
+            DeductionComponents =
+            [
+                new SalaryComponentContract
+                {
+                    ComponentId = percentageDeduction.Id,
+                    Name = percentageDeduction.Name,
+                    Amount = 0m,
+                    IsFixed = true
+                }
+            ]
+        });
+
+        var saved = (await _employeePayrollComponentRepository.GetDeductionsByEmployeeIdAsync(employee.Id))
+            .Single(x => x.ComponentId == percentageDeduction.Id);
+        saved.Amount.ShouldBe(12m);
+        saved.ComponentType.ShouldBe(SalaryComponentType.Percentage);
+        saved.DependOn.ShouldBe(SalaryComponentDependency.Basic);
+        saved.IsFixed.ShouldBeFalse();
+    }
+
     #endregion
 
     #region Activate/Deactivate Tests

@@ -48,7 +48,10 @@ public static class DeductionComponentContractMapper
             SelectedDeductionComponentId = request.SelectedDeductionComponentId,
             DependOn = dependOn,
             VisibleInPayslip = request.VisibleInPayslip,
-            DisplayOrder = existingDisplayOrder
+            DisplayOrder = existingDisplayOrder,
+            ApplyMode = ParseApplyMode(request.ApplyMode),
+            EffectiveMonth = request.EffectiveMonth,
+            PreviewHash = request.PreviewHash
         };
     }
 
@@ -137,5 +140,15 @@ public static class DeductionComponentContractMapper
             return ComponentDependency.CustomComponent;
 
         return ComponentDependency.None;
+    }
+
+    private static PayrollComponentApplyMode ParseApplyMode(string? applyMode)
+    {
+        if (string.IsNullOrWhiteSpace(applyMode))
+            return PayrollComponentApplyMode.SyncedOnly;
+
+        return Enum.TryParse<PayrollComponentApplyMode>(applyMode, ignoreCase: true, out var parsed)
+            ? parsed
+            : PayrollComponentApplyMode.SyncedOnly;
     }
 }

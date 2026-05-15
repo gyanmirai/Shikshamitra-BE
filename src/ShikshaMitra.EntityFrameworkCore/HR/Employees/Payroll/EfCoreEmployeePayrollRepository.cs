@@ -125,6 +125,27 @@ public class EfCoreEmployeePayrollComponentRepository
 		return rows.Select(x => x.Component).ToList();
 	}
 
+	public async Task DeleteByComponentIdAsync(
+		Guid componentId,
+		bool isEarning,
+		CancellationToken cancellationToken = default)
+	{
+		var dbContext = await GetDbContextAsync();
+		var query = from component in dbContext.EmployeePayrollComponents
+					join employee in dbContext.Set<Employee>() on component.EmployeeId equals employee.Id
+					where component.ComponentId == componentId && component.IsEarning == isEarning
+					select new { Component = component, EmployeeTenantId = employee.TenantId };
+
+		var currentTenantId = CurrentTenant.Id;
+		if (currentTenantId.HasValue)
+		{
+			query = query.Where(x => x.EmployeeTenantId == currentTenantId);
+		}
+
+		var components = await query.Select(x => x.Component).ToListAsync(cancellationToken);
+		dbContext.EmployeePayrollComponents.RemoveRange(components);
+	}
+
 	public async Task DeleteByEmployeeIdAsync(
 		Guid employeeId,
 		bool isEarning,

@@ -57,6 +57,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	private readonly IRepository<Holiday, Guid> _holidayRepository;
 	private readonly IDayCalculationSettingRepository _dayCalculationSettingRepository;
 	private readonly SalarySlipManager _salarySlipManager;
+	private readonly PayrollComponentVersionResolver _componentVersionResolver;
 	private readonly IUserScopeService _userScopeService;
 	private readonly HrUserScopeAccessService _hrScopeAccessService;
 	private readonly ILogger<RunPayrollAppService> _logger;
@@ -76,6 +77,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		IRepository<Holiday, Guid> holidayRepository,
 		IDayCalculationSettingRepository dayCalculationSettingRepository,
 		SalarySlipManager salarySlipManager,
+		PayrollComponentVersionResolver componentVersionResolver,
 		IUserScopeService userScopeService,
 		HrUserScopeAccessService hrScopeAccessService,
 		ILogger<RunPayrollAppService> logger)
@@ -90,6 +92,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		_holidayRepository = holidayRepository;
 		_dayCalculationSettingRepository = dayCalculationSettingRepository;
 		_salarySlipManager = salarySlipManager;
+		_componentVersionResolver = componentVersionResolver;
 		_userScopeService = userScopeService;
 		_hrScopeAccessService = hrScopeAccessService;
 		_logger = logger;
@@ -156,17 +159,24 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				var attendanceByEmployee = await GetAttendanceRecordsAsync(employeeIds, startDate, endDate);
 				var payrollDetailsByEmployee = await _payrollDetailsRepository.GetByEmployeeIdsAsync(employeeIds);
 				var componentsByEmployee = await _payrollComponentRepository.GetByEmployeeIdsAsync(employeeIds);
+				var resolvedComponentsByEmployee = await _componentVersionResolver.ResolveByEmployeeAsync(
+					componentsByEmployee,
+					internalMonthYear);
 
-				var computedItems = scopedEmployees.Select(employee => BuildPayrollItem(
-					employee,
-					attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
-					payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
-					componentsByEmployee[employee.Id].ToList(),
-					basis,
-					finalizedEmployeeIds.Contains(employee.Id),
-					reviewByEmployee.GetValueOrDefault(employee.Id),
-					previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id)
-				)).ToList();
+				var computedItems = new List<RunPayrollItem>();
+				foreach (var employee in scopedEmployees)
+				{
+					computedItems.Add(BuildPayrollItem(
+						employee,
+						attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
+						payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
+						resolvedComponentsByEmployee[employee.Id].ToList(),
+						basis,
+						finalizedEmployeeIds.Contains(employee.Id),
+						reviewByEmployee.GetValueOrDefault(employee.Id),
+						previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id)
+					));
+				}
 
 				await UpsertSnapshotsAsync(internalMonthYear, computedItems);
 				persistedSnapshots = await GetSnapshotsByMonthAsync(internalMonthYear);

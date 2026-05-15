@@ -42,4 +42,8 @@ public interface ISalarySlipRepository : IRepository<SalarySlip, Guid>
 	Task<List<SalarySlip>> GetByMonthAsync(
 		string monthYear,
 		CancellationToken cancellationToken = default);
+
+	Task<(int FinalizedSlipCount, int DraftSlipCount)> GetStatusCountsByEmployeeIdsAsync(
+		IReadOnlyCollection<Guid> employeeIds,
+		CancellationToken cancellationToken = default);
 }

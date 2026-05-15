@@ -40,6 +40,7 @@ public partial class ShikshaMitraDbContext
     DbSet<ProfessionalTax> ProfessionalTaxes { get; set; }
     public DbSet<EarningComponent> EarningComponents { get; set; }
     public DbSet<DeductionComponent> DeductionComponents { get; set; }
+    public DbSet<PayrollComponentVersion> PayrollComponentVersions { get; set; }
     public DbSet<DayCalculationSetting> DayCalculationSettings { get; set; }
     public DbSet<SalarySlip> SalarySlips { get; set; }
     public DbSet<AttendanceImportBatch> AttendanceImportBatches { get; set; }

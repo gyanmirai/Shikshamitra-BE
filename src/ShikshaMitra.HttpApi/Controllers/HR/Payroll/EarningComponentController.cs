@@ -82,12 +82,48 @@ public class EarningComponentController : AbpControllerBase
 		return Ok();
 	}
 
+	[HttpPost("{id}/update-impact-preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsEarningComponents.Add)]
+	[ProducesResponseType(typeof(PayrollComponentUpdateImpactPreviewDto), 200)]
+	public virtual async Task<PayrollComponentUpdateImpactPreviewDto> PreviewUpdateImpactAsync(
+		Guid id,
+		[FromBody] EarningComponentUpdateRequestDto input,
+		[FromQuery] bool includeEmployees = false,
+		[FromQuery] int skipCount = 0,
+		[FromQuery] int maxResultCount = 20)
+	{
+		var existingComponent = await _earningComponentAppService.GetAsync(id);
+		var updateDto = EarningComponentContractMapper.ToUpdateDto(input, existingComponent.DisplayOrder);
+		return await _earningComponentAppService.PreviewUpdateImpactAsync(
+			id,
+			updateDto,
+			includeEmployees,
+			skipCount,
+			maxResultCount);
+	}
+
+	[HttpGet("{id}/delete-impact-preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsEarningComponents.Delete)]
+	[ProducesResponseType(typeof(PayrollComponentUpdateImpactPreviewDto), 200)]
+	public virtual async Task<PayrollComponentUpdateImpactPreviewDto> PreviewDeleteImpactAsync(
+		Guid id,
+		[FromQuery] bool includeEmployees = false,
+		[FromQuery] int skipCount = 0,
+		[FromQuery] int maxResultCount = 20)
+	{
+		return await _earningComponentAppService.PreviewDeleteImpactAsync(
+			id,
+			includeEmployees,
+			skipCount,
+			maxResultCount);
+	}
+
 	[HttpDelete("{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsEarningComponents.Delete)]
 	[ProducesResponseType(204)]
-	public virtual async Task<IActionResult> DeleteAsync(Guid id)
+	public virtual async Task<IActionResult> DeleteAsync(Guid id, [FromQuery] string? previewHash = null)
 	{
-		await _earningComponentAppService.DeleteAsync(id);
+		await _earningComponentAppService.DeleteConfirmedAsync(id, previewHash ?? string.Empty);
 		return NoContent();
 	}
 }

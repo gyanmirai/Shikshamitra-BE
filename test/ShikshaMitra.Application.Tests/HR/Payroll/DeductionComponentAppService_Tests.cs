@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.PersonalInfo;
+using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.TenantSettings;
 using Shouldly;
@@ -26,6 +27,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
     private readonly IDeductionComponentAppService _deductionComponentAppService;
     private readonly IEmployeePersonalInfoAppService _employeePersonalInfoAppService;
     private readonly IEmployeePayrollComponentRepository _employeePayrollComponentRepository;
+    private readonly ISalarySlipRepository _salarySlipRepository;
     private readonly IIdentityRoleRepository _roleRepository;
     private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
     private readonly ICurrentTenant _currentTenant;
@@ -36,6 +38,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         _deductionComponentAppService = GetRequiredService<IDeductionComponentAppService>();
         _employeePersonalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
         _employeePayrollComponentRepository = GetRequiredService<IEmployeePayrollComponentRepository>();
+        _salarySlipRepository = GetRequiredService<ISalarySlipRepository>();
         _roleRepository = GetRequiredService<IIdentityRoleRepository>();
         _shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
         _currentTenant = GetRequiredService<ICurrentTenant>();
@@ -301,7 +304,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         };
 
         // Act
-        var result = await _deductionComponentAppService.UpdateAsync(created.Id, updateInput);
+        var result = await UpdateDeductionComponentWithPreviewAsync(created.Id, updateInput);
 
         // Assert
         result.ShouldNotBeNull();
@@ -315,6 +318,123 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         result.Amount.ShouldBeNull();
         result.VisibleInPayslip.ShouldBeFalse();
         result.DisplayOrder.ShouldBe(10);
+    }
+
+    [Fact]
+    public async Task Update_Should_Require_Current_Preview_Hash()
+    {
+        var created = await CreateTestDeductionComponentAsync($"Preview Required Deduction {Guid.NewGuid():N}");
+        var updateInput = new UpdateDeductionComponentDto
+        {
+            Name = created.Name,
+            Description = "Preview gate test",
+            ComponentType = created.ComponentType,
+            CalculationType = created.CalculationType,
+            Amount = created.Amount,
+            Percentage = created.Percentage,
+            SelectedDeductionComponentId = created.SelectedDeductionComponentId,
+            DependOn = created.DependOn
+        };
+
+        var missingHash = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _deductionComponentAppService.UpdateAsync(created.Id, updateInput);
+        });
+        missingHash.Code.ShouldBe("ShikshaMitra:PayrollComponentPreviewRequired");
+
+        updateInput.PreviewHash = "stale-preview";
+        var staleHash = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _deductionComponentAppService.UpdateAsync(created.Id, updateInput);
+        });
+        staleHash.Code.ShouldBe("ShikshaMitra:PayrollComponentPreviewExpired");
+    }
+
+    [Fact]
+    public async Task Update_Preview_Hash_Should_Expire_When_Linked_Slip_Status_Changes()
+    {
+        var employee = await CreateEmployeeAsync("deduction-update-slip-status");
+        var master = await CreateTestDeductionComponentAsync($"Update Slip Status Deduction {Guid.NewGuid():N}");
+        var effectiveMonth = DateTime.UtcNow.AddMonths(1).ToString("yyyy-MM");
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(),
+            employee.Id,
+            master.Name,
+            master.Id,
+            master.Description,
+            master.Amount ?? 0m,
+            isFixed: true,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: false), autoSave: true);
+
+        var draftSlip = new SalarySlip(
+            _guidGenerator.Create(),
+            _currentTenant.Id,
+            employee.Id,
+            effectiveMonth,
+            new(),
+            new());
+        await _salarySlipRepository.InsertAsync(draftSlip, autoSave: true);
+
+        var updateInput = new UpdateDeductionComponentDto
+        {
+            Name = master.Name,
+            Description = master.Description,
+            ComponentType = master.ComponentType,
+            CalculationType = master.CalculationType,
+            Amount = master.Amount,
+            Percentage = master.Percentage,
+            SelectedDeductionComponentId = master.SelectedDeductionComponentId,
+            DependOn = master.DependOn,
+            VisibleInPayslip = master.VisibleInPayslip,
+            EffectiveMonth = effectiveMonth
+        };
+        updateInput.PreviewHash = (await _deductionComponentAppService.PreviewUpdateImpactAsync(master.Id, updateInput)).PreviewHash;
+
+        draftSlip.Finalize();
+        await _salarySlipRepository.UpdateAsync(draftSlip, autoSave: true);
+
+        var staleHash = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _deductionComponentAppService.UpdateAsync(master.Id, updateInput);
+        });
+        staleHash.Code.ShouldBe("ShikshaMitra:PayrollComponentPreviewExpired");
+    }
+
+    [Fact]
+    public async Task Update_And_Preview_Should_Reject_Inactive_Deduction_Component()
+    {
+        var created = await CreateTestDeductionComponentAsync($"Inactive Update Deduction {Guid.NewGuid():N}");
+        await _deductionComponentAppService.DeactivateAsync(created.Id);
+        var updateInput = new UpdateDeductionComponentDto
+        {
+            Name = created.Name,
+            Description = created.Description,
+            ComponentType = created.ComponentType,
+            CalculationType = created.CalculationType,
+            Amount = created.Amount,
+            Percentage = created.Percentage,
+            SelectedDeductionComponentId = created.SelectedDeductionComponentId,
+            DependOn = created.DependOn,
+            VisibleInPayslip = created.VisibleInPayslip,
+            PreviewHash = "any-preview-hash"
+        };
+
+        var previewError = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _deductionComponentAppService.PreviewUpdateImpactAsync(created.Id, updateInput);
+        });
+        previewError.Code.ShouldBe("ShikshaMitra:PayrollComponentInactive");
+
+        var updateError = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _deductionComponentAppService.UpdateAsync(created.Id, updateInput);
+        });
+        updateError.Code.ShouldBe("ShikshaMitra:PayrollComponentInactive");
     }
 
     [Fact]
@@ -336,7 +456,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         // Act & Assert
         await Should.ThrowAsync<BusinessException>(async () =>
         {
-            await _deductionComponentAppService.UpdateAsync(component2.Id, updateInput);
+            await UpdateDeductionComponentWithPreviewAsync(component2.Id, updateInput);
         });
     }
 
@@ -359,7 +479,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         };
 
         // Act
-        var result = await _deductionComponentAppService.UpdateAsync(created.Id, updateInput);
+        var result = await UpdateDeductionComponentWithPreviewAsync(created.Id, updateInput);
 
         // Assert
         result.ShouldNotBeNull();
@@ -403,7 +523,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             dependOn: SalaryComponentDependency.None,
             isEarning: false), autoSave: true);
 
-        await _deductionComponentAppService.UpdateAsync(master.Id, new UpdateDeductionComponentDto
+        await UpdateDeductionComponentWithPreviewAsync(master.Id, new UpdateDeductionComponentDto
         {
             Name = "Updated TDS",
             Description = "Updated from master",
@@ -412,7 +532,8 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             DependOn = ComponentDependency.None,
             Amount = 100m,
             VisibleInPayslip = true,
-            DisplayOrder = 1
+            DisplayOrder = 1,
+            EffectiveMonth = DateTime.Now.ToString("yyyy-MM")
         });
 
         await WithUnitOfWorkAsync(async () =>
@@ -462,7 +583,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             dependOn: SalaryComponentDependency.Basic,
             isEarning: false), autoSave: true);
 
-        await _deductionComponentAppService.UpdateAsync(percentageComponent.Id, new UpdateDeductionComponentDto
+        await UpdateDeductionComponentWithPreviewAsync(percentageComponent.Id, new UpdateDeductionComponentDto
         {
             Name = "Updated PF Percentage",
             Description = "Updated percentage deduction",
@@ -472,7 +593,8 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             Percentage = 12m,
             SelectedDeductionComponentId = baseComponent.Id,
             VisibleInPayslip = true,
-            DisplayOrder = 2
+            DisplayOrder = 2,
+            EffectiveMonth = DateTime.Now.ToString("yyyy-MM")
         });
 
         await WithUnitOfWorkAsync(async () =>
@@ -485,6 +607,68 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             linked.ComponentType.ShouldBe(SalaryComponentType.Percentage);
             linked.DependOn.ShouldBe(SalaryComponentDependency.Basic);
         });
+    }
+
+    [Fact]
+    public async Task Should_Preview_And_Force_Apply_Deduction_Component_Manual_Overrides()
+    {
+        var syncedEmployee = await CreateEmployeeAsync("deduction-preview-synced");
+        var overriddenEmployee = await CreateEmployeeAsync("deduction-preview-override");
+        var master = await CreateTestDeductionComponentAsync($"Preview TDS {Guid.NewGuid():N}");
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(), syncedEmployee.Id, master.Name, master.Id, master.Description, master.Amount ?? 0m,
+            isFixed: true, isTemp: false, applicableMonth: null, componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None, isEarning: false, usesMasterValue: true), autoSave: true);
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(), overriddenEmployee.Id, master.Name, master.Id, master.Description, 777m,
+            isFixed: true, isTemp: false, applicableMonth: null, componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None, isEarning: false, usesMasterValue: false), autoSave: true);
+
+        var update = new UpdateDeductionComponentDto
+        {
+            Name = "Preview TDS Updated",
+            Description = "Preview update",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 125m,
+            EffectiveMonth = "2026-06"
+        };
+
+        var preview = await _deductionComponentAppService.PreviewUpdateImpactAsync(master.Id, update);
+        preview.SyncedEmployeeCount.ShouldBe(1);
+        preview.ManualOverrideEmployeeCount.ShouldBe(1);
+        preview.EffectiveMonth.ShouldBe("2026-06");
+        preview.PreviewHash.ShouldNotBeNullOrWhiteSpace();
+
+        update.PreviewHash = preview.PreviewHash;
+        await UpdateDeductionComponentWithPreviewAsync(master.Id, update);
+        var normalRows = await _employeePayrollComponentRepository.GetByComponentIdAsync(master.Id, isEarning: false);
+        normalRows.Single(x => x.EmployeeId == syncedEmployee.Id).Amount.ShouldBe(master.Amount ?? 0m);
+        normalRows.Single(x => x.EmployeeId == overriddenEmployee.Id).Amount.ShouldBe(777m);
+        normalRows.Single(x => x.EmployeeId == overriddenEmployee.Id).UsesMasterValue.ShouldBeFalse();
+
+        var forceUpdate = new UpdateDeductionComponentDto
+        {
+            Name = "Preview TDS Force",
+            Description = "Force update",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 140m,
+            EffectiveMonth = "2026-07",
+            ApplyMode = PayrollComponentApplyMode.ForceApply
+        };
+        forceUpdate.PreviewHash = (await _deductionComponentAppService.PreviewUpdateImpactAsync(master.Id, forceUpdate)).PreviewHash;
+
+        await UpdateDeductionComponentWithPreviewAsync(master.Id, forceUpdate);
+        var forceRows = await _employeePayrollComponentRepository.GetByComponentIdAsync(master.Id, isEarning: false);
+        forceRows.Single(x => x.EmployeeId == syncedEmployee.Id).Amount.ShouldBe(master.Amount ?? 0m);
+        var forcedOverride = forceRows.Single(x => x.EmployeeId == overriddenEmployee.Id);
+        forcedOverride.Amount.ShouldBe(777m);
+        forcedOverride.UsesMasterValue.ShouldBeTrue();
     }
 
     #endregion
@@ -556,13 +740,202 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         var created = await CreateTestDeductionComponentAsync("Deduction to Delete");
 
         // Act
-        await _deductionComponentAppService.DeleteAsync(created.Id);
+        await DeleteDeductionComponentWithPreviewAsync(created.Id);
 
         // Assert
-        await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(async () =>
+        var retired = await _deductionComponentAppService.GetAsync(created.Id);
+        retired.IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Delete_Should_Remove_Linked_Employee_Deductions_But_Keep_Custom_Rows()
+    {
+        var employee = await CreateEmployeeAsync("deduction-delete");
+        var master = await CreateTestDeductionComponentAsync($"Delete Linked Deduction {Guid.NewGuid():N}");
+        var customRowId = Guid.NewGuid();
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(),
+            employee.Id,
+            master.Name,
+            master.Id,
+            master.Description,
+            master.Amount ?? 0m,
+            isFixed: true,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: false), autoSave: true);
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            customRowId,
+            employee.Id,
+            "Custom Deduction",
+            componentId: null,
+            "Employee custom deduction",
+            123m,
+            isFixed: true,
+            isTemp: true,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: false,
+            usesMasterValue: false), autoSave: true);
+
+        var preview = await _deductionComponentAppService.PreviewDeleteImpactAsync(master.Id, includeEmployees: true);
+        preview.LinkedEmployeeCount.ShouldBe(1);
+        preview.SyncedEmployeeCount.ShouldBe(1);
+        preview.SyncedEmployees.ShouldContain(x => x.EmployeeId == employee.Id);
+
+        await DeleteDeductionComponentWithPreviewAsync(master.Id);
+
+        var rows = await _employeePayrollComponentRepository.GetDeductionsByEmployeeIdAsync(employee.Id);
+        rows.ShouldNotContain(x => x.ComponentId == master.Id);
+        rows.ShouldContain(x => x.Id == customRowId);
+
+        var retired = await _deductionComponentAppService.GetAsync(master.Id);
+        retired.IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Delete_Should_Require_Current_Preview_Hash()
+    {
+        var component = await CreateTestDeductionComponentAsync($"Delete Preview Required Deduction {Guid.NewGuid():N}");
+
+        var missingHash = await Should.ThrowAsync<BusinessException>(async () =>
         {
-            await _deductionComponentAppService.GetAsync(created.Id);
+            await _deductionComponentAppService.DeleteAsync(component.Id);
         });
+        missingHash.Code.ShouldBe("ShikshaMitra:PayrollComponentPreviewRequired");
+
+        var staleHash = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _deductionComponentAppService.DeleteConfirmedAsync(component.Id, "stale-preview");
+        });
+        staleHash.Code.ShouldBe("ShikshaMitra:PayrollComponentPreviewExpired");
+    }
+
+    [Fact]
+    public async Task Delete_Preview_Should_Count_Historical_Slips_For_Linked_Employees()
+    {
+        var employee = await CreateEmployeeAsync("deduction-delete-history");
+        var master = await CreateTestDeductionComponentAsync($"Delete Historical Deduction {Guid.NewGuid():N}");
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(),
+            employee.Id,
+            master.Name,
+            master.Id,
+            master.Description,
+            master.Amount ?? 0m,
+            isFixed: true,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: false), autoSave: true);
+
+        var finalizedSlip = new SalarySlip(
+            _guidGenerator.Create(),
+            _currentTenant.Id,
+            employee.Id,
+            "2024-01",
+            new(),
+            new());
+        finalizedSlip.Finalize();
+        await _salarySlipRepository.InsertAsync(finalizedSlip, autoSave: true);
+        await _salarySlipRepository.InsertAsync(new SalarySlip(
+            _guidGenerator.Create(),
+            _currentTenant.Id,
+            employee.Id,
+            "2024-02",
+            new(),
+            new()), autoSave: true);
+
+        var preview = await _deductionComponentAppService.PreviewDeleteImpactAsync(master.Id);
+
+        preview.FinalizedSlipCount.ShouldBeGreaterThanOrEqualTo(1);
+        preview.DraftSlipCount.ShouldBeGreaterThanOrEqualTo(1);
+    }
+
+    [Fact]
+    public async Task Delete_Preview_Hash_Should_Change_When_Historical_Slip_Status_Counts_Change()
+    {
+        var employee = await CreateEmployeeAsync("deduction-delete-status-hash");
+        var master = await CreateTestDeductionComponentAsync($"Delete Status Hash Deduction {Guid.NewGuid():N}");
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(),
+            employee.Id,
+            master.Name,
+            master.Id,
+            master.Description,
+            master.Amount ?? 0m,
+            isFixed: true,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: false), autoSave: true);
+
+        var draftSlip = new SalarySlip(
+            _guidGenerator.Create(),
+            _currentTenant.Id,
+            employee.Id,
+            "2024-03",
+            new(),
+            new());
+        await _salarySlipRepository.InsertAsync(draftSlip, autoSave: true);
+
+        var preview = await _deductionComponentAppService.PreviewDeleteImpactAsync(master.Id);
+
+        draftSlip.Finalize();
+        await _salarySlipRepository.UpdateAsync(draftSlip, autoSave: true);
+
+        var refreshedPreview = await _deductionComponentAppService.PreviewDeleteImpactAsync(master.Id);
+        refreshedPreview.PreviewHash.ShouldNotBe(preview.PreviewHash);
+    }
+
+    [Fact]
+    public async Task Delete_Should_Remove_Manual_Override_Deduction_Rows()
+    {
+        var employee = await CreateEmployeeAsync("deduction-delete-override");
+        var master = await CreateTestDeductionComponentAsync($"Delete Override Deduction {Guid.NewGuid():N}");
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(),
+            employee.Id,
+            master.Name,
+            master.Id,
+            master.Description,
+            999m,
+            isFixed: true,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: false,
+            usesMasterValue: false), autoSave: true);
+
+        var preview = await _deductionComponentAppService.PreviewDeleteImpactAsync(master.Id);
+        preview.LinkedEmployeeCount.ShouldBe(1);
+        preview.ManualOverrideEmployeeCount.ShouldBe(1);
+
+        await DeleteDeductionComponentWithPreviewAsync(master.Id);
+
+        var rows = await _employeePayrollComponentRepository.GetDeductionsByEmployeeIdAsync(employee.Id);
+        rows.ShouldNotContain(x => x.ComponentId == master.Id);
+    }
+
+    [Fact]
+    public async Task Delete_Should_Exclude_Deduction_From_Filtered_List()
+    {
+        var component = await CreateTestDeductionComponentAsync($"Filtered Delete Deduction {Guid.NewGuid():N}");
+        await DeleteDeductionComponentWithPreviewAsync(component.Id);
+
+        var filtered = await _deductionComponentAppService.GetFilteredListAsync(0, 100, component.Name);
+        filtered.Items.ShouldNotContain(x => x.Id == component.Id);
     }
 
     #endregion
@@ -771,7 +1144,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         };
 
         // Act
-        var result = await _deductionComponentAppService.UpdateAsync(created.Id, updateInput);
+        var result = await UpdateDeductionComponentWithPreviewAsync(created.Id, updateInput);
 
         // Assert
         result.ComponentType.ShouldBe(DeductionComponentType.Variable);
@@ -920,7 +1293,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         };
 
         // Act
-        var result = await _deductionComponentAppService.UpdateAsync(created.Id, updateInput);
+        var result = await UpdateDeductionComponentWithPreviewAsync(created.Id, updateInput);
 
         // Assert — Amount should be cleared, Percentage should be set
         result.CalculationType.ShouldBe(CalculationType.Percentage);
@@ -954,7 +1327,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         };
 
         // Act
-        var result = await _deductionComponentAppService.UpdateAsync(created.Id, updateInput);
+        var result = await UpdateDeductionComponentWithPreviewAsync(created.Id, updateInput);
 
         // Assert — Percentage should be cleared, Amount should be set
         result.CalculationType.ShouldBe(CalculationType.Amount);
@@ -1002,7 +1375,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         };
 
         // Act
-        var result = await _deductionComponentAppService.UpdateAsync(created.Id, updateInput);
+        var result = await UpdateDeductionComponentWithPreviewAsync(created.Id, updateInput);
 
         // Assert
         result.VisibleInPayslip.ShouldBeFalse();
@@ -1094,7 +1467,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             VisibleInPayslip = false,
             DisplayOrder = 2
         };
-        var updated = await _deductionComponentAppService.UpdateAsync(created.Id, updateInput);
+        var updated = await UpdateDeductionComponentWithPreviewAsync(created.Id, updateInput);
         updated.Name.ShouldBe("Full Lifecycle Deduction Updated");
         updated.Amount.ShouldBe(2500m);
         updated.VisibleInPayslip.ShouldBeFalse();
@@ -1111,11 +1484,9 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         reactivated.Name.ShouldBe("Full Lifecycle Deduction Updated");
 
         // Step 5: Delete
-        await _deductionComponentAppService.DeleteAsync(created.Id);
-        await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(async () =>
-        {
-            await _deductionComponentAppService.GetAsync(created.Id);
-        });
+        await DeleteDeductionComponentWithPreviewAsync(created.Id);
+        var deleted = await _deductionComponentAppService.GetAsync(created.Id);
+        deleted.IsActive.ShouldBeFalse();
     }
 
     [Fact]
@@ -1136,7 +1507,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
     }
 
     [Fact]
-    public async Task Should_Include_Deactivated_In_GetListAsync()
+    public async Task Should_Exclude_Deactivated_In_GetListAsync()
     {
         // Arrange
         var component = await CreateTestDeductionComponentAsync("Deactivated In Full List Ded");
@@ -1150,14 +1521,26 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         });
 
         // Assert
-        allList.Items.ShouldContain(x => x.Id == component.Id);
-        var found = allList.Items.First(x => x.Id == component.Id);
-        found.IsActive.ShouldBeFalse();
+        allList.Items.ShouldNotContain(x => x.Id == component.Id);
     }
 
     #endregion
 
     #region Helper Methods
+
+    private async Task<DeductionComponentDto> UpdateDeductionComponentWithPreviewAsync(
+        Guid id,
+        UpdateDeductionComponentDto input)
+    {
+        input.PreviewHash = (await _deductionComponentAppService.PreviewUpdateImpactAsync(id, input)).PreviewHash;
+        return await _deductionComponentAppService.UpdateAsync(id, input);
+    }
+
+    private async Task DeleteDeductionComponentWithPreviewAsync(Guid id)
+    {
+        var preview = await _deductionComponentAppService.PreviewDeleteImpactAsync(id);
+        await _deductionComponentAppService.DeleteConfirmedAsync(id, preview.PreviewHash);
+    }
 
     private async Task<DeductionComponentDto> CreateTestDeductionComponentAsync(
         string name,
@@ -1235,3 +1618,4 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
 
     #endregion
 }
+

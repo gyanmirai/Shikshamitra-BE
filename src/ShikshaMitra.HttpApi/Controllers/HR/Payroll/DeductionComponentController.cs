@@ -82,12 +82,48 @@ public class DeductionComponentController : AbpControllerBase
 		return Ok();
 	}
 
+	[HttpPost("{id}/update-impact-preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Add)]
+	[ProducesResponseType(typeof(PayrollComponentUpdateImpactPreviewDto), 200)]
+	public virtual async Task<PayrollComponentUpdateImpactPreviewDto> PreviewUpdateImpactAsync(
+		Guid id,
+		[FromBody] DeductionComponentUpdateRequestDto input,
+		[FromQuery] bool includeEmployees = false,
+		[FromQuery] int skipCount = 0,
+		[FromQuery] int maxResultCount = 20)
+	{
+		var existingComponent = await _deductionComponentAppService.GetAsync(id);
+		var updateDto = DeductionComponentContractMapper.ToUpdateDto(input, existingComponent.DisplayOrder);
+		return await _deductionComponentAppService.PreviewUpdateImpactAsync(
+			id,
+			updateDto,
+			includeEmployees,
+			skipCount,
+			maxResultCount);
+	}
+
+	[HttpGet("{id}/delete-impact-preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Delete)]
+	[ProducesResponseType(typeof(PayrollComponentUpdateImpactPreviewDto), 200)]
+	public virtual async Task<PayrollComponentUpdateImpactPreviewDto> PreviewDeleteImpactAsync(
+		Guid id,
+		[FromQuery] bool includeEmployees = false,
+		[FromQuery] int skipCount = 0,
+		[FromQuery] int maxResultCount = 20)
+	{
+		return await _deductionComponentAppService.PreviewDeleteImpactAsync(
+			id,
+			includeEmployees,
+			skipCount,
+			maxResultCount);
+	}
+
 	[HttpDelete("{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.Delete)]
 	[ProducesResponseType(204)]
-	public virtual async Task<IActionResult> DeleteAsync(Guid id)
+	public virtual async Task<IActionResult> DeleteAsync(Guid id, [FromQuery] string? previewHash = null)
 	{
-		await _deductionComponentAppService.DeleteAsync(id);
+		await _deductionComponentAppService.DeleteConfirmedAsync(id, previewHash ?? string.Empty);
 		return NoContent();
 	}
 }

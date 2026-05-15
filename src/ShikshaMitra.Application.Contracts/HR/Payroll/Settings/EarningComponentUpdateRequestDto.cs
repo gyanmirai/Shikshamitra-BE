@@ -12,4 +12,7 @@ public class EarningComponentUpdateRequestDto
     public decimal? Percentage { get; set; }
     public Guid? SelectedEarningComponentId { get; set; }
     public bool VisibleInPayslip { get; set; } = true;
+    public string? ApplyMode { get; set; }
+    public string? EffectiveMonth { get; set; }
+    public string? PreviewHash { get; set; }
 }

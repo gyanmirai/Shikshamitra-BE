@@ -29,6 +29,8 @@ public interface IEmployeePayrollComponentRepository : IRepository<EmployeePayro
 
 	Task<List<EmployeePayrollComponent>> GetByComponentIdAsync(Guid componentId, bool isEarning, CancellationToken cancellationToken = default);
 
+	Task DeleteByComponentIdAsync(Guid componentId, bool isEarning, CancellationToken cancellationToken = default);
+
 	Task DeleteByEmployeeIdAsync(Guid employeeId, bool isEarning, CancellationToken cancellationToken = default);
 
 	/// <summary>

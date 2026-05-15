@@ -12,4 +12,7 @@ public class DeductionComponentUpdateRequestDto
     public decimal? Percentage { get; set; }
     public Guid? SelectedDeductionComponentId { get; set; }
     public bool VisibleInPayslip { get; set; } = true;
+    public string? ApplyMode { get; set; }
+    public string? EffectiveMonth { get; set; }
+    public string? PreviewHash { get; set; }
 }

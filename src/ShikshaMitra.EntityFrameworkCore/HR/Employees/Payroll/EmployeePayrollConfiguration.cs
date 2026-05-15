@@ -68,5 +68,6 @@ public class EmployeePayrollComponentConfiguration : IEntityTypeConfiguration<Em
 		builder.Property(x => x.ComponentType).IsRequired();
 		builder.Property(x => x.DependOn);
 		builder.Property(x => x.IsEarning).IsRequired();
+		builder.Property(x => x.UsesMasterValue).IsRequired().HasDefaultValue(true);
 	}
 }

@@ -14,4 +14,7 @@ public class UpdateEarningComponentDto
 	public ComponentDependency DependOn { get; set; }
 	public bool VisibleInPayslip { get; set; } = true;
 	public int DisplayOrder { get; set; } = 0;
+	public PayrollComponentApplyMode ApplyMode { get; set; } = PayrollComponentApplyMode.SyncedOnly;
+	public string? EffectiveMonth { get; set; }
+	public string? PreviewHash { get; set; }
 }

@@ -22,6 +22,21 @@ public interface IEarningComponentAppService : ICrudAppService<
 	/// </summary>
 	Task<PagedResultDto<EarningComponentDto>> GetAllActiveAsync(PagedResultRequestDto input);
 
+	Task<PayrollComponentUpdateImpactPreviewDto> PreviewUpdateImpactAsync(
+		Guid id,
+		UpdateEarningComponentDto input,
+		bool includeEmployees = false,
+		int skipCount = 0,
+		int maxResultCount = 20);
+
+	Task<PayrollComponentUpdateImpactPreviewDto> PreviewDeleteImpactAsync(
+		Guid id,
+		bool includeEmployees = false,
+		int skipCount = 0,
+		int maxResultCount = 20);
+
+	Task DeleteConfirmedAsync(Guid id, string previewHash);
+
 	/// <summary>
 	/// Activate an earning component
 	/// </summary>

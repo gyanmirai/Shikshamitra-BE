@@ -309,7 +309,8 @@ public class EmployeePayrollAppService(
 					? SalaryComponentType.Fixed
 					: SalaryComponentType.Percentage,
 				master is null ? resolved.ExistingPayrollComponent?.DependOn : MapDependency(master.DependOn),
-				isEarning: true);
+				isEarning: true,
+				usesMasterValue: ShouldUseMasterValue(resolved, amount));
 
 			await payrollComponentRepository.InsertAsync(earningComponent);
 		}
@@ -339,7 +340,8 @@ public class EmployeePayrollAppService(
 					? SalaryComponentType.Fixed
 					: SalaryComponentType.Percentage,
 				master is null ? resolved.ExistingPayrollComponent?.DependOn : MapDependency(master.DependOn),
-				isEarning: false);
+				isEarning: false,
+				usesMasterValue: ShouldUseMasterValue(resolved, amount));
 
 			await payrollComponentRepository.InsertAsync(deductionComponent);
 		}
@@ -356,10 +358,9 @@ public class EmployeePayrollAppService(
 		{
 			try
 			{
-				return new ResolvedPayrollLine<EarningComponent>(
-					line,
-					await earningComponentRepository.GetAsync(cid),
-					existingPayrollRow);
+				var master = await earningComponentRepository.GetAsync(cid);
+				EnsureActiveMaster(master, HRErrorCodes.EmployeePayrollInvalidEarningComponent, cid);
+				return new ResolvedPayrollLine<EarningComponent>(line, master, existingPayrollRow);
 			}
 			catch (Volo.Abp.Domain.Entities.EntityNotFoundException)
 			{
@@ -367,10 +368,9 @@ public class EmployeePayrollAppService(
 				{
 					try
 					{
-						return new ResolvedPayrollLine<EarningComponent>(
-							line,
-							await earningComponentRepository.GetAsync(masterId),
-							existingPayrollRow);
+						var master = await earningComponentRepository.GetAsync(masterId);
+						EnsureActiveMaster(master, HRErrorCodes.EmployeePayrollInvalidEarningComponent, masterId);
+						return new ResolvedPayrollLine<EarningComponent>(line, master, existingPayrollRow);
 					}
 					catch (Volo.Abp.Domain.Entities.EntityNotFoundException)
 					{
@@ -396,7 +396,7 @@ public class EmployeePayrollAppService(
 		var name = (line.Name ?? string.Empty).Trim();
 		var matches = await AsyncExecuter.ToListAsync(
 			(await earningComponentRepository.GetQueryableAsync())
-				.Where(x => x.Name.ToLower() == name.ToLower()));
+				.Where(x => x.IsActive && x.Name.ToLower() == name.ToLower()));
 		if (matches.Count != 1)
 		{
 			return new ResolvedPayrollLine<EarningComponent>(line, null, existingPayrollRow);
@@ -414,10 +414,9 @@ public class EmployeePayrollAppService(
 		{
 			try
 			{
-				return new ResolvedPayrollLine<DeductionComponent>(
-					line,
-					await deductionComponentRepository.GetAsync(cid),
-					existingPayrollRow);
+				var master = await deductionComponentRepository.GetAsync(cid);
+				EnsureActiveMaster(master, HRErrorCodes.EmployeePayrollInvalidDeductionComponent, cid);
+				return new ResolvedPayrollLine<DeductionComponent>(line, master, existingPayrollRow);
 			}
 			catch (Volo.Abp.Domain.Entities.EntityNotFoundException)
 			{
@@ -425,10 +424,9 @@ public class EmployeePayrollAppService(
 				{
 					try
 					{
-						return new ResolvedPayrollLine<DeductionComponent>(
-							line,
-							await deductionComponentRepository.GetAsync(masterId),
-							existingPayrollRow);
+						var master = await deductionComponentRepository.GetAsync(masterId);
+						EnsureActiveMaster(master, HRErrorCodes.EmployeePayrollInvalidDeductionComponent, masterId);
+						return new ResolvedPayrollLine<DeductionComponent>(line, master, existingPayrollRow);
 					}
 					catch (Volo.Abp.Domain.Entities.EntityNotFoundException)
 					{
@@ -454,7 +452,7 @@ public class EmployeePayrollAppService(
 		var name = (line.Name ?? string.Empty).Trim();
 		var matches = await AsyncExecuter.ToListAsync(
 			(await deductionComponentRepository.GetQueryableAsync())
-				.Where(x => x.Name.ToLower() == name.ToLower()));
+				.Where(x => x.IsActive && x.Name.ToLower() == name.ToLower()));
 		if (matches.Count != 1)
 		{
 			return new ResolvedPayrollLine<DeductionComponent>(line, null, existingPayrollRow);
@@ -545,6 +543,28 @@ public class EmployeePayrollAppService(
 				: resolved.ExistingPayrollComponent?.Amount);
 	}
 
+	private static bool ShouldUseMasterValue(ResolvedPayrollLine<EarningComponent> resolved, decimal amount)
+	{
+		if (resolved.Master is null || resolved.Line.IsTemp == true)
+		{
+			return false;
+		}
+
+		var masterAmount = ResolveEarningComponentAmount(resolved.Master);
+		return amount == masterAmount;
+	}
+
+	private static bool ShouldUseMasterValue(ResolvedPayrollLine<DeductionComponent> resolved, decimal amount)
+	{
+		if (resolved.Master is null || resolved.Line.IsTemp == true)
+		{
+			return false;
+		}
+
+		var masterAmount = ResolveDeductionComponentAmount(resolved.Master);
+		return amount == masterAmount;
+	}
+
 	private static bool IsPercentageComponent(ResolvedPayrollLine<EarningComponent> resolved)
 	{
 		return resolved.Master?.CalculationType == CalculationType.Percentage;
@@ -570,7 +590,7 @@ public class EmployeePayrollAppService(
 		}
 
 		var masters = await AsyncExecuter.ToListAsync(
-			(await earningComponentRepository.GetQueryableAsync()).Where(x => names.Contains(x.Name)));
+			(await earningComponentRepository.GetQueryableAsync()).Where(x => x.IsActive && names.Contains(x.Name)));
 
 		return masters
 			.GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
@@ -592,7 +612,7 @@ public class EmployeePayrollAppService(
 		}
 
 		var masters = await AsyncExecuter.ToListAsync(
-			(await deductionComponentRepository.GetQueryableAsync()).Where(x => names.Contains(x.Name)));
+			(await deductionComponentRepository.GetQueryableAsync()).Where(x => x.IsActive && names.Contains(x.Name)));
 
 		return masters
 			.GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
@@ -663,4 +683,24 @@ public class EmployeePayrollAppService(
 		TMaster? Master,
 		EmployeePayrollComponent? ExistingPayrollComponent)
 		where TMaster : class;
+
+	private static void EnsureActiveMaster(EarningComponent master, string errorCode, Guid componentId)
+	{
+		if (master.IsActive)
+		{
+			return;
+		}
+
+		throw new BusinessException(errorCode).WithData("componentId", componentId);
+	}
+
+	private static void EnsureActiveMaster(DeductionComponent master, string errorCode, Guid componentId)
+	{
+		if (master.IsActive)
+		{
+			return;
+		}
+
+		throw new BusinessException(errorCode).WithData("componentId", componentId);
+	}
 }

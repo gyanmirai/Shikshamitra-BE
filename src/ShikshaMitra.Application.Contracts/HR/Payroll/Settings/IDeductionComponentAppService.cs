@@ -22,6 +22,21 @@ public interface IDeductionComponentAppService : ICrudAppService<
 	/// </summary>
 	Task<PagedResultDto<DeductionComponentDto>> GetAllActiveAsync(PagedResultRequestDto input);
 
+	Task<PayrollComponentUpdateImpactPreviewDto> PreviewUpdateImpactAsync(
+		Guid id,
+		UpdateDeductionComponentDto input,
+		bool includeEmployees = false,
+		int skipCount = 0,
+		int maxResultCount = 20);
+
+	Task<PayrollComponentUpdateImpactPreviewDto> PreviewDeleteImpactAsync(
+		Guid id,
+		bool includeEmployees = false,
+		int skipCount = 0,
+		int maxResultCount = 20);
+
+	Task DeleteConfirmedAsync(Guid id, string previewHash);
+
 	/// <summary>
 	/// Activate a deduction component
 	/// </summary>

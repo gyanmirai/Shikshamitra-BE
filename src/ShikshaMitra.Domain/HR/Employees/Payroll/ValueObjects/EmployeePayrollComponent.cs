@@ -61,6 +61,12 @@ public class EmployeePayrollComponent : Entity<Guid>
 	/// </summary>
 	public bool IsEarning { get; set; }
 
+	/// <summary>
+	/// True when the row follows the linked master component for future payroll calculations.
+	/// False means the employee row was manually overridden and normal master changes should skip it.
+	/// </summary>
+	public bool UsesMasterValue { get; set; }
+
 	// Navigation property
 	public Employee Employee { get; set; } = null!;
 
@@ -80,7 +86,8 @@ public class EmployeePayrollComponent : Entity<Guid>
 		DateTime? applicableMonth,
 		SalaryComponentType componentType,
 		SalaryComponentDependency? dependOn,
-		bool isEarning) : base(id)
+		bool isEarning,
+		bool usesMasterValue = true) : base(id)
 	{
 		EmployeeId = employeeId;
 		Name = name;
@@ -93,6 +100,7 @@ public class EmployeePayrollComponent : Entity<Guid>
 		ComponentType = componentType;
 		DependOn = dependOn;
 		IsEarning = isEarning;
+		UsesMasterValue = componentId.HasValue && !isTemp && usesMasterValue;
 	}
 
 	public void UpdateComponent(
@@ -102,7 +110,8 @@ public class EmployeePayrollComponent : Entity<Guid>
 		bool isFixed,
 		bool isTemp,
 		SalaryComponentType componentType,
-		SalaryComponentDependency? dependOn)
+		SalaryComponentDependency? dependOn,
+		bool? usesMasterValue = null)
 	{
 		Name = name;
 		Description = description;
@@ -111,6 +120,20 @@ public class EmployeePayrollComponent : Entity<Guid>
 		IsTemp = isTemp;
 		ComponentType = componentType;
 		DependOn = dependOn;
+		if (usesMasterValue.HasValue)
+		{
+			UsesMasterValue = ComponentId.HasValue && !isTemp && usesMasterValue.Value;
+		}
+	}
+
+	public void MarkManualOverride()
+	{
+		UsesMasterValue = false;
+	}
+
+	public void MarkUsesMasterValue()
+	{
+		UsesMasterValue = ComponentId.HasValue && !IsTemp;
 	}
 }
 

@@ -78,4 +78,27 @@ public class EfCoreSalarySlipRepository
 			            x.MonthYear == monthYear)
 			.ToListAsync(cancellationToken);
 	}
+
+	public async Task<(int FinalizedSlipCount, int DraftSlipCount)> GetStatusCountsByEmployeeIdsAsync(
+		IReadOnlyCollection<Guid> employeeIds,
+		CancellationToken cancellationToken = default)
+	{
+		if (employeeIds.Count == 0)
+		{
+			return (0, 0);
+		}
+
+		var dbSet = await GetDbSetAsync();
+		var statusCounts = await dbSet
+			.AsNoTracking()
+			.Where(x => x.TenantId == _currentTenant.Id &&
+			            employeeIds.Contains(x.EmployeeId))
+			.GroupBy(x => x.Status)
+			.Select(x => new { Status = x.Key, Count = x.Count() })
+			.ToListAsync(cancellationToken);
+
+		return (
+			statusCounts.FirstOrDefault(x => x.Status == SalarySlipStatus.Finalized)?.Count ?? 0,
+			statusCounts.FirstOrDefault(x => x.Status == SalarySlipStatus.Draft)?.Count ?? 0);
+	}
 }

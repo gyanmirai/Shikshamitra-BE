@@ -28,6 +28,7 @@ public class SalarySlipManager : DomainService
 	private readonly IRepository<Holiday, Guid> _holidayRepository;
 	private readonly IRepository<EmployeeAttendance, Guid> _attendanceRepository;
 	private readonly IDayCalculationSettingRepository _dayCalculationSettingRepository;
+	private readonly PayrollComponentVersionResolver _componentVersionResolver;
 	private readonly ILogger<SalarySlipManager> _logger;
 
 	public SalarySlipManager(
@@ -37,6 +38,7 @@ public class SalarySlipManager : DomainService
 		IRepository<Holiday, Guid> holidayRepository,
 		IRepository<EmployeeAttendance, Guid> attendanceRepository,
 		IDayCalculationSettingRepository dayCalculationSettingRepository,
+		PayrollComponentVersionResolver componentVersionResolver,
 		ILogger<SalarySlipManager> logger)
 	{
 		_salarySlipRepository = salarySlipRepository;
@@ -45,6 +47,7 @@ public class SalarySlipManager : DomainService
 		_holidayRepository = holidayRepository;
 		_attendanceRepository = attendanceRepository;
 		_dayCalculationSettingRepository = dayCalculationSettingRepository;
+		_componentVersionResolver = componentVersionResolver;
 		_logger = logger;
 	}
 
@@ -97,6 +100,7 @@ public class SalarySlipManager : DomainService
 		var presentDays = attendance.Count(a => a.StatusType == EmployeeAttendanceStatusType.Present);
 		var halfDays = attendance.Count(a => a.StatusType == EmployeeAttendanceStatusType.HalfDayLeave);
 		var components = await _payrollComponentRepository.GetByEmployeeIdAsync(employeeId, cancellationToken);
+		components = await _componentVersionResolver.ResolveAsync(components, normalizedMonthYear);
 		var computation = PayrollComputation.Calculate(presentDays, halfDays, basis.BasisDays, components);
 
 		if (components.Count == 0)

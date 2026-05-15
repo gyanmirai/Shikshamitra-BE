@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.PersonalInfo;
+using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.TenantSettings;
 using Shouldly;
@@ -28,6 +29,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
     private readonly IEmployeePersonalInfoAppService _employeePersonalInfoAppService;
     private readonly IEmployeePayrollAppService _employeePayrollAppService;
     private readonly IEmployeePayrollComponentRepository _employeePayrollComponentRepository;
+    private readonly ISalarySlipRepository _salarySlipRepository;
     private readonly IIdentityRoleRepository _roleRepository;
     private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
     private readonly ICurrentTenant _currentTenant;
@@ -40,6 +42,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         _employeePersonalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
         _employeePayrollAppService = GetRequiredService<IEmployeePayrollAppService>();
         _employeePayrollComponentRepository = GetRequiredService<IEmployeePayrollComponentRepository>();
+        _salarySlipRepository = GetRequiredService<ISalarySlipRepository>();
         _roleRepository = GetRequiredService<IIdentityRoleRepository>();
         _shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
         _currentTenant = GetRequiredService<ICurrentTenant>();
@@ -146,7 +149,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
     }
 
     [Fact]
-    public async Task Should_Allow_Creating_Same_Name_After_Delete()
+    public async Task Should_Retire_Component_After_Delete()
     {
         // Arrange
         var input = new CreateEarningComponentDto
@@ -159,14 +162,17 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         };
 
         var created = await _earningComponentAppService.CreateAsync(input);
-        await _earningComponentAppService.DeleteAsync(created.Id);
-
-        // Act
-        var recreated = await _earningComponentAppService.CreateAsync(input);
+        await DeleteEarningComponentWithPreviewAsync(created.Id);
 
         // Assert
-        recreated.Id.ShouldNotBe(created.Id);
-        recreated.Name.ShouldBe(input.Name);
+        var retired = await _earningComponentAppService.GetAsync(created.Id);
+        retired.IsActive.ShouldBeFalse();
+        var active = await _earningComponentAppService.GetAllActiveAsync(new PagedResultRequestDto
+        {
+            SkipCount = 0,
+            MaxResultCount = 100
+        });
+        active.Items.ShouldNotContain(x => x.Id == created.Id);
     }
 
     [Fact]
@@ -363,7 +369,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         };
 
         // Act
-        var result = await _earningComponentAppService.UpdateAsync(created.Id, updateInput);
+        var result = await UpdateEarningComponentWithPreviewAsync(created.Id, updateInput);
 
         // Assert
         result.ShouldNotBeNull();
@@ -377,6 +383,123 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         result.Amount.ShouldBeNull();
         result.VisibleInPayslip.ShouldBeFalse();
         result.DisplayOrder.ShouldBe(10);
+    }
+
+    [Fact]
+    public async Task Update_Should_Require_Current_Preview_Hash()
+    {
+        var created = await CreateTestEarningComponentAsync($"Preview Required Earning {Guid.NewGuid():N}");
+        var updateInput = new UpdateEarningComponentDto
+        {
+            Name = created.Name,
+            Description = "Preview gate test",
+            ComponentType = created.ComponentType,
+            CalculationType = created.CalculationType,
+            DependOn = created.DependOn,
+            Amount = created.Amount,
+            Percentage = created.Percentage,
+            SelectedEarningComponentId = created.SelectedEarningComponentId
+        };
+
+        var missingHash = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _earningComponentAppService.UpdateAsync(created.Id, updateInput);
+        });
+        missingHash.Code.ShouldBe("ShikshaMitra:PayrollComponentPreviewRequired");
+
+        updateInput.PreviewHash = "stale-preview";
+        var staleHash = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _earningComponentAppService.UpdateAsync(created.Id, updateInput);
+        });
+        staleHash.Code.ShouldBe("ShikshaMitra:PayrollComponentPreviewExpired");
+    }
+
+    [Fact]
+    public async Task Update_Preview_Hash_Should_Expire_When_Linked_Slip_Status_Changes()
+    {
+        var employee = await CreateEmployeeAsync("earning-update-slip-status");
+        var master = await CreateTestEarningComponentAsync($"Update Slip Status Earning {Guid.NewGuid():N}");
+        var effectiveMonth = DateTime.UtcNow.AddMonths(1).ToString("yyyy-MM");
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(),
+            employee.Id,
+            master.Name,
+            master.Id,
+            master.Description,
+            master.Amount ?? 0m,
+            isFixed: true,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: true), autoSave: true);
+
+        var draftSlip = new SalarySlip(
+            _guidGenerator.Create(),
+            _currentTenant.Id,
+            employee.Id,
+            effectiveMonth,
+            new(),
+            new());
+        await _salarySlipRepository.InsertAsync(draftSlip, autoSave: true);
+
+        var updateInput = new UpdateEarningComponentDto
+        {
+            Name = master.Name,
+            Description = master.Description,
+            ComponentType = master.ComponentType,
+            CalculationType = master.CalculationType,
+            DependOn = master.DependOn,
+            Amount = master.Amount,
+            Percentage = master.Percentage,
+            SelectedEarningComponentId = master.SelectedEarningComponentId,
+            VisibleInPayslip = master.VisibleInPayslip,
+            EffectiveMonth = effectiveMonth
+        };
+        updateInput.PreviewHash = (await _earningComponentAppService.PreviewUpdateImpactAsync(master.Id, updateInput)).PreviewHash;
+
+        draftSlip.Finalize();
+        await _salarySlipRepository.UpdateAsync(draftSlip, autoSave: true);
+
+        var staleHash = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _earningComponentAppService.UpdateAsync(master.Id, updateInput);
+        });
+        staleHash.Code.ShouldBe("ShikshaMitra:PayrollComponentPreviewExpired");
+    }
+
+    [Fact]
+    public async Task Update_And_Preview_Should_Reject_Inactive_Earning_Component()
+    {
+        var created = await CreateTestEarningComponentAsync($"Inactive Update Earning {Guid.NewGuid():N}");
+        await _earningComponentAppService.DeactivateAsync(created.Id);
+        var updateInput = new UpdateEarningComponentDto
+        {
+            Name = created.Name,
+            Description = created.Description,
+            ComponentType = created.ComponentType,
+            CalculationType = created.CalculationType,
+            DependOn = created.DependOn,
+            Amount = created.Amount,
+            Percentage = created.Percentage,
+            SelectedEarningComponentId = created.SelectedEarningComponentId,
+            VisibleInPayslip = created.VisibleInPayslip,
+            PreviewHash = "any-preview-hash"
+        };
+
+        var previewError = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _earningComponentAppService.PreviewUpdateImpactAsync(created.Id, updateInput);
+        });
+        previewError.Code.ShouldBe("ShikshaMitra:PayrollComponentInactive");
+
+        var updateError = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _earningComponentAppService.UpdateAsync(created.Id, updateInput);
+        });
+        updateError.Code.ShouldBe("ShikshaMitra:PayrollComponentInactive");
     }
 
     [Fact]
@@ -398,7 +521,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         // Act & Assert
         await Should.ThrowAsync<BusinessException>(async () =>
         {
-            await _earningComponentAppService.UpdateAsync(component2.Id, updateInput);
+            await UpdateEarningComponentWithPreviewAsync(component2.Id, updateInput);
         });
     }
 
@@ -421,7 +544,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         };
 
         // Act
-        var result = await _earningComponentAppService.UpdateAsync(created.Id, updateInput);
+        var result = await UpdateEarningComponentWithPreviewAsync(created.Id, updateInput);
 
         // Assert
         result.ShouldNotBeNull();
@@ -465,7 +588,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             dependOn: SalaryComponentDependency.None,
             isEarning: true), autoSave: true);
 
-        await _earningComponentAppService.UpdateAsync(master.Id, new UpdateEarningComponentDto
+        await UpdateEarningComponentWithPreviewAsync(master.Id, new UpdateEarningComponentDto
         {
             Name = "Updated Basic Salary",
             Description = "Updated from master",
@@ -474,7 +597,8 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             DependOn = ComponentDependency.None,
             Amount = 25000m,
             VisibleInPayslip = true,
-            DisplayOrder = 1
+            DisplayOrder = 1,
+            EffectiveMonth = DateTime.Now.ToString("yyyy-MM")
         });
 
         var rows = await _employeePayrollComponentRepository.GetEarningsByEmployeeIdAsync(employee.Id);
@@ -521,7 +645,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             dependOn: SalaryComponentDependency.Basic,
             isEarning: true), autoSave: true);
 
-        await _earningComponentAppService.UpdateAsync(percentageComponent.Id, new UpdateEarningComponentDto
+        await UpdateEarningComponentWithPreviewAsync(percentageComponent.Id, new UpdateEarningComponentDto
         {
             Name = "Updated HRA Percentage",
             Description = "Updated percentage earning",
@@ -531,7 +655,8 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             Percentage = 15m,
             SelectedEarningComponentId = baseComponent.Id,
             VisibleInPayslip = true,
-            DisplayOrder = 2
+            DisplayOrder = 2,
+            EffectiveMonth = DateTime.Now.ToString("yyyy-MM")
         });
 
         var linked = (await _employeePayrollComponentRepository.GetEarningsByEmployeeIdAsync(employee.Id))
@@ -590,6 +715,68 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         saved.Amount.ShouldBe(12m);
         saved.ComponentType.ShouldBe(SalaryComponentType.Percentage);
         saved.IsFixed.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Should_Preview_And_Force_Apply_Earning_Component_Manual_Overrides()
+    {
+        var syncedEmployee = await CreateEmployeeAsync("earning-preview-synced");
+        var overriddenEmployee = await CreateEmployeeAsync("earning-preview-override");
+        var master = await CreateTestEarningComponentAsync($"Preview Basic {Guid.NewGuid():N}");
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(), syncedEmployee.Id, master.Name, master.Id, master.Description, master.Amount ?? 0m,
+            isFixed: true, isTemp: false, applicableMonth: null, componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None, isEarning: true, usesMasterValue: true), autoSave: true);
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(), overriddenEmployee.Id, master.Name, master.Id, master.Description, 7777m,
+            isFixed: true, isTemp: false, applicableMonth: null, componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None, isEarning: true, usesMasterValue: false), autoSave: true);
+
+        var update = new UpdateEarningComponentDto
+        {
+            Name = "Preview Basic Updated",
+            Description = "Preview update",
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 22000m,
+            EffectiveMonth = "2026-06"
+        };
+
+        var preview = await _earningComponentAppService.PreviewUpdateImpactAsync(master.Id, update);
+        preview.SyncedEmployeeCount.ShouldBe(1);
+        preview.ManualOverrideEmployeeCount.ShouldBe(1);
+        preview.EffectiveMonth.ShouldBe("2026-06");
+        preview.PreviewHash.ShouldNotBeNullOrWhiteSpace();
+
+        update.PreviewHash = preview.PreviewHash;
+        await UpdateEarningComponentWithPreviewAsync(master.Id, update);
+        var normalRows = await _employeePayrollComponentRepository.GetByComponentIdAsync(master.Id, isEarning: true);
+        normalRows.Single(x => x.EmployeeId == syncedEmployee.Id).Amount.ShouldBe(master.Amount ?? 0m);
+        normalRows.Single(x => x.EmployeeId == overriddenEmployee.Id).Amount.ShouldBe(7777m);
+        normalRows.Single(x => x.EmployeeId == overriddenEmployee.Id).UsesMasterValue.ShouldBeFalse();
+
+        var forceUpdate = new UpdateEarningComponentDto
+        {
+            Name = "Preview Basic Force",
+            Description = "Force update",
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            DependOn = ComponentDependency.None,
+            Amount = 24000m,
+            EffectiveMonth = "2026-07",
+            ApplyMode = PayrollComponentApplyMode.ForceApply
+        };
+        forceUpdate.PreviewHash = (await _earningComponentAppService.PreviewUpdateImpactAsync(master.Id, forceUpdate)).PreviewHash;
+
+        await UpdateEarningComponentWithPreviewAsync(master.Id, forceUpdate);
+        var forceRows = await _employeePayrollComponentRepository.GetByComponentIdAsync(master.Id, isEarning: true);
+        forceRows.Single(x => x.EmployeeId == syncedEmployee.Id).Amount.ShouldBe(master.Amount ?? 0m);
+        var forcedOverride = forceRows.Single(x => x.EmployeeId == overriddenEmployee.Id);
+        forcedOverride.Amount.ShouldBe(7777m);
+        forcedOverride.UsesMasterValue.ShouldBeTrue();
     }
 
     [Fact]
@@ -717,13 +904,294 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         var created = await CreateTestEarningComponentAsync("Component to Delete");
 
         // Act
-        await _earningComponentAppService.DeleteAsync(created.Id);
+        await DeleteEarningComponentWithPreviewAsync(created.Id);
 
         // Assert
-        await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(async () =>
+        var retired = await _earningComponentAppService.GetAsync(created.Id);
+        retired.IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Delete_Should_Remove_Linked_Employee_Earnings_But_Keep_Custom_Rows()
+    {
+        var employee = await CreateEmployeeAsync("earning-delete");
+        var master = await CreateTestEarningComponentAsync($"Delete Linked Earning {Guid.NewGuid():N}");
+        var customRowId = Guid.NewGuid();
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(),
+            employee.Id,
+            master.Name,
+            master.Id,
+            master.Description,
+            master.Amount ?? 0m,
+            isFixed: true,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: true), autoSave: true);
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            customRowId,
+            employee.Id,
+            "Custom Earning",
+            componentId: null,
+            "Employee custom earning",
+            123m,
+            isFixed: true,
+            isTemp: true,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: true,
+            usesMasterValue: false), autoSave: true);
+
+        var preview = await _earningComponentAppService.PreviewDeleteImpactAsync(master.Id, includeEmployees: true);
+        preview.LinkedEmployeeCount.ShouldBe(1);
+        preview.SyncedEmployeeCount.ShouldBe(1);
+        preview.SyncedEmployees.ShouldContain(x => x.EmployeeId == employee.Id);
+
+        await DeleteEarningComponentWithPreviewAsync(master.Id);
+
+        var rows = await _employeePayrollComponentRepository.GetEarningsByEmployeeIdAsync(employee.Id);
+        rows.ShouldNotContain(x => x.ComponentId == master.Id);
+        rows.ShouldContain(x => x.Id == customRowId);
+
+        var retired = await _earningComponentAppService.GetAsync(master.Id);
+        retired.IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Delete_Should_Not_Remove_Other_Tenant_Employee_Payroll_Rows()
+    {
+        var currentTenantEmployee = await CreateEmployeeAsync("earning-delete-tenant-current");
+        var master = await CreateTestEarningComponentAsync($"Delete Tenant Scoped Earning {Guid.NewGuid():N}");
+        var otherTenantId = Guid.NewGuid();
+        Guid otherTenantEmployeeId;
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(),
+            currentTenantEmployee.Id,
+            master.Name,
+            master.Id,
+            master.Description,
+            master.Amount ?? 0m,
+            isFixed: true,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: true), autoSave: true);
+
+        using (_currentTenant.Change(otherTenantId))
         {
-            await _earningComponentAppService.GetAsync(created.Id);
+            var otherTenantEmployee = await CreateEmployeeAsync("earning-delete-tenant-other");
+            otherTenantEmployeeId = otherTenantEmployee.Id;
+            await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+                Guid.NewGuid(),
+                otherTenantEmployee.Id,
+                master.Name,
+                master.Id,
+                master.Description,
+                master.Amount ?? 0m,
+                isFixed: true,
+                isTemp: false,
+                applicableMonth: null,
+                componentType: SalaryComponentType.Fixed,
+                dependOn: SalaryComponentDependency.None,
+                isEarning: true), autoSave: true);
+        }
+
+        await DeleteEarningComponentWithPreviewAsync(master.Id);
+
+        var currentTenantRows = await _employeePayrollComponentRepository.GetEarningsByEmployeeIdAsync(currentTenantEmployee.Id);
+        currentTenantRows.ShouldNotContain(x => x.ComponentId == master.Id);
+
+        using (_currentTenant.Change(otherTenantId))
+        {
+            var otherTenantRows = await _employeePayrollComponentRepository.GetEarningsByEmployeeIdAsync(otherTenantEmployeeId);
+            otherTenantRows.ShouldContain(x => x.ComponentId == master.Id);
+        }
+    }
+
+    [Fact]
+    public async Task Delete_Should_Require_Current_Preview_Hash()
+    {
+        var component = await CreateTestEarningComponentAsync($"Delete Preview Required Earning {Guid.NewGuid():N}");
+
+        var missingHash = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _earningComponentAppService.DeleteAsync(component.Id);
         });
+        missingHash.Code.ShouldBe("ShikshaMitra:PayrollComponentPreviewRequired");
+
+        var staleHash = await Should.ThrowAsync<BusinessException>(async () =>
+        {
+            await _earningComponentAppService.DeleteConfirmedAsync(component.Id, "stale-preview");
+        });
+        staleHash.Code.ShouldBe("ShikshaMitra:PayrollComponentPreviewExpired");
+    }
+
+    [Fact]
+    public async Task Delete_Preview_Should_Count_Historical_Slips_For_Linked_Employees()
+    {
+        var employee = await CreateEmployeeAsync("earning-delete-history");
+        var master = await CreateTestEarningComponentAsync($"Delete Historical Earning {Guid.NewGuid():N}");
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(),
+            employee.Id,
+            master.Name,
+            master.Id,
+            master.Description,
+            master.Amount ?? 0m,
+            isFixed: true,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: true), autoSave: true);
+
+        var finalizedSlip = new SalarySlip(
+            _guidGenerator.Create(),
+            _currentTenant.Id,
+            employee.Id,
+            "2024-01",
+            new(),
+            new());
+        finalizedSlip.Finalize();
+        await _salarySlipRepository.InsertAsync(finalizedSlip, autoSave: true);
+        await _salarySlipRepository.InsertAsync(new SalarySlip(
+            _guidGenerator.Create(),
+            _currentTenant.Id,
+            employee.Id,
+            "2024-02",
+            new(),
+            new()), autoSave: true);
+
+        var preview = await _earningComponentAppService.PreviewDeleteImpactAsync(master.Id);
+
+        preview.FinalizedSlipCount.ShouldBeGreaterThanOrEqualTo(1);
+        preview.DraftSlipCount.ShouldBeGreaterThanOrEqualTo(1);
+    }
+
+    [Fact]
+    public async Task Delete_Preview_Hash_Should_Change_When_Historical_Slip_Status_Counts_Change()
+    {
+        var employee = await CreateEmployeeAsync("earning-delete-status-hash");
+        var master = await CreateTestEarningComponentAsync($"Delete Status Hash Earning {Guid.NewGuid():N}");
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(),
+            employee.Id,
+            master.Name,
+            master.Id,
+            master.Description,
+            master.Amount ?? 0m,
+            isFixed: true,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: true), autoSave: true);
+
+        var draftSlip = new SalarySlip(
+            _guidGenerator.Create(),
+            _currentTenant.Id,
+            employee.Id,
+            "2024-03",
+            new(),
+            new());
+        await _salarySlipRepository.InsertAsync(draftSlip, autoSave: true);
+
+        var preview = await _earningComponentAppService.PreviewDeleteImpactAsync(master.Id);
+
+        draftSlip.Finalize();
+        await _salarySlipRepository.UpdateAsync(draftSlip, autoSave: true);
+
+        var refreshedPreview = await _earningComponentAppService.PreviewDeleteImpactAsync(master.Id);
+        refreshedPreview.PreviewHash.ShouldNotBe(preview.PreviewHash);
+    }
+
+    [Fact]
+    public async Task Salary_Slip_Status_Counts_Should_Respect_Current_Tenant()
+    {
+        var currentTenantEmployee = await CreateEmployeeAsync("earning-slip-count-current");
+        var otherTenantId = Guid.NewGuid();
+        Guid otherTenantEmployeeId;
+
+        var currentSlip = new SalarySlip(
+            _guidGenerator.Create(),
+            _currentTenant.Id,
+            currentTenantEmployee.Id,
+            "2024-04",
+            new(),
+            new());
+        currentSlip.Finalize();
+        await _salarySlipRepository.InsertAsync(currentSlip, autoSave: true);
+
+        using (_currentTenant.Change(otherTenantId))
+        {
+            var otherTenantEmployee = await CreateEmployeeAsync("earning-slip-count-other");
+            otherTenantEmployeeId = otherTenantEmployee.Id;
+            var otherTenantSlip = new SalarySlip(
+                _guidGenerator.Create(),
+                otherTenantId,
+                otherTenantEmployee.Id,
+                "2024-04",
+                new(),
+                new());
+            otherTenantSlip.Finalize();
+            await _salarySlipRepository.InsertAsync(otherTenantSlip, autoSave: true);
+        }
+
+        var counts = await _salarySlipRepository.GetStatusCountsByEmployeeIdsAsync(
+            new[] { currentTenantEmployee.Id, otherTenantEmployeeId });
+
+        counts.FinalizedSlipCount.ShouldBe(1);
+        counts.DraftSlipCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Delete_Should_Remove_Manual_Override_Earning_Rows()
+    {
+        var employee = await CreateEmployeeAsync("earning-delete-override");
+        var master = await CreateTestEarningComponentAsync($"Delete Override Earning {Guid.NewGuid():N}");
+
+        await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
+            Guid.NewGuid(),
+            employee.Id,
+            master.Name,
+            master.Id,
+            master.Description,
+            999m,
+            isFixed: true,
+            isTemp: false,
+            applicableMonth: null,
+            componentType: SalaryComponentType.Fixed,
+            dependOn: SalaryComponentDependency.None,
+            isEarning: true,
+            usesMasterValue: false), autoSave: true);
+
+        var preview = await _earningComponentAppService.PreviewDeleteImpactAsync(master.Id);
+        preview.LinkedEmployeeCount.ShouldBe(1);
+        preview.ManualOverrideEmployeeCount.ShouldBe(1);
+
+        await DeleteEarningComponentWithPreviewAsync(master.Id);
+
+        var rows = await _employeePayrollComponentRepository.GetEarningsByEmployeeIdAsync(employee.Id);
+        rows.ShouldNotContain(x => x.ComponentId == master.Id);
+    }
+
+    [Fact]
+    public async Task Delete_Should_Exclude_Earning_From_Filtered_List()
+    {
+        var component = await CreateTestEarningComponentAsync($"Filtered Delete Earning {Guid.NewGuid():N}");
+        await DeleteEarningComponentWithPreviewAsync(component.Id);
+
+        var filtered = await _earningComponentAppService.GetFilteredListAsync(0, 100, component.Name);
+        filtered.Items.ShouldNotContain(x => x.Id == component.Id);
     }
 
     #endregion
@@ -1031,7 +1499,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         };
 
         // Act
-        var result = await _earningComponentAppService.UpdateAsync(created.Id, updateInput);
+        var result = await UpdateEarningComponentWithPreviewAsync(created.Id, updateInput);
 
         // Assert — Amount should be cleared, Percentage should be set
         result.CalculationType.ShouldBe(CalculationType.Percentage);
@@ -1067,7 +1535,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         };
 
         // Act
-        var result = await _earningComponentAppService.UpdateAsync(created.Id, updateInput);
+        var result = await UpdateEarningComponentWithPreviewAsync(created.Id, updateInput);
 
         // Assert — Percentage should be cleared, Amount should be set
         result.CalculationType.ShouldBe(CalculationType.Amount);
@@ -1140,7 +1608,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         };
 
         // Act
-        var result = await _earningComponentAppService.UpdateAsync(created.Id, updateInput);
+        var result = await UpdateEarningComponentWithPreviewAsync(created.Id, updateInput);
 
         // Assert
         result.VisibleInPayslip.ShouldBeFalse();
@@ -1232,7 +1700,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             VisibleInPayslip = false,
             DisplayOrder = 2
         };
-        var updated = await _earningComponentAppService.UpdateAsync(created.Id, updateInput);
+        var updated = await UpdateEarningComponentWithPreviewAsync(created.Id, updateInput);
         updated.Name.ShouldBe("Full Lifecycle Earning Updated");
         updated.Amount.ShouldBe(25000m);
         updated.VisibleInPayslip.ShouldBeFalse();
@@ -1249,11 +1717,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         reactivated.Name.ShouldBe("Full Lifecycle Earning Updated"); // Data preserved
 
         // Step 5: Delete
-        await _earningComponentAppService.DeleteAsync(created.Id);
-        await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(async () =>
-        {
-            await _earningComponentAppService.GetAsync(created.Id);
-        });
+        await DeleteEarningComponentWithPreviewAsync(created.Id);
+        var deleted = await _earningComponentAppService.GetAsync(created.Id);
+        deleted.IsActive.ShouldBeFalse();
     }
 
     [Fact]
@@ -1274,13 +1740,13 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
     }
 
     [Fact]
-    public async Task Should_Include_Deactivated_Components_In_GetListAsync()
+    public async Task Should_Exclude_Deactivated_Components_In_GetListAsync()
     {
         // Arrange — create and deactivate a component
         var component = await CreateTestEarningComponentAsync("Deactivated In Full List");
         await _earningComponentAppService.DeactivateAsync(component.Id);
 
-        // Act — GetListAsync should return all (including deactivated)
+        // Act — normal lists should hide inactive components
         var allList = await _earningComponentAppService.GetListAsync(new PagedAndSortedResultRequestDto
         {
             SkipCount = 0,
@@ -1288,14 +1754,26 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         });
 
         // Assert
-        allList.Items.ShouldContain(x => x.Id == component.Id);
-        var found = allList.Items.First(x => x.Id == component.Id);
-        found.IsActive.ShouldBeFalse();
+        allList.Items.ShouldNotContain(x => x.Id == component.Id);
     }
 
     #endregion
 
     #region Helper Methods
+
+    private async Task<EarningComponentDto> UpdateEarningComponentWithPreviewAsync(
+        Guid id,
+        UpdateEarningComponentDto input)
+    {
+        input.PreviewHash = (await _earningComponentAppService.PreviewUpdateImpactAsync(id, input)).PreviewHash;
+        return await _earningComponentAppService.UpdateAsync(id, input);
+    }
+
+    private async Task DeleteEarningComponentWithPreviewAsync(Guid id)
+    {
+        var preview = await _earningComponentAppService.PreviewDeleteImpactAsync(id);
+        await _earningComponentAppService.DeleteConfirmedAsync(id, preview.PreviewHash);
+    }
 
     private async Task<EarningComponentDto> CreateTestEarningComponentAsync(
         string name,
@@ -1372,3 +1850,4 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
 
     #endregion
 }
+

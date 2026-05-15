@@ -110,6 +110,7 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 			var isFixed = master is not null
 				? master.CalculationType == CalculationType.Amount
 				: earning.IsFixed;
+			var amount = ResolveEarningAmount(earning, master);
 
 			componentsToInsert.Add(new EmployeePayrollComponent(
 				existingComponent?.Id ?? _guidGenerator.Create(),
@@ -117,13 +118,14 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 				earning.Name,
 				master?.Id,
 				description,
-				ResolveEarningAmount(earning, master),
+				amount,
 				isFixed,
 				earning.IsTemp,
 				earning.ApplicableMonth ?? existingComponent?.ApplicableMonth,
 				componentType,
 				dependOn,
-				isEarning: true
+				isEarning: true,
+				usesMasterValue: ShouldUseMasterValue(earning, master, amount)
 			));
 		}
 
@@ -145,6 +147,7 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 			var isFixed = master is not null
 				? master.CalculationType == CalculationType.Amount
 				: deduction.IsFixed;
+			var amount = ResolveDeductionAmount(deduction, master);
 
 			componentsToInsert.Add(new EmployeePayrollComponent(
 				existingComponent?.Id ?? _guidGenerator.Create(),
@@ -152,13 +155,14 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 				deduction.Name,
 				master?.Id,
 				description,
-				ResolveDeductionAmount(deduction, master),
+				amount,
 				isFixed,
 				deduction.IsTemp,
 				deduction.ApplicableMonth ?? existingComponent?.ApplicableMonth,
 				componentType,
 				dependOn,
-				isEarning: false
+				isEarning: false,
+				usesMasterValue: ShouldUseMasterValue(deduction, master, amount)
 			));
 		}
 
@@ -261,7 +265,7 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 		}
 
 		var masters = await AsyncExecuter.ToListAsync(
-			(await _earningComponentRepository.GetQueryableAsync()).Where(x => ids.Contains(x.Id)));
+			(await _earningComponentRepository.GetQueryableAsync()).Where(x => x.IsActive && ids.Contains(x.Id)));
 		return masters.ToDictionary(x => x.Id);
 	}
 
@@ -279,7 +283,7 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 		}
 
 		var masters = await AsyncExecuter.ToListAsync(
-			(await _deductionComponentRepository.GetQueryableAsync()).Where(x => ids.Contains(x.Id)));
+			(await _deductionComponentRepository.GetQueryableAsync()).Where(x => x.IsActive && ids.Contains(x.Id)));
 		return masters.ToDictionary(x => x.Id);
 	}
 
@@ -329,6 +333,32 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 		}
 
 		return line.Amount ?? master.Amount ?? 0m;
+	}
+
+	private static bool ShouldUseMasterValue(SalaryComponentDto line, EarningComponent? master, decimal amount)
+	{
+		if (master is null || line.IsTemp)
+		{
+			return false;
+		}
+
+		var masterAmount = master.CalculationType == CalculationType.Amount
+			? master.Amount ?? 0m
+			: master.Percentage ?? 0m;
+		return amount == masterAmount;
+	}
+
+	private static bool ShouldUseMasterValue(SalaryComponentDto line, DeductionComponent? master, decimal amount)
+	{
+		if (master is null || line.IsTemp)
+		{
+			return false;
+		}
+
+		var masterAmount = master.CalculationType == CalculationType.Amount
+			? master.Amount ?? 0m
+			: master.Percentage ?? 0m;
+		return amount == masterAmount;
 	}
 
 	private static void EnsureAllMasterComponentsExist(

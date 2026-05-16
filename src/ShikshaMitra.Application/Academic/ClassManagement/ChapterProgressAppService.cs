@@ -64,8 +64,10 @@ public class ChapterProgressAppService(
 		var subjects = await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id));
 		var subjectLookup = subjects.ToDictionary(s => s.Id);
 
-		var chapters = await chapterRepository.GetListAsync(c => subjectIds.Contains(c.AssignedSubjectId));
-		var chaptersBySubject = chapters
+		// AssignedSubjectChapter.AssignedSubjectId is the AssignedSubject.Id (not Subject.Id)
+		var assignmentIds = assignments.Select(a => a.Id).Distinct().ToList();
+		var chapters = await chapterRepository.GetListAsync(c => assignmentIds.Contains(c.AssignedSubjectId));
+		var chaptersByAssignment = chapters
 			.GroupBy(c => c.AssignedSubjectId)
 			.ToDictionary(g => g.Key, g => g.ToList());
 		var chapterIds = chapters.Select(c => c.Id).ToList();
@@ -90,7 +92,7 @@ public class ChapterProgressAppService(
 				continue;
 			}
 
-			if (!chaptersBySubject.TryGetValue(subject.Id, out var subjectChapters))
+			if (!chaptersByAssignment.TryGetValue(assignment.Id, out var subjectChapters))
 			{
 				subjectChapters = new List<AssignedSubjectChapter>();
 			}
@@ -114,7 +116,7 @@ public class ChapterProgressAppService(
 			}
 
 			var progressPercentage = totalChapters > 0
-				? (int)Math.Round(progressSum / (double)totalChapters)
+				? (int) Math.Round(progressSum / (double) totalChapters)
 				: 0;
 
 			result.Add(new ClassDivisionSubjectDto
@@ -155,7 +157,8 @@ public class ChapterProgressAppService(
 			throw new ArgumentException("Division ID cannot be empty", nameof(divisionId));
 		}
 
-		if (subjectId == Guid.Empty) {
+		if (subjectId == Guid.Empty)
+		{
 			throw new ArgumentException("Subject ID cannot be empty", nameof(subjectId));
 		}
 
@@ -165,8 +168,18 @@ public class ChapterProgressAppService(
 		);
 
 		// Get all chapters for the subject
+		// AssignedSubjectChapter.AssignedSubjectId is the AssignedSubject.Id (not Subject.Id)
+		// Look up the AssignedSubject row for this (classId, subjectId) pair
+		var assignment = await subjectAssignmentRepository.FindAsync(a =>
+			a.StandardId == classId && a.SubjectId == subjectId
+		);
+		if (assignment == null)
+		{
+			return new PaginatedChapterProgressResponseDto { TotalRecords = 0, Records = [] };
+		}
+
 		var chaptersQuery = await chapterRepository.GetQueryableAsync();
-		chaptersQuery = chaptersQuery.Where(c => c.AssignedSubjectId == subjectId);
+		chaptersQuery = chaptersQuery.Where(c => c.AssignedSubjectId == assignment.Id);
 
 		if (!string.IsNullOrWhiteSpace(search))
 		{
@@ -342,9 +355,9 @@ public class ChapterProgressAppService(
 
 		// Common DB exception types that indicate constraint violations
 		if (exceptionTypeName.Contains("DbUpdate", StringComparison.OrdinalIgnoreCase) ||
-		    innerExceptionTypeName.Contains("PostgresException", StringComparison.OrdinalIgnoreCase) ||
-		    innerExceptionTypeName.Contains("SqlException", StringComparison.OrdinalIgnoreCase) ||
-		    innerExceptionTypeName.Contains("MySqlException", StringComparison.OrdinalIgnoreCase))
+			innerExceptionTypeName.Contains("PostgresException", StringComparison.OrdinalIgnoreCase) ||
+			innerExceptionTypeName.Contains("SqlException", StringComparison.OrdinalIgnoreCase) ||
+			innerExceptionTypeName.Contains("MySqlException", StringComparison.OrdinalIgnoreCase))
 		{
 			// Check for PostgreSQL-specific SqlState "23505" (unique violation)
 			if (ex.InnerException != null)
@@ -391,12 +404,39 @@ public class ChapterProgressAppService(
 		var innerMessage = ex.InnerException?.Message ?? string.Empty;
 
 		return message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) ||
-		       message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
-		       message.Contains("unique index", StringComparison.OrdinalIgnoreCase) ||
-		       message.Contains("cannot insert duplicate", StringComparison.OrdinalIgnoreCase) ||
-		       message.Contains("violation of unique key", StringComparison.OrdinalIgnoreCase) ||
-		       innerMessage.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) ||
-		       innerMessage.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
-		       innerMessage.Contains("unique index", StringComparison.OrdinalIgnoreCase);
+			   message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
+			   message.Contains("unique index", StringComparison.OrdinalIgnoreCase) ||
+			   message.Contains("cannot insert duplicate", StringComparison.OrdinalIgnoreCase) ||
+			   message.Contains("violation of unique key", StringComparison.OrdinalIgnoreCase) ||
+			   innerMessage.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) ||
+			   innerMessage.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
+			   innerMessage.Contains("unique index", StringComparison.OrdinalIgnoreCase);
+	}
+
+	public async Task<List<SubjectForChaptersDto>> GetSubjectsForStandardAsync(Guid standardId)
+	{
+		logger.LogInformation("Getting subjects for standard {StandardId}", standardId);
+
+		var assignments = await subjectAssignmentRepository.GetListAsync(a => a.StandardId == standardId);
+
+		if (!assignments.Any())
+		{
+			return new List<SubjectForChaptersDto>();
+		}
+
+		var subjectIds = assignments.Select(a => a.SubjectId).Distinct().ToList();
+		var subjects = await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id));
+		var subjectLookup = subjects.ToDictionary(s => s.Id);
+
+		return assignments
+			.Where(a => subjectLookup.ContainsKey(a.SubjectId))
+			.Select(a => new SubjectForChaptersDto
+			{
+				SubjectId = a.SubjectId,
+				SubjectAssignmentId = a.Id,
+				SubjectName = subjectLookup[a.SubjectId].Name,
+				SubjectCode = a.SubjectCode ?? string.Empty
+			})
+			.ToList();
 	}
 }

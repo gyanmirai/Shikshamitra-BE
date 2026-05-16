@@ -1,15 +1,16 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
+using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Common;
 using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Academic.Syllabus;
 
 public interface IChapterAppService : IApplicationService
 {
-	Task<ChapterDto> CreateAsync(CreateUpdateChapterDto input);
-	Task<List<ChapterDto>> GetByAssignedSubjectIdAsync(Guid assignedSubjectId);
+	Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, CreateChapterDto input);
+	Task<List<ChapterDto>> GetByStandardAndSubjectAsync(Guid standardId, Guid subjectId);
 	Task<ChapterDto> UpdateAsync(Guid id, CreateUpdateChapterDto input);
 	Task DeleteAsync(Guid id);
-
 }

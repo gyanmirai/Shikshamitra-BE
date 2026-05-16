@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Syllabus;
+using ShikshaMitra.Common;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
@@ -14,15 +16,20 @@ namespace ShikshaMitra.Controllers.Academic.Syllabus;
 public class ChapterController(IChapterAppService chapterAppService) : AbpController
 {
 	[HttpPost]
-	public Task<ChapterDto> CreateAsync([FromBody] CreateUpdateChapterDto input)
+	public Task<ApiSuccessResponseDto> CreateAsync(
+		[FromQuery] Guid standardId,
+		[FromQuery] Guid subjectId,
+		[FromBody] CreateChapterDto input)
 	{
-		return chapterAppService.CreateAsync(input);
+		return chapterAppService.CreateAsync(standardId, subjectId, input);
 	}
 
-	[HttpGet("{assignedStandardId}")]
-	public Task<List<ChapterDto>> Get(Guid assignedStandardId)
+	[HttpGet]
+	public Task<List<ChapterDto>> GetAsync(
+		[FromQuery] Guid standardId,
+		[FromQuery] Guid subjectId)
 	{
-		return chapterAppService.GetByAssignedSubjectIdAsync(assignedStandardId);
+		return chapterAppService.GetByStandardAndSubjectAsync(standardId, subjectId);
 	}
 
 	[HttpPut("{id}")]
@@ -36,5 +43,5 @@ public class ChapterController(IChapterAppService chapterAppService) : AbpContro
 	{
 		return chapterAppService.DeleteAsync(id);
 	}
-
 }
+

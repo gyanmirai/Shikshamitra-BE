@@ -8,8 +8,8 @@ using Volo.Abp.Guids;
 namespace ShikshaMitra.Academic.Examination.Exams;
 
 public class ExamManager(
-	IRepository<Exam, Guid> examRepository,
-	IGuidGenerator guidGenerator
+    IRepository<Exam, Guid> examRepository,
+    IGuidGenerator guidGenerator
 ) : DomainService
 {
     public Exam Create(Guid examTypeId, string examName, Guid standardId, List<Guid> divisionIds, List<Guid> subjectIds)
@@ -36,14 +36,14 @@ public class ExamManager(
         exam.UpdateSubjects(subjectIds);
     }
 
-    public void SaveSchedule(Exam exam, List<(Guid subjectId, DateTime? examDate, DateTime? startTime, DateTime? endTime, double? totalMarks, double? passingMarks, string? notes)> schedules)
+    public void SaveSchedule(Exam exam, List<(Guid subjectId, DateTime? examDate, DateTime? startTime, DateTime? endTime, double? totalMarks, double? passingMarks, string? notes, Guid? gradeScalingId)> schedules)
     {
         foreach (var schedule in schedules)
         {
             var subject = exam.ExamSubjects.ToList().FirstOrDefault(x => x.SubjectId == schedule.subjectId);
             if (subject != null)
             {
-                subject.UpdateSchedule(schedule.examDate, schedule.startTime, schedule.endTime, schedule.totalMarks, schedule.passingMarks, schedule.notes);
+                subject.UpdateSchedule(schedule.examDate, schedule.startTime, schedule.endTime, schedule.totalMarks, schedule.passingMarks, schedule.notes, schedule.gradeScalingId);
             }
         }
     }

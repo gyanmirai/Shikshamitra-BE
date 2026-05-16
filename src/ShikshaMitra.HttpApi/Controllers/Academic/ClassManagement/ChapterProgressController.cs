@@ -114,4 +114,20 @@ public class ChapterProgressController(
 		var result = await appService.UpdateChapterProgressAsync(chapterId, input);
 		return Ok(result);
 	}
+
+	[HttpGet]
+	[Route("api/chapters/subjects")]
+	[ProducesResponseType(typeof(List<SubjectForChaptersDto>), 200)]
+	[ProducesResponseType(400)]
+	[ProducesResponseType(401)]
+	public async Task<IActionResult> GetSubjectsForStandardAsync([FromQuery] Guid standardId)
+	{
+		if (standardId == Guid.Empty)
+		{
+			return BadRequest(new { error = "standardId is required" });
+		}
+
+		var result = await appService.GetSubjectsForStandardAsync(standardId);
+		return Ok(result);
+	}
 }

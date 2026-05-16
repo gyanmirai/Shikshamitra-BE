@@ -24,4 +24,6 @@ public interface IChapterProgressAppService
 		Guid chapterId,
 		UpdateChapterProgressDto input
 	);
+
+	Task<List<SubjectForChaptersDto>> GetSubjectsForStandardAsync(Guid standardId);
 }

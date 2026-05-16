@@ -8,4 +8,6 @@ namespace ShikshaMitra.HR.Payroll.Settings;
 public interface IDayCalculationSettingRepository : IRepository<DayCalculationSetting, Guid>
 {
 	Task<DayCalculationSetting?> FindByTenantAsync(Guid? tenantId, CancellationToken cancellationToken = default);
+	Task<DayCalculationSetting?> FindByTenantAndAcademicYearAsync(Guid? tenantId, Guid academicYearId, CancellationToken cancellationToken = default);
+	Task<DayCalculationSetting?> FindEffectiveAsync(Guid? tenantId, Guid? academicYearId, CancellationToken cancellationToken = default);
 }

@@ -54,8 +54,9 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	private readonly ISalarySlipRepository _salarySlipRepository;
 	private readonly IRepository<PayrollRunReview, Guid> _payrollRunReviewRepository;
 	private readonly IRepository<PayrollRunItemSnapshot, Guid> _payrollRunItemSnapshotRepository;
-	private readonly IRepository<Holiday, Guid> _holidayRepository;
 	private readonly IDayCalculationSettingRepository _dayCalculationSettingRepository;
+	private readonly PayrollCalendarResolver _payrollCalendarResolver;
+	private readonly PayrollApprovedLeaveResolver _payrollApprovedLeaveResolver;
 	private readonly SalarySlipManager _salarySlipManager;
 	private readonly PayrollComponentVersionResolver _componentVersionResolver;
 	private readonly IUserScopeService _userScopeService;
@@ -74,8 +75,9 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		ISalarySlipRepository salarySlipRepository,
 		IRepository<PayrollRunReview, Guid> payrollRunReviewRepository,
 		IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
-		IRepository<Holiday, Guid> holidayRepository,
 		IDayCalculationSettingRepository dayCalculationSettingRepository,
+		PayrollCalendarResolver payrollCalendarResolver,
+		PayrollApprovedLeaveResolver payrollApprovedLeaveResolver,
 		SalarySlipManager salarySlipManager,
 		PayrollComponentVersionResolver componentVersionResolver,
 		IUserScopeService userScopeService,
@@ -89,8 +91,9 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		_salarySlipRepository = salarySlipRepository;
 		_payrollRunReviewRepository = payrollRunReviewRepository;
 		_payrollRunItemSnapshotRepository = payrollRunItemSnapshotRepository;
-		_holidayRepository = holidayRepository;
 		_dayCalculationSettingRepository = dayCalculationSettingRepository;
+		_payrollCalendarResolver = payrollCalendarResolver;
+		_payrollApprovedLeaveResolver = payrollApprovedLeaveResolver;
 		_salarySlipManager = salarySlipManager;
 		_componentVersionResolver = componentVersionResolver;
 		_userScopeService = userScopeService;
@@ -148,15 +151,18 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 					.GroupBy(x => x.EmployeeId)
 					.ToDictionary(g => g.Key, g => (decimal?)g.OrderByDescending(x => x.ProcessedDate).First().NetSalary);
 				var reviewByEmployee = await GetReviewsByEmployeeAsync(internalMonthYear);
-				var holidays = await LoadHolidaysForMonthAsync(year, month);
-				var workingWeekdaysMinusHolidays = PayrollMonthCalendar.CountWorkingWeekdaysExcludingHolidayWeekdays(year, month, holidays);
-				var daySetting = await _dayCalculationSettingRepository.FindByTenantAsync(CurrentTenant.Id);
-				var basis = PayrollBasisDays.Resolve(daySetting, year, month, workingWeekdaysMinusHolidays);
+				var calendar = await _payrollCalendarResolver.ResolveAsync(year, month);
+				var daySetting = await _dayCalculationSettingRepository.FindEffectiveAsync(CurrentTenant.Id, calendar.AcademicYearId);
+				var basis = PayrollBasisDays.Resolve(daySetting, year, month, calendar.WorkingDays);
 
 				var employeeIds = scopedEmployees.Select(e => e.Id).ToList();
 				var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
 				var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
 				var attendanceByEmployee = await GetAttendanceRecordsAsync(employeeIds, startDate, endDate);
+				var leaveUnitsByEmployee = await _payrollApprovedLeaveResolver.ResolveLeaveUnitsByEmployeeAsync(
+					employeeIds,
+					year,
+					month);
 				var payrollDetailsByEmployee = await _payrollDetailsRepository.GetByEmployeeIdsAsync(employeeIds);
 				var componentsByEmployee = await _payrollComponentRepository.GetByEmployeeIdsAsync(employeeIds);
 				var resolvedComponentsByEmployee = await _componentVersionResolver.ResolveByEmployeeAsync(
@@ -172,6 +178,10 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 						payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
 						resolvedComponentsByEmployee[employee.Id].ToList(),
 						basis,
+						year,
+						month,
+						calendar.Holidays,
+						leaveUnitsByEmployee.GetValueOrDefault(employee.Id),
 						finalizedEmployeeIds.Contains(employee.Id),
 						reviewByEmployee.GetValueOrDefault(employee.Id),
 						previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id)
@@ -597,6 +607,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		snapshot.IsTeaching = item.IsTeaching;
 		snapshot.BasicSalary = (decimal)item.BasicSalary;
 		snapshot.GrossSalary = (decimal)item.GrossSalary;
+		snapshot.FullGrossSalary = (decimal)item.FullGrossSalary;
 		snapshot.TotalDeduction = (decimal)item.TotalDeduction;
 		snapshot.NetPay = (decimal)item.NetPay;
 		snapshot.PreviousMonthNetPay = item.PreviousMonthNetPay.HasValue ? (decimal)item.PreviousMonthNetPay.Value : null;
@@ -628,6 +639,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			IsTeaching = row.IsTeaching,
 			BasicSalary = (double)row.BasicSalary,
 			GrossSalary = (double)row.GrossSalary,
+			FullGrossSalary = (double)row.FullGrossSalary,
 			TotalDeduction = (double)row.TotalDeduction,
 			NetPay = (double)row.NetPay,
 			PreviousMonthNetPay = row.PreviousMonthNetPay.HasValue ? (double)row.PreviousMonthNetPay.Value : null,
@@ -672,27 +684,6 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		return (year, month, internalFormat);
 	}
 
-	private async Task<List<Holiday>> LoadHolidaysForMonthAsync(int year, int month)
-	{
-		var firstDay = new DateTime(year, month, 1);
-		var lastDay = new DateTime(year, month, DateTime.DaysInMonth(year, month));
-		var startDate = new DateTimeOffset(firstDay);
-		var endDate = new DateTimeOffset(lastDay.AddDays(1).AddTicks(-1));
-
-		var holidayQuery = await _holidayRepository.GetQueryableAsync();
-
-		if (CurrentTenant.Id.HasValue)
-		{
-			holidayQuery = holidayQuery.Where(h => h.TenantId == CurrentTenant.Id);
-		}
-
-		return await AsyncExecuter.ToListAsync(
-			holidayQuery.Where(h =>
-				h.StartDate <= endDate &&
-				h.EndDate >= startDate)
-		);
-	}
-
 	/// <summary>
 	/// Batch fetch attendance records for multiple employees
 	/// </summary>
@@ -730,13 +721,27 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		EmployeePayrollDetails? payrollDetails,
 		List<EmployeePayrollComponent> components,
 		PayrollBasisDaysResult basis,
+		int year,
+		int month,
+		IReadOnlyList<Holiday> holidays,
+		IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>? leaveUnitsByDate,
 		bool isLocked,
 		PayrollRunReview? review,
 		decimal? previousMonthNetPay)
 	{
-		var presentDays = attendanceRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.Present);
-		var halfDays = attendanceRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.HalfDayLeave);
-		var computation = PayrollComputation.Calculate(presentDays, halfDays, basis.BasisDays, components);
+		var attendanceSummary = PayrollAttendanceCalculator.CalculatePayableDays(
+			attendanceRecords,
+			basis,
+			year,
+			month,
+			holidays,
+			leaveUnitsByDate);
+		var computation = PayrollComputation.Calculate(
+			attendanceSummary.PresentDays,
+			attendanceSummary.HalfWorkingDays,
+			attendanceSummary.PayableDays,
+			basis.BasisDays,
+			components);
 		var netPay = computation.NetPay;
 		var netPayDelta = previousMonthNetPay.HasValue ? netPay - previousMonthNetPay.Value : (decimal?)null;
 		var netPayDeltaPercent = previousMonthNetPay.HasValue && previousMonthNetPay.Value != 0
@@ -755,14 +760,15 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			IsTeaching = employee.EmployeeGroup == EmployeeGroupType.Teaching,
 			BasicSalary = (double)computation.BasicSalary,
 			GrossSalary = (double)computation.GrossSalary,
+			FullGrossSalary = (double)computation.FullGrossSalary,
 			TotalDeduction = (double)computation.TotalDeduction,
 			NetPay = (double)netPay,
 			PreviousMonthNetPay = previousMonthNetPay.HasValue ? (double)previousMonthNetPay.Value : null,
 			NetPayDelta = netPayDelta.HasValue ? (double)netPayDelta.Value : null,
 			NetPayDeltaPercent = netPayDeltaPercent.HasValue ? (double)netPayDeltaPercent.Value : null,
 			IssueCodes = BuildIssueCodes(payrollDetails, components, basis.BasisDays, computation.PayableDays, netPay, previousMonthNetPay, netPayDeltaPercent),
-			PresentDays = presentDays,
-			HalfWorkingDays = halfDays,
+			PresentDays = attendanceSummary.PresentDays,
+			HalfWorkingDays = attendanceSummary.HalfWorkingDays,
 			TotalWorkingDays = basis.BasisDays,
 			PayableDays = (double)computation.PayableDays,
 			ProrationFactor = (double)computation.ProrationFactor,

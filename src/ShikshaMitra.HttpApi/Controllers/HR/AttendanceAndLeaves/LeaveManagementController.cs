@@ -186,6 +186,7 @@ public class LeaveManagementController : AbpControllerBase
 		[FromForm] Guid? employeeId,
 		[FromForm, Required] DateTime startDate,
 		[FromForm, Required] DateTime endDate,
+		[FromForm] bool halfDay,
 		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
 		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
 	{
@@ -202,6 +203,7 @@ public class LeaveManagementController : AbpControllerBase
 			ForEmployeeId = forEmployeeId ?? employeeId,
 			StartDate = startDate,
 			EndDate = endDate,
+			HalfDay = halfDay,
 			Reason = reason
 		};
 		var file = attachment?.File;
@@ -223,6 +225,7 @@ public class LeaveManagementController : AbpControllerBase
 		[FromForm] Guid? leaveTypeId,
 		[FromForm, Required] DateTime startDate,
 		[FromForm, Required] DateTime endDate,
+		[FromForm] bool halfDay,
 		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
 		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
 	{
@@ -237,6 +240,7 @@ public class LeaveManagementController : AbpControllerBase
 			LeaveTypeId = leaveTypeId ?? Guid.Empty,
 			StartDate = startDate,
 			EndDate = endDate,
+			HalfDay = halfDay,
 			Reason = reason
 		};
 

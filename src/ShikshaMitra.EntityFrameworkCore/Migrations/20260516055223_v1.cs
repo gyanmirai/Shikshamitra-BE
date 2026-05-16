@@ -753,8 +753,10 @@ namespace ShikshaMitra.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: true),
                     DayCalculationType = table.Column<int>(type: "integer", nullable: false),
                     ManualDays = table.Column<int>(type: "integer", nullable: true),
+                    ManualMonthDaysJson = table.Column<string>(type: "text", nullable: true),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -2027,6 +2029,7 @@ namespace ShikshaMitra.Migrations
                     IsTeaching = table.Column<bool>(type: "boolean", nullable: false),
                     BasicSalary = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
                     GrossSalary = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    FullGrossSalary = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
                     TotalDeduction = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
                     NetPay = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
                     PreviousMonthNetPay = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
@@ -4242,6 +4245,8 @@ namespace ShikshaMitra.Migrations
                     StartDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     EndDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
+                    ApprovedPaidType = table.Column<int>(type: "integer", nullable: true),
+                    ApprovedLeaveUnits = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false, defaultValue: 0m),
                     Description = table.Column<string>(type: "text", nullable: true),
                     RejectionReason = table.Column<string>(type: "text", nullable: true),
                     Attachment = table.Column<byte[]>(type: "bytea", nullable: true),
@@ -5760,10 +5765,18 @@ namespace ShikshaMitra.Migrations
                 column: "ConcessionTypeDocumentId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_DayCalculationSettings_TenantId",
+                name: "IX_DayCalculationSettings_Tenant_AcademicYear",
+                table: "AppDayCalculationSettings",
+                columns: new[] { "TenantId", "AcademicYearId" },
+                unique: true,
+                filter: "\"AcademicYearId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DayCalculationSettings_Tenant_Fallback",
                 table: "AppDayCalculationSettings",
                 column: "TenantId",
-                unique: true);
+                unique: true,
+                filter: "\"AcademicYearId\" IS NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DeductionComponents_DisplayOrder",

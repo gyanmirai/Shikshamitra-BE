@@ -102,6 +102,7 @@ public class LeaveValidationService : DomainService
 		Guid leaveTypeId,
 		DateTime startDate,
 		DateTime endDate,
+		bool halfDay = false,
 		Guid? academicYearId = null,
 		Guid? excludeLeaveId = null)
 	{
@@ -110,6 +111,8 @@ public class LeaveValidationService : DomainService
 		{
 			throw new BusinessException(HRErrorCodes.LeaveStartAfterEnd);
 		}
+
+		EnsureValidHalfDayRange(startDate, endDate, halfDay);
 
 		if (startDate.Date < DateTime.Today)
 		{
@@ -146,22 +149,22 @@ public class LeaveValidationService : DomainService
 			throw new BusinessException(HRErrorCodes.LeavePolicyInactive);
 		}
 
-		// 5. Check maximum duration per request (business days per PRD)
-		var requestedDays = LeaveDurationCalculator.CountInclusiveBusinessDays(startDate, endDate);
-		if (requestedDays == 0)
+		// 5. Check maximum duration per request (Sunday is the weekly off day)
+		var requestedUnits = LeaveDurationCalculator.CountLeaveUnits(startDate, endDate, halfDay);
+		if (requestedUnits <= 0)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveNoBusinessDaysInRange);
 		}
 		const int maxDaysPerRequest = 30; // Default maximum
 
-		if (requestedDays > maxDaysPerRequest)
+		if (requestedUnits > maxDaysPerRequest)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveMaxDaysExceeded);
 		}
 
 		// 6. Check leave balance for the selected leave policy.
 		// Leave policies are academic-year scoped, so policy-level approved days are used.
-		await EnsureSufficientLeaveBalanceAsync(employeeId, leavePolicy, requestedDays);
+		await EnsureSufficientLeaveBalanceAsync(employeeId, leavePolicy, requestedUnits);
 
 		// 7. Check minimum notice period (2 days advance notice)
 		const int minimumNoticeDays = 2;
@@ -179,7 +182,8 @@ public class LeaveValidationService : DomainService
 		Guid employeeId,
 		Guid leavePolicyId,
 		DateTime startDate,
-		DateTime endDate)
+		DateTime endDate,
+		bool halfDay = false)
 	{
 		var leavePolicy = await _leavePolicyRepository.FindAsync(x => x.Id == leavePolicyId);
 		if (leavePolicy == null)
@@ -187,19 +191,21 @@ public class LeaveValidationService : DomainService
 			throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
 		}
 
-		var requestedDays = LeaveDurationCalculator.CountInclusiveBusinessDays(startDate, endDate);
-		if (requestedDays == 0)
+		EnsureValidHalfDayRange(startDate, endDate, halfDay);
+
+		var requestedUnits = LeaveDurationCalculator.CountLeaveUnits(startDate, endDate, halfDay);
+		if (requestedUnits <= 0)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveNoBusinessDaysInRange);
 		}
 
-		await EnsureSufficientLeaveBalanceAsync(employeeId, leavePolicy, requestedDays);
+		await EnsureSufficientLeaveBalanceAsync(employeeId, leavePolicy, requestedUnits);
 	}
 
 	/// <summary>
-	/// Calculates leave days excluding weekends
+	/// Calculates leave days excluding Sundays
 	/// </summary>
-	public int CalculateBusinessDays(DateTime startDate, DateTime endDate)
+	public decimal CalculateBusinessDays(DateTime startDate, DateTime endDate)
 	{
 		return LeaveDurationCalculator.CountInclusiveBusinessDays(startDate, endDate);
 	}
@@ -207,7 +213,7 @@ public class LeaveValidationService : DomainService
 	/// <summary>
 	/// Gets remaining leave balance for employee
 	/// </summary>
-	public async Task<int> GetRemainingLeaveBalanceAsync(
+	public async Task<decimal> GetRemainingLeaveBalanceAsync(
 		Guid employeeId,
 		Guid leaveTypeId)
 	{
@@ -224,7 +230,7 @@ public class LeaveValidationService : DomainService
 		return Math.Max(0, leavePolicy.LeaveCount - approvedDays);
 	}
 
-	private async Task EnsureSufficientLeaveBalanceAsync(Guid employeeId, LeavePolicy leavePolicy, int requestedDays)
+	private async Task EnsureSufficientLeaveBalanceAsync(Guid employeeId, LeavePolicy leavePolicy, decimal requestedUnits)
 	{
 		var approvedDaysForPolicy = await _employeeLeaveRepository.GetApprovedLeaveDaysAsync(
 			employeeId,
@@ -232,9 +238,17 @@ public class LeaveValidationService : DomainService
 
 		var remainingBalance = leavePolicy.LeaveCount - approvedDaysForPolicy;
 
-		if (requestedDays > remainingBalance)
+		if (requestedUnits > remainingBalance)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveInsufficientBalance);
+		}
+	}
+
+	private static void EnsureValidHalfDayRange(DateTime startDate, DateTime endDate, bool halfDay)
+	{
+		if (halfDay && startDate.Date != endDate.Date)
+		{
+			throw new BusinessException(HRErrorCodes.LeaveHalfDayMustBeSingleDate);
 		}
 	}
 }

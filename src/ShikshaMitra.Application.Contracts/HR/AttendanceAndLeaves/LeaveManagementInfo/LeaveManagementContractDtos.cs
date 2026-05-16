@@ -26,7 +26,9 @@ public class LeaveManagementItemResponse
 	[Required]
 	public DateTime EndDate { get; set; }
 	[Required]
-	public int TotalDays { get; set; }
+	public decimal TotalDays { get; set; }
+	public bool HalfDay { get; set; }
+	public decimal ApprovedLeaveUnits { get; set; }
 	[Required]
 	public string MediumStageName { get; set; } = string.Empty;
 	[Required]
@@ -91,7 +93,9 @@ public class LeaveRequestDetailsResponse
 	[Required]
 	public DateTime EndDate { get; set; }
 	[Required]
-	public int TotalDays { get; set; }
+	public decimal TotalDays { get; set; }
+	public bool HalfDay { get; set; }
+	public decimal ApprovedLeaveUnits { get; set; }
 	[Required]
 	public string Description { get; set; } = string.Empty;
 	public string? AttachmentUrl { get; set; }

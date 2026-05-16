@@ -22,6 +22,7 @@ public class PayrollRunItemSnapshot : FullAuditedAggregateRoot<Guid>, IMultiTena
 	public bool IsTeaching { get; set; }
 	public decimal BasicSalary { get; set; }
 	public decimal GrossSalary { get; set; }
+	public decimal FullGrossSalary { get; set; }
 	public decimal TotalDeduction { get; set; }
 	public decimal NetPay { get; set; }
 	public decimal? PreviousMonthNetPay { get; set; }

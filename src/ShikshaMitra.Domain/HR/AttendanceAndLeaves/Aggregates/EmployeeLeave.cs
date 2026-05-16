@@ -23,6 +23,8 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public DateTimeOffset StartDate { get; private set; }
 	public DateTimeOffset EndDate { get; private set; }
 	public EmployeeLeaveStatusType Status { get; private set; }
+	public LeavePaidType? ApprovedPaidType { get; private set; }
+	public decimal ApprovedLeaveUnits { get; private set; }
 	public string? Description { get; private set; }
 	public string? RejectionReason { get; private set; }
 	public Employee? Employee { get; private set; }
@@ -54,6 +56,18 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		Status = status;
 		RejectionReason = rejectionReason;
+		return this;
+	}
+
+	internal EmployeeLeave SetApprovalPayrollSnapshot(LeavePaidType paidType, decimal approvedLeaveUnits)
+	{
+		if (approvedLeaveUnits < 0)
+		{
+			throw new BusinessException(HRErrorCodes.LeaveNoBusinessDaysInRange);
+		}
+
+		ApprovedPaidType = paidType;
+		ApprovedLeaveUnits = approvedLeaveUnits;
 		return this;
 	}
 

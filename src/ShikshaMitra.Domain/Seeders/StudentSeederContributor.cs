@@ -24,12 +24,12 @@ using Volo.Abp.Uow;
 namespace ShikshaMitra.Seeders;
 
 /// <summary>
-/// Seeds student data for Class 10 divisions in the current academic year.
+/// Seeds student data for all standards/divisions in the current academic year.
 /// Creates diverse, realistic student profiles for testing.
 /// </summary>
 public class StudentSeederContributor : BaseSeederContributor
 {
-	private const int StudentsPerDivision = 36;
+	private const int StudentsPerDivision = 6;
 	private const int InsertBatchSize = 100;
 
 	private readonly IRepository<Student, Guid> _studentRepository;
@@ -154,26 +154,25 @@ public class StudentSeederContributor : BaseSeederContributor
 		var stageIdSet = stages.Select(x => x.Id).ToHashSet();
 
 		var allStandards = await _standardRepository.GetListAsync();
-		var class10Standards = allStandards
-			.Where(s => stageIdSet.Contains(s.EducationMediumStageId) &&
-						s.Name.Equals("Class 10", StringComparison.OrdinalIgnoreCase))
+		var standards = allStandards
+			.Where(s => stageIdSet.Contains(s.EducationMediumStageId))
 			.ToList();
-		var class10StandardIdSet = class10Standards.Select(x => x.Id).ToHashSet();
+		var standardIdSet = standards.Select(x => x.Id).ToHashSet();
 
 		var allDivisions = await _divisionRepository.GetListAsync();
-		var divisions = allDivisions.Where(d => class10StandardIdSet.Contains(d.StandardId)).ToList();
+		var divisions = allDivisions.Where(d => standardIdSet.Contains(d.StandardId)).ToList();
 
 		var mediumsByBoard = mediums.GroupBy(x => x.EducationBoardId).ToDictionary(x => x.Key, x => x.ToList());
 		var stagesByMedium = stages.GroupBy(x => x.EducationMediumId).ToDictionary(x => x.Key, x => x.ToList());
-		var standardsByStage = class10Standards.GroupBy(x => x.EducationMediumStageId).ToDictionary(x => x.Key, x => x.ToList());
+		var standardsByStage = standards.GroupBy(x => x.EducationMediumStageId).ToDictionary(x => x.Key, x => x.ToList());
 		var divisionsByStandard = divisions.GroupBy(x => x.StandardId).ToDictionary(x => x.Key, x => x.ToList());
 
 		_logger.LogInformation(
-			"[StudentSeeder] Data loaded: Boards={Boards}, Mediums={Mediums}, Stages={Stages}, Class10Standards={Standards}, Divisions={Divisions}",
+			"[StudentSeeder] Data loaded: Boards={Boards}, Mediums={Mediums}, Stages={Stages}, Standards={Standards}, Divisions={Divisions}",
 			boards.Count,
 			mediums.Count,
 			stages.Count,
-			class10Standards.Count,
+			standards.Count,
 			divisions.Count
 		);
 
@@ -215,7 +214,9 @@ public class StudentSeederContributor : BaseSeederContributor
 							{
 								var student = CreateStudent(
 									medium.Id,
+									stage.Id,
 									standard.Id,
+									standard.Name,
 									division.Id,
 									currentAcademicYear.Id,
 									board.Id,
@@ -261,7 +262,9 @@ public class StudentSeederContributor : BaseSeederContributor
 
 	private Student CreateStudent(
 		Guid mediumId,
+		Guid stageId,
 		Guid standardId,
+		string standardName,
 		Guid divisionId,
 		Guid academicYearId,
 		Guid academicBoardId,
@@ -283,8 +286,7 @@ public class StudentSeederContributor : BaseSeederContributor
 
 		var studentId = GuidGenerator.Create();
 
-		// Age for Class 10 students: 14-16 years
-		var age = 14 + (globalCounter % 3); // Varies between 14, 15, 16
+		var age = ResolveAgeForStandard(standardName, globalCounter);
 		var dateOfBirth = DateTimeOffset.Now.AddYears(-age).AddDays(random.Next(-180, 180));
 
 		// Create student with Admission status (already enrolled and approved)
@@ -297,7 +299,7 @@ public class StudentSeederContributor : BaseSeederContributor
 			educationYearId: academicYearId,
 			educationBoardId: academicBoardId,
 			educationMediumId: mediumId,
-			educationMediumStageId: Guid.Empty, // Can be set if needed
+			educationMediumStageId: stageId,
 			standardId: standardId,
 			divisionId: divisionId,
 			grNo: 10000 + globalCounter, // GR numbers starting from 10001
@@ -343,7 +345,7 @@ public class StudentSeederContributor : BaseSeederContributor
 			city,
 			motherTongue,
 			"ABC Public School", // Previous school
-			"Class 9", // Last class passed
+			"Previous Class",
 			StudentRegistrationStateEnum.BankDetails, // Complete registration state
 			null,
 			"1234"
@@ -411,6 +413,21 @@ public class StudentSeederContributor : BaseSeederContributor
 	private string GenerateLandmark(Random random)
 	{
 		return _landmarks[random.Next(_landmarks.Length)];
+	}
+
+	private static int ResolveAgeForStandard(string standardName, int globalCounter)
+	{
+		var baseAge = standardName switch
+		{
+			"Nursery" => 3,
+			"LKG" => 4,
+			"UKG" => 5,
+			string name when name.StartsWith("Class ", StringComparison.OrdinalIgnoreCase) &&
+			                 int.TryParse(name["Class ".Length..], out var classNumber) => 5 + classNumber,
+			_ => 10
+		};
+
+		return baseAge + (globalCounter % 2);
 	}
 
 	#endregion

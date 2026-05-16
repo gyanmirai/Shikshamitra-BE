@@ -40,6 +40,7 @@
     "HR:Leave:020032": "चयनित तिथि सीमा में leave लागू करने हेतु कोई business day नहीं है।",
     "HR:Leave:020033": "इस leave कार्रवाई के लिए target employee आवश्यक है।",
     "HR:Leave:020034": "leave request केवल active employees के लिए बनाई जा सकती है।",
+    "HR:Leave:020035": "Half-day leave की start और end date समान होनी चाहिए।",
     "HR:Leave:020101": "attachment फ़ाइल बहुत बड़ी है।",
     "HR:Leave:020102": "attachment फ़ाइल खाली है।",
     "HR:Leave:020103": "attachment फ़ाइल extension अनुमत नहीं है।",

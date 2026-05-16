@@ -72,11 +72,11 @@ public class FamilyMemberInfo
 /// </summary>
 public class CountryInfo
 {
-	[Required]
-	public string Name { get; set; } = string.Empty;
+	[MaxLength(128)]
+	public string? Name { get; set; }
 
-	[Required]
-	public string IsoCode { get; set; } = string.Empty;
+	[MaxLength(16)]
+	public string? IsoCode { get; set; }
 }
 
 /// <summary>
@@ -84,9 +84,9 @@ public class CountryInfo
 /// </summary>
 public class StateInfo
 {
-	[Required]
-	public string Name { get; set; } = string.Empty;
+	[MaxLength(128)]
+	public string? Name { get; set; }
 
-	[Required]
-	public string IsoCode { get; set; } = string.Empty;
+	[MaxLength(16)]
+	public string? IsoCode { get; set; }
 }

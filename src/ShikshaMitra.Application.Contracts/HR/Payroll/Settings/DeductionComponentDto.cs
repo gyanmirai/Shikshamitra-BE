@@ -15,6 +15,7 @@ public class DeductionComponentDto : FullAuditedEntityDto<Guid>
 	public string? SelectedDeductionComponentName { get; set; }
 	public string? SelectedDeductionComponentDescription { get; set; }
 	public bool? SelectedDeductionComponentVisibleInPayslip { get; set; }
+	public string? SelectedDeductionComponentSource { get; set; }
 	public ComponentDependency DependOn { get; set; }
 	public bool VisibleInPayslip { get; set; }
 	public int DisplayOrder { get; set; }

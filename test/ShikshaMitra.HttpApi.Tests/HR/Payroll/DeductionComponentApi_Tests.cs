@@ -18,6 +18,7 @@ namespace ShikshaMitra.HR.Payroll;
 public class DeductionComponentApi_Tests : ShikshaMitraApiTestBase
 {
 	private const string BaseUrl = "/api/payroll/deduction-components";
+	private const string EarningComponentsBaseUrl = "/api/payroll/earning-components";
 
 	public DeductionComponentApi_Tests(ShikshaMitraApiTestFactory factory)
 		: base(factory)
@@ -91,7 +92,7 @@ public class DeductionComponentApi_Tests : ShikshaMitraApiTestBase
 			VisibleInPayslip = true,
 		};
 
-		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{created.Id}", updateDto, JsonOptions);
+		var response = await PutWithPreviewAsync(created.Id, updateDto);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
@@ -102,7 +103,7 @@ public class DeductionComponentApi_Tests : ShikshaMitraApiTestBase
 	{
 		var created = await CreateComponentAsync();
 
-		var response = await Client.DeleteAsync($"{BaseUrl}/{created.Id}");
+		var response = await DeleteWithPreviewAsync(created.Id);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 	}
@@ -232,7 +233,7 @@ public class DeductionComponentApi_Tests : ShikshaMitraApiTestBase
 			VisibleInPayslip = true,
 		};
 
-		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{created.Id}", updateDto, JsonOptions);
+		var response = await PutWithPreviewAsync(created.Id, updateDto);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
@@ -278,9 +279,9 @@ public class DeductionComponentApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Return_Custom_Component_Name_In_List_Response()
+	public async Task Should_Return_Deduction_Base_Component_Name_In_List_Response()
 	{
-		var baseComponent = await CreateComponentAsync("BaseForNestedName");
+		var baseComponent = await CreateComponentWithNameAsync("BaseForNestedName");
 		var dependentName = TestDataHelper.UniqueName("DependsOnBase");
 
 		var createDependent = new DeductionComponentCreateRequestDto
@@ -289,7 +290,7 @@ public class DeductionComponentApi_Tests : ShikshaMitraApiTestBase
 			DeductionType = "FIXED",
 			CalculationType = "PERCENTAGE",
 			Percentage = 8m,
-			SelectedDeductionComponentId = baseComponent.Id,
+			SelectedDeductionComponentId = baseComponent.Created.Id,
 			VisibleInPayslip = true
 		};
 
@@ -304,7 +305,83 @@ public class DeductionComponentApi_Tests : ShikshaMitraApiTestBase
 		var dependent = body.Items.FirstOrDefault(x => x.DeductionComponentName == dependentName);
 		dependent.ShouldNotBeNull();
 		dependent.CustomComponent.ShouldNotBeNull();
-		dependent.CustomComponent!.ComponentName.ShouldNotBeNullOrWhiteSpace();
+		dependent.CustomComponent!.ComponentName.ShouldBe(baseComponent.Name);
+		dependent.CustomComponent.ComponentOf.ShouldBe("DEDUCTION_COMPONENT");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Earning_Base_Component_Name_In_List_Response()
+	{
+		var earningBase = await CreateEarningComponentWithNameAsync("BasicSalaryForDeduction");
+		var dependentName = TestDataHelper.UniqueName("PFDependsOnBasic");
+
+		var createDependent = new DeductionComponentCreateRequestDto
+		{
+			DeductionComponentName = dependentName,
+			DeductionType = "FIXED",
+			CalculationType = "PERCENTAGE",
+			Percentage = 12m,
+			SelectedDeductionComponentId = earningBase.Created.Id,
+			VisibleInPayslip = true
+		};
+
+		var createResponse = await Client.PostAsJsonAsync(BaseUrl, createDependent, JsonOptions);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+		var listResponse = await Client.GetAsync($"{BaseUrl}?search={dependentName}");
+		listResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var body = await listResponse.Content.ReadFromJsonAsync<DeductionComponentPaginatedResponseDto>(JsonOptions);
+		body.ShouldNotBeNull();
+		var dependent = body.Items.FirstOrDefault(x => x.DeductionComponentName == dependentName);
+		dependent.ShouldNotBeNull();
+		dependent.CustomComponent.ShouldNotBeNull();
+		dependent.CustomComponent!.ComponentName.ShouldBe(earningBase.Name);
+		dependent.CustomComponent.ComponentOf.ShouldBe("EARNING_COMPONENT");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Null_Custom_Component_For_Amount_Deduction()
+	{
+		var created = await CreateComponentAsync("AmountWithoutCustomComponent");
+
+		var response = await Client.GetAsync($"{BaseUrl}/{created.Id}");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var body = await response.Content.ReadFromJsonAsync<DeductionComponentResponseDto>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.CustomComponent.ShouldBeNull();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Null_Custom_Component_For_Unresolved_Percentage_Base()
+	{
+		var dependentName = TestDataHelper.UniqueName("MissingBase");
+		var createDependent = new DeductionComponentCreateRequestDto
+		{
+			DeductionComponentName = dependentName,
+			DeductionType = "FIXED",
+			CalculationType = "PERCENTAGE",
+			Percentage = 9m,
+			SelectedDeductionComponentId = Guid.NewGuid(),
+			VisibleInPayslip = true
+		};
+
+		var createResponse = await Client.PostAsJsonAsync(BaseUrl, createDependent, JsonOptions);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+		var listResponse = await Client.GetAsync($"{BaseUrl}?search={dependentName}");
+		listResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var body = await listResponse.Content.ReadFromJsonAsync<DeductionComponentPaginatedResponseDto>(JsonOptions);
+		body.ShouldNotBeNull();
+		var dependent = body.Items.FirstOrDefault(x => x.DeductionComponentName == dependentName);
+		dependent.ShouldNotBeNull();
+		dependent.SelectedDeductionComponentId.ShouldNotBeNull();
+		dependent.CustomComponent.ShouldBeNull();
 	}
 
 	#endregion
@@ -340,7 +417,7 @@ public class DeductionComponentApi_Tests : ShikshaMitraApiTestBase
 			Amount = 8000m,
 			VisibleInPayslip = false,
 		};
-		var updateResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{created.Id}", updateDto, JsonOptions);
+		var updateResponse = await PutWithPreviewAsync(created.Id, updateDto);
 		updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
 		var getResponse = await Client.GetAsync($"{BaseUrl}/{created.Id}");
@@ -348,7 +425,7 @@ public class DeductionComponentApi_Tests : ShikshaMitraApiTestBase
 		body.ShouldNotBeNull();
 		body.Amount.ShouldBe(8000m);
 
-		var deleteResponse = await Client.DeleteAsync($"{BaseUrl}/{created.Id}");
+		var deleteResponse = await DeleteWithPreviewAsync(created.Id);
 		deleteResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 	}
 
@@ -371,6 +448,71 @@ public class DeductionComponentApi_Tests : ShikshaMitraApiTestBase
 		response.EnsureSuccessStatusCode();
 		return await response.Content.ReadFromJsonAsync<ComponentCreateResponseDto>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create test deduction component");
+	}
+
+	private async Task<HttpResponseMessage> PutWithPreviewAsync(Guid id, DeductionComponentUpdateRequestDto input)
+	{
+		var previewResponse = await Client.PostAsJsonAsync(
+			$"{BaseUrl}/{id}/update-impact-preview",
+			input,
+			JsonOptions);
+		previewResponse.EnsureSuccessStatusCode();
+		var preview = await previewResponse.Content.ReadFromJsonAsync<PayrollComponentUpdateImpactPreviewDto>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to preview deduction component update");
+
+		input.ApplyMode = "SyncedOnly";
+		input.EffectiveMonth = preview.EffectiveMonth;
+		input.PreviewHash = preview.PreviewHash;
+
+		return await Client.PutAsJsonAsync($"{BaseUrl}/{id}", input, JsonOptions);
+	}
+
+	private async Task<HttpResponseMessage> DeleteWithPreviewAsync(Guid id)
+	{
+		var previewResponse = await Client.GetAsync($"{BaseUrl}/{id}/delete-impact-preview");
+		previewResponse.EnsureSuccessStatusCode();
+		var preview = await previewResponse.Content.ReadFromJsonAsync<PayrollComponentUpdateImpactPreviewDto>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to preview deduction component delete");
+
+		return await Client.DeleteAsync($"{BaseUrl}/{id}?previewHash={Uri.EscapeDataString(preview.PreviewHash)}");
+	}
+
+	private async Task<(ComponentCreateResponseDto Created, string Name)> CreateComponentWithNameAsync(string nameSuffix)
+	{
+		var name = TestDataHelper.UniqueName(nameSuffix);
+		var input = new DeductionComponentCreateRequestDto
+		{
+			DeductionComponentName = name,
+			DeductionType = "FIXED",
+			CalculationType = "AMOUNT",
+			Amount = 3000m,
+			VisibleInPayslip = true,
+		};
+
+		var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+		response.EnsureSuccessStatusCode();
+		var created = await response.Content.ReadFromJsonAsync<ComponentCreateResponseDto>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to create test deduction component");
+		return (created, name);
+	}
+
+	private async Task<(ComponentCreateResponseDto Created, string Name)> CreateEarningComponentWithNameAsync(string nameSuffix)
+	{
+		var name = TestDataHelper.UniqueName(nameSuffix);
+		var input = new EarningComponentCreateRequestDto
+		{
+			EarningComponentName = name,
+			EarningType = "FIXED",
+			CalculationType = "AMOUNT",
+			Amount = 30000m,
+			VisibleInPayslip = true,
+		};
+
+		var response = await Client.PostAsJsonAsync(EarningComponentsBaseUrl, input, JsonOptions);
+		response.EnsureSuccessStatusCode();
+		var created = await response.Content.ReadFromJsonAsync<ComponentCreateResponseDto>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to create test earning component");
+		return (created, name);
 	}
 
 	#endregion

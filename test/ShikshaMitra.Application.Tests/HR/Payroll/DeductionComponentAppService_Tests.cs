@@ -25,6 +25,7 @@ namespace ShikshaMitra.HR.Payroll;
 public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
     private readonly IDeductionComponentAppService _deductionComponentAppService;
+    private readonly IEarningComponentAppService _earningComponentAppService;
     private readonly IEmployeePersonalInfoAppService _employeePersonalInfoAppService;
     private readonly IEmployeePayrollComponentRepository _employeePayrollComponentRepository;
     private readonly ISalarySlipRepository _salarySlipRepository;
@@ -36,6 +37,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
     public DeductionComponentAppService_Tests()
     {
         _deductionComponentAppService = GetRequiredService<IDeductionComponentAppService>();
+        _earningComponentAppService = GetRequiredService<IEarningComponentAppService>();
         _employeePersonalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
         _employeePayrollComponentRepository = GetRequiredService<IEmployeePayrollComponentRepository>();
         _salarySlipRepository = GetRequiredService<ISalarySlipRepository>();
@@ -196,6 +198,51 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         result.ShouldNotBeNull();
         result.Id.ShouldBe(created.Id);
         result.Name.ShouldBe(created.Name);
+    }
+
+    [Fact]
+    public async Task Should_Populate_Selected_Deduction_Component_Name_For_Percentage_By_Id()
+    {
+        var baseComponent = await CreateTestDeductionComponentAsync($"Base Deduction Name {Guid.NewGuid():N}");
+        var dependent = await _deductionComponentAppService.CreateAsync(new CreateDeductionComponentDto
+        {
+            Name = $"Dependent Deduction Name {Guid.NewGuid():N}",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            Percentage = 8m,
+            SelectedDeductionComponentId = baseComponent.Id,
+            DependOn = ComponentDependency.CustomComponent,
+            VisibleInPayslip = true
+        });
+
+        var result = await _deductionComponentAppService.GetAsync(dependent.Id);
+
+        result.SelectedDeductionComponentName.ShouldBe(baseComponent.Name);
+        result.SelectedDeductionComponentSource.ShouldBe("DEDUCTION_COMPONENT");
+    }
+
+    [Fact]
+    public async Task Should_Populate_Selected_Earning_Component_Name_For_Percentage_By_Id()
+    {
+        var earningBase = await CreateTestEarningComponentAsync($"Basic Salary Base {Guid.NewGuid():N}");
+        var dependent = await _deductionComponentAppService.CreateAsync(new CreateDeductionComponentDto
+        {
+            Name = $"PF On Basic {Guid.NewGuid():N}",
+            ComponentType = DeductionComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            Percentage = 12m,
+            SelectedDeductionComponentId = earningBase.Id,
+            DependOn = ComponentDependency.CustomComponent,
+            VisibleInPayslip = true
+        });
+
+        var list = await _deductionComponentAppService.GetFilteredListAsync(0, 10, dependent.Name);
+        var result = list.Items.Single(x => x.Id == dependent.Id);
+
+        result.SelectedDeductionComponentName.ShouldBe(earningBase.Name);
+        result.SelectedDeductionComponentDescription.ShouldBe(earningBase.Description);
+        result.SelectedDeductionComponentVisibleInPayslip.ShouldBe(earningBase.VisibleInPayslip);
+        result.SelectedDeductionComponentSource.ShouldBe("EARNING_COMPONENT");
     }
 
     [Fact]
@@ -1561,6 +1608,23 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         };
 
         return await _deductionComponentAppService.CreateAsync(input);
+    }
+
+    private async Task<EarningComponentDto> CreateTestEarningComponentAsync(string name)
+    {
+        var input = new CreateEarningComponentDto
+        {
+            Name = name,
+            Description = $"Test description for {name}",
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Amount,
+            Amount = 10000m,
+            DependOn = ComponentDependency.None,
+            VisibleInPayslip = true,
+            DisplayOrder = 0
+        };
+
+        return await _earningComponentAppService.CreateAsync(input);
     }
 
     private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync(string suffix)

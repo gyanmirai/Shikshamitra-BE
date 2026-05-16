@@ -15,7 +15,6 @@ using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
@@ -34,6 +33,7 @@ public class HrManualTestDataSeederContributor : BaseSeederContributor
 {
 	private const string SeedFlagKey = "SeedHrManualTestData";
 	private const string TempPassword = "Temp@123";
+	private const int HistoricalPayrollMonthCount = 10;
 	private static readonly Guid DdvsTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 	private static readonly TimeSpan IndiaOffset = TimeSpan.FromHours(5.5);
 
@@ -55,7 +55,6 @@ public class HrManualTestDataSeederContributor : BaseSeederContributor
 	private readonly ILeavePolicyRepository _leavePolicyRepository;
 	private readonly IEmployeeLeaveRepository _leaveRepository;
 	private readonly EmployeeLeaveManager _leaveManager;
-	private readonly SalarySlipManager _salarySlipManager;
 	private readonly ISalarySlipRepository _salarySlipRepository;
 	private readonly IRepository<PayrollRunReview, Guid> _payrollRunReviewRepository;
 	private readonly IRepository<PayrollRunItemSnapshot, Guid> _payrollRunItemSnapshotRepository;
@@ -83,7 +82,6 @@ public class HrManualTestDataSeederContributor : BaseSeederContributor
 		ILeavePolicyRepository leavePolicyRepository,
 		IEmployeeLeaveRepository leaveRepository,
 		EmployeeLeaveManager leaveManager,
-		SalarySlipManager salarySlipManager,
 		ISalarySlipRepository salarySlipRepository,
 		IRepository<PayrollRunReview, Guid> payrollRunReviewRepository,
 		IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
@@ -108,7 +106,6 @@ public class HrManualTestDataSeederContributor : BaseSeederContributor
 		_leavePolicyRepository = leavePolicyRepository;
 		_leaveRepository = leaveRepository;
 		_leaveManager = leaveManager;
-		_salarySlipManager = salarySlipManager;
 		_salarySlipRepository = salarySlipRepository;
 		_payrollRunReviewRepository = payrollRunReviewRepository;
 		_payrollRunItemSnapshotRepository = payrollRunItemSnapshotRepository;
@@ -147,16 +144,16 @@ public class HrManualTestDataSeederContributor : BaseSeederContributor
 
 		await EnsureReportingChainAsync(employees);
 
-		var seedMonth = DateTime.UtcNow;
-		await SeedAttendanceAsync(employees, educationMediumStage.Id, seedMonth);
-		await SeedPreviousMonthAttendanceAsync(employees, seedMonth.AddMonths(-1), educationMediumStage.Id);
-		await SeedLeavesAsync(employees, academicYear, seedMonth);
-		await SeedPayrollRunStateAsync(employees, seedMonth);
+		var historicalMonths = GetHistoricalPayrollMonths(DateTime.UtcNow);
+		await SeedHistoricalAttendanceAsync(employees, educationMediumStage.Id, historicalMonths);
+		await CleanupSeededPayrollArtifactsAsync(employees.Values.Select(e => e.Id).ToList(), historicalMonths);
+		await SeedLeavesAsync(employees, academicYear, historicalMonths[^1]);
 
 		await CurrentUnitOfWork.SaveChangesAsync();
 		_logger.LogInformation(
-			"[HrManualTestDataSeeder] Seeded HR manual test data for {MonthYear}. Employees={EmployeeCount}",
-			seedMonth.ToString("yyyy-MM"),
+			"[HrManualTestDataSeeder] Seeded HR manual test data for {StartMonth}..{EndMonth}. Employees={EmployeeCount}",
+			historicalMonths[0].ToString("yyyy-MM"),
+			historicalMonths[^1].ToString("yyyy-MM"),
 			employees.Count);
 	}
 
@@ -196,17 +193,17 @@ public class HrManualTestDataSeederContributor : BaseSeederContributor
 
 	private static List<HrManualEmployeeSpec> BuildEmployeeSpecs() =>
 	[
-		new("yagnik1", "Yagnik", "Vadher 1", "yagnik.vadher1@ddvs.com", "9100001001", "Principal", "Principal", "Administration", EmployeeGroupType.Teaching, GenderType.Male, MaritalStatusType.Married, 120_000m, AttendanceScenario.Normal, PayrollState.Locked),
-		new("yagnik2", "Yagnik", "Vadher 2", "yagnik.vadher2@ddvs.com", "9100001002", "Vice Principal", "Vice Principal", "Administration", EmployeeGroupType.Teaching, GenderType.Male, MaritalStatusType.Married, 105_000m, AttendanceScenario.Normal, PayrollState.Locked),
-		new("prerna", "Prerna", "Atre", "prerna.atre@ddvs.com", "9100001003", "HR Manager", "HR Manager", "Human Resources", EmployeeGroupType.NonTeaching, GenderType.Female, MaritalStatusType.Married, 72_000m, AttendanceScenario.Normal, PayrollState.Pending),
-		new("parth", "Parth", "Ghusar", "parth.ghusar@ddvs.com", "9100001004", "Finance Officer", "Finance Officer", "Finance", EmployeeGroupType.NonTeaching, GenderType.Male, MaritalStatusType.Unmarried, 78_000m, AttendanceScenario.Normal, PayrollState.Locked),
-		new("raj", "Raj", "Baku", "raj.baku@ddvs.com", "9100001005", "Teacher", "Senior Teacher - Mathematics", "Mathematics", EmployeeGroupType.Teaching, GenderType.Male, MaritalStatusType.Married, 82_000m, AttendanceScenario.Clean, PayrollState.Reviewed),
-		new("jignesh", "Jignesh", "Jinjala", "jignesh.jinjala@ddvs.com", "9100001006", "Teacher", "Teacher - Science", "Science", EmployeeGroupType.Teaching, GenderType.Male, MaritalStatusType.Married, 58_000m, AttendanceScenario.TwoHalfDays, PayrollState.Pending),
-		new("nikhil", "Nikhil", "Baku", "nikhil.baku@ddvs.com", "9100001007", "Teacher", "Teacher - English", "English", EmployeeGroupType.Teaching, GenderType.Male, MaritalStatusType.Unmarried, 54_000m, AttendanceScenario.ApprovedLeave, PayrollState.Reviewed),
-		new("keyur", "Keyur", "Sidhupura", "keyur.sidhupura@ddvs.com", "9100001008", "Teacher", "Teacher - Computer Science", "Computer Science", EmployeeGroupType.Teaching, GenderType.Male, MaritalStatusType.Unmarried, 60_000m, AttendanceScenario.LowAttendance, PayrollState.Pending),
-		new("mayur", "Mayur", "Solanki", "mayur.solanki@ddvs.com", "9100001009", "Administrative Manager", "Administrative Manager", "Administration", EmployeeGroupType.NonTeaching, GenderType.Male, MaritalStatusType.Married, 68_000m, AttendanceScenario.Normal, PayrollState.Pending),
-		new("jagruti", "Jagruti", "Vadher", "jagruti.vadher@ddvs.com", "9100001010", "Office Assistant", "Office Assistant", "Administration", EmployeeGroupType.NonTeaching, GenderType.Female, MaritalStatusType.Married, 30_000m, AttendanceScenario.OneLopDay, PayrollState.Reviewed),
-		new("vishal", "Vishal", "Makwana", "vishal.makwana@ddvs.com", "9100001011", "IT Administrator", "IT Administrator", "Information Technology", EmployeeGroupType.NonTeaching, GenderType.Male, MaritalStatusType.Unmarried, 64_000m, AttendanceScenario.Normal, PayrollState.Pending)
+		new("yagnik1", "Yagnik", "Vadher 1", "yagnik.vadher1@ddvs.com", "9100001001", "Principal", "Principal", "Administration", EmployeeGroupType.Teaching, GenderType.Male, MaritalStatusType.Married, 120_000m, AttendanceScenario.Normal),
+		new("yagnik2", "Yagnik", "Vadher 2", "yagnik.vadher2@ddvs.com", "9100001002", "Vice Principal", "Vice Principal", "Administration", EmployeeGroupType.Teaching, GenderType.Male, MaritalStatusType.Married, 105_000m, AttendanceScenario.Normal),
+		new("prerna", "Prerna", "Atre", "prerna.atre@ddvs.com", "9100001003", "HR Manager", "HR Manager", "Human Resources", EmployeeGroupType.NonTeaching, GenderType.Female, MaritalStatusType.Married, 72_000m, AttendanceScenario.Normal),
+		new("parth", "Parth", "Ghusar", "parth.ghusar@ddvs.com", "9100001004", "Finance Officer", "Finance Officer", "Finance", EmployeeGroupType.NonTeaching, GenderType.Male, MaritalStatusType.Unmarried, 78_000m, AttendanceScenario.Normal),
+		new("raj", "Raj", "Baku", "raj.baku@ddvs.com", "9100001005", "Teacher", "Senior Teacher - Mathematics", "Mathematics", EmployeeGroupType.Teaching, GenderType.Male, MaritalStatusType.Married, 82_000m, AttendanceScenario.Clean),
+		new("jignesh", "Jignesh", "Jinjala", "jignesh.jinjala@ddvs.com", "9100001006", "Teacher", "Teacher - Science", "Science", EmployeeGroupType.Teaching, GenderType.Male, MaritalStatusType.Married, 58_000m, AttendanceScenario.TwoHalfDays),
+		new("nikhil", "Nikhil", "Baku", "nikhil.baku@ddvs.com", "9100001007", "Teacher", "Teacher - English", "English", EmployeeGroupType.Teaching, GenderType.Male, MaritalStatusType.Unmarried, 54_000m, AttendanceScenario.ApprovedLeave),
+		new("keyur", "Keyur", "Sidhupura", "keyur.sidhupura@ddvs.com", "9100001008", "Teacher", "Teacher - Computer Science", "Computer Science", EmployeeGroupType.Teaching, GenderType.Male, MaritalStatusType.Unmarried, 60_000m, AttendanceScenario.LowAttendance),
+		new("mayur", "Mayur", "Solanki", "mayur.solanki@ddvs.com", "9100001009", "Administrative Manager", "Administrative Manager", "Administration", EmployeeGroupType.NonTeaching, GenderType.Male, MaritalStatusType.Married, 68_000m, AttendanceScenario.Normal),
+		new("jagruti", "Jagruti", "Vadher", "jagruti.vadher@ddvs.com", "9100001010", "Office Assistant", "Office Assistant", "Administration", EmployeeGroupType.NonTeaching, GenderType.Female, MaritalStatusType.Married, 30_000m, AttendanceScenario.OneLopDay),
+		new("vishal", "Vishal", "Makwana", "vishal.makwana@ddvs.com", "9100001011", "IT Administrator", "IT Administrator", "Information Technology", EmployeeGroupType.NonTeaching, GenderType.Male, MaritalStatusType.Unmarried, 64_000m, AttendanceScenario.Normal)
 	];
 
 	private async Task<Employee> EnsureEmployeeAsync(HrManualEmployeeSpec spec, Guid? shiftId)
@@ -552,61 +549,54 @@ public class HrManualTestDataSeederContributor : BaseSeederContributor
 			SalaryComponentDependency.None,
 			isEarning);
 
-	private async Task SeedAttendanceAsync(
-		Dictionary<string, Employee> employees,
-		Guid educationMediumStageId,
-		DateTime month)
+	private static List<DateTime> GetHistoricalPayrollMonths(DateTime nowUtc)
 	{
-		var firstDay = new DateOnly(month.Year, month.Month, 1);
-		var lastDay = new DateOnly(month.Year, month.Month, DateTime.DaysInMonth(month.Year, month.Month));
-		await DeleteAttendanceForRangeAsync(employees.Values.Select(e => e.Id).ToList(), firstDay, lastDay);
-
-		foreach (var (key, employee) in employees)
-		{
-			var spec = BuildEmployeeSpecs().First(x => x.Key == key);
-			var workingDayIndex = 0;
-			for (var date = firstDay; date <= lastDay; date = date.AddDays(1))
-			{
-				if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
-				{
-					continue;
-				}
-
-				workingDayIndex++;
-				var status = ResolveAttendanceStatus(spec.AttendanceScenario, workingDayIndex);
-				if (status == null)
-				{
-					continue;
-				}
-
-				await _attendanceRepository.InsertAsync(
-					BuildAttendance(employee.Id, date, status.Value, educationMediumStageId),
-					autoSave: false);
-			}
-		}
+		var lastCompletedMonth = new DateTime(nowUtc.Year, nowUtc.Month, 1).AddMonths(-1);
+		return Enumerable
+			.Range(0, HistoricalPayrollMonthCount)
+			.Select(offset => lastCompletedMonth.AddMonths(-(HistoricalPayrollMonthCount - 1 - offset)))
+			.ToList();
 	}
 
-	private async Task SeedPreviousMonthAttendanceAsync(
+	private async Task SeedHistoricalAttendanceAsync(
 		Dictionary<string, Employee> employees,
-		DateTime previousMonth,
-		Guid educationMediumStageId)
+		Guid educationMediumStageId,
+		List<DateTime> months)
 	{
-		var firstDay = new DateOnly(previousMonth.Year, previousMonth.Month, 1);
-		var lastDay = new DateOnly(previousMonth.Year, previousMonth.Month, DateTime.DaysInMonth(previousMonth.Year, previousMonth.Month));
-		await DeleteAttendanceForRangeAsync(employees.Values.Select(e => e.Id).ToList(), firstDay, lastDay);
+		var employeeIds = employees.Values.Select(e => e.Id).ToList();
+		var currentMonthStart = DateTime.UtcNow.Date;
+		currentMonthStart = new DateTime(currentMonthStart.Year, currentMonthStart.Month, 1);
+		await DeleteAttendanceForRangeAsync(
+			employeeIds,
+			DateOnly.FromDateTime(months[0]),
+			new DateOnly(currentMonthStart.Year, currentMonthStart.Month, DateTime.DaysInMonth(currentMonthStart.Year, currentMonthStart.Month)));
 
-		foreach (var employee in employees.Values)
+		foreach (var month in months)
 		{
-			for (var date = firstDay; date <= lastDay; date = date.AddDays(1))
+			var firstDay = new DateOnly(month.Year, month.Month, 1);
+			var lastDay = new DateOnly(month.Year, month.Month, DateTime.DaysInMonth(month.Year, month.Month));
+			foreach (var (key, employee) in employees)
 			{
-				if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+				var spec = BuildEmployeeSpecs().First(x => x.Key == key);
+				var workingDayIndex = 0;
+				for (var date = firstDay; date <= lastDay; date = date.AddDays(1))
 				{
-					continue;
-				}
+					if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+					{
+						continue;
+					}
 
-				await _attendanceRepository.InsertAsync(
-					BuildAttendance(employee.Id, date, EmployeeAttendanceStatusType.Present, educationMediumStageId),
-					autoSave: false);
+					workingDayIndex++;
+					var status = ResolveAttendanceStatus(spec.AttendanceScenario, workingDayIndex);
+					if (status == null)
+					{
+						continue;
+					}
+
+					await _attendanceRepository.InsertAsync(
+						BuildAttendance(employee.Id, date, status.Value, educationMediumStageId),
+						autoSave: false);
+				}
 			}
 		}
 	}
@@ -708,9 +698,9 @@ public class HrManualTestDataSeederContributor : BaseSeederContributor
 			l.EmployeeId == employeeId &&
 			l.LeaveTypeId == policyId &&
 			l.Description == description);
-		if (existing.Count > 0)
+		foreach (var existingLeave in existing)
 		{
-			return;
+			await _leaveRepository.DeleteAsync(existingLeave, autoSave: false);
 		}
 
 		var leave = await _leaveManager.CreateAsync(
@@ -746,208 +736,42 @@ public class HrManualTestDataSeederContributor : BaseSeederContributor
 		return monthStart.Date;
 	}
 
-	private async Task SeedPayrollRunStateAsync(Dictionary<string, Employee> employees, DateTime seedMonth)
+	private async Task CleanupSeededPayrollArtifactsAsync(List<Guid> employeeIds, List<DateTime> historicalMonths)
 	{
-		var monthYear = seedMonth.ToString("yyyy-MM");
-		var previousMonthYear = seedMonth.AddMonths(-1).ToString("yyyy-MM");
-		var reviewerUserId = employees["parth"].UserId ?? employees["yagnik1"].UserId ?? Guid.Empty;
-		var previousNetByEmployee = new Dictionary<Guid, decimal>();
-
-		foreach (var employee in employees.Values)
-		{
-			var previousSlip = await _salarySlipRepository.GetByEmployeeAndMonthAsync(employee.Id, previousMonthYear);
-			if (previousSlip == null)
-			{
-				previousSlip = await _salarySlipManager.GenerateOrGetSalarySlipAsync(employee.Id, previousMonthYear, forceRegenerate: false);
-				previousSlip.Finalize();
-				await _salarySlipRepository.UpdateAsync(previousSlip, autoSave: false);
-			}
-
-			previousNetByEmployee[employee.Id] = previousSlip.NetSalary;
-		}
-
-		foreach (var key in new[] { "yagnik1", "yagnik2", "parth" })
-		{
-			var employee = employees[key];
-			var slip = await _salarySlipRepository.GetByEmployeeAndMonthAsync(employee.Id, monthYear);
-			if (slip == null)
-			{
-				slip = await _salarySlipManager.GenerateOrGetSalarySlipAsync(employee.Id, monthYear, forceRegenerate: false);
-				slip.Finalize();
-				await _salarySlipRepository.UpdateAsync(slip, autoSave: false);
-			}
-		}
-
-		var firstDay = new DateOnly(seedMonth.Year, seedMonth.Month, 1);
-		var lastDay = new DateOnly(seedMonth.Year, seedMonth.Month, DateTime.DaysInMonth(seedMonth.Year, seedMonth.Month));
-		var basisDays = CountWeekdays(firstDay, lastDay);
-		var currentAttendance = await _attendanceRepository.GetListAsync(a =>
-			employees.Values.Select(e => e.Id).Contains(a.EmployeeId) &&
-			a.AttendanceDate >= firstDay &&
-			a.AttendanceDate <= lastDay);
-
-		foreach (var (key, employee) in employees)
-		{
-			var spec = BuildEmployeeSpecs().First(x => x.Key == key);
-			var rows = currentAttendance.Where(a => a.EmployeeId == employee.Id).ToList();
-			var components = await _payrollComponentRepository.GetByEmployeeIdAsync(employee.Id);
-			var snapshot = await FindOrCreateSnapshotAsync(monthYear, employee.Id);
-			ApplySnapshot(snapshot, employee, components, rows, basisDays, spec.PayrollState, reviewerUserId, previousNetByEmployee.GetValueOrDefault(employee.Id));
-			await _payrollRunItemSnapshotRepository.UpdateAsync(snapshot, autoSave: false);
-
-			if (spec.PayrollState is PayrollState.Reviewed or PayrollState.Locked)
-			{
-				await EnsurePayrollReviewAsync(monthYear, employee.Id, reviewerUserId);
-			}
-		}
-	}
-
-	private async Task<PayrollRunItemSnapshot> FindOrCreateSnapshotAsync(string monthYear, Guid employeeId)
-	{
-		var query = await _payrollRunItemSnapshotRepository.GetQueryableAsync();
-		var existing = query.FirstOrDefault(x =>
-			x.TenantId == CurrentTenant.Id &&
-			x.MonthYear == monthYear &&
-			x.EmployeeId == employeeId);
-		if (existing != null)
-		{
-			return existing;
-		}
-
-		var snapshot = new PayrollRunItemSnapshot(GuidGenerator.Create(), CurrentTenant.Id, monthYear, employeeId);
-		await _payrollRunItemSnapshotRepository.InsertAsync(snapshot, autoSave: false);
-		return snapshot;
-	}
-
-	private void ApplySnapshot(
-		PayrollRunItemSnapshot snapshot,
-		Employee employee,
-		List<EmployeePayrollComponent> components,
-		List<EmployeeAttendance> attendance,
-		int basisDays,
-		PayrollState state,
-		Guid reviewerUserId,
-		decimal previousNetPay)
-	{
-		var presentDays = attendance.Count(a => a.StatusType == EmployeeAttendanceStatusType.Present);
-		var halfDays = attendance.Count(a => a.StatusType == EmployeeAttendanceStatusType.HalfDayLeave);
-		var payableDays = presentDays + 0.5m * halfDays;
-		var factor = basisDays <= 0 ? 1m : Math.Min(1m, payableDays / basisDays);
-		var earnings = components
-			.Where(c => c.IsEarning)
-			.Select(c => new PayrollComponentPreview(c.Name, Math.Round(c.IsTemp ? c.Amount : c.Amount * factor, 2)))
+		var monthYears = historicalMonths
+			.Append(new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1))
+			.Select(x => x.ToString("yyyy-MM"))
+			.Distinct()
 			.ToList();
-		var deductions = components
-			.Where(c => !c.IsEarning)
-			.Select(c => new PayrollComponentPreview(c.Name, Math.Round(c.IsTemp ? c.Amount : c.Amount * factor, 2)))
-			.ToList();
-		var gross = earnings.Sum(x => x.Amount);
-		var totalDeduction = deductions.Sum(x => x.Amount);
-		var netPay = gross - totalDeduction;
-		var delta = netPay - previousNetPay;
-		var deltaPercent = previousNetPay == 0 ? 0 : delta / previousNetPay * 100m;
-		var issues = BuildIssueCodes(components, basisDays, payableDays, netPay, deltaPercent);
 
-		snapshot.EmployeeName = employee.EmployeeName;
-		snapshot.EmployeeIdentifier = employee.EmployeeCode ?? string.Empty;
-		snapshot.IsTeaching = employee.EmployeeGroup == EmployeeGroupType.Teaching;
-		snapshot.BasicSalary = earnings.Where(x => string.Equals(x.Name, "Basic", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Amount);
-		snapshot.GrossSalary = gross;
-		snapshot.TotalDeduction = totalDeduction;
-		snapshot.NetPay = netPay;
-		snapshot.PreviousMonthNetPay = previousNetPay;
-		snapshot.NetPayDelta = delta;
-		snapshot.NetPayDeltaPercent = deltaPercent;
-		snapshot.IssueCodesJson = JsonSerializer.Serialize(issues);
-		snapshot.PresentDays = presentDays;
-		snapshot.HalfWorkingDays = halfDays;
-		snapshot.TotalWorkingDays = basisDays;
-		snapshot.PayableDays = payableDays;
-		snapshot.ProrationFactor = factor;
-		snapshot.DayCalculationMode = "working-days";
-		snapshot.UsedDefaultDayCalculation = true;
-		snapshot.EarningComponentsJson = JsonSerializer.Serialize(earnings);
-		snapshot.DeductionComponentsJson = JsonSerializer.Serialize(deductions);
-		snapshot.IsLocked = state == PayrollState.Locked;
-		snapshot.ReviewStatus = state switch
+		foreach (var monthYear in monthYears)
 		{
-			PayrollState.Locked => "LOCKED",
-			PayrollState.Reviewed => "REVIEWED",
-			_ => "PENDING"
-		};
-		snapshot.ReviewedByUserId = state == PayrollState.Pending ? null : reviewerUserId;
-		snapshot.ReviewedAt = state == PayrollState.Pending ? null : DateTime.UtcNow;
-	}
-
-	private static List<string> BuildIssueCodes(
-		List<EmployeePayrollComponent> components,
-		int basisDays,
-		decimal payableDays,
-		decimal netPay,
-		decimal deltaPercent)
-	{
-		var issues = new List<string>();
-		if (components.Count == 0)
-		{
-			issues.Add("MISSING_SALARY_STRUCTURE");
-		}
-		if (basisDays > 0 && payableDays <= 0)
-		{
-			issues.Add("NO_ATTENDANCE");
-		}
-		else if (basisDays > 0 && payableDays < basisDays)
-		{
-			issues.Add("LOW_ATTENDANCE");
-		}
-		if (netPay < 0)
-		{
-			issues.Add("NEGATIVE_NET_PAY");
-		}
-		if (Math.Abs(deltaPercent) >= 10m)
-		{
-			issues.Add("LARGE_SALARY_VARIANCE");
-		}
-
-		return issues;
-	}
-
-	private async Task EnsurePayrollReviewAsync(string monthYear, Guid employeeId, Guid reviewerUserId)
-	{
-		var query = await _payrollRunReviewRepository.GetQueryableAsync();
-		var existing = query.FirstOrDefault(x =>
-			x.TenantId == CurrentTenant.Id &&
-			x.MonthYear == monthYear &&
-			x.EmployeeId == employeeId);
-		if (existing != null)
-		{
-			existing.Refresh(reviewerUserId, DateTime.UtcNow);
-			await _payrollRunReviewRepository.UpdateAsync(existing, autoSave: false);
-			return;
-		}
-
-		await _payrollRunReviewRepository.InsertAsync(
-			new PayrollRunReview(
-				GuidGenerator.Create(),
-				CurrentTenant.Id,
-				monthYear,
-				employeeId,
-				reviewerUserId,
-				DateTime.UtcNow),
-			autoSave: false);
-	}
-
-	private static int CountWeekdays(DateOnly start, DateOnly end)
-	{
-		var count = 0;
-		for (var date = start; date <= end; date = date.AddDays(1))
-		{
-			if (date.DayOfWeek is not DayOfWeek.Saturday and not DayOfWeek.Sunday)
+			var slips = await _salarySlipRepository.GetByMonthAsync(monthYear);
+			foreach (var slip in slips.Where(x => employeeIds.Contains(x.EmployeeId)))
 			{
-				count++;
+				await _salarySlipRepository.DeleteAsync(slip, autoSave: false);
 			}
 		}
 
-		return count;
+		var snapshotQuery = await _payrollRunItemSnapshotRepository.GetQueryableAsync();
+		var snapshots = snapshotQuery.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			monthYears.Contains(x.MonthYear) &&
+			employeeIds.Contains(x.EmployeeId)).ToList();
+		foreach (var snapshot in snapshots)
+		{
+			await _payrollRunItemSnapshotRepository.DeleteAsync(snapshot, autoSave: false);
+		}
+
+		var reviewQuery = await _payrollRunReviewRepository.GetQueryableAsync();
+		var reviews = reviewQuery.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			monthYears.Contains(x.MonthYear) &&
+			employeeIds.Contains(x.EmployeeId)).ToList();
+		foreach (var review in reviews)
+		{
+			await _payrollRunReviewRepository.DeleteAsync(review, autoSave: false);
+		}
 	}
 
 	private sealed record HrManualEmployeeSpec(
@@ -963,13 +787,10 @@ public class HrManualTestDataSeederContributor : BaseSeederContributor
 		GenderType Gender,
 		MaritalStatusType MaritalStatus,
 		decimal MonthlyGross,
-		AttendanceScenario AttendanceScenario,
-		PayrollState PayrollState)
+		AttendanceScenario AttendanceScenario)
 	{
 		public string DisplayName => $"{FirstName} {LastName}";
 	}
-
-	private sealed record PayrollComponentPreview(string Name, decimal Amount);
 
 	private enum AttendanceScenario
 	{
@@ -979,12 +800,5 @@ public class HrManualTestDataSeederContributor : BaseSeederContributor
 		ApprovedLeave,
 		LowAttendance,
 		OneLopDay
-	}
-
-	private enum PayrollState
-	{
-		Pending,
-		Reviewed,
-		Locked
 	}
 }

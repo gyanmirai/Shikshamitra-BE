@@ -173,6 +173,8 @@ public class LeaveManagementAppService(
 				StartDate = leave.StartDate.DateTime,
 				EndDate = leave.EndDate.DateTime,
 				TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
+				HalfDay = leave.HalfDay,
+				ApprovedLeaveUnits = GetApprovedLeaveUnits(leave),
 				MediumStageName = leave.LeavePolicy?.AcademicYear?.Name ?? "",
 				Description = leave.Description ?? "",
 				Remarks = leave.RejectionReason,
@@ -294,14 +296,14 @@ public class LeaveManagementAppService(
 		}
 
 		var resolvedPolicyId = await leaveValidationService.ValidateLeaveRequestAsync(
-			targetEmployee.Id, policyId, input.StartDate, input.EndDate, academicYearId);
+			targetEmployee.Id, policyId, input.StartDate, input.EndDate, input.HalfDay, academicYearId);
 
 		byte[]? attachmentBytes = await ExtractAttachmentBytesAsync(attachment);
 
 		var leave = await employeeLeaveManager.CreateAsync(
 			targetEmployee.Id, resolvedPolicyId,
 			new DateTimeOffset(input.StartDate), new DateTimeOffset(input.EndDate),
-			input.Reason, false);
+			input.Reason, input.HalfDay);
 
 		if (attachmentBytes is { Length: > 0 })
 		{
@@ -345,12 +347,13 @@ public class LeaveManagementAppService(
 			leave.EmployeeId,
 			leave.LeaveTypeId,
 			leave.StartDate.DateTime,
-			leave.EndDate.DateTime);
+			leave.EndDate.DateTime,
+			leave.HalfDay);
 
-		await employeeLeaveManager.UpdateLeaveRequestStatusAsync(
+		await employeeLeaveManager.ApproveAsync(
 			leave,
-			EmployeeLeaveStatusType.Approved,
-			rejectionReason: null);
+			leave.LeavePolicy!.PaidType,
+			CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay));
 
 		return new LeaveActionResultDto
 		{
@@ -615,6 +618,8 @@ public class LeaveManagementAppService(
 			StartDate = leave.StartDate.DateTime,
 			EndDate = leave.EndDate.DateTime,
 			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
+			HalfDay = leave.HalfDay,
+			ApprovedLeaveUnits = GetApprovedLeaveUnits(leave),
 			Status = leave.Status.ToString().ToUpperInvariant(),
 			MediumStageName = leave.Employee?.UserId is Guid mediumUserId && employeeMediumStageLookup.TryGetValue(mediumUserId, out var mediumStageName)
 				? mediumStageName.MediumStageName
@@ -961,6 +966,8 @@ public class LeaveManagementAppService(
 			StartDate = leave.StartDate.DateTime,
 			EndDate = leave.EndDate.DateTime,
 			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
+			HalfDay = leave.HalfDay,
+			ApprovedLeaveUnits = GetApprovedLeaveUnits(leave),
 			Description = leave.Description ?? "",
 			AttachmentUrl = leave.Attachment != null ? $"/api/leave-management/{leave.Id}/attachment" : null,
 			Remarks = leave.RejectionReason,
@@ -1196,8 +1203,15 @@ public class LeaveManagementAppService(
 		return ("application/octet-stream", ".bin");
 	}
 
-	private static int CalculateDays(DateTime startDate, DateTime endDate, bool isHalfDay)
+	private static decimal CalculateDays(DateTime startDate, DateTime endDate, bool isHalfDay)
 	{
-		return LeaveDurationCalculator.CountLeaveDays(startDate, endDate, isHalfDay);
+		return LeaveDurationCalculator.CountLeaveUnits(startDate, endDate, isHalfDay);
 	}
+
+	private static decimal GetApprovedLeaveUnits(EmployeeLeave leave) =>
+		leave.ApprovedLeaveUnits > 0
+			? leave.ApprovedLeaveUnits
+			: leave.Status == EmployeeLeaveStatusType.Approved
+				? CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay)
+				: 0m;
 }

@@ -97,6 +97,7 @@ public static class HRErrorCodes
 	public const string LeaveNoBusinessDaysInRange = "HR:Leave:020032";
 	public const string LeaveTargetEmployeeRequired = "HR:Leave:020033";
 	public const string LeaveTargetEmployeeInactive = "HR:Leave:020034";
+	public const string LeaveHalfDayMustBeSingleDate = "HR:Leave:020035";
 
 	// Attendance — Validation
 	public const string AttendanceInvalidDateFormat = "HR:Attendance:020301";

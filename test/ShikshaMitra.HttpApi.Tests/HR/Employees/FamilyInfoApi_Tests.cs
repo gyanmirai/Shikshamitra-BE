@@ -97,6 +97,8 @@ public class FamilyInfoApi_Tests : ShikshaMitraApiTestBase
 			return;
 		}
 
+		response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+
 		var json = await response.Content.ReadAsStringAsync();
 		using var document = JsonDocument.Parse(json);
 		var root = document.RootElement;
@@ -108,13 +110,12 @@ public class FamilyInfoApi_Tests : ShikshaMitraApiTestBase
 		var keys = errors.EnumerateObject()
 			.Select(e => e.Name)
 			.ToList();
-		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
 		keys.Any(k => k.Contains("name", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Return_Field_Level_Validation_Errors_For_Nested_Country_State_Required_Fields()
+	public async Task Should_Accept_Blank_Nested_Country_State_Fields()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "FamNestedVal");
 
@@ -137,37 +138,7 @@ public class FamilyInfoApi_Tests : ShikshaMitraApiTestBase
 		};
 
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/family-info", request, JsonOptions);
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
-
-		if (response.StatusCode != HttpStatusCode.BadRequest)
-		{
-			return;
-		}
-
-		var json = await response.Content.ReadAsStringAsync();
-		using var document = JsonDocument.Parse(json);
-		var root = document.RootElement;
-
-		root.GetProperty("status").GetInt32().ShouldBe((int)HttpStatusCode.BadRequest);
-		var errors = root.GetProperty("errors");
-		errors.ValueKind.ShouldBe(JsonValueKind.Object);
-
-		var keys = errors.EnumerateObject()
-			.Select(e => e.Name)
-			.ToList();
-
-		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase) &&
-		              k.Contains("country", StringComparison.OrdinalIgnoreCase) &&
-		              k.Contains("name", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
-		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase) &&
-		              k.Contains("country", StringComparison.OrdinalIgnoreCase) &&
-		              k.Contains("iso", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
-		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase) &&
-		              k.Contains("state", StringComparison.OrdinalIgnoreCase) &&
-		              k.Contains("name", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
-		keys.Any(k => k.Contains("father", StringComparison.OrdinalIgnoreCase) &&
-		              k.Contains("state", StringComparison.OrdinalIgnoreCase) &&
-		              k.Contains("iso", StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
+		response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 	}
 
 	#endregion

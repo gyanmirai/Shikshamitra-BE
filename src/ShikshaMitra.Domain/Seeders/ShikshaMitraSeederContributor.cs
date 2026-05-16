@@ -59,6 +59,10 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 					var academicSetupSeeder = scope.ServiceProvider.GetRequiredService<Seeders.AcademicSetupSeederContributor>();
 					await academicSetupSeeder.SeedAsync(context);
 
+					// Seed institute rooms and academic reference data (after Academic Setup, before Students)
+					var demoAcademicAndInstituteSeeder = scope.ServiceProvider.GetRequiredService<Seeders.DemoAcademicAndInstituteSeederContributor>();
+					await demoAcademicAndInstituteSeeder.SeedAsync(context);
+
 					// Seed HR module data
 					var hrSeeder = scope.ServiceProvider.GetRequiredService<Seeders.HRSeederContributor>();
 					await hrSeeder.SeedAsync(context);

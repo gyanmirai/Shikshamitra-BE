@@ -90,7 +90,9 @@ public class LeaveManagementCalendarItemDto
 	public string? LeaveTypeColor { get; set; }
 	public DateTime StartDate { get; set; }
 	public DateTime EndDate { get; set; }
-	public int TotalDays { get; set; }
+	public decimal TotalDays { get; set; }
+	public bool HalfDay { get; set; }
+	public decimal ApprovedLeaveUnits { get; set; }
 	public string Status { get; set; } = string.Empty;
 	public string MediumStageName { get; set; } = string.Empty;
 }
@@ -107,8 +109,8 @@ public class LeaveBalanceItemDto
 	public Guid LeaveTypeMasterId { get; set; }
 	public string LeaveTypeName { get; set; } = string.Empty;
 	public int EntitledDays { get; set; }
-	public int UsedDays { get; set; }
-	public int RemainingDays { get; set; }
+	public decimal UsedDays { get; set; }
+	public decimal RemainingDays { get; set; }
 }
 
 public class LeaveManagementDto
@@ -123,7 +125,9 @@ public class LeaveManagementDto
 	public string LeaveType { get; set; } = string.Empty;
 	public DateTime StartDate { get; set; }
 	public DateTime EndDate { get; set; }
-	public int TotalDays { get; set; }
+	public decimal TotalDays { get; set; }
+	public bool HalfDay { get; set; }
+	public decimal ApprovedLeaveUnits { get; set; }
 	public string MediumStageName { get; set; } = string.Empty;
 	public string Description { get; set; } = string.Empty;
 	public string? Remarks { get; set; }
@@ -152,7 +156,9 @@ public class LeaveRequestDetailsDto
 	public string LeaveType { get; set; } = string.Empty;
 	public DateTime StartDate { get; set; }
 	public DateTime EndDate { get; set; }
-	public int TotalDays { get; set; }
+	public decimal TotalDays { get; set; }
+	public bool HalfDay { get; set; }
+	public decimal ApprovedLeaveUnits { get; set; }
 	public string Description { get; set; } = string.Empty;
 	public string? AttachmentUrl { get; set; }
 	public string? Remarks { get; set; }
@@ -172,6 +178,7 @@ public class LeaveRequestCreateDto
 
 	public DateTime StartDate { get; set; }
 	public DateTime EndDate { get; set; }
+	public bool HalfDay { get; set; }
 	public string Reason { get; set; } = string.Empty;
 
 	public Guid ResolveLeavePolicyId()

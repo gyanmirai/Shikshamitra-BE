@@ -17,7 +17,7 @@ public class TestLoginSeederContributor : BaseSeederContributor
 	private const string SeedFlagKey = "SeedTestLogins";
 	private const string TempPassword = "Temp@123";
 	private static readonly Guid DdvsTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
-	private const string LinkedStudentEmail = "student1@ddvs.com";
+	private const string LinkedStudentEmail = "student-demo@ddvs.com";
 
 	private readonly IConfiguration _configuration;
 	private readonly IdentityUserManager _userManager;
@@ -62,24 +62,25 @@ public class TestLoginSeederContributor : BaseSeederContributor
 
 		var credentialSpecs = new List<TestLoginSpec>
 		{
-			new("admin1", "admin1@gmail.com", "Admin", "One", "admin", ["ddvs@gmail.com"], []),
-			new("admin2", "admin2@ddvs.com", "Admin", "Two", "admin", [], []),
-			new("principle1", "principle1@ddvs.com", "Principal", "User", "Principal", ["rajesh.kumar@school.edu"], []),
-			new("teacher1", "teacher1@ddvs.com", "Teacher", "User", "Teacher", ["vikram.singh@school.edu"], []),
-			new("clerk1", "clerk1@ddvs.com", "Clerk", "User", "Clerk", ["clerk@school.edu"], []),
-			new("finance1", "finance1@ddvs.com", "Finance", "User", "Finance Officer", ["suresh.patil@school.edu"], [])
+			new("admin-ddvs", "admin-ddvs@ddvs.com", "Admin", "DDVS", "admin", ["admin1@gmail.com", "ddvs@gmail.com"], ["admin1"]),
+			new("admin-ops", "admin-ops@ddvs.com", "Admin", "Operations", "admin", ["admin2@ddvs.com"], ["admin2"]),
+			new("principal-gseb", "principal-gseb@ddvs.com", "Principal", "GSEB", "Principal", ["principal1@ddvs.com", "rajesh.kumar@school.edu"], ["principal1"]),
+			new("principal-cbse", "principal-cbse@ddvs.com", "Principal", "CBSE", "Principal", ["principle1@ddvs.com"], ["principle1"]),
+			new("teacher-gseb", "teacher-gseb@ddvs.com", "Teacher", "GSEB", "Teacher", ["teacher1@ddvs.com", "vikram.singh@school.edu"], ["teacher1"]),
+			new("clerk-office", "clerk-office@ddvs.com", "Clerk", "Office", "Clerk", ["clerk1@ddvs.com", "clerk@school.edu"], ["clerk1"]),
+			new("finance-officer", "finance-officer@ddvs.com", "Finance", "Officer", "Finance Officer", ["finance1@ddvs.com", "suresh.patil@school.edu"], ["finance1"])
 		};
 
 		if (!string.IsNullOrWhiteSpace(linkedStudentEmail))
 		{
 			credentialSpecs.Add(new TestLoginSpec(
-				"student1",
+				"student-demo",
 				linkedStudentEmail,
 				"Student",
 				"User",
 				"Student",
-				["student.demo@school.edu"],
-				["studentdemo"]));
+				["student1@ddvs.com", "student.demo@school.edu"],
+				["student1", "studentdemo"]));
 		}
 
 		foreach (var spec in credentialSpecs)

@@ -160,50 +160,18 @@ public class AcademicSetupSeederContributor : BaseSeederContributor
 		{
 			var mediums = new List<EducationMedium>();
 
-			// English Medium (Common for both boards)
-			var englishMedium = await _educationMediumManager.CreateAsync(
-				educationBoardId: board.Id,
-				name: "English"
-			);
-			mediums.Add(englishMedium);
-			await _educationMediumRepository.InsertAsync(englishMedium);
+			var mediumNames = board.Type == EducationBoardType.GSEB
+				? ["English", "Gujarati"]
+				: new[] { "English" };
 
-			// Hindi Medium (Common for both boards)
-			var hindiMedium = await _educationMediumManager.CreateAsync(
-				educationBoardId: board.Id,
-				name: "Hindi"
-			);
-			mediums.Add(hindiMedium);
-			await _educationMediumRepository.InsertAsync(hindiMedium);
-
-			// Board-specific mediums
-			if (board.Type == EducationBoardType.GSEB)
+			foreach (var mediumName in mediumNames)
 			{
-				// Gujarati Medium (for GSEB)
-				var gujaratiMedium = await _educationMediumManager.CreateAsync(
+				var medium = await _educationMediumManager.CreateAsync(
 					educationBoardId: board.Id,
-					name: "Gujarati"
+					name: mediumName
 				);
-				mediums.Add(gujaratiMedium);
-				await _educationMediumRepository.InsertAsync(gujaratiMedium);
-
-				// Semi-English Medium (for GSEB)
-				var semiEnglishMedium = await _educationMediumManager.CreateAsync(
-					educationBoardId: board.Id,
-					name: "Semi-English"
-				);
-				mediums.Add(semiEnglishMedium);
-				await _educationMediumRepository.InsertAsync(semiEnglishMedium);
-			}
-			else if (board.Type == EducationBoardType.CBSE)
-			{
-				// Sanskrit Medium (for CBSE)
-				var sanskritMedium = await _educationMediumManager.CreateAsync(
-					educationBoardId: board.Id,
-					name: "Sanskrit"
-				);
-				mediums.Add(sanskritMedium);
-				await _educationMediumRepository.InsertAsync(sanskritMedium);
+				mediums.Add(medium);
+				await _educationMediumRepository.InsertAsync(medium);
 			}
 
 			mediumsMap[board.Id] = mediums;

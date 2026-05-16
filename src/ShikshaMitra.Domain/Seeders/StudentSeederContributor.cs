@@ -14,6 +14,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
@@ -29,8 +30,10 @@ namespace ShikshaMitra.Seeders;
 /// </summary>
 public class StudentSeederContributor : BaseSeederContributor
 {
-	private const int StudentsPerDivision = 6;
+	private const int DefaultStudentsPerDivision = 2;
 	private const int InsertBatchSize = 100;
+	private const string StudentsPerDivisionKey = "StudentSeeder:StudentsPerDivision";
+	private const string MaxStudentsKey = "StudentSeeder:MaxStudents";
 
 	private readonly IRepository<Student, Guid> _studentRepository;
 	private readonly IAcademicYearRepository _academicYearRepository;
@@ -39,6 +42,7 @@ public class StudentSeederContributor : BaseSeederContributor
 	private readonly IEducationMediumStageRepository _educationMediumStageRepository;
 	private readonly IStandardRepository _standardRepository;
 	private readonly IDivisionRepository _divisionRepository;
+	private readonly IConfiguration _configuration;
 	private readonly ILogger<StudentSeederContributor> _logger;
 
 	// Diverse Indian names (15 boys, 15 girls)
@@ -89,6 +93,7 @@ public class StudentSeederContributor : BaseSeederContributor
 		IEducationMediumStageRepository educationMediumStageRepository,
 		IStandardRepository standardRepository,
 		IDivisionRepository divisionRepository,
+		IConfiguration configuration,
 		ILogger<StudentSeederContributor> logger)
 		: base(currentTenant, guidGenerator, unitOfWork)
 	{
@@ -99,6 +104,7 @@ public class StudentSeederContributor : BaseSeederContributor
 		_educationMediumStageRepository = educationMediumStageRepository;
 		_standardRepository = standardRepository;
 		_divisionRepository = divisionRepository;
+		_configuration = configuration;
 		_logger = logger;
 	}
 
@@ -178,6 +184,14 @@ public class StudentSeederContributor : BaseSeederContributor
 
 		int totalStudentsCreated = 0;
 		var pendingStudents = new List<Student>(InsertBatchSize);
+		var studentsPerDivision = GetStudentsPerDivision();
+		var maxStudents = GetMaxStudents();
+
+		_logger.LogInformation(
+			"[StudentSeeder] Limits resolved: StudentsPerDivision={StudentsPerDivision}, MaxStudents={MaxStudents}",
+			studentsPerDivision,
+			maxStudents?.ToString() ?? "none"
+		);
 
 		foreach (var board in boards)
 		{
@@ -210,8 +224,20 @@ public class StudentSeederContributor : BaseSeederContributor
 
 						foreach (var division in divisionsForStandard)
 						{
-							for (int i = 0; i < StudentsPerDivision; i++)
+							if (maxStudents.HasValue && totalStudentsCreated >= maxStudents.Value)
 							{
+								await FlushRemainingAndLogCompletionAsync(pendingStudents, totalStudentsCreated);
+								return;
+							}
+
+							for (int i = 0; i < studentsPerDivision; i++)
+							{
+								if (maxStudents.HasValue && totalStudentsCreated >= maxStudents.Value)
+								{
+									await FlushRemainingAndLogCompletionAsync(pendingStudents, totalStudentsCreated);
+									return;
+								}
+
 								var student = CreateStudent(
 									medium.Id,
 									stage.Id,
@@ -244,6 +270,31 @@ public class StudentSeederContributor : BaseSeederContributor
 		}
 
 		_logger.LogInformation("[StudentSeeder] Completed seeding. TotalStudentsCreated={TotalStudentsCreated}", totalStudentsCreated);
+	}
+
+	private int GetStudentsPerDivision()
+	{
+		var configuredValue = _configuration.GetValue<int?>(StudentsPerDivisionKey);
+		return configuredValue is > 0 ? configuredValue.Value : DefaultStudentsPerDivision;
+	}
+
+	private int? GetMaxStudents()
+	{
+		var configuredValue = _configuration.GetValue<int?>(MaxStudentsKey);
+		return configuredValue is > 0 ? configuredValue.Value : null;
+	}
+
+	private async Task FlushRemainingAndLogCompletionAsync(List<Student> pendingStudents, int totalStudentsCreated)
+	{
+		if (pendingStudents.Count > 0)
+		{
+			await FlushStudentBatchAsync(pendingStudents, totalStudentsCreated);
+		}
+
+		_logger.LogInformation(
+			"[StudentSeeder] Completed seeding. TotalStudentsCreated={TotalStudentsCreated}",
+			totalStudentsCreated
+		);
 	}
 
 	private async Task FlushStudentBatchAsync(List<Student> pendingStudents, int totalStudentsCreated)
@@ -357,7 +408,7 @@ public class StudentSeederContributor : BaseSeederContributor
 			tenantId: CurrentTenant.Id,
 			primaryContactNo: GeneratePhoneNumber(random),
 			secondaryContactNo: random.Next(0, 3) > 0 ? GeneratePhoneNumber(random) : null,
-			email: $"{firstName.ToLower()}.{lastName.ToLower()}{globalCounter}@student.test.com",
+			email: $"{firstName.ToLower()}.{lastName.ToLower()}{globalCounter}@ddvs.com",
 			address1: $"{random.Next(1, 500)}, {locality}",
 			address2: $"Near {GenerateLandmark(random)}",
 			address3: null,

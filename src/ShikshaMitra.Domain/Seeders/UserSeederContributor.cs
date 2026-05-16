@@ -1,7 +1,7 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Configuration;
 using Volo.Abp.Data;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
@@ -12,9 +12,8 @@ namespace ShikshaMitra.Seeders;
 
 public class UserSeederContributor : BaseSeederContributor
 {
-	private const string SeedFlagKey = "SeedTestLogins";
+	private const string TempPassword = "Temp@123";
 
-	private readonly IConfiguration _configuration;
 	private readonly IdentityUserManager _userManager;
 	private readonly IIdentityUserRepository _userRepository;
 	private readonly IIdentityRoleRepository _roleRepository;
@@ -24,14 +23,12 @@ public class UserSeederContributor : BaseSeederContributor
 		ICurrentTenant currentTenant,
 		IGuidGenerator guidGenerator,
 		IUnitOfWork unitOfWork,
-		IConfiguration configuration,
 		IdentityUserManager userManager,
 		IIdentityUserRepository userRepository,
 		IIdentityRoleRepository roleRepository,
 		ILookupNormalizer lookupNormalizer)
 		: base(currentTenant, guidGenerator, unitOfWork)
 	{
-		_configuration = configuration;
 		_userManager = userManager;
 		_userRepository = userRepository;
 		_roleRepository = roleRepository;
@@ -40,40 +37,22 @@ public class UserSeederContributor : BaseSeederContributor
 
 	public override async Task SeedAsync(DataSeedContext context)
 	{
-		// TestLoginSeederContributor already seeds these users when this flag is enabled.
-		// Skipping here prevents duplicate username collisions (e.g. teacher1).
-		if (_configuration.GetValue<bool>(SeedFlagKey, false))
-		{
-			return;
-		}
-
 		var tenantId = CurrentTenant.Id;
 
-		var users = new List<(string UserName, string Email, string Name, string Surname, string RoleName)>
+		var users = new List<BaselineUserSpec>
 		{
-			("teacher1", "teacher1@school.com", "John", "Doe", "Teacher"),
-			("teacher2", "teacher2@school.com", "Jane", "Smith", "Teacher"),
-			("principal", "principal@school.com", "Robert", "Johnson", "Principal"),
-			("hr", "hr@school.com", "Sarah", "Williams", "HR Manager")
+			new("teacher-demo-1", "teacher-demo-1@ddvs.com", "Teacher", "Demo 1", "Teacher", ["teacher1"], ["teacher1@school.com"]),
+			new("teacher-demo-2", "teacher-demo-2@ddvs.com", "Teacher", "Demo 2", "Teacher", ["teacher2"], ["teacher2@school.com"]),
+			new("principal-demo-gseb", "principal-demo-gseb@ddvs.com", "Principal", "Demo GSEB", "Principal", ["principal"], ["principal@school.com"]),
+			new("hr-manager", "hr-manager@ddvs.com", "HR", "Manager", "HR Manager", ["hr"], ["hr@school.com"])
 		};
 
 		foreach (var userInfo in users)
 		{
-			var existingUser = await _userRepository.FindByNormalizedUserNameAsync(
-				_lookupNormalizer.NormalizeName(userInfo.UserName)
-			);
+			var existingUser = await FindExistingUserAsync(userInfo);
 			if (existingUser != null)
 			{
-				await EnsureRoleMembershipAsync(existingUser, userInfo.RoleName);
-				continue;
-			}
-
-			var existingByEmail = await _userRepository.FindByNormalizedEmailAsync(
-				_lookupNormalizer.NormalizeEmail(userInfo.Email)
-			);
-			if (existingByEmail != null)
-			{
-				await EnsureRoleMembershipAsync(existingByEmail, userInfo.RoleName);
+				await UpdateExistingUserAsync(existingUser, userInfo);
 				continue;
 			}
 
@@ -88,7 +67,7 @@ public class UserSeederContributor : BaseSeederContributor
 			user.Surname = userInfo.Surname;
 			user.SetEmailConfirmed(true);
 
-			var result = await _userManager.CreateAsync(user, "Temp@123");
+			var result = await _userManager.CreateAsync(user, TempPassword);
 			if (!result.Succeeded)
 			{
 				// Another seeder may have created the same user between existence check and create.
@@ -100,6 +79,64 @@ public class UserSeederContributor : BaseSeederContributor
 		}
 
 		await CurrentUnitOfWork.SaveChangesAsync();
+	}
+
+	private async Task<IdentityUser?> FindExistingUserAsync(BaselineUserSpec userInfo)
+	{
+		var emails = new[] { userInfo.Email }.Concat(userInfo.AliasEmails);
+		foreach (var email in emails)
+		{
+			var user = await _userRepository.FindByNormalizedEmailAsync(_lookupNormalizer.NormalizeEmail(email));
+			if (user != null)
+			{
+				return user;
+			}
+		}
+
+		var userNames = new[] { userInfo.UserName }.Concat(userInfo.AliasUserNames);
+		foreach (var userName in userNames)
+		{
+			var user = await _userRepository.FindByNormalizedUserNameAsync(_lookupNormalizer.NormalizeName(userName));
+			if (user != null)
+			{
+				return user;
+			}
+		}
+
+		return null;
+	}
+
+	private async Task UpdateExistingUserAsync(IdentityUser user, BaselineUserSpec userInfo)
+	{
+		var managedUser = await _userManager.FindByIdAsync(user.Id.ToString()) ?? user;
+
+		if (!string.Equals(managedUser.UserName, userInfo.UserName, System.StringComparison.Ordinal))
+		{
+			var setUserNameResult = await _userManager.SetUserNameAsync(managedUser, userInfo.UserName);
+			if (!setUserNameResult.Succeeded)
+			{
+				throw new System.Exception(
+					$"Failed to update username for seeded user '{userInfo.Email}': " +
+					string.Join(", ", setUserNameResult.Errors.Select(e => e.Description)));
+			}
+		}
+
+		if (!string.Equals(managedUser.Email, userInfo.Email, System.StringComparison.OrdinalIgnoreCase))
+		{
+			var setEmailResult = await _userManager.SetEmailAsync(managedUser, userInfo.Email);
+			if (!setEmailResult.Succeeded)
+			{
+				throw new System.Exception(
+					$"Failed to update email for seeded user '{userInfo.Email}': " +
+					string.Join(", ", setEmailResult.Errors.Select(e => e.Description)));
+			}
+		}
+
+		managedUser.Name = userInfo.Name;
+		managedUser.Surname = userInfo.Surname;
+		managedUser.SetEmailConfirmed(true);
+		await _userManager.UpdateAsync(managedUser);
+		await EnsureRoleMembershipAsync(managedUser, userInfo.RoleName);
 	}
 
 	private async Task EnsureRoleMembershipAsync(IdentityUser user, string roleName)
@@ -119,4 +156,13 @@ public class UserSeederContributor : BaseSeederContributor
 
 		await _userManager.AddToRoleAsync(managedUser, role.Name);
 	}
+
+	private sealed record BaselineUserSpec(
+		string UserName,
+		string Email,
+		string Name,
+		string Surname,
+		string RoleName,
+		IReadOnlyList<string> AliasUserNames,
+		IReadOnlyList<string> AliasEmails);
 }

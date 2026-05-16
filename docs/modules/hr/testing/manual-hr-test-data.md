@@ -9,7 +9,7 @@ All HR manual test users created by the seeder use:
 - Password: `Temp@123`
 - Tenant: `DDVS`
 
-The existing deterministic accounts from `SeedTestLogins=true` are still available, including `admin1@gmail.com`, `admin2@ddvs.com`, `principle1@ddvs.com`, `teacher1@ddvs.com`, `clerk1@ddvs.com`, and `finance1@ddvs.com`.
+The existing deterministic accounts from `SeedTestLogins=true` are still available, including `admin-ddvs@ddvs.com`, `admin-ops@ddvs.com`, `principal-gseb@ddvs.com`, `principal-cbse@ddvs.com`, `teacher-gseb@ddvs.com`, `clerk-office@ddvs.com`, and `finance-officer@ddvs.com`.
 
 ## Tester-Owned Employees
 
@@ -131,7 +131,7 @@ Leave requests are seeded in the most recent completed month so they line up wit
 The main development seeder also creates supporting data for non-payroll manual testing:
 
 - Institute setup: room types such as Classroom, Lab, Library, Staff Room, and Exam Hall; demo buildings with floors; and rooms with capacity, benches, and feature notes.
-- Student data: six admitted students per division for every standard in the current academic year, with contact, additional, and medical details.
+- Student data: admitted students for every division in the current academic year, with contact, additional, and medical details. The default is two students per division and can be changed with `StudentSeeder:StudentsPerDivision` or capped with `StudentSeeder:MaxStudents`.
 - Academic setup: subjects per education medium, exam types, homework types, assignment types, and homework assignment types for assignment/homework flows.
 
 This supporting data is seeded before the student data so exams, room allocation, timetable, homework, and assignment flows can use the same academic setup.

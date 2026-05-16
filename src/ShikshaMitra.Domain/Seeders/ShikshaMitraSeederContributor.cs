@@ -51,6 +51,9 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 					var rolesSeeder = scope.ServiceProvider.GetRequiredService<Seeders.RolesSeederContributor>();
 					await rolesSeeder.SeedAsync(context);
 
+					var rolePermissionSeeder = scope.ServiceProvider.GetRequiredService<Seeders.RolePermissionSeederContributor>();
+					await rolePermissionSeeder.SeedAsync(context);
+
 					// Seed users (after roles)
 					var userSeeder = scope.ServiceProvider.GetRequiredService<Seeders.UserSeederContributor>();
 					await userSeeder.SeedAsync(context);
@@ -74,6 +77,9 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 					// Seed deterministic test-login accounts (feature-flagged; DDVS only)
 					var testLoginSeeder = scope.ServiceProvider.GetRequiredService<Seeders.TestLoginSeederContributor>();
 					await testLoginSeeder.SeedAsync(context);
+
+					var staffUserScopeSeeder = scope.ServiceProvider.GetRequiredService<Seeders.StaffUserScopeSeederContributor>();
+					await staffUserScopeSeeder.SeedAsync(context);
 
 					// Seed deterministic HR manual test data (feature-flagged; DDVS only)
 					var hrManualTestDataSeeder = scope.ServiceProvider.GetRequiredService<Seeders.HrManualTestDataSeederContributor>();

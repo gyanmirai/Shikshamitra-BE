@@ -95,6 +95,11 @@ public class RunPayrollItem
 	public double GrossSalary { get; set; }
 
 	/// <summary>
+	/// Full gross salary before attendance proration.
+	/// </summary>
+	public double FullGrossSalary { get; set; }
+
+	/// <summary>
 	/// Total deductions
 	/// </summary>
 	public double TotalDeduction { get; set; }

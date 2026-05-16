@@ -240,6 +240,7 @@
     "HR:Leave:020032": "Selected date range has no business days to apply leave.",
     "HR:Leave:020033": "Target employee is required for this leave operation.",
     "HR:Leave:020034": "Leave requests can only be created for active employees.",
+    "HR:Leave:020035": "Half-day leave must start and end on the same date.",
     "HR:Leave:020101": "Attachment file is too large.",
     "HR:Leave:020102": "Attachment file is empty.",
     "HR:Leave:020103": "Attachment file extension is not allowed.",

@@ -17,7 +17,15 @@ public class DayCalculationRequestDtoValidator : AbstractValidator<DayCalculatio
 		RuleFor(x => x.ManualDays)
 			.NotNull()
 			.InclusiveBetween(1, 31)
-			.When(x => (x.DayCalculationType ?? string.Empty).Trim().ToLowerInvariant() == "manual-days")
+			.When(x => (x.DayCalculationType ?? string.Empty).Trim().ToLowerInvariant() == "manual-days" && (x.ManualMonthDays == null || x.ManualMonthDays.Count == 0))
 			.WithMessage("manualDays must be between 1 and 31 when dayCalculationType is manual-days.");
+
+		RuleForEach(x => x.ManualMonthDays)
+			.ChildRules(month =>
+			{
+				month.RuleFor(x => x.Year).InclusiveBetween(1900, 2100);
+				month.RuleFor(x => x.Month).InclusiveBetween(1, 12);
+				month.RuleFor(x => x.ManualDays).InclusiveBetween(1, 31);
+			});
 	}
 }

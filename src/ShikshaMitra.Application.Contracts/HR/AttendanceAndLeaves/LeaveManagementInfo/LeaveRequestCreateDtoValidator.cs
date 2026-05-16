@@ -19,6 +19,10 @@ public class LeaveRequestCreateDtoValidator : AbstractValidator<LeaveRequestCrea
 			.GreaterThanOrEqualTo(x => x.StartDate)
 			.WithMessage("End date must be on or after start date.");
 
+		RuleFor(x => x)
+			.Must(x => !x.HalfDay || x.StartDate.Date == x.EndDate.Date)
+			.WithMessage("Half-day leave must start and end on the same date.");
+
 		RuleFor(x => x.Reason)
 			.NotEmpty()
 			.MinimumLength(5)

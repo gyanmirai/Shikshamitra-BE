@@ -40,6 +40,9 @@ public class HRSeederContributor : BaseSeederContributor
 	private readonly EarningComponentManager _earningComponentManager;
 	private readonly IRepository<DeductionComponent, Guid> _deductionComponentRepository;
 	private readonly DeductionComponentManager _deductionComponentManager;
+	private readonly IProvidentFundRepository _providentFundRepository;
+	private readonly IProfessionalTaxRepository _professionalTaxRepository;
+	private readonly IDayCalculationSettingRepository _dayCalculationSettingRepository;
 	private readonly IRepository<LeavePolicy, Guid> _leavePolicyRepository;
 	private readonly LeavePolicyManager _leavePolicyManager;
 	private readonly ILeaveTypeRepository _leaveTypeQueryRepository;
@@ -55,6 +58,8 @@ public class HRSeederContributor : BaseSeederContributor
 	private readonly IIdentityUserRepository _userRepository;
 	private readonly ILookupNormalizer _lookupNormalizer;
 	private readonly IEmployeeAttendanceRepository _employeeAttendanceRepository;
+	private readonly IEmployeeLeaveRepository _employeeLeaveRepository;
+	private readonly EmployeeLeaveManager _employeeLeaveManager;
 	private readonly IEmployeePayrollDetailsRepository _employeePayrollDetailsRepository;
 	private readonly IEmployeePayrollComponentRepository _employeePayrollComponentRepository;
 	private readonly ILogger<HRSeederContributor> _logger;
@@ -69,6 +74,9 @@ public class HRSeederContributor : BaseSeederContributor
 		EarningComponentManager earningComponentManager,
 		IRepository<DeductionComponent, Guid> deductionComponentRepository,
 		DeductionComponentManager deductionComponentManager,
+		IProvidentFundRepository providentFundRepository,
+		IProfessionalTaxRepository professionalTaxRepository,
+		IDayCalculationSettingRepository dayCalculationSettingRepository,
 		IRepository<LeavePolicy, Guid> leavePolicyRepository,
 		LeavePolicyManager leavePolicyManager,
 		ILeaveTypeRepository leaveTypeQueryRepository,
@@ -84,6 +92,8 @@ public class HRSeederContributor : BaseSeederContributor
 			IIdentityUserRepository userRepository,
 			ILookupNormalizer lookupNormalizer,
 			IEmployeeAttendanceRepository employeeAttendanceRepository,
+			IEmployeeLeaveRepository employeeLeaveRepository,
+			EmployeeLeaveManager employeeLeaveManager,
 			IEmployeePayrollDetailsRepository employeePayrollDetailsRepository,
 			IEmployeePayrollComponentRepository employeePayrollComponentRepository,
 			ILogger<HRSeederContributor> logger)
@@ -95,6 +105,9 @@ public class HRSeederContributor : BaseSeederContributor
 		_earningComponentManager = earningComponentManager;
 		_deductionComponentRepository = deductionComponentRepository;
 		_deductionComponentManager = deductionComponentManager;
+		_providentFundRepository = providentFundRepository;
+		_professionalTaxRepository = professionalTaxRepository;
+		_dayCalculationSettingRepository = dayCalculationSettingRepository;
 		_leavePolicyRepository = leavePolicyRepository;
 		_leavePolicyManager = leavePolicyManager;
 		_leaveTypeQueryRepository = leaveTypeQueryRepository;
@@ -110,6 +123,8 @@ public class HRSeederContributor : BaseSeederContributor
 		_userRepository = userRepository;
 		_lookupNormalizer = lookupNormalizer;
 		_employeeAttendanceRepository = employeeAttendanceRepository;
+		_employeeLeaveRepository = employeeLeaveRepository;
+		_employeeLeaveManager = employeeLeaveManager;
 		_employeePayrollDetailsRepository = employeePayrollDetailsRepository;
 		_employeePayrollComponentRepository = employeePayrollComponentRepository;
 		_logger = logger;
@@ -122,6 +137,7 @@ public class HRSeederContributor : BaseSeederContributor
 		// Phase 1: Seed payroll components
 		await SeedEarningComponentsAsync();
 		await SeedDeductionComponentsAsync();
+		await SeedPayrollSettingsAsync();
 		_logger.LogInformation("[HRSeeder] Phase 1 complete (payroll components)");
 
 		// Phase 2: Seed shift management (required for employees)
@@ -138,6 +154,7 @@ public class HRSeederContributor : BaseSeederContributor
 
 		// Phase 5: Sample per-employee payroll + attendance for employees seeded in this run only.
 		await SeedSampleEmployeePayrollAndAttendanceAsync(seededEmployeeIds);
+		await SeedSampleApprovedLeavesAsync(seededEmployeeIds);
 		_logger.LogInformation("[HRSeeder] Phase 5 complete (sample payroll/attendance)");
 		_logger.LogInformation("[HRSeeder] Finished seeding for TenantId={TenantId}", CurrentTenant.Id);
 	}
@@ -300,6 +317,68 @@ public class HRSeederContributor : BaseSeederContributor
 			);
 			await _deductionComponentRepository.InsertAsync(deductionComponent, autoSave: true);
 		}
+	}
+
+	private async Task SeedPayrollSettingsAsync()
+	{
+		if (!await _providentFundRepository.IsCodeExistsAsync("STD-PF"))
+		{
+			await _providentFundRepository.InsertAsync(
+				new ProvidentFund(
+					GuidGenerator.Create(),
+					CurrentTenant.Id,
+					"STD-PF",
+					"Standard Provident Fund",
+					employeePercentage: 12,
+					employerPercentage: 12),
+				autoSave: true);
+		}
+
+		var professionalTaxSlabs = new[]
+		{
+			new { Gender = GenderType.Male, From = 0d, To = 5_999.99d, Amount = 0d },
+			new { Gender = GenderType.Male, From = 6_000d, To = 8_999.99d, Amount = 80d },
+			new { Gender = GenderType.Male, From = 9_000d, To = 11_999.99d, Amount = 150d },
+			new { Gender = GenderType.Male, From = 12_000d, To = 999_999d, Amount = 200d },
+			new { Gender = GenderType.Female, From = 0d, To = 5_999.99d, Amount = 0d },
+			new { Gender = GenderType.Female, From = 6_000d, To = 8_999.99d, Amount = 80d },
+			new { Gender = GenderType.Female, From = 9_000d, To = 11_999.99d, Amount = 150d },
+			new { Gender = GenderType.Female, From = 12_000d, To = 999_999d, Amount = 200d }
+		};
+
+		foreach (var slab in professionalTaxSlabs)
+		{
+			if (await _professionalTaxRepository.AnyAsync(x =>
+				    x.GenderType == slab.Gender &&
+				    x.FromSalary == slab.From &&
+				    x.ToSalary == slab.To))
+			{
+				continue;
+			}
+
+			await _professionalTaxRepository.InsertAsync(
+				new ProfessionalTax(
+					GuidGenerator.Create(),
+					CurrentTenant.Id,
+					slab.Gender,
+					slab.From,
+					slab.To,
+					slab.Amount),
+				autoSave: false);
+		}
+
+		if (await _dayCalculationSettingRepository.FindByTenantAsync(CurrentTenant.Id) == null)
+		{
+			await _dayCalculationSettingRepository.InsertAsync(
+				new DayCalculationSetting(
+					GuidGenerator.Create(),
+					CurrentTenant.Id,
+					DayCalculationType.WorkingDays,
+					manualDays: null),
+				autoSave: false);
+		}
+
+		await CurrentUnitOfWork.SaveChangesAsync();
 	}
 
 	private async Task SeedShiftManagementAsync()
@@ -615,6 +694,89 @@ public class HRSeederContributor : BaseSeederContributor
 			"[HRSeeder] Attendance sample seeded rows={InsertedCount} for employees={EmployeeCount}",
 			insertedCount,
 			employeeIds.Count);
+	}
+
+	private async Task SeedSampleApprovedLeavesAsync(List<Guid> employeeIds)
+	{
+		if (employeeIds.Count == 0)
+		{
+			return;
+		}
+
+		var currentYear = DateTime.Now.Year;
+		var academicYear = await _academicYearRepository
+			.FirstOrDefaultAsync(y => y.Name.StartsWith(currentYear.ToString()))
+			?? await _academicYearRepository.FirstOrDefaultAsync();
+		if (academicYear == null)
+		{
+			return;
+		}
+
+		var leavePolicies = await _leavePolicyRepository.GetListAsync(x => x.AcademicYearId == academicYear.Id);
+		var casual = leavePolicies.FirstOrDefault(x => x.PolicyName.Contains("Casual", StringComparison.OrdinalIgnoreCase));
+		var sick = leavePolicies.FirstOrDefault(x => x.PolicyName.Contains("Sick", StringComparison.OrdinalIgnoreCase));
+		var policies = new[] { casual, sick }.Where(x => x != null).ToList();
+		if (policies.Count == 0)
+		{
+			return;
+		}
+
+		var currentMonthStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+		var candidates = employeeIds.Take(Math.Min(3, employeeIds.Count)).ToList();
+		var insertedCount = 0;
+		for (var i = 0; i < candidates.Count; i++)
+		{
+			var employeeId = candidates[i];
+			var policy = policies[i % policies.Count]!;
+			var leaveDate = GetCurrentMonthBusinessDayNotFuture(currentMonthStart, 2 + i * 3);
+			var description = $"HR base seed approved leave {i + 1}";
+			if (await _employeeLeaveRepository.AnyAsync(x =>
+				    x.EmployeeId == employeeId &&
+				    x.Description == description))
+			{
+				continue;
+			}
+
+			var leave = await _employeeLeaveManager.CreateAsync(
+				employeeId,
+				policy.Id,
+				new DateTimeOffset(leaveDate, TimeSpan.FromHours(5.5)),
+				new DateTimeOffset(leaveDate, TimeSpan.FromHours(5.5)),
+				description);
+			await _employeeLeaveRepository.InsertAsync(leave, autoSave: true);
+			await _employeeLeaveManager.UpdateLeaveRequestStatusAsync(
+				leave,
+				EmployeeLeaveStatusType.Approved,
+				rejectionReason: null);
+			insertedCount++;
+		}
+
+		_logger.LogInformation(
+			"[HRSeeder] Approved leave sample seeded rows={InsertedCount}",
+			insertedCount);
+	}
+
+	private static DateTime GetCurrentMonthBusinessDayNotFuture(DateTime monthStart, int preferredBusinessDayNumber)
+	{
+		var today = DateTime.UtcNow.Date;
+		var count = 0;
+		var selected = monthStart.Date;
+		for (var date = monthStart.Date; date <= today; date = date.AddDays(1))
+		{
+			if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+			{
+				continue;
+			}
+
+			count++;
+			selected = date;
+			if (count == preferredBusinessDayNumber)
+			{
+				return date;
+			}
+		}
+
+		return selected;
 	}
 
 	private async Task SeedTeachingStaffAsync(Guid educationMediumStageId, Guid? shiftId, List<Guid> seededEmployeeIds)

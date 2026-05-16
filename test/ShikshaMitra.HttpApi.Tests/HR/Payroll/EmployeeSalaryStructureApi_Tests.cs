@@ -390,6 +390,224 @@ public class EmployeeSalaryStructureApi_Tests : ShikshaMitraApiTestBase
 		body.ShouldNotContain("<html", Case.Insensitive);
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Recalculate_Percentage_Earning_When_Replacing_Component()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "SalReplacePctEarn");
+		var basic = await PayrollTestHelper.CreateEarningComponentAsync(Client, "SalPctBasicEarn");
+		var oldEarning = await PayrollTestHelper.CreateEarningComponentAsync(Client, "SalOldEarn");
+		var deduction = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "SalPctEarnDed");
+		var hra = await PayrollTestHelper.CreatePercentageEarningComponentAsync(
+			Client,
+			basic.Id,
+			10m,
+			"SalHraPct");
+
+		var firstUpdate = new UpdateSalaryStructureDto
+		{
+			EarningComponents =
+			[
+				new()
+				{
+					ComponentId = basic.Id,
+					Name = "Basic Salary",
+					Amount = 30000m,
+					IsFixed = true,
+					IsTemp = false
+				},
+				new()
+				{
+					ComponentId = oldEarning.Id,
+					Name = oldEarning.Name,
+					Amount = 5000m,
+					IsFixed = true,
+					IsTemp = false
+				}
+			],
+			DeductionComponents =
+			[
+				new()
+				{
+					ComponentId = deduction.Id,
+					Name = deduction.Name,
+					Amount = 500m,
+					IsFixed = true,
+					IsTemp = false
+				}
+			]
+		};
+
+		var firstResponse = await Client.PutAsJsonAsync(Url(empId), firstUpdate, JsonOptions);
+		firstResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var replaceUpdate = new UpdateSalaryStructureDto
+		{
+			EarningComponents =
+			[
+				new()
+				{
+					ComponentId = basic.Id,
+					Name = "Basic Salary",
+					Amount = 30000m,
+					IsFixed = true,
+					IsTemp = false
+				},
+				new()
+				{
+					ComponentId = hra.Id,
+					Name = hra.Name,
+					Amount = null,
+					IsFixed = true,
+					IsTemp = false
+				}
+			],
+			DeductionComponents =
+			[
+				new()
+				{
+					ComponentId = deduction.Id,
+					Name = deduction.Name,
+					Amount = 500m,
+					IsFixed = true,
+					IsTemp = false
+				}
+			]
+		};
+
+		var replaceResponse = await Client.PutAsJsonAsync(Url(empId), replaceUpdate, JsonOptions);
+		replaceResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var getResponse = await Client.GetAsync(Url(empId));
+		var saved = await getResponse.Content.ReadFromJsonAsync<SalaryStructureResponseDto>(JsonOptions);
+		saved.ShouldNotBeNull();
+		var savedHra = saved.EarningComponents.Single(x => x.ComponentId == hra.Id);
+		savedHra.Amount.ShouldBe(3000m);
+		savedHra.IsFixed.ShouldBeTrue();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Recalculate_Percentage_Deduction_When_Replacing_Component()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "SalReplacePctDed");
+		var basic = await PayrollTestHelper.CreateEarningComponentAsync(Client, "SalPctBasicDed");
+		var oldDeduction = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "SalOldDed");
+		var pf = await PayrollTestHelper.CreatePercentageDeductionComponentAsync(
+			Client,
+			basic.Id,
+			12m,
+			"SalPfPct");
+
+		var firstUpdate = new UpdateSalaryStructureDto
+		{
+			EarningComponents =
+			[
+				new()
+				{
+					ComponentId = basic.Id,
+					Name = "Basic Salary",
+					Amount = 30000m,
+					IsFixed = true,
+					IsTemp = false
+				}
+			],
+			DeductionComponents =
+			[
+				new()
+				{
+					ComponentId = oldDeduction.Id,
+					Name = oldDeduction.Name,
+					Amount = 500m,
+					IsFixed = true,
+					IsTemp = false
+				}
+			]
+		};
+
+		var firstResponse = await Client.PutAsJsonAsync(Url(empId), firstUpdate, JsonOptions);
+		firstResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var replaceUpdate = new UpdateSalaryStructureDto
+		{
+			EarningComponents =
+			[
+				new()
+				{
+					ComponentId = basic.Id,
+					Name = "Basic Salary",
+					Amount = 30000m,
+					IsFixed = true,
+					IsTemp = false
+				}
+			],
+			DeductionComponents =
+			[
+				new()
+				{
+					ComponentId = pf.Id,
+					Name = pf.Name,
+					Amount = null,
+					IsFixed = true,
+					IsTemp = false
+				}
+			]
+		};
+
+		var replaceResponse = await Client.PutAsJsonAsync(Url(empId), replaceUpdate, JsonOptions);
+		replaceResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var getResponse = await Client.GetAsync(Url(empId));
+		var saved = await getResponse.Content.ReadFromJsonAsync<SalaryStructureResponseDto>(JsonOptions);
+		saved.ShouldNotBeNull();
+		var savedPf = saved.DeductionComponents.Single(x => x.ComponentId == pf.Id);
+		savedPf.Amount.ShouldBe(3600m);
+		savedPf.IsFixed.ShouldBeTrue();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Percentage_Deduction_When_Base_Component_Is_Missing()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "SalMissingPctBase");
+		var basic = await PayrollTestHelper.CreateEarningComponentAsync(Client, "SalMissingBaseBasic");
+		var allowance = await PayrollTestHelper.CreateEarningComponentAsync(Client, "SalMissingBaseAllowance");
+		var pf = await PayrollTestHelper.CreatePercentageDeductionComponentAsync(
+			Client,
+			basic.Id,
+			12m,
+			"SalMissingBasePf");
+
+		var update = new UpdateSalaryStructureDto
+		{
+			EarningComponents =
+			[
+				new()
+				{
+					ComponentId = allowance.Id,
+					Name = allowance.Name,
+					Amount = 5000m,
+					IsFixed = true,
+					IsTemp = false
+				}
+			],
+			DeductionComponents =
+			[
+				new()
+				{
+					ComponentId = pf.Id,
+					Name = pf.Name,
+					Amount = null,
+					IsFixed = true,
+					IsTemp = false
+				}
+			]
+		};
+
+		var response = await Client.PutAsJsonAsync(Url(empId), update, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
 	#endregion
 
 	[Fact]

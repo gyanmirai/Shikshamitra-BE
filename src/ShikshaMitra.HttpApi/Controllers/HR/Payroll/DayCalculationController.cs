@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using System;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
@@ -21,6 +22,15 @@ public class DayCalculationController : AbpControllerBase
 		_dayCalculationSettingAppService = dayCalculationSettingAppService;
 	}
 
+	[HttpGet]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsPayrollConfiguration.View)]
+	[ProducesResponseType(typeof(DayCalculationSettingDto), 200)]
+	[ProducesResponseType(400)]
+	public virtual async Task<DayCalculationSettingDto> GetAsync([FromQuery] Guid academicYearId)
+	{
+		return await _dayCalculationSettingAppService.GetAsync(academicYearId);
+	}
+
 	[HttpPost]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsPayrollConfiguration.Add)]
 	[ProducesResponseType(typeof(DayCalculationResponseDto), 200)]
@@ -29,5 +39,15 @@ public class DayCalculationController : AbpControllerBase
 		[FromBody] DayCalculationRequestDto input)
 	{
 		return await _dayCalculationSettingAppService.SaveAsync(input);
+	}
+
+	[HttpPost("preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsPayrollConfiguration.View)]
+	[ProducesResponseType(typeof(DayCalculationSettingDto), 200)]
+	[ProducesResponseType(400)]
+	public virtual async Task<DayCalculationSettingDto> PreviewAsync(
+		[FromBody] DayCalculationRequestDto input)
+	{
+		return await _dayCalculationSettingAppService.PreviewAsync(input);
 	}
 }

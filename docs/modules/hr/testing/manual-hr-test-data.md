@@ -15,17 +15,17 @@ The existing deterministic accounts from `SeedTestLogins=true` are still availab
 
 | Employee | Login | Identity Role | Employee Designation | Payroll Scenario | Attendance Scenario | Leave Scenario |
 |---|---|---|---|---|---|---|
-| Yagnik Vadher 1 | `yagnik.vadher1@ddvs.com` | Principal | Principal | Locked/finalized payslip | Full month present | Approver / HR owner |
-| Yagnik Vadher 2 | `yagnik.vadher2@ddvs.com` | Vice Principal | Vice Principal | Locked/finalized payslip | Full month present | Reporting-chain approver |
-| Prerna Atre | `prerna.atre@ddvs.com` | HR Manager | HR Manager | Pending payroll row | Full month present | Leave and employee-update owner |
-| Parth Ghusar | `parth.ghusar@ddvs.com` | Finance Officer | Finance Officer | Locked/finalized payslip | Full month present | Payroll reviewer |
-| Raj Baku | `raj.baku@ddvs.com` | Teacher | Senior Teacher - Mathematics | Reviewed, not locked | Clean attendance | Baseline teacher row |
-| Jignesh Jinjala | `jignesh.jinjala@ddvs.com` | Teacher | Teacher - Science | Pending payroll row | Two half days | Pending casual leave |
-| Nikhil Baku | `nikhil.baku@ddvs.com` | Teacher | Teacher - English | Reviewed, not locked | Approved leave days | Approved sick leave |
-| Keyur Sidhupura | `keyur.sidhupura@ddvs.com` | Teacher | Teacher - Computer Science | Pending payroll row with issue | Low/missing attendance | Rejected casual leave |
-| Mayur Solanki | `mayur.solanki@ddvs.com` | Administrative Manager | Administrative Manager | Pending payroll row | Full month present | Reporting manager scenario |
-| Jagruti Vadher | `jagruti.vadher@ddvs.com` | Office Assistant | Office Assistant | Reviewed, not locked | One LOP/full-day leave | Approved loss-of-pay leave |
-| Vishal Makwana | `vishal.makwana@ddvs.com` | IT Administrator | IT Administrator | Pending payroll row | Full month present | Cancelled self-leave |
+| Yagnik Vadher 1 | `yagnik.vadher1@ddvs.com` | Principal | Principal | Ready to calculate | Full month present | Approver / HR owner |
+| Yagnik Vadher 2 | `yagnik.vadher2@ddvs.com` | Vice Principal | Vice Principal | Ready to calculate | Full month present | Reporting-chain approver |
+| Prerna Atre | `prerna.atre@ddvs.com` | HR Manager | HR Manager | Ready to calculate | Full month present | Leave and employee-update owner |
+| Parth Ghusar | `parth.ghusar@ddvs.com` | Finance Officer | Finance Officer | Ready to calculate | Full month present | Payroll reviewer |
+| Raj Baku | `raj.baku@ddvs.com` | Teacher | Senior Teacher - Mathematics | Ready to calculate | Clean attendance | Baseline teacher row |
+| Jignesh Jinjala | `jignesh.jinjala@ddvs.com` | Teacher | Teacher - Science | Ready to calculate | Two half days | Pending casual leave |
+| Nikhil Baku | `nikhil.baku@ddvs.com` | Teacher | Teacher - English | Ready to calculate | Approved leave days | Approved sick leave |
+| Keyur Sidhupura | `keyur.sidhupura@ddvs.com` | Teacher | Teacher - Computer Science | Ready to calculate with low-attendance issue | Low/missing attendance | Rejected casual leave |
+| Mayur Solanki | `mayur.solanki@ddvs.com` | Administrative Manager | Administrative Manager | Ready to calculate | Full month present | Reporting manager scenario |
+| Jagruti Vadher | `jagruti.vadher@ddvs.com` | Office Assistant | Office Assistant | Ready to calculate | One LOP/full-day leave | Approved loss-of-pay leave |
+| Vishal Makwana | `vishal.makwana@ddvs.com` | IT Administrator | IT Administrator | Ready to calculate | Full month present | Cancelled self-leave |
 
 ## Reporting Chain
 
@@ -69,21 +69,28 @@ Seeded deductions:
 - ESI-like deduction for Jagruti Vadher
 - Loan and advance deductions for Vishal Makwana
 
-## Payroll Row States
+The base HR seeder also creates payroll settings used by payroll previews and settings screens:
 
-For the current seed month, based on seed-run date:
+- Standard Provident Fund rule (`STD-PF`) with 12% employee and 12% employer contribution
+- Professional Tax slabs for male and female employees
+- Default day calculation setting using working days
 
-| State | Employees |
-|---|---|
-| Pending review | Prerna Atre, Jignesh Jinjala, Keyur Sidhupura, Mayur Solanki, Vishal Makwana |
-| Reviewed, not locked | Raj Baku, Nikhil Baku, Jagruti Vadher |
-| Locked/finalized | Yagnik Vadher 1, Yagnik Vadher 2, Parth Ghusar |
+## Payroll Starting State
 
-Previous-month finalized payslips are also seeded for all tester-owned employees so the run-payroll screen can show previous-month net pay comparison.
+Payroll is intentionally empty after seeding. The seeder does not create salary slips, finalized slips, payroll run snapshots, locked rows, or reviewed rows for the manual-test employees.
+
+To test payroll manually:
+
+- Choose a completed historical month from the seeded attendance window.
+- Open the run-payroll preview to calculate rows from attendance and salary components.
+- Mark rows reviewed.
+- Run/lock payroll to create finalized salary slips.
+
+Previous-month net-pay comparison appears only after you have manually run and locked a prior month.
 
 ## Attendance Data
 
-The seeder creates weekday attendance for the full current calendar month, including future weekdays in the current month. This is intentional so the current-month payroll preview has a stable full-month basis during manual testing.
+The seeder creates weekday attendance for the last 10 fully completed calendar months. It excludes the current month and never seeds future attendance dates. For example, if the seeder runs on May 16, 2026, payroll-test attendance is created for July 2025 through April 2026.
 
 | Employee | Attendance Pattern |
 |---|---|
@@ -96,6 +103,8 @@ The seeder creates weekday attendance for the full current calendar month, inclu
 
 All attendance rows include `EducationMediumStageId` so payroll scope filtering includes these employees.
 
+The base HR seed also creates current-month attendance and a few approved leaves for general seeded HR employees. Those rows are for attendance and leave workflow testing only. The tester-owned payroll employees above remain historical-only for payroll testing.
+
 ## Leave Data
 
 The seeder uses existing leave types and policies from the base HR seed:
@@ -107,7 +116,7 @@ The seeder uses existing leave types and policies from the base HR seed:
 - Maternity Leave
 - Paternity Leave
 
-Current-month leave requests:
+Leave requests are seeded in the most recent completed month so they line up with the historical attendance/payroll test window.
 
 | Employee | Status | Type |
 |---|---|---|
@@ -116,4 +125,14 @@ Current-month leave requests:
 | Keyur Sidhupura | Rejected | Casual Leave |
 | Vishal Makwana | Cancelled | Casual Leave |
 | Jagruti Vadher | Approved | Loss of Pay |
+
+## Broader Demo Data
+
+The main development seeder also creates supporting data for non-payroll manual testing:
+
+- Institute setup: room types such as Classroom, Lab, Library, Staff Room, and Exam Hall; demo buildings with floors; and rooms with capacity, benches, and feature notes.
+- Student data: six admitted students per division for every standard in the current academic year, with contact, additional, and medical details.
+- Academic setup: subjects per education medium, exam types, homework types, assignment types, and homework assignment types for assignment/homework flows.
+
+This supporting data is seeded before the student data so exams, room allocation, timetable, homework, and assignment flows can use the same academic setup.
 

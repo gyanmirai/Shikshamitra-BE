@@ -37,6 +37,30 @@ public static class PayrollTestHelper
 		return new PayrollComponentSeed(dto.Id, name);
 	}
 
+	public static async Task<PayrollComponentSeed> CreatePercentageEarningComponentAsync(
+		HttpClient client,
+		Guid selectedEarningComponentId,
+		decimal percentage,
+		string? nameSuffix = null)
+	{
+		var name = TestDataHelper.UniqueName(nameSuffix ?? "PctEarnHelper");
+		var input = new EarningComponentCreateRequestDto
+		{
+			EarningComponentName = name,
+			EarningType = "FIXED",
+			CalculationType = "PERCENTAGE",
+			Percentage = percentage,
+			SelectedEarningComponentId = selectedEarningComponentId,
+			VisibleInPayslip = true,
+		};
+
+		var response = await client.PostAsJsonAsync("/api/payroll/earning-components", input, JsonOptions);
+		response.EnsureSuccessStatusCode();
+		var dto = await response.Content.ReadFromJsonAsync<ComponentCreateResponseDto>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to create percentage earning component");
+		return new PayrollComponentSeed(dto.Id, name);
+	}
+
 	public static async Task<PayrollComponentSeed> CreateDeductionComponentAsync(
 		HttpClient client, string? nameSuffix = null)
 	{
@@ -54,6 +78,30 @@ public static class PayrollTestHelper
 		response.EnsureSuccessStatusCode();
 		var dto = await response.Content.ReadFromJsonAsync<ComponentCreateResponseDto>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create deduction component");
+		return new PayrollComponentSeed(dto.Id, name);
+	}
+
+	public static async Task<PayrollComponentSeed> CreatePercentageDeductionComponentAsync(
+		HttpClient client,
+		Guid selectedComponentId,
+		decimal percentage,
+		string? nameSuffix = null)
+	{
+		var name = TestDataHelper.UniqueName(nameSuffix ?? "PctDeductHelper");
+		var input = new DeductionComponentCreateRequestDto
+		{
+			DeductionComponentName = name,
+			DeductionType = "FIXED",
+			CalculationType = "PERCENTAGE",
+			Percentage = percentage,
+			SelectedDeductionComponentId = selectedComponentId,
+			VisibleInPayslip = true,
+		};
+
+		var response = await client.PostAsJsonAsync("/api/payroll/deduction-components", input, JsonOptions);
+		response.EnsureSuccessStatusCode();
+		var dto = await response.Content.ReadFromJsonAsync<ComponentCreateResponseDto>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to create percentage deduction component");
 		return new PayrollComponentSeed(dto.Id, name);
 	}
 

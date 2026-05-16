@@ -30,6 +30,7 @@ public class DeductionComponentAppService : CrudAppService<
 	private readonly IEmployeePayrollComponentRepository _employeePayrollComponentRepository;
 	private readonly IEmployeeCacheManager _employeeCacheManager;
 	private readonly IRepository<Employee, Guid> _employeeRepository;
+	private readonly IRepository<EarningComponent, Guid> _earningComponentRepository;
 	private readonly ISalarySlipRepository _salarySlipRepository;
 	private readonly IRepository<PayrollComponentVersion, Guid> _componentVersionRepository;
 	private readonly IDistributedCache<PagedResultDto<DeductionComponentDto>> _cache;
@@ -46,6 +47,7 @@ public class DeductionComponentAppService : CrudAppService<
 		IEmployeePayrollComponentRepository employeePayrollComponentRepository,
 		IEmployeeCacheManager employeeCacheManager,
 		IRepository<Employee, Guid> employeeRepository,
+		IRepository<EarningComponent, Guid> earningComponentRepository,
 		ISalarySlipRepository salarySlipRepository,
 		IRepository<PayrollComponentVersion, Guid> componentVersionRepository,
 		IDistributedCache<PagedResultDto<DeductionComponentDto>> cache)
@@ -55,6 +57,7 @@ public class DeductionComponentAppService : CrudAppService<
 		_employeePayrollComponentRepository = employeePayrollComponentRepository;
 		_employeeCacheManager = employeeCacheManager;
 		_employeeRepository = employeeRepository;
+		_earningComponentRepository = earningComponentRepository;
 		_salarySlipRepository = salarySlipRepository;
 		_componentVersionRepository = componentVersionRepository;
 		_cache = cache;
@@ -726,15 +729,25 @@ public class DeductionComponentAppService : CrudAppService<
 			return dto;
 		}
 
-		var selected = await Repository.FindAsync(dto.SelectedDeductionComponentId.Value);
-		if (selected is null)
+		var selectedDeduction = await Repository.FindAsync(dto.SelectedDeductionComponentId.Value);
+		if (selectedDeduction is { IsActive: true })
 		{
+			dto.SelectedDeductionComponentName = selectedDeduction.Name;
+			dto.SelectedDeductionComponentDescription = selectedDeduction.Description;
+			dto.SelectedDeductionComponentVisibleInPayslip = selectedDeduction.VisibleInPayslip;
+			dto.SelectedDeductionComponentSource = "DEDUCTION_COMPONENT";
+
 			return dto;
 		}
 
-		dto.SelectedDeductionComponentName = selected.Name;
-		dto.SelectedDeductionComponentDescription = selected.Description;
-		dto.SelectedDeductionComponentVisibleInPayslip = selected.VisibleInPayslip;
+		var selectedEarning = await _earningComponentRepository.FindAsync(dto.SelectedDeductionComponentId.Value);
+		if (selectedEarning is { IsActive: true })
+		{
+			dto.SelectedDeductionComponentName = selectedEarning.Name;
+			dto.SelectedDeductionComponentDescription = selectedEarning.Description;
+			dto.SelectedDeductionComponentVisibleInPayslip = selectedEarning.VisibleInPayslip;
+			dto.SelectedDeductionComponentSource = "EARNING_COMPONENT";
+		}
 
 		return dto;
 	}
@@ -752,11 +765,23 @@ public class DeductionComponentAppService : CrudAppService<
 			return;
 		}
 
-		var queryable = await Repository.GetQueryableAsync();
-		var selectedComponents = await AsyncExecuter.ToListAsync(
-			queryable.Where(x => selectedIds.Contains(x.Id)));
+		var deductionQueryable = await Repository.GetQueryableAsync();
+		var selectedDeductions = await AsyncExecuter.ToListAsync(
+			deductionQueryable.Where(x => x.IsActive && selectedIds.Contains(x.Id)));
 
-		var selectedById = selectedComponents.ToDictionary(x => x.Id);
+		var selectedDeductionById = selectedDeductions.ToDictionary(x => x.Id);
+		var unresolvedIds = selectedIds
+			.Where(id => !selectedDeductionById.ContainsKey(id))
+			.ToList();
+
+		var selectedEarningById = new Dictionary<Guid, EarningComponent>();
+		if (unresolvedIds.Count > 0)
+		{
+			var earningQueryable = await _earningComponentRepository.GetQueryableAsync();
+			var selectedEarnings = await AsyncExecuter.ToListAsync(
+				earningQueryable.Where(x => x.IsActive && unresolvedIds.Contains(x.Id)));
+			selectedEarningById = selectedEarnings.ToDictionary(x => x.Id);
+		}
 
 		foreach (var item in items)
 		{
@@ -765,14 +790,22 @@ public class DeductionComponentAppService : CrudAppService<
 				continue;
 			}
 
-			if (!selectedById.TryGetValue(item.SelectedDeductionComponentId.Value, out var selected))
+			if (selectedDeductionById.TryGetValue(item.SelectedDeductionComponentId.Value, out var selectedDeduction))
 			{
+				item.SelectedDeductionComponentName = selectedDeduction.Name;
+				item.SelectedDeductionComponentDescription = selectedDeduction.Description;
+				item.SelectedDeductionComponentVisibleInPayslip = selectedDeduction.VisibleInPayslip;
+				item.SelectedDeductionComponentSource = "DEDUCTION_COMPONENT";
 				continue;
 			}
 
-			item.SelectedDeductionComponentName = selected.Name;
-			item.SelectedDeductionComponentDescription = selected.Description;
-			item.SelectedDeductionComponentVisibleInPayslip = selected.VisibleInPayslip;
+			if (selectedEarningById.TryGetValue(item.SelectedDeductionComponentId.Value, out var selectedEarning))
+			{
+				item.SelectedDeductionComponentName = selectedEarning.Name;
+				item.SelectedDeductionComponentDescription = selectedEarning.Description;
+				item.SelectedDeductionComponentVisibleInPayslip = selectedEarning.VisibleInPayslip;
+				item.SelectedDeductionComponentSource = "EARNING_COMPONENT";
+			}
 		}
 	}
 }

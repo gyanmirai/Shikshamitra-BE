@@ -85,12 +85,13 @@ public static class DeductionComponentContractMapper
             Percentage = dto.Percentage,
             SelectedDeductionComponentId = dto.SelectedDeductionComponentId,
             VisibleInPayslip = dto.VisibleInPayslip,
-            CustomComponent = dto.SelectedDeductionComponentId.HasValue
+            CustomComponent = dto.SelectedDeductionComponentId.HasValue &&
+                              !string.IsNullOrWhiteSpace(dto.SelectedDeductionComponentName)
                 ? new CustomComponentDto
                 {
                     Id = dto.SelectedDeductionComponentId.Value,
                     ComponentName = dto.SelectedDeductionComponentName ?? string.Empty,
-                    ComponentOf = dto.DependOn.ToString().ToUpperInvariant(),
+                    ComponentOf = dto.SelectedDeductionComponentSource ?? dto.DependOn.ToString().ToUpperInvariant(),
                     Description = dto.SelectedDeductionComponentDescription,
                     VisibleInPayslip = dto.SelectedDeductionComponentVisibleInPayslip ?? dto.VisibleInPayslip
                 }

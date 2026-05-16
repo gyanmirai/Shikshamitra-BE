@@ -4195,6 +4195,15 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<decimal>("ApprovedLeaveUnits")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<int?>("ApprovedPaidType")
+                        .HasColumnType("integer");
+
                     b.Property<byte[]>("Attachment")
                         .HasColumnType("bytea");
 
@@ -6052,6 +6061,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
+                    b.Property<decimal>("FullGrossSalary")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<decimal>("GrossSalary")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -6369,6 +6382,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AcademicYearId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -6403,6 +6419,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<int?>("ManualDays")
                         .HasColumnType("integer");
 
+                    b.Property<string>("ManualMonthDaysJson")
+                        .HasColumnType("text");
+
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
@@ -6411,7 +6430,13 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId")
                         .IsUnique()
-                        .HasDatabaseName("IX_DayCalculationSettings_TenantId");
+                        .HasDatabaseName("IX_DayCalculationSettings_Tenant_Fallback")
+                        .HasFilter("\"AcademicYearId\" IS NULL");
+
+                    b.HasIndex("TenantId", "AcademicYearId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_DayCalculationSettings_Tenant_AcademicYear")
+                        .HasFilter("\"AcademicYearId\" IS NOT NULL");
 
                     b.ToTable("AppDayCalculationSettings", (string)null);
                 });

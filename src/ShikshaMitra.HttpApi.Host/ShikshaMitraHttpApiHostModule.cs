@@ -518,15 +518,15 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			app.UseDeveloperExceptionPage();
 		}
 
-		// Enforce RFC 7807 ProblemDetails for all /api endpoints.
-		app.UseApiProblemDetails();
-
 		app.UseAbpRequestLocalization();
 
 		if (!env.IsDevelopment())
 		{
 			app.UseErrorPage();
 		}
+
+		// Enforce RFC 7807 ProblemDetails for all /api endpoints.
+		app.UseApiProblemDetails();
 
 		app.UseCorrelationId();
 		app.UseStaticFiles();

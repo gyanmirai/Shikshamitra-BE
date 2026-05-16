@@ -15,11 +15,24 @@ public class DayCalculationSettingConfiguration : IEntityTypeConfiguration<DayCa
 		builder.Property(x => x.DayCalculationType)
 			.IsRequired();
 
+		builder.Property(x => x.AcademicYearId)
+			.IsRequired(false);
+
 		builder.Property(x => x.ManualDays)
 			.IsRequired(false);
 
+		builder.Property(x => x.ManualMonthDaysJson)
+			.HasColumnType("text")
+			.IsRequired(false);
+
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId })
+			.IsUnique()
+			.HasFilter("\"AcademicYearId\" IS NOT NULL")
+			.HasDatabaseName("IX_DayCalculationSettings_Tenant_AcademicYear");
+
 		builder.HasIndex(x => x.TenantId)
 			.IsUnique()
-			.HasDatabaseName("IX_DayCalculationSettings_TenantId");
+			.HasFilter("\"AcademicYearId\" IS NULL")
+			.HasDatabaseName("IX_DayCalculationSettings_Tenant_Fallback");
 	}
 }

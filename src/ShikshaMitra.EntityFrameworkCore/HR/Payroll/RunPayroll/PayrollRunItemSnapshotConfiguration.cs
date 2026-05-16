@@ -21,6 +21,7 @@ public class PayrollRunItemSnapshotConfiguration : IEntityTypeConfiguration<Payr
 
 		builder.Property(x => x.BasicSalary).HasPrecision(18, 2);
 		builder.Property(x => x.GrossSalary).HasPrecision(18, 2);
+		builder.Property(x => x.FullGrossSalary).HasPrecision(18, 2);
 		builder.Property(x => x.TotalDeduction).HasPrecision(18, 2);
 		builder.Property(x => x.NetPay).HasPrecision(18, 2);
 		builder.Property(x => x.PreviousMonthNetPay).HasPrecision(18, 2);

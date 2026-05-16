@@ -85,6 +85,41 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 			deductionMasterById.Keys,
 			HRErrorCodes.EmployeePayrollInvalidDeductionComponent);
 
+		var resolvedEarnings = input.EarningComponents
+			.Select(earning =>
+			{
+				var master = ShouldResolveMasterComponent(earning)
+					&& earningMasterById.TryGetValue(earning.ComponentId!.Value, out var earningMaster)
+					? earningMaster
+					: null;
+				return new ResolvedSalaryComponent<EarningComponent>(
+					earning,
+					FindExistingComponent(earning, existingEarningById),
+					master);
+			})
+			.ToList();
+		var resolvedDeductions = input.DeductionComponents
+			.Select(deduction =>
+			{
+				var master = ShouldResolveMasterComponent(deduction)
+					&& deductionMasterById.TryGetValue(deduction.ComponentId!.Value, out var deductionMaster)
+					? deductionMaster
+					: null;
+				return new ResolvedSalaryComponent<DeductionComponent>(
+					deduction,
+					FindExistingComponent(deduction, existingDeductionById),
+					master);
+			})
+			.ToList();
+
+		var earningAmountsByComponentId = ResolveEarningAmounts(resolvedEarnings);
+		var grossAmount = earningAmountsByComponentId.Values.Sum();
+		var deductionAmountsByComponentId = ResolveDeductionAmounts(
+			resolvedDeductions,
+			resolvedEarnings,
+			earningAmountsByComponentId,
+			grossAmount);
+
 		// Delete existing components
 		await _payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: true);
 		await _payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: false);
@@ -93,13 +128,11 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 		var componentsToInsert = new List<EmployeePayrollComponent>();
 
 		// Build earning components
-		foreach (var earning in input.EarningComponents)
+		foreach (var resolved in resolvedEarnings)
 		{
-			var existingComponent = FindExistingComponent(earning, existingEarningById);
-			var master = ShouldResolveMasterComponent(earning)
-				&& earningMasterById.TryGetValue(earning.ComponentId!.Value, out var earningMaster)
-				? earningMaster
-				: null;
+			var earning = resolved.Line;
+			var master = resolved.Master;
+			var existingComponent = resolved.Existing;
 			var componentType = master is not null
 				? MapCalculationType(master.CalculationType)
 				: existingComponent?.ComponentType ?? SalaryComponentType.Fixed;
@@ -107,10 +140,9 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 				? MapDependency(master.DependOn)
 				: existingComponent?.DependOn;
 			var description = master?.Description ?? existingComponent?.Description;
-			var isFixed = master is not null
-				? master.CalculationType == CalculationType.Amount
-				: earning.IsFixed;
-			var amount = ResolveEarningAmount(earning, master);
+			var amount = master?.Id is Guid masterId && earningAmountsByComponentId.TryGetValue(masterId, out var resolvedAmount)
+				? resolvedAmount
+				: ResolveAmountComponentFallback(earning, master?.Amount);
 
 			componentsToInsert.Add(new EmployeePayrollComponent(
 				existingComponent?.Id ?? _guidGenerator.Create(),
@@ -119,24 +151,22 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 				master?.Id,
 				description,
 				amount,
-				isFixed,
+				earning.IsFixed,
 				earning.IsTemp,
 				earning.ApplicableMonth ?? existingComponent?.ApplicableMonth,
 				componentType,
 				dependOn,
 				isEarning: true,
-				usesMasterValue: ShouldUseMasterValue(earning, master, amount)
+				usesMasterValue: ShouldUseMasterValue(earning, master)
 			));
 		}
 
 		// Build deduction components
-		foreach (var deduction in input.DeductionComponents)
+		foreach (var resolved in resolvedDeductions)
 		{
-			var existingComponent = FindExistingComponent(deduction, existingDeductionById);
-			var master = ShouldResolveMasterComponent(deduction)
-				&& deductionMasterById.TryGetValue(deduction.ComponentId!.Value, out var deductionMaster)
-				? deductionMaster
-				: null;
+			var deduction = resolved.Line;
+			var master = resolved.Master;
+			var existingComponent = resolved.Existing;
 			var componentType = master is not null
 				? MapCalculationType(master.CalculationType)
 				: existingComponent?.ComponentType ?? SalaryComponentType.Fixed;
@@ -144,10 +174,9 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 				? MapDependency(master.DependOn)
 				: existingComponent?.DependOn;
 			var description = master?.Description ?? existingComponent?.Description;
-			var isFixed = master is not null
-				? master.CalculationType == CalculationType.Amount
-				: deduction.IsFixed;
-			var amount = ResolveDeductionAmount(deduction, master);
+			var amount = master?.Id is Guid masterId && deductionAmountsByComponentId.TryGetValue(masterId, out var resolvedAmount)
+				? resolvedAmount
+				: ResolveAmountComponentFallback(deduction, master?.Amount);
 
 			componentsToInsert.Add(new EmployeePayrollComponent(
 				existingComponent?.Id ?? _guidGenerator.Create(),
@@ -156,13 +185,13 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 				master?.Id,
 				description,
 				amount,
-				isFixed,
+				deduction.IsFixed,
 				deduction.IsTemp,
 				deduction.ApplicableMonth ?? existingComponent?.ApplicableMonth,
 				componentType,
 				dependOn,
 				isEarning: false,
-				usesMasterValue: ShouldUseMasterValue(deduction, master, amount)
+				usesMasterValue: ShouldUseMasterValue(deduction, master)
 			));
 		}
 
@@ -305,60 +334,205 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 		};
 	}
 
-	private static decimal ResolveEarningAmount(SalaryComponentDto line, EarningComponent? master)
+	private static Dictionary<Guid, decimal> ResolveEarningAmounts(
+		IReadOnlyList<ResolvedSalaryComponent<EarningComponent>> earnings)
 	{
-		if (master is null)
+		var amountsByComponentId = new Dictionary<Guid, decimal>();
+
+		foreach (var earning in earnings.Where(x => x.Master?.CalculationType != CalculationType.Percentage))
 		{
-			return line.Amount ?? 0m;
+			if (earning.Master?.Id is Guid masterId)
+			{
+				amountsByComponentId[masterId] = ResolveAmountComponentFallback(earning.Line, earning.Master.Amount);
+			}
 		}
 
-		if (master.CalculationType == CalculationType.Percentage && (!line.Amount.HasValue || line.Amount <= 0))
+		var pendingPercentageEarnings = earnings
+			.Where(x => x.Master?.CalculationType == CalculationType.Percentage)
+			.ToList();
+		while (pendingPercentageEarnings.Count > 0)
 		{
-			return master.Percentage ?? 0m;
+			var resolvedAny = false;
+			foreach (var earning in pendingPercentageEarnings.ToList())
+			{
+				var master = earning.Master!;
+				if (!TryResolvePercentageBaseAmount(
+					    master.DependOn,
+					    master.SelectedEarningComponentId,
+					    earnings,
+					    amountsByComponentId,
+					    new Dictionary<Guid, decimal>(),
+					    out var baseAmount))
+				{
+					continue;
+				}
+
+				amountsByComponentId[master.Id] = CalculatePercentageAmount(baseAmount, master.Percentage);
+				pendingPercentageEarnings.Remove(earning);
+				resolvedAny = true;
+			}
+
+			if (!resolvedAny)
+			{
+				var unresolved = pendingPercentageEarnings[0].Master!;
+				throw new BusinessException(HRErrorCodes.EmployeePayrollInvalidEarningComponent)
+					.WithData("componentId", unresolved.SelectedEarningComponentId?.ToString() ?? string.Empty)
+					.WithData("dependency", unresolved.DependOn.ToString());
+			}
 		}
 
-		return line.Amount ?? master.Amount ?? 0m;
+		return amountsByComponentId;
 	}
 
-	private static decimal ResolveDeductionAmount(SalaryComponentDto line, DeductionComponent? master)
+	private static Dictionary<Guid, decimal> ResolveDeductionAmounts(
+		IReadOnlyList<ResolvedSalaryComponent<DeductionComponent>> deductions,
+		IReadOnlyList<ResolvedSalaryComponent<EarningComponent>> earnings,
+		IReadOnlyDictionary<Guid, decimal> earningAmountsByComponentId,
+		decimal grossAmount)
 	{
-		if (master is null)
+		var amountsByComponentId = new Dictionary<Guid, decimal>();
+
+		foreach (var deduction in deductions.Where(x => x.Master?.CalculationType != CalculationType.Percentage))
 		{
-			return line.Amount ?? 0m;
+			if (deduction.Master?.Id is Guid masterId)
+			{
+				amountsByComponentId[masterId] = ResolveAmountComponentFallback(deduction.Line, deduction.Master.Amount);
+			}
 		}
 
-		if (master.CalculationType == CalculationType.Percentage && (!line.Amount.HasValue || line.Amount <= 0))
+		var pendingPercentageDeductions = deductions
+			.Where(x => x.Master?.CalculationType == CalculationType.Percentage)
+			.ToList();
+		while (pendingPercentageDeductions.Count > 0)
 		{
-			return master.Percentage ?? 0m;
+			var resolvedAny = false;
+			foreach (var deduction in pendingPercentageDeductions.ToList())
+			{
+				var master = deduction.Master!;
+				if (!TryResolvePercentageBaseAmount(
+					    master.DependOn,
+					    master.SelectedDeductionComponentId,
+					    earnings,
+					    earningAmountsByComponentId,
+					    amountsByComponentId,
+					    out var baseAmount,
+					    grossAmount))
+				{
+					continue;
+				}
+
+				amountsByComponentId[master.Id] = CalculatePercentageAmount(baseAmount, master.Percentage);
+				pendingPercentageDeductions.Remove(deduction);
+				resolvedAny = true;
+			}
+
+			if (!resolvedAny)
+			{
+				var unresolved = pendingPercentageDeductions[0].Master!;
+				throw new BusinessException(HRErrorCodes.EmployeePayrollInvalidDeductionComponent)
+					.WithData("componentId", unresolved.SelectedDeductionComponentId?.ToString() ?? string.Empty)
+					.WithData("dependency", unresolved.DependOn.ToString());
+			}
 		}
 
-		return line.Amount ?? master.Amount ?? 0m;
+		return amountsByComponentId;
 	}
 
-	private static bool ShouldUseMasterValue(SalaryComponentDto line, EarningComponent? master, decimal amount)
+	private static bool TryResolvePercentageBaseAmount(
+		ComponentDependency dependOn,
+		Guid? selectedComponentId,
+		IReadOnlyList<ResolvedSalaryComponent<EarningComponent>>? earnings,
+		IReadOnlyDictionary<Guid, decimal> earningAmountsByComponentId,
+		IReadOnlyDictionary<Guid, decimal> deductionAmountsByComponentId,
+		out decimal amount,
+		decimal? grossAmount = null)
+	{
+		switch (dependOn)
+		{
+			case ComponentDependency.Basic:
+				return TryResolveBasicAmount(earnings, earningAmountsByComponentId, out amount);
+			case ComponentDependency.Gross:
+				amount = grossAmount ?? earningAmountsByComponentId.Values.Sum();
+				return true;
+			case ComponentDependency.CustomComponent when selectedComponentId.HasValue &&
+				earningAmountsByComponentId.TryGetValue(selectedComponentId.Value, out var earningAmount):
+				amount = earningAmount;
+				return true;
+			case ComponentDependency.CustomComponent when selectedComponentId.HasValue &&
+				deductionAmountsByComponentId.TryGetValue(selectedComponentId.Value, out var deductionAmount):
+				amount = deductionAmount;
+				return true;
+			default:
+				amount = 0m;
+				return false;
+		}
+	}
+
+	private static bool TryResolveBasicAmount(
+		IReadOnlyList<ResolvedSalaryComponent<EarningComponent>>? earnings,
+		IReadOnlyDictionary<Guid, decimal> earningAmountsByComponentId,
+		out decimal amount)
+	{
+		if (earnings != null)
+		{
+			var basic = earnings.FirstOrDefault(x =>
+				x.Master?.Id is Guid masterId &&
+				earningAmountsByComponentId.ContainsKey(masterId) &&
+				IsBasicSalaryComponentName(x.Line.Name));
+			if (basic?.Master?.Id is Guid masterId)
+			{
+				amount = earningAmountsByComponentId[masterId];
+				return true;
+			}
+		}
+
+		if (earningAmountsByComponentId.Count == 1)
+		{
+			amount = earningAmountsByComponentId.Values.Single();
+			return true;
+		}
+
+		amount = 0m;
+		return false;
+	}
+
+	private static decimal ResolveAmountComponentFallback(SalaryComponentDto line, decimal? masterAmount) =>
+		line.Amount ?? masterAmount ?? 0m;
+
+	private static decimal CalculatePercentageAmount(decimal baseAmount, decimal? percentage) =>
+		Math.Round(baseAmount * (percentage ?? 0m) / 100m, 2, MidpointRounding.AwayFromZero);
+
+	private static bool IsBasicSalaryComponentName(string? name)
+	{
+		if (string.IsNullOrWhiteSpace(name))
+		{
+			return false;
+		}
+
+		return string.Equals(name, "Basic", StringComparison.OrdinalIgnoreCase)
+		       || name.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static bool ShouldUseMasterValue(SalaryComponentDto line, EarningComponent? master)
 	{
 		if (master is null || line.IsTemp)
 		{
 			return false;
 		}
 
-		var masterAmount = master.CalculationType == CalculationType.Amount
-			? master.Amount ?? 0m
-			: master.Percentage ?? 0m;
-		return amount == masterAmount;
+		return master.CalculationType == CalculationType.Percentage ||
+		       (line.Amount ?? 0m) == (master.Amount ?? 0m);
 	}
 
-	private static bool ShouldUseMasterValue(SalaryComponentDto line, DeductionComponent? master, decimal amount)
+	private static bool ShouldUseMasterValue(SalaryComponentDto line, DeductionComponent? master)
 	{
 		if (master is null || line.IsTemp)
 		{
 			return false;
 		}
 
-		var masterAmount = master.CalculationType == CalculationType.Amount
-			? master.Amount ?? 0m
-			: master.Percentage ?? 0m;
-		return amount == masterAmount;
+		return master.CalculationType == CalculationType.Percentage ||
+		       (line.Amount ?? 0m) == (master.Amount ?? 0m);
 	}
 
 	private static void EnsureAllMasterComponentsExist(
@@ -382,5 +556,10 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 		throw new BusinessException(errorCode)
 			.WithData("missingComponentIds", string.Join(",", missing));
 	}
+
+	private sealed record ResolvedSalaryComponent<TMaster>(
+		SalaryComponentDto Line,
+		EmployeePayrollComponent? Existing,
+		TMaster? Master);
 }
 

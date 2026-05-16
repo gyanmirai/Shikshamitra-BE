@@ -26,7 +26,7 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
     /// <summary>
     /// Get total approved leave days for employee in a specific period
     /// </summary>
-    Task<int> GetApprovedLeaveDaysAsync(
+    Task<decimal> GetApprovedLeaveDaysAsync(
         Guid employeeId,
         Guid leaveTypeId,
         int year);
@@ -34,7 +34,7 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 	/// <summary>
 	/// Get total approved leave days for employee for a leave policy.
 	/// </summary>
-	Task<int> GetApprovedLeaveDaysAsync(
+	Task<decimal> GetApprovedLeaveDaysAsync(
 		Guid employeeId,
 		Guid leaveTypeId);
 

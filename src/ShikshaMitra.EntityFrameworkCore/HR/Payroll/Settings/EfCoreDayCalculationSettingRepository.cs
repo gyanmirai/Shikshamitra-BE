@@ -21,7 +21,24 @@ public class EfCoreDayCalculationSettingRepository
 	{
 		var dbSet = await GetDbSetAsync();
 		return await dbSet
-			.Where(x => x.TenantId == tenantId)
+			.Where(x => x.TenantId == tenantId && x.AcademicYearId == null)
+			.FirstOrDefaultAsync(cancellationToken);
+	}
+
+	public async Task<DayCalculationSetting?> FindByTenantAndAcademicYearAsync(Guid? tenantId, Guid academicYearId, CancellationToken cancellationToken = default)
+	{
+		var dbSet = await GetDbSetAsync();
+		return await dbSet
+			.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)
+			.FirstOrDefaultAsync(cancellationToken);
+	}
+
+	public async Task<DayCalculationSetting?> FindEffectiveAsync(Guid? tenantId, Guid? academicYearId, CancellationToken cancellationToken = default)
+	{
+		var dbSet = await GetDbSetAsync();
+		return await dbSet
+			.Where(x => x.TenantId == tenantId && (x.AcademicYearId == academicYearId || x.AcademicYearId == null))
+			.OrderByDescending(x => x.AcademicYearId == academicYearId)
 			.FirstOrDefaultAsync(cancellationToken);
 	}
 }

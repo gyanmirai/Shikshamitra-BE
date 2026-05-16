@@ -18,6 +18,10 @@ public class EmployeeLeaveConfiguration : IEntityTypeConfiguration<EmployeeLeave
 			.UseIdentityAlwaysColumn()
 			.ValueGeneratedOnAdd();
 
+		builder.Property(e => e.ApprovedLeaveUnits)
+			.HasPrecision(18, 2)
+			.HasDefaultValue(0m);
+
 		// Unique index on PublicId per tenant for fast lookups
 		builder.HasIndex(e => new { e.TenantId, e.PublicId })
 			.IsUnique()

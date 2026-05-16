@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using ShikshaMitra.HR;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Guids;
@@ -48,6 +49,16 @@ public class EmployeeLeaveManager(IEmployeeLeaveRepository employeeLeaveReposito
 		EmployeeLeaveStatusType status, string? rejectionReason)
 	{
 		employeeLeave.UpdateLeaveStatus(status, rejectionReason);
+		return await employeeLeaveRepository.UpdateAsync(employeeLeave);
+	}
+
+	public async Task<EmployeeLeave> ApproveAsync(
+		EmployeeLeave employeeLeave,
+		LeavePaidType paidType,
+		decimal approvedLeaveUnits)
+	{
+		employeeLeave.SetApprovalPayrollSnapshot(paidType, approvedLeaveUnits);
+		employeeLeave.UpdateLeaveStatus(EmployeeLeaveStatusType.Approved, null);
 		return await employeeLeaveRepository.UpdateAsync(employeeLeave);
 	}
 

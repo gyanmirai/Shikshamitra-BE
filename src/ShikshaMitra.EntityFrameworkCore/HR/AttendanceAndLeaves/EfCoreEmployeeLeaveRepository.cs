@@ -40,7 +40,7 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 		return await query.AnyAsync();
 	}
 
-	public async Task<int> GetApprovedLeaveDaysAsync(
+	public async Task<decimal> GetApprovedLeaveDaysAsync(
 		Guid employeeId,
 		Guid leavePolicyId,
 		int year)
@@ -60,19 +60,16 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 				x.EndDate <= endOfYear)
 			.ToListAsync();
 
-		var totalDays = 0;
+		var totalDays = 0m;
 		foreach (var leave in leaves)
 		{
-			totalDays += LeaveDurationCalculator.CountLeaveDays(
-				leave.StartDate.DateTime,
-				leave.EndDate.DateTime,
-				leave.HalfDay);
+			totalDays += GetApprovedUnits(leave);
 		}
 
 		return totalDays;
 	}
 
-	public async Task<int> GetApprovedLeaveDaysAsync(
+	public async Task<decimal> GetApprovedLeaveDaysAsync(
 		Guid employeeId,
 		Guid leavePolicyId)
 	{
@@ -86,17 +83,22 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 				!x.IsDeleted)
 			.ToListAsync();
 
-		var totalDays = 0;
+		var totalDays = 0m;
 		foreach (var leave in leaves)
 		{
-			totalDays += LeaveDurationCalculator.CountLeaveDays(
-				leave.StartDate.DateTime,
-				leave.EndDate.DateTime,
-				leave.HalfDay);
+			totalDays += GetApprovedUnits(leave);
 		}
 
 		return totalDays;
 	}
+
+	private static decimal GetApprovedUnits(EmployeeLeave leave) =>
+		leave.ApprovedLeaveUnits > 0
+			? leave.ApprovedLeaveUnits
+			: LeaveDurationCalculator.CountLeaveUnits(
+				leave.StartDate.DateTime,
+				leave.EndDate.DateTime,
+				leave.HalfDay);
 
 	public async Task<(int TotalCount, List<Guid> PageIds)> GetPagedIdsForManagementListAsync(
 		DateTime rangeStart,

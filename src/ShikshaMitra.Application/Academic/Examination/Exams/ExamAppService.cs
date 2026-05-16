@@ -93,7 +93,8 @@ public class ExamAppService(
 			s.EndTime,
 			s.TotalMarks,
 			s.PassingMarks,
-			s.Notes
+			s.Notes,
+			s.GradeScalingId
 		)).ToList();
 
 		examManager.SaveSchedule(exam, schedules);
@@ -173,7 +174,8 @@ public class ExamAppService(
 					StartTime = s.StartTime,
 					EndTime = s.EndTime,
 					TotalMarks = s.TotalMarks,
-					PassingMarks = s.PassingMarks
+					PassingMarks = s.PassingMarks,
+					GradeScalingId = s.GradeScalingId
 				};
 			}).ToList()
 		};

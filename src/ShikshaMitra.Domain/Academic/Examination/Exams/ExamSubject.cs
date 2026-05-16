@@ -16,6 +16,7 @@ public class ExamSubject : Entity<Guid>
     public double? TotalMarks { get; private set; }
     public double? PassingMarks { get; private set; }
     public string? Notes { get; private set; }
+    public Guid? GradeScalingId { get; private set; }
 
     public ICollection<ExamSubjectDivision> RoomAssignments { get; private set; }
 
@@ -33,7 +34,8 @@ public class ExamSubject : Entity<Guid>
         DateTime? endTime,
         double? totalMarks,
         double? passingMarks,
-        string? notes = null) : base(id)
+        string? notes = null,
+        Guid? gradeScalingId = null) : base(id)
     {
         ExamId = examId;
         SubjectId = subjectId;
@@ -43,6 +45,7 @@ public class ExamSubject : Entity<Guid>
         TotalMarks = totalMarks;
         PassingMarks = passingMarks;
         Notes = notes;
+        GradeScalingId = gradeScalingId;
 
         RoomAssignments = new Collection<ExamSubjectDivision>();
     }
@@ -63,7 +66,7 @@ public class ExamSubject : Entity<Guid>
         ExamId = examId;
     }
 
-    public void UpdateSchedule(DateTime? examDate, DateTime? startTime, DateTime? endTime, double? totalMarks, double? passingMarks, string? notes)
+    public void UpdateSchedule(DateTime? examDate, DateTime? startTime, DateTime? endTime, double? totalMarks, double? passingMarks, string? notes, Guid? gradeScalingId = null)
     {
         ExamDate = examDate;
         StartTime = startTime;
@@ -71,6 +74,7 @@ public class ExamSubject : Entity<Guid>
         TotalMarks = totalMarks;
         PassingMarks = passingMarks;
         Notes = notes;
+        GradeScalingId = gradeScalingId;
     }
 
     public void AddRoomAssignment(ExamSubjectDivision assignment)

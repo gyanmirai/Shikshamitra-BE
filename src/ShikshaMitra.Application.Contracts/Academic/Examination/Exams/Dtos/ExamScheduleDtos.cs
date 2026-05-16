@@ -28,6 +28,8 @@ public class ExamSubjectScheduleDto
     public double? TotalMarks { get; set; }
 
     public double? PassingMarks { get; set; }
+
+    public Guid? GradeScalingId { get; set; }
 }
 
 public class ExamScheduleResponseDto
@@ -51,6 +53,7 @@ public class ExamScheduleSubjectDto
     public DateTime? EndTime { get; set; }
     public double? TotalMarks { get; set; }
     public double? PassingMarks { get; set; }
+    public Guid? GradeScalingId { get; set; }
 }
 
 public class ExamElectiveGroupSubjectDto

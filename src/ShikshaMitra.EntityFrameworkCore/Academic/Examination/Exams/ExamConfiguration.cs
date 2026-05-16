@@ -54,6 +54,7 @@ public class ExamSubjectConfiguration : IEntityTypeConfiguration<ExamSubject>
         builder.Property(x => x.TotalMarks).IsRequired(false);
         builder.Property(x => x.PassingMarks).IsRequired(false);
         builder.Property(x => x.Notes).HasMaxLength(1000);
+        builder.Property(x => x.GradeScalingId).IsRequired(false);
 
         builder.HasMany(x => x.RoomAssignments)
             .WithOne()

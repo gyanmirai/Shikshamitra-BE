@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Academic.Syllabus;
+using ShikshaMitra.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,30 +17,31 @@ public class ChapterAppService(
 	IGuidGenerator guidGenerator
 ) : ApplicationService, IChapterAppService
 {
-	public async Task<ChapterDto> CreateAsync(CreateUpdateChapterDto createChapterDto)
+	public async Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, CreateChapterDto createChapterDto)
 	{
 		try
 		{
-			var assignedSubject =
-				await assignedSubjectRepository.FindAsync(createChapterDto.AssignedSubjectId)
-				?? throw new UserFriendlyException("Assigned subject not found");
+			var assignedSubject = await assignedSubjectRepository.FindAsync(
+					a => a.StandardId == standardId && a.SubjectId == subjectId
+				) ?? throw new UserFriendlyException("Subject not assigned to this class");
 
 			assignedSubject.AddChapter(
 				guidGenerator.Create(),
-				createChapterDto.ChapterNumber,
+				createChapterDto.ChapterNo,
 				createChapterDto.ChapterName,
-				createChapterDto.ChapterStartTime,
-				createChapterDto.ChapterEndTime,
+				createChapterDto.StartDate,
+				createChapterDto.EndDate,
 				createChapterDto.Documents,
 				createChapterDto.Description
 			);
 
 			await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
 
-			var dto = ObjectMapper.Map<AssignedSubjectChapter, ChapterDto>(assignedSubject.Chapters.Last());
-			dto.StandardId = assignedSubject.StandardId;
-			dto.SubjectId = assignedSubject.SubjectId;
-			return dto;
+			return new ApiSuccessResponseDto { Message = "Chapter created successfully." };
+		}
+		catch (UserFriendlyException)
+		{
+			throw;
 		}
 		catch (Exception ex)
 		{
@@ -47,15 +49,16 @@ public class ChapterAppService(
 		}
 	}
 
-	public async Task<List<ChapterDto>> GetByAssignedSubjectIdAsync(Guid assignedSubjectId)
+	public async Task<List<ChapterDto>> GetByStandardAndSubjectAsync(Guid standardId, Guid subjectId)
 	{
 		try
 		{
-			var assignedSubject =
-				await assignedSubjectRepository.FindAsync(assignedSubjectId)
-				?? throw new UserFriendlyException("Assigned subject not found");
+			var assignedSubject = await assignedSubjectRepository.FindAsync(
+					a => a.StandardId == standardId && a.SubjectId == subjectId,
+					includeDetails: true
+				) ?? throw new UserFriendlyException("Subject not assigned to this class");
 
-			var chapters = assignedSubject.Chapters.ToList();
+			var chapters = assignedSubject.Chapters.OrderBy(c => c.ChapterNumber).ToList();
 			var dtos = ObjectMapper.Map<List<AssignedSubjectChapter>, List<ChapterDto>>(chapters);
 			foreach (var dto in dtos)
 			{
@@ -63,6 +66,10 @@ public class ChapterAppService(
 				dto.SubjectId = assignedSubject.SubjectId;
 			}
 			return dtos;
+		}
+		catch (UserFriendlyException)
+		{
+			throw;
 		}
 		catch (Exception ex)
 		{

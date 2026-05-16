@@ -33,6 +33,7 @@ public class HRSeederContributor : BaseSeederContributor
 	private const int ProfileSeedImageCount = 8;
 	private const int SampleEmployeePayrollAttendanceCount = 5;
 	private const int SampleAttendanceDayWindow = 14;
+	private const string TempPassword = "Temp@123";
 
 	private readonly IRepository<LeaveType, Guid> _leaveTypeRepository;
 	private readonly LeaveTypeManager _leaveTypeManager;
@@ -788,7 +789,7 @@ public class HRSeederContributor : BaseSeederContributor
 							FirstName = "Rajesh",
 							LastName = "Kumar",
 							MiddleName = "Kumar",
-							Email = "rajesh.kumar@school.edu",
+							Email = "rajesh.kumar@ddvs.com",
 							Mobile = "9876543210",
 							SecondaryMobile = "9876543211",
 							RoleName = "Principal",
@@ -817,7 +818,7 @@ public class HRSeederContributor : BaseSeederContributor
 							FirstName = "Priya",
 							LastName = "Sharma",
 							MiddleName = "Devi",
-							Email = "priya.sharma@school.edu",
+							Email = "priya.sharma@ddvs.com",
 							Mobile = "9876543212",
 							SecondaryMobile = "9876543213",
 							RoleName = "Vice Principal",
@@ -846,7 +847,7 @@ public class HRSeederContributor : BaseSeederContributor
 							FirstName = "Amit",
 							LastName = "Patel",
 							MiddleName = (string?)null,
-							Email = "amit.patel@school.edu",
+							Email = "amit.patel@ddvs.com",
 							Mobile = "9876543214",
 							SecondaryMobile = (string?)null,
 							RoleName = "Head of Department",
@@ -875,7 +876,7 @@ public class HRSeederContributor : BaseSeederContributor
 							FirstName = "Sunita",
 							LastName = "Desai",
 							MiddleName = (string?)null,
-							Email = "sunita.desai@school.edu",
+							Email = "sunita.desai@ddvs.com",
 							Mobile = "9876543215",
 							SecondaryMobile = (string?)null,
 							RoleName = "Head of Department",
@@ -904,7 +905,7 @@ public class HRSeederContributor : BaseSeederContributor
 							FirstName = "Vikram",
 							LastName = "Singh",
 							MiddleName = "Kumar",
-							Email = "vikram.singh@school.edu",
+							Email = "vikram.singh@ddvs.com",
 							Mobile = "9876543216",
 							SecondaryMobile = "9876543217",
 							RoleName = "Teacher",
@@ -933,7 +934,7 @@ public class HRSeederContributor : BaseSeederContributor
 							FirstName = "Meera",
 							LastName = "Joshi",
 							MiddleName = (string?)null,
-							Email = "meera.joshi@school.edu",
+							Email = "meera.joshi@ddvs.com",
 							Mobile = "9876543218",
 							SecondaryMobile = (string?)null,
 							RoleName = "Teacher",
@@ -962,7 +963,7 @@ public class HRSeederContributor : BaseSeederContributor
 							FirstName = "Arjun",
 							LastName = "Reddy",
 							MiddleName = (string?)null,
-							Email = "arjun.reddy@school.edu",
+							Email = "arjun.reddy@ddvs.com",
 							Mobile = "9876543219",
 							SecondaryMobile = (string?)null,
 							RoleName = "Teacher",
@@ -991,7 +992,7 @@ public class HRSeederContributor : BaseSeederContributor
 							FirstName = "Kavita",
 							LastName = "Nair",
 							MiddleName = (string?)null,
-							Email = "kavita.nair@school.edu",
+							Email = "kavita.nair@ddvs.com",
 							Mobile = "9876543220",
 							SecondaryMobile = "9876543221",
 							RoleName = "Teacher",
@@ -1020,7 +1021,7 @@ public class HRSeederContributor : BaseSeederContributor
 							FirstName = "Deepak",
 							LastName = "Mehta",
 							MiddleName = (string?)null,
-							Email = "deepak.mehta@school.edu",
+							Email = "deepak.mehta@ddvs.com",
 							Mobile = "9876543222",
 							SecondaryMobile = (string?)null,
 							RoleName = "Teacher",
@@ -1049,7 +1050,7 @@ public class HRSeederContributor : BaseSeederContributor
 							FirstName = "Anjali",
 							LastName = "Rao",
 							MiddleName = (string?)null,
-							Email = "anjali.rao@school.edu",
+							Email = "anjali.rao@ddvs.com",
 							Mobile = "9876543223",
 							SecondaryMobile = (string?)null,
 							RoleName = "Teacher",
@@ -1138,7 +1139,7 @@ public class HRSeederContributor : BaseSeederContributor
 							FirstName = "Ramesh",
 							LastName = "Gupta",
 							MiddleName = (string?)null,
-							Email = "ramesh.gupta@school.edu",
+							Email = "ramesh.gupta@ddvs.com",
 							Mobile = "9876543224",
 							SecondaryMobile = "9876543225",
 							RoleName = "Administrative Manager",
@@ -1167,7 +1168,7 @@ public class HRSeederContributor : BaseSeederContributor
 							FirstName = "Neha",
 							LastName = "Kulkarni",
 							MiddleName = (string?)null,
-							Email = "neha.kulkarni@school.edu",
+							Email = "neha.kulkarni@ddvs.com",
 							Mobile = "9876543226",
 							SecondaryMobile = (string?)null,
 							RoleName = "HR Manager",
@@ -1196,7 +1197,7 @@ public class HRSeederContributor : BaseSeederContributor
 							FirstName = "Suresh",
 							LastName = "Patil",
 							MiddleName = (string?)null,
-							Email = "suresh.patil@school.edu",
+							Email = "suresh.patil@ddvs.com",
 							Mobile = "9876543227",
 							SecondaryMobile = "9876543228",
 							RoleName = "Finance Officer",
@@ -1225,7 +1226,7 @@ public class HRSeederContributor : BaseSeederContributor
 							FirstName = "Rahul",
 							LastName = "Verma",
 							MiddleName = (string?)null,
-							Email = "rahul.verma@school.edu",
+							Email = "rahul.verma@ddvs.com",
 							Mobile = "9876543229",
 							SecondaryMobile = (string?)null,
 							RoleName = "IT Administrator",
@@ -1254,7 +1255,7 @@ public class HRSeederContributor : BaseSeederContributor
 							FirstName = "Pooja",
 							LastName = "Shah",
 							MiddleName = (string?)null,
-							Email = "pooja.shah@school.edu",
+							Email = "pooja.shah@ddvs.com",
 							Mobile = "9876543230",
 							SecondaryMobile = (string?)null,
 							RoleName = "Office Assistant",
@@ -1283,7 +1284,7 @@ public class HRSeederContributor : BaseSeederContributor
 							FirstName = "Nilesh",
 							LastName = "Joshi",
 							MiddleName = (string?)null,
-							Email = "clerk@school.edu",
+							Email = "nilesh.joshi@ddvs.com",
 							Mobile = "9876543231",
 							SecondaryMobile = (string?)null,
 							RoleName = "Clerk",
@@ -1466,22 +1467,18 @@ public class HRSeederContributor : BaseSeederContributor
 			throw new Exception($"Invalid mobile number for employee {firstName} {lastName}");
 		}
 
-		// Check if email already exists
-		var normalizedEmail = _lookupNormalizer.NormalizeEmail(email);
-		var existingUserByEmail = await _userRepository.FindByNormalizedEmailAsync(normalizedEmail);
+		// Check if email already exists. Also recognize legacy @school.edu seed emails
+		// so rerunning the migrator repairs old local databases instead of duplicating users.
+		var existingUserByEmail = await FindUserByEmailOrLegacyAliasAsync(email);
 		if (existingUserByEmail != null)
 		{
+			await UpdateSeededEmployeeUserAsync(existingUserByEmail, firstName, lastName, email, mobileNo);
 			await EnsureUserInRoleAsync(existingUserByEmail, roleName);
 			return existingUserByEmail.Id;
 		}
 
 		// Generate unique username
 		var username = await GenerateUniqueUsernameAsync(firstName, lastName);
-
-		// Generate password (Username@last4digitsOfMobile - with uppercase first letter)
-		var last4Digits = mobileNo.Substring(mobileNo.Length - 4);
-		var capitalizedUsername = char.ToUpper(username[0]) + username.Substring(1);
-		var password = $"{capitalizedUsername}@{last4Digits}";
 
 		// Create user
 		var user = new IdentityUser(
@@ -1496,8 +1493,8 @@ public class HRSeederContributor : BaseSeederContributor
 		user.SetEmailConfirmed(true);
 		user.SetPhoneNumber(mobileNo, false);
 
-		// Create user with password
-		var userCreateResult = await _userManager.CreateAsync(user, password);
+		// Create user with the same deterministic password as other seeded login users.
+		var userCreateResult = await _userManager.CreateAsync(user, TempPassword);
 		if (!userCreateResult.Succeeded)
 		{
 			throw new Exception(
@@ -1516,6 +1513,89 @@ public class HRSeederContributor : BaseSeederContributor
 		await EnsureUserInRoleAsync(createdUser, roleName);
 
 		return user.Id;
+	}
+
+	private async Task<IdentityUser?> FindUserByEmailOrLegacyAliasAsync(string email)
+	{
+		var emails = new List<string> { email };
+		if (email.EndsWith("@ddvs.com", StringComparison.OrdinalIgnoreCase))
+		{
+			emails.Add(email[..^"@ddvs.com".Length] + "@school.edu");
+		}
+
+		if (string.Equals(email, "nilesh.joshi@ddvs.com", StringComparison.OrdinalIgnoreCase))
+		{
+			emails.Add("clerk@school.edu");
+		}
+
+		foreach (var candidateEmail in emails.Distinct(StringComparer.OrdinalIgnoreCase))
+		{
+			var normalizedEmail = _lookupNormalizer.NormalizeEmail(candidateEmail);
+			var user = await _userRepository.FindByNormalizedEmailAsync(normalizedEmail);
+			if (user != null)
+			{
+				return user;
+			}
+		}
+
+		return null;
+	}
+
+	private async Task UpdateSeededEmployeeUserAsync(
+		IdentityUser user,
+		string firstName,
+		string lastName,
+		string email,
+		string mobileNo)
+	{
+		var managedUser = await _userManager.FindByIdAsync(user.Id.ToString()) ?? user;
+
+		if (!string.Equals(managedUser.Email, email, StringComparison.OrdinalIgnoreCase))
+		{
+			var setEmailResult = await _userManager.SetEmailAsync(managedUser, email);
+			if (!setEmailResult.Succeeded)
+			{
+				throw new Exception(
+					$"Failed to update seeded HR user email '{email}': " +
+					string.Join(", ", setEmailResult.Errors.Select(e => e.Description)));
+			}
+		}
+
+		managedUser.Name = firstName;
+		managedUser.Surname = lastName;
+		managedUser.SetEmailConfirmed(true);
+		managedUser.SetPhoneNumber(mobileNo, false);
+		await _userManager.UpdateAsync(managedUser);
+		await ResetPasswordAsync(managedUser, TempPassword);
+	}
+
+	private async Task ResetPasswordAsync(IdentityUser user, string password)
+	{
+		var managedUser = await _userManager.FindByIdAsync(user.Id.ToString()) ?? user;
+		IdentityResult result;
+		if (string.IsNullOrWhiteSpace(managedUser.PasswordHash))
+		{
+			result = await _userManager.AddPasswordAsync(managedUser, password);
+		}
+		else
+		{
+			var removeResult = await _userManager.RemovePasswordAsync(managedUser);
+			if (!removeResult.Succeeded)
+			{
+				throw new Exception(
+					$"Failed to remove existing password for seeded HR user '{managedUser.Email}': " +
+					string.Join(", ", removeResult.Errors.Select(e => e.Description)));
+			}
+
+			result = await _userManager.AddPasswordAsync(managedUser, password);
+		}
+
+		if (!result.Succeeded)
+		{
+			throw new Exception(
+				$"Failed to set password for seeded HR user '{managedUser.Email}': " +
+				string.Join(", ", result.Errors.Select(e => e.Description)));
+		}
 	}
 
 	private async Task EnsureUserInRoleAsync(IdentityUser user, string roleName)
@@ -1597,3 +1677,4 @@ public class HRSeederContributor : BaseSeederContributor
 		}
 	}
 }
+

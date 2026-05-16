@@ -10,7 +10,7 @@ Use the seeded data described in [manual-hr-test-data.md](./manual-hr-test-data.
    - `SeedTestLogins=true`
    - `SeedHrManualTestData=true`
 2. Start backend and frontend against the same local database.
-3. Log in as `admin1@gmail.com` / `Temp@123`.
+3. Log in as `admin-ddvs@ddvs.com` / `Temp@123`.
 4. Open HR Employee List and verify these employees appear:
    - Yagnik Vadher 1
    - Yagnik Vadher 2

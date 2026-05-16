@@ -49,7 +49,15 @@ public class RolesSeederContributor : BaseSeederContributor
 
 		foreach (var role in roles)
 		{
+			var existingRole = await _roleRepository.FindByNormalizedNameAsync(role.NormalizedName);
+			if (existingRole != null)
+			{
+				continue;
+			}
+
 			await _roleRepository.InsertAsync(role);
 		}
+
+		await CurrentUnitOfWork.SaveChangesAsync();
 	}
 }

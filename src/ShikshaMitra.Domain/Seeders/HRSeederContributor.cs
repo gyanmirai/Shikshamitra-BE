@@ -14,6 +14,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
@@ -63,6 +64,7 @@ public class HRSeederContributor : BaseSeederContributor
 	private readonly EmployeeLeaveManager _employeeLeaveManager;
 	private readonly IEmployeePayrollDetailsRepository _employeePayrollDetailsRepository;
 	private readonly IEmployeePayrollComponentRepository _employeePayrollComponentRepository;
+	private readonly IConfiguration _configuration;
 	private readonly ILogger<HRSeederContributor> _logger;
 
 	public HRSeederContributor(
@@ -97,6 +99,7 @@ public class HRSeederContributor : BaseSeederContributor
 			EmployeeLeaveManager employeeLeaveManager,
 			IEmployeePayrollDetailsRepository employeePayrollDetailsRepository,
 			IEmployeePayrollComponentRepository employeePayrollComponentRepository,
+			IConfiguration configuration,
 			ILogger<HRSeederContributor> logger)
 			: base(currentTenant, guidGenerator, unitOfWork)
 	{
@@ -128,6 +131,7 @@ public class HRSeederContributor : BaseSeederContributor
 		_employeeLeaveManager = employeeLeaveManager;
 		_employeePayrollDetailsRepository = employeePayrollDetailsRepository;
 		_employeePayrollComponentRepository = employeePayrollComponentRepository;
+		_configuration = configuration;
 		_logger = logger;
 	}
 
@@ -155,7 +159,10 @@ public class HRSeederContributor : BaseSeederContributor
 
 		// Phase 5: Sample per-employee payroll + attendance for employees seeded in this run only.
 		await SeedSampleEmployeePayrollAndAttendanceAsync(seededEmployeeIds);
-		await SeedSampleApprovedLeavesAsync(seededEmployeeIds);
+		if (_configuration.GetValue("ShikshaMitra:Seeders:HR:SeedSampleApprovedLeaves", true))
+		{
+			await SeedSampleApprovedLeavesAsync(seededEmployeeIds);
+		}
 		_logger.LogInformation("[HRSeeder] Phase 5 complete (sample payroll/attendance)");
 		_logger.LogInformation("[HRSeeder] Finished seeding for TenantId={TenantId}", CurrentTenant.Id);
 	}

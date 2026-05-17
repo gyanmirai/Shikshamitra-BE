@@ -28,6 +28,7 @@ public class TestAuthHandler(
 	public const string TestTenantId = "11111111-1111-1111-1111-111111111111";
 	public const string TestUserIdHeader = "X-Test-UserId";
 	public const string TestRolesHeader = "X-Test-Roles";
+	public const string TestTenantIdHeader = "X-Test-TenantId";
 
 	protected override Task<AuthenticateResult> HandleAuthenticateAsync()
 	{
@@ -67,9 +68,16 @@ public class TestAuthHandler(
 			claims.Add(new Claim(ClaimTypes.Role, role));
 		}
 
-		if (!string.IsNullOrEmpty(TestTenantId))
+		var tenantId = TestTenantId;
+		if (Context.Request.Headers.TryGetValue(TestTenantIdHeader, out var tenantIdOverride))
 		{
-			claims.Add(new Claim(AbpClaimTypes.TenantId, TestTenantId));
+			tenantId = tenantIdOverride.ToString();
+		}
+
+		if (!string.IsNullOrWhiteSpace(tenantId) &&
+		    !tenantId.Equals("host", StringComparison.OrdinalIgnoreCase))
+		{
+			claims.Add(new Claim(AbpClaimTypes.TenantId, tenantId));
 		}
 
 		var identity = new ClaimsIdentity(claims, SchemeName);

@@ -40,7 +40,7 @@ The seeders grant two separate kinds of access:
 
 | Role | Seeded access |
 |---|---|
-| Admin | Runtime admin bypass; all permissions and all scope. |
+| Admin | Seeded all application/platform permissions; tenant users remain limited to their current tenant. |
 | Principal | All seeded application permissions; `principal-gseb@ddvs.com` and `principal-demo-gseb@ddvs.com` are GSEB scoped, `principal-cbse@ddvs.com` is CBSE scoped. |
 | Teacher | Dashboard, Students, Academics, Class Management, and Calendar permissions; full organization scope for seeded demo data. |
 | Clerk | Dashboard, Students, HR, Communication, Calendar, and Institute Setup permissions; full organization scope for seeded demo data. |

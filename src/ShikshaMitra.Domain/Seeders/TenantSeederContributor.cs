@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
@@ -38,8 +39,10 @@ public class TenantSeederContributor(
 
 		foreach (var tenantInfo in tenants)
 		{
-			// Check if the tenant already exists by name.
-			var existingTenant = await tenantRepository.FindByNameAsync(tenantInfo.Name);
+			var existingTenants = await tenantRepository.GetListAsync();
+			var existingTenant = existingTenants.FirstOrDefault(tenant =>
+				tenant.Id == tenantInfo.Id ||
+				string.Equals(tenant.Name, tenantInfo.Name, StringComparison.OrdinalIgnoreCase));
 			if (existingTenant != null)
 			{
 				tenantIds.Add(existingTenant.Id);

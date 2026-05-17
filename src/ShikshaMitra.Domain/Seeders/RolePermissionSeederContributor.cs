@@ -4,10 +4,12 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Constants.Permissions;
 using Volo.Abp.Data;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.PermissionManagement;
+using Volo.Abp.TenantManagement;
 using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Seeders;
@@ -18,17 +20,20 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 
 	private readonly IPermissionDataSeeder _permissionDataSeeder;
 	private readonly IIdentityRoleRepository _roleRepository;
+	private readonly IRepository<PermissionGrant, Guid> _permissionGrantRepository;
 
 	public RolePermissionSeederContributor(
 		ICurrentTenant currentTenant,
 		IGuidGenerator guidGenerator,
 		IUnitOfWork unitOfWork,
 		IPermissionDataSeeder permissionDataSeeder,
-		IIdentityRoleRepository roleRepository)
+		IIdentityRoleRepository roleRepository,
+		IRepository<PermissionGrant, Guid> permissionGrantRepository)
 		: base(currentTenant, guidGenerator, unitOfWork)
 	{
 		_permissionDataSeeder = permissionDataSeeder;
 		_roleRepository = roleRepository;
+		_permissionGrantRepository = permissionGrantRepository;
 	}
 
 	public override async Task SeedAsync(DataSeedContext context)
@@ -43,17 +48,58 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 				continue;
 			}
 
+			var effectivePermissions = GetEffectivePermissions(roleName, permissions);
+
+			await RemoveObsoletePermissionGrantsAsync(role.Name, effectivePermissions);
+
 			await _permissionDataSeeder.SeedAsync(
 				RoleProviderName,
 				role.Name,
-				permissions,
+				effectivePermissions,
 				CurrentTenant.Id);
 		}
 	}
 
+	private async Task RemoveObsoletePermissionGrantsAsync(string roleName, string[] effectivePermissions)
+	{
+		var effectivePermissionSet = effectivePermissions.ToHashSet(StringComparer.OrdinalIgnoreCase);
+		var obsoletePermissions = DangerousPlatformPermissions()
+			.Where(permission => !effectivePermissionSet.Contains(permission))
+			.ToArray();
+
+		foreach (var obsoletePermission in obsoletePermissions)
+		{
+			await _permissionGrantRepository.DeleteAsync(
+				grant =>
+					grant.TenantId == CurrentTenant.Id &&
+					grant.Name == obsoletePermission &&
+					grant.ProviderName == RoleProviderName &&
+					grant.ProviderKey == roleName,
+				autoSave: true);
+		}
+	}
+
+	private string[] GetEffectivePermissions(string roleName, string[] permissions)
+	{
+		if (CurrentTenant.Id != null || !IsHostAdministratorRole(roleName))
+		{
+			return permissions;
+		}
+
+		return permissions
+			.Concat(HostPlatformPermissions())
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToArray();
+	}
+
+	private static bool IsHostAdministratorRole(string roleName) =>
+		roleName.Equals("admin", StringComparison.OrdinalIgnoreCase) ||
+		roleName.Equals("super-admin", StringComparison.OrdinalIgnoreCase);
+
 	private static Dictionary<string, string[]> BuildRolePermissions()
 	{
-		var allPermissions = AllApplicationPermissions();
+		var tenantAdminPermissions = TenantAdminPermissions();
+		var schoolOperatorPermissions = SchoolOperatorPermissions();
 		var teacherPermissions = PermissionsForModules(
 			ShikshaMitraModulePermissions.Dashboard,
 			ShikshaMitraModulePermissions.Students,
@@ -78,11 +124,13 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 
 		return new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
 		{
-			["Director"] = allPermissions,
-			["Principal"] = allPermissions,
-			["Vice Principal"] = allPermissions,
-			["Administrative Manager"] = allPermissions,
-			["IT Administrator"] = allPermissions,
+			["admin"] = tenantAdminPermissions,
+			["super-admin"] = tenantAdminPermissions,
+			["Director"] = schoolOperatorPermissions,
+			["Principal"] = schoolOperatorPermissions,
+			["Vice Principal"] = schoolOperatorPermissions,
+			["Administrative Manager"] = schoolOperatorPermissions,
+			["IT Administrator"] = schoolOperatorPermissions,
 			["Head of Department"] = teacherPermissions,
 			["Teacher"] = teacherPermissions,
 			["Clerk"] = clerkPermissions,
@@ -100,15 +148,29 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 
 	private static string[] AllApplicationPermissions() =>
 		AllModulePermissions()
+			.Concat(AllDetailedModulePermissions())
 			.Concat(AllLegacySubModulePermissions())
 			.Concat(AllDetailedSubmodulePermissions())
 			.Concat(AllPlatformPermissions())
 			.Distinct(StringComparer.OrdinalIgnoreCase)
 			.ToArray();
 
+	private static string[] TenantAdminPermissions() =>
+		AllApplicationPermissions()
+			.Concat(TenantAdminPlatformPermissions())
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToArray();
+
+	private static string[] SchoolOperatorPermissions() =>
+		AllApplicationPermissions()
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToArray();
+
 	private static string[] PermissionsForModules(params string[] modulePermissions)
 	{
-		var moduleSet = modulePermissions.ToHashSet(StringComparer.OrdinalIgnoreCase);
+		var moduleSet = modulePermissions
+			.SelectMany(ModulePermissionAliases)
+			.ToHashSet(StringComparer.OrdinalIgnoreCase);
 		var modulePrefixes = moduleSet
 			.Select(permission => permission + ".")
 			.ToArray();
@@ -123,6 +185,9 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 	private static IEnumerable<string> AllModulePermissions() =>
 		ShikshaMitraModulePermissions.All;
 
+	private static IEnumerable<string> AllDetailedModulePermissions() =>
+		ShikshaMitraSubmodulePermissions.AllModules.Keys;
+
 	private static IEnumerable<string> AllLegacySubModulePermissions() =>
 		ShikshaMitraSubModulePermissions.All;
 
@@ -131,7 +196,43 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 			.SelectMany(module => module.Value.Submodules.Values)
 			.SelectMany(submodule => submodule.Permissions);
 
+	private static IEnumerable<string> ModulePermissionAliases(string modulePermission)
+	{
+		yield return modulePermission;
+
+		var detailedModulePermission = modulePermission switch
+		{
+			ShikshaMitraModulePermissions.Students => ShikshaMitraSubmodulePermissions.Students.Default,
+			ShikshaMitraModulePermissions.Academics => ShikshaMitraSubmodulePermissions.Academics.Default,
+			ShikshaMitraModulePermissions.ClassManagement => ShikshaMitraSubmodulePermissions.ClassManagement.Default,
+			ShikshaMitraModulePermissions.HR => ShikshaMitraSubmodulePermissions.HR.Default,
+			ShikshaMitraModulePermissions.Finance => ShikshaMitraSubmodulePermissions.Finance.Default,
+			ShikshaMitraModulePermissions.Communication => ShikshaMitraSubmodulePermissions.Communication.Default,
+			ShikshaMitraModulePermissions.Calendar => ShikshaMitraSubmodulePermissions.Calendar.Default,
+			ShikshaMitraModulePermissions.Library => ShikshaMitraSubmodulePermissions.Library.Default,
+			ShikshaMitraModulePermissions.Transport => ShikshaMitraSubmodulePermissions.Transport.Default,
+			ShikshaMitraModulePermissions.InstituteSetup => ShikshaMitraSubmodulePermissions.InstituteSetup.Default,
+			_ => null
+		};
+
+		if (!string.IsNullOrWhiteSpace(detailedModulePermission))
+		{
+			yield return detailedModulePermission;
+		}
+	}
+
 	private static IEnumerable<string> AllPlatformPermissions()
+	{
+		yield return "ShikshaMitra.Group";
+		yield return "ShikshaMitra.Group.List";
+		yield return "ShikshaMitra.Group.View";
+		yield return "ShikshaMitra.Group.Create";
+		yield return "ShikshaMitra.Group.Edit";
+		yield return "ShikshaMitra.Group.Delete";
+		yield return TenantManagementPermissions.Tenants.Default;
+	}
+
+	private static IEnumerable<string> TenantAdminPlatformPermissions()
 	{
 		yield return "ShikshaMitra.UserScope";
 		yield return "ShikshaMitra.UserScope.Assign";
@@ -139,11 +240,23 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 		yield return "ShikshaMitra.UserScope.View";
 		yield return "ShikshaMitra.UserScope.BulkAssign";
 		yield return "ShikshaMitra.UserScope.Manage";
-		yield return "ShikshaMitra.Group";
-		yield return "ShikshaMitra.Group.List";
-		yield return "ShikshaMitra.Group.View";
-		yield return "ShikshaMitra.Group.Create";
-		yield return "ShikshaMitra.Group.Edit";
-		yield return "ShikshaMitra.Group.Delete";
+		yield return "AbpPermissionManagement.Permissions";
+		yield return "AbpPermissionManagement.Permissions.Manage";
+		yield return TenantManagementPermissions.Tenants.Update;
+		yield return IdentityPermissions.Users.Default;
+		yield return IdentityPermissions.Users.ManagePermissions;
+		yield return IdentityPermissions.Roles.Default;
+		yield return IdentityPermissions.Roles.ManagePermissions;
 	}
+
+	private static IEnumerable<string> HostPlatformPermissions()
+	{
+		yield return TenantManagementPermissions.Tenants.Create;
+		yield return TenantManagementPermissions.Tenants.Delete;
+		yield return TenantManagementPermissions.Tenants.ManageConnectionStrings;
+	}
+
+	private static IEnumerable<string> DangerousPlatformPermissions() =>
+		TenantAdminPlatformPermissions()
+			.Concat(HostPlatformPermissions());
 }

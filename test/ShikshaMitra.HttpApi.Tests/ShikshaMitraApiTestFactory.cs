@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Data.Common;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -12,6 +12,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -143,6 +144,13 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	protected override void ConfigureWebHost(IWebHostBuilder builder)
 	{
 		builder.UseEnvironment("Development");
+		builder.ConfigureAppConfiguration(configuration =>
+		{
+			configuration.AddInMemoryCollection(new Dictionary<string, string?>
+			{
+				["ShikshaMitra:Seeders:HR:SeedSampleApprovedLeaves"] = "false"
+			});
+		});
 
 		builder.ConfigureServices(services =>
 		{
@@ -236,10 +244,6 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 				}
 			}
 		});
-
-		services.AddSingleton<IAuthorizationHandler, AllowAllAuthorizationHandler>();
-
-		services.AddAlwaysAllowAuthorization();
 
 		services.AddTransient<Volo.Abp.Authorization.Permissions.IPermissionChecker,
 			AlwaysGrantPermissionChecker>();

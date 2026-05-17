@@ -80,10 +80,6 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 
 					var staffUserScopeSeeder = scope.ServiceProvider.GetRequiredService<Seeders.StaffUserScopeSeederContributor>();
 					await staffUserScopeSeeder.SeedAsync(context);
-
-					// Seed deterministic HR manual test data (feature-flagged; DDVS only)
-					var hrManualTestDataSeeder = scope.ServiceProvider.GetRequiredService<Seeders.HrManualTestDataSeederContributor>();
-					await hrManualTestDataSeeder.SeedAsync(context);
 				}
 			}
 		}

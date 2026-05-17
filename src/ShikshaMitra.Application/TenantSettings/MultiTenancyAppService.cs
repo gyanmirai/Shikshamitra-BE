@@ -1,4 +1,5 @@
 using System;
+using Microsoft.AspNetCore.Authorization;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Authorization;
@@ -14,6 +15,7 @@ namespace ShikshaMitra.TenantSettings;
 
 [Dependency(ReplaceServices = true)]
 [ExposeServices(typeof(ITenantAppService), typeof(MultiTenancyAppService))]
+[AllowAnonymous]
 public class MultiTenancyAppService : TenantAppService
 {
 	private readonly IPermissionChecker _permissionChecker;
@@ -34,16 +36,17 @@ public class MultiTenancyAppService : TenantAppService
 		_currentPrincipalAccessor = currentPrincipalAccessor;
 	}
 
+	[AllowAnonymous]
 	public override async Task<PagedResultDto<TenantDto>> GetListAsync(GetTenantsInput input)
 	{
-		await CheckTenantViewPermissionAsync();
-
 		var tenantId = GetEffectiveTenantId();
 		if (tenantId == null)
 		{
+			await CheckTenantViewPermissionAsync();
 			return await base.GetListAsync(input);
 		}
 
+		CheckAuthenticatedTenantUser();
 		var currentTenant = await base.GetAsync(tenantId.Value);
 		return new PagedResultDto<TenantDto>(1, new[] { currentTenant });
 	}
@@ -67,14 +70,23 @@ public class MultiTenancyAppService : TenantAppService
 		return await base.UpdateAsync(id, input);
 	}
 
+	[AllowAnonymous]
 	public override async Task<TenantDto> GetAsync(Guid id)
 	{
-		await CheckTenantViewPermissionAsync();
-
 		var tenantId = GetEffectiveTenantId();
 		if (tenantId != null && tenantId != id)
 		{
+			await CheckTenantViewPermissionAsync();
 			throw new AbpAuthorizationException("You are not allowed to view this tenant.");
+		}
+
+		if (tenantId == id)
+		{
+			CheckAuthenticatedTenantUser();
+		}
+		else
+		{
+			await CheckTenantViewPermissionAsync();
 		}
 
 		return await base.GetAsync(id);
@@ -130,6 +142,14 @@ public class MultiTenancyAppService : TenantAppService
 		if (!await _permissionChecker.IsGrantedAsync(permissionName))
 		{
 			throw new AbpAuthorizationException("You are not authorized to manage tenants.");
+		}
+	}
+
+	private void CheckAuthenticatedTenantUser()
+	{
+		if (!CurrentUser.IsAuthenticated || GetEffectiveTenantId() == null)
+		{
+			throw new AbpAuthorizationException("You are not authorized to view tenant information.");
 		}
 	}
 

@@ -4,6 +4,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -32,8 +33,8 @@ namespace ShikshaMitra.Seeders;
 public class HRSeederContributor : BaseSeederContributor
 {
 	private const int ProfileSeedImageCount = 8;
-	private const int SampleEmployeePayrollAttendanceCount = 5;
-	private const int SampleAttendanceDayWindow = 14;
+	private const int ActiveEmployeeSeedPercentage = 90;
+	private const int SampleAttendanceMonthWindow = 12;
 	private const string TempPassword = "Temp@123";
 
 	private readonly IRepository<LeaveType, Guid> _leaveTypeRepository;
@@ -64,6 +65,7 @@ public class HRSeederContributor : BaseSeederContributor
 	private readonly EmployeeLeaveManager _employeeLeaveManager;
 	private readonly IEmployeePayrollDetailsRepository _employeePayrollDetailsRepository;
 	private readonly IEmployeePayrollComponentRepository _employeePayrollComponentRepository;
+	private readonly IRepository<PayrollRunItemSnapshot, Guid> _payrollRunItemSnapshotRepository;
 	private readonly IConfiguration _configuration;
 	private readonly ILogger<HRSeederContributor> _logger;
 
@@ -99,6 +101,7 @@ public class HRSeederContributor : BaseSeederContributor
 			EmployeeLeaveManager employeeLeaveManager,
 			IEmployeePayrollDetailsRepository employeePayrollDetailsRepository,
 			IEmployeePayrollComponentRepository employeePayrollComponentRepository,
+			IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
 			IConfiguration configuration,
 			ILogger<HRSeederContributor> logger)
 			: base(currentTenant, guidGenerator, unitOfWork)
@@ -131,6 +134,7 @@ public class HRSeederContributor : BaseSeederContributor
 		_employeeLeaveManager = employeeLeaveManager;
 		_employeePayrollDetailsRepository = employeePayrollDetailsRepository;
 		_employeePayrollComponentRepository = employeePayrollComponentRepository;
+		_payrollRunItemSnapshotRepository = payrollRunItemSnapshotRepository;
 		_configuration = configuration;
 		_logger = logger;
 	}
@@ -157,15 +161,24 @@ public class HRSeederContributor : BaseSeederContributor
 		var seededEmployeeIds = await SeedEmployeesAsync();
 		_logger.LogInformation("[HRSeeder] Phase 4 complete (employees seeded={Count})", seededEmployeeIds.Count);
 
-		// Phase 5: Sample per-employee payroll + attendance for employees seeded in this run only.
-		await SeedSampleEmployeePayrollAndAttendanceAsync(seededEmployeeIds);
-		if (_configuration.GetValue("ShikshaMitra:Seeders:HR:SeedSampleApprovedLeaves", true))
+		// Phase 5: Keep seeded/demo employees realistic: most active, some inactive.
+		var activeEmployeeIds = await EnsureEmployeeStatusDistributionAsync(seededEmployeeIds);
+		_logger.LogInformation("[HRSeeder] Phase 5 complete (active employees={Count})", activeEmployeeIds.Count);
+
+		// Phase 6: Payroll-ready active employees with 12 months of attendance.
+		var samplePayrollEmployeeIds = await SeedSampleEmployeePayrollAndAttendanceAsync(activeEmployeeIds);
+		if (ShouldSeedSampleLeaveScenarios())
 		{
-			await SeedSampleApprovedLeavesAsync(seededEmployeeIds);
+			await SeedSampleLeaveScenariosAsync(samplePayrollEmployeeIds);
 		}
-		_logger.LogInformation("[HRSeeder] Phase 5 complete (sample payroll/attendance)");
+		_logger.LogInformation("[HRSeeder] Phase 6 complete (sample payroll/attendance/leaves)");
 		_logger.LogInformation("[HRSeeder] Finished seeding for TenantId={TenantId}", CurrentTenant.Id);
 	}
+
+	private bool ShouldSeedSampleLeaveScenarios() =>
+		_configuration.GetValue(
+			"ShikshaMitra:Seeders:HR:SeedSampleLeaveScenarios",
+			_configuration.GetValue("ShikshaMitra:Seeders:HR:SeedSampleApprovedLeaves", true));
 
 	private async Task SeedLeaveTypesAndPoliciesAsync()
 	{
@@ -442,34 +455,119 @@ public class HRSeederContributor : BaseSeederContributor
 		return seededEmployeeIds;
 	}
 
-	/// <summary>
-	/// Demo payroll lines + attendance for the first N employees (by employee code). Skips employees that already have payroll components.
-	/// Attendance: last ~14 calendar days, weekdays only; idempotent per employee per day.
-	/// </summary>
-	private async Task SeedSampleEmployeePayrollAndAttendanceAsync(List<Guid> seededEmployeeIds)
+	private async Task<List<Guid>> EnsureEmployeeStatusDistributionAsync(List<Guid> seededEmployeeIds)
 	{
-		if (seededEmployeeIds.Count == 0)
+		var employeeQuery = await _employeeRepository.GetQueryableAsync();
+		if (seededEmployeeIds.Count > 0)
 		{
-			return;
+			employeeQuery = employeeQuery.Where(e => seededEmployeeIds.Contains(e.Id));
 		}
 
+		var employees = employeeQuery
+			.Where(e =>
+				!e.EmployeeStatusType.HasValue ||
+				e.EmployeeStatusType == EmployeeStatusType.Active ||
+				e.EmployeeStatusType == EmployeeStatusType.Inactive)
+			.AsEnumerable()
+			.Where(IsSeededDemoEmployee)
+			.OrderBy(e => e.EmployeeCode)
+			.ToList();
+		if (employees.Count == 0)
+		{
+			return new List<Guid>();
+		}
+
+		var inactiveCount = employees.Count <= 1
+			? 0
+			: (int)Math.Round(
+				employees.Count * ((100m - ActiveEmployeeSeedPercentage) / 100m),
+				MidpointRounding.AwayFromZero);
+		inactiveCount = Math.Clamp(inactiveCount, 0, employees.Count - 1);
+
+		var inactiveEmployeeIds = employees
+			.OrderBy(e => StableSeedHash($"{CurrentTenant.Id:N}:{e.EmployeeCode}:{e.Email}:{e.Id:N}"))
+			.Take(inactiveCount)
+			.Select(e => e.Id)
+			.ToHashSet();
+
+		var activeEmployeeIds = new List<Guid>();
+		var updatedCount = 0;
+		foreach (var employee in employees)
+		{
+			var targetStatus = inactiveEmployeeIds.Contains(employee.Id)
+				? EmployeeStatusType.Inactive
+				: EmployeeStatusType.Active;
+			if (targetStatus == EmployeeStatusType.Active)
+			{
+				activeEmployeeIds.Add(employee.Id);
+			}
+
+			if (employee.EmployeeStatusType == targetStatus)
+			{
+				continue;
+			}
+
+			var updated = await _employeeManager.UpdateEmployeeStatusAsync(
+				employee.Id,
+				targetStatus,
+				$"Set by HR seeder to maintain {ActiveEmployeeSeedPercentage}% active demo employee distribution");
+			await _employeeRepository.UpdateAsync(updated, autoSave: false);
+			updatedCount++;
+		}
+
+		if (updatedCount > 0)
+		{
+			await CurrentUnitOfWork.SaveChangesAsync();
+		}
+
+		_logger.LogInformation(
+			"[HRSeeder] Employee status distribution applied active={ActiveCount}, inactive={InactiveCount}, updated={UpdatedCount}",
+			activeEmployeeIds.Count,
+			inactiveCount,
+			updatedCount);
+
+		return activeEmployeeIds;
+	}
+
+	private static bool IsSeededDemoEmployee(Employee employee) =>
+		employee.Email?.EndsWith("@ddvs.com", StringComparison.OrdinalIgnoreCase) == true;
+
+	private static uint StableSeedHash(string value)
+	{
+		unchecked
+		{
+			var hash = 2166136261u;
+			foreach (var character in value.ToUpperInvariant())
+			{
+				hash ^= character;
+				hash *= 16777619u;
+			}
+
+			return hash;
+		}
+	}
+
+	/// <summary>
+	/// Demo payroll lines + attendance for active employees. Skips employees that already have payroll components.
+	/// Attendance: rolling 12 months, weekdays only; idempotent per employee per day.
+	/// </summary>
+	private async Task<List<Guid>> SeedSampleEmployeePayrollAndAttendanceAsync(List<Guid> activeEmployeeIds)
+	{
 		var educationMediumStage = (await _educationMediumStageRepository.GetQueryableAsync()).FirstOrDefault();
 		if (educationMediumStage == null)
 		{
-			return;
+			return new List<Guid>();
 		}
 
 		if (!await _earningComponentRepository.AnyAsync() || !await _deductionComponentRepository.AnyAsync())
 		{
-			return;
+			return new List<Guid>();
 		}
 
-		var employeeIds = seededEmployeeIds
-			.Take(SampleEmployeePayrollAttendanceCount)
-			.ToList();
+		var employeeIds = await ResolveActivePayrollEmployeeIdsAsync(activeEmployeeIds);
 		if (employeeIds.Count == 0)
 		{
-			return;
+			return employeeIds;
 		}
 
 		foreach (var employeeId in employeeIds)
@@ -477,11 +575,30 @@ public class HRSeederContributor : BaseSeederContributor
 			await SeedSamplePayrollForEmployeeIfNeededAsync(employeeId);
 		}
 
-		await ActivateEmployeesWithPayrollStructureAsync(employeeIds);
-
 		await SeedSampleAttendanceForEmployeesAsync(
 			employeeIds,
 			educationMediumStage.Id);
+
+		return employeeIds;
+	}
+
+	private async Task<List<Guid>> ResolveActivePayrollEmployeeIdsAsync(List<Guid> activeEmployeeIds)
+	{
+		var employeeIds = activeEmployeeIds
+			.Distinct()
+			.ToList();
+
+		if (employeeIds.Count > 0)
+		{
+			return employeeIds;
+		}
+
+		var existingEmployeeQuery = await _employeeRepository.GetQueryableAsync();
+		return existingEmployeeQuery
+			.Where(e => e.EmployeeStatusType == EmployeeStatusType.Active)
+			.OrderBy(e => e.EmployeeCode)
+			.Select(e => e.Id)
+			.ToList();
 	}
 
 	private async Task ActivateEmployeesWithPayrollStructureAsync(List<Guid> employeeIds)
@@ -512,12 +629,19 @@ public class HRSeederContributor : BaseSeederContributor
 	private async Task SeedSamplePayrollForEmployeeIfNeededAsync(Guid employeeId)
 	{
 		var hasPendingChanges = false;
-		var existingComponents = await _employeePayrollComponentRepository.GetByEmployeeIdAsync(employeeId);
-		if (existingComponents.Count > 0)
+		var employee = await _employeeRepository.FindAsync(employeeId);
+		if (employee == null)
 		{
-			_logger.LogDebug("[HRSeeder] Skip payroll seed for EmployeeId={EmployeeId} (already exists)", employeeId);
 			return;
 		}
+
+		var forceRepairSeededDemoPayroll = IsSeededDemoEmployee(employee);
+		var existingComponents = await _employeePayrollComponentRepository.GetByEmployeeIdAsync(employeeId);
+		var existingComponentsById = existingComponents
+			.Where(x => x.ComponentId.HasValue)
+			.GroupBy(x => (x.ComponentId!.Value, x.IsEarning))
+			.ToDictionary(x => x.Key, x => x.First());
+		var seededSalary = BuildSeededSalary(employee);
 
 		var payrollDetails = await _employeePayrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
 		if (payrollDetails == null)
@@ -549,13 +673,42 @@ public class HRSeederContributor : BaseSeederContributor
 
 		foreach (var master in earningMasters)
 		{
-			var amount = master.Amount ?? 0m;
+			var amount = seededSalary.GetEarningAmount(master.Name);
+			var isFixed = master.CalculationType == CalculationType.Amount;
+			if (existingComponentsById.TryGetValue((master.Id, true), out var existing))
+			{
+				if (amount <= 0m)
+				{
+					await _employeePayrollComponentRepository.DeleteAsync(existing, autoSave: false);
+					hasPendingChanges = true;
+					continue;
+				}
+
+				if (forceRepairSeededDemoPayroll || existing.UsesMasterValue || existing.Amount == master.Amount)
+				{
+					existing.UpdateComponent(
+						master.Name,
+						master.Description,
+						amount,
+						isFixed,
+						isTemp: false,
+						master.CalculationType == CalculationType.Amount
+							? SalaryComponentType.Fixed
+							: SalaryComponentType.Percentage,
+						MapSalaryDependency(master.DependOn),
+						usesMasterValue: false);
+					await _employeePayrollComponentRepository.UpdateAsync(existing, autoSave: false);
+					hasPendingChanges = true;
+				}
+
+				continue;
+			}
+
 			if (amount <= 0m)
 			{
 				continue;
 			}
 
-			var isFixed = master.CalculationType == CalculationType.Amount;
 			var row = new EmployeePayrollComponent(
 				GuidGenerator.Create(),
 				employeeId,
@@ -570,20 +723,50 @@ public class HRSeederContributor : BaseSeederContributor
 					? SalaryComponentType.Fixed
 					: SalaryComponentType.Percentage,
 				MapSalaryDependency(master.DependOn),
-				isEarning: true);
+				isEarning: true,
+				usesMasterValue: false);
 			await _employeePayrollComponentRepository.InsertAsync(row, autoSave: false);
 			hasPendingChanges = true;
 		}
 
 		foreach (var master in deductionMasters)
 		{
-			var amount = master.Amount ?? 0m;
+			var amount = seededSalary.GetDeductionAmount(master.Name);
+			var isFixed = master.CalculationType == CalculationType.Amount;
+			if (existingComponentsById.TryGetValue((master.Id, false), out var existing))
+			{
+				if (amount <= 0m)
+				{
+					await _employeePayrollComponentRepository.DeleteAsync(existing, autoSave: false);
+					hasPendingChanges = true;
+					continue;
+				}
+
+				if (forceRepairSeededDemoPayroll || existing.UsesMasterValue || existing.Amount == master.Amount)
+				{
+					existing.UpdateComponent(
+						master.Name,
+						master.Description,
+						amount,
+						isFixed,
+						isTemp: false,
+						master.CalculationType == CalculationType.Amount
+							? SalaryComponentType.Fixed
+							: SalaryComponentType.Percentage,
+						MapSalaryDependency(master.DependOn),
+						usesMasterValue: false);
+					await _employeePayrollComponentRepository.UpdateAsync(existing, autoSave: false);
+					hasPendingChanges = true;
+				}
+
+				continue;
+			}
+
 			if (amount <= 0m)
 			{
 				continue;
 			}
 
-			var isFixed = master.CalculationType == CalculationType.Amount;
 			var row = new EmployeePayrollComponent(
 				GuidGenerator.Create(),
 				employeeId,
@@ -598,15 +781,137 @@ public class HRSeederContributor : BaseSeederContributor
 					? SalaryComponentType.Fixed
 					: SalaryComponentType.Percentage,
 				MapSalaryDependency(master.DependOn),
-				isEarning: false);
+				isEarning: false,
+				usesMasterValue: false);
 			await _employeePayrollComponentRepository.InsertAsync(row, autoSave: false);
 			hasPendingChanges = true;
 		}
 
 		if (hasPendingChanges)
 		{
+			await InvalidateUnlockedPayrollSnapshotsAsync(employeeId);
 			await CurrentUnitOfWork.SaveChangesAsync();
 		}
+	}
+
+	private async Task InvalidateUnlockedPayrollSnapshotsAsync(Guid employeeId)
+	{
+		var snapshotQuery = await _payrollRunItemSnapshotRepository.GetQueryableAsync();
+		var snapshots = snapshotQuery
+			.Where(x => x.EmployeeId == employeeId && !x.IsLocked)
+			.ToList();
+		foreach (var snapshot in snapshots)
+		{
+			await _payrollRunItemSnapshotRepository.DeleteAsync(snapshot, autoSave: false);
+		}
+	}
+
+	private SeededSalaryProfile BuildSeededSalary(Employee employee)
+	{
+		var grossSalary = ResolveSeededGrossSalary(employee);
+		var basic = RoundToNearest(grossSalary * 0.50m, 100m);
+		var hra = RoundToNearest(grossSalary * 0.20m, 100m);
+		var da = RoundToNearest(grossSalary * 0.10m, 100m);
+		var transport = grossSalary >= 90_000m ? 5_000m : grossSalary >= 55_000m ? 2_500m : 1_600m;
+		var medical = grossSalary >= 55_000m ? 2_000m : 1_250m;
+		var seed = StableSeedHash($"{CurrentTenant.Id:N}:{employee.EmployeeCode}:{employee.Email}:{employee.Id:N}");
+		var performanceBonus = grossSalary switch
+		{
+			>= 100_000m => 8_000m + (seed % 3) * 1_000m,
+			>= 70_000m => 4_000m + (seed % 3) * 1_000m,
+			>= 45_000m => 2_000m + (seed % 2) * 1_000m,
+			_ => seed % 2 == 0 ? 1_000m : 0m
+		};
+		var incentive = seed % 4 == 0 ? 2_000m : seed % 5 == 0 ? 1_000m : 0m;
+		var specialAllowance = grossSalary - basic - hra - da - transport - medical - performanceBonus - incentive;
+		if (specialAllowance < 0)
+		{
+			specialAllowance = 0;
+		}
+
+		var pf = RoundToNearest(basic * 0.12m, 1m);
+		var professionalTax = grossSalary >= 12_000m ? 200m : 0m;
+		var tds = grossSalary switch
+		{
+			>= 120_000m => 12_000m,
+			>= 100_000m => 8_000m,
+			>= 80_000m => 5_000m,
+			>= 60_000m => 2_500m,
+			>= 50_000m => 1_000m,
+			_ => 0m
+		};
+		var loan = seed % 7 == 0 ? 1_500m : 0m;
+		var advance = seed % 11 == 0 ? 1_000m : 0m;
+
+		return new SeededSalaryProfile(
+			grossSalary,
+			new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
+			{
+				["Basic Salary"] = basic,
+				["House Rent Allowance (HRA)"] = hra,
+				["Dearness Allowance (DA)"] = da,
+				["Transport Allowance"] = transport,
+				["Medical Allowance"] = medical,
+				["Special Allowance"] = specialAllowance,
+				["Performance Bonus"] = performanceBonus,
+				["Incentive"] = incentive
+			},
+			new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
+			{
+				["Provident Fund (PF)"] = pf,
+				["Professional Tax"] = professionalTax,
+				["Income Tax (TDS)"] = tds,
+				["Employee State Insurance (ESI)"] = 0m,
+				["Loan Repayment"] = loan,
+				["Advance Salary Deduction"] = advance,
+				["Loss of Pay (LOP)"] = 0m
+			});
+	}
+
+	private decimal ResolveSeededGrossSalary(Employee employee)
+	{
+		var designation = employee.Designation ?? string.Empty;
+		var department = employee.Department ?? string.Empty;
+		var employeeCode = employee.EmployeeCode ?? string.Empty;
+		var seed = StableSeedHash($"{CurrentTenant.Id:N}:{employeeCode}:{employee.Email}:{employee.Id:N}");
+
+		var (min, max) = designation switch
+		{
+			var value when value.Contains("Principal", StringComparison.OrdinalIgnoreCase) &&
+				!value.Contains("Vice", StringComparison.OrdinalIgnoreCase) => (130_000m, 150_000m),
+			var value when value.Contains("Vice Principal", StringComparison.OrdinalIgnoreCase) => (95_000m, 115_000m),
+			var value when value.Contains("Head", StringComparison.OrdinalIgnoreCase) => (75_000m, 95_000m),
+			var value when value.Contains("Senior Teacher", StringComparison.OrdinalIgnoreCase) => (55_000m, 70_000m),
+			var value when value.Contains("Teacher", StringComparison.OrdinalIgnoreCase) => (38_000m, 60_000m),
+			var value when value.Contains("Administrative Manager", StringComparison.OrdinalIgnoreCase) => (70_000m, 85_000m),
+			var value when value.Contains("HR Manager", StringComparison.OrdinalIgnoreCase) => (60_000m, 75_000m),
+			var value when value.Contains("Finance Officer", StringComparison.OrdinalIgnoreCase) => (65_000m, 80_000m),
+			var value when value.Contains("IT Administrator", StringComparison.OrdinalIgnoreCase) => (45_000m, 60_000m),
+			var value when value.Contains("Office Assistant", StringComparison.OrdinalIgnoreCase) => (30_000m, 38_000m),
+			var value when value.Contains("Clerk", StringComparison.OrdinalIgnoreCase) => (30_000m, 40_000m),
+			_ when department.Contains("Administration", StringComparison.OrdinalIgnoreCase) => (40_000m, 60_000m),
+			_ => (35_000m, 55_000m)
+		};
+
+		var steps = (int)((max - min) / 5_000m);
+		return min + (seed % (uint)(steps + 1)) * 5_000m;
+	}
+
+	private static decimal RoundToNearest(decimal amount, decimal nearest)
+	{
+		return Math.Round(amount / nearest, MidpointRounding.AwayFromZero) * nearest;
+	}
+
+	private sealed record SeededSalaryProfile(
+		decimal GrossSalary,
+		IReadOnlyDictionary<string, decimal> Earnings,
+		IReadOnlyDictionary<string, decimal> Deductions)
+	{
+		public decimal GetEarningAmount(string name) =>
+			Earnings.TryGetValue(name, out var amount) ? amount : 0m;
+
+		public decimal GetDeductionAmount(string name) =>
+			Deductions.TryGetValue(name, out var amount) ? amount : 0m;
 	}
 
 	private static SalaryComponentDependency? MapSalaryDependency(ComponentDependency dependOn)
@@ -628,7 +933,9 @@ public class HRSeederContributor : BaseSeederContributor
 		}
 
 		var today = DateOnly.FromDateTime(DateTime.UtcNow);
-		var windowStart = today.AddDays(-SampleAttendanceDayWindow + 1);
+		var windowStartMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1)
+			.AddMonths(-(SampleAttendanceMonthWindow - 1));
+		var windowStart = DateOnly.FromDateTime(windowStartMonth);
 
 		var existingRows = await _employeeAttendanceRepository.GetListAsync(a =>
 			employeeIds.Contains(a.EmployeeId) &&
@@ -704,7 +1011,7 @@ public class HRSeederContributor : BaseSeederContributor
 			employeeIds.Count);
 	}
 
-	private async Task SeedSampleApprovedLeavesAsync(List<Guid> employeeIds)
+	private async Task SeedSampleLeaveScenariosAsync(List<Guid> employeeIds)
 	{
 		if (employeeIds.Count == 0)
 		{
@@ -723,46 +1030,65 @@ public class HRSeederContributor : BaseSeederContributor
 		var leavePolicies = await _leavePolicyRepository.GetListAsync(x => x.AcademicYearId == academicYear.Id);
 		var casual = leavePolicies.FirstOrDefault(x => x.PolicyName.Contains("Casual", StringComparison.OrdinalIgnoreCase));
 		var sick = leavePolicies.FirstOrDefault(x => x.PolicyName.Contains("Sick", StringComparison.OrdinalIgnoreCase));
-		var policies = new[] { casual, sick }.Where(x => x != null).ToList();
-		if (policies.Count == 0)
+		var lossOfPay = leavePolicies.FirstOrDefault(x =>
+			x.PolicyName.Contains("Loss", StringComparison.OrdinalIgnoreCase) ||
+			x.PolicyName.Contains("LOP", StringComparison.OrdinalIgnoreCase));
+		if (casual == null || sick == null)
 		{
 			return;
 		}
 
 		var currentMonthStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
-		var candidates = employeeIds.Take(Math.Min(3, employeeIds.Count)).ToList();
+		var candidates = employeeIds.Take(Math.Min(4, employeeIds.Count)).ToList();
 		var insertedCount = 0;
-		for (var i = 0; i < candidates.Count; i++)
+		var scenarios = new List<LeaveSeedScenario>
+		{
+			new("HR seed approved sick leave", EmployeeLeaveStatusType.Approved, sick, 2),
+			new("HR seed pending casual leave", EmployeeLeaveStatusType.Pending, casual, 5),
+			new("HR seed rejected casual leave", EmployeeLeaveStatusType.Rejected, casual, 8, "Seeded rejection scenario."),
+			new("HR seed approved loss of pay leave", EmployeeLeaveStatusType.Approved, lossOfPay ?? casual, 11)
+		};
+
+		for (var i = 0; i < candidates.Count && i < scenarios.Count; i++)
 		{
 			var employeeId = candidates[i];
-			var policy = policies[i % policies.Count]!;
-			var leaveDate = GetCurrentMonthBusinessDayNotFuture(currentMonthStart, 2 + i * 3);
-			var description = $"HR base seed approved leave {i + 1}";
+			var scenario = scenarios[i];
+			var leaveDate = GetCurrentMonthBusinessDayNotFuture(currentMonthStart, scenario.BusinessDay);
 			if (await _employeeLeaveRepository.AnyAsync(x =>
 				    x.EmployeeId == employeeId &&
-				    x.Description == description))
+				    x.Description == scenario.Description))
 			{
 				continue;
 			}
 
 			var leave = await _employeeLeaveManager.CreateAsync(
 				employeeId,
-				policy.Id,
+				scenario.Policy.Id,
 				new DateTimeOffset(leaveDate, TimeSpan.FromHours(5.5)),
 				new DateTimeOffset(leaveDate, TimeSpan.FromHours(5.5)),
-				description);
+				scenario.Description);
 			await _employeeLeaveRepository.InsertAsync(leave, autoSave: true);
-			await _employeeLeaveManager.UpdateLeaveRequestStatusAsync(
-				leave,
-				EmployeeLeaveStatusType.Approved,
-				rejectionReason: null);
+			if (scenario.Status != EmployeeLeaveStatusType.Pending)
+			{
+				await _employeeLeaveManager.UpdateLeaveRequestStatusAsync(
+					leave,
+					scenario.Status,
+					scenario.RejectionReason);
+			}
 			insertedCount++;
 		}
 
 		_logger.LogInformation(
-			"[HRSeeder] Approved leave sample seeded rows={InsertedCount}",
+			"[HRSeeder] Leave scenario sample seeded rows={InsertedCount}",
 			insertedCount);
 	}
+
+	private sealed record LeaveSeedScenario(
+		string Description,
+		EmployeeLeaveStatusType Status,
+		LeavePolicy Policy,
+		int BusinessDay,
+		string? RejectionReason = null);
 
 	private static DateTime GetCurrentMonthBusinessDayNotFuture(DateTime monthStart, int preferredBusinessDayNumber)
 	{
@@ -1098,7 +1424,7 @@ public class HRSeederContributor : BaseSeederContributor
 				lastName: emp.LastName,
 				middleName: emp.MiddleName,
 				shortName: $"{emp.FirstName[0]}.{emp.LastName}",
-				employeeStatusType: EmployeeStatusType.Inactive,
+				employeeStatusType: EmployeeStatusType.Active,
 				dateOfBirth: emp.DateOfBirth,
 				familyCast: emp.FamilyCast,
 				castType: emp.CastType,
@@ -1332,7 +1658,7 @@ public class HRSeederContributor : BaseSeederContributor
 				lastName: emp.LastName,
 				middleName: emp.MiddleName,
 				shortName: $"{emp.FirstName[0]}.{emp.LastName}",
-				employeeStatusType: EmployeeStatusType.Inactive,
+				employeeStatusType: EmployeeStatusType.Active,
 				dateOfBirth: emp.DateOfBirth,
 				familyCast: emp.FamilyCast,
 				castType: emp.CastType,

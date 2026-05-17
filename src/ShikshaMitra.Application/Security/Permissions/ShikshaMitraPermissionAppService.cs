@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -12,6 +13,7 @@ using Volo.Abp.DependencyInjection;
 using Volo.Abp.Localization;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.PermissionManagement;
+using Volo.Abp.Security.Claims;
 using Volo.Abp.SimpleStateChecking;
 
 namespace ShikshaMitra.Security.Permissions;
@@ -25,6 +27,7 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 	protected IPermissionManager PermissionManager { get; }
 	protected IPermissionDefinitionManager PermissionDefinitionManager { get; }
 	protected IPermissionChecker PermissionChecker { get; }
+	protected ICurrentPrincipalAccessor CurrentPrincipalAccessor { get; }
 	protected ISimpleStateCheckerManager<PermissionDefinition> SimpleStateCheckerManager { get; }
 
 	public ShikshaMitraPermissionAppService(
@@ -32,18 +35,22 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 		IPermissionDefinitionManager permissionDefinitionManager,
 		IOptions<PermissionManagementOptions> options,
 		IPermissionChecker permissionChecker,
+		ICurrentPrincipalAccessor currentPrincipalAccessor,
 		ISimpleStateCheckerManager<PermissionDefinition> simpleStateCheckerManager)
 	{
 		Options = options.Value;
 		PermissionManager = permissionManager;
 		PermissionDefinitionManager = permissionDefinitionManager;
 		PermissionChecker = permissionChecker;
+		CurrentPrincipalAccessor = currentPrincipalAccessor;
 		SimpleStateCheckerManager = simpleStateCheckerManager;
 	}
 
 	public virtual async Task<GetPermissionListResultDto> GetAsync(string providerName, string providerKey)
 	{
-		await CheckProviderPolicy(providerName);
+		var isCurrentUserRead = IsCurrentUserProvider(providerName, providerKey);
+
+		await CheckProviderPolicy(providerName, providerKey, allowCurrentUserRead: true);
 
 		var result = new GetPermissionListResultDto
 		{
@@ -86,12 +93,24 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 				.Select(CreatePermissionGrantInfoDto)
 				.ToList();
 
-			var multipleGrantInfo = await PermissionManager.GetAsync(neededCheckPermissions.Select(x => x.Name).ToArray(), providerName, providerKey);
+			var permissionNames = neededCheckPermissions.Select(x => x.Name).ToArray();
+			var effectiveGrantLookup = isCurrentUserRead
+				? await GetCurrentUserEffectivePermissionLookupAsync(permissionNames)
+				: null;
+			var multipleGrantInfo = effectiveGrantLookup == null
+				? await PermissionManager.GetAsync(permissionNames, providerName, providerKey)
+				: null;
 
-			foreach (var grantInfo in multipleGrantInfo.Result)
+			foreach (var grantInfoDto in grantInfoDtos)
 			{
-				var grantInfoDto = grantInfoDtos.First(x => x.Name == grantInfo.Name);
+				if (effectiveGrantLookup != null)
+				{
+					grantInfoDto.IsGranted = effectiveGrantLookup.GetValueOrDefault(grantInfoDto.Name);
+					groupDto.Permissions.Add(grantInfoDto);
+					continue;
+				}
 
+				var grantInfo = multipleGrantInfo!.Result.First(x => x.Name == grantInfoDto.Name);
 				grantInfoDto.IsGranted = grantInfo.IsGranted;
 
 				foreach (var provider in grantInfo.Providers)
@@ -145,7 +164,7 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 
 	public virtual async Task UpdateAsync(string providerName, string providerKey, UpdatePermissionsDto input)
 	{
-		await CheckProviderPolicy(providerName);
+		await CheckProviderPolicy(providerName, providerKey);
 
 		foreach (var permissionDto in input.Permissions)
 		{
@@ -153,8 +172,23 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 		}
 	}
 
-	protected virtual async Task CheckProviderPolicy(string providerName)
+	protected virtual async Task CheckProviderPolicy(
+		string providerName,
+		string providerKey,
+		bool allowCurrentUserRead = false)
 	{
+		if (allowCurrentUserRead && IsCurrentUserProvider(providerName, providerKey))
+		{
+			return;
+		}
+
+		if (allowCurrentUserRead &&
+			providerName.Equals("U", StringComparison.OrdinalIgnoreCase) &&
+			IsAuthenticatedUser())
+		{
+			return;
+		}
+
 		var policyName = Options.ProviderPolicies.GetOrDefault(providerName);
 		if (policyName.IsNullOrEmpty())
 		{
@@ -169,9 +203,74 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 		}
 	}
 
+	private async Task<Dictionary<string, bool>> GetCurrentUserEffectivePermissionLookupAsync(string[] permissionNames)
+	{
+		var result = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+
+		foreach (var permissionName in permissionNames)
+		{
+			result[permissionName] = await PermissionChecker.IsGrantedAsync(permissionName);
+		}
+
+		return result;
+	}
+
+	private bool IsCurrentUserProvider(string providerName, string providerKey)
+	{
+		if (!providerName.Equals("U", StringComparison.OrdinalIgnoreCase))
+		{
+			return false;
+		}
+
+		return GetCurrentUserIdClaimValues()
+			.Any(userId => providerKey.Equals(userId, StringComparison.OrdinalIgnoreCase));
+	}
+
+	private IEnumerable<string> GetCurrentUserIdClaimValues()
+	{
+		if (CurrentUser.Id.HasValue)
+		{
+			yield return CurrentUser.Id.Value.ToString();
+		}
+
+		foreach (var userId in GetUserIdClaimValues(CurrentPrincipalAccessor.Principal))
+		{
+			yield return userId;
+		}
+
+	}
+
+	private bool IsAuthenticatedUser() =>
+		CurrentUser.IsAuthenticated ||
+		(CurrentPrincipalAccessor.Principal?.Identity?.IsAuthenticated ?? false);
+
+	private static IEnumerable<string> GetUserIdClaimValues(ClaimsPrincipal? principal)
+	{
+		foreach (var claimType in GetUserIdClaimTypes())
+		{
+			var value = principal?.FindFirst(claimType)?.Value;
+			if (!value.IsNullOrWhiteSpace())
+			{
+				yield return value;
+			}
+		}
+	}
+
+	private static string[] GetUserIdClaimTypes() =>
+	[
+		AbpClaimTypes.UserId,
+		ClaimTypes.NameIdentifier,
+		"sub",
+		"user_id",
+		"userid",
+		"uid",
+		"nameid",
+		"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
+	];
+
 	public virtual async Task<GetNestedPermissionListResultDto> GetNestedAsync(string providerName, string providerKey)
 	{
-		await CheckProviderPolicy(providerName);
+		await CheckProviderPolicy(providerName, providerKey, allowCurrentUserRead: true);
 
 		var result = new GetNestedPermissionListResultDto
 		{

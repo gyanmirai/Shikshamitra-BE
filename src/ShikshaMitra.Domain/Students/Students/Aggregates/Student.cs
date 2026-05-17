@@ -6,6 +6,7 @@ using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.Students.ValueObjects;
 using ShikshaMitra.Students.StudentRecords;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -16,7 +17,7 @@ using ShikshaMitra.TenantSettings.AcademicYears;
 
 namespace ShikshaMitra.Students;
 
-public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScopedEntity
 {
 	public Guid? TenantId { get; private set; }
 	public string? FirstName { get; private set; }
@@ -556,4 +557,11 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new InvalidOperationException("Student additional details are missing.");
 		}
 	}
+
+	Guid? IUserScopedEntity.AcademicYearId => AcademicYearId;
+	Guid? IUserScopedEntity.EducationBoardId => AcademicBoardId;
+	Guid? IUserScopedEntity.EducationMediumId => AcademicMediumId;
+	Guid? IUserScopedEntity.EducationMediumStageId => AcademicMediumStageId;
+	Guid? IUserScopedEntity.StandardId => StandardId;
+	Guid? IUserScopedEntity.DivisionId => DivisionId;
 }

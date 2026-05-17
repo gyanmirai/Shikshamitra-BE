@@ -9,10 +9,11 @@ namespace ShikshaMitra.Students.Enrollments.Admissions;
 /// </summary>
 public class GetStudentAdmissionsInput : PagedAndSortedResultRequestDto
 {
-	public Guid AcademicMediumId { get; set; }
+	public Guid? AcademicMediumId { get; set; }
 	public string? Search { get; set; }
 	public StudentEnrollmentApprovalState ApprovalStatus { get; set; } = StudentEnrollmentApprovalState.Approved;
 	public Guid? DivisionId { get; set; }
 	public Guid? StandardId { get; set; }
 	public Guid? AcademicYearId { get; set; }
+	public Guid? EducationMediumStageId { get; set; }
 }

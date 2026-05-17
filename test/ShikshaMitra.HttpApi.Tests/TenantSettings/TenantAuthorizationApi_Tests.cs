@@ -44,6 +44,42 @@ public class TenantAuthorizationApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Tenant_User_Without_View_Permission_Should_View_Current_Tenant()
+	{
+		using var client = CreateClient(
+			tenantId: TestTenantId.ToString(),
+			roles: "Principal",
+			permissions: "");
+
+		var response = await client.GetAsync($"{BaseUrl}/{TestTenantId}");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var result = await response.Content.ReadFromJsonAsync<TenantDto>(JsonOptions);
+		result.ShouldNotBeNull();
+		result.Id.ShouldBe(TestTenantId);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Tenant_User_Without_View_Permission_Should_List_Only_Current_Tenant()
+	{
+		using var client = CreateClient(
+			tenantId: TestTenantId.ToString(),
+			roles: "Principal",
+			permissions: "");
+
+		var response = await client.GetAsync(BaseUrl);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var result = await response.Content.ReadFromJsonAsync<PagedResultDto<TenantDto>>(JsonOptions);
+		result.ShouldNotBeNull();
+		result.TotalCount.ShouldBe(1);
+		result.Items.Count.ShouldBe(1);
+		result.Items[0].Id.ShouldBe(TestTenantId);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Tenant_User_Should_Not_View_Another_Tenant()
 	{
 		using var client = CreateClient(
@@ -112,14 +148,32 @@ public class TenantAuthorizationApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Principal_Should_Not_Call_Permission_Management_Apis()
+	public async Task User_Should_Read_Own_Permissions_Without_ManagePermissions()
+	{
+		using var client = CreateClient(
+			tenantId: TestTenantId.ToString(),
+			userId: TestAuthHandler.TestUserId,
+			roles: "Principal",
+			permissions: "");
+
+		var response = await client.GetAsync($"/api/permission-management/permissions?providerName=U&providerKey={TestAuthHandler.TestUserId}");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Principal_Should_Not_Update_Permission_Management_Apis()
 	{
 		using var client = CreateClient(
 			tenantId: TestTenantId.ToString(),
 			roles: "Principal",
 			permissions: "");
 
-		var response = await client.GetAsync($"/api/permission-management/permissions?providerName=U&providerKey={Guid.NewGuid()}");
+		var response = await client.PutAsJsonAsync(
+			$"/api/permission-management/permissions?providerName=U&providerKey={Guid.NewGuid()}",
+			new { Permissions = Array.Empty<object>() },
+			JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
 	}
@@ -155,10 +209,15 @@ public class TenantAuthorizationApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
 
-	private HttpClient CreateClient(string tenantId, string permissions, string roles = "admin")
+	private HttpClient CreateClient(string tenantId, string permissions, string roles = "admin", string? userId = null)
 	{
 		var client = Factory.CreateClient();
 		client.DefaultRequestHeaders.Add(TestAuthHandler.TestTenantIdHeader, tenantId);
+		if (!string.IsNullOrWhiteSpace(userId))
+		{
+			client.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, userId);
+		}
+
 		client.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, roles);
 		client.DefaultRequestHeaders.Add(
 			AlwaysGrantPermissionChecker.TestPermissionsHeader,

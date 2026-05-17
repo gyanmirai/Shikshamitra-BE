@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Students.Records.Settings;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
@@ -23,7 +24,8 @@ public class StudentManagementAppService(
 	IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
-	IRepository<StudentManagementSettings, Guid> studentManagementSettingsRepository
+	IRepository<StudentManagementSettings, Guid> studentManagementSettingsRepository,
+	IUserScopeService userScopeService
 ) : ApplicationService, IStudentManagementAppService
 {
 	public async Task<(List<StudentRecordDto> StudentRecords, ArrangementTypeEnum? ArrangementType, ArrangementByEnum? ArrangementBy)> GetStudentRecords(Guid divisionId)
@@ -31,7 +33,11 @@ public class StudentManagementAppService(
 		try
 		{
 			// Get students with their additional details
-			var students = await studentRepository.GetListAsync(s => s.DivisionId == divisionId && s.Status == StudentLifeCycleStatusEnum.Enrolled, includeDetails: true);
+			var query = (await studentRepository.WithDetailsAsync())
+				.Where(s => s.DivisionId == divisionId && s.Status == StudentLifeCycleStatusEnum.Enrolled);
+
+			query = await ApplyCurrentUserScopeAsync(query);
+			var students = await AsyncExecuter.ToListAsync(query);
 
 			// Get arrangement settings for the division
 			var settings = await studentManagementSettingsRepository.FirstOrDefaultAsync(s => s.DivisionId == divisionId);
@@ -177,7 +183,11 @@ public class StudentManagementAppService(
 		try
 		{
 			// get students in division which gr no is null
-			var students = await studentRepository.GetListAsync(s => s.DivisionId == divisionId, includeDetails: true);
+			var query = (await studentRepository.WithDetailsAsync())
+				.Where(s => s.DivisionId == divisionId);
+
+			query = await ApplyCurrentUserScopeAsync(query);
+			var students = await AsyncExecuter.ToListAsync(query);
 
 			// Find board from divisionId
 			var division = await divisionRepository.FindAsync(s => s.Id == divisionId, includeDetails: true) ?? throw new UserFriendlyException("Division not found.");
@@ -251,7 +261,11 @@ public class StudentManagementAppService(
 		try
 		{
 			// get students in division which roll no is null
-			var students = await studentRepository.GetListAsync(s => s.DivisionId == divisionId && s.RollNo == null, includeDetails: true) ?? new List<Student>();
+			var query = (await studentRepository.WithDetailsAsync())
+				.Where(s => s.DivisionId == divisionId && s.RollNo == null);
+
+			query = await ApplyCurrentUserScopeAsync(query);
+			var students = await AsyncExecuter.ToListAsync(query);
 
 			// arrange by first name or last name within the above arrangement
 			if (arrangementBy == ArrangementByEnum.FirstName)
@@ -362,5 +376,55 @@ public class StudentManagementAppService(
 		{
 			throw;
 		}
+	}
+
+	private async Task<IQueryable<Student>> ApplyCurrentUserScopeAsync(IQueryable<Student> query)
+	{
+		var currentUserId = CurrentUser.Id;
+		if (!currentUserId.HasValue)
+		{
+			return query.Where(_ => false);
+		}
+
+		var scope = await userScopeService.GetUserScopeAsync(currentUserId.Value);
+		if (scope.IsAdmin)
+		{
+			return query;
+		}
+
+		if (!scope.HasAnyAccess)
+		{
+			return query.Where(_ => false);
+		}
+
+		var scopedQuery = query.Where(s =>
+			scope.HasWildcardAcademicYear ||
+			(s.AcademicYearId.HasValue && scope.WildcardBoardAcademicYearIds.Contains(s.AcademicYearId.Value)) ||
+			(s.DivisionId.HasValue && (
+				scope.DivisionIds.Contains(s.DivisionId.Value) ||
+				(scope.HasWildcardDivision && s.StandardId.HasValue && scope.WildcardDivisionStandardIds.Contains(s.StandardId.Value)))) ||
+			(s.StandardId.HasValue && (
+				scope.StandardIds.Contains(s.StandardId.Value) ||
+				(scope.HasWildcardStandard && s.AcademicMediumStageId.HasValue && scope.WildcardStandardMediumStageIds.Contains(s.AcademicMediumStageId.Value)))) ||
+			(s.AcademicMediumStageId.HasValue && (
+				scope.MediumStageIds.Contains(s.AcademicMediumStageId.Value) ||
+				(scope.HasWildcardMediumStage && scope.WildcardMediumStageMediumIds.Contains(s.AcademicMediumId)))) ||
+			scope.MediumIds.Contains(s.AcademicMediumId) ||
+			(scope.HasWildcardMedium && s.AcademicBoardId.HasValue && scope.WildcardMediumBoardIds.Contains(s.AcademicBoardId.Value)) ||
+			(s.AcademicBoardId.HasValue && scope.BoardIds.Contains(s.AcademicBoardId.Value)));
+
+		if (scope.HasWildcardAcademicYear)
+		{
+			return scopedQuery;
+		}
+
+		if (scope.AcademicYearIds.Any())
+		{
+			return scopedQuery.Where(s =>
+				!s.AcademicYearId.HasValue ||
+				scope.AcademicYearIds.Contains(s.AcademicYearId.Value));
+		}
+
+		return scopedQuery.Where(s => !s.AcademicYearId.HasValue);
 	}
 }

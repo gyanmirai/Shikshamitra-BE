@@ -18,6 +18,7 @@ using Volo.Abp.Guids;
 using Volo.Abp.Domain.Entities;
 using ShikshaMitra.Students.ValueObjects;
 using ShikshaMitra.Students.StudentEnrollments.Managers;
+using ShikshaMitra.Security.UserScope;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
@@ -32,7 +33,8 @@ public class StudentAdmissionAppService(
 	IdentityUserManager userManager,
 	IGuidGenerator guidGenerator,
 	IStudentEmailService studentEmailService,
-	AdmissionManager admissionManager) : ApplicationService, IStudentAdmissionAppService
+	AdmissionManager admissionManager,
+	IUserScopeService userScopeService) : ApplicationService, IStudentAdmissionAppService
 {
 	/// <summary>
 	/// Gets a paginated list of students in admission stage with filters
@@ -41,8 +43,34 @@ public class StudentAdmissionAppService(
 	public async Task<PagedResultDto<StudentDto>> GetListAsync(GetStudentAdmissionsInput input)
 	{
 		var query = (await studentRepository.GetQueryableAsync())
-			.Where(s => s.Status == StudentLifeCycleStatusEnum.Admission
-				&& s.AcademicMediumId == input.AcademicMediumId);
+			.Where(s => s.Status == StudentLifeCycleStatusEnum.Admission);
+
+		query = await ApplyCurrentUserScopeAsync(query);
+
+		if (input.AcademicYearId.HasValue && input.AcademicYearId.Value != Guid.Empty)
+		{
+			query = query.Where(s => s.AcademicYearId == input.AcademicYearId.Value);
+		}
+
+		if (input.AcademicMediumId.HasValue && input.AcademicMediumId.Value != Guid.Empty)
+		{
+			query = query.Where(s => s.AcademicMediumId == input.AcademicMediumId.Value);
+		}
+
+		if (input.EducationMediumStageId.HasValue && input.EducationMediumStageId.Value != Guid.Empty)
+		{
+			query = query.Where(s => s.AcademicMediumStageId == input.EducationMediumStageId.Value);
+		}
+
+		if (input.StandardId.HasValue && input.StandardId.Value != Guid.Empty)
+		{
+			query = query.Where(s => s.StandardId == input.StandardId.Value);
+		}
+
+		if (input.DivisionId.HasValue && input.DivisionId.Value != Guid.Empty)
+		{
+			query = query.Where(s => s.DivisionId == input.DivisionId.Value);
+		}
 
 		// Apply filters
 		if (!string.IsNullOrWhiteSpace(input.Search))
@@ -71,6 +99,56 @@ public class StudentAdmissionAppService(
 		var studentDtos = ObjectMapper.Map<List<Student>, List<StudentDto>>(students);
 
 		return new PagedResultDto<StudentDto>(totalCount, studentDtos);
+	}
+
+	private async Task<IQueryable<Student>> ApplyCurrentUserScopeAsync(IQueryable<Student> query)
+	{
+		var currentUserId = CurrentUser.Id;
+		if (!currentUserId.HasValue)
+		{
+			return query.Where(_ => false);
+		}
+
+		var scope = await userScopeService.GetUserScopeAsync(currentUserId.Value);
+		if (scope.IsAdmin)
+		{
+			return query;
+		}
+
+		if (!scope.HasAnyAccess)
+		{
+			return query.Where(_ => false);
+		}
+
+		var scopedQuery = query.Where(s =>
+			scope.HasWildcardAcademicYear ||
+			(s.AcademicYearId.HasValue && scope.WildcardBoardAcademicYearIds.Contains(s.AcademicYearId.Value)) ||
+			(s.DivisionId.HasValue && (
+				scope.DivisionIds.Contains(s.DivisionId.Value) ||
+				(scope.HasWildcardDivision && s.StandardId.HasValue && scope.WildcardDivisionStandardIds.Contains(s.StandardId.Value)))) ||
+			(s.StandardId.HasValue && (
+				scope.StandardIds.Contains(s.StandardId.Value) ||
+				(scope.HasWildcardStandard && s.AcademicMediumStageId.HasValue && scope.WildcardStandardMediumStageIds.Contains(s.AcademicMediumStageId.Value)))) ||
+			(s.AcademicMediumStageId.HasValue && (
+				scope.MediumStageIds.Contains(s.AcademicMediumStageId.Value) ||
+				(scope.HasWildcardMediumStage && scope.WildcardMediumStageMediumIds.Contains(s.AcademicMediumId)))) ||
+			scope.MediumIds.Contains(s.AcademicMediumId) ||
+			(scope.HasWildcardMedium && s.AcademicBoardId.HasValue && scope.WildcardMediumBoardIds.Contains(s.AcademicBoardId.Value)) ||
+			(s.AcademicBoardId.HasValue && scope.BoardIds.Contains(s.AcademicBoardId.Value)));
+
+		if (scope.HasWildcardAcademicYear)
+		{
+			return scopedQuery;
+		}
+
+		if (scope.AcademicYearIds.Any())
+		{
+			return scopedQuery.Where(s =>
+				!s.AcademicYearId.HasValue ||
+				scope.AcademicYearIds.Contains(s.AcademicYearId.Value));
+		}
+
+		return scopedQuery.Where(s => !s.AcademicYearId.HasValue);
 	}
 
 	/// <summary>

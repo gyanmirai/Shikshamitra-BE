@@ -30,7 +30,8 @@ namespace ShikshaMitra.Seeders;
 /// </summary>
 public class StudentSeederContributor : BaseSeederContributor
 {
-	private const int DefaultStudentsPerDivision = 2;
+	private const int MinimumStudentsPerDivision = 4;
+	private const int DefaultStudentsPerDivision = MinimumStudentsPerDivision;
 	private const int InsertBatchSize = 100;
 	private const string StudentsPerDivisionKey = "StudentSeeder:StudentsPerDivision";
 	private const string MaxStudentsKey = "StudentSeeder:MaxStudents";
@@ -110,7 +111,7 @@ public class StudentSeederContributor : BaseSeederContributor
 
 	public override async Task SeedAsync(DataSeedContext context)
 	{
-		// Check if students already seeded
+		// Clean-seed behavior: when any students exist for the tenant, leave them untouched.
 		if (await _studentRepository.GetCountAsync() > 0)
 		{
 			_logger.LogInformation("[StudentSeeder] Students already exist, skipping. TenantId={TenantId}", CurrentTenant.Id);
@@ -224,12 +225,6 @@ public class StudentSeederContributor : BaseSeederContributor
 
 						foreach (var division in divisionsForStandard)
 						{
-							if (maxStudents.HasValue && totalStudentsCreated >= maxStudents.Value)
-							{
-								await FlushRemainingAndLogCompletionAsync(pendingStudents, totalStudentsCreated);
-								return;
-							}
-
 							for (int i = 0; i < studentsPerDivision; i++)
 							{
 								if (maxStudents.HasValue && totalStudentsCreated >= maxStudents.Value)
@@ -275,7 +270,9 @@ public class StudentSeederContributor : BaseSeederContributor
 	private int GetStudentsPerDivision()
 	{
 		var configuredValue = _configuration.GetValue<int?>(StudentsPerDivisionKey);
-		return configuredValue is > 0 ? configuredValue.Value : DefaultStudentsPerDivision;
+		return Math.Max(
+			configuredValue is > 0 ? configuredValue.Value : DefaultStudentsPerDivision,
+			MinimumStudentsPerDivision);
 	}
 
 	private int? GetMaxStudents()

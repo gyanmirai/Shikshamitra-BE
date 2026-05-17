@@ -6,7 +6,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Authorization;
 using Volo.Abp.Authorization.Permissions;
+using Volo.Abp.DependencyInjection;
 using Volo.Abp.Localization;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.PermissionManagement;
@@ -15,22 +17,27 @@ using Volo.Abp.SimpleStateChecking;
 namespace ShikshaMitra.Security.Permissions;
 
 [RemoteService(false)]
-public class ShikshaMitraPermissionAppService : ApplicationService, IShikshaMitraPermissionAppService
+[Dependency(ReplaceServices = true)]
+[ExposeServices(typeof(IPermissionAppService), typeof(IShikshaMitraPermissionAppService), typeof(ShikshaMitraPermissionAppService))]
+public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionAppService, IShikshaMitraPermissionAppService
 {
 	protected PermissionManagementOptions Options { get; }
 	protected IPermissionManager PermissionManager { get; }
 	protected IPermissionDefinitionManager PermissionDefinitionManager { get; }
+	protected IPermissionChecker PermissionChecker { get; }
 	protected ISimpleStateCheckerManager<PermissionDefinition> SimpleStateCheckerManager { get; }
 
 	public ShikshaMitraPermissionAppService(
 		IPermissionManager permissionManager,
 		IPermissionDefinitionManager permissionDefinitionManager,
 		IOptions<PermissionManagementOptions> options,
+		IPermissionChecker permissionChecker,
 		ISimpleStateCheckerManager<PermissionDefinition> simpleStateCheckerManager)
 	{
 		Options = options.Value;
 		PermissionManager = permissionManager;
 		PermissionDefinitionManager = permissionDefinitionManager;
+		PermissionChecker = permissionChecker;
 		SimpleStateCheckerManager = simpleStateCheckerManager;
 	}
 
@@ -155,6 +162,11 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IShikshaMitr
 		}
 
 		await AuthorizationService.CheckAsync(policyName);
+
+		if (!await PermissionChecker.IsGrantedAsync(policyName))
+		{
+			throw new AbpAuthorizationException();
+		}
 	}
 
 	public virtual async Task<GetNestedPermissionListResultDto> GetNestedAsync(string providerName, string providerKey)

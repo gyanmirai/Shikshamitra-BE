@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Seeders;
 using ShikshaMitra.Students;
@@ -34,11 +35,12 @@ internal sealed class NoOpStudentSeeder : StudentSeederContributor
 		IEducationMediumStageRepository educationMediumStageRepository,
 		IStandardRepository standardRepository,
 		IDivisionRepository divisionRepository,
+		IConfiguration configuration,
 		ILogger<StudentSeederContributor> logger)
 		: base(currentTenant, guidGenerator, unitOfWork,
 			studentRepository, academicYearRepository,
 			educationBoardRepository, educationMediumRepository, educationMediumStageRepository,
-			standardRepository, divisionRepository, logger)
+			standardRepository, divisionRepository, configuration, logger)
 	{
 	}
 

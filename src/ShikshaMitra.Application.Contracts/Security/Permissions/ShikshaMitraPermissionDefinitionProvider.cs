@@ -115,6 +115,8 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
 	{
 		var permissionsToUpdate = new[]
 		{
+			"AbpPermissionManagement.Permissions",
+			"AbpPermissionManagement.Permissions.Manage",
 			TenantManagementPermissions.Tenants.Default,
 			TenantManagementPermissions.Tenants.Update,
 		};

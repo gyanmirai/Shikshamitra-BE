@@ -1,81 +1,150 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Authorization;
+using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.Data;
+using Volo.Abp.DependencyInjection;
 using Volo.Abp.EventBus.Distributed;
 using Volo.Abp.EventBus.Local;
+using Volo.Abp.Security.Claims;
 using Volo.Abp.TenantManagement;
 
 namespace ShikshaMitra.TenantSettings;
 
+[Dependency(ReplaceServices = true)]
+[ExposeServices(typeof(ITenantAppService), typeof(MultiTenancyAppService))]
 public class MultiTenancyAppService : TenantAppService
 {
+	private readonly IPermissionChecker _permissionChecker;
+	private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
+
 	public MultiTenancyAppService(
 		ITenantRepository tenantRepository,
 		ITenantManager tenantManager,
 		IDataSeeder dataSeeder,
 		IDistributedEventBus distributedEventBus,
-		ILocalEventBus localEventBus
+		ILocalEventBus localEventBus,
+		IPermissionChecker permissionChecker,
+		ICurrentPrincipalAccessor currentPrincipalAccessor
 	)
-		: base(tenantRepository, tenantManager, dataSeeder, distributedEventBus, localEventBus) { }
+		: base(tenantRepository, tenantManager, dataSeeder, distributedEventBus, localEventBus)
+	{
+		_permissionChecker = permissionChecker;
+		_currentPrincipalAccessor = currentPrincipalAccessor;
+	}
 
 	public override async Task<PagedResultDto<TenantDto>> GetListAsync(GetTenantsInput input)
 	{
-		var _currentTenant = CurrentTenant;
-		var _currentUser = CurrentUser;
+		await CheckTenantViewPermissionAsync();
 
-		// Host admin can see all tenants
-		if (_currentTenant.Id == null && _currentUser.IsInRole("admin"))
+		var tenantId = GetEffectiveTenantId();
+		if (tenantId == null)
 		{
 			return await base.GetListAsync(input);
 		}
 
-		// Tenant admin can see only their tenant
-		if (_currentTenant.IsAvailable && _currentUser.IsInRole("admin"))
-		{
-			var currentTenant = await GetAsync(_currentTenant.Id!.Value);
-			return new PagedResultDto<TenantDto>(1, new[] { currentTenant });
-		}
+		var currentTenant = await base.GetAsync(tenantId.Value);
+		return new PagedResultDto<TenantDto>(1, new[] { currentTenant });
+	}
 
-		return new PagedResultDto<TenantDto>(0, new List<TenantDto>());
+	public override async Task<TenantDto> CreateAsync(TenantCreateDto input)
+	{
+		await CheckHostTenantOperationAsync(TenantManagementPermissions.Tenants.Create);
+		return await base.CreateAsync(input);
 	}
 
 	public override async Task<TenantDto> UpdateAsync(Guid id, TenantUpdateDto input)
 	{
-		var _currentTenant = CurrentTenant;
-		var _currentUser = CurrentUser;
+		await CheckTenantUpdatePermissionAsync();
 
-		// check if the current user is an admin
-		return !_currentUser.IsInRole("admin")
-				? throw new AbpAuthorizationException("Only admins can update tenant information.")
-			: _currentTenant.IsAvailable && _currentTenant.Id != id
-				? throw new AbpAuthorizationException("You are not allowed to update this tenant.")
-			: await base.UpdateAsync(id, input);
+		var tenantId = GetEffectiveTenantId();
+		if (tenantId != null && tenantId != id)
+		{
+			throw new AbpAuthorizationException("You are not allowed to update this tenant.");
+		}
+
+		return await base.UpdateAsync(id, input);
 	}
 
 	public override async Task<TenantDto> GetAsync(Guid id)
 	{
-		var _currentTenant = CurrentTenant;
-		var _currentUser = CurrentUser;
+		await CheckTenantViewPermissionAsync();
 
-		// Host admin can see all tenants
-		if (_currentTenant.Id == null && _currentUser.IsInRole("admin"))
+		var tenantId = GetEffectiveTenantId();
+		if (tenantId != null && tenantId != id)
 		{
-			return await base.GetAsync(id);
+			throw new AbpAuthorizationException("You are not allowed to view this tenant.");
 		}
 
-		// Tenant admin can see only their tenant
-		if (_currentTenant.IsAvailable && _currentUser.IsInRole("admin"))
+		return await base.GetAsync(id);
+	}
+
+	public override async Task DeleteAsync(Guid id)
+	{
+		await CheckHostTenantOperationAsync(TenantManagementPermissions.Tenants.Delete);
+		await base.DeleteAsync(id);
+	}
+
+	public override async Task<string> GetDefaultConnectionStringAsync(Guid id)
+	{
+		await CheckHostTenantOperationAsync(TenantManagementPermissions.Tenants.ManageConnectionStrings);
+		return await base.GetDefaultConnectionStringAsync(id);
+	}
+
+	public override async Task UpdateDefaultConnectionStringAsync(Guid id, string defaultConnectionString)
+	{
+		await CheckHostTenantOperationAsync(TenantManagementPermissions.Tenants.ManageConnectionStrings);
+		await base.UpdateDefaultConnectionStringAsync(id, defaultConnectionString);
+	}
+
+	public override async Task DeleteDefaultConnectionStringAsync(Guid id)
+	{
+		await CheckHostTenantOperationAsync(TenantManagementPermissions.Tenants.ManageConnectionStrings);
+		await base.DeleteDefaultConnectionStringAsync(id);
+	}
+
+	private async Task CheckTenantViewPermissionAsync()
+	{
+		if (!await _permissionChecker.IsGrantedAsync(TenantManagementPermissions.Tenants.Default))
 		{
-			if (_currentTenant.Id != id)
-			{
-				throw new AbpAuthorizationException("You are not allowed to view this tenant.");
-			}
-			return await base.GetAsync(id);
+			throw new AbpAuthorizationException("You are not authorized to view tenant information.");
+		}
+	}
+
+	private async Task CheckTenantUpdatePermissionAsync()
+	{
+		if (!await _permissionChecker.IsGrantedAsync(TenantManagementPermissions.Tenants.Update))
+		{
+			throw new AbpAuthorizationException("You are not authorized to update tenant information.");
+		}
+	}
+
+	private async Task CheckHostTenantOperationAsync(string permissionName)
+	{
+		if (GetEffectiveTenantId() != null)
+		{
+			throw new AbpAuthorizationException("Only host users can manage tenants.");
 		}
 
-		throw new AbpAuthorizationException("You are not authorized to view tenant information.");
+		if (!await _permissionChecker.IsGrantedAsync(permissionName))
+		{
+			throw new AbpAuthorizationException("You are not authorized to manage tenants.");
+		}
+	}
+
+	private Guid? GetEffectiveTenantId()
+	{
+		return CurrentTenant.Id ?? CurrentUser.TenantId ?? GetTenantIdFromClaims();
+	}
+
+	private Guid? GetTenantIdFromClaims()
+	{
+		var principal = _currentPrincipalAccessor.Principal;
+		var tenantIdValue = principal?.FindFirst(AbpClaimTypes.TenantId)?.Value
+			?? principal?.FindFirst("tenantid")?.Value
+			?? principal?.FindFirst("tenant_id")?.Value;
+
+		return Guid.TryParse(tenantIdValue, out var tenantId) ? tenantId : null;
 	}
 }

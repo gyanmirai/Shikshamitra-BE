@@ -14,9 +14,9 @@ These are created by `TenantSeederContributor` when tenants are created.
 
 | Tenant | Email / Login | Role | Access |
 |---|---|---|---|
-| DDVS | `admin-ddvs@ddvs.com` | admin | Admin bypass; all permissions and all data scope. |
-| SSVM | `admin-ssvm@ddvs.com` | admin | Admin bypass; all permissions and all data scope. |
-| Forgot | `admin-forgot@ddvs.com` | admin | Admin bypass; all permissions and all data scope. |
+| DDVS | `admin-ddvs@ddvs.com` | admin | Seeded all application/platform permissions; tenant-bound to DDVS. |
+| SSVM | `admin-ssvm@ddvs.com` | admin | Seeded all application/platform permissions; tenant-bound to SSVM. |
+| Forgot | `admin-forgot@ddvs.com` | admin | Seeded all application/platform permissions; tenant-bound to Forgot. |
 
 ## Baseline Staff Accounts
 
@@ -35,8 +35,8 @@ These are seeded only for the DDVS tenant when `SeedTestLogins=true`.
 
 | Email / Login | Role | Access |
 |---|---|---|
-| `admin-ddvs@ddvs.com` | admin | Admin bypass; all permissions and all data scope. |
-| `admin-ops@ddvs.com` | admin | Admin bypass; all permissions and all data scope. |
+| `admin-ddvs@ddvs.com` | admin | Seeded all application/platform permissions; tenant-bound to DDVS. |
+| `admin-ops@ddvs.com` | admin | Seeded all application/platform permissions; tenant-bound to DDVS. |
 | `principal-gseb@ddvs.com` | Principal | Principal module permissions; GSEB board data scope only. |
 | `principal-cbse@ddvs.com` | Principal | Principal module permissions; CBSE board data scope only. |
 | `teacher-gseb@ddvs.com` | Teacher | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
@@ -87,8 +87,8 @@ These are seeded only for the DDVS tenant when `SeedHrManualTestData=true`.
 
 ## Access Notes
 
-- `admin` users have runtime admin bypass and should be used for setup, troubleshooting, and permission-management screens.
-- Principal users can see Principal-level modules but should not use permission-management APIs.
+- `admin` users receive seeded permissions for setup, troubleshooting, and permission-management screens; they do not bypass tenant isolation.
+- Principal users can use permission-management APIs only when the role/user has the relevant ABP permission-management grants.
 - `principal-gseb@ddvs.com` and `principal-demo-gseb@ddvs.com` are intended for GSEB-only testing.
 - `principal-cbse@ddvs.com` is intended for CBSE-only testing.
 - HR manual test users are designed for HR payroll, attendance, leave, and reporting workflows.

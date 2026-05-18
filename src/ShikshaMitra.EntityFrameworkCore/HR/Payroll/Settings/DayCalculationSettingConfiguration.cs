@@ -25,6 +25,22 @@ public class DayCalculationSettingConfiguration : IEntityTypeConfiguration<DayCa
 			.HasColumnType("text")
 			.IsRequired(false);
 
+		builder.Property(x => x.SaturdayWorkPolicy)
+			.IsRequired()
+			.HasConversion<int>();
+
+		builder.Property(x => x.HolidaySyncMode)
+			.IsRequired()
+			.HasConversion<int>();
+
+		builder.Property(x => x.HolidayOverridesJson)
+			.HasColumnType("text")
+			.IsRequired(false);
+
+		builder.Property(x => x.LockedMonthSettingsJson)
+			.HasColumnType("text")
+			.IsRequired(false);
+
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId })
 			.IsUnique()
 			.HasFilter("\"AcademicYearId\" IS NOT NULL")

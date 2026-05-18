@@ -436,7 +436,10 @@ public class HRSeederContributor : BaseSeederContributor
 
 		// Check if already seeded
 		if (await _employeeRepository.AnyAsync())
+		{
+			await EnsureSeededReportingChainAsync();
 			return seededEmployeeIds;
+		}
 
 		// Get required dependencies
 		var educationMediumStage = (await _educationMediumStageRepository.GetQueryableAsync()).FirstOrDefault();
@@ -452,7 +455,77 @@ public class HRSeederContributor : BaseSeederContributor
 		// Seed non-teaching staff
 		await SeedNonTeachingStaffAsync(educationMediumStage.Id, fullDayShift?.Id, seededEmployeeIds);
 
+		await EnsureSeededReportingChainAsync();
+
 		return seededEmployeeIds;
+	}
+
+	private async Task EnsureSeededReportingChainAsync()
+	{
+		var employeeQuery = await _employeeRepository.GetQueryableAsync();
+		var seededEmployees = employeeQuery
+			.AsEnumerable()
+			.Where(IsSeededDemoEmployee)
+			.ToDictionary(e => e.Email ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+
+		await LinkSeededEmployeeToLoginAsync(seededEmployees, "hiren.vadher@ddvs.com", "principal-gseb@ddvs.com");
+		await LinkSeededEmployeeToLoginAsync(seededEmployees, "sweta.badgujar@ddvs.com", "teacher-gseb@ddvs.com");
+		await LinkSeededEmployeeToLoginAsync(seededEmployees, "punam.badgujar@ddvs.com", "finance-officer@ddvs.com");
+		await LinkSeededEmployeeToLoginAsync(seededEmployees, "raj.baku@ddvs.com", "clerk-office@ddvs.com");
+
+		await AssignSeededReportingManagerAsync(seededEmployees, "jignesh.jinjala@ddvs.com", "hiren.vadher@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "akshay.patel@ddvs.com", "jignesh.jinjala@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "parth.ghusar@ddvs.com", "jignesh.jinjala@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "sweta.badgujar@ddvs.com", "akshay.patel@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "jeet.ram@ddvs.com", "akshay.patel@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "dharmik.jinjala@ddvs.com", "akshay.patel@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "jay.dalia@ddvs.com", "parth.ghusar@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "hiren.akbari@ddvs.com", "parth.ghusar@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "prerna.atre@ddvs.com", "parth.ghusar@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "vishal.makwana@ddvs.com", "jignesh.jinjala@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "mayur.solanki@ddvs.com", "vishal.makwana@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "punam.badgujar@ddvs.com", "vishal.makwana@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "milind.kumar@ddvs.com", "vishal.makwana@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "nikhil.baku@ddvs.com", "mayur.solanki@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "raj.baku@ddvs.com", "mayur.solanki@ddvs.com");
+
+		await CurrentUnitOfWork.SaveChangesAsync();
+	}
+
+	private async Task LinkSeededEmployeeToLoginAsync(
+		IReadOnlyDictionary<string, Employee> seededEmployees,
+		string employeeEmail,
+		string loginEmail)
+	{
+		if (!seededEmployees.TryGetValue(employeeEmail, out var employee))
+		{
+			return;
+		}
+
+		var user = await _userRepository.FindByNormalizedEmailAsync(_lookupNormalizer.NormalizeEmail(loginEmail));
+		if (user == null || employee.UserId == user.Id)
+		{
+			return;
+		}
+
+		employee.UpdateUserId(user.Id);
+		await _employeeRepository.UpdateAsync(employee, autoSave: false);
+	}
+
+	private async Task AssignSeededReportingManagerAsync(
+		IReadOnlyDictionary<string, Employee> seededEmployees,
+		string employeeEmail,
+		string managerEmail)
+	{
+		if (!seededEmployees.TryGetValue(employeeEmail, out var employee) ||
+		    !seededEmployees.TryGetValue(managerEmail, out var manager) ||
+		    employee.ReportingManagerId == manager.Id)
+		{
+			return;
+		}
+
+		employee.AssignReportingManager(manager.Id);
+		await _employeeRepository.UpdateAsync(employee, autoSave: false);
 	}
 
 	private async Task<List<Guid>> EnsureEmployeeStatusDistributionAsync(List<Guid> seededEmployeeIds)
@@ -1119,20 +1192,20 @@ public class HRSeederContributor : BaseSeederContributor
 		{
 						new
 						{
-							FirstName = "Rajesh",
-							LastName = "Kumar",
-							MiddleName = "Kumar",
-							Email = "rajesh.kumar@ddvs.com",
+							FirstName = "Hiren",
+							LastName = "Vadher",
+							MiddleName = (string?)null,
+							Email = "hiren.vadher@ddvs.com",
 							Mobile = "9876543210",
 							SecondaryMobile = "9876543211",
 							RoleName = "Principal",
 							Designation = "Principal",
 							Department = "Administration",
-							DateOfBirth = new DateOnly(1975, 5, 15),
+							DateOfBirth = new DateOnly(1984, 1, 1),
 							DateOfJoining = new DateOnly(2010, 6, 1),
 							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Married,
-							FamilyCast = "Kumar",
+							FamilyCast = "Vadher",
 							CastType = CastType.General,
 							Religion = "Hindu",
 							BloodGroup = "B+",
@@ -1148,20 +1221,20 @@ public class HRSeederContributor : BaseSeederContributor
 						},
 						new
 						{
-							FirstName = "Priya",
-							LastName = "Sharma",
-							MiddleName = "Devi",
-							Email = "priya.sharma@ddvs.com",
+							FirstName = "Jignesh",
+							LastName = "Jinjala",
+							MiddleName = (string?)null,
+							Email = "jignesh.jinjala@ddvs.com",
 							Mobile = "9876543212",
 							SecondaryMobile = "9876543213",
 							RoleName = "Vice Principal",
 							Designation = "Vice Principal",
 							Department = "Administration",
-							DateOfBirth = new DateOnly(1978, 8, 22),
-							DateOfJoining = new DateOnly(2012, 7, 15),
-							Gender = GenderType.Female,
-							MaritalStatus = MaritalStatusType.Married,
-							FamilyCast = "Sharma",
+							DateOfBirth = new DateOnly(2001, 4, 16),
+							DateOfJoining = new DateOnly(2022, 6, 1),
+							Gender = GenderType.Male,
+							MaritalStatus = MaritalStatusType.Unmarried,
+							FamilyCast = "Jinjala",
 							CastType = CastType.General,
 							Religion = "Hindu",
 							BloodGroup = "A+",
@@ -1177,16 +1250,16 @@ public class HRSeederContributor : BaseSeederContributor
 						},
 						new
 						{
-							FirstName = "Amit",
+							FirstName = "Akshay",
 							LastName = "Patel",
 							MiddleName = (string?)null,
-							Email = "amit.patel@ddvs.com",
+							Email = "akshay.patel@ddvs.com",
 							Mobile = "9876543214",
 							SecondaryMobile = (string?)null,
-							RoleName = "Head of Department",
+							RoleName = "HOD",
 							Designation = "Head of Science Department",
 							Department = "Science",
-							DateOfBirth = new DateOnly(1980, 3, 10),
+							DateOfBirth = new DateOnly(1988, 1, 1),
 							DateOfJoining = new DateOnly(2013, 6, 1),
 							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Married,
@@ -1206,20 +1279,20 @@ public class HRSeederContributor : BaseSeederContributor
 						},
 						new
 						{
-							FirstName = "Sunita",
-							LastName = "Desai",
+							FirstName = "Parth",
+							LastName = "Ghusar",
 							MiddleName = (string?)null,
-							Email = "sunita.desai@ddvs.com",
+							Email = "parth.ghusar@ddvs.com",
 							Mobile = "9876543215",
 							SecondaryMobile = (string?)null,
-							RoleName = "Head of Department",
+							RoleName = "HOD",
 							Designation = "Head of Mathematics Department",
 							Department = "Mathematics",
-							DateOfBirth = new DateOnly(1982, 11, 5),
-							DateOfJoining = new DateOnly(2014, 7, 1),
-							Gender = GenderType.Female,
+							DateOfBirth = new DateOnly(2000, 5, 14),
+							DateOfJoining = new DateOnly(2020, 6, 1),
+							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Unmarried,
-							FamilyCast = "Desai",
+							FamilyCast = "Ghusar",
 							CastType = CastType.General,
 							Religion = "Hindu",
 							BloodGroup = "AB+",
@@ -1235,20 +1308,20 @@ public class HRSeederContributor : BaseSeederContributor
 						},
 						new
 						{
-							FirstName = "Vikram",
-							LastName = "Singh",
-							MiddleName = "Kumar",
-							Email = "vikram.singh@ddvs.com",
+							FirstName = "Sweta",
+							LastName = "Badgujar",
+							MiddleName = (string?)null,
+							Email = "sweta.badgujar@ddvs.com",
 							Mobile = "9876543216",
 							SecondaryMobile = "9876543217",
 							RoleName = "Teacher",
 							Designation = "Senior Teacher - English",
 							Department = "Languages",
-							DateOfBirth = new DateOnly(1985, 1, 20),
-							DateOfJoining = new DateOnly(2015, 6, 1),
-							Gender = GenderType.Male,
-							MaritalStatus = MaritalStatusType.Married,
-							FamilyCast = "Rajput",
+							DateOfBirth = new DateOnly(2003, 7, 2),
+							DateOfJoining = new DateOnly(2023, 7, 1),
+							Gender = GenderType.Female,
+							MaritalStatus = MaritalStatusType.Unmarried,
+							FamilyCast = "Badgujar",
 							CastType = CastType.General,
 							Religion = "Hindu",
 							BloodGroup = "B-",
@@ -1264,20 +1337,20 @@ public class HRSeederContributor : BaseSeederContributor
 						},
 						new
 						{
-							FirstName = "Meera",
-							LastName = "Joshi",
+							FirstName = "Jeet",
+							LastName = "Ram",
 							MiddleName = (string?)null,
-							Email = "meera.joshi@ddvs.com",
+							Email = "jeet.ram@ddvs.com",
 							Mobile = "9876543218",
 							SecondaryMobile = (string?)null,
 							RoleName = "Teacher",
 							Designation = "Teacher - Chemistry",
 							Department = "Science",
-							DateOfBirth = new DateOnly(1987, 6, 12),
+							DateOfBirth = new DateOnly(1992, 1, 1),
 							DateOfJoining = new DateOnly(2016, 7, 1),
-							Gender = GenderType.Female,
+							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Married,
-							FamilyCast = "Joshi",
+							FamilyCast = "Ram",
 							CastType = CastType.General,
 							Religion = "Hindu",
 							BloodGroup = "O-",
@@ -1293,20 +1366,20 @@ public class HRSeederContributor : BaseSeederContributor
 						},
 						new
 						{
-							FirstName = "Arjun",
-							LastName = "Reddy",
+							FirstName = "Dharmik",
+							LastName = "Jinjala",
 							MiddleName = (string?)null,
-							Email = "arjun.reddy@ddvs.com",
+							Email = "dharmik.jinjala@ddvs.com",
 							Mobile = "9876543219",
 							SecondaryMobile = (string?)null,
 							RoleName = "Teacher",
 							Designation = "Teacher - Biology",
 							Department = "Science",
-							DateOfBirth = new DateOnly(1988, 9, 8),
-							DateOfJoining = new DateOnly(2017, 6, 1),
+							DateOfBirth = new DateOnly(2003, 11, 27),
+							DateOfJoining = new DateOnly(2023, 12, 1),
 							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Unmarried,
-							FamilyCast = "Reddy",
+							FamilyCast = "Jinjala",
 							CastType = CastType.OBC,
 							Religion = "Hindu",
 							BloodGroup = "A-",
@@ -1322,20 +1395,20 @@ public class HRSeederContributor : BaseSeederContributor
 						},
 						new
 						{
-							FirstName = "Kavita",
-							LastName = "Nair",
+							FirstName = "Jay",
+							LastName = "Dalia",
 							MiddleName = (string?)null,
-							Email = "kavita.nair@ddvs.com",
+							Email = "jay.dalia@ddvs.com",
 							Mobile = "9876543220",
 							SecondaryMobile = "9876543221",
 							RoleName = "Teacher",
 							Designation = "Teacher - History",
 							Department = "Social Studies",
-							DateOfBirth = new DateOnly(1986, 4, 25),
+							DateOfBirth = new DateOnly(1997, 10, 12),
 							DateOfJoining = new DateOnly(2016, 6, 1),
-							Gender = GenderType.Female,
+							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Married,
-							FamilyCast = "Nair",
+							FamilyCast = "Dalia",
 							CastType = CastType.General,
 							Religion = "Hindu",
 							BloodGroup = "B+",
@@ -1351,20 +1424,20 @@ public class HRSeederContributor : BaseSeederContributor
 						},
 						new
 						{
-							FirstName = "Deepak",
-							LastName = "Mehta",
+							FirstName = "Hiren",
+							LastName = "Akbari",
 							MiddleName = (string?)null,
-							Email = "deepak.mehta@ddvs.com",
+							Email = "hiren.akbari@ddvs.com",
 							Mobile = "9876543222",
 							SecondaryMobile = (string?)null,
 							RoleName = "Teacher",
 							Designation = "Teacher - Computer Science",
 							Department = "Computer Science",
-							DateOfBirth = new DateOnly(1989, 7, 18),
+							DateOfBirth = new DateOnly(1996, 1, 7),
 							DateOfJoining = new DateOnly(2018, 7, 1),
 							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Unmarried,
-							FamilyCast = "Mehta",
+							FamilyCast = "Akbari",
 							CastType = CastType.General,
 							Religion = "Jain",
 							BloodGroup = "AB-",
@@ -1380,20 +1453,20 @@ public class HRSeederContributor : BaseSeederContributor
 						},
 						new
 						{
-							FirstName = "Anjali",
-							LastName = "Rao",
+							FirstName = "Prerna",
+							LastName = "Atre",
 							MiddleName = (string?)null,
-							Email = "anjali.rao@ddvs.com",
+							Email = "prerna.atre@ddvs.com",
 							Mobile = "9876543223",
 							SecondaryMobile = (string?)null,
 							RoleName = "Teacher",
 							Designation = "Teacher - Hindi",
 							Department = "Languages",
-							DateOfBirth = new DateOnly(1990, 2, 14),
-							DateOfJoining = new DateOnly(2019, 6, 1),
+							DateOfBirth = new DateOnly(2002, 12, 1),
+							DateOfJoining = new DateOnly(2022, 12, 1),
 							Gender = GenderType.Female,
 							MaritalStatus = MaritalStatusType.Unmarried,
-							FamilyCast = "Rao",
+							FamilyCast = "Atre",
 							CastType = CastType.General,
 							Religion = "Hindu",
 							BloodGroup = "O+",
@@ -1469,20 +1542,20 @@ public class HRSeederContributor : BaseSeederContributor
 		{
 									new
 									{
-							FirstName = "Ramesh",
-							LastName = "Gupta",
+							FirstName = "Vishal",
+							LastName = "Makwana",
 							MiddleName = (string?)null,
-							Email = "ramesh.gupta@ddvs.com",
+							Email = "vishal.makwana@ddvs.com",
 							Mobile = "9876543224",
 							SecondaryMobile = "9876543225",
 							RoleName = "Administrative Manager",
 							Designation = "Administrative Manager",
 							Department = "Administration",
-							DateOfBirth = new DateOnly(1977, 10, 5),
-							DateOfJoining = new DateOnly(2011, 4, 1),
+							DateOfBirth = new DateOnly(1999, 5, 10),
+							DateOfJoining = new DateOnly(2019, 6, 1),
 							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Married,
-							FamilyCast = "Gupta",
+							FamilyCast = "Makwana",
 							CastType = CastType.General,
 							Religion = "Hindu",
 							BloodGroup = "A+",
@@ -1498,20 +1571,20 @@ public class HRSeederContributor : BaseSeederContributor
 						},
 						new
 						{
-							FirstName = "Neha",
-							LastName = "Kulkarni",
+							FirstName = "Mayur",
+							LastName = "Solanki",
 							MiddleName = (string?)null,
-							Email = "neha.kulkarni@ddvs.com",
+							Email = "mayur.solanki@ddvs.com",
 							Mobile = "9876543226",
 							SecondaryMobile = (string?)null,
 							RoleName = "HR Manager",
 							Designation = "HR Manager",
 							Department = "Human Resources",
-							DateOfBirth = new DateOnly(1983, 3, 18),
-							DateOfJoining = new DateOnly(2014, 5, 1),
-							Gender = GenderType.Female,
-							MaritalStatus = MaritalStatusType.Married,
-							FamilyCast = "Maratha",
+							DateOfBirth = new DateOnly(2003, 3, 31),
+							DateOfJoining = new DateOnly(2023, 6, 1),
+							Gender = GenderType.Male,
+							MaritalStatus = MaritalStatusType.Unmarried,
+							FamilyCast = "Solanki",
 							CastType = CastType.OBC,
 							Religion = "Hindu",
 							BloodGroup = "B+",
@@ -1527,20 +1600,20 @@ public class HRSeederContributor : BaseSeederContributor
 						},
 						new
 						{
-							FirstName = "Suresh",
-							LastName = "Patil",
+							FirstName = "Punam",
+							LastName = "Badgujar",
 							MiddleName = (string?)null,
-							Email = "suresh.patil@ddvs.com",
+							Email = "punam.badgujar@ddvs.com",
 							Mobile = "9876543227",
 							SecondaryMobile = "9876543228",
 							RoleName = "Finance Officer",
 							Designation = "Finance Officer",
 							Department = "Finance",
-							DateOfBirth = new DateOnly(1979, 12, 10),
-							DateOfJoining = new DateOnly(2012, 6, 1),
-							Gender = GenderType.Male,
+							DateOfBirth = new DateOnly(1998, 11, 15),
+							DateOfJoining = new DateOnly(2019, 6, 1),
+							Gender = GenderType.Female,
 							MaritalStatus = MaritalStatusType.Married,
-							FamilyCast = "Patil",
+							FamilyCast = "Badgujar",
 							CastType = CastType.OBC,
 							Religion = "Hindu",
 							BloodGroup = "O+",
@@ -1556,20 +1629,20 @@ public class HRSeederContributor : BaseSeederContributor
 						},
 						new
 						{
-							FirstName = "Rahul",
-							LastName = "Verma",
+							FirstName = "Milind",
+							LastName = "Kumar",
 							MiddleName = (string?)null,
-							Email = "rahul.verma@ddvs.com",
+							Email = "milind.kumar@ddvs.com",
 							Mobile = "9876543229",
 							SecondaryMobile = (string?)null,
 							RoleName = "IT Administrator",
 							Designation = "IT Administrator",
 							Department = "Information Technology",
-							DateOfBirth = new DateOnly(1991, 5, 22),
-							DateOfJoining = new DateOnly(2019, 8, 1),
+							DateOfBirth = new DateOnly(1995, 2, 12),
+							DateOfJoining = new DateOnly(2016, 6, 1),
 							Gender = GenderType.Male,
-							MaritalStatus = MaritalStatusType.Unmarried,
-							FamilyCast = "Verma",
+							MaritalStatus = MaritalStatusType.Married,
+							FamilyCast = "Kumar",
 							CastType = CastType.General,
 							Religion = "Hindu",
 							BloodGroup = "AB+",
@@ -1585,20 +1658,20 @@ public class HRSeederContributor : BaseSeederContributor
 						},
 						new
 						{
-							FirstName = "Pooja",
-							LastName = "Shah",
+							FirstName = "Nikhil",
+							LastName = "Baku",
 							MiddleName = (string?)null,
-							Email = "pooja.shah@ddvs.com",
+							Email = "nikhil.baku@ddvs.com",
 							Mobile = "9876543230",
 							SecondaryMobile = (string?)null,
 							RoleName = "Office Assistant",
 							Designation = "Office Assistant",
 							Department = "Administration",
-							DateOfBirth = new DateOnly(1992, 8, 30),
-							DateOfJoining = new DateOnly(2020, 7, 1),
-							Gender = GenderType.Female,
+							DateOfBirth = new DateOnly(2001, 10, 21),
+							DateOfJoining = new DateOnly(2021, 11, 1),
+							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Unmarried,
-							FamilyCast = "Shah",
+							FamilyCast = "Baku",
 							CastType = CastType.General,
 							Religion = "Hindu",
 							BloodGroup = "A-",
@@ -1614,20 +1687,20 @@ public class HRSeederContributor : BaseSeederContributor
 						},
 						new
 						{
-							FirstName = "Nilesh",
-							LastName = "Joshi",
+							FirstName = "Raj",
+							LastName = "Baku",
 							MiddleName = (string?)null,
-							Email = "nilesh.joshi@ddvs.com",
+							Email = "raj.baku@ddvs.com",
 							Mobile = "9876543231",
 							SecondaryMobile = (string?)null,
 							RoleName = "Clerk",
 							Designation = "Clerk",
 							Department = "Administration",
-							DateOfBirth = new DateOnly(1990, 11, 11),
-							DateOfJoining = new DateOnly(2021, 6, 1),
+							DateOfBirth = new DateOnly(2000, 7, 10),
+							DateOfJoining = new DateOnly(2020, 7, 15),
 							Gender = GenderType.Male,
 							MaritalStatus = MaritalStatusType.Unmarried,
-							FamilyCast = "Joshi",
+							FamilyCast = "Baku",
 							CastType = CastType.General,
 							Religion = "Hindu",
 							BloodGroup = "B+",

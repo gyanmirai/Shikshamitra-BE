@@ -13,7 +13,7 @@ namespace ShikshaMitra.HR.Payroll.Services;
 public sealed record PayrollCalendarResolution(
 	Guid? AcademicYearId,
 	IReadOnlyList<Holiday> Holidays,
-	int WorkingDays);
+	decimal WorkingDays);
 
 public class PayrollCalendarResolver : DomainService
 {

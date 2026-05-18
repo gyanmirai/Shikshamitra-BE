@@ -10,6 +10,9 @@ namespace ShikshaMitra.Seeders;
 
 public class RolesSeederContributor : BaseSeederContributor
 {
+	private const string HeadOfDepartmentRoleName = "Head of Department";
+	private const string HodRoleName = "HOD";
+
 	private readonly IIdentityRoleRepository _roleRepository;
 
 	public RolesSeederContributor(
@@ -25,6 +28,8 @@ public class RolesSeederContributor : BaseSeederContributor
 	public override async Task SeedAsync(DataSeedContext context)
 	{
 		var tenantId = CurrentTenant.Id;
+		await RenameHeadOfDepartmentRoleAsync();
+
 		var roles = new List<IdentityRole>
 		{
 			// Core System Roles
@@ -36,7 +41,7 @@ public class RolesSeederContributor : BaseSeederContributor
 			new IdentityRole(GuidGenerator.Create(), "Parent", tenantId),
 
 			// Department Heads
-			new IdentityRole(GuidGenerator.Create(), "Head of Department", tenantId),
+			new IdentityRole(GuidGenerator.Create(), HodRoleName, tenantId),
 
 			// Administrative Roles
 			new IdentityRole(GuidGenerator.Create(), "Vice Principal", tenantId),
@@ -59,5 +64,23 @@ public class RolesSeederContributor : BaseSeederContributor
 		}
 
 		await CurrentUnitOfWork.SaveChangesAsync();
+	}
+
+	private async Task RenameHeadOfDepartmentRoleAsync()
+	{
+		var existingHodRole = await _roleRepository.FindByNormalizedNameAsync(HodRoleName.ToUpperInvariant());
+		if (existingHodRole != null)
+		{
+			return;
+		}
+
+		var existingHeadOfDepartmentRole = await _roleRepository.FindByNormalizedNameAsync(HeadOfDepartmentRoleName.ToUpperInvariant());
+		if (existingHeadOfDepartmentRole == null)
+		{
+			return;
+		}
+
+		existingHeadOfDepartmentRole.ChangeName(HodRoleName);
+		await _roleRepository.UpdateAsync(existingHeadOfDepartmentRole);
 	}
 }

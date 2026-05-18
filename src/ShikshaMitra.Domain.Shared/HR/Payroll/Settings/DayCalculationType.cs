@@ -6,3 +6,15 @@ public enum DayCalculationType
 	TotalMonthDays = 1,
 	ManualDays = 2
 }
+
+public enum SaturdayWorkPolicy
+{
+	FullDay = 0,
+	HalfDay = 1,
+	Off = 2
+}
+
+public enum HolidaySyncMode
+{
+	SyncedWithOverrides = 0
+}

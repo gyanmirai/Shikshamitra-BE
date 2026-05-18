@@ -15,6 +15,18 @@ public class SalarySlipResponse
     [Required]
     public Guid EmployeeId { get; set; }
 
+    public string? EmployeeName { get; set; }
+
+    public string? EmployeeCode { get; set; }
+
+    public string? Department { get; set; }
+
+    public string? Designation { get; set; }
+
+    public DateOnly? DateOfJoining { get; set; }
+
+    public string? SlipNumber { get; set; }
+
     /// <summary>
     /// Salary period in MMMM-YYYY format (e.g., JANUARY-2025)
     /// </summary>
@@ -43,6 +55,10 @@ public class SalarySlipResponse
     [Range(0, double.MaxValue)]
     public double NetPay { get; set; }
 
+    public double NetSalary { get; set; }
+
+    public string? NetPayInWords { get; set; }
+
     /// <summary>
     /// Salary earning components
     /// </summary>
@@ -65,12 +81,18 @@ public class SalarySlipResponse
     /// <summary>
     /// Payroll basis days (denominator) when the slip was computed.
     /// </summary>
-    public int? PayrollBasisDays { get; set; }
+    public decimal? PayrollBasisDays { get; set; }
 
     /// <summary>
     /// Payable days from attendance at computation time.
     /// </summary>
     public double? PayableDays { get; set; }
+
+    public double? PresentDays { get; set; }
+
+    public double? HalfWorkingDays { get; set; }
+
+    public double? LopDays { get; set; }
 
     /// <summary>
     /// LOP proration factor (capped at 1).
@@ -81,6 +103,18 @@ public class SalarySlipResponse
     /// Day calculation mode: working-days, total-month-days, or manual-days.
     /// </summary>
     public string? PayrollDayCalculationMode { get; set; }
+
+    public string? BankName { get; set; }
+
+    public string? MaskedAccountNumber { get; set; }
+
+    public string? IfscCode { get; set; }
+
+    public string? UanNumber { get; set; }
+
+    public string? EpfNumber { get; set; }
+
+    public string? Remarks { get; set; }
 }
 
 /// <summary>

@@ -40,4 +40,13 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 
 		ex.Code.ShouldBe(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 	}
+
+	[Fact]
+	public async Task GenerateSalarySlipPdfAsync_Should_Deny_When_Employee_Stage_Is_Unresolved()
+	{
+		var ex = await Should.ThrowAsync<BusinessException>(async () =>
+			await _salarySlipAppService.GenerateSalarySlipPdfAsync(Guid.NewGuid(), "2026-04"));
+
+		ex.Code.ShouldBe(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+	}
 }

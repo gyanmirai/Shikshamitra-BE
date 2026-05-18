@@ -1,18 +1,19 @@
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.Security.UserScope;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
-using Volo.Abp.Caching;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.Payroll.SalarySlips;
@@ -26,29 +27,35 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 	private readonly ISalarySlipRepository _salarySlipRepository;
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly IRepository<EmployeeAttendance, Guid> _employeeAttendanceRepository;
+	private readonly IRepository<PayrollRunItemSnapshot, Guid> _payrollRunItemSnapshotRepository;
+	private readonly IEmployeePayrollDetailsRepository _employeePayrollDetailsRepository;
 	private readonly SalarySlipManager _salarySlipManager;
+	private readonly PayslipPdfService _payslipPdfService;
 	private readonly IUserScopeService _userScopeService;
 	private readonly HrUserScopeAccessService _hrScopeAccessService;
-	private readonly IDistributedCache<SalarySlipDto> _cache;
 	private readonly ILogger<SalarySlipAppService> _logger;
 
 	public SalarySlipAppService(
 		ISalarySlipRepository salarySlipRepository,
 		IEmployeeRepository employeeRepository,
 		IRepository<EmployeeAttendance, Guid> employeeAttendanceRepository,
+		IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
+		IEmployeePayrollDetailsRepository employeePayrollDetailsRepository,
 		SalarySlipManager salarySlipManager,
+		PayslipPdfService payslipPdfService,
 		IUserScopeService userScopeService,
 		HrUserScopeAccessService hrScopeAccessService,
-		IDistributedCache<SalarySlipDto> cache,
 		ILogger<SalarySlipAppService> logger)
 	{
 		_salarySlipRepository = salarySlipRepository;
 		_employeeRepository = employeeRepository;
 		_employeeAttendanceRepository = employeeAttendanceRepository;
+		_payrollRunItemSnapshotRepository = payrollRunItemSnapshotRepository;
+		_employeePayrollDetailsRepository = employeePayrollDetailsRepository;
 		_salarySlipManager = salarySlipManager;
+		_payslipPdfService = payslipPdfService;
 		_userScopeService = userScopeService;
 		_hrScopeAccessService = hrScopeAccessService;
-		_cache = cache;
 		_logger = logger;
 	}
 
@@ -73,19 +80,6 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 			await EnsureEmployeeScopeAllowedAsync(employeeId);
 			_salarySlipManager.ValidateMonthYearFormat(monthYear);
 
-			// Check cache first
-			var cacheKey = GetCacheKey(CurrentTenant.Id, employeeId, monthYear);
-			var cachedDto = await _cache.GetAsync(cacheKey);
-
-			if (cachedDto != null)
-			{
-				stopwatch.Stop();
-				_logger.LogInformation("Salary slip retrieved from cache - EmployeeId: {EmployeeId}, " +
-					"MonthYear: {MonthYear}, Duration: {Duration}ms",
-					employeeId, monthYear, stopwatch.ElapsedMilliseconds);
-				return cachedDto;
-			}
-
 			// Generate or retrieve salary slip (Manager validates employee existence)
 			var salarySlip = await _salarySlipManager.GenerateOrGetSalarySlipAsync(
 				employeeId,
@@ -97,16 +91,6 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 
 			// Map to DTO
 			var dto = await MapToSalarySlipDtoAsync(salarySlip, employee);
-
-			// Cache the result (cache for finalized slips longer)
-			var cacheOptions = new DistributedCacheEntryOptions
-			{
-				AbsoluteExpirationRelativeToNow = salarySlip.Status == SalarySlipStatus.Finalized
-					? TimeSpan.FromHours(24)  // Finalized slips: 24 hours
-					: TimeSpan.FromMinutes(30) // Draft slips: 30 minutes
-			};
-
-			await _cache.SetAsync(cacheKey, dto, cacheOptions);
 
 			stopwatch.Stop();
 			_logger.LogInformation("Salary slip processed successfully - EmployeeId: {EmployeeId}, " +
@@ -137,6 +121,63 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		}
 	}
 
+	public async Task<byte[]> GenerateSalarySlipPdfAsync(Guid employeeId, string monthYear)
+	{
+		if (employeeId == Guid.Empty)
+		{
+			throw new BusinessException(HRErrorCodes.PayrollEmployeeIdRequired);
+		}
+
+		await EnsureEmployeeScopeAllowedAsync(employeeId);
+		var normalizedMonthYear = NormalizeMonthYear(monthYear);
+		var salarySlip = await _salarySlipRepository.GetByEmployeeAndMonthAsync(employeeId, normalizedMonthYear);
+		if (salarySlip == null)
+		{
+			throw new BusinessException(HRErrorCodes.SalarySlipNotFound);
+		}
+
+		if (salarySlip.Status is not (SalarySlipStatus.Finalized or SalarySlipStatus.Paid))
+		{
+			throw new BusinessException(HRErrorCodes.SalarySlipPdfRequiresFinalized);
+		}
+
+		var employee = await _employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
+		var dto = await MapToSalarySlipDtoAsync(salarySlip, employee);
+		var period = FormatPayPeriod(dto.MonthYear);
+		var pdfModel = new PayslipPdfModel(
+			InstituteName: CurrentTenant.Name ?? "ShikshaMitra",
+			InstituteAddress: null,
+			EmployeeName: dto.EmployeeName ?? "-",
+			EmployeeCode: dto.EmployeeCode ?? "-",
+			Department: dto.Department,
+			Designation: dto.Designation,
+			DateOfJoining: dto.DateOfJoining?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture),
+			PayPeriodDisplay: period,
+			SlipNumber: dto.SlipNumber ?? BuildSlipNumber(dto.EmployeeCode, dto.MonthYear),
+			GeneratedAt: dto.ProcessedDate,
+			PayrollBasisDays: dto.PayrollBasisDays,
+			PayableDays: dto.PayableDays,
+			PresentDays: dto.PresentDays,
+			HalfWorkingDays: dto.HalfWorkingDays,
+			LopDays: dto.LopDays,
+			ProrationFactor: dto.ProrationFactor,
+			DayCalculationMode: FormatDayCalculationMode(dto.PayrollDayCalculationMode),
+			BankName: dto.BankName,
+			MaskedAccountNumber: dto.MaskedAccountNumber,
+			IfscCode: dto.IfscCode,
+			UanNumber: dto.UanNumber,
+			EpfNumber: dto.EpfNumber,
+			Earnings: dto.Earnings.Select(x => new PayslipPdfLineItem(x.Name, x.Amount)).ToList(),
+			Deductions: dto.Deductions.Select(x => new PayslipPdfLineItem(x.Name, x.Amount)).ToList(),
+			TotalEarnings: dto.TotalEarning,
+			TotalDeductions: dto.TotalDeduction,
+			NetPay: dto.NetSalary,
+			NetPayInWords: dto.NetPayInWords ?? ToIndianCurrencyWords(dto.NetSalary),
+			Remarks: dto.Remarks);
+
+		return _payslipPdfService.Generate(pdfModel);
+	}
+
 	/// <summary>
 	/// Generates a new salary slip or regenerates an existing draft
 	/// </summary>
@@ -161,10 +202,6 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 
 		// Get employee for DTO mapping (already validated by Manager)
 		var employee = await _employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
-
-		// Clear cache
-		var cacheKey = GetCacheKey(CurrentTenant.Id, input.EmployeeId, input.MonthYear);
-		await _cache.RemoveAsync(cacheKey);
 
 		// Map to DTO
 		var dto = await MapToSalarySlipDtoAsync(salarySlip, employee);
@@ -209,10 +246,6 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 
 		await _salarySlipRepository.UpdateAsync(salarySlip);
 
-		// Clear cache
-		var cacheKey = GetCacheKey(CurrentTenant.Id, salarySlip.EmployeeId, salarySlip.MonthYear);
-		await _cache.RemoveAsync(cacheKey);
-
 		// Get employee details for DTO
 		var employee = await _employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
 		var dto = await MapToSalarySlipDtoAsync(salarySlip, employee);
@@ -237,10 +270,6 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		salarySlip.Finalize();
 
 		await _salarySlipRepository.UpdateAsync(salarySlip);
-
-		// Clear cache
-		var cacheKey = GetCacheKey(CurrentTenant.Id, salarySlip.EmployeeId, salarySlip.MonthYear);
-		await _cache.RemoveAsync(cacheKey);
 
 		// Get employee details for DTO
 		var employee = await _employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
@@ -267,10 +296,6 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 			throw new BusinessException(HRErrorCodes.SalarySlipAlreadyFinalized);
 		}
 
-		// Clear cache
-		var cacheKey = GetCacheKey(CurrentTenant.Id, salarySlip.EmployeeId, salarySlip.MonthYear);
-		await _cache.RemoveAsync(cacheKey);
-
 		await _salarySlipRepository.DeleteAsync(id);
 
 		_logger.LogInformation("Salary slip deleted - Id: {Id}, EmployeeId: {EmployeeId}, MonthYear: {MonthYear}",
@@ -280,14 +305,28 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 	/// <summary>
 	/// Maps SalarySlip entity to DTO with employee details and component metadata
 	/// </summary>
-	private Task<SalarySlipDto> MapToSalarySlipDtoAsync(SalarySlip salarySlip, Employee employee)
+	private async Task<SalarySlipDto> MapToSalarySlipDtoAsync(SalarySlip salarySlip, Employee employee)
 	{
+		var snapshot = await GetPayrollSnapshotAsync(salarySlip.EmployeeId, salarySlip.MonthYear);
+		var payrollDetails = await _employeePayrollDetailsRepository.GetByEmployeeIdAsync(salarySlip.EmployeeId);
+		var payrollBasisDays = salarySlip.PayrollBasisDays ?? snapshot?.TotalWorkingDays;
+		var payableDays = salarySlip.PayableDays ?? snapshot?.PayableDays;
+		var presentDays = snapshot?.PresentDays;
+		var halfWorkingDays = snapshot?.HalfWorkingDays;
+		var lopDays = payrollBasisDays.HasValue && payableDays.HasValue
+			? Math.Max(0m, payrollBasisDays.Value - payableDays.Value)
+			: (decimal?) null;
+
 		var dto = new SalarySlipDto
 		{
 			Id = salarySlip.Id,
 			EmployeeId = salarySlip.EmployeeId,
 			EmployeeName = employee.EmployeeName,
 			EmployeeCode = employee.EmployeeCode,
+			Department = employee.Department,
+			Designation = employee.Designation,
+			DateOfJoining = employee.DateOfJoining,
+			SlipNumber = BuildSlipNumber(employee.EmployeeCode, salarySlip.MonthYear),
 			MonthYear = salarySlip.MonthYear,
 			TotalEarning = salarySlip.TotalEarning,
 			TotalDeduction = salarySlip.TotalDeduction,
@@ -295,12 +334,21 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 			Status = salarySlip.Status,
 			Remarks = salarySlip.Remarks,
 			ProcessedDate = salarySlip.ProcessedDate,
-			PayrollBasisDays = salarySlip.PayrollBasisDays,
-			PayableDays = salarySlip.PayableDays,
-			ProrationFactor = salarySlip.ProrationFactor,
+			PayrollBasisDays = payrollBasisDays,
+			PayableDays = payableDays,
+			PresentDays = presentDays,
+			HalfWorkingDays = halfWorkingDays,
+			LopDays = lopDays,
+			ProrationFactor = salarySlip.ProrationFactor ?? snapshot?.ProrationFactor,
 			PayrollDayCalculationMode = salarySlip.PayrollDayCalculationMode.HasValue
 				? PayrollDayCalculationApiLabels.ToApiString(salarySlip.PayrollDayCalculationMode.Value)
-				: null,
+				: snapshot?.DayCalculationMode,
+			BankName = payrollDetails?.BankName,
+			MaskedAccountNumber = MaskAccountNumber(payrollDetails?.AccountNumber),
+			IfscCode = payrollDetails?.IfscCode,
+			UanNumber = payrollDetails?.UanNumber,
+			EpfNumber = payrollDetails?.EpfNumber,
+			NetPayInWords = ToIndianCurrencyWords(salarySlip.NetSalary),
 			Earnings = salarySlip.Earnings.Select(e => new SalarySlipLineItemDto
 			{
 				Name = e.Name,
@@ -323,16 +371,162 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 			}).ToList()
 		};
 
-		return Task.FromResult(dto);
+		return dto;
 	}
 
-	/// <summary>
-	/// Generates cache key for salary slip (includes tenant ID for multi-tenancy support)
-	/// </summary>
-	private string GetCacheKey(Guid? tenantId, Guid employeeId, string monthYear)
+	private async Task<PayrollRunItemSnapshot?> GetPayrollSnapshotAsync(Guid employeeId, string monthYear)
 	{
-		var tenantPrefix = tenantId.HasValue ? tenantId.Value.ToString() : "host";
-		return $"SalarySlip:{tenantPrefix}:{employeeId}:{monthYear}";
+		var query = await _payrollRunItemSnapshotRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			query = query.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+
+		return await AsyncExecuter.FirstOrDefaultAsync(
+			query.Where(x => x.EmployeeId == employeeId && x.MonthYear == monthYear));
+	}
+
+	private static string NormalizeMonthYear(string monthYear)
+	{
+		if (!PayrollMonthNormalizer.TryNormalizeToInternal(monthYear, out var normalizedMonthYear))
+		{
+			throw new BusinessException(string.IsNullOrWhiteSpace(monthYear)
+				? HRErrorCodes.MonthYearRequired
+				: HRErrorCodes.InvalidMonthYearFormat);
+		}
+
+		return normalizedMonthYear;
+	}
+
+	private static string BuildSlipNumber(string? employeeCode, string monthYear)
+	{
+		var normalizedCode = string.IsNullOrWhiteSpace(employeeCode) ? "EMP" : employeeCode.Trim();
+		return $"PS-{monthYear.Replace("-", string.Empty, StringComparison.Ordinal)}-{normalizedCode}";
+	}
+
+	private static string? MaskAccountNumber(string? accountNumber)
+	{
+		if (string.IsNullOrWhiteSpace(accountNumber))
+		{
+			return null;
+		}
+
+		var digits = new string(accountNumber.Where(char.IsLetterOrDigit).ToArray());
+		if (digits.Length <= 4)
+		{
+			return $"XXXX{digits}";
+		}
+
+		return $"XXXX{digits[^4..]}";
+	}
+
+	private static string FormatPayPeriod(string monthYear)
+	{
+		if (DateTime.TryParseExact(monthYear + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture,
+			    DateTimeStyles.None, out var date))
+		{
+			return date.ToString("MMMM yyyy", CultureInfo.InvariantCulture);
+		}
+
+		return monthYear;
+	}
+
+	private static string FormatDayCalculationMode(string? mode) =>
+		mode switch
+		{
+			"working-days" => "Working days",
+			"total-month-days" => "Calendar days",
+			"manual-days" => "Manual days",
+			null or "" => "-",
+			_ => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(mode.Replace("-", " ", StringComparison.Ordinal))
+		};
+
+	private static string ToIndianCurrencyWords(decimal amount)
+	{
+		var rupees = (long) Math.Floor(Math.Abs(amount));
+		var paise = (int) Math.Round((Math.Abs(amount) - rupees) * 100, MidpointRounding.AwayFromZero);
+		if (paise == 100)
+		{
+			rupees += 1;
+			paise = 0;
+		}
+
+		var words = $"{NumberToWords(rupees)} rupees";
+		if (paise > 0)
+		{
+			words += $" and {NumberToWords(paise)} paise";
+		}
+
+		return $"{CultureInfo.InvariantCulture.TextInfo.ToTitleCase(words)} only";
+	}
+
+	private static string NumberToWords(long number)
+	{
+		if (number == 0)
+		{
+			return "zero";
+		}
+
+		string[] units =
+		[
+			"", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+			"eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
+			"eighteen", "nineteen"
+		];
+		string[] tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+
+		static string TwoDigits(long value, string[] localUnits, string[] localTens)
+		{
+			if (value < 20)
+			{
+				return localUnits[(int) value];
+			}
+
+			return localTens[(int) (value / 10)] + (value % 10 > 0 ? " " + localUnits[(int) (value % 10)] : "");
+		}
+
+		static string ThreeDigits(long value, string[] localUnits, string[] localTens)
+		{
+			var hundred = value / 100;
+			var rest = value % 100;
+			var result = hundred > 0 ? localUnits[(int) hundred] + " hundred" : "";
+			if (rest > 0)
+			{
+				result += (result.Length > 0 ? " " : "") + TwoDigits(rest, localUnits, localTens);
+			}
+
+			return result;
+		}
+
+		var parts = new List<string>();
+		var crore = number / 10000000;
+		number %= 10000000;
+		var lakh = number / 100000;
+		number %= 100000;
+		var thousand = number / 1000;
+		number %= 1000;
+
+		if (crore > 0)
+		{
+			parts.Add($"{NumberToWords(crore)} crore");
+		}
+
+		if (lakh > 0)
+		{
+			parts.Add($"{NumberToWords(lakh)} lakh");
+		}
+
+		if (thousand > 0)
+		{
+			parts.Add($"{NumberToWords(thousand)} thousand");
+		}
+
+		if (number > 0)
+		{
+			parts.Add(ThreeDigits(number, units, tens));
+		}
+
+		return string.Join(" ", parts);
 	}
 
 	private async Task EnsureEmployeeScopeAllowedAsync(Guid employeeId)

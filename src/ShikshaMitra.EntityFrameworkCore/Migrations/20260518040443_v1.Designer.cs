@@ -14,8 +14,8 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20260516070254_AddGradeScalingIdToExamSubject")]
-    partial class AddGradeScalingIdToExamSubject
+    [Migration("20260518040443_v1")]
+    partial class v1
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -6327,8 +6327,9 @@ namespace ShikshaMitra.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
-                    b.Property<int?>("PayrollBasisDays")
-                        .HasColumnType("integer");
+                    b.Property<decimal?>("PayrollBasisDays")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
 
                     b.Property<int?>("PayrollDayCalculationMode")
                         .HasColumnType("integer");
@@ -6414,6 +6415,12 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
+                    b.Property<string>("HolidayOverridesJson")
+                        .HasColumnType("text");
+
+                    b.Property<int>("HolidaySyncMode")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("LastModificationTime");
@@ -6422,11 +6429,17 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<string>("LockedMonthSettingsJson")
+                        .HasColumnType("text");
+
                     b.Property<int?>("ManualDays")
                         .HasColumnType("integer");
 
                     b.Property<string>("ManualMonthDaysJson")
                         .HasColumnType("text");
+
+                    b.Property<int>("SaturdayWorkPolicy")
+                        .HasColumnType("integer");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")

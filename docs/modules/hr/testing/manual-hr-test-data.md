@@ -37,6 +37,14 @@ The existing deterministic accounts from `SeedTestLogins=true` are still availab
 - Mayur Solanki reports to Prerna Atre.
 - Jagruti Vadher and Vishal Makwana report to Mayur Solanki.
 
+The always-on HR employee seeder also creates a hierarchy for Employee List testing:
+
+- Hiren Vadher is the top-level Principal and is linked to `principal-gseb@ddvs.com`.
+- Jignesh Jinjala reports to Hiren Vadher.
+- Akshay Patel and Parth Ghusar report to Jignesh Jinjala.
+- Teaching employees report under Akshay Patel or Parth Ghusar.
+- Non-teaching employees report under Jignesh Jinjala, Vishal Makwana, or Mayur Solanki.
+
 ## Payroll Structure
 
 Each active tester employee receives bank/payroll details and employee-specific salary components. Earning components are seeded with a `Basic` component name so payroll computation can identify basic salary correctly.
@@ -131,7 +139,7 @@ Leave requests are seeded in the most recent completed month so they line up wit
 The main development seeder also creates supporting data for non-payroll manual testing:
 
 - Institute setup: room types such as Classroom, Lab, Library, Staff Room, and Exam Hall; demo buildings with floors; and rooms with capacity, benches, and feature notes.
-- Student data: admitted students for every division in the current academic year, with contact, additional, and medical details. The default is two students per division and can be changed with `StudentSeeder:StudentsPerDivision` or capped with `StudentSeeder:MaxStudents`.
+- Student data: admitted students for every division in the current academic year, with contact, additional, medical details, and fun-name middle names for parent-style testing. The default is four students per division and can be changed with `StudentSeeder:StudentsPerDivision` or capped with `StudentSeeder:MaxStudents`.
 - Academic setup: subjects per education medium, exam types, homework types, assignment types, and homework assignment types for assignment/homework flows.
 
 This supporting data is seeded before the student data so exams, room allocation, timetable, homework, and assignment flows can use the same academic setup.

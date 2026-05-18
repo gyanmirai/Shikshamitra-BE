@@ -22,7 +22,7 @@ public class StaffUserScopeSeederContributor : BaseSeederContributor
 		"Vice Principal",
 		"Administrative Manager",
 		"IT Administrator",
-		"Head of Department",
+		"HOD",
 		"Teacher",
 		"Clerk",
 		"Office Assistant",

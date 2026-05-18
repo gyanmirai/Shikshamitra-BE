@@ -68,7 +68,8 @@ public class SalarySlipConfiguration : IEntityTypeConfiguration<SalarySlip>
 		builder.Property(x => x.Remarks)
 			.HasMaxLength(1000);
 
-		builder.Property(x => x.PayrollBasisDays);
+		builder.Property(x => x.PayrollBasisDays)
+			.HasPrecision(18, 2);
 
 		builder.Property(x => x.PayableDays)
 			.HasPrecision(18, 2);

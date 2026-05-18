@@ -41,7 +41,7 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 	}
 
 	[Fact]
-	public async Task GetFilteredListAsync_Should_Return_Only_Direct_Reportees_For_Reporting_Manager()
+	public async Task GetFilteredListAsync_Should_Return_Reportees_And_Descendants_For_Reporting_Manager()
 	{
 		var manager = await _personalInfoAppService.CreateAsync(await BuildCreateDtoAsync("mgr.scope"));
 		var reporteeA = await _personalInfoAppService.CreateAsync(await BuildCreateDtoAsync("rpta.scope"));
@@ -53,7 +53,7 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 		await _employeeRepository.UpdateAsync(employeeA, autoSave: true);
 
 		var employeeB = await _employeeRepository.GetAsync(reporteeB.Id);
-		employeeB.AssignReportingManager(manager.Id);
+		employeeB.AssignReportingManager(reporteeA.Id);
 		await _employeeRepository.UpdateAsync(employeeB, autoSave: true);
 
 		var principal = BuildPrincipal(manager.Id);

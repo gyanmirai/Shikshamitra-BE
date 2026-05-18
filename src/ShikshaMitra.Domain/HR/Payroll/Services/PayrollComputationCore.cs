@@ -41,35 +41,79 @@ public sealed record PayrollLeaveUnits(
 	decimal UnpaidUnits);
 
 public sealed record PayrollBasisDaysResult(
-	int BasisDays,
+	decimal BasisDays,
 	DayCalculationType EffectiveMode,
-	bool UsedTenantDefault);
+	bool UsedTenantDefault,
+	SaturdayWorkPolicy SaturdayWorkPolicy = SaturdayWorkPolicy.FullDay,
+	IReadOnlyDictionary<DateOnly, decimal>? WorkingUnitsByDate = null);
+
+public sealed record PayrollResolvedHolidayDay(
+	DateOnly Date,
+	Guid? CalendarHolidayId,
+	string HolidayName,
+	bool IncludedInPayroll,
+	bool IsPayrollOnly);
 
 public static class PayrollMonthCalendar
 {
-	public static int CountWorkingWeekdaysExcludingHolidayWeekdays(int year, int month, IReadOnlyList<Holiday> holidays)
+	public static decimal CountWorkingWeekdaysExcludingHolidayWeekdays(int year, int month, IReadOnlyList<Holiday> holidays)
 	{
-		return CountWorkingDaysExcludingSundaysAndHolidays(year, month, holidays);
+		return CountWorkingDayUnits(
+			year,
+			month,
+			holidays,
+			SaturdayWorkPolicy.FullDay,
+			Array.Empty<PayrollHolidayOverride>());
 	}
 
-	public static int CountWorkingDaysExcludingSundaysAndHolidays(int year, int month, IReadOnlyList<Holiday> holidays)
+	public static decimal CountWorkingDaysExcludingSundaysAndHolidays(int year, int month, IReadOnlyList<Holiday> holidays)
+	{
+		return CountWorkingDayUnits(
+			year,
+			month,
+			holidays,
+			SaturdayWorkPolicy.FullDay,
+			Array.Empty<PayrollHolidayOverride>());
+	}
+
+	public static decimal CountWorkingDayUnits(
+		int year,
+		int month,
+		IReadOnlyList<Holiday> holidays,
+		SaturdayWorkPolicy saturdayWorkPolicy,
+		IReadOnlyList<PayrollHolidayOverride> holidayOverrides)
+	{
+		return BuildWorkingUnitsByDate(year, month, holidays, saturdayWorkPolicy, holidayOverrides).Values.Sum();
+	}
+
+	public static Dictionary<DateOnly, decimal> BuildWorkingUnitsByDate(
+		int year,
+		int month,
+		IReadOnlyList<Holiday> holidays,
+		SaturdayWorkPolicy saturdayWorkPolicy,
+		IReadOnlyList<PayrollHolidayOverride> holidayOverrides)
 	{
 		var firstDay = new DateTime(year, month, 1);
 		var lastDay = new DateTime(year, month, DateTime.DaysInMonth(year, month));
-		var businessDays = 0;
+		var includedHolidayDates = GetResolvedHolidayDaysInMonth(year, month, holidays, holidayOverrides)
+			.Where(x => x.IncludedInPayroll)
+			.Select(x => x.Date)
+			.ToHashSet();
+		var units = new Dictionary<DateOnly, decimal>();
+
 		for (var date = firstDay; date <= lastDay; date = date.AddDays(1))
 		{
-			if (date.DayOfWeek != DayOfWeek.Sunday)
+			var dateOnly = DateOnly.FromDateTime(date);
+			var unit = GetBaseWorkingUnit(date.DayOfWeek, saturdayWorkPolicy);
+			if (unit > 0m && includedHolidayDates.Contains(dateOnly))
 			{
-				businessDays++;
+				unit = 0m;
 			}
+
+			units[dateOnly] = unit;
 		}
 
-		var holidayDates = GetHolidayDatesInMonth(year, month, holidays)
-			.Where(date => date.DayOfWeek != DayOfWeek.Sunday)
-			.ToHashSet();
-
-		return Math.Max(0, businessDays - holidayDates.Count);
+		return units;
 	}
 
 	public static HashSet<DateOnly> GetHolidayDateOnlySetInMonth(int year, int month, IReadOnlyList<Holiday> holidays) =>
@@ -77,13 +121,18 @@ public static class PayrollMonthCalendar
 			.Select(DateOnly.FromDateTime)
 			.ToHashSet();
 
-	private static IEnumerable<DateTime> GetHolidayDatesInMonth(int year, int month, IReadOnlyList<Holiday> holidays)
+	public static IReadOnlyList<PayrollResolvedHolidayDay> GetResolvedHolidayDaysInMonth(
+		int year,
+		int month,
+		IReadOnlyList<Holiday> holidays,
+		IReadOnlyList<PayrollHolidayOverride> holidayOverrides)
 	{
 		var firstDay = new DateTime(year, month, 1);
 		var lastDay = new DateTime(year, month, DateTime.DaysInMonth(year, month));
 		var startDate = new DateTimeOffset(firstDay);
 		var endDate = new DateTimeOffset(lastDay.AddDays(1).AddTicks(-1));
-		var holidayDates = new HashSet<DateTime>();
+		var resolved = new Dictionary<(DateOnly Date, Guid? CalendarHolidayId), PayrollResolvedHolidayDay>();
+
 		foreach (var holiday in holidays)
 		{
 			if (holiday.StartDate > endDate || holiday.EndDate < startDate)
@@ -95,11 +144,63 @@ public static class PayrollMonthCalendar
 			var hEnd = holiday.EndDate.Date < lastDay ? holiday.EndDate.Date : lastDay;
 			for (var date = hStart; date <= hEnd; date = date.AddDays(1))
 			{
-				holidayDates.Add(date);
+				var key = (DateOnly.FromDateTime(date), (Guid?)holiday.Id);
+				resolved[key] = new PayrollResolvedHolidayDay(
+					key.Item1,
+					holiday.Id,
+					holiday.HolidayName,
+					IncludedInPayroll: true,
+					IsPayrollOnly: false);
 			}
 		}
 
-		return holidayDates;
+		foreach (var holidayOverride in holidayOverrides)
+		{
+			if (holidayOverride.Date.Year != year || holidayOverride.Date.Month != month)
+			{
+				continue;
+			}
+
+			var date = DateOnly.FromDateTime(holidayOverride.Date.Date);
+			var key = (date, holidayOverride.CalendarHolidayId);
+			resolved[key] = new PayrollResolvedHolidayDay(
+				date,
+				holidayOverride.CalendarHolidayId,
+				holidayOverride.HolidayName,
+				holidayOverride.IncludedInPayroll,
+				IsPayrollOnly: holidayOverride.CalendarHolidayId == null);
+		}
+
+		return resolved.Values
+			.OrderBy(x => x.Date)
+			.ThenBy(x => x.HolidayName)
+			.ToList();
+	}
+
+	private static IEnumerable<DateTime> GetHolidayDatesInMonth(int year, int month, IReadOnlyList<Holiday> holidays)
+	{
+		var resolved = GetResolvedHolidayDaysInMonth(
+			year,
+			month,
+			holidays,
+			Array.Empty<PayrollHolidayOverride>());
+		return resolved.Select(x => x.Date.ToDateTime(TimeOnly.MinValue));
+	}
+
+	private static decimal GetBaseWorkingUnit(DayOfWeek dayOfWeek, SaturdayWorkPolicy saturdayWorkPolicy)
+	{
+		return dayOfWeek switch
+		{
+			DayOfWeek.Sunday => 0m,
+			DayOfWeek.Saturday => saturdayWorkPolicy switch
+			{
+				SaturdayWorkPolicy.FullDay => 1m,
+				SaturdayWorkPolicy.HalfDay => 0.5m,
+				SaturdayWorkPolicy.Off => 0m,
+				_ => 1m
+			},
+			_ => 1m
+		};
 	}
 }
 
@@ -109,35 +210,47 @@ public static class PayrollBasisDays
 		DayCalculationSetting? setting,
 		int year,
 		int month,
-		int workingWeekdaysMinusHolidayWeekdays)
+		decimal workingWeekdaysMinusHolidayWeekdays,
+		IReadOnlyDictionary<DateOnly, decimal>? workingUnitsByDate = null)
 	{
 		if (setting is null)
 		{
 			return new PayrollBasisDaysResult(
 				workingWeekdaysMinusHolidayWeekdays,
 				DayCalculationType.WorkingDays,
-				UsedTenantDefault: true);
+				UsedTenantDefault: true,
+				SaturdayWorkPolicy.FullDay,
+				workingUnitsByDate);
 		}
 
-		return setting.DayCalculationType switch
+		var effectiveMode = setting.GetEffectiveDayCalculationTypeForMonth(year, month);
+		var effectiveSaturdayPolicy = setting.GetEffectiveSaturdayWorkPolicyForMonth(year, month);
+
+		return effectiveMode switch
 		{
 			DayCalculationType.WorkingDays => new PayrollBasisDaysResult(
 				workingWeekdaysMinusHolidayWeekdays,
 				DayCalculationType.WorkingDays,
-				UsedTenantDefault: false),
+				UsedTenantDefault: false,
+				effectiveSaturdayPolicy,
+				workingUnitsByDate),
 
 			DayCalculationType.TotalMonthDays => new PayrollBasisDaysResult(
 				DateTime.DaysInMonth(year, month),
 				DayCalculationType.TotalMonthDays,
-				UsedTenantDefault: false),
+				UsedTenantDefault: false,
+				effectiveSaturdayPolicy,
+				workingUnitsByDate),
 
 			DayCalculationType.ManualDays => new PayrollBasisDaysResult(
-				setting.GetManualDaysForMonth(year, month)
+				setting.GetEffectiveManualDaysForMonth(year, month)
 					?? throw new InvalidOperationException($"ManualDays must be set for {year}-{month:00} when mode is ManualDays."),
 				DayCalculationType.ManualDays,
-				UsedTenantDefault: false),
+				UsedTenantDefault: false,
+				effectiveSaturdayPolicy,
+				workingUnitsByDate),
 
-			_ => throw new ArgumentOutOfRangeException(nameof(setting), setting.DayCalculationType, "Unknown day calculation type.")
+			_ => throw new ArgumentOutOfRangeException(nameof(setting), effectiveMode, "Unknown day calculation type.")
 		};
 	}
 }
@@ -147,7 +260,7 @@ public static class PayrollProrationCalculator
 	public static decimal CalculatePayableDays(int presentDays, int halfWorkingDays) =>
 		presentDays + 0.5m * halfWorkingDays;
 
-	public static decimal CalculateProrationFactor(int basisDays, decimal payableDays)
+	public static decimal CalculateProrationFactor(decimal basisDays, decimal payableDays)
 	{
 		if (basisDays <= 0)
 		{
@@ -228,11 +341,17 @@ public static class PayrollAttendanceCalculator
 			return new PayrollAttendancePayableDays(presentDays, halfDays, totalMonthPayableDays);
 		}
 
-		var holidayDates = PayrollMonthCalendar.GetHolidayDateOnlySetInMonth(year, month, holidays);
+		var workingUnitsByDate = basis.WorkingUnitsByDate
+			?? PayrollMonthCalendar.BuildWorkingUnitsByDate(
+				year,
+				month,
+				holidays,
+				basis.SaturdayWorkPolicy,
+				Array.Empty<PayrollHolidayOverride>());
 		if (basis.EffectiveMode == DayCalculationType.WorkingDays)
 		{
 			monthRecords = monthRecords
-				.Where(a => IsWorkingDay(a.AttendanceDate, holidayDates))
+				.Where(a => IsWorkingDay(a.AttendanceDate, workingUnitsByDate))
 				.ToList();
 		}
 
@@ -240,11 +359,18 @@ public static class PayrollAttendanceCalculator
 		var half = monthRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.HalfDayLeave);
 		var attendancePayableByDate = monthRecords.ToDictionary(
 			a => a.AttendanceDate,
-			a => a.StatusType switch
+			a =>
 			{
-				EmployeeAttendanceStatusType.Present => 1m,
-				EmployeeAttendanceStatusType.HalfDayLeave => 0.5m,
-				_ => 0m
+				var dayUnit = basis.EffectiveMode == DayCalculationType.WorkingDays
+					? GetWorkingUnit(a.AttendanceDate, workingUnitsByDate)
+					: 1m;
+
+				return a.StatusType switch
+				{
+					EmployeeAttendanceStatusType.Present => dayUnit,
+					EmployeeAttendanceStatusType.HalfDayLeave => dayUnit * 0.5m,
+					_ => 0m
+				};
 			});
 
 		var payableDays = attendancePayableByDate.Values.Sum();
@@ -257,12 +383,15 @@ public static class PayrollAttendanceCalculator
 					continue;
 				}
 
-				if (basis.EffectiveMode == DayCalculationType.WorkingDays && !IsWorkingDay(date, holidayDates))
+				if (basis.EffectiveMode == DayCalculationType.WorkingDays && !IsWorkingDay(date, workingUnitsByDate))
 				{
 					continue;
 				}
 
-				var paidUnitsForDate = Math.Clamp(leaveUnits.PaidUnits, 0m, 1m);
+				var maxUnitsForDate = basis.EffectiveMode == DayCalculationType.WorkingDays
+					? GetWorkingUnit(date, workingUnitsByDate)
+					: 1m;
+				var paidUnitsForDate = Math.Clamp(leaveUnits.PaidUnits, 0m, maxUnitsForDate);
 				var attendanceUnits = attendancePayableByDate.GetValueOrDefault(date);
 				if (paidUnitsForDate > attendanceUnits)
 				{
@@ -277,8 +406,11 @@ public static class PayrollAttendanceCalculator
 			payableDays);
 	}
 
-	private static bool IsWorkingDay(DateOnly date, IReadOnlySet<DateOnly> holidayDates) =>
-		date.DayOfWeek != DayOfWeek.Sunday && !holidayDates.Contains(date);
+	private static bool IsWorkingDay(DateOnly date, IReadOnlyDictionary<DateOnly, decimal> workingUnitsByDate) =>
+		GetWorkingUnit(date, workingUnitsByDate) > 0m;
+
+	private static decimal GetWorkingUnit(DateOnly date, IReadOnlyDictionary<DateOnly, decimal> workingUnitsByDate) =>
+		workingUnitsByDate.TryGetValue(date, out var unit) ? unit : 0m;
 
 	private static PayrollLeaveUnits GetLeaveUnits(
 		DateOnly date,
@@ -300,7 +432,7 @@ public static class PayrollComputation
 	public static PayrollComputationResult Calculate(
 		int presentDays,
 		int halfWorkingDays,
-		int basisDays,
+		decimal basisDays,
 		IReadOnlyList<EmployeePayrollComponent> components)
 	{
 		var payableDays = PayrollProrationCalculator.CalculatePayableDays(presentDays, halfWorkingDays);
@@ -311,7 +443,7 @@ public static class PayrollComputation
 		int presentDays,
 		int halfWorkingDays,
 		decimal payableDays,
-		int basisDays,
+		decimal basisDays,
 		IReadOnlyList<EmployeePayrollComponent> components)
 	{
 		var factor = PayrollProrationCalculator.CalculateProrationFactor(basisDays, payableDays);

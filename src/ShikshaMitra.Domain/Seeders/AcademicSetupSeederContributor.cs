@@ -319,43 +319,33 @@ public class AcademicSetupSeederContributor : BaseSeederContributor
 		{
 			foreach (var standard in standards)
 			{
-				// Determine divisions based on class level for realistic data
-				string[] divisionNames;
+				// Keep seeded classes varied but bounded: each class gets 1, 2, or 3 divisions.
+				var divisionNames = ResolveDivisionNames(standard.Name);
 				int strength;
 
 				if (standard.Name == "Nursery" || standard.Name == "LKG" || standard.Name == "UKG")
 				{
-					// Pre-Primary: 2 divisions with smaller strength
-					divisionNames = new[] { "A", "B" };
 					strength = 25;
 				}
 				else if (standard.Name.StartsWith("Class") &&
 				         (standard.Name == "Class 1" || standard.Name == "Class 2"))
 				{
-					// Lower Primary: 3 divisions
-					divisionNames = new[] { "A", "B", "C" };
 					strength = 35;
 				}
 				else if (standard.Name.StartsWith("Class") &&
 				         int.TryParse(standard.Name.Replace("Class ", ""), out int classNum) &&
 				         classNum >= 3 && classNum <= 8)
 				{
-					// Middle Primary & Secondary: 4 divisions
-					divisionNames = new[] { "A", "B", "C", "D" };
 					strength = 40;
 				}
 				else if (standard.Name.StartsWith("Class") &&
 				         int.TryParse(standard.Name.Replace("Class ", ""), out int classNum2) &&
 				         classNum2 >= 9 && classNum2 <= 10)
 				{
-					// Classes 9-10: 5 divisions (high enrollment)
-					divisionNames = new[] { "A", "B", "C", "D", "E" };
 					strength = 45;
 				}
 				else
 				{
-					// Classes 11-12: 3 divisions (stream-based: Science, Commerce, Arts)
-					divisionNames = new[] { "A", "B", "C" };
 					strength = 35;
 				}
 
@@ -372,5 +362,20 @@ public class AcademicSetupSeederContributor : BaseSeederContributor
 		}
 
 		await CurrentUnitOfWork.SaveChangesAsync();
+	}
+
+	private static string[] ResolveDivisionNames(string standardName)
+	{
+		var divisionCount = standardName switch
+		{
+			"Nursery" => 1,
+			"LKG" => 2,
+			"UKG" => 3,
+			string name when name.StartsWith("Class ", StringComparison.OrdinalIgnoreCase) &&
+			                 int.TryParse(name["Class ".Length..], out var classNumber) => ((classNumber - 1) % 3) + 1,
+			_ => 1
+		};
+
+		return new[] { "A", "B", "C" }[..divisionCount];
 	}
 }

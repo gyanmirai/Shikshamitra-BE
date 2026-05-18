@@ -27,17 +27,18 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 			!x.IsDeleted &&
 			(x.Status == EmployeeLeaveStatusType.Pending ||
 			 x.Status == EmployeeLeaveStatusType.Approved ||
-			 x.Status == EmployeeLeaveStatusType.Reviewed) &&
-			((x.StartDate <= startDate && x.EndDate >= startDate) ||
-			 (x.StartDate <= endDate && x.EndDate >= endDate) ||
-			 (x.StartDate >= startDate && x.EndDate <= endDate)));
+			 x.Status == EmployeeLeaveStatusType.Reviewed));
 
 		if (excludeLeaveId.HasValue)
 		{
 			query = query.Where(x => x.Id != excludeLeaveId.Value);
 		}
 
-		return await query.AnyAsync();
+		var candidateLeaves = await query.ToListAsync();
+		return candidateLeaves.Any(x =>
+			(x.StartDate <= startDate && x.EndDate >= startDate) ||
+			(x.StartDate <= endDate && x.EndDate >= endDate) ||
+			(x.StartDate >= startDate && x.EndDate <= endDate));
 	}
 
 	public async Task<decimal> GetApprovedLeaveDaysAsync(

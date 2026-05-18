@@ -153,7 +153,15 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				var reviewByEmployee = await GetReviewsByEmployeeAsync(internalMonthYear);
 				var calendar = await _payrollCalendarResolver.ResolveAsync(year, month);
 				var daySetting = await _dayCalculationSettingRepository.FindEffectiveAsync(CurrentTenant.Id, calendar.AcademicYearId);
-				var basis = PayrollBasisDays.Resolve(daySetting, year, month, calendar.WorkingDays);
+				var saturdayWorkPolicy = daySetting?.GetEffectiveSaturdayWorkPolicyForMonth(year, month) ?? SaturdayWorkPolicy.FullDay;
+				var holidayOverrides = daySetting?.GetEffectiveHolidayOverridesForMonth(year, month) ?? Array.Empty<PayrollHolidayOverride>();
+				var workingUnitsByDate = PayrollMonthCalendar.BuildWorkingUnitsByDate(
+					year,
+					month,
+					calendar.Holidays,
+					saturdayWorkPolicy,
+					holidayOverrides);
+				var basis = PayrollBasisDays.Resolve(daySetting, year, month, workingUnitsByDate.Values.Sum(), workingUnitsByDate);
 
 				var employeeIds = scopedEmployees.Select(e => e.Id).ToList();
 				var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
@@ -769,7 +777,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			IssueCodes = BuildIssueCodes(payrollDetails, components, basis.BasisDays, computation.PayableDays, netPay, previousMonthNetPay, netPayDeltaPercent),
 			PresentDays = attendanceSummary.PresentDays,
 			HalfWorkingDays = attendanceSummary.HalfWorkingDays,
-			TotalWorkingDays = basis.BasisDays,
+			TotalWorkingDays = (double)basis.BasisDays,
 			PayableDays = (double)computation.PayableDays,
 			ProrationFactor = (double)computation.ProrationFactor,
 			DayCalculationMode = PayrollDayCalculationApiLabels.ToApiString(basis.EffectiveMode),
@@ -880,7 +888,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	private static List<string> BuildIssueCodes(
 		EmployeePayrollDetails? payrollDetails,
 		List<EmployeePayrollComponent> components,
-		double basisDays,
+		decimal basisDays,
 		decimal payableDays,
 		decimal netPay,
 		decimal? previousMonthNetPay,
@@ -897,7 +905,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		{
 			issues.Add(IssueCodes.NoAttendance);
 		}
-		else if (basisDays > 0 && payableDays < (decimal)basisDays)
+		else if (basisDays > 0 && payableDays < basisDays)
 		{
 			issues.Add(IssueCodes.LowAttendance);
 		}

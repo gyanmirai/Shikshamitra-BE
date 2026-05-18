@@ -29,6 +29,14 @@ public class SalarySlipDto
 	/// </summary>
 	public string? EmployeeCode { get; set; }
 
+	public string? Department { get; set; }
+
+	public string? Designation { get; set; }
+
+	public DateOnly? DateOfJoining { get; set; }
+
+	public string? SlipNumber { get; set; }
+
 	/// <summary>
 	/// Month and year in YYYY-MM format
 	/// </summary>
@@ -77,12 +85,18 @@ public class SalarySlipDto
 	/// <summary>
 	/// Payroll basis days (denominator) when slip was computed.
 	/// </summary>
-	public int? PayrollBasisDays { get; set; }
+	public decimal? PayrollBasisDays { get; set; }
 
 	/// <summary>
 	/// Payable days from attendance at computation time.
 	/// </summary>
 	public decimal? PayableDays { get; set; }
+
+	public decimal? PresentDays { get; set; }
+
+	public decimal? HalfWorkingDays { get; set; }
+
+	public decimal? LopDays { get; set; }
 
 	/// <summary>
 	/// LOP proration factor applied (capped at 1).
@@ -93,6 +107,18 @@ public class SalarySlipDto
 	/// Day calculation mode: working-days, total-month-days, or manual-days.
 	/// </summary>
 	public string? PayrollDayCalculationMode { get; set; }
+
+	public string? BankName { get; set; }
+
+	public string? MaskedAccountNumber { get; set; }
+
+	public string? IfscCode { get; set; }
+
+	public string? UanNumber { get; set; }
+
+	public string? EpfNumber { get; set; }
+
+	public string? NetPayInWords { get; set; }
 }
 
 /// <summary>

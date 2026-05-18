@@ -2,6 +2,7 @@
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -89,14 +90,40 @@ public class EmployeeSearchAppService(
 			return queryable.Where(_ => false);
 		}
 
-		var reportees = await employeeRepository.GetEmployeesByManagerAsync(actorEmployee.Id);
-		if (reportees.Count == 0)
+		var reporteeIds = await GetDescendantReporteeIdsAsync(actorEmployee.Id);
+		if (reporteeIds.Count == 0)
 		{
 			return queryable.Where(e => e.Id == actorEmployee.Id);
 		}
 
-		var reporteeIds = reportees.Select(e => e.Id).ToList();
 		return queryable.Where(e => reporteeIds.Contains(e.Id));
+	}
+
+	private async Task<List<Guid>> GetDescendantReporteeIdsAsync(Guid managerId)
+	{
+		var result = new List<Guid>();
+		var visited = new HashSet<Guid> { managerId };
+		var managerQueue = new Queue<Guid>();
+		managerQueue.Enqueue(managerId);
+
+		while (managerQueue.Count > 0)
+		{
+			var currentManagerId = managerQueue.Dequeue();
+			var reportees = await employeeRepository.GetEmployeesByManagerAsync(currentManagerId);
+
+			foreach (var reportee in reportees)
+			{
+				if (!visited.Add(reportee.Id))
+				{
+					continue;
+				}
+
+				result.Add(reportee.Id);
+				managerQueue.Enqueue(reportee.Id);
+			}
+		}
+
+		return result;
 	}
 
 	private bool IsPrivilegedUser()

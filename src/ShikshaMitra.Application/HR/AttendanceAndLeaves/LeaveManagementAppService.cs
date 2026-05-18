@@ -39,6 +39,14 @@ public class LeaveManagementAppService(
 	: ApplicationService, ILeaveManagementAppService
 {
 	private const int MaxHierarchyDepth = 64;
+	private static readonly IReadOnlyDictionary<string, string[]> SeededLoginEmployeeEmailAliases =
+		new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+		{
+			["principal-gseb"] = ["principal1@ddvs.com", "rajesh.kumar@school.edu", "hiren.vadher@ddvs.com"],
+			["teacher-gseb"] = ["teacher1@ddvs.com", "vikram.singh@school.edu", "sweta.badgujar@ddvs.com"],
+			["clerk-office"] = ["clerk1@ddvs.com", "clerk@school.edu", "raj.baku@ddvs.com"],
+			["finance-officer"] = ["finance1@ddvs.com", "suresh.patil@school.edu", "punam.badgujar@ddvs.com"]
+		};
 
 	public async Task<PagedLeaveManagementResultDto> GetListAsync(LeaveManagementGetListInput input)
 	{
@@ -848,7 +856,7 @@ public class LeaveManagementAppService(
 		var currentUserId = CurrentUser.Id
 			?? throw new BusinessException(HRErrorCodes.LeaveUserNotAuthenticated);
 
-		var actorEmployee = await employeeRepository.GetEmployeeByUserIdAsync(currentUserId);
+		var actorEmployee = await ResolveCurrentUserEmployeeAsync(currentUserId);
 		var isAdminBypass = IsAdminBypassUser();
 
 		if (actorEmployee is null && !isAdminBypass)
@@ -857,6 +865,61 @@ public class LeaveManagementAppService(
 		}
 
 		return new LeaveActorContext(isAdminBypass, actorEmployee?.Id);
+	}
+
+	private async Task<Employee?> ResolveCurrentUserEmployeeAsync(Guid currentUserId)
+	{
+		var actorEmployee = await employeeRepository.GetEmployeeByUserIdAsync(currentUserId);
+		if (actorEmployee is not null)
+		{
+			return actorEmployee;
+		}
+
+		var (candidateEmails, canRelinkSeededAlias) = ResolveCurrentUserEmployeeCandidateEmails();
+		if (candidateEmails.Count == 0)
+		{
+			return null;
+		}
+
+		var employees = await employeeRepository.GetListAsync();
+		var employee = employees.FirstOrDefault(x =>
+			!string.IsNullOrWhiteSpace(x.Email) &&
+			candidateEmails.Contains(x.Email, StringComparer.OrdinalIgnoreCase));
+		if (employee is null)
+		{
+			return null;
+		}
+
+		if (employee.UserId.HasValue && employee.UserId.Value != currentUserId && !canRelinkSeededAlias)
+		{
+			return null;
+		}
+
+		return employee;
+	}
+
+	private (List<string> Emails, bool CanRelinkSeededAlias) ResolveCurrentUserEmployeeCandidateEmails()
+	{
+		var emails = new List<string>();
+		if (!string.IsNullOrWhiteSpace(CurrentUser.Email))
+		{
+			emails.Add(CurrentUser.Email);
+		}
+
+		var canRelinkSeededAlias = false;
+		var userName = CurrentUser.UserName;
+		if (!string.IsNullOrWhiteSpace(userName) &&
+		    SeededLoginEmployeeEmailAliases.TryGetValue(userName, out var aliases))
+		{
+			emails.AddRange(aliases);
+			canRelinkSeededAlias = true;
+		}
+
+		return (emails
+			.Where(x => !string.IsNullOrWhiteSpace(x))
+			.Select(x => x.Trim())
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList(), canRelinkSeededAlias);
 	}
 
 	private async Task<Guid> ResolveCurrentActorEmployeeIdStrictAsync()

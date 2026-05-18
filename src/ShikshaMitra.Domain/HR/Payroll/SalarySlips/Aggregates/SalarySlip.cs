@@ -79,7 +79,7 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Payroll day basis used for LOP proration (denominator days).
 	/// </summary>
-	public int? PayrollBasisDays { get; private set; }
+	public decimal? PayrollBasisDays { get; private set; }
 
 	/// <summary>
 	/// Payable days from attendance (present + half-days as 0.5).
@@ -190,7 +190,7 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// Stores payroll day basis snapshot for audit (draft only).
 	/// </summary>
 	internal void SetPayrollComputationSnapshot(
-		int basisDays,
+		decimal basisDays,
 		decimal payableDays,
 		decimal factor,
 		DayCalculationType dayMode)

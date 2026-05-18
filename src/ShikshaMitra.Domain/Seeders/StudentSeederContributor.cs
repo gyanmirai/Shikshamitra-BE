@@ -30,7 +30,7 @@ namespace ShikshaMitra.Seeders;
 /// </summary>
 public class StudentSeederContributor : BaseSeederContributor
 {
-	private const int MinimumStudentsPerDivision = 4;
+	private const int MinimumStudentsPerDivision = 3;
 	private const int DefaultStudentsPerDivision = MinimumStudentsPerDivision;
 	private const int InsertBatchSize = 100;
 	private const string StudentsPerDivisionKey = "StudentSeeder:StudentsPerDivision";
@@ -59,16 +59,15 @@ public class StudentSeederContributor : BaseSeederContributor
 		"Navya", "Kiara", "Avni", "Mira", "Riya", "Shanaya", "Myra"
 	];
 
-	private readonly string[] _middleNames =
+	private readonly string[] _middleAndLastNamePairs =
 	[
-		"Kumar", "Singh", "Raj", "Mohan", "Dev", "Prasad", "Chandra", "Anil",
-		"Suresh", "Prakash", "Dinesh", "Ramesh", "Vijay", "Rakesh", "Mahesh"
-	];
-
-	private readonly string[] _lastNames =
-	[
-		"Patel", "Sharma", "Desai", "Shah", "Mehta", "Reddy", "Gupta", "Verma",
-		"Iyer", "Joshi", "Nair", "Kulkarni", "Thakur", "Pandey", "Rao"
+		"Hiren Vadher", "Jignesh Jinjala", "Akshay Patel", "Parth Ghusar",
+		"Sweta Badgujar", "Jeet Ram", "Dharmik Jinjala", "Jay Dalia",
+		"Hiren Akbari", "Prerna Atre", "Vishal Makwana", "Mayur Solanki",
+		"Punam Badgujar", "Milind Kumar", "Nikhil Baku", "Raj Baku",
+		"Poonam Sonwane", "Dhiraj Kavalkar", "Rohit Katariya", "Aarti Ahir",
+		"Riddhish Solanki", "Yash Bari", "Badal Gaadhe", "Keyur Siddhapura",
+		"Yogesh Kalsariya", "Jayeshbhai", "Megh", "Dharmil", "Krunal Chauhan"
 	];
 
 	private readonly string[] _cities = ["Surat", "Ahmedabad", "Vadodara", "Rajkot", "Bhavnagar"];
@@ -326,8 +325,7 @@ public class StudentSeederContributor : BaseSeederContributor
 		var firstName = isGirl
 			? _firstNamesGirls[globalCounter % _firstNamesGirls.Length]
 			: _firstNamesBoys[globalCounter % _firstNamesBoys.Length];
-		var middleName = _middleNames[globalCounter % _middleNames.Length];
-		var lastName = _lastNames[globalCounter % _lastNames.Length];
+		var (middleName, lastName) = ResolveMiddleAndLastName(globalCounter);
 
 		// Gender: 0 = Male, 1 = Female (adjust if your enum is different)
 		var gender = (GenderEnum)(isGirl ? 1 : 0);
@@ -461,6 +459,18 @@ public class StudentSeederContributor : BaseSeederContributor
 	private string GenerateLandmark(Random random)
 	{
 		return _landmarks[random.Next(_landmarks.Length)];
+	}
+
+	private (string MiddleName, string LastName) ResolveMiddleAndLastName(int globalCounter)
+	{
+		var name = _middleAndLastNamePairs[(globalCounter - 1) % _middleAndLastNamePairs.Length];
+		var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+		if (parts.Length == 1)
+		{
+			return (parts[0], parts[0]);
+		}
+
+		return (string.Join(' ', parts[..^1]), parts[^1]);
 	}
 
 	private static int ResolveAgeForStandard(string standardName, int globalCounter)

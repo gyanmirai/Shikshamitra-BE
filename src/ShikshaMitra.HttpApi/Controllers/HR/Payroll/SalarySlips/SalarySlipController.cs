@@ -52,6 +52,27 @@ public class SalarySlipController : AbpControllerBase
 		return MapToSalarySlipResponse(salarySlipDto, monthYear);
 	}
 
+	[HttpGet("pdf")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_GenerateSalarySlip.View)]
+	[ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public virtual async Task<IActionResult> GetSalarySlipPdfAsync(
+		[FromQuery, Required] Guid employeeId,
+		[FromQuery, Required] string monthYear)
+	{
+		if (!System.Text.RegularExpressions.Regex.IsMatch(monthYear, @"^[A-Z]+-\d{4}$"))
+		{
+			throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat);
+		}
+
+		var internalMonthYear = ConvertToInternalFormat(monthYear);
+		var bytes = await _salarySlipAppService.GenerateSalarySlipPdfAsync(employeeId, internalMonthYear);
+		var fileName = $"Payslip_{employeeId:N}_{monthYear}.pdf";
+
+		return File(bytes, "application/pdf", fileName);
+	}
+
 	private static string ConvertToInternalFormat(string monthYear)
 	{
 		var parts = monthYear.Split('-');
@@ -74,14 +95,31 @@ public class SalarySlipController : AbpControllerBase
 		return new SalarySlipResponse
 		{
 			EmployeeId = dto.EmployeeId,
+			EmployeeName = dto.EmployeeName,
+			EmployeeCode = dto.EmployeeCode,
+			Department = dto.Department,
+			Designation = dto.Designation,
+			DateOfJoining = dto.DateOfJoining,
+			SlipNumber = dto.SlipNumber,
 			MonthYear = contractMonthYear,
 			TotalEarning = Convert.ToDouble(dto.TotalEarning),
 			TotalDeduction = Convert.ToDouble(dto.TotalDeduction),
 			NetPay = Convert.ToDouble(dto.NetSalary),
+			NetSalary = Convert.ToDouble(dto.NetSalary),
+			NetPayInWords = dto.NetPayInWords,
 			PayrollBasisDays = dto.PayrollBasisDays,
 			PayableDays = dto.PayableDays.HasValue ? Convert.ToDouble(dto.PayableDays.Value) : null,
+			PresentDays = dto.PresentDays.HasValue ? Convert.ToDouble(dto.PresentDays.Value) : null,
+			HalfWorkingDays = dto.HalfWorkingDays.HasValue ? Convert.ToDouble(dto.HalfWorkingDays.Value) : null,
+			LopDays = dto.LopDays.HasValue ? Convert.ToDouble(dto.LopDays.Value) : null,
 			ProrationFactor = dto.ProrationFactor.HasValue ? Convert.ToDouble(dto.ProrationFactor.Value) : null,
 			PayrollDayCalculationMode = dto.PayrollDayCalculationMode,
+			BankName = dto.BankName,
+			MaskedAccountNumber = dto.MaskedAccountNumber,
+			IfscCode = dto.IfscCode,
+			UanNumber = dto.UanNumber,
+			EpfNumber = dto.EpfNumber,
+			Remarks = dto.Remarks,
 			Earnings = dto.Earnings.Select(e => new SalaryComponent
 			{
 				Name = e.Name,

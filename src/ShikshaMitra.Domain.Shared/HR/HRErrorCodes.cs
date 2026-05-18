@@ -158,6 +158,7 @@ public static class HRErrorCodes
 	public const string PayrollGenerationCompleteFailure = "HR:Payroll:030018";
 	public const string PayrollSnapshotMigrationRequired = "HR:Payroll:030019";
 	public const string PayrollStructureLegacyEndpointDeprecated = "HR:Payroll:030020";
+	public const string SalarySlipPdfRequiresFinalized = "HR:Payroll:030021";
 
 	// ── Calendar: 04xxxx ─────────────────────────────────────────
 

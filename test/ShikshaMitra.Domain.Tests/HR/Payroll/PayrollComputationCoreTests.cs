@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
@@ -129,6 +130,82 @@ public class PayrollComputationCoreTests
 	}
 
 	[Fact]
+	public void MonthCalendar_Applies_Saturday_Half_And_Off_Policies()
+	{
+		var full = PayrollMonthCalendar.CountWorkingDayUnits(
+			2026,
+			4,
+			Array.Empty<Holiday>(),
+			SaturdayWorkPolicy.FullDay,
+			Array.Empty<PayrollHolidayOverride>());
+		var half = PayrollMonthCalendar.CountWorkingDayUnits(
+			2026,
+			4,
+			Array.Empty<Holiday>(),
+			SaturdayWorkPolicy.HalfDay,
+			Array.Empty<PayrollHolidayOverride>());
+		var off = PayrollMonthCalendar.CountWorkingDayUnits(
+			2026,
+			4,
+			Array.Empty<Holiday>(),
+			SaturdayWorkPolicy.Off,
+			Array.Empty<PayrollHolidayOverride>());
+
+		Assert.Equal(26m, full);
+		Assert.Equal(24m, half);
+		Assert.Equal(22m, off);
+	}
+
+	[Fact]
+	public void MonthCalendar_Excluding_Calendar_Holiday_Restores_Working_Unit()
+	{
+		var holiday = Holiday.Create(
+			null,
+			Guid.NewGuid(),
+			"Operating day",
+			Guid.NewGuid(),
+			new DateTimeOffset(2026, 4, 8, 0, 0, 0, TimeSpan.Zero),
+			new DateTimeOffset(2026, 4, 8, 0, 0, 0, TimeSpan.Zero));
+		var overrides = new[]
+		{
+			new PayrollHolidayOverride(new DateTime(2026, 4, 8), holiday.HolidayName, false, holiday.Id)
+		};
+
+		var n = PayrollMonthCalendar.CountWorkingDayUnits(2026, 4, new[] { holiday }, SaturdayWorkPolicy.FullDay, overrides);
+
+		Assert.Equal(26m, n);
+	}
+
+	[Fact]
+	public void MonthCalendar_Payroll_Only_Holiday_Reduces_Future_Basis()
+	{
+		var overrides = new[]
+		{
+			new PayrollHolidayOverride(new DateTime(2026, 4, 6), "Payroll only", true)
+		};
+
+		var n = PayrollMonthCalendar.CountWorkingDayUnits(2026, 4, Array.Empty<Holiday>(), SaturdayWorkPolicy.FullDay, overrides);
+
+		Assert.Equal(25m, n);
+	}
+
+	[Fact]
+	public void MonthCalendar_Saturday_Holiday_Removes_Half_Unit_When_Saturday_Is_Half_Day()
+	{
+		var holiday = Holiday.Create(
+			null,
+			Guid.NewGuid(),
+			"Saturday holiday",
+			Guid.NewGuid(),
+			new DateTimeOffset(2026, 4, 4, 0, 0, 0, TimeSpan.Zero),
+			new DateTimeOffset(2026, 4, 4, 0, 0, 0, TimeSpan.Zero));
+
+		var n = PayrollMonthCalendar.CountWorkingDayUnits(2026, 4, new[] { holiday }, SaturdayWorkPolicy.HalfDay, Array.Empty<PayrollHolidayOverride>());
+
+		Assert.Equal(23.5m, n);
+	}
+
+	[Fact]
 	public void WorkingDays_Ignores_Sunday_And_Holiday_Attendance_For_Payable_Days()
 	{
 		var holiday = Holiday.Create(
@@ -153,6 +230,29 @@ public class PayrollComputationCoreTests
 		Assert.Equal(1, summary.PresentDays);
 		Assert.Equal(1, summary.HalfWorkingDays);
 		Assert.Equal(1.5m, summary.PayableDays);
+	}
+
+	[Fact]
+	public void WorkingDays_Saturday_Half_Day_Present_Counts_As_Half_Payable_Day()
+	{
+		var workingUnits = PayrollMonthCalendar.BuildWorkingUnitsByDate(
+			2026,
+			4,
+			Array.Empty<Holiday>(),
+			SaturdayWorkPolicy.HalfDay,
+			Array.Empty<PayrollHolidayOverride>());
+		var basis = new PayrollBasisDaysResult(workingUnits.Values.Sum(), DayCalculationType.WorkingDays, false, SaturdayWorkPolicy.HalfDay, workingUnits);
+		var attendance = new List<EmployeeAttendance>
+		{
+			Attendance(2026, 4, 4, EmployeeAttendanceStatusType.Present),
+			Attendance(2026, 4, 11, EmployeeAttendanceStatusType.HalfDayLeave)
+		};
+
+		var summary = PayrollAttendanceCalculator.CalculatePayableDays(attendance, basis, 2026, 4, Array.Empty<Holiday>());
+
+		Assert.Equal(1, summary.PresentDays);
+		Assert.Equal(1, summary.HalfWorkingDays);
+		Assert.Equal(0.75m, summary.PayableDays);
 	}
 
 	[Fact]

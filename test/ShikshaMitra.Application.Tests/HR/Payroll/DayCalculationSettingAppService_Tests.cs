@@ -25,6 +25,7 @@ public class DayCalculationSettingAppService_Tests : ShikshaMitraApplicationTest
     private readonly AcademicYearManager _academicYearManager;
     private readonly IAcademicYearRepository _academicYearRepository;
     private readonly IRepository<Holiday, Guid> _holidayRepository;
+    private readonly IDayCalculationSettingRepository _dayCalculationSettingRepository;
     private readonly PayrollCalendarResolver _payrollCalendarResolver;
     private readonly ICurrentTenant _currentTenant;
 
@@ -34,6 +35,7 @@ public class DayCalculationSettingAppService_Tests : ShikshaMitraApplicationTest
         _academicYearManager = GetRequiredService<AcademicYearManager>();
         _academicYearRepository = GetRequiredService<IAcademicYearRepository>();
         _holidayRepository = GetRequiredService<IRepository<Holiday, Guid>>();
+        _dayCalculationSettingRepository = GetRequiredService<IDayCalculationSettingRepository>();
         _payrollCalendarResolver = GetRequiredService<PayrollCalendarResolver>();
         _currentTenant = GetRequiredService<ICurrentTenant>();
     }
@@ -459,6 +461,460 @@ public class DayCalculationSettingAppService_Tests : ShikshaMitraApplicationTest
             april.WorkingDays.ShouldBe(calendar.WorkingDays);
             april.BasisDays.ShouldBe(calendar.WorkingDays);
             april.HolidayNames.ShouldContain("Preview Holiday");
+        });
+    }
+
+    [Fact]
+    public async Task Save_Should_Persist_SaturdayPolicy_And_HolidayOverrides()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var academicYear = await CreateAcademicYearAsync(
+                "Payroll Calendar Config AY",
+                new DateTime(2026, 5, 1),
+                new DateTime(2027, 4, 30));
+
+            var result = await _dayCalculationSettingAppService.SaveAsync(new DayCalculationRequestDto
+            {
+                AcademicYearId = academicYear.Id,
+                DayCalculationType = "working-days",
+                SaturdayWorkPolicy = "half-day",
+                HolidaySyncMode = "synced-with-overrides",
+                HolidayOverrides =
+                {
+                    new PayrollHolidayOverrideDto
+                    {
+                        Date = new DateTime(2026, 6, 10),
+                        HolidayName = "Payroll only",
+                        IncludedInPayroll = true
+                    }
+                }
+            });
+
+            result.Success.ShouldBeTrue();
+
+            var saved = await _dayCalculationSettingAppService.GetAsync(academicYear.Id);
+            saved.SaturdayWorkPolicy.ShouldBe("half-day");
+            saved.HolidaySyncMode.ShouldBe("synced-with-overrides");
+            saved.HolidayOverrides.Count.ShouldBe(1);
+            var june = saved.Months.Single(x => x.Year == 2026 && x.Month == 6);
+            june.Holidays.ShouldContain(x => x.HolidayName == "Payroll only" && x.Source == "payroll");
+            june.PayrollHolidayUnits.ShouldBeGreaterThan(0);
+        });
+    }
+
+    [Fact]
+    public async Task Preview_Should_Show_Tenant_Calendar_Holiday_As_Synced()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var academicYear = await CreateAcademicYearAsync(
+                "Payroll Synced Holiday AY",
+                new DateTime(2026, 5, 1),
+                new DateTime(2027, 4, 30));
+            var holidayTypeId = Guid.NewGuid();
+
+            var holiday = await _holidayRepository.InsertAsync(
+                Holiday.Create(
+                    null,
+                    academicYear.Id,
+                    "Synced Holiday",
+                    holidayTypeId,
+                    new DateTimeOffset(2026, 6, 11, 0, 0, 0, TimeSpan.Zero),
+                    new DateTimeOffset(2026, 6, 11, 0, 0, 0, TimeSpan.Zero)),
+                autoSave: true);
+
+            var preview = await _dayCalculationSettingAppService.PreviewAsync(new DayCalculationRequestDto
+            {
+                AcademicYearId = academicYear.Id,
+                DayCalculationType = "working-days",
+                HolidayOverrides =
+                {
+                    new PayrollHolidayOverrideDto
+                    {
+                        Date = new DateTime(2026, 6, 11),
+                        HolidayName = "Synced Holiday",
+                        IncludedInPayroll = false,
+                        CalendarHolidayId = holiday.Id
+                    }
+                }
+            });
+
+            var june = preview.Months.Single(x => x.Year == 2026 && x.Month == 6);
+            june.Holidays.ShouldContain(x =>
+                x.HolidayName == "Synced Holiday" &&
+                x.Source == "calendar" &&
+                !x.IncludedInPayroll);
+        });
+    }
+
+    [Fact]
+    public async Task Save_Should_Reject_Past_HolidayOverride_Changes()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var academicYear = await CreateAcademicYearAsync(
+                "Payroll Past Override Lock AY",
+                new DateTime(2026, 4, 1),
+                new DateTime(2027, 3, 31));
+
+            var ex = await Should.ThrowAsync<BusinessException>(async () =>
+            {
+                await _dayCalculationSettingAppService.SaveAsync(new DayCalculationRequestDto
+                {
+                    AcademicYearId = academicYear.Id,
+                    DayCalculationType = "working-days",
+                    HolidayOverrides =
+                    {
+                        new PayrollHolidayOverrideDto
+                        {
+                            Date = new DateTime(2026, 4, 10),
+                            HolidayName = "Past override",
+                            IncludedInPayroll = true
+                        }
+                    }
+                });
+            });
+
+            ex.Code.ShouldBe("ShikshaMitra:PastPayrollMonthLocked");
+        });
+    }
+
+    [Fact]
+    public async Task Save_Should_Preserve_Past_SaturdayPolicy_When_Changed_For_Future_Months()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var academicYear = await CreateAcademicYearAsync(
+                "Payroll Locked Saturday AY",
+                new DateTime(2026, 4, 1),
+                new DateTime(2026, 6, 30));
+
+            await _dayCalculationSettingRepository.InsertAsync(
+                new DayCalculationSetting(
+                    Guid.NewGuid(),
+                    null,
+                    DayCalculationType.WorkingDays,
+                    null,
+                    academicYear.Id,
+                    null,
+                    SaturdayWorkPolicy.HalfDay),
+                autoSave: true);
+
+            var before = await _dayCalculationSettingAppService.GetAsync(academicYear.Id);
+            var aprilBefore = before.Months.Single(x => x.Year == 2026 && x.Month == 4);
+
+            await _dayCalculationSettingAppService.SaveAsync(new DayCalculationRequestDto
+            {
+                AcademicYearId = academicYear.Id,
+                DayCalculationType = "working-days",
+                SaturdayWorkPolicy = "off"
+            });
+
+            var after = await _dayCalculationSettingAppService.GetAsync(academicYear.Id);
+            var aprilAfter = after.Months.Single(x => x.Year == 2026 && x.Month == 4);
+            var juneAfter = after.Months.Single(x => x.Year == 2026 && x.Month == 6);
+
+            aprilAfter.Locked.ShouldBeTrue();
+            aprilAfter.BasisDays.ShouldBe(aprilBefore.BasisDays);
+            aprilAfter.SaturdayUnits.ShouldBe(aprilBefore.SaturdayUnits);
+            juneAfter.SaturdayUnits.ShouldBe(0m);
+        });
+    }
+
+    [Fact]
+    public async Task Save_Should_Preserve_Past_Manual_Basis_When_Mode_Changes()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var academicYear = await CreateAcademicYearAsync(
+                "Payroll Locked Manual AY",
+                new DateTime(2026, 4, 1),
+                new DateTime(2026, 6, 30));
+
+            await _dayCalculationSettingRepository.InsertAsync(
+                new DayCalculationSetting(
+                    Guid.NewGuid(),
+                    null,
+                    DayCalculationType.ManualDays,
+                    null,
+                    academicYear.Id,
+                    new[]
+                    {
+                        new DayCalculationManualMonth(2026, 4, 22),
+                        new DayCalculationManualMonth(2026, 5, 24),
+                        new DayCalculationManualMonth(2026, 6, 25)
+                    }),
+                autoSave: true);
+
+            await _dayCalculationSettingAppService.SaveAsync(new DayCalculationRequestDto
+            {
+                AcademicYearId = academicYear.Id,
+                DayCalculationType = "working-days",
+                SaturdayWorkPolicy = "off"
+            });
+
+            var saved = await _dayCalculationSettingAppService.GetAsync(academicYear.Id);
+            var april = saved.Months.Single(x => x.Year == 2026 && x.Month == 4);
+            var june = saved.Months.Single(x => x.Year == 2026 && x.Month == 6);
+
+            april.Locked.ShouldBeTrue();
+            april.DayCalculationType.ShouldBe("manual-days");
+            april.ManualDays.ShouldBe(22);
+            april.BasisDays.ShouldBe(22m);
+            june.DayCalculationType.ShouldBe("working-days");
+        });
+    }
+
+    [Fact]
+    public async Task Save_Should_Preserve_Existing_Past_Overrides_When_Client_Sends_Empty_List()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var academicYear = await CreateAcademicYearAsync(
+                "Payroll Preserve Past Override AY",
+                new DateTime(2026, 4, 1),
+                new DateTime(2026, 6, 30));
+
+            await _dayCalculationSettingRepository.InsertAsync(
+                new DayCalculationSetting(
+                    Guid.NewGuid(),
+                    null,
+                    DayCalculationType.WorkingDays,
+                    null,
+                    academicYear.Id,
+                    null,
+                    SaturdayWorkPolicy.FullDay,
+                    HolidaySyncMode.SyncedWithOverrides,
+                    new[] { new PayrollHolidayOverride(new DateTime(2026, 4, 10), "Past override", true) }),
+                autoSave: true);
+
+            await _dayCalculationSettingAppService.SaveAsync(new DayCalculationRequestDto
+            {
+                AcademicYearId = academicYear.Id,
+                DayCalculationType = "working-days",
+                HolidayOverrides = { }
+            });
+
+            var saved = await _dayCalculationSettingAppService.GetAsync(academicYear.Id);
+
+            saved.HolidayOverrides.ShouldContain(x =>
+                x.Date.Date == new DateTime(2026, 4, 10) &&
+                x.HolidayName == "Past override" &&
+                x.IncludedInPayroll);
+        });
+    }
+
+    [Fact]
+    public async Task Save_Should_Reject_Changed_Existing_Past_Override()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var academicYear = await CreateAcademicYearAsync(
+                "Payroll Reject Changed Past Override AY",
+                new DateTime(2026, 4, 1),
+                new DateTime(2026, 6, 30));
+
+            await _dayCalculationSettingRepository.InsertAsync(
+                new DayCalculationSetting(
+                    Guid.NewGuid(),
+                    null,
+                    DayCalculationType.WorkingDays,
+                    null,
+                    academicYear.Id,
+                    null,
+                    SaturdayWorkPolicy.FullDay,
+                    HolidaySyncMode.SyncedWithOverrides,
+                    new[] { new PayrollHolidayOverride(new DateTime(2026, 4, 10), "Past override", true) }),
+                autoSave: true);
+
+            var ex = await Should.ThrowAsync<BusinessException>(async () =>
+            {
+                await _dayCalculationSettingAppService.SaveAsync(new DayCalculationRequestDto
+                {
+                    AcademicYearId = academicYear.Id,
+                    DayCalculationType = "working-days",
+                    HolidayOverrides =
+                    {
+                        new PayrollHolidayOverrideDto
+                        {
+                            Date = new DateTime(2026, 4, 10),
+                            HolidayName = "Changed past override",
+                            IncludedInPayroll = true
+                        }
+                    }
+                });
+            });
+
+            ex.Code.ShouldBe("ShikshaMitra:PastPayrollMonthLocked");
+        });
+    }
+
+    [Fact]
+    public async Task Preview_Should_Not_Count_Holidays_That_Do_Not_Reduce_Working_Units()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var academicYear = await CreateAcademicYearAsync(
+                "Payroll Non Working Holiday Count AY",
+                new DateTime(2026, 5, 1),
+                new DateTime(2026, 6, 30));
+
+            var preview = await _dayCalculationSettingAppService.PreviewAsync(new DayCalculationRequestDto
+            {
+                AcademicYearId = academicYear.Id,
+                DayCalculationType = "working-days",
+                SaturdayWorkPolicy = "off",
+                HolidayOverrides =
+                {
+                    new PayrollHolidayOverrideDto
+                    {
+                        Date = new DateTime(2026, 6, 6),
+                        HolidayName = "Off Saturday",
+                        IncludedInPayroll = true
+                    },
+                    new PayrollHolidayOverrideDto
+                    {
+                        Date = new DateTime(2026, 6, 7),
+                        HolidayName = "Sunday Holiday",
+                        IncludedInPayroll = true
+                    }
+                }
+            });
+
+            var june = preview.Months.Single(x => x.Year == 2026 && x.Month == 6);
+
+            june.Holidays.ShouldContain(x => x.HolidayName == "Off Saturday");
+            june.Holidays.ShouldContain(x => x.HolidayName == "Sunday Holiday");
+            june.PayrollHolidayDays.ShouldBe(0);
+            june.PayrollHolidayUnits.ShouldBe(0m);
+        });
+    }
+
+    [Fact]
+    public async Task Preview_Should_Reject_Invalid_CalendarHolidayId()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var academicYear = await CreateAcademicYearAsync(
+                "Payroll Invalid Holiday Id AY",
+                new DateTime(2026, 5, 1),
+                new DateTime(2026, 6, 30));
+
+            var ex = await Should.ThrowAsync<BusinessException>(async () =>
+            {
+                await _dayCalculationSettingAppService.PreviewAsync(new DayCalculationRequestDto
+                {
+                    AcademicYearId = academicYear.Id,
+                    DayCalculationType = "working-days",
+                    HolidayOverrides =
+                    {
+                        new PayrollHolidayOverrideDto
+                        {
+                            Date = new DateTime(2026, 6, 10),
+                            HolidayName = "Spoofed",
+                            IncludedInPayroll = false,
+                            CalendarHolidayId = Guid.NewGuid()
+                        }
+                    }
+                });
+            });
+
+            ex.Code.ShouldBe("ShikshaMitra:InvalidPayrollHolidayOverride");
+        });
+    }
+
+    [Fact]
+    public async Task Preview_Should_Reject_CalendarHolidayId_On_Wrong_Date()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var academicYear = await CreateAcademicYearAsync(
+                "Payroll Wrong Holiday Date AY",
+                new DateTime(2026, 5, 1),
+                new DateTime(2026, 6, 30));
+            var holidayTypeId = Guid.NewGuid();
+
+            var holiday = await _holidayRepository.InsertAsync(
+                Holiday.Create(
+                    null,
+                    academicYear.Id,
+                    "Calendar Holiday",
+                    holidayTypeId,
+                    new DateTimeOffset(2026, 6, 11, 0, 0, 0, TimeSpan.Zero),
+                    new DateTimeOffset(2026, 6, 11, 0, 0, 0, TimeSpan.Zero)),
+                autoSave: true);
+
+            var ex = await Should.ThrowAsync<BusinessException>(async () =>
+            {
+                await _dayCalculationSettingAppService.PreviewAsync(new DayCalculationRequestDto
+                {
+                    AcademicYearId = academicYear.Id,
+                    DayCalculationType = "working-days",
+                    HolidayOverrides =
+                    {
+                        new PayrollHolidayOverrideDto
+                        {
+                            Date = new DateTime(2026, 6, 12),
+                            HolidayName = "Wrong date",
+                            IncludedInPayroll = false,
+                            CalendarHolidayId = holiday.Id
+                        }
+                    }
+                });
+            });
+
+            ex.Code.ShouldBe("ShikshaMitra:InvalidPayrollHolidayOverride");
+        });
+    }
+
+    [Fact]
+    public async Task Get_Should_Reject_Missing_AcademicYear_With_Controlled_Error()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var ex = await Should.ThrowAsync<BusinessException>(async () =>
+            {
+                await _dayCalculationSettingAppService.GetAsync(Guid.NewGuid());
+            });
+
+            ex.Code.ShouldBe("ShikshaMitra:AcademicYearNotFound");
+        });
+    }
+
+    [Fact]
+    public async Task Preview_Should_Reject_Missing_AcademicYear_With_Controlled_Error()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var ex = await Should.ThrowAsync<BusinessException>(async () =>
+            {
+                await _dayCalculationSettingAppService.PreviewAsync(new DayCalculationRequestDto
+                {
+                    AcademicYearId = Guid.NewGuid(),
+                    DayCalculationType = "working-days"
+                });
+            });
+
+            ex.Code.ShouldBe("ShikshaMitra:AcademicYearNotFound");
+        });
+    }
+
+    [Fact]
+    public async Task Save_Should_Reject_Missing_AcademicYear_With_Controlled_Error()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var ex = await Should.ThrowAsync<BusinessException>(async () =>
+            {
+                await _dayCalculationSettingAppService.SaveAsync(new DayCalculationRequestDto
+                {
+                    AcademicYearId = Guid.NewGuid(),
+                    DayCalculationType = "working-days"
+                });
+            });
+
+            ex.Code.ShouldBe("ShikshaMitra:AcademicYearNotFound");
         });
     }
 

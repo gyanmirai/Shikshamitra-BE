@@ -19,6 +19,11 @@ public interface ISalarySlipAppService : IApplicationService
 	Task<SalarySlipDto> GetSalarySlipAsync(Guid employeeId, string monthYear);
 
 	/// <summary>
+	/// Generates the official salary slip PDF for a given employee and month-year.
+	/// </summary>
+	Task<byte[]> GenerateSalarySlipPdfAsync(Guid employeeId, string monthYear);
+
+	/// <summary>
 	/// Generates a new salary slip or regenerates an existing draft
 	/// </summary>
 	/// <param name="input">Generate salary slip input parameters</param>

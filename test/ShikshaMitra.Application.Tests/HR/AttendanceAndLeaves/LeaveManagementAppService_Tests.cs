@@ -1,13 +1,26 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Common;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.PersonalInfo;
+using ShikshaMitra.TenantSettings;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Guids;
+using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Security.Claims;
 using Xunit;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
@@ -17,10 +30,26 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 	private static readonly Guid TestAcademicYearId = Guid.Parse("00000000-0000-0000-0000-000000000020");
 
 	private readonly ILeaveManagementAppService _leaveManagement;
+	private readonly ILeaveTypeAppService _leaveTypeAppService;
+	private readonly ILeavePolicyAppService _leavePolicyAppService;
+	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
+	private readonly IIdentityRoleRepository _roleRepository;
+	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+	private readonly IGuidGenerator _guidGenerator;
+	private readonly ICurrentTenant _currentTenant;
+	private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
 
 	public LeaveManagementAppService_Tests()
 	{
 		_leaveManagement = GetRequiredService<ILeaveManagementAppService>();
+		_leaveTypeAppService = GetRequiredService<ILeaveTypeAppService>();
+		_leavePolicyAppService = GetRequiredService<ILeavePolicyAppService>();
+		_personalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
+		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
+		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+		_guidGenerator = GetRequiredService<IGuidGenerator>();
+		_currentTenant = GetRequiredService<ICurrentTenant>();
+		_currentPrincipalAccessor = GetRequiredService<ICurrentPrincipalAccessor>();
 		SeedAcademicYearForListTests();
 	}
 
@@ -117,6 +146,52 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 		result.TotalCount.ShouldBe(0);
 		result.Items.ShouldNotBeNull();
 		result.Items.Count.ShouldBe(0);
+	}
+
+	[Fact]
+	public async Task GetMyBalancesAsync_Should_Return_Balances_For_Linked_Employee_User()
+	{
+		var employee = await CreateLinkedEmployeeAsync("self.balance");
+		var policy = await CreateLeavePolicyAsync("SelfBalance");
+
+		using (_currentPrincipalAccessor.Change(BuildPrincipal(employee.UserId!.Value)))
+		{
+			var result = await _leaveManagement.GetMyBalancesAsync(TestAcademicYearId);
+
+			result.Items.ShouldContain(x => x.LeavePolicyId == policy.Id);
+		}
+	}
+
+	[Fact]
+	public async Task GetMyBalancesAsync_Should_Link_Seeded_Principal_Alias_When_UserId_Is_Missing_Or_Stale()
+	{
+		var employee = await CreateLinkedEmployeeAsync(
+			"seeded.principal",
+			email: "hiren.vadher@ddvs.com");
+		var principalUserId = Guid.NewGuid();
+		var policy = await CreateLeavePolicyAsync("SeededPrincipalAlias");
+
+		using (_currentPrincipalAccessor.Change(BuildPrincipal(
+			       principalUserId,
+			       userName: "principal-gseb",
+			       email: "principal-gseb@ddvs.com")))
+		{
+			var result = await _leaveManagement.GetMyBalancesAsync(TestAcademicYearId);
+
+			result.Items.ShouldContain(x => x.LeavePolicyId == policy.Id);
+		}
+	}
+
+	[Fact]
+	public async Task GetMyBalancesAsync_Should_Throw_When_User_Is_Not_Linked_To_Employee()
+	{
+		using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid())))
+		{
+			var ex = await Should.ThrowAsync<BusinessException>(async () =>
+				await _leaveManagement.GetMyBalancesAsync(TestAcademicYearId));
+
+			ex.Code.ShouldBe(HRErrorCodes.LeaveEmployeeNotFound);
+		}
 	}
 
 	[Fact]
@@ -310,5 +385,105 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 
 		var ex = Should.Throw<BusinessException>(() => leave.Cancel());
 		ex.Code.ShouldBe(HRErrorCodes.LeaveNotCancellable);
+	}
+
+	private async Task<EmployeePersonalInfoDto> CreateLinkedEmployeeAsync(string prefix, string? email = null)
+	{
+		var roleId = await EnsureRoleExistsAsync();
+		var shiftId = await EnsureShiftExistsAsync();
+		var uniq = Guid.NewGuid().ToString("N")[..8];
+
+		return await _personalInfoAppService.CreateAsync(new CreateEmployeePersonalInfoDto
+		{
+			FirstName = $"{prefix}-{uniq}",
+			LastName = "Employee",
+			MobileNo = $"9{DateTime.UtcNow.Ticks % 1000000000:D9}",
+			Email = email ?? $"{prefix}.{uniq}@test.local",
+			DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 5, 15)),
+			GenderType = GenderType.Male,
+			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
+			EmployeeStatusType = EmployeeStatusType.Active,
+			RoleId = roleId,
+			ShiftId = shiftId
+		});
+	}
+
+	private async Task<LeavePolicyResponse> CreateLeavePolicyAsync(string prefix)
+	{
+		var uniq = Guid.NewGuid().ToString("N")[..8];
+		var leaveType = await _leaveTypeAppService.CreateLeaveTypeAsync(
+			TestAcademicYearId,
+			new LeaveTypeCreateRequest
+			{
+				Name = $"{prefix} Type {uniq}",
+				Color = "#4CAF50"
+			});
+
+		return await _leavePolicyAppService.CreateLeavePolicyAsync(
+			TestAcademicYearId,
+			new LeavePolicyCreateRequest
+			{
+				PolicyTitle = $"{prefix} Policy {uniq}",
+				LeaveType = leaveType.Id,
+				AccrualPolicyType = "Yearly",
+				LeaveCount = 12,
+				PaidType = "Paid",
+				CarryForward = false,
+				EncashmentAllowed = false,
+				RequiresApproval = true,
+				Description = "Self-service leave test policy"
+			});
+	}
+
+	private ClaimsPrincipal BuildPrincipal(
+		Guid userId,
+		string? userName = null,
+		string? email = null)
+	{
+		var claims = new List<Claim>
+		{
+			new(AbpClaimTypes.UserId, userId.ToString()),
+			new(AbpClaimTypes.UserName, userName ?? $"user-{userId:N}"),
+			new(AbpClaimTypes.Email, email ?? $"user-{userId:N}@test.local"),
+			new(AbpClaimTypes.TenantId, (_currentTenant.Id ?? Guid.Empty).ToString())
+		};
+
+		return new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
+	}
+
+	private async Task<Guid> EnsureRoleExistsAsync()
+	{
+		var roles = await _roleRepository.GetListAsync();
+		var existing = roles.FirstOrDefault();
+		if (existing != null)
+		{
+			return existing.Id;
+		}
+
+		var id = _guidGenerator.Create();
+		var role = new IdentityRole(id, $"TestRole-{id:N}", _currentTenant.Id);
+		await _roleRepository.InsertAsync(role, autoSave: true);
+		return id;
+	}
+
+	private async Task<Guid> EnsureShiftExistsAsync()
+	{
+		var shifts = await _shiftRepository.GetListAsync();
+		var existing = shifts.FirstOrDefault();
+		if (existing != null)
+		{
+			return existing.Id;
+		}
+
+		var id = _guidGenerator.Create();
+		var shift = new ShiftManagement
+		{
+			ShiftName = $"Test Shift {id:N}",
+			StartTime = new TimeOnly(8, 0, 0),
+			EndTime = new TimeOnly(15, 0, 0)
+		};
+		typeof(ShiftManagement).GetProperty(nameof(ShiftManagement.Id))!.SetValue(shift, id);
+		await _shiftRepository.InsertAsync(shift, autoSave: true);
+		return id;
 	}
 }

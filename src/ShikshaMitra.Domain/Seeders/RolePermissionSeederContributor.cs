@@ -131,7 +131,7 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 			["Vice Principal"] = schoolOperatorPermissions,
 			["Administrative Manager"] = schoolOperatorPermissions,
 			["IT Administrator"] = schoolOperatorPermissions,
-			["Head of Department"] = teacherPermissions,
+			["HOD"] = teacherPermissions,
 			["Teacher"] = teacherPermissions,
 			["Clerk"] = clerkPermissions,
 			["Office Assistant"] = clerkPermissions,

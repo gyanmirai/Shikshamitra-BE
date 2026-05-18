@@ -49,7 +49,7 @@ Here are some common roles you might want to create:
 | `teacher` | Teachers who teach subjects |
 | `principal` | School principal with full access |
 | `vice_principal` | Vice principal with administrative access |
-| `hod` | Head of Department for specific subjects |
+| `hod` | HOD for specific subjects |
 | `librarian` | Library management staff |
 | `accountant` | Accounts and finance staff |
 | `admin_staff` | General administrative staff |

@@ -94,7 +94,15 @@ public class SalarySlipManager : DomainService
 		var month = int.Parse(normalizedMonthYear[5..7]);
 		var calendar = await _payrollCalendarResolver.ResolveAsync(year, month, cancellationToken);
 		var daySetting = await _dayCalculationSettingRepository.FindEffectiveAsync(CurrentTenant.Id, calendar.AcademicYearId, cancellationToken);
-		var basis = PayrollBasisDays.Resolve(daySetting, year, month, calendar.WorkingDays);
+		var saturdayWorkPolicy = daySetting?.GetEffectiveSaturdayWorkPolicyForMonth(year, month) ?? SaturdayWorkPolicy.FullDay;
+		var holidayOverrides = daySetting?.GetEffectiveHolidayOverridesForMonth(year, month) ?? Array.Empty<PayrollHolidayOverride>();
+		var workingUnitsByDate = PayrollMonthCalendar.BuildWorkingUnitsByDate(
+			year,
+			month,
+			calendar.Holidays,
+			saturdayWorkPolicy,
+			holidayOverrides);
+		var basis = PayrollBasisDays.Resolve(daySetting, year, month, workingUnitsByDate.Values.Sum(), workingUnitsByDate);
 
 		var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
 		var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));

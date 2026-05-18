@@ -50,22 +50,22 @@ These are created by `HRSeederContributor` for each tenant as employee login use
 
 | Email / Login | Role | Access |
 |---|---|---|
-| `rajesh.kumar@ddvs.com` | Principal | Principal module permissions; GSEB board data scope by default. |
-| `priya.sharma@ddvs.com` | Vice Principal | All seeded application permissions; full organization data scope. |
-| `amit.patel@ddvs.com` | Head of Department | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
-| `sunita.desai@ddvs.com` | Head of Department | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
-| `vikram.singh@ddvs.com` | Teacher | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
-| `meera.joshi@ddvs.com` | Teacher | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
-| `arjun.reddy@ddvs.com` | Teacher | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
-| `kavita.nair@ddvs.com` | Teacher | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
-| `deepak.mehta@ddvs.com` | Teacher | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
-| `anjali.rao@ddvs.com` | Teacher | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
-| `ramesh.gupta@ddvs.com` | Administrative Manager | All seeded application permissions; full organization data scope. |
-| `neha.kulkarni@ddvs.com` | HR Manager | Dashboard, HR, Calendar, Institute Setup; full organization data scope. |
-| `suresh.patil@ddvs.com` | Finance Officer | Dashboard, Students, Finance; full organization data scope. |
-| `rahul.verma@ddvs.com` | IT Administrator | All seeded application permissions; full organization data scope. |
-| `pooja.shah@ddvs.com` | Office Assistant | Dashboard, Students, HR, Communication, Calendar, Institute Setup; full organization data scope. |
-| `nilesh.joshi@ddvs.com` | Clerk | Dashboard, Students, HR, Communication, Calendar, Institute Setup; full organization data scope. |
+| `hiren.vadher@ddvs.com` | Principal | Principal module permissions; GSEB board data scope by default. |
+| `jignesh.jinjala@ddvs.com` | Vice Principal | All seeded application permissions; full organization data scope. |
+| `akshay.patel@ddvs.com` | HOD | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
+| `parth.ghusar@ddvs.com` | HOD | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
+| `sweta.badgujar@ddvs.com` | Teacher | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
+| `jeet.ram@ddvs.com` | Teacher | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
+| `dharmik.jinjala@ddvs.com` | Teacher | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
+| `jay.dalia@ddvs.com` | Teacher | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
+| `hiren.akbari@ddvs.com` | Teacher | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
+| `prerna.atre@ddvs.com` | Teacher | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
+| `vishal.makwana@ddvs.com` | Administrative Manager | All seeded application permissions; full organization data scope. |
+| `mayur.solanki@ddvs.com` | HR Manager | Dashboard, HR, Calendar, Institute Setup; full organization data scope. |
+| `punam.badgujar@ddvs.com` | Finance Officer | Dashboard, Students, Finance; full organization data scope. |
+| `milind.kumar@ddvs.com` | IT Administrator | All seeded application permissions; full organization data scope. |
+| `nikhil.baku@ddvs.com` | Office Assistant | Dashboard, Students, HR, Communication, Calendar, Institute Setup; full organization data scope. |
+| `raj.baku@ddvs.com` | Clerk | Dashboard, Students, HR, Communication, Calendar, Institute Setup; full organization data scope. |
 
 ## HR Manual Test Accounts
 
@@ -92,7 +92,9 @@ These are seeded only for the DDVS tenant when `SeedHrManualTestData=true`.
 - `principal-gseb@ddvs.com` and `principal-demo-gseb@ddvs.com` are intended for GSEB-only testing.
 - `principal-cbse@ddvs.com` is intended for CBSE-only testing.
 - HR manual test users are designed for HR payroll, attendance, leave, and reporting workflows.
+- `principal-gseb@ddvs.com` is linked to the seeded principal employee record and can see the seeded reporting chain in Employee List.
 - Student accounts are linked to seeded student records and are not staff users.
+- Student seed data cycles through the fun-name list as middle names so student rows expose parent-style names in testing.
 
 ## Legacy Aliases Repaired By Seeders
 

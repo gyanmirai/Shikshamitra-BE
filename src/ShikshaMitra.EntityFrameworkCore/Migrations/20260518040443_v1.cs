@@ -757,6 +757,10 @@ namespace ShikshaMitra.Migrations
                     DayCalculationType = table.Column<int>(type: "integer", nullable: false),
                     ManualDays = table.Column<int>(type: "integer", nullable: true),
                     ManualMonthDaysJson = table.Column<string>(type: "text", nullable: true),
+                    SaturdayWorkPolicy = table.Column<int>(type: "integer", nullable: false),
+                    HolidaySyncMode = table.Column<int>(type: "integer", nullable: false),
+                    HolidayOverridesJson = table.Column<string>(type: "text", nullable: true),
+                    LockedMonthSettingsJson = table.Column<string>(type: "text", nullable: true),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -2103,7 +2107,7 @@ namespace ShikshaMitra.Migrations
                     Remarks = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
                     Earnings = table.Column<string>(type: "jsonb", nullable: false),
                     Deductions = table.Column<string>(type: "jsonb", nullable: false),
-                    PayrollBasisDays = table.Column<int>(type: "integer", nullable: true),
+                    PayrollBasisDays = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
                     PayableDays = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
                     ProrationFactor = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: true),
                     PayrollDayCalculationMode = table.Column<int>(type: "integer", nullable: true),
@@ -3096,7 +3100,8 @@ namespace ShikshaMitra.Migrations
                     EndTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     TotalMarks = table.Column<double>(type: "double precision", nullable: true),
                     PassingMarks = table.Column<double>(type: "double precision", nullable: true),
-                    Notes = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true)
+                    Notes = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    GradeScalingId = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {

@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Students;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Data;
 using Volo.Abp.Guids;
@@ -25,6 +28,8 @@ public class TestLoginSeederContributor : BaseSeederContributor
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly ILookupNormalizer _lookupNormalizer;
 	private readonly IStudentRepository _studentRepository;
+	private readonly IEmployeeRepository _employeeRepository;
+	private readonly ILogger<TestLoginSeederContributor> _logger;
 
 	public TestLoginSeederContributor(
 		ICurrentTenant currentTenant,
@@ -35,7 +40,9 @@ public class TestLoginSeederContributor : BaseSeederContributor
 		IIdentityUserRepository userRepository,
 		IIdentityRoleRepository roleRepository,
 		ILookupNormalizer lookupNormalizer,
-		IStudentRepository studentRepository)
+		IStudentRepository studentRepository,
+		IEmployeeRepository employeeRepository,
+		ILogger<TestLoginSeederContributor> logger)
 		: base(currentTenant, guidGenerator, unitOfWork)
 	{
 		_configuration = configuration;
@@ -44,6 +51,8 @@ public class TestLoginSeederContributor : BaseSeederContributor
 		_roleRepository = roleRepository;
 		_lookupNormalizer = lookupNormalizer;
 		_studentRepository = studentRepository;
+		_employeeRepository = employeeRepository;
+		_logger = logger;
 	}
 
 	public override async Task SeedAsync(DataSeedContext context)
@@ -64,11 +73,11 @@ public class TestLoginSeederContributor : BaseSeederContributor
 		{
 			new("admin-ddvs", "admin-ddvs@ddvs.com", "Admin", "DDVS", "admin", ["admin1@gmail.com", "ddvs@gmail.com"], ["admin1"]),
 			new("admin-ops", "admin-ops@ddvs.com", "Admin", "Operations", "admin", ["admin2@ddvs.com"], ["admin2"]),
-			new("principal-gseb", "principal-gseb@ddvs.com", "Principal", "GSEB", "Principal", ["principal1@ddvs.com", "rajesh.kumar@school.edu"], ["principal1"]),
+			new("principal-gseb", "principal-gseb@ddvs.com", "Principal", "GSEB", "Principal", ["principal1@ddvs.com", "rajesh.kumar@school.edu", "hiren.vadher@ddvs.com"], ["principal1"]),
 			new("principal-cbse", "principal-cbse@ddvs.com", "Principal", "CBSE", "Principal", ["principle1@ddvs.com"], ["principle1"]),
-			new("teacher-gseb", "teacher-gseb@ddvs.com", "Teacher", "GSEB", "Teacher", ["teacher1@ddvs.com", "vikram.singh@school.edu"], ["teacher1"]),
-			new("clerk-office", "clerk-office@ddvs.com", "Clerk", "Office", "Clerk", ["clerk1@ddvs.com", "clerk@school.edu"], ["clerk1"]),
-			new("finance-officer", "finance-officer@ddvs.com", "Finance", "Officer", "Finance Officer", ["finance1@ddvs.com", "suresh.patil@school.edu"], ["finance1"])
+			new("teacher-gseb", "teacher-gseb@ddvs.com", "Teacher", "GSEB", "Teacher", ["teacher1@ddvs.com", "vikram.singh@school.edu", "sweta.badgujar@ddvs.com"], ["teacher1"]),
+			new("clerk-office", "clerk-office@ddvs.com", "Clerk", "Office", "Clerk", ["clerk1@ddvs.com", "clerk@school.edu", "raj.baku@ddvs.com"], ["clerk1"]),
+			new("finance-officer", "finance-officer@ddvs.com", "Finance", "Officer", "Finance Officer", ["finance1@ddvs.com", "suresh.patil@school.edu", "punam.badgujar@ddvs.com"], ["finance1"])
 		};
 
 		if (!string.IsNullOrWhiteSpace(linkedStudentEmail))
@@ -205,6 +214,55 @@ public class TestLoginSeederContributor : BaseSeederContributor
 		}
 
 		await EnsureRoleMembershipAsync(user, spec.RoleName);
+		await LinkEmployeeAliasesToUserAsync(user, spec);
+	}
+
+	private async Task LinkEmployeeAliasesToUserAsync(IdentityUser user, TestLoginSpec spec)
+	{
+		if (spec.EmployeeAliasEmails.Count == 0)
+		{
+			return;
+		}
+
+		var aliasEmails = spec.EmployeeAliasEmails
+			.Where(x => !string.IsNullOrWhiteSpace(x))
+			.Select(x => x.Trim())
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+		if (aliasEmails.Count == 0)
+		{
+			return;
+		}
+
+		var employees = await _employeeRepository.GetListAsync();
+		var employee = employees.FirstOrDefault(x =>
+			!string.IsNullOrWhiteSpace(x.Email) &&
+			aliasEmails.Contains(x.Email, StringComparer.OrdinalIgnoreCase));
+
+		if (employee == null)
+		{
+			_logger.LogInformation(
+				"No employee alias match found for seeded login {UserName}. AliasEmails={AliasEmails}",
+				spec.UserName,
+				string.Join(", ", aliasEmails));
+			return;
+		}
+
+		if (employee.UserId == user.Id)
+		{
+			return;
+		}
+
+		_logger.LogInformation(
+			"Linking employee {EmployeeId} ({EmployeeEmail}) to seeded login {UserName} ({UserId}). PreviousUserId={PreviousUserId}",
+			employee.Id,
+			employee.Email,
+			spec.UserName,
+			user.Id,
+			employee.UserId);
+
+		employee.UpdateUserId(user.Id);
+		await _employeeRepository.UpdateAsync(employee, autoSave: true);
 	}
 
 	private async Task<IdentityUser?> FindUserAsync(TestLoginSpec spec)
@@ -311,5 +369,8 @@ public class TestLoginSeederContributor : BaseSeederContributor
 		string LastName,
 		string RoleName,
 		IReadOnlyList<string> AliasEmails,
-		IReadOnlyList<string> AliasUserNames);
+		IReadOnlyList<string> AliasUserNames)
+	{
+		public IReadOnlyList<string> EmployeeAliasEmails => AliasEmails;
+	}
 }

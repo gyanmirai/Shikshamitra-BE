@@ -9,6 +9,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="HR\EventAndHolidays\**" />
+    <EmbeddedResource Remove="HR\EventAndHolidays\**" />
+    <None Remove="HR\EventAndHolidays\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Volo.Abp.BlobStoring.Database.EntityFrameworkCore" Version="9.0.0" />
     <ProjectReference Include="..\ShikshaMitra.Domain\ShikshaMitra.Domain.csproj" />
     <PackageReference Include="Volo.Abp.EntityFrameworkCore.PostgreSql" Version="9.0.0" />
@@ -45,7 +51,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="HR\EventAndHolidays\" />
     <Folder Include="HR\Payroll\PayrollStructures\" />
     <Folder Include="Migrations\" />
   </ItemGroup>

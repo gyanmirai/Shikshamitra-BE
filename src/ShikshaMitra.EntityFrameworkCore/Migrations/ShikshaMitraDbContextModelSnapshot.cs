@@ -4350,6 +4350,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<double>("AbsentPayPercentage")
+                        .HasColumnType("double precision");
+
                     b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uuid");
 
@@ -4368,6 +4371,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
+                    b.Property<string>("CustomWeeklyOffs")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<Guid?>("DeleterId")
                         .HasColumnType("uuid")
                         .HasColumnName("DeleterId");
@@ -4376,12 +4383,30 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
+                    b.Property<bool>("EarlyExitEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("EarlyExitGraceTime")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("EffectiveFrom")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("EffectiveTo")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
                     b.Property<int>("GraceTime")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("HalfDayPayPercentage")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("HolidayWorkBehavior")
                         .HasColumnType("integer");
 
                     b.Property<double>("HoursBasedPayPercentage")
@@ -4401,10 +4426,16 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<bool>("ManualCorrectionAllowed")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("MaxLateAllowedPerMonth")
                         .HasColumnType("integer");
 
                     b.Property<int?>("MinOvertimeMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MissingPunchBehavior")
                         .HasColumnType("integer");
 
                     b.Property<bool>("OvertimeEnabled")
@@ -4413,12 +4444,38 @@ namespace ShikshaMitra.Migrations
                     b.Property<int?>("OvertimeRate")
                         .HasColumnType("integer");
 
+                    b.Property<int>("PayrollIntegrationMode")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("PayrollPreviewEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("PenaltyCountThreshold")
+                        .HasColumnType("integer");
+
                     b.Property<int>("PenaltyType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PolicyName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("RequirePublishedAttendanceForPayrollLock")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("SandwichRuleEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Status")
                         .HasColumnType("integer");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
+
+                    b.Property<int>("WeeklyOffPattern")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -4427,6 +4484,318 @@ namespace ShikshaMitra.Migrations
                         .HasDatabaseName("IX_AttendanceConfigurations_TenantId_AcademicYearId");
 
                     b.ToTable("AppAttendanceConfigurations", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.AttendancePolicyEvaluationResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("AttendanceDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("AttendancePolicyEvaluationRunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("BaselinePayableUnits")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("BaselineStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("EvaluatedPayableUnits")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("EvaluatedStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<bool>("IsEarlyExit")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsLate")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsManualOverride")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<int>("OvertimeMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("SourceAttendanceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<string>("WarningsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AttendancePolicyEvaluationRunId");
+
+                    b.HasIndex("TenantId", "AttendancePolicyEvaluationRunId", "EmployeeId", "AttendanceDate")
+                        .HasDatabaseName("IX_AttendancePolicyEvaluationResults_Run_Employee_Date");
+
+                    b.ToTable("HR_AttendancePolicyEvaluationResults", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.AttendancePolicyEvaluationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AffectedEmployeeCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ApprovedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AttendanceConfigurationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<string>("ConfigHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<int>("EstimatedAbsenceCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("EstimatedLateCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("EstimatedOvertimeMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("EstimatedPayableDayDelta")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<DateOnly>("FromDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PublishedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<DateOnly>("ToDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("WarningsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcademicYearId", "Year", "Month")
+                        .IsUnique()
+                        .HasDatabaseName("UX_AttendancePolicyEvaluationRuns_HostPublishedMonth")
+                        .HasFilter("\"Status\" = 4 AND \"TenantId\" IS NULL");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "Year", "Month")
+                        .IsUnique()
+                        .HasDatabaseName("UX_AttendancePolicyEvaluationRuns_TenantPublishedMonth")
+                        .HasFilter("\"Status\" = 4 AND \"TenantId\" IS NOT NULL");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "Year", "Month", "Status")
+                        .HasDatabaseName("IX_AttendancePolicyEvaluationRuns_Month_Status");
+
+                    b.ToTable("HR_AttendancePolicyEvaluationRuns", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.AttendancePolicyOverride", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AttendanceConfigurationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<int?>("GraceTime")
+                        .HasColumnType("integer");
+
+                    b.Property<double?>("HoursBasedPayPercentage")
+                        .HasColumnType("double precision");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<int?>("MaxLateAllowedPerMonth")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MinOvertimeMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<bool?>("OvertimeEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("OvertimeRate")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PenaltyType")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TargetId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("TargetName")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<int>("TargetType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AttendanceConfigurationId");
+
+                    b.HasIndex("TenantId", "AttendanceConfigurationId", "TargetType", "TargetId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_AttendancePolicyOverrides_Target")
+                        .HasFilter("\"IsActive\" = TRUE");
+
+                    b.ToTable("AppAttendancePolicyOverrides", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.AutomatedNotificationsSettings", b =>
@@ -6006,6 +6375,13 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AttendancePolicyEvaluationRunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AttendancePolicyWarningsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
                     b.Property<decimal>("BasicSalary")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -6120,6 +6496,11 @@ namespace ShikshaMitra.Migrations
                     b.Property<decimal>("PayableDays")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("PayrollAttendanceSource")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<decimal>("PresentDays")
                         .HasPrecision(18, 2)
@@ -12866,6 +13247,26 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("LeavePolicy");
                 });
 
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.AttendancePolicyEvaluationResult", b =>
+                {
+                    b.HasOne("ShikshaMitra.HR.AttendanceAndLeaves.Settings.AttendancePolicyEvaluationRun", "Run")
+                        .WithMany("Results")
+                        .HasForeignKey("AttendancePolicyEvaluationRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.AttendancePolicyOverride", b =>
+                {
+                    b.HasOne("ShikshaMitra.HR.AttendanceAndLeaves.Settings.AttendanceConfiguration", null)
+                        .WithMany("Overrides")
+                        .HasForeignKey("AttendanceConfigurationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicy", b =>
                 {
                     b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", "AcademicYear")
@@ -14840,6 +15241,16 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Members");
 
                     b.Navigation("StudentRules");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.AttendanceConfiguration", b =>
+                {
+                    b.Navigation("Overrides");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.AttendanceAndLeaves.Settings.AttendancePolicyEvaluationRun", b =>
+                {
+                    b.Navigation("Results");
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>

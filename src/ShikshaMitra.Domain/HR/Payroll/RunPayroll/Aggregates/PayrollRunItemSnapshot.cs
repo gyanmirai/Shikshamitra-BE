@@ -36,6 +36,9 @@ public class PayrollRunItemSnapshot : FullAuditedAggregateRoot<Guid>, IMultiTena
 	public decimal ProrationFactor { get; set; }
 	public string DayCalculationMode { get; set; } = string.Empty;
 	public bool UsedDefaultDayCalculation { get; set; }
+	public Guid? AttendancePolicyEvaluationRunId { get; set; }
+	public string PayrollAttendanceSource { get; set; } = "raw_attendance";
+	public string AttendancePolicyWarningsJson { get; set; } = "[]";
 	public string EarningComponentsJson { get; set; } = "[]";
 	public string DeductionComponentsJson { get; set; } = "[]";
 

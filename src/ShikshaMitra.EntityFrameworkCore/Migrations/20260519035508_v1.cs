@@ -500,13 +500,31 @@ namespace ShikshaMitra.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
+                    PolicyName = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    EffectiveFrom = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    EffectiveTo = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    WeeklyOffPattern = table.Column<int>(type: "integer", nullable: false),
+                    CustomWeeklyOffs = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     HoursBasedPayPercentage = table.Column<double>(type: "double precision", nullable: false),
+                    HalfDayPayPercentage = table.Column<double>(type: "double precision", nullable: false),
+                    AbsentPayPercentage = table.Column<double>(type: "double precision", nullable: false),
+                    MissingPunchBehavior = table.Column<int>(type: "integer", nullable: false),
+                    ManualCorrectionAllowed = table.Column<bool>(type: "boolean", nullable: false),
                     GraceTime = table.Column<int>(type: "integer", nullable: false),
                     MaxLateAllowedPerMonth = table.Column<int>(type: "integer", nullable: false),
                     PenaltyType = table.Column<int>(type: "integer", nullable: false),
+                    PenaltyCountThreshold = table.Column<int>(type: "integer", nullable: false),
+                    EarlyExitEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    EarlyExitGraceTime = table.Column<int>(type: "integer", nullable: false),
                     OvertimeEnabled = table.Column<bool>(type: "boolean", nullable: false),
                     OvertimeRate = table.Column<int>(type: "integer", nullable: true),
                     MinOvertimeMinutes = table.Column<int>(type: "integer", nullable: true),
+                    HolidayWorkBehavior = table.Column<int>(type: "integer", nullable: false),
+                    SandwichRuleEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    PayrollPreviewEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    PayrollIntegrationMode = table.Column<int>(type: "integer", nullable: false),
+                    RequirePublishedAttendanceForPayrollLock = table.Column<bool>(type: "boolean", nullable: false),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -2017,6 +2035,45 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "HR_AttendancePolicyEvaluationRuns",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AttendanceConfigurationId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Year = table.Column<int>(type: "integer", nullable: false),
+                    Month = table.Column<int>(type: "integer", nullable: false),
+                    FromDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    ToDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    AffectedEmployeeCount = table.Column<int>(type: "integer", nullable: false),
+                    EstimatedLateCount = table.Column<int>(type: "integer", nullable: false),
+                    EstimatedAbsenceCount = table.Column<int>(type: "integer", nullable: false),
+                    EstimatedOvertimeMinutes = table.Column<int>(type: "integer", nullable: false),
+                    EstimatedPayableDayDelta = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    ConfigHash = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    WarningsJson = table.Column<string>(type: "jsonb", nullable: false),
+                    ApprovedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ApprovedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    PublishedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    PublishedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_HR_AttendancePolicyEvaluationRuns", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "HR_PayrollRunItems",
                 columns: table => new
                 {
@@ -2047,6 +2104,9 @@ namespace ShikshaMitra.Migrations
                     ProrationFactor = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: false),
                     DayCalculationMode = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     UsedDefaultDayCalculation = table.Column<bool>(type: "boolean", nullable: false),
+                    AttendancePolicyEvaluationRunId = table.Column<Guid>(type: "uuid", nullable: true),
+                    PayrollAttendanceSource = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    AttendancePolicyWarningsJson = table.Column<string>(type: "jsonb", nullable: false),
                     EarningComponentsJson = table.Column<string>(type: "jsonb", nullable: false),
                     DeductionComponentsJson = table.Column<string>(type: "jsonb", nullable: false),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
@@ -2940,6 +3000,44 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppAttendancePolicyOverrides",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AttendanceConfigurationId = table.Column<Guid>(type: "uuid", nullable: false),
+                    TargetType = table.Column<int>(type: "integer", nullable: false),
+                    TargetId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    TargetName = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: false),
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    Priority = table.Column<int>(type: "integer", nullable: false),
+                    HoursBasedPayPercentage = table.Column<double>(type: "double precision", nullable: true),
+                    GraceTime = table.Column<int>(type: "integer", nullable: true),
+                    MaxLateAllowedPerMonth = table.Column<int>(type: "integer", nullable: true),
+                    PenaltyType = table.Column<int>(type: "integer", nullable: true),
+                    OvertimeEnabled = table.Column<bool>(type: "boolean", nullable: true),
+                    OvertimeRate = table.Column<int>(type: "integer", nullable: true),
+                    MinOvertimeMinutes = table.Column<int>(type: "integer", nullable: true),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppAttendancePolicyOverrides", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppAttendancePolicyOverrides_AppAttendanceConfigurations_At~",
+                        column: x => x.AttendanceConfigurationId,
+                        principalTable: "AppAttendanceConfigurations",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppBookCopies",
                 columns: table => new
                 {
@@ -3438,6 +3536,44 @@ namespace ShikshaMitra.Migrations
                         name: "FK_HR_AttendanceImportRows_HR_AttendanceImportBatches_BatchId",
                         column: x => x.BatchId,
                         principalTable: "HR_AttendanceImportBatches",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "HR_AttendancePolicyEvaluationResults",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AttendancePolicyEvaluationRunId = table.Column<Guid>(type: "uuid", nullable: false),
+                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AttendanceDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    SourceAttendanceId = table.Column<Guid>(type: "uuid", nullable: true),
+                    BaselineStatus = table.Column<int>(type: "integer", nullable: false),
+                    BaselinePayableUnits = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    EvaluatedStatus = table.Column<int>(type: "integer", nullable: false),
+                    EvaluatedPayableUnits = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    IsLate = table.Column<bool>(type: "boolean", nullable: false),
+                    IsEarlyExit = table.Column<bool>(type: "boolean", nullable: false),
+                    OvertimeMinutes = table.Column<int>(type: "integer", nullable: false),
+                    WarningsJson = table.Column<string>(type: "jsonb", nullable: false),
+                    IsManualOverride = table.Column<bool>(type: "boolean", nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_HR_AttendancePolicyEvaluationResults", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_HR_AttendancePolicyEvaluationResults_HR_AttendancePolicyEva~",
+                        column: x => x.AttendancePolicyEvaluationRunId,
+                        principalTable: "HR_AttendancePolicyEvaluationRuns",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -5666,6 +5802,18 @@ namespace ShikshaMitra.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_AppAttendancePolicyOverrides_AttendanceConfigurationId",
+                table: "AppAttendancePolicyOverrides",
+                column: "AttendanceConfigurationId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AttendancePolicyOverrides_Target",
+                table: "AppAttendancePolicyOverrides",
+                columns: new[] { "TenantId", "AttendanceConfigurationId", "TargetType", "TargetId" },
+                unique: true,
+                filter: "\"IsActive\" = TRUE");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AppBookCopies_AccessionNumber",
                 table: "AppBookCopies",
                 column: "AccessionNumber",
@@ -6726,6 +6874,35 @@ namespace ShikshaMitra.Migrations
                 column: "TenantId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_AttendancePolicyEvaluationResults_Run_Employee_Date",
+                table: "HR_AttendancePolicyEvaluationResults",
+                columns: new[] { "TenantId", "AttendancePolicyEvaluationRunId", "EmployeeId", "AttendanceDate" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_HR_AttendancePolicyEvaluationResults_AttendancePolicyEvalua~",
+                table: "HR_AttendancePolicyEvaluationResults",
+                column: "AttendancePolicyEvaluationRunId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AttendancePolicyEvaluationRuns_Month_Status",
+                table: "HR_AttendancePolicyEvaluationRuns",
+                columns: new[] { "TenantId", "AcademicYearId", "Year", "Month", "Status" });
+
+            migrationBuilder.CreateIndex(
+                name: "UX_AttendancePolicyEvaluationRuns_HostPublishedMonth",
+                table: "HR_AttendancePolicyEvaluationRuns",
+                columns: new[] { "AcademicYearId", "Year", "Month" },
+                unique: true,
+                filter: "\"Status\" = 4 AND \"TenantId\" IS NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "UX_AttendancePolicyEvaluationRuns_TenantPublishedMonth",
+                table: "HR_AttendancePolicyEvaluationRuns",
+                columns: new[] { "TenantId", "AcademicYearId", "Year", "Month" },
+                unique: true,
+                filter: "\"Status\" = 4 AND \"TenantId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_HR_PayrollRunItems_Month_ReviewStatus",
                 table: "HR_PayrollRunItems",
                 columns: new[] { "MonthYear", "ReviewStatus" });
@@ -6971,10 +7148,10 @@ namespace ShikshaMitra.Migrations
                 name: "AppAssignmentDivisionSchedules");
 
             migrationBuilder.DropTable(
-                name: "AppAttendanceConfigurations");
+                name: "AppAttendanceEntries");
 
             migrationBuilder.DropTable(
-                name: "AppAttendanceEntries");
+                name: "AppAttendancePolicyOverrides");
 
             migrationBuilder.DropTable(
                 name: "AppAutomatedNotificationsSettings");
@@ -7220,6 +7397,9 @@ namespace ShikshaMitra.Migrations
                 name: "HR_AttendanceImportRows");
 
             migrationBuilder.DropTable(
+                name: "HR_AttendancePolicyEvaluationResults");
+
+            migrationBuilder.DropTable(
                 name: "HR_PayrollRunItems");
 
             migrationBuilder.DropTable(
@@ -7269,6 +7449,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "AppAttendanceDays");
+
+            migrationBuilder.DropTable(
+                name: "AppAttendanceConfigurations");
 
             migrationBuilder.DropTable(
                 name: "AppBooks");
@@ -7350,6 +7533,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "HR_AttendanceImportBatches");
+
+            migrationBuilder.DropTable(
+                name: "HR_AttendancePolicyEvaluationRuns");
 
             migrationBuilder.DropTable(
                 name: "OpenIddictAuthorizations");

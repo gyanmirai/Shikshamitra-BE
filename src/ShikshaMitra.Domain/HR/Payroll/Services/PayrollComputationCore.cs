@@ -40,6 +40,11 @@ public sealed record PayrollLeaveUnits(
 	decimal PaidUnits,
 	decimal UnpaidUnits);
 
+public sealed record PayrollApprovedAttendanceDay(
+	DateOnly Date,
+	EmployeeAttendanceStatusType Status,
+	decimal PayableUnits);
+
 public sealed record PayrollBasisDaysResult(
 	decimal BasisDays,
 	DayCalculationType EffectiveMode,
@@ -283,6 +288,118 @@ public static class PayrollProrationCalculator
 
 public static class PayrollAttendanceCalculator
 {
+	public static PayrollAttendancePayableDays CalculatePayableDays(
+		IReadOnlyList<PayrollApprovedAttendanceDay> approvedDays,
+		PayrollBasisDaysResult basis,
+		int year,
+		int month,
+		IReadOnlyList<Holiday> holidays,
+		IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>? leaveUnitsByDate = null)
+	{
+		var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
+		var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
+		var monthRecords = approvedDays
+			.Where(a => a.Date >= startDate && a.Date <= endDate)
+			.GroupBy(a => a.Date)
+			.Select(g => g.Last())
+			.ToList();
+
+		var workingUnitsByDate = basis.WorkingUnitsByDate
+			?? PayrollMonthCalendar.BuildWorkingUnitsByDate(
+				year,
+				month,
+				holidays,
+				basis.SaturdayWorkPolicy,
+				Array.Empty<PayrollHolidayOverride>());
+
+		if (basis.EffectiveMode == DayCalculationType.WorkingDays)
+		{
+			monthRecords = monthRecords.Where(a => IsWorkingDay(a.Date, workingUnitsByDate)).ToList();
+		}
+
+		var present = monthRecords.Count(a => a.Status == EmployeeAttendanceStatusType.Present);
+		var half = monthRecords.Count(a => a.Status == EmployeeAttendanceStatusType.HalfDayLeave);
+		var payableByDate = monthRecords.ToDictionary(
+			a => a.Date,
+			a =>
+			{
+				var maxUnits = basis.EffectiveMode == DayCalculationType.WorkingDays
+					? GetWorkingUnit(a.Date, workingUnitsByDate)
+					: 1m;
+				return Math.Clamp(a.PayableUnits, 0m, maxUnits);
+			});
+
+		if (basis.EffectiveMode == DayCalculationType.TotalMonthDays)
+		{
+			var unpaidDeduction = monthRecords.Sum(a =>
+			{
+				var leaveUnits = GetLeaveUnits(a.Date, leaveUnitsByDate);
+				return a.Status switch
+				{
+					EmployeeAttendanceStatusType.FullDayLeave => Math.Max(0m, 1m - leaveUnits.PaidUnits),
+					EmployeeAttendanceStatusType.HalfDayLeave => Math.Max(0m, 0.5m - leaveUnits.PaidUnits),
+					_ => 0m
+				};
+			});
+			var attendanceDates = monthRecords
+				.Where(a => a.Status == EmployeeAttendanceStatusType.Present)
+				.Select(a => a.Date)
+				.ToHashSet();
+			if (leaveUnitsByDate is { Count: > 0 })
+			{
+				foreach (var (date, leaveUnits) in leaveUnitsByDate)
+				{
+					if (date < startDate || date > endDate || attendanceDates.Contains(date))
+					{
+						continue;
+					}
+
+					var existingDeduction = monthRecords
+						.Where(a => a.Date == date)
+						.Sum(a => a.Status switch
+						{
+							EmployeeAttendanceStatusType.FullDayLeave => Math.Max(0m, 1m - GetLeaveUnits(date, leaveUnitsByDate).PaidUnits),
+							EmployeeAttendanceStatusType.HalfDayLeave => Math.Max(0m, 0.5m - GetLeaveUnits(date, leaveUnitsByDate).PaidUnits),
+							_ => 0m
+						});
+					unpaidDeduction += Math.Max(0m, Math.Clamp(leaveUnits.UnpaidUnits, 0m, 1m) - existingDeduction);
+				}
+			}
+
+			var totalMonthPayableDays = Math.Max(0m, basis.BasisDays - unpaidDeduction);
+			return new PayrollAttendancePayableDays(present, half, totalMonthPayableDays);
+		}
+
+		var payableDays = payableByDate.Values.Sum();
+		if (leaveUnitsByDate is { Count: > 0 })
+		{
+			foreach (var (date, leaveUnits) in leaveUnitsByDate)
+			{
+				if (date < startDate || date > endDate)
+				{
+					continue;
+				}
+
+				if (basis.EffectiveMode == DayCalculationType.WorkingDays && !IsWorkingDay(date, workingUnitsByDate))
+				{
+					continue;
+				}
+
+				var maxUnitsForDate = basis.EffectiveMode == DayCalculationType.WorkingDays
+					? GetWorkingUnit(date, workingUnitsByDate)
+					: 1m;
+				var paidUnitsForDate = Math.Clamp(leaveUnits.PaidUnits, 0m, maxUnitsForDate);
+				var attendanceUnits = payableByDate.GetValueOrDefault(date);
+				if (paidUnitsForDate > attendanceUnits)
+				{
+					payableDays += paidUnitsForDate - attendanceUnits;
+				}
+			}
+		}
+
+		return new PayrollAttendancePayableDays(present, half, Math.Max(0m, payableDays));
+	}
+
 	public static PayrollAttendancePayableDays CalculatePayableDays(
 		IReadOnlyList<EmployeeAttendance> attendanceRecords,
 		PayrollBasisDaysResult basis,

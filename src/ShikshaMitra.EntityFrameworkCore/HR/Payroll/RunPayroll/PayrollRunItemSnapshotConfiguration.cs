@@ -18,6 +18,7 @@ public class PayrollRunItemSnapshotConfiguration : IEntityTypeConfiguration<Payr
 		builder.Property(x => x.EmployeeIdentifier).IsRequired().HasMaxLength(64);
 		builder.Property(x => x.ReviewStatus).IsRequired().HasMaxLength(16);
 		builder.Property(x => x.DayCalculationMode).IsRequired().HasMaxLength(64);
+		builder.Property(x => x.PayrollAttendanceSource).IsRequired().HasMaxLength(64);
 
 		builder.Property(x => x.BasicSalary).HasPrecision(18, 2);
 		builder.Property(x => x.GrossSalary).HasPrecision(18, 2);
@@ -34,6 +35,7 @@ public class PayrollRunItemSnapshotConfiguration : IEntityTypeConfiguration<Payr
 		builder.Property(x => x.ProrationFactor).HasPrecision(18, 4);
 
 		builder.Property(x => x.IssueCodesJson).HasColumnType("jsonb");
+		builder.Property(x => x.AttendancePolicyWarningsJson).HasColumnType("jsonb");
 		builder.Property(x => x.EarningComponentsJson).HasColumnType("jsonb");
 		builder.Property(x => x.DeductionComponentsJson).HasColumnType("jsonb");
 

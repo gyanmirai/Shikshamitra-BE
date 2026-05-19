@@ -14,6 +14,8 @@ public class EfCoreAttendanceConfigurationRepository(IDbContextProvider<ShikshaM
 	public async Task<AttendanceConfiguration?> FindByAcademicYearIdAsync(Guid academicYearId, CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
-		return await dbSet.FirstOrDefaultAsync(x => x.AcademicYearId == academicYearId, cancellationToken);
+		return await dbSet
+			.Include(x => x.Overrides)
+			.FirstOrDefaultAsync(x => x.AcademicYearId == academicYearId, cancellationToken);
 	}
 }

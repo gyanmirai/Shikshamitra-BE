@@ -164,6 +164,10 @@ public class RunPayrollItem
 	/// </summary>
 	public bool UsedDefaultDayCalculation { get; set; }
 
+	public Guid? AttendancePolicyEvaluationRunId { get; set; }
+	public string PayrollAttendanceSource { get; set; } = "raw_attendance";
+	public List<string> AttendancePolicyWarnings { get; set; } = new();
+
 	/// <summary>
 	/// Itemized earning components contributing to gross salary
 	/// </summary>

@@ -360,6 +360,29 @@ public class PayrollComputationCoreTests
 	}
 
 	[Fact]
+	public void Approved_TotalMonthDays_Mirrors_Raw_Attendance_Deduction_Semantics()
+	{
+		var basis = new PayrollBasisDaysResult(30, DayCalculationType.TotalMonthDays, false);
+		var approved = new List<PayrollApprovedAttendanceDay>
+		{
+			new(new DateOnly(2026, 4, 6), EmployeeAttendanceStatusType.Present, 1m),
+			new(new DateOnly(2026, 4, 7), EmployeeAttendanceStatusType.FullDayLeave, 0m),
+			new(new DateOnly(2026, 4, 8), EmployeeAttendanceStatusType.HalfDayLeave, 0.5m)
+		};
+
+		var summary = PayrollAttendanceCalculator.CalculatePayableDays(
+			approved,
+			basis,
+			2026,
+			4,
+			Array.Empty<Holiday>());
+
+		Assert.Equal(1, summary.PresentDays);
+		Assert.Equal(1, summary.HalfWorkingDays);
+		Assert.Equal(28.5m, summary.PayableDays);
+	}
+
+	[Fact]
 	public void TotalMonthDays_Unpaid_Leave_Deducts_Without_Attendance_Row()
 	{
 		var basis = new PayrollBasisDaysResult(30, DayCalculationType.TotalMonthDays, false);
@@ -414,6 +437,38 @@ public class PayrollComputationCoreTests
 		Assert.Equal(runPayrollPreview.PayableDays, salarySlipLocking.PayableDays);
 		Assert.Equal(runPayrollPreview.PresentDays, salarySlipLocking.PresentDays);
 		Assert.Equal(runPayrollPreview.HalfWorkingDays, salarySlipLocking.HalfWorkingDays);
+	}
+
+	[Fact]
+	public void Attendance_Payable_Days_Stay_Status_Driven_For_Attendance_Configuration_V1()
+	{
+		var basis = new PayrollBasisDaysResult(26, DayCalculationType.WorkingDays, false);
+		var attendance = new List<EmployeeAttendance>
+		{
+			Attendance(2026, 4, 6, EmployeeAttendanceStatusType.Present),
+			Attendance(2026, 4, 7, EmployeeAttendanceStatusType.HalfDayLeave),
+			Attendance(2026, 4, 8, EmployeeAttendanceStatusType.FullDayLeave)
+		};
+
+		var beforeConfigurationPreview = PayrollAttendanceCalculator.CalculatePayableDays(
+			attendance,
+			basis,
+			2026,
+			4,
+			Array.Empty<Holiday>());
+		var afterConfigurationPreview = PayrollAttendanceCalculator.CalculatePayableDays(
+			attendance,
+			basis,
+			2026,
+			4,
+			Array.Empty<Holiday>());
+
+		Assert.Equal(1, beforeConfigurationPreview.PresentDays);
+		Assert.Equal(1, beforeConfigurationPreview.HalfWorkingDays);
+		Assert.Equal(1.5m, beforeConfigurationPreview.PayableDays);
+		Assert.Equal(beforeConfigurationPreview.PayableDays, afterConfigurationPreview.PayableDays);
+		Assert.Equal(beforeConfigurationPreview.PresentDays, afterConfigurationPreview.PresentDays);
+		Assert.Equal(beforeConfigurationPreview.HalfWorkingDays, afterConfigurationPreview.HalfWorkingDays);
 	}
 
 	[Fact]

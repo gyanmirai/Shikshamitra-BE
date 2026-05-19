@@ -30,6 +30,9 @@ public partial class ShikshaMitraDbContext
     DbSet<StaffAttendanceDayLock> StaffAttendanceDayLocks { get; set; }
     public DbSet<EmployeeLeave> EmployeeLeaves { get; set; }
     DbSet<AttendanceConfiguration> AttendanceConfigurations { get; set; }
+    DbSet<AttendancePolicyOverride> AttendancePolicyOverrides { get; set; }
+    public DbSet<AttendancePolicyEvaluationRun> AttendancePolicyEvaluationRuns { get; set; }
+    public DbSet<AttendancePolicyEvaluationResult> AttendancePolicyEvaluationResults { get; set; }
     DbSet<AutomatedNotificationsSettings> AutomatedNotificationsSettings { get; set; }
     DbSet<NotificationInfo> NotificationInfos { get; set; }
     public DbSet<LeaveType> EmployeeLeaveTypes { get; set; }

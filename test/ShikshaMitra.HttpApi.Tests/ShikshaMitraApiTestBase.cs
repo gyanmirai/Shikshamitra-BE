@@ -43,6 +43,19 @@ public abstract class ShikshaMitraApiTestBase
 	}
 
 	/// <summary>
+	/// Creates an HttpClient authenticated as the specified user ID.
+	/// Uses the <c>X-Test-UserId</c> header supported by <see cref="Infrastructure.Auth.TestAuthHandler"/>.
+	/// Useful for maker-checker tests where a second identity must approve/reject a record
+	/// created by the default test user.
+	/// </summary>
+	protected HttpClient CreateClientAs(Guid userId)
+	{
+		var client = Factory.CreateClient();
+		client.DefaultRequestHeaders.Add("X-Test-UserId", userId.ToString());
+		return client;
+	}
+
+	/// <summary>
 	/// POST + deserialize shortcut that asserts a success status code.
 	/// </summary>
 	protected async Task<TResponse> PostAndReadAsync<TResponse>(string url, object body)

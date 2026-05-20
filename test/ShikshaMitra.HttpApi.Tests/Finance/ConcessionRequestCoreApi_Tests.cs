@@ -35,7 +35,7 @@ public class ConcessionRequestCoreApi_Tests : ConcessionRequestApiTestsBase
 
 		var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
 
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 	}
 
 	[Fact]
@@ -105,7 +105,7 @@ public class ConcessionRequestCoreApi_Tests : ConcessionRequestApiTestsBase
 
 		var response = await Client.DeleteAsync($"{BaseUrl}/{requestId}");
 
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
 		var getResponse = await Client.GetAsync($"{BaseUrl}/{requestId}");
 		getResponse.StatusCode.ShouldBeOneOf(HttpStatusCode.NotFound, HttpStatusCode.InternalServerError);

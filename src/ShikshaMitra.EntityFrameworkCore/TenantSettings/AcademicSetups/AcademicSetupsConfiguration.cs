@@ -61,8 +61,11 @@ public class AcademicSetupsConfiguration
 		);
 		builder.ConfigureByConvention();
 
-		// Make the Name property required with a max length
-		builder.Navigation(x => x.EducationMediums).AutoInclude();
+		// Collection navigations (EducationMediums) are NOT auto-included here.
+		// Loading all mediums/stages/standards/divisions for every board query creates a
+		// circular cascade (Board→Mediums→Stages→Standards→Stage→...) that causes EF Core
+		// query compilation to loop. Use explicit Include chains (e.g. WithDetailsAsync) where
+		// the full hierarchy is needed.
 
 		// Define many-to-one relationship:
 		// Many Education can belong to one AcademicYear
@@ -87,7 +90,7 @@ public class AcademicSetupsConfiguration
 			.IsRequired()
 			.HasMaxLength(EducationMediumConsts.MaxNameLength);
 
-		builder.Navigation(x => x.EducationMediumStages).AutoInclude();
+		// Collection navigation (EducationMediumStages) is NOT auto-included — see EducationBoard note.
 
 		// add navigation property to get Education Board details when fetching EducationMedium
 		builder
@@ -121,7 +124,7 @@ public class AcademicSetupsConfiguration
 			.WithMany(x => x.EducationMediumStages)
 			.HasForeignKey(x => x.EducationMediumId);
 
-		builder.Navigation(x => x.Standards).AutoInclude();
+		// Collection navigation (Standards) is NOT auto-included — see EducationBoard note.
 
 		builder.Navigation(x => x.EducationMedium).AutoInclude();
 	}
@@ -147,7 +150,7 @@ public class AcademicSetupsConfiguration
 
 		builder.Navigation(x => x.EducationMediumStage).AutoInclude();
 
-		builder.Navigation(x => x.Divisions).AutoInclude();
+		// Collection navigation (Divisions) is NOT auto-included — see EducationBoard note.
 
 		builder.Navigation(x => x.Shift).AutoInclude();
 	}

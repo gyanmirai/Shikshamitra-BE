@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Charges;
 using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Fees.Charges;
@@ -123,12 +124,13 @@ public class FeeCollectionAppService(
             .Select(g => new { StudentId = g.Key, Paid = g.Sum(r => r.Amount) })
             .ToDictionary(x => x.StudentId, x => x.Paid);
 
-        // ── 5. Overdue fees — unpaid charges past their due date ──────────
+        // ── 5. Overdue fees — unpaid approved charges past their due date ────
         var now = DateTime.UtcNow;
         var chargesQuery = await chargeRepository.GetQueryableAsync();
         var overdueChargeList = chargesQuery
             .Where(c => allStudentIds.Contains(c.StudentId)
                      && c.AcademicYearId == input.AcademicYearId
+                     && c.Status == ChargeStatus.Approved
                      && c.DueDate < now)
             .Select(c => new { c.Id, c.StudentId, Amount = (double)c.Amount })
             .ToList();
@@ -415,10 +417,10 @@ public class FeeCollectionAppService(
             }).ToList();
         }
 
-        // ── 4. Charges for this student in this academic year ─────────────
+        // ── 4. Charges for this student in this academic year (approved only) ─
         var chargesQuery = await chargeRepository.GetQueryableAsync();
         var studentCharges = chargesQuery
-            .Where(c => c.StudentId == input.StudentId && c.AcademicYearId == input.AcademicYearId)
+            .Where(c => c.StudentId == input.StudentId && c.AcademicYearId == input.AcademicYearId && c.Status == ChargeStatus.Approved)
             .ToList();
 
         List<FeeChargeDetailDto>? chargeDtos = null;

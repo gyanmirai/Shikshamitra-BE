@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Charges.Dtos;
@@ -10,11 +11,13 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Charges;
 
 [RemoteService]
-[Area("Finance")]
-[Route("api/charges")]
+[Area("app")]
+[Route("api/app/charges")]
 [Authorize]
 public class ChargeController : AbpController
 {
+	private const int MaxChargePageSize = 100;
+
 	private readonly IChargeAppService _chargeAppService;
 
 	public ChargeController(IChargeAppService chargeAppService)
@@ -23,31 +26,25 @@ public class ChargeController : AbpController
 	}
 
 	/// <summary>
-	/// Create a new charge for a student
+	/// Create a new charge for a student.
+	/// Scope (board, medium, class, division) is derived server-side from the student record.
 	/// </summary>
-	/// <param name="academicYearId">Academic year identifier for data partitioning and filtering</param>
-	/// <param name="input">Charge creation details</param>
-	/// <returns>Created charge details</returns>
 	[HttpPost]
+	[ProducesResponseType(typeof(ChargeResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	public Task<ChargeResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] CreateChargeRequest input)
 	{
 		return _chargeAppService.CreateAsync(academicYearId, input);
 	}
 
 	/// <summary>
-	/// Retrieve a paginated list of charges with optional filtering and sorting
+	/// Retrieve a paginated list of charges with optional filtering and sorting.
+	/// Maximum page size is 100.
 	/// </summary>
-	/// <param name="academicYearId">Academic year identifier for data partitioning and filtering</param>
-	/// <param name="page">Page number for pagination (1-indexed)</param>
-	/// <param name="pageSize">Number of records per page (maximum 100)</param>
-	/// <param name="search">Search term for filtering by student name, GR number, or roll number</param>
-	/// <param name="status">Filter by charge status (0=PENDING, 1=APPROVED, 2=REJECTED)</param>
-	/// <param name="sortBy">Field to sort by</param>
-	/// <param name="sortOrder">Sort order direction</param>
-	/// <param name="educationMediumId">Filter by education medium</param>
-	/// <param name="boardId">Filter by education board</param>
-	/// <returns>Paginated list of charges</returns>
 	[HttpGet]
+	[ProducesResponseType(typeof(ChargeListResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	public Task<ChargeListResponse> GetAllAsync(
 		[FromQuery] Guid academicYearId,
 		[FromQuery] int page = 1,
@@ -62,7 +59,7 @@ public class ChargeController : AbpController
 		var request = new GetChargesRequest
 		{
 			Page = page,
-			PageSize = pageSize,
+			PageSize = Math.Min(pageSize, MaxChargePageSize),
 			Search = search,
 			Status = status,
 			SortBy = sortBy,
@@ -75,11 +72,12 @@ public class ChargeController : AbpController
 	}
 
 	/// <summary>
-	/// Get detailed information about a specific charge
+	/// Get detailed information about a specific charge.
 	/// </summary>
-	/// <param name="chargeId">Unique charge identifier</param>
-	/// <returns>Detailed charge information</returns>
 	[HttpGet("{chargeId}")]
+	[ProducesResponseType(typeof(ChargeDetailResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	public Task<ChargeDetailResponse> GetByIdAsync(Guid chargeId)
 	{
 		return _chargeAppService.GetByIdAsync(chargeId);
@@ -88,34 +86,34 @@ public class ChargeController : AbpController
 	/// <summary>
 	/// Update an existing charge. Only PENDING charges can be updated.
 	/// </summary>
-	/// <param name="chargeId">Unique charge identifier</param>
-	/// <param name="input">Charge update details</param>
-	/// <returns>Updated charge details</returns>
 	[HttpPut("{chargeId}")]
+	[ProducesResponseType(typeof(ChargeResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	public Task<ChargeResponse> UpdateAsync(Guid chargeId, [FromBody] UpdateChargeRequest input)
 	{
 		return _chargeAppService.UpdateAsync(chargeId, input);
 	}
 
 	/// <summary>
-	/// Approve a pending charge
+	/// Approve a pending charge. Approver must differ from the requestor (maker-checker).
 	/// </summary>
-	/// <param name="chargeId">Unique charge identifier</param>
-	/// <param name="input">Approval details</param>
-	/// <returns>Approval response</returns>
 	[HttpPost("{chargeId}/approve")]
+	[ProducesResponseType(typeof(ApprovalResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	public Task<ApprovalResponse> ApproveAsync(Guid chargeId, [FromBody] ApproveChargeRequest input)
 	{
 		return _chargeAppService.ApproveAsync(chargeId, input);
 	}
 
 	/// <summary>
-	/// Reject a pending charge with mandatory rejection reason
+	/// Reject a pending charge with a mandatory reason. Rejector must differ from the requestor.
 	/// </summary>
-	/// <param name="chargeId">Unique charge identifier</param>
-	/// <param name="input">Rejection details with reason</param>
-	/// <returns>Rejection response</returns>
 	[HttpPost("{chargeId}/reject")]
+	[ProducesResponseType(typeof(RejectionResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	public Task<RejectionResponse> RejectAsync(Guid chargeId, [FromBody] RejectChargeRequest input)
 	{
 		return _chargeAppService.RejectAsync(chargeId, input);
@@ -124,9 +122,10 @@ public class ChargeController : AbpController
 	/// <summary>
 	/// Delete a charge. Only PENDING charges can be deleted.
 	/// </summary>
-	/// <param name="chargeId">Unique charge identifier</param>
-	/// <returns>No content on success</returns>
 	[HttpDelete("{chargeId}")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	public Task DeleteAsync(Guid chargeId)
 	{
 		return _chargeAppService.DeleteAsync(chargeId);

@@ -50,6 +50,7 @@ public class ConcessionRequestController : AbpController
 
 	/// <summary>Creates a new ConcessionRequest batch in Draft state (Steps 1 + 2).</summary>
 	[HttpPost]
+	[ProducesResponseType(204)]
 	public async Task CreateAsync([FromBody] CreateConcessionRequestDto input)
 		=> await _appService.CreateAsync(input);
 
@@ -70,6 +71,7 @@ public class ConcessionRequestController : AbpController
 
 	/// <summary>Deletes a Draft ConcessionRequest.</summary>
 	[HttpDelete("{id:guid}")]
+	[ProducesResponseType(204)]
 	public virtual Task DeleteAsync(Guid id)
 		=> _appService.DeleteAsync(id);
 }

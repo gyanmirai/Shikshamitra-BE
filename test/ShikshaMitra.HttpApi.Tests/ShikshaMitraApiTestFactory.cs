@@ -4,8 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
@@ -25,6 +25,7 @@ using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
+using Volo.Abp.AspNetCore.Mvc.Libs;
 using Volo.Abp.Auditing;
 using Volo.Abp.Security.Claims;
 using Volo.Abp.Authorization;
@@ -94,6 +95,12 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			var teacherRole = await roleRepo.FindByNormalizedNameAsync(lookupNormalizer.NormalizeName("Teacher"));
 			SeededRoleId = teacherRole?.Id ?? Guid.Empty;
 
+			// Ensure the test auth user (TestAuthHandler.TestUserId) exists in IdentityUsers so that
+			// any app service query that JOINs with IdentityUser on requestorId/approvedBy resolves
+			// correctly. Without this, the charge requestor JOIN returns null and the charge is
+			// reported as "not found" immediately after creation.
+			await EnsureTestAuthUserExistsAsync(services, tenantId, lookupNormalizer);
+
 			var shiftRepo = services.GetRequiredService<IRepository<ShiftManagement, Guid>>();
 			var fullDayShift = await (await shiftRepo.GetQueryableAsync()).AsNoTracking()
 				.FirstOrDefaultAsync(s => s.ShiftName == "Full Day Shift");
@@ -141,6 +148,30 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 		}
 	}
 
+	/// <summary>
+	/// Inserts an <see cref="IdentityUser"/> row whose Id matches <see cref="TestAuthHandler.TestUserId"/>
+	/// if it doesn't already exist. Required because app-service queries (e.g. charge detail, salary slip)
+	/// do an INNER JOIN on <c>IdentityUsers</c> for the requestor/approver. Without this row the JOIN
+	/// produces no result and the entity appears to not exist immediately after creation.
+	/// </summary>
+	private static async Task EnsureTestAuthUserExistsAsync(
+		IServiceProvider services,
+		Guid tenantId,
+		ILookupNormalizer lookupNormalizer)
+	{
+		var userRepo = services.GetRequiredService<IIdentityUserRepository>();
+		var testUserId = Guid.Parse(TestAuthHandler.TestUserId);
+
+		var existing = await userRepo.FindAsync(testUserId);
+		if (existing != null)
+			return;
+
+		var dbContext = services.GetRequiredService<ShikshaMitraDbContext>();
+		var testUser = new Volo.Abp.Identity.IdentityUser(testUserId, TestAuthHandler.TestUserName, TestAuthHandler.TestEmail, tenantId);
+		await dbContext.Set<Volo.Abp.Identity.IdentityUser>().AddAsync(testUser);
+		await dbContext.SaveChangesAsync();
+	}
+
 	protected override void ConfigureWebHost(IWebHostBuilder builder)
 	{
 		builder.UseEnvironment("Development");
@@ -165,6 +196,10 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 		{
 			AddTestAuthentication(services);
 			services.AddTransient<StudentSeederContributor, NoOpStudentSeeder>();
+			// ABP's bundling module enables the wwwroot/libs check which blocks all
+			// API requests when npm packages are not installed. PostConfigure runs
+			// after all Configure<> calls to ensure this override wins.
+			services.PostConfigure<AbpMvcLibsOptions>(opts => opts.CheckLibs = false);
 		});
 	}
 

@@ -45,7 +45,7 @@ public class ConcessionRequestWizardController : AbpController
 	/// Replaces the fee-head selection for each listed concession type.
 	/// </summary>
 	[HttpPut("{concessionRequestId:guid}/feeHeadsData")]
-	[ProducesResponseType(200)]
+	[ProducesResponseType(204)]
 	[ProducesResponseType(401)]
 	[ProducesResponseType(404)]
 	public virtual Task SaveFeeHeadsDataAsync(
@@ -74,7 +74,7 @@ public class ConcessionRequestWizardController : AbpController
 	/// Persists discount amounts or percentages per fee head, grouped by concession type.
 	/// </summary>
 	[HttpPut("{concessionRequestId:guid}/value-entry")]
-	[ProducesResponseType(200)]
+	[ProducesResponseType(204)]
 	[ProducesResponseType(401)]
 	[ProducesResponseType(404)]
 	public virtual Task SaveValueEntryAsync(
@@ -104,7 +104,7 @@ public class ConcessionRequestWizardController : AbpController
 	/// Persists document URLs and upload statuses per concession type.
 	/// </summary>
 	[HttpPut("{concessionRequestId:guid}/document-upload")]
-	[ProducesResponseType(200)]
+	[ProducesResponseType(204)]
 	[ProducesResponseType(401)]
 	[ProducesResponseType(404)]
 	public virtual Task SaveDocumentUploadAsync(
@@ -121,7 +121,7 @@ public class ConcessionRequestWizardController : AbpController
 	/// Draft concession request. Null or empty clears any previously saved description.
 	/// </summary>
 	[HttpPut("{concessionRequestId:guid}/description")]
-	[ProducesResponseType(200)]
+	[ProducesResponseType(204)]
 	[ProducesResponseType(401)]
 	[ProducesResponseType(404)]
 	public virtual Task SaveDescriptionAsync(

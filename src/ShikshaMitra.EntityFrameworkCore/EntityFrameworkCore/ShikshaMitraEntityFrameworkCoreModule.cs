@@ -16,6 +16,9 @@ using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Students;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Uow;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
 using Volo.Abp.BackgroundJobs.EntityFrameworkCore;
@@ -31,6 +34,9 @@ using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.TenantManagement.EntityFrameworkCore;
 using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
 using Volo.Abp.Data;
+using ShikshaMitra.EntityFrameworkCore.Configurations.Standards;
+using ShikshaMitra.EntityFrameworkCore.Finance.Fees.Charges;
+using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.EntityFrameworkCore.Finance.FeeRefund;
 using ShikshaMitra.Finance.FeeRefund;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
@@ -79,7 +85,16 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
                          .Include(x => x.Documents);
             });
 
+            options.Entity<Standard>(opt =>
+            {
+                opt.DefaultWithDetailsFunc = query =>
+                    query.Include(s => s.EducationMediumStage)
+                        .ThenInclude((EducationMediumStage ms) => ms.EducationMedium)
+                        .ThenInclude((EducationMedium m) => m.EducationBoard);
+            });
+
             // Register custom repositories
+            options.AddRepository<Standard, EfCoreStandardRepository>();
             options.AddRepository<UserScopeAssignment, EfCoreUserScopeAssignmentRepository>();
             options.AddRepository<SalarySlip, EfCoreSalarySlipRepository>();
             options.AddRepository<HolidayType, EFCoreHolidayTypeRepository>();
@@ -89,6 +104,7 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
             options.AddRepository<PayrollRunReview, EfCorePayrollRunReviewRepository>();
             options.AddRepository<Student, EfCoreStudentRepository>();
             options.AddRepository<ConcessionRequest, EfCoreConcessionRequestRepository>();
+            options.AddRepository<Charge, EfCoreChargeRepository>();
             options.AddRepository<StaffAttendanceDayLock, EfCoreStaffAttendanceDayLockRepository>();
             options.AddRepository<DueFee, EfCoreDueFeeRepository>();
             options.AddRepository<FeeRefundRequest, EfCoreFeeRefundRepository>();

@@ -83,7 +83,7 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 		};
 
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{requestId}/feeHeadsData", input, JsonOptions);
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 	}
 
 	[Fact]
@@ -170,7 +170,7 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 		};
 
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{requestId}/value-entry", valueInput, JsonOptions);
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 	}
 
 	[Fact]
@@ -259,7 +259,7 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 		};
 
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{requestId}/document-upload", input, JsonOptions);
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 	}
 
 	[Fact]
@@ -302,7 +302,7 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 		var input = new SaveDescriptionDto { Description = "This is a test description for the concession request." };
 
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{requestId}/description", input, JsonOptions);
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 	}
 
 	[Fact]

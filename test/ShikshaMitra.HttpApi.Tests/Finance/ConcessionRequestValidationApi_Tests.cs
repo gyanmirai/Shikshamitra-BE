@@ -25,7 +25,7 @@ public class ConcessionRequestValidationApi_Tests : ConcessionRequestApiTestsBas
 	{
 		using var anonClient = CreateAnonymousClient();
 		var response = await anonClient.GetAsync($"{BaseUrl}?maxResultCount=10");
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 	}
 
 	[Fact]

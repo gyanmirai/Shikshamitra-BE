@@ -52,7 +52,6 @@ public class AcademicSetupsConfiguration
 			.IsUnique(); // Ensuring uniqueness
 	}
 
-	// Configure the EducationBoard entity
 	public void Configure(EntityTypeBuilder<EducationBoard> builder)
 	{
 		builder.ToTable(

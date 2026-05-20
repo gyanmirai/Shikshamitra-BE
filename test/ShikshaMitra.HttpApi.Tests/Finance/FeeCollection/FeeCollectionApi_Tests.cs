@@ -263,7 +263,7 @@ public class FeeCollectionApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Important)]
-    public async Task Should_Get_Comprehensive_Fee_Details_Returns_500_Not_Implemented()
+    public async Task Should_Get_Comprehensive_Fee_Details_Returns_501_Not_Implemented()
     {
         var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
 
@@ -271,6 +271,6 @@ public class FeeCollectionApi_Tests : ShikshaMitraApiTestBase
 
         var response = await Client.GetAsync(url);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotImplemented);
     }
 }

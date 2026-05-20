@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using System;
@@ -15,6 +16,22 @@ namespace ShikshaMitra.EntityFrameworkCore.Configurations.Standards;
 public class EfCoreStandardRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
 	: EfCoreRepository<ShikshaMitraDbContext, Standard, Guid>(dbContextProvider), IStandardRepository
 {
+	/// <summary>
+	/// Includes the full navigation chain needed by student registration:
+	/// Standard → EducationMediumStage → EducationMedium → EducationBoard.
+	/// <see cref="IgnoreAutoIncludes"/> prevents the circular auto-include cascade
+	/// (EducationMediumStage.Standards → EducationMedium.Stages → ...) that would
+	/// otherwise load the entire academic hierarchy for a single Standard lookup.
+	/// </summary>
+	public override async Task<IQueryable<Standard>> WithDetailsAsync()
+	{
+		return (await GetDbSetAsync())
+			.IgnoreAutoIncludes()
+			.Include(s => s.EducationMediumStage)
+				.ThenInclude((EducationMediumStage ms) => ms.EducationMedium)
+					.ThenInclude((EducationMedium m) => m.EducationBoard);
+	}
+
 	public async Task<Standard?> FindByNameAndEducationMediumStageIdAsync(string name, Guid educationMediumStageId)
 	{
 		DbSet<Standard> dbSet = await GetDbSetAsync();

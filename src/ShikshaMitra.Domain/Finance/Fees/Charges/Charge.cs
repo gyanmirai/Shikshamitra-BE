@@ -89,7 +89,7 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (Status != ChargeStatus.Pending)
 		{
-			throw new BusinessException("ShikshaMitra:ChargeNotPending")
+			throw new BusinessException(FinanceChargeErrorCodes.ChargeNotPending)
 				.WithData("Status", Status.ToString());
 		}
 
@@ -125,14 +125,21 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	/// <summary>
 	/// Approves the charge. Only allowed for PENDING charges.
+	/// The approver must differ from the requestor (maker-checker rule).
 	/// </summary>
 	public void Approve(Guid approvedBy, string? approvalNotes = null)
 	{
 		if (Status != ChargeStatus.Pending)
 		{
-			throw new BusinessException("ShikshaMitra:ChargeNotPending")
+			throw new BusinessException(FinanceChargeErrorCodes.ChargeNotPending)
 				.WithData("Status", Status.ToString())
 				.WithData("Message", "Only pending charges can be approved");
+		}
+
+		if (approvedBy == RequestorId)
+		{
+			throw new BusinessException(FinanceChargeErrorCodes.ChargeApproverCannotBeRequestor)
+				.WithData("Message", "The approver must differ from the charge requestor");
 		}
 
 		Status = ChargeStatus.Approved;
@@ -143,20 +150,27 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	/// <summary>
 	/// Rejects the charge with a mandatory reason. Only allowed for PENDING charges.
+	/// The rejector must differ from the requestor (maker-checker rule).
 	/// </summary>
 	public void Reject(Guid rejectedBy, string rejectionReason)
 	{
 		if (Status != ChargeStatus.Pending)
 		{
-			throw new BusinessException("ShikshaMitra:ChargeNotPending")
+			throw new BusinessException(FinanceChargeErrorCodes.ChargeNotPending)
 				.WithData("Status", Status.ToString())
 				.WithData("Message", "Only pending charges can be rejected");
 		}
 
 		if (string.IsNullOrWhiteSpace(rejectionReason) || rejectionReason.Length < 10)
 		{
-			throw new BusinessException("ShikshaMitra:InvalidRejectionReason")
+			throw new BusinessException(FinanceChargeErrorCodes.InvalidRejectionReason)
 				.WithData("Message", "Rejection reason must be at least 10 characters");
+		}
+
+		if (rejectedBy == RequestorId)
+		{
+			throw new BusinessException(FinanceChargeErrorCodes.ChargeApproverCannotBeRequestor)
+				.WithData("Message", "The rejector must differ from the charge requestor");
 		}
 
 		Status = ChargeStatus.Rejected;
@@ -172,7 +186,7 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (Status != ChargeStatus.Pending)
 		{
-			throw new BusinessException("ShikshaMitra:ChargeCannotBeDeleted")
+			throw new BusinessException(FinanceChargeErrorCodes.ChargeCannotBeDeleted)
 				.WithData("Status", Status.ToString())
 				.WithData("Message", "Only pending charges can be deleted");
 		}
@@ -182,7 +196,7 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (Amount <= 0)
 		{
-			throw new BusinessException("ShikshaMitra:InvalidChargeAmount")
+			throw new BusinessException(FinanceChargeErrorCodes.InvalidChargeAmount)
 				.WithData("Amount", Amount)
 				.WithData("Message", "Charge amount must be greater than 0");
 		}
@@ -192,7 +206,7 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (DueDate.Date < DateTime.UtcNow.Date)
 		{
-			throw new BusinessException("ShikshaMitra:InvalidDueDate")
+			throw new BusinessException(FinanceChargeErrorCodes.InvalidDueDate)
 				.WithData("DueDate", DueDate)
 				.WithData("Message", "Due date must be in the future");
 		}

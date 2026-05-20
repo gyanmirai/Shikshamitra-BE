@@ -16,8 +16,8 @@ public class ConcessionTypeDocumentBlockDto
     /// <summary>
     /// All document uploads for this concession type.
     /// Must include every REQUIRED document; OPTIONAL documents may be omitted.
+    /// An empty list is valid when the concession type has no required documents.
     /// </summary>
     [Required]
-    [MinLength(1, ErrorMessage = "At least one document entry is required per concession type.")]
     public List<DocumentUploadEntryDto> Documents { get; set; } = new();
 }

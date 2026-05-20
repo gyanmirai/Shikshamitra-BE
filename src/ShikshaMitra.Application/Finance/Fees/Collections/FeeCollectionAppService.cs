@@ -8,6 +8,7 @@ using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Fees.Charges;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
@@ -43,6 +44,7 @@ public class FeeCollectionAppService(
     IRepository<FeeCategory, Guid> feeCategoryRepository,
     IConcessionRequestRepository concessionRequestRepository,
     IRepository<ConcessionType, Guid> concessionTypeRepository,
+    IDueFeeRepository dueFeeRepository,
     ICurrentUser currentUser
 ) : ApplicationService, IFeeCollectionAppService
 {
@@ -308,9 +310,37 @@ public class FeeCollectionAppService(
                 tenantId: CurrentTenant.Id,
                 notes: input.Notes))
             .ToList();
-        await paymentMethodRecordRepository.InsertManyAsync(paymentRecords, autoSave: true);
+        await paymentMethodRecordRepository.InsertManyAsync(paymentRecords, autoSave: false);
 
-        // ── 8. Build and return response ──────────────────────────────────
+        // ── 8. Apply DueFee allocations (optional — backward-compatible) ──
+        var allAllocations = input.SelectedFeeHeads
+            .Where(sfh => sfh.Allocations is { Count: > 0 })
+            .SelectMany(sfh => sfh.Allocations!)
+            .ToList();
+
+        if (allAllocations.Count > 0)
+        {
+            var dueFeeIds = allAllocations.Select(a => a.DueFeeId).Distinct().ToList();
+            var dueFees = await dueFeeRepository.GetListAsync(df => dueFeeIds.Contains(df.Id));
+
+            if (dueFees.Count != dueFeeIds.Count)
+                throw new BusinessException(DueFeeErrorCodes.DueFeeNotFound);
+
+            var dueFeeMap = dueFees.ToDictionary(df => df.Id);
+            foreach (var alloc in allAllocations)
+            {
+                dueFeeMap[alloc.DueFeeId].ApplyPayment(alloc.Amount);
+            }
+
+            await dueFeeRepository.UpdateManyAsync(dueFees, autoSave: true);
+        }
+        else
+        {
+            // No explicit allocations — flush previous inserts without DueFee updates
+            await CurrentUnitOfWork!.SaveChangesAsync();
+        }
+
+        // ── 9. Build and return response ──────────────────────────────────
         var collectedBy = currentUser.Id ?? Guid.Empty;
 
         return new CollectFeeOutput

@@ -1,10 +1,17 @@
 ﻿using ShikshaMitra.Finance.Collections;
+using ShikshaMitra.Finance.FeeCollection;
 using System;
+using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Finance.Fees.FeeCollection;
 
+/// <summary>
+/// Represents a single monthly fee obligation for a student.
+/// All monetary mutations must go through <see cref="ApplyPayment"/> and <see cref="ApplyRefund"/>
+/// — never assign <see cref="PaidAmount"/> or <see cref="RefundedAmount"/> directly.
+/// </summary>
 public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
@@ -17,7 +24,11 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public double NetAmount { get; private set; }
 	public double PaidAmount { get; private set; }
 	public double OutstandingAmount { get; private set; }
-	public FeeStatus Status { get; set; }
+
+	/// <summary>Total amount already refunded against this obligation line.</summary>
+	public double RefundedAmount { get; private set; }
+
+	public FeeStatus Status { get; private set; }
 
 	private DueFee() { /* For ORM */ }
 
@@ -42,6 +53,47 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		NetAmount = 0;
 		PaidAmount = 0;
 		OutstandingAmount = amount;
+		RefundedAmount = 0;
 		Status = FeeStatus.Pending;
 	}
+
+	/// <summary>
+	/// Records a payment allocation against this obligation line.
+	/// Calling code is responsible for ensuring the sum of allocations matches the receipt total.
+	/// </summary>
+	/// <param name="amount">Positive amount being allocated to this line.</param>
+	public void ApplyPayment(double amount)
+	{
+		if (amount <= 0)
+			throw new BusinessException(DueFeeErrorCodes.PaymentAmountMustBePositive)
+				.WithData("Amount", amount);
+
+		PaidAmount += amount;
+		OutstandingAmount = Math.Max(0d, OriginalAmount - PaidAmount);
+		Status = OutstandingAmount <= 0d ? FeeStatus.Paid : FeeStatus.PartiallyPaid;
+	}
+
+	/// <summary>
+	/// Records a refund against this obligation line (called when a refund request is approved).
+	/// Invariant: <see cref="RefundedAmount"/> + <paramref name="amount"/> must not exceed
+	/// <see cref="PaidAmount"/>.
+	/// </summary>
+	/// <param name="amount">Positive amount being refunded from this line.</param>
+	public void ApplyRefund(double amount)
+	{
+		if (amount <= 0)
+			throw new BusinessException(DueFeeErrorCodes.RefundAmountMustBePositive)
+				.WithData("Amount", amount);
+
+		var available = PaidAmount - RefundedAmount;
+		if (amount > available)
+			throw new BusinessException(DueFeeErrorCodes.RefundExceedsPaidAmount)
+				.WithData("Requested", amount)
+				.WithData("Available", available);
+
+		RefundedAmount += amount;
+	}
+
+	/// <summary>Net refundable balance: paid minus already refunded.</summary>
+	public double RefundableBalance => Math.Max(0d, PaidAmount - RefundedAmount);
 }

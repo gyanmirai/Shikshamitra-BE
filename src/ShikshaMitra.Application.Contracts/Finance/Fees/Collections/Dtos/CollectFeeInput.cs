@@ -43,11 +43,32 @@ public class CollectFeeInput
     public List<FeePaymentDto> Payments { get; set; } = [];
 }
 
-/// <summary>A fee head being paid in this transaction.</summary>
+/// <summary>
+/// A fee head being paid in this transaction.
+/// When <see cref="Allocations"/> is provided the sum of all allocation amounts must equal
+/// <see cref="Amount"/>; each allocation points to a specific <see cref="DueFee"/> row so that
+/// monthly balances stay authoritative for future refund eligibility.
+/// </summary>
 public class SelectedFeeHeadDto
 {
     [Required]
     public Guid FeeHeadId { get; set; }
+
+    [Range(0.01, double.MaxValue)]
+    public double Amount { get; set; }
+
+    /// <summary>
+    /// Optional per-DueFee allocation breakdown.
+    /// Leave null / empty for legacy compatibility (no DueFee rows will be updated).
+    /// </summary>
+    public List<DueFeeAllocationDto>? Allocations { get; set; }
+}
+
+/// <summary>Allocates part of a fee-head payment to a specific monthly <see cref="DueFee"/> row.</summary>
+public class DueFeeAllocationDto
+{
+    [Required]
+    public Guid DueFeeId { get; set; }
 
     [Range(0.01, double.MaxValue)]
     public double Amount { get; set; }

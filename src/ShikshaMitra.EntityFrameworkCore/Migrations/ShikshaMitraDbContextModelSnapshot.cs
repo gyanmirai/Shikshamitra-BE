@@ -2923,6 +2923,104 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("Transactions", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.FeeRefund.FeeRefundRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ApproverNotes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<DateTimeOffset?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ProcessedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("RefundMethod")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<double>("TotalAmount")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("VoucherNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "VoucherNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_FeeRefundRequests_TenantId_VoucherNumber");
+
+                    b.HasIndex("StudentId", "AcademicYearId", "Status")
+                        .HasDatabaseName("IX_FeeRefundRequests_Student_Year_Status");
+
+                    b.ToTable("FeeRefundRequests", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.Charges.Charge", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3415,6 +3513,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("double precision");
 
                     b.Property<double>("PaidAmount")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("RefundedAmount")
                         .HasColumnType("double precision");
 
                     b.Property<int>("Status")
@@ -13106,6 +13207,39 @@ namespace ShikshaMitra.Migrations
                         });
 
                     b.Navigation("CategoryTags");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.FeeRefund.FeeRefundRequest", b =>
+                {
+                    b.OwnsMany("ShikshaMitra.Finance.FeeRefund.FeeRefundLine", "Lines", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("uuid");
+
+                            b1.Property<double>("Amount")
+                                .HasColumnType("double precision");
+
+                            b1.Property<Guid>("DueFeeId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid>("FeeRefundRequestId")
+                                .HasColumnType("uuid");
+
+                            b1.HasKey("Id");
+
+                            b1.HasIndex("DueFeeId")
+                                .HasDatabaseName("IX_FeeRefundLines_DueFeeId");
+
+                            b1.HasIndex("FeeRefundRequestId");
+
+                            b1.ToTable("FeeRefundLines", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("FeeRefundRequestId");
+                        });
+
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.ConcessionRequests.ConcessionFeeHeadMapping", b =>

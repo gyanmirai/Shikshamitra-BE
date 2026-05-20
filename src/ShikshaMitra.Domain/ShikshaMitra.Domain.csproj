@@ -58,7 +58,6 @@
 
     <Folder Include="HR\AttendanceAndLeaves\Import\" />
     <Folder Include="HR\Employees\Payroll\Services\" />
-    <Folder Include="HR\EventAndHolidays\Repositories\" />
     <Folder Include="HR\Payroll\PayrollStructures\Managers\" />
     <Folder Include="HR\Payroll\PayrollStructures\Services\" />
     <!-- Students – restructured to mirror HR pattern -->

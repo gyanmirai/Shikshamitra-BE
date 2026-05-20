@@ -74,6 +74,10 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 					var studentSeeder = scope.ServiceProvider.GetRequiredService<Seeders.StudentSeederContributor>();
 					await studentSeeder.SeedAsync(context);
 
+					// Seed fee-refund test data (depends on students and academic year)
+					var feeRefundSeeder = scope.ServiceProvider.GetRequiredService<Seeders.FeeRefundSeederContributor>();
+					await feeRefundSeeder.SeedAsync(context);
+
 					// Seed deterministic test-login accounts (feature-flagged; DDVS only)
 					var testLoginSeeder = scope.ServiceProvider.GetRequiredService<Seeders.TestLoginSeederContributor>();
 					await testLoginSeeder.SeedAsync(context);

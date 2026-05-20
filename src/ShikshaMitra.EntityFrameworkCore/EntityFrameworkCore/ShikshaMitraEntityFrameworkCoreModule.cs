@@ -31,6 +31,8 @@ using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.TenantManagement.EntityFrameworkCore;
 using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
 using Volo.Abp.Data;
+using ShikshaMitra.EntityFrameworkCore.Finance.FeeRefund;
+using ShikshaMitra.Finance.FeeRefund;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Concessions;
 
@@ -89,6 +91,7 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
             options.AddRepository<ConcessionRequest, EfCoreConcessionRequestRepository>();
             options.AddRepository<StaffAttendanceDayLock, EfCoreStaffAttendanceDayLockRepository>();
             options.AddRepository<DueFee, EfCoreDueFeeRepository>();
+            options.AddRepository<FeeRefundRequest, EfCoreFeeRefundRepository>();
         });
 
         // Register custom repository extensions

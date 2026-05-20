@@ -4,6 +4,7 @@ using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Accounts.Expenses;
 using ShikshaMitra.Finance.Accounts.Incomes;
 using ShikshaMitra.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.FeeRefund;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.FeeCollection;
@@ -67,4 +68,9 @@ public partial class ShikshaMitraDbContext
 	public DbSet<ChargeCollectionRecord> ChargeCollectionRecords { get; set; }
 	public DbSet<PaymentMethodRecord> PaymentMethodRecords { get; set; }
 	public DbSet<StudentFeeRecord> StudentFeeRecords { get; set; }
+
+	// ───────────────────────────────────────────────
+	// Finance — Fee Refunds
+	// ───────────────────────────────────────────────
+	public DbSet<FeeRefundRequest> FeeRefundRequests { get; set; }
 }

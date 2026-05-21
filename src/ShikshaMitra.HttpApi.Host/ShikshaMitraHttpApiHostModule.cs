@@ -18,7 +18,9 @@ using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Extensions;
 using ShikshaMitra.HealthChecks;
 using ShikshaMitra.MultiTenancy;
+using ShikshaMitra.BackgroundWorkers;
 using System;
+using Volo.Abp.BackgroundWorkers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -26,6 +28,7 @@ using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Account;
 using Volo.Abp.Account.Web;
@@ -586,5 +589,11 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			var settingManager = serviceProvider.GetService<SettingManager>();
 			settingManager?.SetGlobalAsync(EmailSettingNames.Smtp.Password, smtpPassword);
 		}
+	}
+
+	public override async Task OnApplicationInitializationAsync(ApplicationInitializationContext context)
+	{
+		OnApplicationInitialization(context);
+		await context.AddBackgroundWorkerAsync<ExamAutoCompleteWorker>();
 	}
 }

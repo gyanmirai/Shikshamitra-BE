@@ -12,7 +12,7 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Charges;
 
 [RemoteService]
 [Area("app")]
-[Route("api/app/charges")]
+[Route("api/charges")]
 [Authorize]
 public class ChargeController : AbpController
 {

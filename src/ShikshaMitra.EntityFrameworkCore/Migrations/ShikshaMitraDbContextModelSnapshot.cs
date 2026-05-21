@@ -3690,12 +3690,12 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ReceiptNumber")
-                        .IsUnique()
-                        .HasDatabaseName("UX_FeeRecordMetadatas_ReceiptNumber");
-
                     b.HasIndex("StudentId", "AcademicYearId")
                         .HasDatabaseName("IX_FeeRecordMetadatas_StudentId_AcademicYearId");
+
+                    b.HasIndex("TenantId", "ReceiptNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_FeeRecordMetadatas_TenantId_ReceiptNumber");
 
                     b.ToTable("FeeRecordMetadatas", (string)null);
                 });
@@ -3893,9 +3893,9 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("FeeCollectionTransactionId")
                         .HasDatabaseName("IX_FeePaymentReceipts_FeeCollectionTransactionId");
 
-                    b.HasIndex("ReceiptNumber")
+                    b.HasIndex("TenantId", "ReceiptNumber")
                         .IsUnique()
-                        .HasDatabaseName("UX_FeePaymentReceipts_ReceiptNumber");
+                        .HasDatabaseName("UX_FeePaymentReceipts_TenantId_ReceiptNumber");
 
                     b.HasIndex("TenantId", "AcademicYearId", "BoardId", "EducationMediumId", "ReceiptKind")
                         .HasDatabaseName("IX_FeePaymentReceipts_ListFilter");

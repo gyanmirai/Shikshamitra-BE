@@ -45,9 +45,9 @@ public class FeePaymentReceiptConfiguration : IEntityTypeConfiguration<FeePaymen
             .IsRequired();
 
         // ── Unique receipt number ─────────────────────────────────────────────
-        builder.HasIndex(x => x.ReceiptNumber)
+        builder.HasIndex(x => new { x.TenantId, x.ReceiptNumber })
             .IsUnique()
-            .HasDatabaseName("UX_FeePaymentReceipts_ReceiptNumber");
+            .HasDatabaseName("UX_FeePaymentReceipts_TenantId_ReceiptNumber");
 
         // ── Parent transaction ────────────────────────────────────────────────
         builder.HasIndex(x => x.FeeCollectionTransactionId)

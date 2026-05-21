@@ -18,9 +18,9 @@ public class FeeRecordMetadataConfiguration : IEntityTypeConfiguration<FeeRecord
         builder.Property(x => x.Remarks)
             .HasMaxLength(1000);
 
-        builder.HasIndex(x => x.ReceiptNumber)
+        builder.HasIndex(x => new { x.TenantId, x.ReceiptNumber })
             .IsUnique()
-            .HasDatabaseName("UX_FeeRecordMetadatas_ReceiptNumber");
+            .HasDatabaseName("UX_FeeRecordMetadatas_TenantId_ReceiptNumber");
 
         builder.HasIndex(x => new { x.StudentId, x.AcademicYearId })
             .HasDatabaseName("IX_FeeRecordMetadatas_StudentId_AcademicYearId");

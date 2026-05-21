@@ -1,0 +1,132 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using ShikshaMitra.Finance.FeeCollection;
+using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Receipts;
+using Volo.Abp.Domain.Services;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Timing;
+
+namespace ShikshaMitra.Finance.Fees.Receipts;
+
+/// <summary>
+/// Domain manager responsible for creating <see cref="FeePaymentReceipt"/> aggregates.
+/// <para>
+/// One receipt is created per <see cref="FeeReceiptScope"/> per collection event.
+/// Fee lines and charge lines always produce separate receipt documents.
+/// </para>
+/// </summary>
+public class FeeReceiptManager(
+    IFeePaymentReceiptRepository receiptRepository,
+    IClock clock,
+    ICurrentTenant currentTenant
+) : DomainService
+{
+    /// <summary>
+    /// Generates a unique receipt number using a kind-specific prefix and a
+    /// zero-padded sequence derived from the current receipt count.
+    /// <list type="bullet">
+    ///   <item><see cref="FeeReceiptKind.FinalFee"/> → <c>FIN-{yyyy}-{nnnnnn}</c></item>
+    ///   <item><see cref="FeeReceiptKind.ProvisionalFee"/> → <c>KFE-{yyyy}-{nnnnnn}</c></item>
+    ///   <item><see cref="FeeReceiptKind.ProvisionalCharge"/> → <c>KCH-{yyyy}-{nnnnnn}</c></item>
+    /// </list>
+    /// </summary>
+    public async Task<string> GenerateReceiptNumberAsync(FeeReceiptKind kind)
+    {
+        var year = clock.Now.Year;
+        var count = await receiptRepository.GetCountByKindAsync(kind);
+        var sequence = (count + 1).ToString("D6");
+        var prefix = kind switch
+        {
+            FeeReceiptKind.FinalFee          => "FIN",
+            FeeReceiptKind.ProvisionalFee    => "KFE",
+            FeeReceiptKind.ProvisionalCharge => "KCH",
+            _                               => "REC",
+        };
+        return $"{prefix}-{year}-{sequence}";
+    }
+
+    /// <summary>
+    /// Creates a <see cref="FeePaymentReceipt"/> for the given scope and payment context.
+    /// The caller is responsible for persisting the returned instance.
+    /// </summary>
+    public FeePaymentReceipt CreateReceipt(
+        Guid feeCollectionTransactionId,
+        Guid studentId,
+        Guid academicYearId,
+        Guid boardId,
+        Guid educationMediumId,
+        FeeReceiptScope scope,
+        FeeReceiptKind kind,
+        double totalPaidAmount,
+        string receiptNumber,
+        string? remarks = null,
+        Guid? receiptBookId = null)
+    {
+        var verificationStatus = kind == FeeReceiptKind.ProvisionalFee
+            ? FeeReceiptVerificationStatus.PendingVerification
+            : FeeReceiptVerificationStatus.NotApplicable;
+
+        return new FeePaymentReceipt(GuidGenerator.Create())
+        {
+            TenantId                   = currentTenant.Id,
+            FeeCollectionTransactionId = feeCollectionTransactionId,
+            StudentId                  = studentId,
+            AcademicYearId             = academicYearId,
+            BoardId                    = boardId,
+            EducationMediumId          = educationMediumId,
+            ReceiptScope               = scope,
+            ReceiptKind                = kind,
+            VerificationStatus         = verificationStatus,
+            TotalPaidAmount            = totalPaidAmount,
+            ReceiptNumber              = receiptNumber,
+            ReceiptDate                = DateOnly.FromDateTime(clock.Now.Date),
+            Remarks                    = remarks,
+            ReceiptBookId              = receiptBookId,
+        };
+    }
+
+    /// <summary>
+    /// Creates 1–2 receipts for a single collection transaction:
+    /// <list type="bullet">
+    ///   <item>Fee lines present → one fee receipt (FinalFee or ProvisionalFee)</item>
+    ///   <item>Charge lines present → one ProvisionalCharge receipt</item>
+    /// </list>
+    /// Both receipts are returned; the caller inserts them.
+    /// </summary>
+    public async Task<List<FeePaymentReceipt>> CreateReceiptsForTransactionAsync(
+        Guid feeCollectionTransactionId,
+        Guid studentId,
+        Guid academicYearId,
+        Guid boardId,
+        Guid educationMediumId,
+        double feeLinesTotal,
+        double chargeLinesTotal,
+        IEnumerable<PaymentMethodEnum> paymentMethods,
+        string? remarks = null)
+    {
+        var receipts = new List<FeePaymentReceipt>();
+        var methods = paymentMethods.ToList();
+
+        if (feeLinesTotal > 0)
+        {
+            var kind = FeeReceiptPaymentPolicy.DetermineFeeReceiptKind(methods);
+            var number = await GenerateReceiptNumberAsync(kind);
+            receipts.Add(CreateReceipt(
+                feeCollectionTransactionId, studentId, academicYearId, boardId, educationMediumId,
+                FeeReceiptScope.Fee, kind, feeLinesTotal, number, remarks));
+        }
+
+        if (chargeLinesTotal > 0)
+        {
+            var number = await GenerateReceiptNumberAsync(FeeReceiptKind.ProvisionalCharge);
+            receipts.Add(CreateReceipt(
+                feeCollectionTransactionId, studentId, academicYearId, boardId, educationMediumId,
+                FeeReceiptScope.Charge, FeeReceiptKind.ProvisionalCharge, chargeLinesTotal, number, remarks));
+        }
+
+        return receipts;
+    }
+}

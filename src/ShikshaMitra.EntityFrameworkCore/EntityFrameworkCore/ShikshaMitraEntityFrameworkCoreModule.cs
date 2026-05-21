@@ -39,6 +39,8 @@ using ShikshaMitra.EntityFrameworkCore.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.EntityFrameworkCore.Finance.FeeRefund;
 using ShikshaMitra.Finance.FeeRefund;
+using ShikshaMitra.EntityFrameworkCore.Finance.Fees.Receipts;
+using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Concessions;
 
@@ -108,6 +110,7 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
             options.AddRepository<StaffAttendanceDayLock, EfCoreStaffAttendanceDayLockRepository>();
             options.AddRepository<DueFee, EfCoreDueFeeRepository>();
             options.AddRepository<FeeRefundRequest, EfCoreFeeRefundRepository>();
+            options.AddRepository<FeePaymentReceipt, EfCoreFeePaymentReceiptRepository>();
         });
 
         // Register custom repository extensions

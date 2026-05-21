@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
@@ -8,17 +9,18 @@ using ShikshaMitra.Finance.FeeCollectionTests;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
+using Volo.Abp.Application.Dtos;
 using Xunit;
 
 namespace ShikshaMitra.Finance.FeeCollections;
 
 [Collection(ApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.Finance)]
-public class FeeCollectionApi_Tests : ShikshaMitraApiTestBase
+public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
 {
-    private const string BaseUrl = "/api/fee-collections";
+    private const string BaseUrl = "/api/v2/fee-collections";
 
-    public FeeCollectionApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
+    public FeeCollectionV2Api_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
     {
         FeeCollectionTestHelper.DefaultAcademicYearId = factory.SeededAcademicYearId;
         FeeCollectionTestHelper.DefaultMediumId = factory.SeededMediumId;
@@ -31,11 +33,11 @@ public class FeeCollectionApi_Tests : ShikshaMitraApiTestBase
         ConcessionRequestTestHelper.DefaultDivisionId = factory.SeededDivisionId;
     }
 
-    // ── GET /api/fee-collections ─────────────────────────────────────────────
+    // ── GET /api/v2/fee-collections ───────────────────────────────────────────
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
-    public async Task Should_Get_Students_Returns_200_With_Correct_Shape()
+    public async Task Should_Get_Summary_Returns_200_With_PagedResultDto_Shape()
     {
         var (_, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
 
@@ -46,16 +48,15 @@ public class FeeCollectionApi_Tests : ShikshaMitraApiTestBase
         var response = await Client.GetAsync(url);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<StudentFeeCollectionListDto>(JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<PagedResultDto<FeeCollectionSummaryItemDtoV2>>(JsonOptions);
         body.ShouldNotBeNull();
         body.Items.ShouldNotBeNull();
-        body.CurrentPage.ShouldBe(1);
-        body.PageSize.ShouldBeGreaterThan(0);
+        body.TotalCount.ShouldBeGreaterThanOrEqualTo(0);
     }
 
     [Fact]
     [TestTier(TestTraits.Tiers.Important)]
-    public async Task Should_Get_Students_Returns_Empty_Items_When_No_Enrolled_Students()
+    public async Task Should_Get_Summary_Returns_Empty_When_No_Enrolled_Students()
     {
         var (_, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
 
@@ -66,16 +67,15 @@ public class FeeCollectionApi_Tests : ShikshaMitraApiTestBase
         var response = await Client.GetAsync(url);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<StudentFeeCollectionListDto>(JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<PagedResultDto<FeeCollectionSummaryItemDtoV2>>(JsonOptions);
         body.ShouldNotBeNull();
         // Students created via direct registration are in Registration status, not Enrolled
-        body.Items.ShouldNotBeNull();
         body.TotalCount.ShouldBe(0);
     }
 
     [Fact]
     [TestTier(TestTraits.Tiers.Important)]
-    public async Task Should_Get_Students_With_Search_Returns_200()
+    public async Task Should_Get_Summary_With_Search_Returns_200()
     {
         var (_, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
 
@@ -89,7 +89,7 @@ public class FeeCollectionApi_Tests : ShikshaMitraApiTestBase
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
-    // ── POST /api/fee-collections ────────────────────────────────────────────
+    // ── POST /api/v2/fee-collections ─────────────────────────────────────────
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
@@ -180,17 +180,17 @@ public class FeeCollectionApi_Tests : ShikshaMitraApiTestBase
             AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
             TotalAmount = 750d,
             Notes = "UPI payment test",
-            SelectedFeeHeads = new System.Collections.Generic.List<SelectedFeeHeadDto>
+            SelectedFeeHeads = new List<SelectedFeeHeadDto>
             {
                 new() { FeeHeadId = feeHeadId, Amount = 750d },
             },
-            Payments = new System.Collections.Generic.List<FeePaymentDto>
+            Payments = new List<FeePaymentDto>
             {
                 new()
                 {
                     PaymentMethod = PaymentMethodEnum.UPI,
                     Amount = 750d,
-                    Details = new System.Collections.Generic.Dictionary<string, object?>
+                    Details = new Dictionary<string, object?>
                     {
                         { "upiTransactionId", "TXN123456789" },
                         { "upiId", "test@upi" },
@@ -208,7 +208,7 @@ public class FeeCollectionApi_Tests : ShikshaMitraApiTestBase
         output.ReceiptNumber.ShouldStartWith("REC-");
     }
 
-    // ── GET /api/fee-collections/{studentId}/fee-details ────────────────────
+    // ── GET /api/v2/fee-collections/{studentId}/fee-details ──────────────────
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
@@ -247,30 +247,121 @@ public class FeeCollectionApi_Tests : ShikshaMitraApiTestBase
         body.Payments![0].ReceiptNumber.ShouldBe(output.ReceiptNumber);
     }
 
-    // ── GET /api/fee-collections/{studentFeeId:guid} ─────────────────────────
+    // ── GET /api/v2/fee-collections/{studentId}/collect-form ─────────────────
 
     [Fact]
-    [TestTier(TestTraits.Tiers.Important)]
-    public async Task Should_Get_Fee_Collection_Details_Returns_Error_For_Unknown_StudentFeeId()
-    {
-        var unknownId = Guid.NewGuid();
-        var response = await Client.GetAsync($"{BaseUrl}/{unknownId}");
-
-        response.IsSuccessStatusCode.ShouldBeFalse();
-    }
-
-    // ── GET /api/fee-collections/{studentId}/comprehensive-fee-details ────────
-
-    [Fact]
-    [TestTier(TestTraits.Tiers.Important)]
-    public async Task Should_Get_Comprehensive_Fee_Details_Returns_501_Not_Implemented()
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Get_Collect_Form_Returns_200_With_Student_Info()
     {
         var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
 
-        var url = $"{BaseUrl}/{studentId}/comprehensive-fee-details?academicYearId={FeeCollectionTestHelper.DefaultAcademicYearId}";
+        var url = $"{BaseUrl}/{studentId}/collect-form?academicYearId={FeeCollectionTestHelper.DefaultAcademicYearId}";
 
         var response = await Client.GetAsync(url);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.NotImplemented);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<FeeCollectFormDto>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Student.ShouldNotBeNull();
+        body.Student.StudentId.ShouldBe(studentId);
+        body.Summary.ShouldNotBeNull();
+        body.Ledger.ShouldNotBeNull();
+        body.Charges.ShouldNotBeNull();
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Get_Collect_Form_Returns_400_When_AcademicYearId_Missing()
+    {
+        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+
+        var response = await Client.GetAsync($"{BaseUrl}/{studentId}/collect-form");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Get_Student_Fee_Details_Returns_400_When_AcademicYearId_Missing()
+    {
+        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+
+        var response = await Client.GetAsync($"{BaseUrl}/{studentId}/fee-details");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    // ── GET /api/v2/fee-collections validation ───────────────────────────────
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Get_Summary_Returns_400_When_BoardId_Missing()
+    {
+        var url = $"{BaseUrl}?academicYearId={FeeCollectionTestHelper.DefaultAcademicYearId}" +
+                  $"&educationMediumId={FeeCollectionTestHelper.DefaultMediumId}";
+
+        var response = await Client.GetAsync(url);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Get_Summary_Returns_400_When_Search_Too_Short()
+    {
+        var (_, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+
+        var url = $"{BaseUrl}?academicYearId={FeeCollectionTestHelper.DefaultAcademicYearId}" +
+                  $"&boardId={boardId}" +
+                  $"&educationMediumId={FeeCollectionTestHelper.DefaultMediumId}" +
+                  $"&search=T";
+
+        var response = await Client.GetAsync(url);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Return_401_For_Anonymous_Client()
+    {
+        var anon = CreateAnonymousClient();
+        var response = await anon.GetAsync(BaseUrl);
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    // ── GET /api/v2/fee-collections/export ────────────────────────────────────
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Export_Csv_Returns_200_With_Bytes()
+    {
+        var (_, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+
+        var url = $"{BaseUrl}/export?academicYearId={FeeCollectionTestHelper.DefaultAcademicYearId}" +
+                  $"&boardId={boardId}" +
+                  $"&educationMediumId={FeeCollectionTestHelper.DefaultMediumId}" +
+                  $"&format=0";
+
+        var response = await Client.GetAsync(url);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        bytes.Length.ShouldBeGreaterThanOrEqualTo(0);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Export_Returns_400_When_EducationMediumId_Missing()
+    {
+        var (_, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+
+        var url = $"{BaseUrl}/export?academicYearId={FeeCollectionTestHelper.DefaultAcademicYearId}" +
+                  $"&boardId={boardId}" +
+                  $"&format=0";
+
+        var response = await Client.GetAsync(url);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 }

@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -77,6 +77,10 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 					// Seed fee-refund test data (depends on students and academic year)
 					var feeRefundSeeder = scope.ServiceProvider.GetRequiredService<Seeders.FeeRefundSeederContributor>();
 					await feeRefundSeeder.SeedAsync(context);
+
+					// Seed fee-collection test data (depends on students and academic year)
+					var feeCollectionSeeder = scope.ServiceProvider.GetRequiredService<Seeders.FeeCollectionSeederContributor>();
+					await feeCollectionSeeder.SeedAsync(context);
 
 					// Seed deterministic test-login accounts (feature-flagged; DDVS only)
 					var testLoginSeeder = scope.ServiceProvider.GetRequiredService<Seeders.TestLoginSeederContributor>();

@@ -18,7 +18,7 @@ public static class FeeCollectionTestHelper
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    private const string FeeCollectionUrl = "/api/fee-collections";
+    private const string FeeCollectionUrl = "/api/v2/fee-collections";
 
     // ── Defaults set by the test class ctor ──────────────────────────────────
 

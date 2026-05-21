@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Syllabus;
 using ShikshaMitra.Common;
@@ -10,8 +11,8 @@ using Volo.Abp;
 
 namespace ShikshaMitra.Controllers.Academic.Syllabus;
 
-[RemoteService]
-[Area("Academic")]
+[Authorize]
+[ApiController]
 [Route("api/academic/curriculum/chapters")]
 public class ChapterController(IChapterAppService chapterAppService) : AbpController
 {

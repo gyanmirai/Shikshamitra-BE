@@ -14,7 +14,7 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20260521093824_v1")]
+    [Migration("20260521110227_v1")]
     partial class v1
     {
         /// <inheritdoc />

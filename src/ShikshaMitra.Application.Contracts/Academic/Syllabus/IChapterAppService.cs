@@ -3,11 +3,10 @@ using System.Threading.Tasks;
 using System;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Common;
-using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Academic.Syllabus;
 
-public interface IChapterAppService : IApplicationService
+public interface IChapterAppService
 {
 	Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, CreateChapterDto input);
 	Task<List<ChapterDto>> GetByStandardAndSubjectAsync(Guid standardId, Guid subjectId);

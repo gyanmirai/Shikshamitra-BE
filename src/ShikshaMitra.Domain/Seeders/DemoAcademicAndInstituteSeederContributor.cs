@@ -78,10 +78,15 @@ public class DemoAcademicAndInstituteSeederContributor : BaseSeederContributor
 
 	public override async Task SeedAsync(DataSeedContext context)
 	{
+		// Each section is independently guarded so a partial previous run is handled correctly.
 		await SeedInstituteRoomsAsync();
 		await SeedAcademicReferenceDataAsync();
 		await CurrentUnitOfWork.SaveChangesAsync();
 	}
+
+	/// <summary>Returns true when the given medium already has every expected assignment type.</summary>
+	private async Task<bool> IsAcademicReferenceDataSeededAsync(Guid mediumId)
+		=> await _assignmentTypeRepository.AnyAsync(x => x.AcademicMediumId == mediumId);
 
 	private async Task SeedInstituteRoomsAsync()
 	{
@@ -253,11 +258,18 @@ public class DemoAcademicAndInstituteSeederContributor : BaseSeederContributor
 		var mediums = await _educationMediumRepository.GetListAsync();
 		foreach (var medium in mediums)
 		{
+			// Skip this medium if reference data was already fully seeded (idempotency guard).
+			if (await IsAcademicReferenceDataSeededAsync(medium.Id))
+				continue;
+
 			await EnsureSubjectsAsync(medium.Id, medium.Name);
 			await EnsureExamTypesAsync(medium.Id);
 			await EnsureHomeworkTypesAsync(medium.Id);
 			await EnsureAssignmentTypesAsync(medium.Id);
 			await EnsureHomeworkAssignmentTypesAsync(medium.Id);
+
+			// Flush after each medium so the next medium's idempotency check sees committed rows.
+			await CurrentUnitOfWork.SaveChangesAsync();
 		}
 	}
 
@@ -320,12 +332,10 @@ public class DemoAcademicAndInstituteSeederContributor : BaseSeederContributor
 		foreach (var name in new[] { "Written Work", "Reading", "Worksheet", "Practice Set", "Revision" })
 		{
 			if (await _homeworkTypeRepository.FindByNameAndAcademicMediumIdAsync(name, mediumId) != null)
-			{
 				continue;
-			}
 
 			var homeworkType = await _homeworkTypeManager.CreateAsync(mediumId, name);
-			await _homeworkTypeRepository.InsertAsync(homeworkType, autoSave: false);
+			await _homeworkTypeRepository.InsertAsync(homeworkType, autoSave: true);
 		}
 	}
 
@@ -334,12 +344,10 @@ public class DemoAcademicAndInstituteSeederContributor : BaseSeederContributor
 		foreach (var name in new[] { "Project", "Research", "Case Study", "Presentation", "Lab Record" })
 		{
 			if (await _assignmentTypeRepository.FindByNameAndAcademicMediumIdAsync(name, mediumId) != null)
-			{
 				continue;
-			}
 
 			var assignmentType = await _assignmentTypeManager.CreateAsync(mediumId, name);
-			await _assignmentTypeRepository.InsertAsync(assignmentType, autoSave: false);
+			await _assignmentTypeRepository.InsertAsync(assignmentType, autoSave: true);
 		}
 	}
 
@@ -358,16 +366,14 @@ public class DemoAcademicAndInstituteSeederContributor : BaseSeederContributor
 			if (await _homeworkAssignmentTypeRepository.AnyAsync(x =>
 				    x.AcademicMediumId == mediumId &&
 				    x.Name == name))
-			{
 				continue;
-			}
 
 			await _homeworkAssignmentTypeRepository.InsertAsync(
 				new HomeworkAssignmentType(GuidGenerator.Create(), name, type, mediumId, CurrentTenant.Id)
 				{
 					Name = name
 				},
-				autoSave: false);
+				autoSave: true);
 		}
 	}
 

@@ -24,6 +24,7 @@ public static class FeeRefundTestHelper
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private const string FeeRefundUrl = "/api/fee-refunds";
+    private const string FeeCollectionUrl = "/api/v2/fee-collections";
 
     // ── Defaults set by test class ctor ──────────────────────────────────────
 
@@ -51,7 +52,7 @@ public static class FeeRefundTestHelper
             // then fall back to zero-allocation (backward-compat path)
             var input = FeeCollectionTestHelper.BuildCollectFeeInput(
                 studentId, DefaultAcademicYearId, feeHeadId, feeAmount);
-            var resp = await client.PostAsJsonAsync("/api/fee-collections", input, JsonOptions);
+            var resp = await client.PostAsJsonAsync(FeeCollectionUrl, input, JsonOptions);
             resp.EnsureSuccessStatusCode();
             return (studentId, Guid.Empty);
         }
@@ -81,7 +82,7 @@ public static class FeeRefundTestHelper
             },
         };
 
-        var collectResp = await client.PostAsJsonAsync("/api/fee-collections", collectInput, JsonOptions);
+        var collectResp = await client.PostAsJsonAsync(FeeCollectionUrl, collectInput, JsonOptions);
         collectResp.EnsureSuccessStatusCode();
 
         return (studentId, dueFeeId);

@@ -19,118 +19,79 @@ public class ChapterAppService(
 {
 	public async Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, CreateChapterDto createChapterDto)
 	{
-		try
-		{
-			var assignedSubject = await assignedSubjectRepository.FindAsync(
-					a => a.StandardId == standardId && a.SubjectId == subjectId
-				) ?? throw new UserFriendlyException("Subject not assigned to this class");
+		var assignedSubject = await assignedSubjectRepository.FindAsync(
+				a => a.StandardId == standardId && a.SubjectId == subjectId
+			) ?? throw new BusinessException("Academic:Chapter:001", "Subject not assigned to this class");
 
-			assignedSubject.AddChapter(
-				guidGenerator.Create(),
-				createChapterDto.ChapterNo,
-				createChapterDto.ChapterName,
-				createChapterDto.StartDate,
-				createChapterDto.EndDate,
-				createChapterDto.Documents,
-				createChapterDto.Description
-			);
+		assignedSubject.AddChapter(
+			guidGenerator.Create(),
+			createChapterDto.ChapterNo,
+			createChapterDto.ChapterName,
+			createChapterDto.StartDate,
+			createChapterDto.EndDate,
+			createChapterDto.Documents ?? [],
+			createChapterDto.Description
+		);
 
-			await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
+		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
 
-			return new ApiSuccessResponseDto { Message = "Chapter created successfully." };
-		}
-		catch (UserFriendlyException)
-		{
-			throw;
-		}
-		catch (Exception ex)
-		{
-			throw new UserFriendlyException("Error creating chapter", ex.Message);
-		}
+		return new ApiSuccessResponseDto { Message = "Chapter created successfully." };
 	}
 
 	public async Task<List<ChapterDto>> GetByStandardAndSubjectAsync(Guid standardId, Guid subjectId)
 	{
-		try
-		{
-			var assignedSubject = await assignedSubjectRepository.FindAsync(
-					a => a.StandardId == standardId && a.SubjectId == subjectId,
-					includeDetails: true
-				) ?? throw new UserFriendlyException("Subject not assigned to this class");
+		var assignedSubject = await assignedSubjectRepository.FindAsync(
+				a => a.StandardId == standardId && a.SubjectId == subjectId,
+				includeDetails: true
+			) ?? throw new BusinessException("Academic:Chapter:002", "Subject not assigned to this class");
 
-			var chapters = assignedSubject.Chapters.OrderBy(c => c.ChapterNumber).ToList();
-			var dtos = ObjectMapper.Map<List<AssignedSubjectChapter>, List<ChapterDto>>(chapters);
-			foreach (var dto in dtos)
-			{
-				dto.StandardId = assignedSubject.StandardId;
-				dto.SubjectId = assignedSubject.SubjectId;
-			}
-			return dtos;
-		}
-		catch (UserFriendlyException)
+		var chapters = assignedSubject.Chapters.OrderBy(c => c.ChapterNumber).ToList();
+		var dtos = ObjectMapper.Map<List<AssignedSubjectChapter>, List<ChapterDto>>(chapters);
+		foreach (var dto in dtos)
 		{
-			throw;
+			dto.StandardId = assignedSubject.StandardId;
+			dto.SubjectId = assignedSubject.SubjectId;
 		}
-		catch (Exception ex)
-		{
-			throw new UserFriendlyException("Error retrieving chapters", ex.Message);
-		}
+		return dtos;
 	}
 
 	public async Task<ChapterDto> UpdateAsync(Guid id, CreateUpdateChapterDto updateChapterDto)
 	{
-		try
-		{
-			var assignedSubject =
-				await assignedSubjectRepository.FindAsync(
-					chapter => chapter.Chapters.Any(c => c.Id == id),
-					includeDetails: true
-				)
-				?? throw new UserFriendlyException("Chapter not found");
-			var chapter = assignedSubject.Chapters.First(c => c.Id == id);
-			chapter.UpdateDetails(
-				updateChapterDto.ChapterNumber,
-				updateChapterDto.ChapterName,
-				updateChapterDto.Description
-			);
-			chapter.UpdateDates(
-				updateChapterDto.ChapterStartTime,
-				updateChapterDto.ChapterEndTime
-			);
-			await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
+		var assignedSubject =
+			await assignedSubjectRepository.FindAsync(
+				chapter => chapter.Chapters.Any(c => c.Id == id),
+				includeDetails: true
+			)
+			?? throw new BusinessException("Academic:Chapter:003", "Chapter not found");
 
-			var dto = ObjectMapper.Map<AssignedSubjectChapter, ChapterDto>(chapter);
-			dto.StandardId = assignedSubject.StandardId;
-			dto.SubjectId = assignedSubject.SubjectId;
-			return dto;
-		}
-		catch (UserFriendlyException ex)
-		{
-			throw;
-		}
-		catch (Exception ex)
-		{
-			throw new UserFriendlyException("Error updating chapter", ex.Message);
-		}
+		var chapter = assignedSubject.Chapters.First(c => c.Id == id);
+		chapter.UpdateDetails(
+			updateChapterDto.ChapterNumber,
+			updateChapterDto.ChapterName,
+			updateChapterDto.Description
+		);
+		chapter.UpdateDates(
+			updateChapterDto.ChapterStartTime,
+			updateChapterDto.ChapterEndTime
+		);
+		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
+
+		var dto = ObjectMapper.Map<AssignedSubjectChapter, ChapterDto>(chapter);
+		dto.StandardId = assignedSubject.StandardId;
+		dto.SubjectId = assignedSubject.SubjectId;
+		return dto;
 	}
 
 	public async Task DeleteAsync(Guid id)
 	{
-		try
-		{
-			var assignedSubject =
-				await assignedSubjectRepository.FindAsync(
-					chapter => chapter.Chapters.Any(c => c.Id == id),
-					includeDetails: true
-				)
-				?? throw new UserFriendlyException("Chapter not found");
+		var assignedSubject =
+			await assignedSubjectRepository.FindAsync(
+				chapter => chapter.Chapters.Any(c => c.Id == id),
+				includeDetails: true
+			)
+			?? throw new BusinessException("Academic:Chapter:003", "Chapter not found");
 
-			assignedSubject.RemoveChapter(id);
-			await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
-		}
-		catch (Exception ex)
-		{
-			throw new UserFriendlyException("Error deleting chapter", ex.Message);
-		}
+		assignedSubject.RemoveChapter(id);
+		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
 	}
 }

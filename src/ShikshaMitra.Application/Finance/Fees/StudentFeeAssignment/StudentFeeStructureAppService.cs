@@ -24,6 +24,7 @@ public class StudentFeeStructureAppService(
 	IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
 	IRepository<DueFee, Guid> dueFeeRepository,
+	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	DueFeeManager dueFeeManager
 ) : ApplicationService, IStudentFeeStructureAppService
 {
@@ -43,6 +44,15 @@ public class StudentFeeStructureAppService(
 		// assign the fee structure to the student
 		student.AssignFeeStructure(input.StandardFeeStructureId);
 
+		// ── Create StudentFeeStructure record for fee collection module lookups ──
+		await studentFeeStructureRepository.InsertAsync(
+			new StudentFeeStructure(
+				id: GuidGenerator.Create(),
+				tenantId: CurrentTenant.Id,
+				studentId: student.Id,
+				feeStructureStandardId: feeStructure.Id),
+			autoSave: false);
+
 		// ── Load FeeStructureMetadata to reach the AcademicYear ──────────────
 		var metadata = await feeStructureMetadataRepository.GetAsync(feeStructure.FeeStructureMetadataId);
 
@@ -60,7 +70,7 @@ public class StudentFeeStructureAppService(
 		foreach (var dueFee in dueFees)
 			await dueFeeRepository.InsertAsync(dueFee, autoSave: false);
 
-		// ── Single atomic commit: student assignment + all due fees ───────────
+		// ── Single atomic commit: student assignment + StudentFeeStructure + all due fees ─
 		await CurrentUnitOfWork.SaveChangesAsync();
 	}
 

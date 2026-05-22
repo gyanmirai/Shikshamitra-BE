@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Students;
@@ -62,7 +64,43 @@ public class StudentFeeStructureAppService(
 		await CurrentUnitOfWork.SaveChangesAsync();
 	}
 
-	//public async Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId)
-	//{
-	//}
+	public async Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId)
+	{
+		var student = await studentRepository.GetAsync(studentId)
+			?? throw new BusinessException("Student with given id does not exist.");
+
+		if (student.FeeStructureId == null)
+			throw new BusinessException("No fee structure has been assigned to this student.");
+
+		var feeStructure = await feeStructureRepository.GetAsync(student.FeeStructureId.Value)
+			?? throw new BusinessException("Assigned fee structure could not be found.");
+
+		// Determine which fee heads have due-fee records (i.e., were selected during assignment)
+		var selectedFeeHeadIds = (await dueFeeRepository.GetListAsync(d => d.StudentId == studentId))
+			.Select(d => d.FeeHeadId)
+			.ToHashSet();
+
+		var feeHeads = feeStructure.FeeStructureDetails
+			.Select(detail => new StudentFeeHeadDto
+			{
+				FeeHeadId = detail.FeeHeadId,
+				FeeHeadName = detail.FeeHead?.Name,
+				CategoryName = detail.FeeHead?.FeeCategory?.Name,
+				Amount = (decimal)detail.Amount,
+				IsOptional = detail.IsOptional,
+				IsOneTime = detail.IsOneTime,
+				IsSelected = !detail.IsOptional || selectedFeeHeadIds.Contains(detail.FeeHeadId)
+			})
+			.ToList();
+
+		return new StudentFeeStructureResponseDto
+		{
+			StudentFeeStructureId = feeStructure.Id,
+			StandardFeeStructureId = feeStructure.Id,
+			StudentId = studentId,
+			StandardId = feeStructure.StandardId,
+			StructureName = feeStructure.Name,
+			FeeHeads = feeHeads
+		};
+	}
 }

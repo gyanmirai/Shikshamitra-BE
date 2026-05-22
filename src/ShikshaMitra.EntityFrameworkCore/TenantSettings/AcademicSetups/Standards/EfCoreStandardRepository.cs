@@ -22,11 +22,14 @@ public class EfCoreStandardRepository(IDbContextProvider<ShikshaMitraDbContext> 
 	/// <see cref="IgnoreAutoIncludes"/> prevents the circular auto-include cascade
 	/// (EducationMediumStage.Standards → EducationMedium.Stages → ...) that would
 	/// otherwise load the entire academic hierarchy for a single Standard lookup.
+	/// Divisions and Shift are suppressed by IgnoreAutoIncludes so they are included explicitly.
 	/// </summary>
 	public override async Task<IQueryable<Standard>> WithDetailsAsync()
 	{
 		return (await GetDbSetAsync())
 			.IgnoreAutoIncludes()
+			.Include(s => s.Divisions)
+			.Include(s => s.Shift)
 			.Include(s => s.EducationMediumStage)
 				.ThenInclude((EducationMediumStage ms) => ms.EducationMedium)
 					.ThenInclude((EducationMedium m) => m.EducationBoard);

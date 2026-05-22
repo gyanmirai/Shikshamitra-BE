@@ -90,10 +90,13 @@ public class PaymentMethodRecord : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		var mismatch = paymentMethod switch
 		{
-			PaymentMethodEnum.Cheque => paymentDetails is not ChequeDetails,
-			PaymentMethodEnum.DemandDraft => paymentDetails is not DemandDraftDetails,
-			PaymentMethodEnum.UPI => paymentDetails is not UpiDetails,
-			PaymentMethodEnum.BankTransfer => paymentDetails is not BankTransferDetails,
+			PaymentMethodEnum.Cheque              => paymentDetails is not ChequeDetails,
+			PaymentMethodEnum.DemandDraft         => paymentDetails is not DemandDraftDetails,
+			PaymentMethodEnum.UPI                 => paymentDetails is not UpiDetails,
+			PaymentMethodEnum.BankTransfer        => paymentDetails is not BankTransferDetails,
+			PaymentMethodEnum.CreditCard          => paymentDetails is not CreditCardDetails,
+			PaymentMethodEnum.OnlinePaymentGateway => paymentDetails is not OnlineGatewayDetails,
+			PaymentMethodEnum.WalletPrepaidCard   => paymentDetails is not WalletDetails,
 			_ => false,
 		};
 

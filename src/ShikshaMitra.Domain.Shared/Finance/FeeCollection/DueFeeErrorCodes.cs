@@ -9,4 +9,6 @@ public static class DueFeeErrorCodes
 	public const string RefundAmountMustBePositive     = Prefix + "10003";
 	public const string RefundExceedsPaidAmount        = Prefix + "10004";
 	public const string DueFeeNotFound                 = Prefix + "10005";
+	public const string ReverseAmountMustBePositive    = Prefix + "10006";
+	public const string ReverseExceedsPaidAmount       = Prefix + "10007";
 }

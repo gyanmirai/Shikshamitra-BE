@@ -36,6 +36,13 @@ public class CollectFeeOutput
     /// <summary>URL to download the payment receipt PDF (null until generated).</summary>
     public string? ReceiptUrl { get; set; }
 
+    /// <summary>
+    /// Provisional fee receipt number (KFE-*) when payment required verification,
+    /// or final receipt number (FIN-*) for immediately-confirmed payments.
+    /// Null when no fee lines were present.
+    /// </summary>
+    public string? FeeReceiptNumber { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 }
 

@@ -13,4 +13,10 @@ public enum FeeCollectionStatus
 
     /// <summary>Payment due date has passed without full payment.</summary>
     Overdue = 2,
+
+    /// <summary>
+    /// Payment instrument (e.g. cheque/DD) was rejected by the bank.
+    /// DueFee allocations are reversed and the collection is treated as void.
+    /// </summary>
+    Reversed = 3,
 }

@@ -1,10 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Finance.FeeRefund;
 using ShikshaMitra.Finance.FeeRefund.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Students;
@@ -15,7 +16,7 @@ using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Uow;
 using Volo.Abp.Users;
 
-namespace ShikshaMitra.Finance.FeeRefund;
+namespace ShikshaMitra.Finance.Fees.FeeRefund;
 
 [Authorize]
 [RemoteService(false)]

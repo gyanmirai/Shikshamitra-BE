@@ -128,26 +128,39 @@ public class FeePaymentReceipt : FullAuditedAggregateRoot<Guid>, IMultiTenant
     }
 
     /// <summary>
+    /// Sets the back-reference to the provisional receipt on a final receipt.
+    /// Called by <c>ReconciliationManager</c> immediately after creating the FIN-* receipt.
+    /// </summary>
+    public void SetLinkedProvisionalReceiptId(Guid provisionalReceiptId)
+    {
+        LinkedProvisionalReceiptId = provisionalReceiptId;
+    }
+
+    /// <summary>
     /// Marks this provisional fee receipt as verified and links to the newly
     /// created final receipt. Called by the reconciliation module.
     /// </summary>
-    public void MarkVerified(Guid finalReceiptId)
+    public void MarkVerified(Guid finalReceiptId, string? remarks = null)
     {
         if (ReceiptKind != FeeReceiptKind.ProvisionalFee)
             throw new AbpException("Only ProvisionalFee receipts can be marked verified.");
 
         VerificationStatus = FeeReceiptVerificationStatus.Verified;
         LinkedFinalReceiptId = finalReceiptId;
+        if (!string.IsNullOrWhiteSpace(remarks))
+            Remarks = remarks;
     }
 
     /// <summary>
     /// Marks this provisional fee receipt as rejected (instrument failed).
     /// </summary>
-    public void MarkRejected()
+    public void MarkRejected(string? remarks = null)
     {
         if (ReceiptKind != FeeReceiptKind.ProvisionalFee)
             throw new AbpException("Only ProvisionalFee receipts can be marked rejected.");
 
         VerificationStatus = FeeReceiptVerificationStatus.Rejected;
+        if (!string.IsNullOrWhiteSpace(remarks))
+            Remarks = remarks;
     }
 }

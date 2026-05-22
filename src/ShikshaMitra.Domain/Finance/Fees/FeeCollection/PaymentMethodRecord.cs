@@ -52,7 +52,16 @@ public class PaymentMethodRecord : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		if (amount <= 0)
 			throw new BusinessException(FeeCollectionErrorCodes.PaymentAmountMustBePositive);
 
-		if (paymentMethod != PaymentMethodEnum.Cash && paymentDetails is null)
+		// Only Cheque, DemandDraft, BankTransfer, and UPI have dedicated detail types
+		// and therefore require details. CreditCard, OnlinePaymentGateway, and
+		// WalletPrepaidCard do not yet have dedicated types, so details are optional for them.
+		var requiresDetails = paymentMethod is
+			PaymentMethodEnum.Cheque or
+			PaymentMethodEnum.DemandDraft or
+			PaymentMethodEnum.BankTransfer or
+			PaymentMethodEnum.UPI;
+
+		if (requiresDetails && paymentDetails is null)
 			throw new BusinessException(FeeCollectionErrorCodes.PaymentDetailsRequiredForNonCash)
 				.WithData("PaymentMethod", paymentMethod);
 

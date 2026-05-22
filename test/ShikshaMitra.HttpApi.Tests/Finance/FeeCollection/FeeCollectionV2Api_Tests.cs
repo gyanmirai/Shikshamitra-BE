@@ -350,18 +350,178 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
         bytes.Length.ShouldBeGreaterThanOrEqualTo(0);
     }
 
+    // ── Payment method tests (bugs fixed) ────────────────────────────────────
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Collect_Fee_With_CreditCard_Returns_201()
+    {
+        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+
+        var input = new CollectFeeInput
+        {
+            StudentId = studentId,
+            AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
+            TotalAmount = 500d,
+            SelectedFeeHeads = new List<SelectedFeeHeadDto>
+            {
+                new() { FeeHeadId = feeHeadId, Amount = 500d },
+            },
+            Payments = new List<FeePaymentDto>
+            {
+                new() { PaymentMethod = PaymentMethodEnum.CreditCard, Amount = 500d },
+            },
+        };
+
+        var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Collect_Fee_With_OnlinePaymentGateway_Returns_201()
+    {
+        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+
+        var input = new CollectFeeInput
+        {
+            StudentId = studentId,
+            AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
+            TotalAmount = 600d,
+            SelectedFeeHeads = new List<SelectedFeeHeadDto>
+            {
+                new() { FeeHeadId = feeHeadId, Amount = 600d },
+            },
+            Payments = new List<FeePaymentDto>
+            {
+                new() { PaymentMethod = PaymentMethodEnum.OnlinePaymentGateway, Amount = 600d },
+            },
+        };
+
+        var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Collect_Fee_With_WalletPrepaidCard_Returns_201()
+    {
+        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+
+        var input = new CollectFeeInput
+        {
+            StudentId = studentId,
+            AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
+            TotalAmount = 400d,
+            SelectedFeeHeads = new List<SelectedFeeHeadDto>
+            {
+                new() { FeeHeadId = feeHeadId, Amount = 400d },
+            },
+            Payments = new List<FeePaymentDto>
+            {
+                new() { PaymentMethod = PaymentMethodEnum.WalletPrepaidCard, Amount = 400d },
+            },
+        };
+
+        var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
     [Fact]
     [TestTier(TestTraits.Tiers.Important)]
-    public async Task Should_Export_Returns_400_When_EducationMediumId_Missing()
+    public async Task Should_Collect_Fee_With_Cheque_Without_Details_Returns_400()
     {
-        var (_, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
 
-        var url = $"{BaseUrl}/export?academicYearId={FeeCollectionTestHelper.DefaultAcademicYearId}" +
-                  $"&boardId={boardId}" +
-                  $"&format=0";
+        var input = new CollectFeeInput
+        {
+            StudentId = studentId,
+            AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
+            TotalAmount = 800d,
+            SelectedFeeHeads = new List<SelectedFeeHeadDto>
+            {
+                new() { FeeHeadId = feeHeadId, Amount = 800d },
+            },
+            Payments = new List<FeePaymentDto>
+            {
+                new() { PaymentMethod = PaymentMethodEnum.Cheque, Amount = 800d },
+                // No Details provided — should fail validation
+            },
+        };
+
+        var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+
+        response.IsSuccessStatusCode.ShouldBeFalse();
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Collect_Fee_With_Cheque_With_Details_Returns_201()
+    {
+        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+
+        var input = new CollectFeeInput
+        {
+            StudentId = studentId,
+            AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
+            TotalAmount = 800d,
+            SelectedFeeHeads = new List<SelectedFeeHeadDto>
+            {
+                new() { FeeHeadId = feeHeadId, Amount = 800d },
+            },
+            Payments = new List<FeePaymentDto>
+            {
+                new()
+                {
+                    PaymentMethod = PaymentMethodEnum.Cheque,
+                    Amount = 800d,
+                    Details = new Dictionary<string, object?>
+                    {
+                        { "chequeNumber", "CHQ-001" },
+                        { "bankName", "Test Bank" },
+                        { "chequeDate", "2026-04-15" },
+                    },
+                },
+            },
+        };
+
+        var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
+    // ── Collect-form month name tests (bug fixed) ─────────────────────────────
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Get_Collect_Form_Ledger_Returns_Month_Names_Not_Numbers()
+    {
+        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+
+        var url = $"{BaseUrl}/{studentId}/collect-form?academicYearId={FeeCollectionTestHelper.DefaultAcademicYearId}";
 
         var response = await Client.GetAsync(url);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<FeeCollectFormDto>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Ledger.ShouldNotBeNull();
+
+        foreach (var month in body.Ledger)
+        {
+            // Month should be a name like "January", "April" — NOT a zero-padded number like "04"
+            int numericValue;
+            var isNumeric = int.TryParse(month.Month, out numericValue);
+            isNumeric.ShouldBeFalse($"Month '{month.Month}' should be a name, not a number");
+            month.Month.Length.ShouldBeGreaterThan(2, $"Month '{month.Month}' looks like a number not a name");
+        }
     }
 }

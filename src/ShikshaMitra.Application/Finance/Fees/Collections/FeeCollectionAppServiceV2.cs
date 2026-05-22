@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
@@ -91,20 +91,19 @@ public class FeeCollectionAppServiceV2(
 		GetFeeCollectionSummaryInputV2 input,
 		CancellationToken cancellationToken = default)
 	{
-		var query = await BuildRawQueryAsync(input);
-		query = ApplyStatusFilter(query, input.Status);
+		var allRows = await BuildRawRowsAsync(input, cancellationToken);
+		var filtered = ApplyStatusFilter(allRows, input.Status);
 
-		var totalCount = await asyncExecuter.CountAsync(query, cancellationToken);
+		var totalCount = filtered.Count;
 		if (totalCount == 0)
 			return new PagedResultDto<FeeCollectionSummaryItemDtoV2>(0, []);
 
-			query = ApplySorting(query, input.Sorting);
+		var page = ApplySorting(filtered, input.Sorting)
+			.Skip(input.SkipCount)
+			.Take(input.MaxResultCount)
+			.ToList();
 
-		var rawItems = await asyncExecuter.ToListAsync(
-			query.Skip(input.SkipCount).Take(input.MaxResultCount),
-			cancellationToken);
-
-		return new PagedResultDto<FeeCollectionSummaryItemDtoV2>(totalCount, MapToDto(rawItems));
+		return new PagedResultDto<FeeCollectionSummaryItemDtoV2>(totalCount, MapToDto(page));
 	}
 
 	public async Task<byte[]> ExportAsync(
@@ -122,47 +121,45 @@ public class FeeCollectionAppServiceV2(
 			Status            = input.Status,
 		};
 
-		var query = await BuildRawQueryAsync(filterInput);
-		query = ApplyStatusFilter(query, input.Status);
-		query = ApplySorting(query, sorting: null);
-
-		var rawRows = await asyncExecuter.ToListAsync(query, cancellationToken);
-		var rows = MapToDto(rawRows);
+		var allRows = await BuildRawRowsAsync(filterInput, cancellationToken);
+		var filtered = ApplyStatusFilter(allRows, input.Status);
+		var sorted   = ApplySorting(filtered, sorting: null).ToList();
+		var rows     = MapToDto(sorted);
 
 		return input.Format == FeeCollectionExportFormat.Excel
 			? BuildExcel(rows)
 			: BuildCsv(rows);
 	}
 
-	// ── Raw query (returns anonymous-projected queryable for SQL translation) ─
+	// ── Raw data fetch: separate DB queries joined in memory ──────────────
+	// Using a complex multi-join IQueryable caused EF Core to emit split queries,
+	// which threw "Nullable object must have a value" when materialising
+	// non-nullable value-type columns from LEFT JOIN NULL rows. Separate queries
+	// joined in memory is reliable, avoids EF Core translation limits, and is
+	// perfectly acceptable for school-scale datasets.
 
-	private async Task<IQueryable<FeeCollectionRawRow>> BuildRawQueryAsync(
-		GetFeeCollectionSummaryInputV2 input)
+	private async Task<List<FeeCollectionRawRow>> BuildRawRowsAsync(
+		GetFeeCollectionSummaryInputV2 input,
+		CancellationToken cancellationToken = default)
 	{
 		EnsureSummaryContextIsValid(input);
 
-		// MonthEnum is 0-indexed (January = 0, December = 11).
-		// An installment is "overdue" when its Month/Year is strictly before
-		// the current calendar month — i.e. the student should have paid by now.
 		var now          = clock.Now;
-		var currentMonth = now.Month - 1; // convert to 0-based MonthEnum
+		var currentMonth = now.Month - 1; // MonthEnum is 0-indexed
 		var currentYear  = now.Year;
 
-		// ── Base student query ─────────────────────────────────────────────
+		// ── 1. Students ────────────────────────────────────────────────────
 		var studentQ = await studentRepository.GetQueryableAsync();
-
-		studentQ = studentQ
-			.Where(s => s.AcademicYearId   == input.AcademicYearId
-					 && s.AcademicBoardId  == input.BoardId
-					 && s.AcademicMediumId == input.EducationMediumId
-					 && s.Status           == StudentLifeCycleStatusEnum.Enrolled);
+		studentQ = studentQ.Where(s =>
+			s.AcademicYearId   == input.AcademicYearId  &&
+			s.AcademicBoardId  == input.BoardId          &&
+			s.AcademicMediumId == input.EducationMediumId &&
+			s.Status           == StudentLifeCycleStatusEnum.Enrolled);
 
 		if (input.StandardId.HasValue)
 			studentQ = studentQ.Where(s => s.StandardId == input.StandardId.Value);
-
 		if (input.DivisionId.HasValue)
 			studentQ = studentQ.Where(s => s.DivisionId == input.DivisionId.Value);
-
 		if (!string.IsNullOrWhiteSpace(input.Search) && input.Search.Length >= 2)
 		{
 			var term = input.Search.Trim().ToLower();
@@ -173,54 +170,102 @@ public class FeeCollectionAppServiceV2(
 				(s.RollNo     != null && s.RollNo.ToString()!.Contains(term)));
 		}
 
-		// ── DueFee queryable ───────────────────────────────────────────────
+		var students = await asyncExecuter.ToListAsync(
+			studentQ.Select(s => new
+			{
+				s.Id, s.FirstName, s.MiddleName, s.LastName,
+				s.GrNo, s.RollNo, s.StandardId, s.DivisionId,
+			}),
+			cancellationToken);
+
+		if (students.Count == 0)
+			return [];
+
+		var studentIds = students.Select(s => s.Id).ToList();
+
+		// ── 2. Fee aggregates per student ──────────────────────────────────
 		var dueFeeQ = await dueFeeRepository.GetQueryableAsync();
 
-		// ── Subquery A: total / paid / outstanding per student ─────────────
-		var feeAggPerStudent = dueFeeQ
-			.GroupBy(d => d.StudentId)
-			.Select(g => new
-			{
-				StudentId   = g.Key,
-				Total       = g.Sum(d => (double?)d.OriginalAmount) ?? 0d,
-				Paid        = g.Sum(d => (double?)d.PaidAmount) ?? 0d,
-				Outstanding = g.Sum(d => (double?)d.OutstandingAmount) ?? 0d,
-			});
+		var feeAggs = await asyncExecuter.ToListAsync(
+			dueFeeQ
+				.Where(d => studentIds.Contains(d.StudentId))
+				.GroupBy(d => d.StudentId)
+				.Select(g => new
+				{
+					StudentId   = g.Key,
+					Total       = (double?)g.Sum(d => (double?)d.OriginalAmount) ?? 0d,
+					Paid        = (double?)g.Sum(d => (double?)d.PaidAmount) ?? 0d,
+					Outstanding = (double?)g.Sum(d => (double?)d.OutstandingAmount) ?? 0d,
+				}),
+			cancellationToken);
 
-		// ── Subquery B: overdue outstanding per student ────────────────────
-		var overduePerStudent = dueFeeQ
-			.Where(d => d.OutstandingAmount > 0d
-					 && (d.Year < currentYear
-					 || (d.Year == currentYear && (int)d.Month < currentMonth)))
-			.GroupBy(d => d.StudentId)
-			.Select(g => new
-			{
-				StudentId = g.Key,
-				Overdue   = (double?)g.Sum(d => d.OutstandingAmount),
-			});
+		var overdueAggs = await asyncExecuter.ToListAsync(
+			dueFeeQ
+				.Where(d => studentIds.Contains(d.StudentId)
+						 && d.OutstandingAmount > 0d
+						 && (d.Year < currentYear
+						 || (d.Year == currentYear && (int)d.Month < currentMonth)))
+				.GroupBy(d => d.StudentId)
+				.Select(g => new
+				{
+					StudentId = g.Key,
+					Overdue   = (double?)g.Sum(d => d.OutstandingAmount),
+				}),
+			cancellationToken);
 
-		// ── Raw projection (only scalar/DB-translatable fields) ────────────
-		var query = studentQ
-			.GroupJoin(feeAggPerStudent, s => s.Id, fa => fa.StudentId, (s, faj) => new { s, faj })
-			.SelectMany(x => x.faj.DefaultIfEmpty(), (x, fa) => new { x.s, fa })
-			.GroupJoin(overduePerStudent, x => x.s.Id, ov => ov.StudentId, (x, ovj) => new { x.s, x.fa, ovj })
-			.SelectMany(x => x.ovj.DefaultIfEmpty(), (x, ov) => new FeeCollectionRawRow
-			{
-				StudentId = x.s.Id,
-				FirstName = x.s.FirstName,
-				MiddleName = x.s.MiddleName,
-				LastName = x.s.LastName,
-				GrNo = x.s.GrNo != null ? x.s.GrNo.ToString() : string.Empty,
-				RollNo = x.s.RollNo != null ? x.s.RollNo.ToString() : string.Empty,
-				StandardName = x.s.Standard != null ? x.s.Standard.Name : string.Empty,
-				DivisionName = x.s.Division != null ? x.s.Division.Name : string.Empty,
-				TotalFees = x.fa == null ? 0d : x.fa.Total,
-				OutstandingFees = x.fa == null ? 0d : x.fa.Outstanding,
-				OverdueFees = ov == null ? 0d : ov.Overdue,
-				PaidFees = x.fa == null ? 0d : x.fa.Paid,
-			});
+		// ── 3. Standard / Division name lookups ────────────────────────────
+		var standardIds = students
+			.Where(s => s.StandardId.HasValue)
+			.Select(s => s.StandardId!.Value)
+			.Distinct().ToList();
+		var divisionIds = students
+			.Where(s => s.DivisionId.HasValue)
+			.Select(s => s.DivisionId!.Value)
+			.Distinct().ToList();
 
-		return query;
+		var standardQ = await standardRepository.GetQueryableAsync();
+		var divisionQ = await divisionRepository.GetQueryableAsync();
+
+		var standardDict = (await asyncExecuter.ToListAsync(
+			standardQ
+				.Where(s => standardIds.Contains(s.Id))
+				.Select(s => new { s.Id, s.Name }),
+			cancellationToken))
+			.ToDictionary(s => s.Id, s => s.Name);
+
+		var divisionDict = (await asyncExecuter.ToListAsync(
+			divisionQ
+				.Where(d => divisionIds.Contains(d.Id))
+				.Select(d => new { d.Id, d.Name }),
+			cancellationToken))
+			.ToDictionary(d => d.Id, d => d.Name);
+
+		// ── 4. Join in memory ──────────────────────────────────────────────
+		var feeDict    = feeAggs.ToDictionary(fa => fa.StudentId);
+		var overdueDict = overdueAggs.ToDictionary(ov => ov.StudentId);
+
+		return students.Select(s =>
+		{
+			feeDict.TryGetValue(s.Id, out var fa);
+			overdueDict.TryGetValue(s.Id, out var ov);
+			standardDict.TryGetValue(s.StandardId ?? Guid.Empty, out var standardName);
+			divisionDict.TryGetValue(s.DivisionId ?? Guid.Empty, out var divisionName);
+			return new FeeCollectionRawRow
+			{
+				StudentId       = s.Id,
+				FirstName       = s.FirstName,
+				MiddleName      = s.MiddleName,
+				LastName        = s.LastName,
+				GrNo            = s.GrNo?.ToString() ?? string.Empty,
+				RollNo          = s.RollNo?.ToString() ?? string.Empty,
+				StandardName    = standardName ?? string.Empty,
+				DivisionName    = divisionName ?? string.Empty,
+				TotalFees       = fa?.Total ?? 0d,
+				PaidFees        = fa?.Paid ?? 0d,
+				OutstandingFees = fa?.Outstanding ?? 0d,
+				OverdueFees     = ov?.Overdue ?? 0d,
+			};
+		}).ToList();
 	}
 
 	// ── In-memory mapping (string concatenation, status derivation) ───────
@@ -264,49 +309,49 @@ public class FeeCollectionAppServiceV2(
 
 	// ── Filters ───────────────────────────────────────────────────────────
 
-	private static IQueryable<FeeCollectionRawRow> ApplyStatusFilter(
-		IQueryable<FeeCollectionRawRow> query,
+	private static List<FeeCollectionRawRow> ApplyStatusFilter(
+		List<FeeCollectionRawRow> rows,
 		FeeCollectionStatus? status)
 	{
 		if (!status.HasValue)
-			return query;
+			return rows;
 
 		return status.Value switch
 		{
-			FeeCollectionStatus.Paid    => query.Where(x => x.OutstandingFees <= 0d),
-			FeeCollectionStatus.Overdue => query.Where(x => x.OutstandingFees > 0d && x.OverdueFees > 0d),
-			FeeCollectionStatus.Pending => query.Where(x => x.OutstandingFees > 0d && x.OverdueFees <= 0d),
-			_                           => query,
+			FeeCollectionStatus.Paid    => rows.Where(x => (x.OutstandingFees ?? 0d) <= 0d).ToList(),
+			FeeCollectionStatus.Overdue => rows.Where(x => (x.OutstandingFees ?? 0d) > 0d && (x.OverdueFees ?? 0d) > 0d).ToList(),
+			FeeCollectionStatus.Pending => rows.Where(x => (x.OutstandingFees ?? 0d) > 0d && (x.OverdueFees ?? 0d) <= 0d).ToList(),
+			_                           => rows,
 		};
 	}
 
 	// ── Sorting ───────────────────────────────────────────────────────────
 
-	private static IQueryable<FeeCollectionRawRow> ApplySorting(
-		IQueryable<FeeCollectionRawRow> query,
+	private static IOrderedEnumerable<FeeCollectionRawRow> ApplySorting(
+		List<FeeCollectionRawRow> rows,
 		string? sorting)
 	{
 		var sort = (sorting ?? string.Empty).Trim().ToLower();
 
 		return sort switch
 		{
-			"studentname asc"      or "studentname"       => query.OrderBy(x => x.LastName).ThenBy(x => x.FirstName),
-			"studentname desc"                            => query.OrderByDescending(x => x.LastName).ThenByDescending(x => x.FirstName),
-			"rollnumber asc"       or "rollnumber"        => query.OrderBy(x => x.RollNo),
-			"rollnumber desc"                             => query.OrderByDescending(x => x.RollNo),
-			"grnumber asc"         or "grnumber"          => query.OrderBy(x => x.GrNo),
-			"grnumber desc"                               => query.OrderByDescending(x => x.GrNo),
-			"totalfees asc"        or "totalfees"         => query.OrderBy(x => x.TotalFees),
-			"totalfees desc"                              => query.OrderByDescending(x => x.TotalFees),
-			"paidfees asc"         or "paidfees"          => query.OrderBy(x => x.PaidFees),
-			"paidfees desc"                               => query.OrderByDescending(x => x.PaidFees),
-			"pendingfees asc"      or "pendingfees"       => query.OrderBy(x => x.OutstandingFees),
-			"pendingfees desc"                            => query.OrderByDescending(x => x.OutstandingFees),
-			"overduefees asc"      or "overduefees"       => query.OrderBy(x => x.OverdueFees),
-			"overduefees desc"                            => query.OrderByDescending(x => x.OverdueFees),
-			"standarddivision asc" or "standarddivision"  => query.OrderBy(x => x.StandardName).ThenBy(x => x.DivisionName),
-			"standarddivision desc"                       => query.OrderByDescending(x => x.StandardName).ThenByDescending(x => x.DivisionName),
-			_                                             => query.OrderBy(x => x.LastName).ThenBy(x => x.FirstName),
+			"studentname asc"      or "studentname"       => rows.OrderBy(x => x.LastName).ThenBy(x => x.FirstName),
+			"studentname desc"                            => rows.OrderByDescending(x => x.LastName).ThenByDescending(x => x.FirstName),
+			"rollnumber asc"       or "rollnumber"        => rows.OrderBy(x => x.RollNo),
+			"rollnumber desc"                             => rows.OrderByDescending(x => x.RollNo),
+			"grnumber asc"         or "grnumber"          => rows.OrderBy(x => x.GrNo),
+			"grnumber desc"                               => rows.OrderByDescending(x => x.GrNo),
+			"totalfees asc"        or "totalfees"         => rows.OrderBy(x => x.TotalFees),
+			"totalfees desc"                              => rows.OrderByDescending(x => x.TotalFees),
+			"paidfees asc"         or "paidfees"          => rows.OrderBy(x => x.PaidFees),
+			"paidfees desc"                               => rows.OrderByDescending(x => x.PaidFees),
+			"pendingfees asc"      or "pendingfees"       => rows.OrderBy(x => x.OutstandingFees),
+			"pendingfees desc"                            => rows.OrderByDescending(x => x.OutstandingFees),
+			"overduefees asc"      or "overduefees"       => rows.OrderBy(x => x.OverdueFees),
+			"overduefees desc"                            => rows.OrderByDescending(x => x.OverdueFees),
+			"standarddivision asc" or "standarddivision"  => rows.OrderBy(x => x.StandardName).ThenBy(x => x.DivisionName),
+			"standarddivision desc"                       => rows.OrderByDescending(x => x.StandardName).ThenByDescending(x => x.DivisionName),
+			_                                             => rows.OrderBy(x => x.LastName).ThenBy(x => x.FirstName),
 		};
 	}
 
@@ -572,7 +617,7 @@ public class FeeCollectionAppServiceV2(
 
 				ledger.Add(new FeeLedgerMonthDto
 				{
-					Month = ((int)group.Key.Month + 1).ToString("00"),
+					Month = group.Key.Month.ToString(),
 					Year = group.Key.Year,
 					TotalDue = lines.Sum(l => l.Due),
 					Items = lines,

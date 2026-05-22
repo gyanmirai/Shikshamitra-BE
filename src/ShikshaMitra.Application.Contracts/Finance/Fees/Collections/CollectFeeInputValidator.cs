@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using FluentValidation;
+using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 
 namespace ShikshaMitra.Finance.Fees.Collections;
@@ -69,6 +70,23 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
         RuleForEach(x => x.Payments).ChildRules(payment =>
         {
             payment.RuleFor(x => x.Amount).GreaterThan(0);
+            payment.RuleFor(x => x.PaymentMethod)
+                .IsInEnum().WithMessage("Invalid payment method value.");
+
+            // Cheque, DD, BankTransfer, and UPI require a non-empty details dictionary.
+            // Field-level validation is handled by the domain layer.
+            payment.When(x =>
+                x.PaymentMethod == PaymentMethodEnum.Cheque ||
+                x.PaymentMethod == PaymentMethodEnum.DemandDraft ||
+                x.PaymentMethod == PaymentMethodEnum.BankTransfer ||
+                x.PaymentMethod == PaymentMethodEnum.UPI,
+            () =>
+            {
+                payment.RuleFor(x => x.Details)
+                    .NotNull().WithMessage("Payment details are required for the selected payment method.")
+                    .Must(d => d != null && d.Count > 0)
+                    .WithMessage("Payment details cannot be empty for the selected payment method.");
+            });
         });
 
         RuleFor(x => x)

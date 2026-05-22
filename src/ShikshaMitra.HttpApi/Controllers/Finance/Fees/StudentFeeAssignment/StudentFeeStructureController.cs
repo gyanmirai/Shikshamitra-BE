@@ -27,17 +27,11 @@ public class StudentFeeStructureController(
 	}
 
 	/// <summary>
-	/// Get assigned fee structure of student
+	/// Get the fee structure assigned to a student
 	/// </summary>
-	//[HttpGet("student/{studentId}")]
-	//public Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId)
-	//{
-	//	//return _studentFeeStructureAppService.GetByStudentIdAsync(studentId);
-	//}
-
-	[HttpGet]
-	public Task GetAsync()
+	[HttpGet("student/{studentId}")]
+	public async Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId)
 	{
-		throw new NotImplementedException();
+		return await studentFeeStructureAppService.GetByStudentIdAsync(studentId);
 	}
 }

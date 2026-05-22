@@ -74,6 +74,19 @@ public class TimetableAppService(
             .ToDictionary(s => s.ElectiveGroupId!.Value, s => s.WeeklyLectures)
             ?? new Dictionary<Guid, int>();
 
+        // Build a (startTime, endTime) → (SlotType, BreakType) lookup from the slot config.
+        // The slot config is the source of truth for period vs break type; saved timetable slots
+        // may carry stale/incorrect SlotType values if data was originally saved with a wrong enum.
+        var slotTypeByTime = new Dictionary<(TimeOnly, TimeOnly), (SlotType, BreakType?)>();
+        if (slotConfig != null)
+        {
+            foreach (var group in slotConfig.SlotGroups)
+            {
+                foreach (var ts in group.TimeSlots)
+                    slotTypeByTime.TryAdd((ts.StartTime, ts.EndTime), (ts.SlotType, ts.BreakType));
+            }
+        }
+
         var response = new TimetableResponseDto();
 
         // Always return all 6 days. Days with saved data use saved data;
@@ -84,45 +97,52 @@ public class TimetableAppService(
 
             if (savedSlotsByDay.TryGetValue(day, out var savedSlots) && savedSlots.Count > 0)
             {
-                response.Days[dayName] = savedSlots.OrderBy(s => s.Sequence).Select(slot => new TimetableSlotResponseDto
+                response.Days[dayName] = savedSlots.OrderBy(s => s.Sequence).Select(slot =>
                 {
-                    Sequence = slot.Sequence,
-                    StartTime = slot.StartTime.ToString("HH:mm"),
-                    EndTime = slot.EndTime.ToString("HH:mm"),
-                    Type = slot.SlotType,
-                    BreakType = slot.BreakType,
-                    SubjectType = slot.SubjectType,
-                    ElectiveGroupId = slot.ElectiveGroupId,
-                    ElectiveGroupName = slot.ElectiveGroupId.HasValue
+                    var (resolvedType, resolvedBreakType) = slotTypeByTime.TryGetValue(
+                        (slot.StartTime, slot.EndTime), out var configType)
+                        ? configType
+                        : (slot.SlotType, slot.BreakType);
+                    return new TimetableSlotResponseDto
+                    {
+                        Sequence = slot.Sequence,
+                        StartTime = slot.StartTime.ToString("HH:mm"),
+                        EndTime = slot.EndTime.ToString("HH:mm"),
+                        Type = resolvedType,
+                        BreakType = resolvedBreakType,
+                        SubjectType = slot.SubjectType,
+                        ElectiveGroupId = slot.ElectiveGroupId,
+                        ElectiveGroupName = slot.ElectiveGroupId.HasValue
                         ? electiveGroups.FirstOrDefault(eg => eg.Id == slot.ElectiveGroupId.Value)?.Name
                         : null,
-                    ElectiveGroupColor = slot.ElectiveGroupId.HasValue
+                        ElectiveGroupColor = slot.ElectiveGroupId.HasValue
                         ? electiveGroups.FirstOrDefault(eg => eg.Id == slot.ElectiveGroupId.Value)?.Color
                         : null,
-                    Subjects = slot.Subjects.Select(sub =>
-                    {
-                        var subject = subjects.FirstOrDefault(s => s.Id == sub.SubjectId);
-                        var room = sub.RoomId.HasValue
-                            ? rooms.FirstOrDefault(r => r.Id == sub.RoomId.Value) : null;
-                        var totalSlots = totalSlotsBySubject.GetValueOrDefault(sub.SubjectId, 0);
-                        if (totalSlots == 0 && slot.ElectiveGroupId.HasValue)
-                            totalSlots = totalSlotsByElective.GetValueOrDefault(slot.ElectiveGroupId.Value, 0);
-                        var occupiedSlots = occupiedBySubject.GetValueOrDefault(sub.SubjectId, 0);
-                        return new TimetableSubjectResponseDto
+                        Subjects = slot.Subjects.Select(sub =>
                         {
-                            SubjectAssignmentId = assignedSubjectBySubjectId.GetValueOrDefault(sub.SubjectId),
-                            SubjectId = sub.SubjectId,
-                            Name = subject?.Name ?? string.Empty,
-                            Color = subject?.Color,
-                            TeacherId = sub.TeacherId,
-                            TeacherName = null,
-                            RoomId = sub.RoomId,
-                            RoomName = room?.RoomName,
-                            TotalSlots = totalSlots,
-                            OccupiedSlots = occupiedSlots,
-                            UnoccupiedSlots = totalSlots - occupiedSlots
-                        };
-                    }).ToList()
+                            var subject = subjects.FirstOrDefault(s => s.Id == sub.SubjectId);
+                            var room = sub.RoomId.HasValue
+                                ? rooms.FirstOrDefault(r => r.Id == sub.RoomId.Value) : null;
+                            var totalSlots = totalSlotsBySubject.GetValueOrDefault(sub.SubjectId, 0);
+                            if (totalSlots == 0 && slot.ElectiveGroupId.HasValue)
+                                totalSlots = totalSlotsByElective.GetValueOrDefault(slot.ElectiveGroupId.Value, 0);
+                            var occupiedSlots = occupiedBySubject.GetValueOrDefault(sub.SubjectId, 0);
+                            return new TimetableSubjectResponseDto
+                            {
+                                SubjectAssignmentId = assignedSubjectBySubjectId.GetValueOrDefault(sub.SubjectId),
+                                SubjectId = sub.SubjectId,
+                                Name = subject?.Name ?? string.Empty,
+                                Color = subject?.Color,
+                                TeacherId = sub.TeacherId,
+                                TeacherName = null,
+                                RoomId = sub.RoomId,
+                                RoomName = room?.RoomName,
+                                TotalSlots = totalSlots,
+                                OccupiedSlots = occupiedSlots,
+                                UnoccupiedSlots = totalSlots - occupiedSlots
+                            };
+                        }).ToList()
+                    };
                 }).ToList();
             }
             else

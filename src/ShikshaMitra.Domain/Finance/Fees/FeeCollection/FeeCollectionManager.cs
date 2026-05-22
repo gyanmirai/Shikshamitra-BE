@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Finance.FeeCollection;
 using Volo.Abp;
@@ -143,6 +144,29 @@ public class FeeCollectionManager(
 	}
 
 	/// <summary>
+	/// Reverses DueFee payment allocations that were persisted during fee collection,
+	/// restoring outstanding balances to their pre-payment state.
+	/// Called by the reconciliation module when an instrument is rejected.
+	/// </summary>
+	public async Task<List<DueFee>> ReverseDueFeeAllocationsAsync(
+		IReadOnlyList<(Guid DueFeeId, double Amount)> allocations,
+		CancellationToken cancellationToken = default)
+	{
+		var ids = allocations.Select(a => a.DueFeeId).Distinct().ToList();
+		var dueFees = await dueFeeRepository.GetListAsync(
+			df => ids.Contains(df.Id), cancellationToken: cancellationToken);
+
+		if (dueFees.Count != ids.Count)
+			throw new BusinessException(DueFeeErrorCodes.DueFeeNotFound);
+
+		var map = dueFees.ToDictionary(df => df.Id);
+		foreach (var (dueFeeId, amount) in allocations)
+			map[dueFeeId].ReversePayment(amount);
+
+		return dueFees;
+	}
+
+	/// <summary>
 	/// Maps the raw details dictionary from the API request into the appropriate
 	/// strongly-typed <see cref="PaymentDetails"/> value object.
 	/// Returns <c>null</c> for Cash — no instrument details required.
@@ -185,8 +209,21 @@ public class FeeCollectionManager(
 				upiId: Get("upiId"),
 				appName: Get("appName")),
 
-			// CreditCard, OnlinePaymentGateway, WalletPrepaidCard — no dedicated
-			// details type yet; domain validation will throw if details are required.
+			PaymentMethodEnum.CreditCard => new CreditCardDetails(
+				transactionId: Get("transactionId"),
+				cardLast4: Get("cardLast4"),
+				bankName: Get("bankName")),
+
+			PaymentMethodEnum.OnlinePaymentGateway => new OnlineGatewayDetails(
+				transactionId: Get("transactionId"),
+				gatewayName: Get("gatewayName"),
+				orderId: details.TryGetValue("orderId", out var oid) ? oid?.ToString() : null),
+
+			PaymentMethodEnum.WalletPrepaidCard => new WalletDetails(
+				transactionId: Get("transactionId"),
+				walletProvider: Get("walletProvider"),
+				mobileNumber: details.TryGetValue("mobileNumber", out var mob) ? mob?.ToString() : null),
+
 			_ => null,
 		};
 	}

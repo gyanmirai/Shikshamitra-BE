@@ -20,6 +20,8 @@ using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Receipts;
+using ShikshaMitra.Finance.Receipts;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
@@ -65,6 +67,9 @@ public class FeeCollectionAppServiceV2(
 	IRepository<ConcessionType, Guid> concessionTypeRepository,
 	IConcessionRequestRepository concessionRequestRepository,
 	FeeCollectionManager feeCollectionManager,
+	FeeReceiptManager feeReceiptManager,
+	IFeePaymentReceiptRepository feePaymentReceiptRepository,
+	IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
 	IAsyncQueryableExecuter asyncExecuter,
 	IClock clock
 ) : ApplicationService, IFeeCollectionAppServiceV2
@@ -420,6 +425,9 @@ public class FeeCollectionAppServiceV2(
 			chargeMap = charges.ToDictionary(c => c.Id);
 		}
 
+		// 1b. Load student for receipt context (boardId / mediumId denorm)
+		var student = await studentRepository.GetAsync(input.StudentId);
+
 		// 2. Determine collection status
 		var received = input.ReceivedAmount ?? input.TotalAmount;
 		var status = received >= input.TotalAmount
@@ -454,6 +462,7 @@ public class FeeCollectionAppServiceV2(
 		}
 
 		// 7. Payment-method records
+		var paymentMethods = input.Payments.Select(p => p.PaymentMethod).ToList();
 		var paymentRecords = feeCollectionManager.CreatePaymentRecords(
 			input.StudentId,
 			metadata.Id,
@@ -464,7 +473,7 @@ public class FeeCollectionAppServiceV2(
 			input.Notes);
 		await paymentMethodRecordRepository.InsertManyAsync(paymentRecords, autoSave: false);
 
-		// 8. Apply DueFee allocations (optional — backward-compatible)
+		// 8. Apply DueFee allocations + persist for reconciliation rollback
 		var allAllocations = input.SelectedFeeHeads
 			.Where(sfh => sfh.Allocations is { Count: > 0 })
 			.SelectMany(sfh => sfh.Allocations!)
@@ -474,21 +483,49 @@ public class FeeCollectionAppServiceV2(
 		if (allAllocations.Count > 0)
 		{
 			var dueFees = await feeCollectionManager.ApplyDueFeeAllocationsAsync(allAllocations);
-			await dueFeeRepository.UpdateManyAsync(dueFees, autoSave: true);
+			await dueFeeRepository.UpdateManyAsync(dueFees, autoSave: false);
+
+			var allocationRows = allAllocations
+				.Select(a => new FeeCollectionDueFeeAllocation(
+					GuidGenerator.Create(),
+					CurrentTenant.Id,
+					metadata.Id,
+					a.DueFeeId,
+					a.Amount))
+				.ToList();
+			await dueFeeAllocationRepository.InsertManyAsync(allocationRows, autoSave: false);
 		}
-		else
-		{
-			await CurrentUnitOfWork!.SaveChangesAsync();
-		}
+
+		// 9. Create provisional/final receipt(s) for this transaction
+		var feeLinesTotal = feeCollectionRecords.Sum(r => r.Amount);
+		var chargeLinesTotal = chargeCollectionRecords.Sum(r => r.Amount);
+
+		var receipts = await feeReceiptManager.CreateReceiptsForTransactionAsync(
+			feeCollectionTransactionId: metadata.Id,
+			studentId: input.StudentId,
+			academicYearId: input.AcademicYearId,
+			boardId: student.AcademicBoardId ?? Guid.Empty,
+			educationMediumId: student.AcademicMediumId,
+			feeLinesTotal: feeLinesTotal,
+			chargeLinesTotal: chargeLinesTotal,
+			paymentMethods: paymentMethods,
+			remarks: input.Notes);
+
+		if (receipts.Count > 0)
+			await feePaymentReceiptRepository.InsertManyAsync(receipts, autoSave: false);
+
+		await CurrentUnitOfWork!.SaveChangesAsync();
 
 		Logger.LogInformation(
-			"Fee collected for student {StudentId}: receipt {ReceiptNumber}, amount {Amount}",
-			input.StudentId, receiptNumber, received);
+			"Fee collected for student {StudentId}: receipt {ReceiptNumber}, amount {Amount}, receipts created {ReceiptCount}",
+			input.StudentId, receiptNumber, received, receipts.Count);
 
+		var feeReceipt = receipts.FirstOrDefault(r => r.ReceiptScope == FeeReceiptScope.Fee);
 		return new CollectFeeOutput
 		{
 			Id = metadata.Id,
 			ReceiptNumber = receiptNumber,
+			FeeReceiptNumber = feeReceipt?.ReceiptNumber,
 			StudentId = input.StudentId,
 			AcademicYearId = input.AcademicYearId,
 			TotalAmount = input.TotalAmount,

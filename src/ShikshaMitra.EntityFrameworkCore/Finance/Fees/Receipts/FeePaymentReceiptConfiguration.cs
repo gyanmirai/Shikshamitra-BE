@@ -63,5 +63,16 @@ public class FeePaymentReceiptConfiguration : IEntityTypeConfiguration<FeePaymen
                 x.ReceiptKind,
             })
             .HasDatabaseName("IX_FeePaymentReceipts_ListFilter");
+
+        // ── Reconciliation inbox query ────────────────────────────────────────
+        builder.HasIndex(x => new
+            {
+                x.TenantId,
+                x.AcademicYearId,
+                x.ReceiptKind,
+                x.VerificationStatus,
+                x.ReceiptDate,
+            })
+            .HasDatabaseName("IX_FeePaymentReceipts_ReconciliationFilter");
     }
 }

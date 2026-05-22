@@ -96,4 +96,26 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	/// <summary>Net refundable balance: paid minus already refunded.</summary>
 	public double RefundableBalance => Math.Max(0d, PaidAmount - RefundedAmount);
+
+	/// <summary>
+	/// Reverses a payment allocation against this obligation line (called when
+	/// the payment instrument — e.g. cheque — is rejected/bounced).
+	/// Invariant: cannot reverse more than <see cref="PaidAmount"/>.
+	/// </summary>
+	/// <param name="amount">Positive amount being reversed.</param>
+	public void ReversePayment(double amount)
+	{
+		if (amount <= 0)
+			throw new BusinessException(DueFeeErrorCodes.ReverseAmountMustBePositive)
+				.WithData("Amount", amount);
+
+		if (amount > PaidAmount)
+			throw new BusinessException(DueFeeErrorCodes.ReverseExceedsPaidAmount)
+				.WithData("Requested", amount)
+				.WithData("PaidAmount", PaidAmount);
+
+		PaidAmount -= amount;
+		OutstandingAmount = Math.Max(0d, OriginalAmount - PaidAmount);
+		Status = PaidAmount <= 0d ? FeeStatus.Pending : FeeStatus.PartiallyPaid;
+	}
 }

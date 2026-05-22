@@ -14,6 +14,33 @@ namespace ShikshaMitra.Finance.Fees.Receipts;
 /// </summary>
 public interface IFeePaymentReceiptRepository : IRepository<FeePaymentReceipt, Guid>
 {
+    // ── Reconciliation queries ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Two-phase paged query for the reconciliation inbox.
+    /// Phase 1: count + page of receipt IDs.
+    /// </summary>
+    Task<(int TotalCount, List<Guid> Ids)> GetReconciliationPagedIdsAsync(
+        ReconciliationListFilter filter,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Hydrates full reconciliation row projections for the given receipt IDs.
+    /// Returns instrument details from the linked <see cref="PaymentMethodRecord"/>.
+    /// </summary>
+    Task<List<ReconciliationRow>> GetReconciliationRowsByIdsAsync(
+        List<Guid> receiptIds,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns per-method, per-status counts for tab badge rendering.
+    /// One grouped DB query — not 7 round-trips.
+    /// </summary>
+    Task<List<ReconciliationStatusCount>> GetReconciliationStatusCountsAsync(
+        Guid academicYearId,
+        int? month,
+        int? year,
+        CancellationToken cancellationToken = default);
     /// <summary>
     /// Returns the total count and a paged, sorted slice of receipts matching
     /// the supplied filter. Results are ordered by <c>CreationTime</c> descending
@@ -56,4 +83,65 @@ public sealed class FeeReceiptListFilter
 
     public int SkipCount { get; init; }
     public int MaxResultCount { get; init; } = 20;
+}
+
+/// <summary>Filter for the reconciliation inbox query.</summary>
+public sealed class ReconciliationListFilter
+{
+    public Guid AcademicYearId { get; init; }
+    public int? Month { get; init; }
+    public int? Year { get; init; }
+
+    /// <summary>Specific payment method tab, or null for all methods.</summary>
+    public PaymentMethodEnum? PaymentMethod { get; init; }
+
+    /// <summary>Specific verification status, or null for all statuses.</summary>
+    public FeeReceiptVerificationStatus? VerificationStatus { get; init; }
+
+    /// <summary>Free-text search: student name, GR number, receipt number.</summary>
+    public string? Search { get; init; }
+
+    public int Page { get; init; } = 1;
+    public int PageSize { get; init; } = 50;
+}
+
+/// <summary>
+/// Projection for a single reconciliation inbox row.
+/// Joins FeePaymentReceipt + PaymentMethodRecord + Student.
+/// </summary>
+public sealed class ReconciliationRow
+{
+    public Guid ReceiptId { get; init; }
+    public string ReceiptNumber { get; init; } = string.Empty;
+    public FeeReceiptVerificationStatus VerificationStatus { get; init; }
+    public DateOnly ReceiptDate { get; init; }
+    public double TotalPaidAmount { get; init; }
+    public string? Remarks { get; init; }
+    public Guid? LinkedFinalReceiptId { get; init; }
+    public string? LinkedFinalReceiptNumber { get; init; }
+    public Guid FeeCollectionTransactionId { get; init; }
+
+    // Payment instrument
+    public PaymentMethodEnum PaymentMethod { get; init; }
+    public string? PaymentDetailsJson { get; init; }
+
+    // Student
+    public Guid StudentId { get; init; }
+    public string StudentName { get; init; } = string.Empty;
+    public int? GrNumber { get; init; }
+    public int? RollNumber { get; init; }
+
+    // Denormalized lookups
+    public string Board { get; init; } = string.Empty;
+    public string Medium { get; init; } = string.Empty;
+    public string Class { get; init; } = string.Empty;
+    public string Division { get; init; } = string.Empty;
+}
+
+/// <summary>One row from the tab-count grouped query.</summary>
+public sealed class ReconciliationStatusCount
+{
+    public PaymentMethodEnum PaymentMethod { get; init; }
+    public FeeReceiptVerificationStatus VerificationStatus { get; init; }
+    public int Count { get; init; }
 }

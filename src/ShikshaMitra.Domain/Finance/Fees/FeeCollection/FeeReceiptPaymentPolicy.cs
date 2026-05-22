@@ -17,26 +17,28 @@ public static class FeeReceiptPaymentPolicy
 {
     /// <summary>
     /// Payment methods that are settled immediately on presentation.
-    /// A collect event that uses only these methods produces a <see cref="FeeReceiptKind.FinalFee"/> receipt.
+    /// Only cash is instantly confirmed — everything else enters the reconciliation inbox.
     /// </summary>
     private static readonly HashSet<PaymentMethodEnum> ConfirmedMethods =
     [
         PaymentMethodEnum.Cash,
-        PaymentMethodEnum.UPI,
-        PaymentMethodEnum.OnlinePaymentGateway,
-        PaymentMethodEnum.WalletPrepaidCard,
-        PaymentMethodEnum.CreditCard,
-        PaymentMethodEnum.BankTransfer,   // default confirmed — adjust per school if needed
     ];
 
     /// <summary>
-    /// Payment methods that require bank verification before realization.
-    /// Any method in this set triggers a <see cref="FeeReceiptKind.ProvisionalFee"/> receipt.
+    /// All non-cash payment methods require bank/instrument verification before the
+    /// fee receipt is finalized. Any method in this set triggers a
+    /// <see cref="FeeReceiptKind.ProvisionalFee"/> receipt so it appears in the
+    /// reconciliation screen for staff approval.
     /// </summary>
     private static readonly HashSet<PaymentMethodEnum> VerificationRequiredMethods =
     [
         PaymentMethodEnum.Cheque,
         PaymentMethodEnum.DemandDraft,
+        PaymentMethodEnum.BankTransfer,
+        PaymentMethodEnum.CreditCard,
+        PaymentMethodEnum.UPI,
+        PaymentMethodEnum.OnlinePaymentGateway,
+        PaymentMethodEnum.WalletPrepaidCard,
     ];
 
     /// <summary>

@@ -28,4 +28,15 @@ public class FeeRecordMetadata : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public FeeCollectionStatus Status { get; set; }
 
 	public string? Remarks { get; set; }
+
+	/// <summary>
+	/// Marks this collection transaction as reversed after instrument rejection
+	/// (e.g. cheque bounce). Only valid if the current status is not already Reversed.
+	/// </summary>
+	public void MarkReversed(string? remarks = null)
+	{
+		Status = FeeCollectionStatus.Reversed;
+		if (!string.IsNullOrWhiteSpace(remarks))
+			Remarks = remarks;
+	}
 }

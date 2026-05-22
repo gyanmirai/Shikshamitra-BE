@@ -15,6 +15,9 @@ namespace ShikshaMitra.Finance.Fees.FeeCollection;
 [JsonDerivedType(typeof(DemandDraftDetails), typeDiscriminator: nameof(DemandDraftDetails))]
 [JsonDerivedType(typeof(UpiDetails), typeDiscriminator: nameof(UpiDetails))]
 [JsonDerivedType(typeof(BankTransferDetails), typeDiscriminator: nameof(BankTransferDetails))]
+[JsonDerivedType(typeof(CreditCardDetails), typeDiscriminator: nameof(CreditCardDetails))]
+[JsonDerivedType(typeof(OnlineGatewayDetails), typeDiscriminator: nameof(OnlineGatewayDetails))]
+[JsonDerivedType(typeof(WalletDetails), typeDiscriminator: nameof(WalletDetails))]
 public abstract class PaymentDetails : ValueObject
 {
     // Intentionally empty — acts as a discriminated union base.

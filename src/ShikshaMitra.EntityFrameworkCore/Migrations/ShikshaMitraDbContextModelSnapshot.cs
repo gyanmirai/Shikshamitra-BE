@@ -3539,6 +3539,43 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("DueFees", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeCollection.FeeCollectionDueFeeAllocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("Amount")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid>("DueFeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FeeRecordMetadataId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DueFeeId")
+                        .HasDatabaseName("IX_FeeCollectionDueFeeAllocations_DueFeeId");
+
+                    b.HasIndex("FeeRecordMetadataId")
+                        .HasDatabaseName("IX_FeeCollectionDueFeeAllocations_FeeRecordMetadataId");
+
+                    b.ToTable("FeeCollectionDueFeeAllocations", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeCollection.FeeCollectionRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3899,6 +3936,9 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "AcademicYearId", "BoardId", "EducationMediumId", "ReceiptKind")
                         .HasDatabaseName("IX_FeePaymentReceipts_ListFilter");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "ReceiptKind", "VerificationStatus", "ReceiptDate")
+                        .HasDatabaseName("IX_FeePaymentReceipts_ReconciliationFilter");
 
                     b.ToTable("FeePaymentReceipts", (string)null);
                 });

@@ -479,6 +479,13 @@ public class FeeCollectionAppServiceV2(
 			? FeeCollectionStatus.Paid
 			: FeeCollectionStatus.Pending;
 
+		// When receivedAmount < totalAmount (partial payment), scale all fee/charge amounts
+		// proportionally so that DueFee outstanding balances and collection records reflect
+		// only what was actually paid — not the full requested amount.
+		var partialPaymentRatio = (input.TotalAmount > 0 && received < input.TotalAmount)
+			? received / input.TotalAmount
+			: 1.0;
+
 		// 3. Generate receipt number
 		var receiptNumber = await feeCollectionManager.GenerateReceiptNumberAsync();
 
@@ -487,22 +494,22 @@ public class FeeCollectionAppServiceV2(
 			input.StudentId, input.AcademicYearId, received, status, receiptNumber, input.Notes);
 		await feeRecordMetadataRepository.InsertAsync(metadata, autoSave: false);
 
-		// 5. Fee-head collection records
+		// 5. Fee-head collection records — amounts are scaled to the actually-received portion
 		var feeHeadMap = feeHeads.ToDictionary(fh => fh.Id);
 		var feeCollectionRecords = feeCollectionManager.CreateFeeCollectionRecords(
 			input.StudentId,
 			metadata.Id,
-			input.SelectedFeeHeads.Select(sfh => (sfh.FeeHeadId, sfh.Amount)));
+			input.SelectedFeeHeads.Select(sfh => (sfh.FeeHeadId, sfh.Amount * partialPaymentRatio)));
 		await feeCollectionRecordRepository.InsertManyAsync(feeCollectionRecords, autoSave: false);
 
-		// 6. Charge collection records
+		// 6. Charge collection records — amounts are scaled to the actually-received portion
 		var chargeCollectionRecords = new List<ChargeCollectionRecord>();
 		if (input.SelectedCharges is { Count: > 0 })
 		{
 			chargeCollectionRecords = feeCollectionManager.CreateChargeCollectionRecords(
 				input.StudentId,
 				metadata.Id,
-				input.SelectedCharges.Select(sc => (sc.ChargeId, sc.Amount)));
+				input.SelectedCharges.Select(sc => (sc.ChargeId, sc.Amount * partialPaymentRatio)));
 			await chargeCollectionRecordRepository.InsertManyAsync(chargeCollectionRecords, autoSave: false);
 		}
 
@@ -518,11 +525,13 @@ public class FeeCollectionAppServiceV2(
 			input.Notes);
 		await paymentMethodRecordRepository.InsertManyAsync(paymentRecords, autoSave: false);
 
-		// 8. Apply DueFee allocations + persist for reconciliation rollback
+		// 8. Apply DueFee allocations + persist for reconciliation rollback.
+		// Allocation amounts are scaled by partialPaymentRatio so that each DueFee row's
+		// PaidAmount and OutstandingAmount reflect only the actually-received payment.
 		var allAllocations = input.SelectedFeeHeads
 			.Where(sfh => sfh.Allocations is { Count: > 0 })
 			.SelectMany(sfh => sfh.Allocations!)
-			.Select(a => (a.DueFeeId, a.Amount))
+			.Select(a => (a.DueFeeId, Amount: a.Amount * partialPaymentRatio))
 			.ToList();
 
 		if (allAllocations.Count > 0)

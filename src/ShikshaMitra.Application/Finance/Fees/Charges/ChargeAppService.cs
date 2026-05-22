@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Charges;
 using ShikshaMitra.Finance.Fees.Charges.Dtos;
 using ShikshaMitra.Finance.Fees.Settings;
@@ -28,6 +29,7 @@ public class ChargeAppService(
 	IChargeRepository chargeRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
 	IRepository<IdentityUser, Guid> userRepository,
+	IRepository<ChargeCategory, Guid> chargeCategoryRepository,
 	ICurrentUser currentUser,
 	ChargeManager chargeManager,
 	ILogger<ChargeAppService> logger)
@@ -135,10 +137,20 @@ public class ChargeAppService(
 			input.Priority.HasValue ? (ChargePriority)input.Priority.Value : null,
 			input.AdditionalNotes);
 
+		// Re-evaluate approval status based on the effective category.
+		// This mirrors the create-flow logic in ChargeManager and ensures that
+		// switching to (or keeping) a category with IsApprovalRequired=false
+		// auto-approves the charge without requiring a manual approval step.
+		var category = await chargeCategoryRepository.FindAsync(charge.ChargeCategoryId);
+		if (category is not null && !category.IsApprovalRequired)
+			charge.AutoApprove();
+
 		await chargeRepository.UpdateAsync(charge, autoSave: true);
 
 		var detail = await GetChargeDetailsOrThrowAsync(chargeId);
-		return BuildChargeResponse(detail, message: "Charge updated successfully");
+		return BuildChargeResponse(detail, message: charge.Status == ChargeStatus.Pending
+			? "Charge updated successfully"
+			: "Charge updated and approved successfully");
 	}
 
 	// ── Approve / Reject ─────────────────────────────────────

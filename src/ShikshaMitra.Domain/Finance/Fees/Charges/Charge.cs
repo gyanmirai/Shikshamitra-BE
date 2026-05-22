@@ -180,6 +180,20 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	/// <summary>
+	/// Automatically approves the charge when the charge category does not require approval.
+	/// Unlike <see cref="Approve"/>, this bypasses the maker-checker rule since no human approver is involved.
+	/// Only applies to pending charges; already-approved/rejected charges are left unchanged.
+	/// </summary>
+	public void AutoApprove()
+	{
+		if (Status != ChargeStatus.Pending)
+			return;
+
+		Status = ChargeStatus.Approved;
+		ApprovedOn = DateTime.UtcNow;
+	}
+
+	/// <summary>
 	/// Validates if the charge can be deleted. Only allowed for PENDING charges.
 	/// </summary>
 	public void ValidateCanDelete()

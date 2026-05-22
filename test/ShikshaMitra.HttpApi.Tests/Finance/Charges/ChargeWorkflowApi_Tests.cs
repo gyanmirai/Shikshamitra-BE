@@ -184,5 +184,50 @@ public class ChargeWorkflowApi_Tests : ChargeApiTestsBase
 		body.Items.ShouldBeEmpty();
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Auto_Approve_Charge_On_Update_When_Category_Does_Not_Require_Approval()
+	{
+		// Create a pending charge (approval-required category)
+		var (chargeId, _, _) = await CreatePendingChargeAsync();
+
+		// Create a category that does NOT require approval
+		var noApprovalCategoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client, isApprovalRequired: false);
+
+		// Update the charge to use the no-approval category
+		var response = await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{chargeId}",
+			new UpdateChargeRequest { ChargeCategoryId = noApprovalCategoryId },
+			JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<ChargeResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Success.ShouldBeTrue();
+		body.Data.ShouldNotBeNull();
+		body.Data.Status.ShouldBe((int)ChargeStatus.Approved);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Remain_Pending_On_Update_When_Category_Requires_Approval()
+	{
+		// Create a pending charge (approval-required category)
+		var (chargeId, _, _) = await CreatePendingChargeAsync();
+
+		// Update only the amount — category stays approval-required
+		var response = await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{chargeId}",
+			new UpdateChargeRequest { Amount = 750m },
+			JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<ChargeResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Success.ShouldBeTrue();
+		body.Data.ShouldNotBeNull();
+		body.Data.Status.ShouldBe((int)ChargeStatus.Pending);
+	}
+
 	#endregion
 }

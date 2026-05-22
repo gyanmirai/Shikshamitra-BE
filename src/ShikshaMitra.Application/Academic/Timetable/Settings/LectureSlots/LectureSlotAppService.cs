@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
@@ -16,6 +17,7 @@ namespace ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
 [Authorize]
 public class LectureSlotAppService(
     ILectureSlotConfigRepository lectureSlotConfigRepository,
+    ITimetableRepository timetableRepository,
     IRepository<Standard, Guid> standardRepository
 ) : ApplicationService, ILectureSlotAppService
 {
@@ -118,6 +120,14 @@ public class LectureSlotAppService(
     {
         var config = await lectureSlotConfigRepository.GetAsync(id);
 
+        // Block update if a timetable has already been created for this standard
+        var existingTimetables = await timetableRepository.GetByStandardIdAsync(config.StandardId);
+        if (existingTimetables.Count > 0)
+        {
+            throw new BusinessException(TimetableErrorCodes.LectureSlotConfigHasTimetable)
+                .WithData("StandardId", config.StandardId);
+        }
+
         config.SetSchoolHours(input.SchoolHours);
         config.SetPreviousStandardId(input.PreviousStandardId);
         config.ClearSlotGroups();
@@ -139,40 +149,70 @@ public class LectureSlotAppService(
             var existing = await lectureSlotConfigRepository.FindByStandardIdAsync(standardId);
             if (existing is not null)
             {
-                throw new BusinessException(TimetableErrorCodes.LectureSlotAlreadyAssigned);
-            }
+                // Overwrite in-place: replace school hours and all slot groups
+                existing.SetSchoolHours(source.SchoolHours);
+                existing.SetPreviousStandardId(source.PreviousStandardId);
+                existing.ClearSlotGroups();
 
-            var clone = new LectureSlotConfig(
-                GuidGenerator.Create(),
-                CurrentTenant.Id,
-                standardId,
-                source.SchoolHours,
-                source.PreviousStandardId);
-
-            foreach (var group in source.SlotGroups)
-            {
-                var newGroup = new LectureSlotGroup(
-                    GuidGenerator.Create(),
-                    clone.Id,
-                    group.TotalSlots,
-                    group.WeekRangeStart,
-                    group.WeekRangeEnd);
-
-                foreach (var timeSlot in group.TimeSlots)
+                foreach (var group in source.SlotGroups)
                 {
-                    newGroup.AddTimeSlot(new LectureSlotTimeSlot(
+                    var newGroup = new LectureSlotGroup(
                         GuidGenerator.Create(),
-                        newGroup.Id,
-                        timeSlot.StartTime,
-                        timeSlot.EndTime,
-                        timeSlot.SlotType,
-                        timeSlot.BreakType));
+                        existing.Id,
+                        group.TotalSlots,
+                        group.WeekRangeStart,
+                        group.WeekRangeEnd);
+
+                    foreach (var timeSlot in group.TimeSlots)
+                    {
+                        newGroup.AddTimeSlot(new LectureSlotTimeSlot(
+                            GuidGenerator.Create(),
+                            newGroup.Id,
+                            timeSlot.StartTime,
+                            timeSlot.EndTime,
+                            timeSlot.SlotType,
+                            timeSlot.BreakType));
+                    }
+
+                    existing.AddSlotGroup(newGroup);
                 }
 
-                clone.AddSlotGroup(newGroup);
+                await lectureSlotConfigRepository.UpdateAsync(existing);
             }
+            else
+            {
+                var clone = new LectureSlotConfig(
+                    GuidGenerator.Create(),
+                    CurrentTenant.Id,
+                    standardId,
+                    source.SchoolHours,
+                    source.PreviousStandardId);
 
-            await lectureSlotConfigRepository.InsertAsync(clone);
+                foreach (var group in source.SlotGroups)
+                {
+                    var newGroup = new LectureSlotGroup(
+                        GuidGenerator.Create(),
+                        clone.Id,
+                        group.TotalSlots,
+                        group.WeekRangeStart,
+                        group.WeekRangeEnd);
+
+                    foreach (var timeSlot in group.TimeSlots)
+                    {
+                        newGroup.AddTimeSlot(new LectureSlotTimeSlot(
+                            GuidGenerator.Create(),
+                            newGroup.Id,
+                            timeSlot.StartTime,
+                            timeSlot.EndTime,
+                            timeSlot.SlotType,
+                            timeSlot.BreakType));
+                    }
+
+                    clone.AddSlotGroup(newGroup);
+                }
+
+                await lectureSlotConfigRepository.InsertAsync(clone);
+            }
         }
     }
 

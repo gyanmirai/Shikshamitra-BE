@@ -35,6 +35,7 @@ public partial class ShikshaMitraDbContext
     // ───────────────────────────────────────────────
     public DbSet<AssignedSubjectChapter> SubjectChapters { get; set; }
     public DbSet<ChapterProgress> ChapterProgresses { get; set; }
+    public DbSet<ChapterProgressLog> ChapterProgressLogs { get; set; }
 
     // ───────────────────────────────────────────────
     // Academic — Homework & Assignments

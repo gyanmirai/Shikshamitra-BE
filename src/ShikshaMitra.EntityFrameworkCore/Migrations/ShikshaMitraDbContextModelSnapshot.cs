@@ -1814,6 +1814,40 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppChapterProgresses", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Academic.Syllabus.ChapterProgressLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ChangedByName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("ChapterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid>("DivisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Progress")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChapterId", "DivisionId");
+
+                    b.ToTable("AppChapterProgressLogs", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Settings.LectureSlots.LectureSlotConfig", b =>
                 {
                     b.Property<Guid>("Id")

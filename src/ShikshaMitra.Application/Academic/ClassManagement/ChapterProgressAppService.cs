@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Academic.Syllabus;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -17,6 +18,7 @@ public class ChapterProgressAppService(
 	IRepository<AssignedSubject, Guid> subjectAssignmentRepository,
 	IRepository<AssignedSubjectChapter, Guid> chapterRepository,
 	IRepository<Syllabus.ChapterProgress, Guid> progressRepository,
+	IRepository<ChapterProgressLog, Guid> progressLogRepository,
 	IRepository<Subject, Guid> subjectRepository,
 	IGuidGenerator guidGenerator,
 	ILogger<ChapterProgressAppService> logger
@@ -270,7 +272,6 @@ public class ChapterProgressAppService(
 							"Updated existing progress for chapter {ChapterId}, division {DivisionId}",
 							chapterId, input.DivisionId
 						);
-						break; // Success - exit retry loop
 					}
 					else
 					{
@@ -287,8 +288,19 @@ public class ChapterProgressAppService(
 							"Created new progress for chapter {ChapterId}, division {DivisionId}",
 							chapterId, input.DivisionId
 						);
-						break; // Success - exit retry loop
 					}
+
+					// Insert audit log entry for this change
+					var log = new ChapterProgressLog(
+						guidGenerator.Create(),
+						chapterId,
+						input.DivisionId,
+						input.Progress,
+						GetCurrentUserDisplayName()
+					);
+					await progressLogRepository.InsertAsync(log);
+
+					break; // Success - exit retry loop
 				}
 				catch (Exception ex) when (
 					attempt < maxRetries &&
@@ -342,6 +354,16 @@ public class ChapterProgressAppService(
 	/// Determines if the exception is a duplicate key/unique constraint violation.
 	/// Handles database-specific exception types using type checking, error codes, and message patterns.
 	/// </summary>
+	private string GetCurrentUserDisplayName()
+	{
+		if (!string.IsNullOrWhiteSpace(CurrentUser.Name))
+		{
+			return $"{CurrentUser.Name} {CurrentUser.SurName}".Trim();
+		}
+
+		return CurrentUser.UserName ?? "Unknown";
+	}
+
 	private bool IsDuplicateKeyException(Exception ex)
 	{
 		if (ex == null)
@@ -411,6 +433,29 @@ public class ChapterProgressAppService(
 			   innerMessage.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) ||
 			   innerMessage.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
 			   innerMessage.Contains("unique index", StringComparison.OrdinalIgnoreCase);
+	}
+
+	public async Task<List<ChapterProgressLogDto>> GetChapterProgressLogsAsync(Guid chapterId, Guid divisionId)
+	{
+		logger.LogInformation(
+			"Getting progress logs for chapter {ChapterId}, division {DivisionId}",
+			chapterId, divisionId
+		);
+
+		var logs = await progressLogRepository.GetListAsync(l =>
+			l.ChapterId == chapterId &&
+			l.DivisionId == divisionId
+		);
+
+		return logs
+			.OrderByDescending(l => l.CreationTime)
+			.Select(l => new ChapterProgressLogDto
+			{
+				ChangedByName = l.ChangedByName,
+				Progress = l.Progress,
+				ChangedAt = l.CreationTime
+			})
+			.ToList();
 	}
 
 	public async Task<List<SubjectForChaptersDto>> GetSubjectsForStandardAsync(Guid standardId)

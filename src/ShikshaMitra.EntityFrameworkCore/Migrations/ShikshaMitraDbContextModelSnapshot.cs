@@ -1364,7 +1364,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("AcademicMediumId", "Name")
                         .IsUnique()
-                        .HasDatabaseName("IX_AssignmentTypes_AcademicMediumId_Name");
+                        .HasDatabaseName("IX_AssignmentTypes_AcademicMediumId_Name")
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("AppAssignmentTypes", (string)null);
                 });
@@ -1618,7 +1619,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("AcademicMediumId", "Name")
                         .IsUnique()
-                        .HasDatabaseName("IX_HomeworkTypes_AcademicMediumId_Name");
+                        .HasDatabaseName("IX_HomeworkTypes_AcademicMediumId_Name")
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("AppHomeworkTypes", (string)null);
                 });

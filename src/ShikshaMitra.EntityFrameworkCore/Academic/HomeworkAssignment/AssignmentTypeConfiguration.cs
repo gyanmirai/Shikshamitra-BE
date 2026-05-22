@@ -33,7 +33,8 @@ public class AssignmentTypeConfiguration : IEntityTypeConfiguration<AssignmentTy
 		builder
 			.HasIndex(x => new { x.AcademicMediumId, x.Name })
 			.IsUnique()
-			.HasDatabaseName("IX_AssignmentTypes_AcademicMediumId_Name");
+			.HasDatabaseName("IX_AssignmentTypes_AcademicMediumId_Name")
+			.HasFilter("\"IsDeleted\" = false");
 
 		// Foreign Keys
 		builder

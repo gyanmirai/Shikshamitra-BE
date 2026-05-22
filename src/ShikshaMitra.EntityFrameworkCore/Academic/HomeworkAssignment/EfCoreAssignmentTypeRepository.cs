@@ -33,8 +33,8 @@ public class EfCoreAssignmentTypeRepository
 		CancellationToken cancellationToken = default
 	)
 	{
-		var dbSet = await GetDbSetAsync();
-		return await dbSet.FirstOrDefaultAsync(
+		var query = await GetQueryableAsync();
+		return await query.FirstOrDefaultAsync(
 			x => EF.Functions.Like(x.Name, name) && x.AcademicMediumId == academicMediumId,
 			GetCancellationToken(cancellationToken)
 		);

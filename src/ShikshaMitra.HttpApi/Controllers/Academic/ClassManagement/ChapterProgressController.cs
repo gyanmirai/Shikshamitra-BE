@@ -130,4 +130,28 @@ public class ChapterProgressController(
 		var result = await appService.GetSubjectsForStandardAsync(standardId);
 		return Ok(result);
 	}
+
+	[HttpGet]
+	[Route("api/class-management/chapters/{chapterId}/progress/logs")]
+	[ProducesResponseType(typeof(List<ChapterProgressLogDto>), 200)]
+	[ProducesResponseType(400)]
+	[ProducesResponseType(401)]
+	public async Task<IActionResult> GetChapterProgressLogsAsync(
+		[FromRoute] Guid chapterId,
+		[FromQuery] Guid divisionId
+	)
+	{
+		if (chapterId == Guid.Empty)
+		{
+			return BadRequest(new { error = "chapterId is required" });
+		}
+
+		if (divisionId == Guid.Empty)
+		{
+			return BadRequest(new { error = "divisionId is required" });
+		}
+
+		var result = await appService.GetChapterProgressLogsAsync(chapterId, divisionId);
+		return Ok(result);
+	}
 }

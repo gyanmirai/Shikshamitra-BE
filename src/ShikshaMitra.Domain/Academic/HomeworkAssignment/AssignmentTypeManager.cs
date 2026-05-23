@@ -102,9 +102,8 @@ public class AssignmentTypeManager : DomainService
 
 		if (existing != null && existing.Id != excludeId)
 		{
-			throw new BusinessException("ShikshaMitra:DuplicateAssignmentType")
-				.WithData("Name", name)
-				.WithData("AcademicMediumId", academicMediumId);
+			throw new BusinessException(HomeworkAssignmentErrorCodes.DuplicateAssignmentType)
+				.WithData("Name", name);
 		}
 	}
 
@@ -119,10 +118,8 @@ public class AssignmentTypeManager : DomainService
 
 		if (medium == null)
 		{
-			throw new BusinessException("ShikshaMitra:AcademicMediumNotFound").WithData(
-				"AcademicMediumId",
-				academicMediumId
-			);
+			throw new BusinessException(HomeworkAssignmentErrorCodes.AcademicMediumNotFound)
+				.WithData("AcademicMediumId", academicMediumId);
 		}
 	}
 }

@@ -114,7 +114,25 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     }
 
     /// <summary>
-    /// Updates mutable fields. Only allowed for Draft requests.
+    /// Cancels a Draft or Pending request. Terminal states (Approved, Rejected, Cancelled)
+    /// cannot be cancelled.
+    /// </summary>
+    public void Cancel()
+    {
+        if (Status == ConcessionRequestStatus.Approved ||
+            Status == ConcessionRequestStatus.Rejected ||
+            Status == ConcessionRequestStatus.Cancelled)
+        {
+            throw new BusinessException(ConcessionRequestErrorCodes.CannotCancelTerminalRequest)
+                .WithData("RequestId", Id)
+                .WithData("Status", Status.ToString());
+        }
+
+        Status = ConcessionRequestStatus.Cancelled;
+    }
+
+    /// <summary>
+    /// Updates mutable fields. Only allowed for Draft or Pending requests.
     /// </summary>
     public void Update(Guid concessionTypeId, string? remarks)
     {

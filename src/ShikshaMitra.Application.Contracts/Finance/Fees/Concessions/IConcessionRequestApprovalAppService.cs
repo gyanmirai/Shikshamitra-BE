@@ -36,6 +36,12 @@ public interface IConcessionRequestApprovalAppService : IApplicationService
 	Task<ConcessionApplicationsDto> GetConcessionApplicationsAsync(GetConcessionApplicationsInput input);
 
 	/// <summary>
+	/// Cancels a Draft or Pending concession request (→ Cancelled).
+	/// Returns cancellation details. Approved/Rejected/Cancelled requests cannot be cancelled.
+	/// </summary>
+	Task<ConcessionCancellationResponseDto> CancelAsync(Guid studentConcessionTypeRequestId);
+
+	/// <summary>
 	/// Deletes a Pending or Rejected concession application. Approved applications
 	/// cannot be deleted. Idempotent — succeeds silently when already deleted.
 	/// </summary>

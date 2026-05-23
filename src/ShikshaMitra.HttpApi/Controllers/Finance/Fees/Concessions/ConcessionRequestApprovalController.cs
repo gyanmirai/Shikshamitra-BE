@@ -22,6 +22,19 @@ public class ConcessionRequestApprovalController : AbpController
 	}
 
 	/// <summary>
+	/// Cancels a Draft or Pending concession request.
+	/// Approved, Rejected, or already-Cancelled requests cannot be cancelled.
+	/// </summary>
+	[HttpPost("{studentConcessionTypeRequestId:guid}/cancel")]
+	[ProducesResponseType(typeof(ConcessionCancellationResponseDto), 200)]
+	[ProducesResponseType(400)]
+	[ProducesResponseType(401)]
+	[ProducesResponseType(404)]
+	public virtual Task<ConcessionCancellationResponseDto> CancelAsync(
+		Guid studentConcessionTypeRequestId)
+		=> _appService.CancelAsync(studentConcessionTypeRequestId);
+
+	/// <summary>
 	/// Approves a Pending concession request with an optional approver message.
 	/// Returns the approval details including approver identity and timestamp.
 	/// </summary>

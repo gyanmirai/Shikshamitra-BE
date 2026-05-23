@@ -258,6 +258,29 @@ public class ConcessionRequestApprovalAppService(
 	}
 
 	// -------------------------------------------------------------------------
+	// Cancel
+	// -------------------------------------------------------------------------
+
+	/// <summary>
+	/// Cancels a Draft or Pending concession request (→ Cancelled).
+	/// </summary>
+	public virtual async Task<ConcessionCancellationResponseDto> CancelAsync(
+		Guid studentConcessionTypeRequestId)
+	{
+		var entity = await concessionRequestRepository.GetAsync(studentConcessionTypeRequestId);
+		entity = await concessionRequestManager.CancelAsync(entity);
+
+		return new ConcessionCancellationResponseDto
+		{
+			StudentConcessionTypeRequestId = entity.Id,
+			Status     = ConcessionRequestDetailDto.MapStatus(entity.Status),
+			StatusName = nameof(ConcessionRequestStatus.Cancelled),
+			CancelledAt = entity.LastModificationTime ?? Clock.Now,
+			Message    = "Concession request cancelled successfully",
+		};
+	}
+
+	// -------------------------------------------------------------------------
 	// Delete Application
 	// -------------------------------------------------------------------------
 
@@ -289,14 +312,15 @@ public class ConcessionRequestApprovalAppService(
 
 	/// <summary>
 	/// Maps the API-level status integer to the domain <see cref="ConcessionRequestStatus"/>.
-	/// Convention: 0=Pending, 1=Approved, 2=Rejected, 3=Draft.
+	/// Convention mirrors the enum's explicit int values: Draft=0, Pending=1, Approved=2, Rejected=3, Cancelled=4.
 	/// </summary>
 	private static ConcessionRequestStatus MapApiStatusToDomain(int apiStatus) => apiStatus switch
 	{
-		0 => ConcessionRequestStatus.Pending,
-		1 => ConcessionRequestStatus.Approved,
-		2 => ConcessionRequestStatus.Rejected,
-		3 => ConcessionRequestStatus.Draft,
+		0 => ConcessionRequestStatus.Draft,
+		1 => ConcessionRequestStatus.Pending,
+		2 => ConcessionRequestStatus.Approved,
+		3 => ConcessionRequestStatus.Rejected,
+		4 => ConcessionRequestStatus.Cancelled,
 		_ => throw new BusinessException(ConcessionRequestErrorCodes.InvalidBasedOnValue)
 		         .WithData("Status", apiStatus),
 	};

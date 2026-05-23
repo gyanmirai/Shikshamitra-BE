@@ -90,6 +90,10 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 					var reconciliationSeeder = scope.ServiceProvider.GetRequiredService<Seeders.ReconciliationSeederContributor>();
 					await reconciliationSeeder.SeedAsync(context);
 
+					// Seed concession types so the concession wizard can be tested immediately
+					var concessionTypeSeeder = scope.ServiceProvider.GetRequiredService<Seeders.ConcessionTypeSeederContributor>();
+					await concessionTypeSeeder.SeedAsync(context);
+
 					// Seed deterministic test-login accounts (feature-flagged; DDVS only)
 					var testLoginSeeder = scope.ServiceProvider.GetRequiredService<Seeders.TestLoginSeederContributor>();
 					await testLoginSeeder.SeedAsync(context);

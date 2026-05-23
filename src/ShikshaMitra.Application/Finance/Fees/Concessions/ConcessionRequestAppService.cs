@@ -42,41 +42,16 @@ public class ConcessionRequestAppService(
     /// </summary>
     public virtual async Task<ApiDataResponseDto<ConcessionRequestDetailDto>> GetAsync(Guid id)
     {
-        // 1. Load the anchor request
         var anchor = await concessionRequestRepository.GetAsync(id);
-
-        // 2. Load the student to source the enrollment context fields
         var student = await studentRepository.GetAsync(anchor.StudentId);
 
-        // 3. Load all requests for this student that share the anchor's status
-        //    — they form the logical "batch" that was created / updated together.
         var siblingRequests = await concessionRequestRepository.GetListAsync(
             skipCount: 0,
             maxResultCount: int.MaxValue,
             studentId: anchor.StudentId,
             status: anchor.Status);
 
-        // 4. Build the aggregated response
-        var detail = new ConcessionRequestDetailDto
-        {
-            ConcessionRequestId   = anchor.Id,
-            BoardId               = student.AcademicBoardId,
-            EducationMediumId     = student.AcademicMediumId,
-            StandardId            = student.StandardId,
-            DivisionId            = student.DivisionId,
-            StudentId             = anchor.StudentId,
-            Status                = ConcessionRequestDetailDto.MapStatus(anchor.Status),
-            CreatedAt             = anchor.CreationTime,
-            UpdatedAt             = anchor.LastModificationTime ?? anchor.CreationTime,
-            SelectedConcessionTypes = siblingRequests
-                .Select(r => new SelectedConcessionTypeDto
-                {
-                    ConcessionTypeId                 = r.ConcessionTypeId,
-                    ConcessionRequestConcessionTypeId = r.Id,
-                })
-                .ToList(),
-        };
-
+        var detail = BuildDetailDto(anchor, student, siblingRequests);
         return ApiDataResponseDto<ConcessionRequestDetailDto>.SuccessResult(detail);
     }
 
@@ -110,8 +85,9 @@ public class ConcessionRequestAppService(
     /// <summary>
     /// Creates one <see cref="ConcessionRequest"/> per concession-type ID (Steps 1 + 2).
     /// Validates student existence and enrollment context before persisting any records.
+    /// Returns the anchor request enriched with its enrollment context and type selections.
     /// </summary>
-    public async Task CreateAsync(CreateConcessionRequestDto input)
+    public async Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateAsync(CreateConcessionRequestDto input)
     {
         var student = await studentRepository.GetAsync(input.StudentId);
 
@@ -120,26 +96,32 @@ public class ConcessionRequestAppService(
 
         await EnsureAllConcessionTypesExistAsync(input.ConcessionTypeIds);
 
-        await concessionRequestManager.CreateAsync(
+        var created = await concessionRequestManager.CreateAsync(
             CurrentTenant.Id,
             input.StudentId,
             input.ConcessionTypeIds);
+
+        var anchor = created.First();
+        var detail = BuildDetailDto(anchor, student, created);
+        return ApiDataResponseDto<ConcessionRequestDetailDto>.SuccessResult(detail);
     }
 
     /// <summary>
-    /// Replaces the student's Pending concession-type selection in full.
-    /// The <paramref name="id"/> must be Pending and must belong to the student
+    /// Replaces the student's Draft or Pending concession-type selection in full.
+    /// The <paramref name="id"/> must be Draft or Pending and must belong to the student
     /// specified in <paramref name="input"/>. The manager performs a batch replace:
-    /// Pending requests for types removed from the list are deleted; newly selected
-    /// types get new Draft requests created for them.
+    /// requests for types removed from the list are deleted; newly selected types get new
+    /// Draft requests created for them.
     /// </summary>
-    public virtual async Task<ConcessionRequestDto> UpdateAsync(Guid id, UpdateConcessionRequestDto input)
+    public virtual async Task<ApiDataResponseDto<ConcessionRequestDetailDto>> UpdateAsync(Guid id, UpdateConcessionRequestDto input)
     {
         var anchor = await concessionRequestRepository.GetAsync(id);
 
-        if (anchor.Status != ConcessionRequestStatus.Pending)
+        if (anchor.Status == ConcessionRequestStatus.Approved ||
+            anchor.Status == ConcessionRequestStatus.Rejected ||
+            anchor.Status == ConcessionRequestStatus.Cancelled)
         {
-            throw new BusinessException(ConcessionRequestErrorCodes.CannotUpdateNonPending)
+            throw new BusinessException(ConcessionRequestErrorCodes.CannotUpdateAfterApproval)
                 .WithData("RequestId", id)
                 .WithData("Status", anchor.Status.ToString());
         }
@@ -159,12 +141,20 @@ public class ConcessionRequestAppService(
 
         await EnsureAllConcessionTypesExistAsync(input.ConcessionTypeIds);
 
-        var result = await concessionRequestManager.UpdateAsync(
+        var firstResult = await concessionRequestManager.UpdateAsync(
             CurrentTenant.Id,
             input.StudentId,
             input.ConcessionTypeIds);
 
-        return ObjectMapper.Map<ConcessionRequest, ConcessionRequestDto>(result);
+        // Re-load all sibling requests to build the full detail DTO
+        var siblingRequests = await concessionRequestRepository.GetListAsync(
+            skipCount: 0,
+            maxResultCount: int.MaxValue,
+            studentId: input.StudentId,
+            status: firstResult.Status);
+
+        var detail = BuildDetailDto(firstResult, student, siblingRequests);
+        return ApiDataResponseDto<ConcessionRequestDetailDto>.SuccessResult(detail);
     }
 
     /// <summary>Submits a Draft request for approval (Draft → Pending).</summary>
@@ -192,6 +182,36 @@ public class ConcessionRequestAppService(
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Builds a <see cref="ConcessionRequestDetailDto"/> from an anchor request,
+    /// the student entity, and the full list of sibling requests in the same batch.
+    /// </summary>
+    private static ConcessionRequestDetailDto BuildDetailDto(
+        ConcessionRequest anchor,
+        Student student,
+        IEnumerable<ConcessionRequest> siblingRequests)
+    {
+        return new ConcessionRequestDetailDto
+        {
+            ConcessionRequestId = anchor.Id,
+            BoardId             = student.AcademicBoardId,
+            EducationMediumId   = student.AcademicMediumId,
+            StandardId          = student.StandardId,
+            DivisionId          = student.DivisionId,
+            StudentId           = anchor.StudentId,
+            Status              = ConcessionRequestDetailDto.MapStatus(anchor.Status),
+            CreatedAt           = anchor.CreationTime,
+            UpdatedAt           = anchor.LastModificationTime ?? anchor.CreationTime,
+            SelectedConcessionTypes = siblingRequests
+                .Select(r => new SelectedConcessionTypeDto
+                {
+                    ConcessionTypeId                  = r.ConcessionTypeId,
+                    ConcessionRequestConcessionTypeId  = r.Id,
+                })
+                .ToList(),
+        };
+    }
 
     /// <summary>
     /// Guards against stale UI state: verifies that the four enrollment context

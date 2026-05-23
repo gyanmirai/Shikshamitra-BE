@@ -34,7 +34,8 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 		var result = await response.Content.ReadFromJsonAsync<ConcessionApprovalResponseDto>(JsonOptions);
 		result.ShouldNotBeNull();
 		result.StudentConcessionTypeRequestId.ShouldBe(pendingId);
-		result.Status.ShouldBe(1);
+		// Approved = 2
+		result.Status.ShouldBe(2);
 		result.StatusName.ShouldBe("Approved");
 	}
 
@@ -54,7 +55,8 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 		var result = await response.Content.ReadFromJsonAsync<ConcessionRejectionResponseDto>(JsonOptions);
 		result.ShouldNotBeNull();
 		result.StudentConcessionTypeRequestId.ShouldBe(pendingId);
-		result.Status.ShouldBe(2);
+		// Rejected = 3
+		result.Status.ShouldBe(3);
 		result.RejectionReason.ShouldBe(reason);
 	}
 
@@ -374,11 +376,105 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Delete_Concession_Application_Returns_204()
+	public async Task Should_Cancel_Pending_Request_Returns_Cancelled_Status()
 	{
 		var pendingId = await CreateDraftWithFeeHeadsAndSubmitAsync();
 
-		var response = await Client.DeleteAsync($"{BaseUrl}/delete-concession/{pendingId}");
-		response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+		var response = await Client.PostAsync($"{ConcessionRequestsBaseUrl}/{pendingId}/cancel", null);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var result = await response.Content.ReadFromJsonAsync<ConcessionCancellationResponseDto>(JsonOptions);
+		result.ShouldNotBeNull();
+		result.StudentConcessionTypeRequestId.ShouldBe(pendingId);
+		// Cancelled = 4
+		result.Status.ShouldBe(4);
+		result.StatusName.ShouldBe("Cancelled");
+		result.CancelledAt.ShouldBeGreaterThan(default);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Cancel_Draft_Request_Returns_Cancelled_Status()
+	{
+		var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+		var typeId = await ConcessionRequestTestHelper.CreateConcessionTypeAsync(Client);
+		var draftId = await ConcessionRequestTestHelper.CreateConcessionRequestAsync(
+			Client, studentId, boardId,
+			ConcessionRequestTestHelper.DefaultMediumId,
+			ConcessionRequestTestHelper.DefaultStandardId,
+			ConcessionRequestTestHelper.DefaultDivisionId,
+			new[] { typeId });
+
+		var response = await Client.PostAsync($"{ConcessionRequestsBaseUrl}/{draftId}/cancel", null);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var result = await response.Content.ReadFromJsonAsync<ConcessionCancellationResponseDto>(JsonOptions);
+		result.ShouldNotBeNull();
+		// Cancelled = 4
+		result.Status.ShouldBe(4);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Error_Cancel_Already_Approved_Request()
+	{
+		var pendingId = await CreateDraftWithFeeHeadsAndSubmitAsync();
+
+		// Approve it first
+		(await Client.PostAsJsonAsync(
+			$"{ConcessionRequestsBaseUrl}/{pendingId}/approve",
+			new ApproveConcessionRequestDto { Message = "Auto-approve for cancel edge case test" },
+			JsonOptions)).EnsureSuccessStatusCode();
+
+		// Attempt cancel on an Approved request
+		var response = await Client.PostAsync($"{ConcessionRequestsBaseUrl}/{pendingId}/cancel", null);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Error_Cancel_Already_Rejected_Request()
+	{
+		var pendingId = await CreateDraftWithFeeHeadsAndSubmitAsync();
+
+		// Reject it first
+		(await Client.PostAsJsonAsync(
+			$"{ConcessionRequestsBaseUrl}/{pendingId}/reject",
+			new RejectConcessionRequestDto { Message = "Reject for cancel edge case test" },
+			JsonOptions)).EnsureSuccessStatusCode();
+
+		// Attempt cancel on a Rejected request
+		var response = await Client.PostAsync($"{ConcessionRequestsBaseUrl}/{pendingId}/cancel", null);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Allow_New_Request_After_Cancel()
+	{
+		var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+		var typeId = await ConcessionRequestTestHelper.CreateConcessionTypeAsync(Client);
+		var draftId = await ConcessionRequestTestHelper.CreateConcessionRequestAsync(
+			Client, studentId, boardId,
+			ConcessionRequestTestHelper.DefaultMediumId,
+			ConcessionRequestTestHelper.DefaultStandardId,
+			ConcessionRequestTestHelper.DefaultDivisionId,
+			new[] { typeId });
+
+		// Cancel the draft request
+		(await Client.PostAsync($"{ConcessionRequestsBaseUrl}/{draftId}/cancel", null)).EnsureSuccessStatusCode();
+
+		// Now creating a new request for the same student + type should succeed
+		var createInput = ConcessionRequestTestHelper.BuildCreateDto(
+			studentId, boardId,
+			ConcessionRequestTestHelper.DefaultMediumId,
+			ConcessionRequestTestHelper.DefaultStandardId,
+			ConcessionRequestTestHelper.DefaultDivisionId,
+			typeId);
+		var response = await Client.PostAsJsonAsync(BaseUrl, createInput, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
 }

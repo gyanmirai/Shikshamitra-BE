@@ -50,18 +50,20 @@ public class ConcessionRequestController : AbpController
 
 	/// <summary>Creates a new ConcessionRequest batch in Draft state (Steps 1 + 2).</summary>
 	[HttpPost]
-	[ProducesResponseType(204)]
-	public async Task CreateAsync([FromBody] CreateConcessionRequestDto input)
+	[ProducesResponseType(typeof(ApiDataResponseDto<ConcessionRequestDetailDto>), 200)]
+	public async Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateAsync(
+		[FromBody] CreateConcessionRequestDto input)
 		=> await _appService.CreateAsync(input);
 
 	/// <summary>
-	/// Replaces the concession-type selection for a student's Pending request batch.
-	/// The <paramref name="id"/> must identify a Pending request owned by the student
-	/// in the body; all Pending requests for that student are then replaced with the
+	/// Replaces the concession-type selection for a student's Draft or Pending request batch.
+	/// The <paramref name="id"/> must identify a Draft or Pending request owned by the student
+	/// in the body; all requests of the same status for that student are then replaced with the
 	/// supplied <c>concessionTypeIds</c>.
 	/// </summary>
 	[HttpPut("{id:guid}")]
-	public async Task<ConcessionRequestDto> UpdateAsync(Guid id, [FromBody] UpdateConcessionRequestDto input)
+	public async Task<ApiDataResponseDto<ConcessionRequestDetailDto>> UpdateAsync(
+		Guid id, [FromBody] UpdateConcessionRequestDto input)
 		=> await _appService.UpdateAsync(id, input);
 
 	/// <summary>Submits a Draft request for approval (Draft → Pending).</summary>

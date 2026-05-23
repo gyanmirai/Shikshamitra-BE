@@ -125,4 +125,15 @@ public static class ConcessionRequestErrorCodes
     /// Only Pending and Rejected applications may be removed via the admin delete endpoint.
     /// </summary>
     public const string CannotDeleteApprovedApplication = Prefix + "CannotDeleteApprovedApplication";
+
+    /// <summary>
+    /// A concession request that is already Approved, Rejected, or Cancelled cannot be cancelled.
+    /// </summary>
+    public const string CannotCancelTerminalRequest = Prefix + "CannotCancelTerminalRequest";
+
+    /// <summary>
+    /// A concession request that is Approved or Cancelled cannot be updated.
+    /// Only Draft and Pending requests may be updated.
+    /// </summary>
+    public const string CannotUpdateAfterApproval = Prefix + "CannotUpdateAfterApproval";
 }

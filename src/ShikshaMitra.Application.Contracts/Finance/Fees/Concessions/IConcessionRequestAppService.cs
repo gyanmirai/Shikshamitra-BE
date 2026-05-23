@@ -30,13 +30,13 @@ public interface IConcessionRequestAppService : IApplicationService
 	Task<PagedResultDto<ConcessionRequestDto>> GetListAsync(GetConcessionRequestListRequestDto input);
 
 	/// <summary>Creates a new ConcessionRequest batch in Draft state (Steps 1 + 2).</summary>
-	Task CreateAsync(CreateConcessionRequestDto input);
+	Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateAsync(CreateConcessionRequestDto input);
 
 	/// <summary>
-	/// Replaces the concession-type selection for a student's Pending request batch
+	/// Replaces the concession-type selection for a student's Draft or Pending request batch
 	/// (batch replace: removes deselected types, adds newly selected ones).
 	/// </summary>
-	Task<ConcessionRequestDto> UpdateAsync(Guid id, UpdateConcessionRequestDto input);
+	Task<ApiDataResponseDto<ConcessionRequestDetailDto>> UpdateAsync(Guid id, UpdateConcessionRequestDto input);
 
 	/// <summary>Submits a Draft request for approval (Draft → Pending).</summary>
 	Task<ConcessionRequestDto> SubmitAsync(Guid id);

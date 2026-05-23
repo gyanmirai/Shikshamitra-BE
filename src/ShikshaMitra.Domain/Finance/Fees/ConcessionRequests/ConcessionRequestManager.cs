@@ -51,13 +51,14 @@ public class ConcessionRequestManager(
     // -------------------------------------------------------------------------
 
     /// <summary>
-    /// Replaces the student's Pending concession-type selection in full.
+    /// Replaces the student's Draft or Pending concession-type selection in full.
     ///
     /// <para>
-    /// All existing <b>Pending</b> requests for the student are deleted, then a
-    /// new request is created for each ID in <paramref name="concessionTypeIds"/>.
-    /// The invariant "no active (non-rejected) duplicate per type" is checked
-    /// before each insert — it catches types that are already <b>Approved</b>.
+    /// All existing <b>Draft</b> and <b>Pending</b> requests for the student are
+    /// deleted, then a new request is created for each ID in
+    /// <paramref name="concessionTypeIds"/>. The invariant "no active duplicate per
+    /// type" is checked before each insert — it catches types that are already
+    /// <b>Approved</b>.
     /// </para>
     /// </summary>
     /// <returns>
@@ -69,17 +70,16 @@ public class ConcessionRequestManager(
         Guid studentId,
         IReadOnlyList<Guid> concessionTypeIds)
     {
-        // 1. Delete all existing Pending requests for this student
-        var pendingRequests = await GetAllPendingRequestsForStudentAsync(studentId);
-        foreach (var req in pendingRequests)
+        // 1. Delete all existing Draft and Pending requests for this student
+        var replaceable = await GetAllReplaceableRequestsForStudentAsync(studentId);
+        foreach (var req in replaceable)
         {
             await concessionRequestRepository.DeleteAsync(req.Id);
         }
 
         // 2. Recreate from the new list
         //    GuardNoDuplicateActiveRequestAsync protects against re-requesting
-        //    an already-Approved type (non-Rejected requests that survived the
-        //    delete above, e.g. Approved ones).
+        //    an already-Approved type.
         ConcessionRequest? first = null;
         foreach (var typeId in concessionTypeIds)
         {
@@ -270,6 +270,16 @@ public class ConcessionRequestManager(
         }
     }
 
+    /// <summary>
+    /// Cancels a Draft or Pending request (→ Cancelled).
+    /// </summary>
+    public async Task<ConcessionRequest> CancelAsync(ConcessionRequest request)
+    {
+        request.Cancel();
+        await concessionRequestRepository.UpdateAsync(request);
+        return request;
+    }
+
     // -------------------------------------------------------------------------
     // State transitions
     // -------------------------------------------------------------------------
@@ -316,28 +326,40 @@ public class ConcessionRequestManager(
     // Private helpers
     // -------------------------------------------------------------------------
 
-    private async Task<List<ConcessionRequest>> GetAllPendingRequestsForStudentAsync(Guid studentId)
+    /// <summary>
+    /// Returns all Draft and Pending requests for a student — the two statuses
+    /// that can be safely replaced by <see cref="UpdateAsync"/>.
+    /// </summary>
+    private async Task<List<ConcessionRequest>> GetAllReplaceableRequestsForStudentAsync(Guid studentId)
     {
-        // Using a large maxResultCount is intentional: a student will never have
-        // thousands of distinct concession-type requests.
-        return await concessionRequestRepository.GetListAsync(
+        var drafts = await concessionRequestRepository.GetListAsync(
+            skipCount: 0,
+            maxResultCount: int.MaxValue,
+            studentId: studentId,
+            status: ConcessionRequestStatus.Draft);
+
+        var pending = await concessionRequestRepository.GetListAsync(
             skipCount: 0,
             maxResultCount: int.MaxValue,
             studentId: studentId,
             status: ConcessionRequestStatus.Pending);
+
+        return drafts.Concat(pending).ToList();
     }
 
     /// <summary>
     /// Throws <see cref="ConcessionRequestErrorCodes.DuplicateActiveRequest"/> when
-    /// the student already has a non-rejected request for the given concession type.
+    /// the student already has an active (non-terminal) request for the given concession type.
     /// This protects against re-requesting an Approved concession.
+    /// Rejected and Cancelled requests are treated as terminal and do not block new requests.
     /// </summary>
     private async Task GuardNoDuplicateActiveRequestAsync(Guid studentId, Guid concessionTypeId)
     {
         var existing = await concessionRequestRepository.FindAsync(r =>
             r.StudentId == studentId &&
             r.ConcessionTypeId == concessionTypeId &&
-            r.Status != ConcessionRequestStatus.Rejected);
+            r.Status != ConcessionRequestStatus.Rejected &&
+            r.Status != ConcessionRequestStatus.Cancelled);
 
         if (existing is not null)
         {

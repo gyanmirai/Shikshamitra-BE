@@ -35,12 +35,14 @@ public class ConcessionRequestDetailDto
     public Guid StudentId { get; init; }
 
     /// <summary>
-    /// Lifecycle status of the anchor request, expressed as the integer defined in the API spec:
+    /// Maps the domain <see cref="ConcessionRequestStatus"/> enum to the integer
+    /// values defined by the API specification.
     /// <list type="bullet">
-    ///   <item><description>0 – PENDING</description></item>
-    ///   <item><description>1 – APPROVED</description></item>
-    ///   <item><description>2 – REJECTED</description></item>
-    ///   <item><description>3 – DRAFT</description></item>
+    ///   <item><description>0 – DRAFT</description></item>
+    ///   <item><description>1 – PENDING</description></item>
+    ///   <item><description>2 – APPROVED</description></item>
+    ///   <item><description>3 – REJECTED</description></item>
+    ///   <item><description>4 – CANCELLED</description></item>
     /// </list>
     /// </summary>
     public int Status { get; init; }
@@ -63,14 +65,7 @@ public class ConcessionRequestDetailDto
 
     /// <summary>
     /// Maps the domain <see cref="ConcessionRequestStatus"/> enum to the integer
-    /// values defined by the API specification.
+    /// values defined by the API specification (mirrors the enum integer values).
     /// </summary>
-    public static int MapStatus(ConcessionRequestStatus status) => status switch
-    {
-        ConcessionRequestStatus.Pending  => 0,
-        ConcessionRequestStatus.Approved => 1,
-        ConcessionRequestStatus.Rejected => 2,
-        ConcessionRequestStatus.Draft    => 3,
-        _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown ConcessionRequestStatus.")
-    };
+    public static int MapStatus(ConcessionRequestStatus status) => (int)status;
 }

@@ -166,8 +166,8 @@ public static class ConcessionRequestTestHelper
 	}
 
 	/// <summary>
-	/// Creates a ConcessionRequest (Draft) and returns the ID of the first created record,
-	/// fetched by filtering the list by studentId.
+	/// Creates a ConcessionRequest (Draft) and returns the ID of the anchor request
+	/// directly from the Create response body.
 	/// </summary>
 	public static async Task<Guid> CreateConcessionRequestAsync(
 		HttpClient client,
@@ -191,17 +191,12 @@ public static class ConcessionRequestTestHelper
 		var createResponse = await client.PostAsJsonAsync(ConcessionRequestUrl, input, JsonOptions);
 		createResponse.EnsureSuccessStatusCode();
 
-		// Fetch the newly created request by studentId filter
-		var listResponse = await client.GetAsync(
-			$"{ConcessionRequestUrl}?studentId={studentId}&maxResultCount=50");
-		listResponse.EnsureSuccessStatusCode();
+		var body = await createResponse.Content
+			.ReadFromJsonAsync<ApiDataResponseDto<ConcessionRequestDetailDto>>(JsonOptions)
+			?? throw new InvalidOperationException("Null response body from concession request create");
 
-		var list = await listResponse.Content
-			.ReadFromJsonAsync<PagedResultDto<ConcessionRequestDto>>(JsonOptions)
-			?? throw new InvalidOperationException("Null concession request list response");
-
-		return list.Items?.FirstOrDefault()?.Id
-			?? throw new InvalidOperationException("Could not find created concession request");
+		return body.Data?.ConcessionRequestId
+			?? throw new InvalidOperationException("Could not find concessionRequestId in create response");
 	}
 
 	// ── DTO builders ──────────────────────────────────────────────────────────

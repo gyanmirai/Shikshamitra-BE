@@ -6,6 +6,7 @@ using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Guids;
+using ShikshaMitra.Academic.Curriculum;
 
 namespace ShikshaMitra.Academic.Curriculum.Settings;
 
@@ -23,21 +24,27 @@ public class SubjectManager(
 			// Validate that the EducationMedium exists
 			if (!await educationMediumRepository.AnyAsync(em => em.Id == educationMediumId))
 			{
-				throw new BusinessException(
-					"ShikshaMitra:Subject:EducationMediumNotFound",
-					$"Education Medium with ID {educationMediumId} does not exist."
-				);
+				throw new BusinessException(CurriculumErrorCodes.SubjectEducationMediumNotFound)
+					.WithData("EducationMediumId", educationMediumId);
 			}
 
 			// Check for duplicate subject name within the same education medium
-			var existingSubject = await subjectRepository.FindAsync(s =>
+			var existingByName = await subjectRepository.FindAsync(s =>
 				s.Name == name && s.EducationMediumId == educationMediumId);
-			if (existingSubject != null)
+			if (existingByName != null)
 			{
-				throw new BusinessException(
-					"ShikshaMitra:Subject:DuplicateName",
-					"Subject with the same name already exists for this education medium."
-				);
+				throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectName)
+					.WithData("Name", name);
+			}
+
+			// Check for duplicate color within the same education medium
+			var existingByColor = await subjectRepository.FindAsync(s =>
+				s.Color == color && s.EducationMediumId == educationMediumId);
+			if (existingByColor != null)
+			{
+				throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectColor)
+					.WithData("Color", color)
+					.WithData("ExistingSubjectName", existingByColor.Name);
 			}
 
 			return new Subject(
@@ -48,9 +55,8 @@ public class SubjectManager(
 				educationMediumId
 			);
 		}
-		catch (UserFriendlyException ex)
+		catch (BusinessException)
 		{
-			logger.LogError(ex.Message);
 			throw;
 		}
 		catch (Exception ex)
@@ -71,16 +77,35 @@ public class SubjectManager(
 		{
 			var existingSubject =
 				await subjectRepository.FindAsync(s => s.Id == id)
-				?? throw new UserFriendlyException("Subject not found");
+				?? throw new BusinessException(CurriculumErrorCodes.SubjectNotFound)
+					.WithData("SubjectId", id);
+
+			// Check for duplicate name (excluding current subject)
+			var duplicateName = await subjectRepository.FindAsync(s =>
+				s.Name == name && s.EducationMediumId == existingSubject.EducationMediumId && s.Id != id);
+			if (duplicateName != null)
+			{
+				throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectName)
+					.WithData("Name", name);
+			}
+
+			// Check for duplicate color (excluding current subject)
+			var duplicateColor = await subjectRepository.FindAsync(s =>
+				s.Color == color && s.EducationMediumId == existingSubject.EducationMediumId && s.Id != id);
+			if (duplicateColor != null)
+			{
+				throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectColor)
+					.WithData("Color", color)
+					.WithData("ExistingSubjectName", duplicateColor.Name);
+			}
 
 			existingSubject.SetName(name);
 			existingSubject.SetColor(color);
 
 			return existingSubject;
 		}
-		catch (UserFriendlyException ex)
+		catch (BusinessException)
 		{
-			logger.LogError(ex.Message);
 			throw;
 		}
 		catch (Exception ex)

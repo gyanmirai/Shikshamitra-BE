@@ -126,6 +126,7 @@ public class ChapterProgressAppService(
 				SubjectId = subject.Id,
 				SubjectName = subject.Name,
 				SubjectCode = assignment.SubjectCode,
+				SubjectColor = subject.Color,
 				TotalChapters = totalChapters,
 				CompletedChapters = completedChapters,
 				ProgressPercentage = progressPercentage

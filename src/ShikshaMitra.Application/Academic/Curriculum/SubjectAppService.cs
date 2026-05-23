@@ -85,9 +85,8 @@ public class SubjectAppService(
 
 			return ObjectMapper.Map<Subject, SubjectDto>(subject);
 		}
-		catch (UserFriendlyException ex)
+		catch (BusinessException)
 		{
-			logger.LogError(ex.Message);
 			throw;
 		}
 		catch (Exception ex)
@@ -116,9 +115,8 @@ public class SubjectAppService(
 
 			return ObjectMapper.Map<Subject, SubjectDto>(subject);
 		}
-		catch (UserFriendlyException ex)
+		catch (BusinessException)
 		{
-			logger.LogError(ex.Message);
 			throw;
 		}
 		catch (Exception ex)

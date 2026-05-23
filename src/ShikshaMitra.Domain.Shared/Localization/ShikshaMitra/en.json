@@ -268,6 +268,32 @@
     "HR:Payroll:030020": "This payroll structure endpoint is deprecated. Use /api/payroll/employees/{employeeId}/salary-structure.",
     "HR:Payroll:030021": "Official payslip PDF is available only after the salary slip is finalized.",
     "HR:Calendar:040005": "Calendar item with ID '{itemId}' was not found.",
-    "ShikshaMitra:DueFee:10001": "Due fees have already been generated for this student."
+    "ShikshaMitra:DueFee:10001": "Due fees have already been generated for this student.",
+
+    "Academic:HomeworkAssignment:010001": "Assignment type '{Name}' already exists. Please use a different name.",
+    "Academic:HomeworkAssignment:010002": "Assignment type was not found.",
+    "Academic:HomeworkAssignment:020001": "Homework type '{Name}' already exists. Please use a different name.",
+    "Academic:HomeworkAssignment:020002": "Homework type was not found.",
+    "Academic:HomeworkAssignment:090001": "Academic medium not found.",
+
+    "Academic:Timetable:010001": "Weekly lecture slot configuration already exists for the selected class.",
+    "Academic:Timetable:010002": "Weekly lecture slot configuration was not found.",
+    "Academic:Timetable:020001": "Lecture slot configuration already exists for the selected class.",
+    "Academic:Timetable:020002": "Lecture slot configuration was not found.",
+    "Academic:Timetable:020003": "Lecture slots are already configured for the selected class.",
+    "Academic:Timetable:020004": "Cannot modify lecture slot settings — a timetable has already been created for this class. Delete the timetable first.",
+    "Academic:Timetable:030001": "Timetable was not found.",
+    "Academic:Timetable:030002": "A timetable already exists for the selected class and week.",
+    "Academic:Timetable:030003": "Teacher is already assigned to another class during this time slot.",
+    "Academic:Timetable:030004": "Room is already booked for another class during this time slot.",
+    "Academic:Timetable:030005": "Timetable slot was not found.",
+    "Academic:Timetable:030006": "Invalid slot configuration.",
+    "Academic:Timetable:040001": "Class (Standard) was not found.",
+    "Academic:Timetable:040002": "Lecture slot configuration has not been created for this class yet.",
+
+    "Academic:Curriculum:010001": "Education medium was not found.",
+    "Academic:Curriculum:010002": "A subject named '{Name}' already exists for this medium.",
+    "Academic:Curriculum:010003": "The color '{Color}' is already used by subject '{ExistingSubjectName}'. Please choose a different color.",
+    "Academic:Curriculum:010004": "Subject was not found."
   }
 }

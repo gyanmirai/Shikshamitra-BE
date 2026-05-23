@@ -27,7 +27,7 @@ namespace ShikshaMitra;
     typeof(AbpTenantManagementDomainSharedModule)
     )]
 [DependsOn(typeof(BlobStoringDatabaseDomainSharedModule))]
-    public class ShikshaMitraDomainSharedModule : AbpModule
+public class ShikshaMitraDomainSharedModule : AbpModule
 {
     public override void PreConfigureServices(ServiceConfigurationContext context)
     {
@@ -55,8 +55,9 @@ namespace ShikshaMitra;
         Configure<AbpExceptionLocalizationOptions>(options =>
         {
             options.MapCodeNamespace("ShikshaMitra", typeof(ShikshaMitraResource));
-			options.MapCodeNamespace("ShikshaMitra.TenantSettings", typeof(ShikshaMitraResource));
-			options.MapCodeNamespace("HR", typeof(ShikshaMitraResource));
-		});
+            options.MapCodeNamespace("ShikshaMitra.TenantSettings", typeof(ShikshaMitraResource));
+            options.MapCodeNamespace("HR", typeof(ShikshaMitraResource));
+            options.MapCodeNamespace("Academic", typeof(ShikshaMitraResource));
+        });
     }
 }

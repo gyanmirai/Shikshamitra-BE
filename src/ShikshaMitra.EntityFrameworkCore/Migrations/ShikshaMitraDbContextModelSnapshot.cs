@@ -3570,7 +3570,8 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("StudentId", "FeeHeadId", "Month", "Year")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("DueFees", (string)null);
                 });

@@ -663,6 +663,23 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppChapterProgressLogs",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ChapterId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DivisionId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Progress = table.Column<int>(type: "integer", nullable: false),
+                    ChangedByName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppChapterProgressLogs", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppClassTeachers",
                 columns: table => new
                 {
@@ -1890,6 +1907,7 @@ namespace ShikshaMitra.Migrations
                     NetAmount = table.Column<double>(type: "double precision", nullable: false),
                     PaidAmount = table.Column<double>(type: "double precision", nullable: false),
                     OutstandingAmount = table.Column<double>(type: "double precision", nullable: false),
+                    RefundedAmount = table.Column<double>(type: "double precision", nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
@@ -1931,6 +1949,23 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "FeeCollectionDueFeeAllocations",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    FeeRecordMetadataId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DueFeeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Amount = table.Column<double>(type: "numeric(18,2)", nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_FeeCollectionDueFeeAllocations", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "FeeCollectionRecords",
                 columns: table => new
                 {
@@ -1954,6 +1989,43 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_FeeCollectionRecords", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "FeePaymentReceipts",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    FeeCollectionTransactionId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ReceiptNumber = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
+                    ReceiptKind = table.Column<int>(type: "integer", nullable: false),
+                    ReceiptScope = table.Column<int>(type: "integer", nullable: false),
+                    VerificationStatus = table.Column<int>(type: "integer", nullable: false),
+                    TotalPaidAmount = table.Column<double>(type: "numeric(18,2)", nullable: false),
+                    StudentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
+                    BoardId = table.Column<Guid>(type: "uuid", nullable: false),
+                    EducationMediumId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ReceiptDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    PdfBlobName = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    LinkedProvisionalReceiptId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LinkedFinalReceiptId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ReceiptBookId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Remarks = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_FeePaymentReceipts", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -1981,6 +2053,37 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_FeeRecordMetadatas", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "FeeRefundRequests",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    StudentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    VoucherNumber = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    TotalAmount = table.Column<double>(type: "double precision", nullable: false),
+                    RefundMethod = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    Reason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    ApproverNotes = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    ProcessedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ProcessedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_FeeRefundRequests", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -3712,6 +3815,26 @@ namespace ShikshaMitra.Migrations
                         principalTable: "FeeCategories",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "FeeRefundLines",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    FeeRefundRequestId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DueFeeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Amount = table.Column<double>(type: "double precision", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_FeeRefundLines", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_FeeRefundLines_FeeRefundRequests_FeeRefundRequestId",
+                        column: x => x.FeeRefundRequestId,
+                        principalTable: "FeeRefundRequests",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -5978,7 +6101,8 @@ namespace ShikshaMitra.Migrations
                 name: "IX_AssignmentTypes_AcademicMediumId_Name",
                 table: "AppAssignmentTypes",
                 columns: new[] { "AcademicMediumId", "Name" },
-                unique: true);
+                unique: true,
+                filter: "\"IsDeleted\" = false");
 
             migrationBuilder.CreateIndex(
                 name: "UX_AttendanceDay_Unique",
@@ -6062,6 +6186,11 @@ namespace ShikshaMitra.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_AppChapterProgresses_ChapterId_DivisionId",
                 table: "AppChapterProgresses",
+                columns: new[] { "ChapterId", "DivisionId" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppChapterProgressLogs_ChapterId_DivisionId",
+                table: "AppChapterProgressLogs",
                 columns: new[] { "ChapterId", "DivisionId" });
 
             migrationBuilder.CreateIndex(
@@ -6586,7 +6715,8 @@ namespace ShikshaMitra.Migrations
                 name: "IX_HomeworkTypes_AcademicMediumId_Name",
                 table: "AppHomeworkTypes",
                 columns: new[] { "AcademicMediumId", "Name" },
-                unique: true);
+                unique: true,
+                filter: "\"IsDeleted\" = false");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AppHouseSettings_AcademicMediumId",
@@ -6985,6 +7115,16 @@ namespace ShikshaMitra.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_FeeCollectionDueFeeAllocations_DueFeeId",
+                table: "FeeCollectionDueFeeAllocations",
+                column: "DueFeeId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FeeCollectionDueFeeAllocations_FeeRecordMetadataId",
+                table: "FeeCollectionDueFeeAllocations",
+                column: "FeeRecordMetadataId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_FeeCollectionRecords_FeeRecordMetadataId",
                 table: "FeeCollectionRecords",
                 column: "FeeRecordMetadataId");
@@ -7000,14 +7140,56 @@ namespace ShikshaMitra.Migrations
                 column: "FeeCategoryId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_FeePaymentReceipts_FeeCollectionTransactionId",
+                table: "FeePaymentReceipts",
+                column: "FeeCollectionTransactionId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FeePaymentReceipts_ListFilter",
+                table: "FeePaymentReceipts",
+                columns: new[] { "TenantId", "AcademicYearId", "BoardId", "EducationMediumId", "ReceiptKind" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FeePaymentReceipts_ReconciliationFilter",
+                table: "FeePaymentReceipts",
+                columns: new[] { "TenantId", "AcademicYearId", "ReceiptKind", "VerificationStatus", "ReceiptDate" });
+
+            migrationBuilder.CreateIndex(
+                name: "UX_FeePaymentReceipts_TenantId_ReceiptNumber",
+                table: "FeePaymentReceipts",
+                columns: new[] { "TenantId", "ReceiptNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_FeeRecordMetadatas_StudentId_AcademicYearId",
                 table: "FeeRecordMetadatas",
                 columns: new[] { "StudentId", "AcademicYearId" });
 
             migrationBuilder.CreateIndex(
-                name: "UX_FeeRecordMetadatas_ReceiptNumber",
+                name: "UX_FeeRecordMetadatas_TenantId_ReceiptNumber",
                 table: "FeeRecordMetadatas",
-                column: "ReceiptNumber",
+                columns: new[] { "TenantId", "ReceiptNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FeeRefundLines_DueFeeId",
+                table: "FeeRefundLines",
+                column: "DueFeeId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FeeRefundLines_FeeRefundRequestId",
+                table: "FeeRefundLines",
+                column: "FeeRefundRequestId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FeeRefundRequests_Student_Year_Status",
+                table: "FeeRefundRequests",
+                columns: new[] { "StudentId", "AcademicYearId", "Status" });
+
+            migrationBuilder.CreateIndex(
+                name: "UX_FeeRefundRequests_TenantId_VoucherNumber",
+                table: "FeeRefundRequests",
+                columns: new[] { "TenantId", "VoucherNumber" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -7454,6 +7636,9 @@ namespace ShikshaMitra.Migrations
                 name: "AppChapterProgresses");
 
             migrationBuilder.DropTable(
+                name: "AppChapterProgressLogs");
+
+            migrationBuilder.DropTable(
                 name: "AppClassTeachers");
 
             migrationBuilder.DropTable(
@@ -7667,10 +7852,19 @@ namespace ShikshaMitra.Migrations
                 name: "DueFees");
 
             migrationBuilder.DropTable(
+                name: "FeeCollectionDueFeeAllocations");
+
+            migrationBuilder.DropTable(
                 name: "FeeCollectionRecords");
 
             migrationBuilder.DropTable(
+                name: "FeePaymentReceipts");
+
+            migrationBuilder.DropTable(
                 name: "FeeRecordMetadatas");
+
+            migrationBuilder.DropTable(
+                name: "FeeRefundLines");
 
             migrationBuilder.DropTable(
                 name: "FeeStructureDetails");
@@ -7824,6 +8018,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "AppWeeklyLectureSlots");
+
+            migrationBuilder.DropTable(
+                name: "FeeRefundRequests");
 
             migrationBuilder.DropTable(
                 name: "FeeHeads");

@@ -22,6 +22,7 @@ public static class EmployeeTestHelper
 
 	public static Guid DefaultRoleId { get; set; }
 	public static Guid DefaultShiftId { get; set; }
+	public static Guid DefaultMediumStageId { get; set; }
 
 	/// <summary>
 	/// Creates an employee via POST /api/employees/personal-info (multipart/form-data)
@@ -114,6 +115,7 @@ public static class EmployeeTestHelper
 			IsTeaching = true,
 			RoleId = DefaultRoleId,
 			ShiftId = DefaultShiftId,
+			OrganizationIds = new List<Guid> { DefaultMediumStageId },
 			Email = TestDataHelper.UniqueEmail("emp"),
 			Gender = 1,
 		};
@@ -142,6 +144,7 @@ public static class EmployeeTestHelper
 			Department = "Science",
 			RoleId = DefaultRoleId,
 			ShiftId = DefaultShiftId,
+			OrganizationIds = new List<Guid> { DefaultMediumStageId },
 			Address1 = "123 Test Street",
 			Address2 = "Block A",
 			Address3 = "Near Park",

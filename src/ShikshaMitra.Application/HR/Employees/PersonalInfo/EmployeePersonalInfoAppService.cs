@@ -4,16 +4,23 @@ using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR;
+using ShikshaMitra.HR.Policies;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities;
-using Volo.Abp.Guids;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.EventBus.Distributed;
+using Volo.Abp.Guids;
 using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
+using IdentityUser = Volo.Abp.Identity.IdentityUser;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
 
@@ -33,6 +40,10 @@ public class EmployeePersonalInfoAppService(
 	IGuidGenerator guidGenerator,
 	IEmployeeEmailService emailService,
 	IDistributedEventBus distributedEventBus,
+	IHrPolicyAssignmentAppService policyAssignmentAppService,
+	IRepository<EmployeeOrganizationAssignment, Guid> employeeOrganizationAssignmentRepository,
+	IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
+	IDataFilter<IMultiTenant> multiTenantDataFilter,
 	ILogger<EmployeePersonalInfoAppService> logger)
 	: ApplicationService, IEmployeePersonalInfoAppService
 {
@@ -58,6 +69,8 @@ public class EmployeePersonalInfoAppService(
 		string? profilePictureFileName,
 		byte[]? profilePictureContent)
 	{
+		var organizationIds = await ValidateOrganizationIdsAsync(input.OrganizationIds);
+
 		if (string.IsNullOrWhiteSpace(input.Email))
 			throw new BusinessException(HRErrorCodes.EmployeeEmailRequired);
 
@@ -94,7 +107,7 @@ public class EmployeePersonalInfoAppService(
 		Employee employee;
 		try
 		{
-			employee = await CreateAndInsertEmployeeWithRetryAsync(user.Id, input);
+			employee = await CreateAndInsertEmployeeWithRetryAsync(user.Id, input, organizationIds);
 		}
 		catch
 		{
@@ -134,12 +147,13 @@ public class EmployeePersonalInfoAppService(
 		var fullName = $"{input.FirstName} {input.LastName}".Trim();
 		await emailService.SendWelcomeEmailAsync(input.Email, fullName, username, password);
 
-		return MapToDto(employee);
+		return MapToDto(await employeeRepository.GetAsync(employee.Id));
 	}
 
 	private async Task<Employee> CreateAndInsertEmployeeWithRetryAsync(
 		Guid userId,
-		CreateEmployeePersonalInfoDto input)
+		CreateEmployeePersonalInfoDto input,
+		IReadOnlyCollection<Guid> organizationIds)
 	{
 		for (var attempt = 1; attempt <= MaxEmployeeCodeInsertAttempts; attempt++)
 		{
@@ -165,6 +179,11 @@ public class EmployeePersonalInfoAppService(
 					shiftId: input.ShiftId);
 
 				employee = await employeeRepository.InsertAsync(employee, autoSave: true);
+				await ReplaceOrganizationAssignmentsAsync(employee.Id, organizationIds);
+				if (input.PolicyOverride != null)
+				{
+					await CreateDirectPolicyOverrideAsync(employee.Id, input.PolicyOverride);
+				}
 				await uow.CompleteAsync();
 				return employee;
 			}
@@ -180,6 +199,66 @@ public class EmployeePersonalInfoAppService(
 		}
 
 		throw new InvalidOperationException("Employee creation retry loop exited unexpectedly.");
+	}
+
+	private async Task CreateDirectPolicyOverrideAsync(Guid employeeId, CreateEmployeePolicyOverrideDto input)
+	{
+		await policyAssignmentAppService.UpsertEmployeeOverrideAsync(new UpsertEmployeePolicyOverrideDto
+		{
+			EmployeeId = employeeId,
+			AcademicYearId = input.AcademicYearId,
+			AttendancePolicyId = input.AttendancePolicyId,
+			PayrollPolicyId = input.PayrollPolicyId,
+			EffectiveFrom = input.EffectiveFrom,
+			EffectiveTo = input.EffectiveTo,
+			AssignmentReason = input.AssignmentReason ?? "Employee creation override",
+			ConfirmationToken = input.ConfirmationToken
+		});
+	}
+
+	private async Task<List<Guid>> ValidateOrganizationIdsAsync(IEnumerable<Guid>? organizationIds)
+	{
+		var distinctIds = (organizationIds ?? [])
+			.Where(id => id != Guid.Empty)
+			.Distinct()
+			.ToList();
+		if (distinctIds.Count == 0)
+		{
+			throw new BusinessException(HRErrorCodes.EmployeeOrganizationRequired);
+		}
+
+		using var _ = CurrentTenant.Id == null ? multiTenantDataFilter.Disable() : null;
+		var query = await educationMediumStageRepository.GetQueryableAsync();
+		var existingIds = await AsyncExecuter.ToListAsync(
+			query.Where(x => distinctIds.Contains(x.Id)).Select(x => x.Id));
+
+		if (existingIds.Count != distinctIds.Count)
+		{
+			throw new BusinessException(HRErrorCodes.EmployeeOrganizationInvalid);
+		}
+
+		return distinctIds;
+	}
+
+	private async Task ReplaceOrganizationAssignmentsAsync(
+		Guid employeeId,
+		IReadOnlyCollection<Guid> organizationIds)
+	{
+		var existing = await employeeOrganizationAssignmentRepository.GetListAsync(x => x.EmployeeId == employeeId);
+		if (existing.Count > 0)
+		{
+			await employeeOrganizationAssignmentRepository.DeleteManyAsync(existing, autoSave: false);
+		}
+
+		var assignments = organizationIds
+			.Select(id => new EmployeeOrganizationAssignment(
+				guidGenerator.Create(),
+				CurrentTenant.Id,
+				employeeId,
+				id))
+			.ToList();
+
+		await employeeOrganizationAssignmentRepository.InsertManyAsync(assignments, autoSave: false);
 	}
 
 	private static bool IsEmployeeCodeUniqueConstraintViolation(Exception exception)
@@ -209,6 +288,7 @@ public class EmployeePersonalInfoAppService(
 
 	public async Task<EmployeePersonalInfoDto> UpdateAsync(Guid id, UpdateEmployeePersonalInfoDto input)
 	{
+		var organizationIds = await ValidateOrganizationIdsAsync(input.OrganizationIds);
 		var existingEmployee = await employeeRepository.GetAsync(id);
 
 		// Update employee using EmployeeManager
@@ -248,9 +328,10 @@ public class EmployeePersonalInfoAppService(
 
 		// Save the updated employee
 		employee = await employeeRepository.UpdateAsync(employee);
+		await ReplaceOrganizationAssignmentsAsync(employee.Id, organizationIds);
 
 		// Return the mapped DTO
-		return MapToDto(employee);
+		return MapToDto(await employeeRepository.GetAsync(employee.Id));
 	}
 
 	public async Task<EmployeeDto> GetByUserIdAsync(Guid userId)
@@ -349,7 +430,26 @@ public class EmployeePersonalInfoAppService(
 			City = employee.City,
 			Pincode = employee.PinCode,
 			ShiftId = employee.ShiftId,
-			Shift = null // Navigation property not included in API contract
+			Shift = null, // Navigation property not included in API contract
+			OrganizationIds = employee.OrganizationAssignments
+				.Select(x => x.EducationMediumStageId)
+				.Distinct()
+				.ToList(),
+			Organizations = employee.OrganizationAssignments
+				.Where(x => x.EducationMediumStage != null)
+				.Select(x => new EmployeeOrganizationDto
+				{
+					Id = x.EducationMediumStageId,
+					Name = x.EducationMediumStage!.Name
+				})
+				.OrderBy(x => x.Name)
+				.ToList(),
+			OrganizationNames = employee.OrganizationAssignments
+				.Where(x => x.EducationMediumStage != null)
+				.Select(x => x.EducationMediumStage!.Name)
+				.Distinct()
+				.OrderBy(x => x)
+				.ToList()
 		};
 	}
 

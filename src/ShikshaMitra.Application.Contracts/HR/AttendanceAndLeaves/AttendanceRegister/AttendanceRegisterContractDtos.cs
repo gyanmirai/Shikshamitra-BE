@@ -1,0 +1,115 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using ShikshaMitra.Common;
+using Volo.Abp.Application.Dtos;
+
+namespace ShikshaMitra.HR.AttendanceAndLeaves.AttendanceRegister;
+
+public enum AttendanceRegisterPayrollState
+{
+	All = 0,
+	Editable = 1,
+	Locked = 2
+}
+
+public class GetAttendanceRegisterInput : PagedAndSortedResultRequestDto
+{
+	public string StartDate { get; set; } = string.Empty;
+	public string EndDate { get; set; } = string.Empty;
+	public Guid? EducationMediumStageId { get; set; }
+	public Guid? EmployeeId { get; set; }
+	public EmployeeGroupType? EmployeeGroup { get; set; }
+	public string? Department { get; set; }
+	public Guid? RoleId { get; set; }
+	public bool? IsTeaching { get; set; }
+	public EmployeeAttendanceStatusType? Status { get; set; }
+	public AttendanceRegisterPayrollState PayrollState { get; set; } = AttendanceRegisterPayrollState.All;
+	public string? Search { get; set; }
+}
+
+public class AttendanceRegisterResponse
+{
+	public int TotalCount { get; set; }
+	public int CurrentPage { get; set; }
+	public int PageSize { get; set; }
+	public int TotalPages { get; set; }
+	public AttendanceRegisterSummaryDto Summary { get; set; } = new();
+	public IReadOnlyList<AttendanceRegisterRowDto> Items { get; set; } = Array.Empty<AttendanceRegisterRowDto>();
+}
+
+public class AttendanceRegisterSummaryDto
+{
+	public int Present { get; set; }
+	public int HalfDay { get; set; }
+	public int Absent { get; set; }
+	public int Editable { get; set; }
+	public int Locked { get; set; }
+}
+
+public class AttendanceRegisterRowDto
+{
+	public Guid AttendanceId { get; set; }
+	public Guid EmployeeId { get; set; }
+	public string EmployeeName { get; set; } = string.Empty;
+	public string EmployeeCode { get; set; } = string.Empty;
+	public string? Department { get; set; }
+	public string? EmployeeGroup { get; set; }
+	public Guid? EducationMediumStageId { get; set; }
+	public string? EducationMediumStageName { get; set; }
+	public Guid? RoleId { get; set; }
+	public string AttendanceDate { get; set; } = string.Empty;
+	public string PayrollMonth { get; set; } = string.Empty;
+	public string? InTime { get; set; }
+	public string? OutTime { get; set; }
+	public string? HoursWorked { get; set; }
+	public string? Remarks { get; set; }
+	public EmployeeAttendanceStatusType Status { get; set; }
+	public bool IsDayLocked { get; set; }
+	public bool IsPayrollLocked { get; set; }
+	public bool CanEdit { get; set; }
+	public string? LockReason { get; set; }
+}
+
+public class AttendanceRegisterAdjustRequest
+{
+	public Guid AttendanceId { get; set; }
+	public string StatusWire { get; set; } = "PRESENT";
+	public string? InTime { get; set; }
+	public string? OutTime { get; set; }
+	public string? Remarks { get; set; }
+	public string? Reason { get; set; }
+}
+
+public class AttendanceRegisterBulkAdjustRequest
+{
+	public List<Guid> AttendanceIds { get; set; } = [];
+	public string StatusWire { get; set; } = "PRESENT";
+	public string? InTime { get; set; }
+	public string? OutTime { get; set; }
+	public string? Remarks { get; set; }
+	public string? Reason { get; set; }
+}
+
+public class AttendanceRegisterAdjustmentResult
+{
+	public int UpdatedCount { get; set; }
+	public int SkippedCount { get; set; }
+	public IReadOnlyList<AttendanceRegisterAdjustmentRowResult> Rows { get; set; } = Array.Empty<AttendanceRegisterAdjustmentRowResult>();
+}
+
+public class AttendanceRegisterAdjustmentRowResult
+{
+	public Guid AttendanceId { get; set; }
+	public Guid? EmployeeId { get; set; }
+	public string? AttendanceDate { get; set; }
+	public bool Updated { get; set; }
+	public string? Reason { get; set; }
+}
+
+public interface IAttendanceRegisterAppService
+{
+	Task<AttendanceRegisterResponse> GetAsync(GetAttendanceRegisterInput input);
+	Task<AttendanceRegisterAdjustmentResult> AdjustAsync(AttendanceRegisterAdjustRequest input);
+	Task<AttendanceRegisterAdjustmentResult> BulkAdjustAsync(AttendanceRegisterBulkAdjustRequest input);
+}

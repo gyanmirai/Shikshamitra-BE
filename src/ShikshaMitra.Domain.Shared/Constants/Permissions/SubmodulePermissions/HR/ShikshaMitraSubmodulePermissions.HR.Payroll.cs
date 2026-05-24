@@ -44,14 +44,18 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
+			public const string Lock = $"{SubmoduleName}.Lock";
+			public const string ViewAudit = $"{SubmoduleName}.ViewAudit";
 
-			public static readonly string[] All = { View, Add, Delete };
+			public static readonly string[] All = { View, Add, Delete, Lock, ViewAudit };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+				{ Delete, $"{SubmoduleDisplayName}.Delete" },
+				{ Lock, $"{SubmoduleDisplayName}.Lock" },
+				{ ViewAudit, $"{SubmoduleDisplayName}.ViewAudit" }
 			};
 		}
 
@@ -131,10 +135,10 @@ public static partial class ShikshaMitraSubmodulePermissions
 			};
 		}
 
-		public static class PayrollManagement_SettingsPayrollConfiguration
+		public static class PayrollManagement_SettingsPayrollPolicies
 		{
-			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Settings.PayrollConfiguration";
-			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.Settings.PayrollConfiguration";
+			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Settings.PayrollPolicies";
+			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.Settings.PayrollPolicies";
 
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";

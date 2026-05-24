@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using ShikshaMitra.HR.Employees;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
 
@@ -78,6 +79,9 @@ public class PersonalInfoRequest : IValidatableObject
 	[Required]
 	public Guid ShiftId { get; set; }
 
+	[Required]
+	public List<Guid> OrganizationIds { get; set; } = [];
+
 	[MaxLength(512)]
 	public string? Address1 { get; set; }
 
@@ -98,6 +102,8 @@ public class PersonalInfoRequest : IValidatableObject
 	[RegularExpression(@"^$|^\d{6}$", ErrorMessage = "Pincode must be 6 digits.")]
 	public string? PinCode { get; set; }
 
+	public PersonalInfoPolicyOverrideRequest? PolicyOverride { get; set; }
+
 	public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
 	{
 		if (!string.IsNullOrWhiteSpace(SecondaryMobileNo) && !string.IsNullOrWhiteSpace(MobileNo))
@@ -112,6 +118,17 @@ public class PersonalInfoRequest : IValidatableObject
 			}
 		}
 	}
+}
+
+public class PersonalInfoPolicyOverrideRequest
+{
+	public Guid AcademicYearId { get; set; }
+	public Guid AttendancePolicyId { get; set; }
+	public Guid PayrollPolicyId { get; set; }
+	public DateTime EffectiveFrom { get; set; }
+	public DateTime? EffectiveTo { get; set; }
+	public string? AssignmentReason { get; set; }
+	public string? ConfirmationToken { get; set; }
 }
 
 /// <summary>
@@ -135,6 +152,10 @@ public class PersonalInfoResponse : PersonalInfoRequest
 	/// Use GET /api/employees/{id}/profile-picture to download.
 	/// </summary>
 	public bool HasProfilePicture { get; set; }
+
+	public List<EmployeeOrganizationDto> Organizations { get; set; } = [];
+
+	public List<string> OrganizationNames { get; set; } = [];
 }
 
 /// <summary>

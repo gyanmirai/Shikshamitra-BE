@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.AdditionalDetails;
 using ShikshaMitra.HR.Employees.AdditionalInfo;
 using Volo.Abp;
@@ -21,10 +22,14 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 public class AdditionalInfoController : AbpControllerBase
 {
 	private readonly IEmployeeAdditionalDetailsAppService _additionalDetailsAppService;
+	private readonly IEmployeeAuthorizationService _authorizationService;
 
-	public AdditionalInfoController(IEmployeeAdditionalDetailsAppService additionalDetailsAppService)
+	public AdditionalInfoController(
+		IEmployeeAdditionalDetailsAppService additionalDetailsAppService,
+		IEmployeeAuthorizationService authorizationService)
 	{
 		_additionalDetailsAppService = additionalDetailsAppService;
+		_authorizationService = authorizationService;
 	}
 
 	/// <summary>
@@ -35,6 +40,7 @@ public class AdditionalInfoController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<AdditionalInfoContract> GetAsync([FromRoute, Required] Guid employeeId)
 	{
+		await _authorizationService.CheckEmployeeAccessAsync(employeeId);
 		var dto = await _additionalDetailsAppService.GetAsync(employeeId);
 		return new AdditionalInfoContract
 		{
@@ -56,6 +62,7 @@ public class AdditionalInfoController : AbpControllerBase
 		[FromRoute, Required] Guid employeeId,
 		[FromBody, Required] AdditionalInfoContract request)
 	{
+		await _authorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 		var upsertDto = new EmployeeAdditionalDetailsUpsertDto
 		{
 			BplCardNo = request.BplCardNo,

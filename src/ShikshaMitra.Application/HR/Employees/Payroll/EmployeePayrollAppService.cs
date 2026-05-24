@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
 using System;
 using System.Collections.Generic;
@@ -8,7 +10,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Employees.Payroll;
 
@@ -20,6 +24,7 @@ public class EmployeePayrollAppService(
 	IEmployeePayrollComponentRepository payrollComponentRepository,
 	IEarningComponentRepository earningComponentRepository,
 	IDeductionComponentRepository deductionComponentRepository,
+	IHrPolicyAssignmentAppService policyAssignmentAppService,
 	IEmployeeCacheManager employeeCacheManager,
 	IGuidGenerator guidGenerator)
 	: ApplicationService, IEmployeePayrollAppService
@@ -189,11 +194,13 @@ public class EmployeePayrollAppService(
 		};
 	}
 
+	[UnitOfWork]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	public async Task UpdatePayrollContractAsync(Guid employeeId, PayrollContract input)
 	{
 		ValidatePayrollContract(input);
 
-		await employeeRepository.GetAsync(employeeId);
+		var employee = await employeeRepository.GetAsync(employeeId);
 		var existingEarnings = await payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
 		var existingDeductions = await payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);
 
@@ -221,9 +228,19 @@ public class EmployeePayrollAppService(
 				.WithData("overlappingComponentIds", string.Join(",", overlap));
 		}
 
+		var earningAmountLines = earningLines.Select(ToAmountLine).ToList();
+		var deductionAmountLines = deductionLines.Select(ToAmountLine).ToList();
+		var earningAmountsByComponentId = PayrollComponentAmountResolver.ResolveEarningAmounts(earningAmountLines);
+		var grossAmount = earningAmountsByComponentId.Values.Sum();
+		var deductionAmountsByComponentId = PayrollComponentAmountResolver.ResolveDeductionAmounts(
+			deductionAmountLines,
+			earningAmountLines,
+			earningAmountsByComponentId,
+			grossAmount);
+
 		foreach (var resolved in earningLines)
 		{
-			var amount = ResolveEarningLineAmount(resolved);
+			var amount = ResolveEarningLineAmount(resolved, earningAmountsByComponentId);
 			if (!IsPercentageComponent(resolved) && (!amount.HasValue || amount <= 0))
 			{
 				throw new BusinessException(HRErrorCodes.EmployeePayrollComponentAmountInvalid)
@@ -235,7 +252,7 @@ public class EmployeePayrollAppService(
 
 		foreach (var resolved in deductionLines)
 		{
-			var amount = ResolveDeductionLineAmount(resolved);
+			var amount = ResolveDeductionLineAmount(resolved, deductionAmountsByComponentId);
 			if (!IsPercentageComponent(resolved) && (!amount.HasValue || amount <= 0))
 			{
 				throw new BusinessException(HRErrorCodes.EmployeePayrollComponentAmountInvalid)
@@ -288,7 +305,7 @@ public class EmployeePayrollAppService(
 		{
 			var line = resolved.Line;
 			var master = resolved.Master;
-			var amount = ResolveEarningLineAmount(resolved)!.Value;
+			var amount = ResolveEarningLineAmount(resolved, earningAmountsByComponentId)!.Value;
 			var isFixed = master is not null
 				? master.CalculationType == CalculationType.Amount
 				: line.IsFixed ?? resolved.ExistingPayrollComponent?.IsFixed ?? false;
@@ -319,7 +336,7 @@ public class EmployeePayrollAppService(
 		{
 			var line = resolved.Line;
 			var master = resolved.Master;
-			var amount = ResolveDeductionLineAmount(resolved)!.Value;
+			var amount = ResolveDeductionLineAmount(resolved, deductionAmountsByComponentId)!.Value;
 			var isFixed = master is not null
 				? master.CalculationType == CalculationType.Amount
 				: line.IsFixed ?? resolved.ExistingPayrollComponent?.IsFixed ?? false;
@@ -346,7 +363,27 @@ public class EmployeePayrollAppService(
 			await payrollComponentRepository.InsertAsync(deductionComponent);
 		}
 
+		if (input.PolicyOverride != null)
+		{
+			await UpsertDirectPolicyOverrideAsync(employee, input.PolicyOverride);
+		}
+
 		await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
+	}
+
+	private async Task UpsertDirectPolicyOverrideAsync(Employee employee, EmployeePayrollPolicyOverrideContract input)
+	{
+		await policyAssignmentAppService.UpsertEmployeeOverrideAsync(new UpsertEmployeePolicyOverrideDto
+		{
+			EmployeeId = employee.Id,
+			AcademicYearId = input.AcademicYearId,
+			AttendancePolicyId = input.AttendancePolicyId,
+			PayrollPolicyId = input.PayrollPolicyId,
+			EffectiveFrom = input.EffectiveFrom,
+			EffectiveTo = input.EffectiveTo,
+			AssignmentReason = input.AssignmentReason,
+			ConfirmationToken = input.ConfirmationToken
+		});
 	}
 
 	private async Task<ResolvedPayrollLine<EarningComponent>> ResolveEarningLineAsync(
@@ -503,25 +540,24 @@ public class EmployeePayrollAppService(
 		};
 	}
 
-	private static decimal ResolveEarningComponentAmount(EarningComponent master)
-	{
-		return master.CalculationType == CalculationType.Amount
+	private static decimal ResolveEarningComponentAmount(EarningComponent master) =>
+		master.CalculationType == CalculationType.Amount
 			? master.Amount ?? 0m
 			: master.Percentage ?? 0m;
-	}
 
-	private static decimal ResolveDeductionComponentAmount(DeductionComponent master)
-	{
-		return master.CalculationType == CalculationType.Amount
+	private static decimal ResolveDeductionComponentAmount(DeductionComponent master) =>
+		master.CalculationType == CalculationType.Amount
 			? master.Amount ?? 0m
 			: master.Percentage ?? 0m;
-	}
 
-	private static decimal? ResolveEarningLineAmount(ResolvedPayrollLine<EarningComponent> resolved)
+	private static decimal? ResolveEarningLineAmount(
+		ResolvedPayrollLine<EarningComponent> resolved,
+		IReadOnlyDictionary<Guid, decimal> resolvedAmountsByComponentId)
 	{
-		if (resolved.Master?.CalculationType == CalculationType.Percentage && (!resolved.Line.Amount.HasValue || resolved.Line.Amount <= 0))
+		if (resolved.Master?.Id is Guid masterId &&
+		    resolvedAmountsByComponentId.TryGetValue(masterId, out var resolvedAmount))
 		{
-			return ResolveEarningComponentAmount(resolved.Master);
+			return resolvedAmount;
 		}
 
 		return resolved.Line.Amount
@@ -530,11 +566,14 @@ public class EmployeePayrollAppService(
 				: resolved.ExistingPayrollComponent?.Amount);
 	}
 
-	private static decimal? ResolveDeductionLineAmount(ResolvedPayrollLine<DeductionComponent> resolved)
+	private static decimal? ResolveDeductionLineAmount(
+		ResolvedPayrollLine<DeductionComponent> resolved,
+		IReadOnlyDictionary<Guid, decimal> resolvedAmountsByComponentId)
 	{
-		if (resolved.Master?.CalculationType == CalculationType.Percentage && (!resolved.Line.Amount.HasValue || resolved.Line.Amount <= 0))
+		if (resolved.Master?.Id is Guid masterId &&
+		    resolvedAmountsByComponentId.TryGetValue(masterId, out var resolvedAmount))
 		{
-			return ResolveDeductionComponentAmount(resolved.Master);
+			return resolvedAmount;
 		}
 
 		return resolved.Line.Amount
@@ -550,6 +589,11 @@ public class EmployeePayrollAppService(
 			return false;
 		}
 
+		if (resolved.Master.CalculationType == CalculationType.Percentage)
+		{
+			return true;
+		}
+
 		var masterAmount = ResolveEarningComponentAmount(resolved.Master);
 		return amount == masterAmount;
 	}
@@ -559,6 +603,11 @@ public class EmployeePayrollAppService(
 		if (resolved.Master is null || resolved.Line.IsTemp == true)
 		{
 			return false;
+		}
+
+		if (resolved.Master.CalculationType == CalculationType.Percentage)
+		{
+			return true;
 		}
 
 		var masterAmount = ResolveDeductionComponentAmount(resolved.Master);
@@ -573,6 +622,32 @@ public class EmployeePayrollAppService(
 	private static bool IsPercentageComponent(ResolvedPayrollLine<DeductionComponent> resolved)
 	{
 		return resolved.Master?.CalculationType == CalculationType.Percentage;
+	}
+
+	private static PayrollComponentAmountLine<EarningComponent> ToAmountLine(
+		ResolvedPayrollLine<EarningComponent> resolved)
+	{
+		var line = resolved.Line;
+		return new PayrollComponentAmountLine<EarningComponent>(
+			line.Id,
+			line.ComponentId,
+			resolved.Master?.Name ?? line.Name,
+			line.Amount,
+			line.IsTemp ?? resolved.ExistingPayrollComponent?.IsTemp ?? resolved.Master is null,
+			resolved.Master);
+	}
+
+	private static PayrollComponentAmountLine<DeductionComponent> ToAmountLine(
+		ResolvedPayrollLine<DeductionComponent> resolved)
+	{
+		var line = resolved.Line;
+		return new PayrollComponentAmountLine<DeductionComponent>(
+			line.Id,
+			line.ComponentId,
+			resolved.Master?.Name ?? line.Name,
+			line.Amount,
+			line.IsTemp ?? resolved.ExistingPayrollComponent?.IsTemp ?? resolved.Master is null,
+			resolved.Master);
 	}
 
 	private async Task<Dictionary<string, Guid>> GetEarningComponentIdsByNameAsync(

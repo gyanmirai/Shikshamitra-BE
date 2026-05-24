@@ -50,6 +50,9 @@ These are created by `HRSeederContributor` for each tenant as employee login use
 
 | Email / Login | Role | Access |
 |---|---|---|
+| `jayesh.bhagat@ddvs.com` | Director | Seeded all application/platform permissions; full organization data scope. |
+| `dasharthbhai.patel@ddvs.com` | Director | Seeded all application/platform permissions; full organization data scope. |
+| `tushar.patel@ddvs.com` | Director | Seeded all application/platform permissions; full organization data scope. |
 | `hiren.vadher@ddvs.com` | Principal | Principal module permissions; GSEB board data scope by default. |
 | `jignesh.jinjala@ddvs.com` | Vice Principal | All seeded application permissions; full organization data scope. |
 | `akshay.patel@ddvs.com` | HOD | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
@@ -92,6 +95,7 @@ These are seeded only for the DDVS tenant when `SeedHrManualTestData=true`.
 - `principal-gseb@ddvs.com` and `principal-demo-gseb@ddvs.com` are intended for GSEB-only testing.
 - `principal-cbse@ddvs.com` is intended for CBSE-only testing.
 - HR manual test users are designed for HR payroll, attendance, leave, and reporting workflows.
+- Director seeded employee accounts are full-access tenant staff accounts and are linked to employee records, so `/api/employees/me` resolves for them.
 - `principal-gseb@ddvs.com` is linked to the seeded principal employee record and can see the seeded reporting chain in Employee List.
 - Student accounts are linked to seeded student records and are not staff users.
 - Student seed data cycles through the fun-name list as middle names so student rows expose parent-style names in testing.

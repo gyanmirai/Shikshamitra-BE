@@ -4,6 +4,8 @@
 
 Manages school events and holidays within academic years. Provides a unified calendar view that merges events and holidays into a single feed, filterable by type and status.
 
+Calendar holidays are neutral shared dates. Payroll and attendance policy modules interpret those dates separately for paid/unpaid treatment, attendance requirements, comp-off, overtime, and basis-day impact.
+
 ## Actors
 
 | Actor | Description |
@@ -36,6 +38,7 @@ Manages school events and holidays within academic years. Provides a unified cal
 2. Status computed automatically: Upcoming (before start), Ongoing (between start-end), Completed (after end).
 3. Business rule: `StartDate <= EndDate` enforced in domain.
 4. Holidays can be filtered by type, status, date range, or search term.
+5. Holidays do not store payroll paid/unpaid behavior or attendance required/not-required behavior. Those are policy-owned decisions.
 
 ### 4. Holiday Types (Master Data)
 
@@ -101,3 +104,4 @@ None currently published by the Calendar submodule.
 
 - Academic Year -- events and holidays are scoped by `academicYearId`
 - [Employees](../employees/prd.md) -- audience IDs may reference employees/groups
+- [HR Policy Architecture](../../implementation/hr-policy-architecture.md) -- describes how payroll and attendance consume neutral calendar dates

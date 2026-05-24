@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -37,6 +39,16 @@ public class RunPayrollController : AbpControllerBase
 	/// <returns>Payroll preview with employee payroll items</returns>
 	/// <response code="200">Payroll preview retrieved successfully</response>
 	/// <response code="400">Invalid month format or other validation errors</response>
+	[HttpGet("readiness")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.View)]
+	[ProducesResponseType(typeof(RunPayrollReadinessSummary), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	public virtual async Task<RunPayrollReadinessSummary> GetReadinessAsync(
+		[FromQuery, Required] string month)
+	{
+		return await _runPayrollAppService.GetReadinessAsync(month);
+	}
+
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.View)]
 	[ProducesResponseType(typeof(RunPayrollResponse), StatusCodes.Status200OK)]
@@ -65,7 +77,7 @@ public class RunPayrollController : AbpControllerBase
 	/// <response code="200">Payroll locked successfully</response>
 	/// <response code="400">Payroll already locked or validation errors</response>
 	[HttpPost]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.Lock)]
 	[ProducesResponseType(typeof(PayrollLockResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	public virtual async Task<PayrollLockResponse> LockPayrollAsync(
@@ -98,6 +110,47 @@ public class RunPayrollController : AbpControllerBase
 		[FromBody, Required] PayrollRunReviewRequest request)
 	{
 		return await _runPayrollAppService.UnmarkReviewedAsync(request);
+	}
+
+	[HttpGet("adjustments")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.View)]
+	[ProducesResponseType(typeof(List<PayrollAdjustmentDto>), StatusCodes.Status200OK)]
+	public virtual async Task<List<PayrollAdjustmentDto>> GetAdjustmentsAsync(
+		[FromQuery, Required] string month,
+		[FromQuery] Guid? employeeId = null)
+	{
+		return await _runPayrollAppService.GetAdjustmentsAsync(month, employeeId);
+	}
+
+	[HttpPost("adjustments")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.Add)]
+	[ProducesResponseType(typeof(PayrollAdjustmentDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	public virtual async Task<PayrollAdjustmentDto> CreateAdjustmentAsync(
+		[FromBody, Required] PayrollAdjustmentRequest request)
+	{
+		return await _runPayrollAppService.CreateAdjustmentAsync(request);
+	}
+
+	[HttpPut("adjustments/{id:guid}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.Add)]
+	[ProducesResponseType(typeof(PayrollAdjustmentDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	public virtual async Task<PayrollAdjustmentDto> UpdateAdjustmentAsync(
+		[FromRoute] Guid id,
+		[FromBody, Required] PayrollAdjustmentRequest request)
+	{
+		return await _runPayrollAppService.UpdateAdjustmentAsync(id, request);
+	}
+
+	[HttpDelete("adjustments/{id:guid}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.Delete)]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	public virtual async Task<IActionResult> DeleteAdjustmentAsync([FromRoute] Guid id)
+	{
+		await _runPayrollAppService.DeleteAdjustmentAsync(id);
+		return NoContent();
 	}
 }
 

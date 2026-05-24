@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Employees.ReportingManager;
 using ShikshaMitra.TenantSettings;
@@ -108,6 +109,7 @@ public class LeaveReportingChain_Tests : ShikshaMitraApplicationTestBase<Shiksha
 	{
 		var roleId = await EnsureRoleExistsAsync();
 		var shiftId = await EnsureShiftExistsAsync();
+		var organizationId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 		return new CreateEmployeePersonalInfoDto
 		{
 			FirstName = "Test",
@@ -119,7 +121,8 @@ public class LeaveReportingChain_Tests : ShikshaMitraApplicationTestBase<Shiksha
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
 			EmployeeStatusType = EmployeeStatusType.Active,
 			RoleId = roleId,
-			ShiftId = shiftId
+			ShiftId = shiftId,
+			OrganizationIds = [organizationId]
 		};
 	}
 

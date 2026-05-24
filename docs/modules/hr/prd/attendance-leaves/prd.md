@@ -4,6 +4,8 @@
 
 Tracks employee attendance (daily in/out, status) and manages the full leave lifecycle: request creation, validation, approval/rejection, cancellation. Includes tenant-scoped settings for leave types, leave policies, custom attendance rules, and automated notifications.
 
+New HR policy architecture introduces `AttendancePolicy` as the attendance-owned replacement for one tenant-wide attendance configuration. Attendance policies reference shared `WorkCalendarPolicy` records and may be assigned through scoped `HrPolicyAssignment` records.
+
 ## Actors
 
 | Actor | Description |
@@ -64,6 +66,15 @@ Tracks employee attendance (daily in/out, status) and manages the full leave lif
 
 1. Admin CRUDs tenant-specific attendance rules (late threshold, half-day threshold, notification settings).
 2. No HTTP controller exposed; available only via application service.
+
+### 5a. Attendance Policies
+
+1. Admin creates multiple attendance policies per academic year using `/api/hr/attendance/policies`.
+2. Each policy references one `WorkCalendarPolicy`.
+3. One active attendance policy can be marked as default per tenant and academic year.
+4. Employee-specific policy assignment overrides the default policy for the assignment date range.
+5. Attendance policy owns punch thresholds, missing punch behavior, late/early rules, overtime, holiday work behavior, sandwich rule, and payroll integration mode.
+6. Calendar holidays remain neutral; attendance policy decides whether attendance is required and how holiday work is treated.
 
 ### 6. Automated Notifications
 
@@ -175,5 +186,6 @@ Tracks employee attendance (daily in/out, status) and manages the full leave lif
 ## Dependencies
 
 - [Employees](../employees/prd.md) -- leave requests reference `EmployeeId`
+- [HR Policy Architecture](../../implementation/hr-policy-architecture.md) -- shared calendar, attendance policy, payroll policy, and employee assignment model
 - Education Medium/Stage -- leave types and policies are scoped by `mediumStageId`
 - Blob Storage -- leave request attachments

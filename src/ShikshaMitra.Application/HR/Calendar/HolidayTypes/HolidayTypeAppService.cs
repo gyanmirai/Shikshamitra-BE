@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -21,6 +22,11 @@ public class HolidayTypeAppService : CrudAppService<HolidayType, HolidayTypeDto,
         : base(repository)
     {
         _repository = repository;
+        GetPolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.View;
+        GetListPolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.View;
+        CreatePolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.Add;
+        UpdatePolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.Add;
+        DeletePolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.Delete;
     }
 
     /// <summary>

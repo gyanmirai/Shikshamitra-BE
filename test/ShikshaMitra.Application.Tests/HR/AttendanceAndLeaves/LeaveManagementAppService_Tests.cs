@@ -391,6 +391,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 	{
 		var roleId = await EnsureRoleExistsAsync();
 		var shiftId = await EnsureShiftExistsAsync();
+		var organizationId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 		var uniq = Guid.NewGuid().ToString("N")[..8];
 
 		return await _personalInfoAppService.CreateAsync(new CreateEmployeePersonalInfoDto
@@ -404,7 +405,8 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
 			EmployeeStatusType = EmployeeStatusType.Active,
 			RoleId = roleId,
-			ShiftId = shiftId
+			ShiftId = shiftId,
+			OrganizationIds = [organizationId]
 		});
 	}
 

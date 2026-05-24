@@ -13,7 +13,8 @@ namespace ShikshaMitra.HR.Employees.ReportingManager;
 [RemoteService(false)]
 public class ReportingManagerAppService(
 	IEmployeeRepository employeeRepository,
-	ICurrentUser currentUser)
+	ICurrentUser currentUser,
+	IEmployeeAuthorizationService employeeAuthorizationService)
 	: ApplicationService, IReportingManagerAppService
 {
 	private const int MaxHierarchyDepth = 64;
@@ -22,6 +23,8 @@ public class ReportingManagerAppService(
 		Guid employeeId,
 		AssignReportingManagerDto input)
 	{
+		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
+
 		// Validate employee exists
 		var employee = await employeeRepository.GetAsync(employeeId)
 			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
@@ -52,6 +55,8 @@ public class ReportingManagerAppService(
 
 	public async Task<EmployeeReportingResponseDto> GetReportingManagerAsync(Guid employeeId)
 	{
+		await employeeAuthorizationService.CheckEmployeeAccessAsync(employeeId);
+
 		var employee = await employeeRepository.GetWithReportingManagerAsync(employeeId)
 			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
 

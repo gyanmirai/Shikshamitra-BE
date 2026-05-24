@@ -32,6 +32,8 @@ public static class HRErrorCodes
 	public const string FamilyMemberNameTooLong = "HR:Employee:010021";
 	public const string FamilyContactTooLong = "HR:Employee:010022";
 	public const string FamilyPincodeTooLong = "HR:Employee:010023";
+	public const string EmployeeOrganizationRequired = "HR:Employee:010028";
+	public const string EmployeeOrganizationInvalid = "HR:Employee:010029";
 
 	// Employee — Documents
 	public const string EmployeeDocumentNotFound = "HR:Employee:010101";
@@ -60,6 +62,14 @@ public static class HRErrorCodes
 	public const string EmployeePayrollAccountHolderRequired = "HR:Employee:010214";
 	public const string EmployeePayrollComponentAmountInvalid = "HR:Employee:010215";
 	public const string EmployeePayrollEmptyComponentId = "HR:Employee:010216";
+
+	// Employee — I-card
+	public const string EmployeeICardTemplateInvalidFieldsJson = "HR:Employee:010301";
+	public const string EmployeeICardAssetInvalid = "HR:Employee:010302";
+	public const string EmployeeICardPdfEmployeeRequired = "HR:Employee:010303";
+	public const string EmployeeICardAssetBlobInvalid = "HR:Employee:010304";
+	public const string EmployeeICardPdfEmployeeMissing = "HR:Employee:010305";
+	public const string EmployeeICardFieldSchemaUnsupported = "HR:Employee:010306";
 
 	// ── Attendance & Leave: 02xxxx ────────────────────────────────
 
@@ -159,6 +169,11 @@ public static class HRErrorCodes
 	public const string PayrollSnapshotMigrationRequired = "HR:Payroll:030019";
 	public const string PayrollStructureLegacyEndpointDeprecated = "HR:Payroll:030020";
 	public const string SalarySlipPdfRequiresFinalized = "HR:Payroll:030021";
+	public const string PayrollAdjustmentNameRequired = "HR:Payroll:030022";
+	public const string PayrollAdjustmentAmountInvalid = "HR:Payroll:030023";
+	public const string PayrollAdjustmentReasonRequired = "HR:Payroll:030024";
+	public const string PayrollAdjustmentNotFound = "HR:Payroll:030025";
+	public const string PayrollBlockingIssuesBeforeLock = "HR:Payroll:030026";
 
 	// ── Calendar: 04xxxx ─────────────────────────────────────────
 
@@ -171,4 +186,9 @@ public static class HRErrorCodes
 	// ── Reports: 05xxxx ──────────────────────────────────────────
 
 	public const string ReportExportFailed = "HR:Reports:050001";
+
+	// ── Professional Management: 06xxxx ──────────────────────────
+
+	public const string ProfessionalReviewCycleInvalidPeriod = "HR:ProfessionalManagement:060001";
+	public const string ProfessionalReviewAlreadySubmitted = "HR:ProfessionalManagement:060002";
 }

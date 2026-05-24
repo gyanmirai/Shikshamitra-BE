@@ -267,6 +267,11 @@
     "HR:Payroll:030019": "Payroll snapshot schema is not applied. Run DB migration 20260428034756_PayrollRunItemSnapshots and try again.",
     "HR:Payroll:030020": "This payroll structure endpoint is deprecated. Use /api/payroll/employees/{employeeId}/salary-structure.",
     "HR:Payroll:030021": "Official payslip PDF is available only after the salary slip is finalized.",
+    "HR:Payroll:030022": "Payroll adjustment name is required.",
+    "HR:Payroll:030023": "Payroll adjustment amount must be greater than zero.",
+    "HR:Payroll:030024": "Payroll adjustment reason is required.",
+    "HR:Payroll:030025": "Payroll adjustment was not found.",
+    "HR:Payroll:030026": "Resolve critical payroll setup issues before locking payroll.",
     "HR:Calendar:040005": "Calendar item with ID '{itemId}' was not found.",
     "ShikshaMitra:DueFee:10001": "Due fees have already been generated for this student.",
 

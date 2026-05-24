@@ -1,6 +1,8 @@
 ﻿using ShikshaMitra.Common;
 using ShikshaMitra.TenantSettings;
+using ShikshaMitra.HR.Employees;
 using System;
+using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
@@ -113,6 +115,12 @@ public class EmployeePersonalInfoDto : EntityDto<Guid>
 	public Guid? ShiftId { get; set; }
 
 	public ShiftManagementDto? Shift { get; set; }
+
+	public List<Guid> OrganizationIds { get; set; } = [];
+
+	public List<EmployeeOrganizationDto> Organizations { get; set; } = [];
+
+	public List<string> OrganizationNames { get; set; } = [];
 
 	#endregion
 }

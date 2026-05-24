@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.WorkExperienceContracts;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
@@ -21,10 +22,14 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 public class WorkExperienceController : AbpControllerBase
 {
 	private readonly IEmployeeWorkExperienceAppService _workExperienceAppService;
+	private readonly IEmployeeAuthorizationService _authorizationService;
 
-	public WorkExperienceController(IEmployeeWorkExperienceAppService workExperienceAppService)
+	public WorkExperienceController(
+		IEmployeeWorkExperienceAppService workExperienceAppService,
+		IEmployeeAuthorizationService authorizationService)
 	{
 		_workExperienceAppService = workExperienceAppService;
+		_authorizationService = authorizationService;
 	}
 
 	/// <summary>
@@ -35,6 +40,7 @@ public class WorkExperienceController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<List<WorkExperienceContract>> GetAsync([FromRoute, Required] Guid employeeId)
 	{
+		await _authorizationService.CheckEmployeeAccessAsync(employeeId);
 		return await _workExperienceAppService.GetAsync(employeeId);
 	}
 
@@ -48,6 +54,7 @@ public class WorkExperienceController : AbpControllerBase
 		[FromRoute, Required] Guid employeeId,
 		[FromBody, Required] List<WorkExperienceContract> request)
 	{
+		await _authorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 		await _workExperienceAppService.UpsertAsync(employeeId, request);
 		return Ok();
 	}

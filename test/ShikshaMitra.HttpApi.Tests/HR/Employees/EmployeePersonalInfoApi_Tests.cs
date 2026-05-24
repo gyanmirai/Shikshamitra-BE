@@ -89,6 +89,7 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 			IsTeaching = false,
 			RoleId = EmployeeTestHelper.DefaultRoleId,
 			ShiftId = EmployeeTestHelper.DefaultShiftId,
+			OrganizationIds = [EmployeeTestHelper.DefaultMediumStageId],
 			Email = TestDataHelper.UniqueEmail("upd"),
 			Gender = 2,
 		};

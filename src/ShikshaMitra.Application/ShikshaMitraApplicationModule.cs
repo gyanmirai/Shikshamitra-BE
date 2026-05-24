@@ -26,6 +26,7 @@ public class ShikshaMitraApplicationModule : AbpModule
 {
 	public override void ConfigureServices(ServiceConfigurationContext context)
 	{
+		context.Services.AddHttpContextAccessor();
 		context.Services.Replace(ServiceDescriptor.Transient<IPermissionAppService, ShikshaMitraPermissionAppService>());
 		context.Services.Replace(ServiceDescriptor.Transient<PermissionAppService, SecureAbpPermissionAppService>());
 

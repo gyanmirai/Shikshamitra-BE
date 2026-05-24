@@ -88,7 +88,7 @@ public class DevAutoAuthMiddleware : ITransientDependency
                 ["username"] = username,
                 ["password"] = password,
                 ["client_id"] = clientId,
-                ["scope"] = "openid profile email roles offline_access ShikshaMitra",
+                ["scope"] = "openid profile email roles ShikshaMitra",
             };
 
             using var client = _httpClientFactory.CreateClient("DevAutoAuth");

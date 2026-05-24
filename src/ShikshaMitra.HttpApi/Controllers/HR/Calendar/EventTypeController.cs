@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Calendar.EventTypes;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
@@ -31,6 +32,7 @@ public class EventTypeController : ShikshaMitraController
     /// <param name="input">Pagination, filtering, and sorting parameters</param>
     /// <returns>Paginated list of holiday types</returns>
     [HttpGet]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.View)]
     [ProducesResponseType(typeof(PagedResultDto<EventTypeDto>), StatusCodes.Status200OK)]
     public virtual async Task<PagedResultDto<EventTypeDto>> GetListAsync(
         [FromQuery] GetEventTypeListRequestDto input)
@@ -44,6 +46,7 @@ public class EventTypeController : ShikshaMitraController
     /// <param name="id">Holiday type ID</param>
     /// <returns>Holiday type details</returns>
     [HttpGet("{id}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.View)]
     [ProducesResponseType(typeof(EventTypeDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public virtual async Task<EventTypeDto> GetAsync(Guid id)
@@ -57,6 +60,7 @@ public class EventTypeController : ShikshaMitraController
     /// <param name="input">Holiday type creation data</param>
     /// <returns>Created holiday type</returns>
     [HttpPost]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.Add)]
     [ProducesResponseType(typeof(EventTypeDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public virtual async Task<EventTypeDto> CreateAsync(
@@ -72,6 +76,7 @@ public class EventTypeController : ShikshaMitraController
     /// <param name="input">Holiday type update data</param>
     /// <returns>Updated holiday type</returns>
     [HttpPut("{id}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.Add)]
     [ProducesResponseType(typeof(EventTypeDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -86,6 +91,7 @@ public class EventTypeController : ShikshaMitraController
     /// </summary>
     /// <param name="id">Holiday type ID</param>
     [HttpDelete("{id}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.Delete)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public virtual async Task DeleteAsync(Guid id)

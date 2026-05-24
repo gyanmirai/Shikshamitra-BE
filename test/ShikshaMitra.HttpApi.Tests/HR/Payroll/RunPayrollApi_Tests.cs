@@ -25,7 +25,22 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Get_Payroll_Preview_Without_500()
 	{
-		var response = await Client.GetAsync($"{BaseUrl}?month={PayrollMonth}&page=0&pageSize=50");
+		var response = await Client.GetAsync($"{BaseUrl}?month=2026-05&page=0&pageSize=100");
+		var body = await response.Content.ReadAsStringAsync();
+
+		body.ShouldNotContain("HR:Payroll:030011");
+		response.StatusCode.ShouldBeOneOf(
+			HttpStatusCode.OK,
+			HttpStatusCode.BadRequest,
+			HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Get_Payroll_Readiness_Without_Generating_Preview()
+	{
+		var response = await Client.GetAsync($"{BaseUrl}/readiness?month=2026-05");
+
 		response.StatusCode.ShouldBeOneOf(
 			HttpStatusCode.OK,
 			HttpStatusCode.BadRequest,
@@ -107,6 +122,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		var json = await response.Content.ReadAsStringAsync();
 		using var document = JsonDocument.Parse(json);
 		document.RootElement.GetProperty("paths").TryGetProperty("/api/payroll/run", out _).ShouldBeTrue();
+		document.RootElement.GetProperty("paths").TryGetProperty("/api/payroll/run/readiness", out _).ShouldBeTrue();
 		document.RootElement.GetProperty("paths").TryGetProperty("/api/payroll/run/reviews", out _).ShouldBeTrue();
 		document.RootElement.GetProperty("paths").TryGetProperty("/api/hr/attendance/automated-runs/{batchId}/lock", out _).ShouldBeTrue();
 	}

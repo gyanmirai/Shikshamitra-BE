@@ -2,10 +2,11 @@
 using ShikshaMitra.Common;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.AttendanceAndLeaves;
-using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Calendar.Holidays;
+using ShikshaMitra.HR.Audit;
+using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
@@ -30,12 +31,6 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 {
 	private sealed record PayrollTargetEmployee(Guid Id, string? EmployeeCode, string? EmployeeName);
-	internal sealed record AttendancePolicyPayrollContext(
-		AttendanceConfiguration? Configuration,
-		AttendancePolicyEvaluationRun? PublishedRun,
-		Dictionary<Guid, List<AttendancePolicyEvaluationResult>> ResultsByEmployee,
-		HashSet<Guid> MissingResultEmployeeIds,
-		List<string> Warnings);
 
 	private static class ReviewStatuses
 	{
@@ -52,29 +47,27 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		public const string NegativeNetPay = "NEGATIVE_NET_PAY";
 		public const string NoPreviousMonthComparison = "NO_PREVIOUS_MONTH_COMPARISON";
 		public const string LargeSalaryVariance = "LARGE_SALARY_VARIANCE";
-		public const string AttendancePolicyEvaluationMissing = "ATTENDANCE_POLICY_EVALUATION_MISSING";
-		public const string AttendancePolicyEvaluationConfigStale = "ATTENDANCE_POLICY_EVALUATION_CONFIG_STALE";
 		public const string AttendancePolicyEffectiveBoundary = "ATTENDANCE_POLICY_EFFECTIVE_BOUNDARY";
-		public const string AttendancePolicyEvaluationResultMissing = "ATTENDANCE_POLICY_EVALUATION_RESULT_MISSING";
+		public const string PayrollPolicyConfiguration = "PAYROLL_POLICY_CONFIGURATION";
 	}
 
 	private readonly IRepository<Employee, Guid> _employeeRepository;
 	private readonly IRepository<EmployeeAttendance, Guid> _attendanceRepository;
-	private readonly IAttendanceConfigurationRepository _attendanceConfigurationRepository;
-	private readonly IRepository<AttendancePolicyEvaluationRun, Guid> _attendancePolicyEvaluationRunRepository;
-	private readonly IRepository<AttendancePolicyEvaluationResult, Guid> _attendancePolicyEvaluationResultRepository;
 	private readonly IEmployeePayrollDetailsRepository _payrollDetailsRepository;
 	private readonly IEmployeePayrollComponentRepository _payrollComponentRepository;
 	private readonly ISalarySlipRepository _salarySlipRepository;
 	private readonly IRepository<PayrollRunReview, Guid> _payrollRunReviewRepository;
 	private readonly IRepository<PayrollRunItemSnapshot, Guid> _payrollRunItemSnapshotRepository;
-	private readonly IDayCalculationSettingRepository _dayCalculationSettingRepository;
+	private readonly IRepository<PayrollAdjustment, Guid> _payrollAdjustmentRepository;
+	private readonly IRepository<WorkCalendarHoliday, Guid> _workCalendarHolidayRepository;
+	private readonly HrPolicyResolver _hrPolicyResolver;
 	private readonly PayrollCalendarResolver _payrollCalendarResolver;
 	private readonly PayrollApprovedLeaveResolver _payrollApprovedLeaveResolver;
 	private readonly SalarySlipManager _salarySlipManager;
 	private readonly PayrollComponentVersionResolver _componentVersionResolver;
 	private readonly IUserScopeService _userScopeService;
 	private readonly HrUserScopeAccessService _hrScopeAccessService;
+	private readonly HrAuditWriter _auditWriter;
 	private readonly ILogger<RunPayrollAppService> _logger;
 
 	// Configuration: Batch size for processing employees
@@ -84,40 +77,40 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	public RunPayrollAppService(
 		IRepository<Employee, Guid> employeeRepository,
 		IRepository<EmployeeAttendance, Guid> attendanceRepository,
-		IAttendanceConfigurationRepository attendanceConfigurationRepository,
-		IRepository<AttendancePolicyEvaluationRun, Guid> attendancePolicyEvaluationRunRepository,
-		IRepository<AttendancePolicyEvaluationResult, Guid> attendancePolicyEvaluationResultRepository,
 		IEmployeePayrollDetailsRepository payrollDetailsRepository,
 		IEmployeePayrollComponentRepository payrollComponentRepository,
 		ISalarySlipRepository salarySlipRepository,
 		IRepository<PayrollRunReview, Guid> payrollRunReviewRepository,
 		IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
-		IDayCalculationSettingRepository dayCalculationSettingRepository,
+		IRepository<PayrollAdjustment, Guid> payrollAdjustmentRepository,
+		IRepository<WorkCalendarHoliday, Guid> workCalendarHolidayRepository,
+		HrPolicyResolver hrPolicyResolver,
 		PayrollCalendarResolver payrollCalendarResolver,
 		PayrollApprovedLeaveResolver payrollApprovedLeaveResolver,
 		SalarySlipManager salarySlipManager,
 		PayrollComponentVersionResolver componentVersionResolver,
 		IUserScopeService userScopeService,
 		HrUserScopeAccessService hrScopeAccessService,
+		HrAuditWriter auditWriter,
 		ILogger<RunPayrollAppService> logger)
 	{
 		_employeeRepository = employeeRepository;
 		_attendanceRepository = attendanceRepository;
-		_attendanceConfigurationRepository = attendanceConfigurationRepository;
-		_attendancePolicyEvaluationRunRepository = attendancePolicyEvaluationRunRepository;
-		_attendancePolicyEvaluationResultRepository = attendancePolicyEvaluationResultRepository;
 		_payrollDetailsRepository = payrollDetailsRepository;
 		_payrollComponentRepository = payrollComponentRepository;
 		_salarySlipRepository = salarySlipRepository;
 		_payrollRunReviewRepository = payrollRunReviewRepository;
 		_payrollRunItemSnapshotRepository = payrollRunItemSnapshotRepository;
-		_dayCalculationSettingRepository = dayCalculationSettingRepository;
+		_payrollAdjustmentRepository = payrollAdjustmentRepository;
+		_workCalendarHolidayRepository = workCalendarHolidayRepository;
+		_hrPolicyResolver = hrPolicyResolver;
 		_payrollCalendarResolver = payrollCalendarResolver;
 		_payrollApprovedLeaveResolver = payrollApprovedLeaveResolver;
 		_salarySlipManager = salarySlipManager;
 		_componentVersionResolver = componentVersionResolver;
 		_userScopeService = userScopeService;
 		_hrScopeAccessService = hrScopeAccessService;
+		_auditWriter = auditWriter;
 		_logger = logger;
 	}
 
@@ -165,33 +158,14 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				.ToList();
 			var calendar = await _payrollCalendarResolver.ResolveAsync(year, month);
 			var employeeIds = scopedEmployees.Select(e => e.Id).ToList();
-			var attendancePolicyContext = await GetAttendancePolicyPayrollContextAsync(
-				calendar.AcademicYearId,
-				year,
-				month,
-				internalMonthYear,
-				employeeIds);
-			var attendancePolicySnapshotsStale = AreAttendancePolicySnapshotsStale(
-				inScopeSnapshots,
-				attendancePolicyContext);
 
-			if (input.ForceRefresh || inScopeSnapshots.Count == 0 || attendancePolicySnapshotsStale)
+			if (input.ForceRefresh || inScopeSnapshots.Count == 0)
 			{
 				var previousMonthNetPayByEmployee = (await _salarySlipRepository.GetByMonthAsync(GetPreviousMonth(internalMonthYear)))
 					.Where(x => x.Status == SalarySlipStatus.Finalized)
 					.GroupBy(x => x.EmployeeId)
 					.ToDictionary(g => g.Key, g => (decimal?)g.OrderByDescending(x => x.ProcessedDate).First().NetSalary);
 				var reviewByEmployee = await GetReviewsByEmployeeAsync(internalMonthYear);
-				var daySetting = await _dayCalculationSettingRepository.FindEffectiveAsync(CurrentTenant.Id, calendar.AcademicYearId);
-				var saturdayWorkPolicy = daySetting?.GetEffectiveSaturdayWorkPolicyForMonth(year, month) ?? SaturdayWorkPolicy.FullDay;
-				var holidayOverrides = daySetting?.GetEffectiveHolidayOverridesForMonth(year, month) ?? Array.Empty<PayrollHolidayOverride>();
-				var workingUnitsByDate = PayrollMonthCalendar.BuildWorkingUnitsByDate(
-					year,
-					month,
-					calendar.Holidays,
-					saturdayWorkPolicy,
-					holidayOverrides);
-				var basis = PayrollBasisDays.Resolve(daySetting, year, month, workingUnitsByDate.Values.Sum(), workingUnitsByDate);
 				var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
 				var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
 				var attendanceByEmployee = await GetAttendanceRecordsAsync(employeeIds, startDate, endDate);
@@ -204,27 +178,73 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				var resolvedComponentsByEmployee = await _componentVersionResolver.ResolveByEmployeeAsync(
 					componentsByEmployee,
 					internalMonthYear);
+				var adjustmentsByEmployee = await GetAdjustmentsByEmployeeAsync(internalMonthYear, employeeIds);
 
 				var computedItems = new List<RunPayrollItem>();
 				foreach (var employee in scopedEmployees)
 				{
-					computedItems.Add(BuildPayrollItem(
-						employee,
-						attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
-						payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
-						resolvedComponentsByEmployee[employee.Id].ToList(),
-						basis,
-						year,
-						month,
-						calendar.Holidays,
-						leaveUnitsByEmployee.GetValueOrDefault(employee.Id),
-						attendancePolicyContext.PublishedRun,
-						attendancePolicyContext.ResultsByEmployee.GetValueOrDefault(employee.Id),
-						attendancePolicyContext.Warnings,
-						finalizedEmployeeIds.Contains(employee.Id),
-						reviewByEmployee.GetValueOrDefault(employee.Id),
-						previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id)
-					));
+					try
+					{
+						var resolvedPolicies = await _hrPolicyResolver.ResolveAsync(
+							employee.Id,
+							new DateTime(year, month, 1),
+							calendar.AcademicYearId);
+						var holidayOverrides = resolvedPolicies.PayrollPolicy.GetHolidayOverrides();
+						var workCalendarHolidays = await GetIncludedWorkCalendarHolidaysAsync(resolvedPolicies.PayrollWorkCalendarPolicy.Id, year, month);
+						var workingUnitsByDate = PayrollMonthCalendar.BuildWorkingUnitsByDate(
+							year,
+							month,
+							workCalendarHolidays,
+							resolvedPolicies.PayrollPolicy.SaturdayWorkPolicy,
+							holidayOverrides,
+							resolvedPolicies.PayrollWorkCalendarPolicy);
+						var payrollPolicyIssueCodes = new List<string>();
+						var basis = ResolvePayrollBasisForPreview(
+							resolvedPolicies.PayrollPolicy,
+							year,
+							month,
+							workingUnitsByDate,
+							payrollPolicyIssueCodes);
+						computedItems.Add(BuildPayrollItem(
+							employee,
+							attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
+							payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
+							GetResolvedComponents(resolvedComponentsByEmployee, employee.Id),
+							adjustmentsByEmployee.GetValueOrDefault(employee.Id) ?? new List<PayrollAdjustment>(),
+							basis,
+							year,
+							month,
+							workCalendarHolidays,
+							leaveUnitsByEmployee.GetValueOrDefault(employee.Id),
+							resolvedPolicies,
+							BuildHolidayImpactJson(year, month, workCalendarHolidays, holidayOverrides),
+							finalizedEmployeeIds.Contains(employee.Id),
+							reviewByEmployee.GetValueOrDefault(employee.Id),
+							previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
+							payrollPolicyIssueCodes
+						));
+					}
+					catch (BusinessException ex) when (IsPayrollPolicySetupException(ex))
+					{
+						_logger.LogWarning(
+							ex,
+							"Payroll preview setup issue for employee {EmployeeId} in {Month}. ErrorCode={ErrorCode}",
+							employee.Id,
+							internalMonthYear,
+							ex.Code);
+						computedItems.Add(BuildPayrollSetupIssueItem(
+							employee,
+							attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
+							payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
+							GetResolvedComponents(resolvedComponentsByEmployee, employee.Id),
+							adjustmentsByEmployee.GetValueOrDefault(employee.Id) ?? new List<PayrollAdjustment>(),
+							year,
+							month,
+							finalizedEmployeeIds.Contains(employee.Id),
+							reviewByEmployee.GetValueOrDefault(employee.Id),
+							previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
+							new[] { IssueCodes.PayrollPolicyConfiguration }));
+					}
 				}
 
 				await UpsertSnapshotsAsync(internalMonthYear, computedItems);
@@ -241,6 +261,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				.Take(input.PageSize)
 				.Select(MapSnapshotToItem)
 				.ToList();
+			var readinessItems = inScopeSnapshots.Select(MapSnapshotToItem).ToList();
 
 			return new RunPayrollResponse
 			{
@@ -249,7 +270,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				CurrentPage = input.Page,
 				PageSize = input.PageSize,
 				TotalPages = (int)Math.Ceiling((double)totalCount / input.PageSize),
-				Items = items
+				Items = items,
+				Readiness = BuildReadinessSummary(internalMonthYear, readinessItems, isGenerated)
 			};
 		}
 		catch (BusinessException)
@@ -270,6 +292,28 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			throw new BusinessException(HRErrorCodes.PayrollPreviewFailed)
 				.WithData("month", input.Month);
 		}
+	}
+
+	public async Task<RunPayrollReadinessSummary> GetReadinessAsync(string month)
+	{
+		var (_, _, internalMonthYear) = ParseMonth(month);
+		var employeeQuery = await GetScopedActiveEmployeeQueryAsync(includeUnknownStageEmployees: false);
+		var scopedEmployeeIds = (await AsyncExecuter.ToListAsync(employeeQuery.Select(e => e.Id))).ToHashSet();
+
+		var snapshots = (await GetSnapshotsByMonthAsync(internalMonthYear))
+			.Where(x => scopedEmployeeIds.Contains(x.EmployeeId))
+			.Select(MapSnapshotToItem)
+			.ToList();
+		var existingSlips = await _salarySlipRepository.GetByMonthAsync(internalMonthYear);
+		var lockedCount = existingSlips.Count(x =>
+			x.Status == SalarySlipStatus.Finalized && scopedEmployeeIds.Contains(x.EmployeeId));
+
+		return BuildReadinessSummary(
+			internalMonthYear,
+			snapshots,
+			isGenerated: lockedCount > 0,
+			employeeCountOverride: scopedEmployeeIds.Count,
+			lockedCountOverride: lockedCount);
 	}
 
 	/// <summary>
@@ -309,50 +353,31 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		var targetEmployees = ResolveTargetEmployees(scopedEmployees, request.EmployeeIds);
 		var lockCalendar = await _payrollCalendarResolver.ResolveAsync(year, month);
-		var lockAttendancePolicyContext = await GetAttendancePolicyPayrollContextAsync(
-			lockCalendar.AcademicYearId,
-			year,
-			month,
-			internalMonthYear,
-			targetEmployees.Select(x => x.Id).ToList());
-		if (lockAttendancePolicyContext.Configuration?.PayrollIntegrationMode == AttendancePayrollIntegrationMode.ApprovedResults &&
-			lockAttendancePolicyContext.Configuration.RequirePublishedAttendanceForPayrollLock &&
-			lockAttendancePolicyContext.PublishedRun == null)
-		{
-			throw new BusinessException("ShikshaMitra:PublishedAttendanceEvaluationRequired")
-				.WithData("month", request.Month);
-		}
-		if (lockAttendancePolicyContext.Configuration?.PayrollIntegrationMode == AttendancePayrollIntegrationMode.ApprovedResults &&
-			lockAttendancePolicyContext.Configuration.RequirePublishedAttendanceForPayrollLock &&
-			lockAttendancePolicyContext.MissingResultEmployeeIds.Count > 0)
-		{
-			throw new BusinessException("ShikshaMitra:PublishedAttendanceEvaluationResultsIncomplete")
-				.WithData("month", request.Month)
-				.WithData("employeeIds", lockAttendancePolicyContext.MissingResultEmployeeIds);
-		}
 
 		var existingSlips = await _salarySlipRepository.GetByMonthAsync(internalMonthYear);
 		var finalizedEmployeeIds = existingSlips
 			.Where(x => x.Status == SalarySlipStatus.Finalized)
 			.Select(x => x.EmployeeId)
 			.ToHashSet();
-		var employees = targetEmployees
-			.Where(e => !finalizedEmployeeIds.Contains(e.Id))
+		var alreadyFinalizedIds = targetEmployees
+			.Where(e => finalizedEmployeeIds.Contains(e.Id))
+			.Select(e => e.Id)
 			.ToList();
-		var alreadyFinalizedCount = targetEmployees.Count - employees.Count;
+		if (alreadyFinalizedIds.Count > 0)
+		{
+			throw new BusinessException(HRErrorCodes.PayrollAlreadyLocked)
+				.WithData("month", request.Month)
+				.WithData("employeeIds", alreadyFinalizedIds);
+		}
+
+		var employees = targetEmployees;
 
 		var snapshotByEmployee = (await GetSnapshotsByMonthAsync(internalMonthYear))
 			.ToDictionary(x => x.EmployeeId, x => x);
-		var reviewedEmployeeIds = snapshotByEmployee.Values
-			.Where(x => x.ReviewStatus == ReviewStatuses.Reviewed || x.IsLocked)
-			.Select(x => x.EmployeeId)
-			.ToHashSet();
-		if (reviewedEmployeeIds.Count == 0)
-		{
-			reviewedEmployeeIds = (await GetReviewsByEmployeeAsync(internalMonthYear)).Keys.ToHashSet();
-		}
 		var unreviewedEmployeeIds = employees
-			.Where(e => !reviewedEmployeeIds.Contains(e.Id))
+			.Where(e => !snapshotByEmployee.TryGetValue(e.Id, out var snapshot) ||
+			            snapshot.IsLocked ||
+			            snapshot.ReviewStatus != ReviewStatuses.Reviewed)
 			.Select(e => e.Id)
 			.ToList();
 		if (unreviewedEmployeeIds.Count > 0)
@@ -362,29 +387,23 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				.WithData("employeeIds", unreviewedEmployeeIds);
 		}
 
-		if (employees.Count == 0)
+		var blockedBySetupIds = employees
+			.Where(e => snapshotByEmployee.TryGetValue(e.Id, out var snapshot) && HasBlockingLockIssue(snapshot.IssueCodesJson))
+			.Select(e => e.Id)
+			.ToList();
+		if (blockedBySetupIds.Count > 0)
 		{
-			_logger.LogInformation(
-				"Payroll for {Month} is already locked for the targeted employee set. Returning idempotent response.",
-				request.Month);
-
-			return new PayrollLockResponse
-			{
-				Message = $"Payroll for {request.Month} is already generated and locked for the targeted employees.",
-				Month = request.Month,
-				WasAlreadyLocked = true,
-				EmployeesProcessed = 0,
-				EmployeesSkipped = alreadyFinalizedCount
-			};
+			throw new BusinessException(HRErrorCodes.PayrollBlockingIssuesBeforeLock)
+				.WithData("month", request.Month)
+				.WithData("employeeIds", blockedBySetupIds);
 		}
 
 		_logger.LogInformation(
-			"Generating salary slips for {ProcessCount} employees ({SkippedCount} already finalized)",
-			employees.Count,
-			alreadyFinalizedCount);
+			"Generating salary slips from reviewed payroll snapshots for {ProcessCount} employees",
+			employees.Count);
 
 		var generatedCount = 0;
-		var skippedCount = alreadyFinalizedCount;
+		var skippedCount = 0;
 		var failedCount = 0;
 		var errors = new List<(string EmployeeCode, string EmployeeName, string Error)>();
 		var batchSize = Math.Min(DefaultBatchSize, MaxBatchSize);
@@ -409,11 +428,17 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 						"Processing employee {EmployeeCode} ({EmployeeName})",
 						employee.EmployeeCode, employee.EmployeeName);
 
-					// Generate or get existing salary slip
-					var salarySlip = await _salarySlipManager.GenerateOrGetSalarySlipAsync(
-						employee.Id,
-						internalMonthYear,
-						forceRegenerate: true);
+					var snapshot = snapshotByEmployee[employee.Id];
+					var earningLineItems = BuildSalarySlipLineItems(snapshot.EarningComponentsJson);
+					var deductionLineItems = BuildSalarySlipLineItems(snapshot.DeductionComponentsJson);
+					EnsureSnapshotTotalsMatchLineItems(snapshot, earningLineItems, deductionLineItems);
+					var dayCalculationMode = ParseDayCalculationMode(snapshot.DayCalculationMode);
+
+					var salarySlip = await _salarySlipManager.GenerateOrGetSalarySlipFromSnapshotAsync(
+						snapshot,
+						earningLineItems,
+						deductionLineItems,
+						dayCalculationMode);
 
 					// Finalize the salary slip if not already finalized
 					if (salarySlip.Status == SalarySlipStatus.Finalized)
@@ -422,22 +447,16 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 							"Salary slip for employee {EmployeeCode} is already finalized, skipping",
 							employee.EmployeeCode);
 						skippedCount++;
-						if (snapshotByEmployee.TryGetValue(employee.Id, out var snapshot))
-						{
-							snapshot.MarkLocked();
-							await _payrollRunItemSnapshotRepository.UpdateAsync(snapshot, autoSave: false);
-						}
+						snapshot.MarkLocked();
+						await _payrollRunItemSnapshotRepository.UpdateAsync(snapshot, autoSave: false);
 					}
 					else
 					{
 						salarySlip.Finalize();
 						await _salarySlipRepository.UpdateAsync(salarySlip, autoSave: false);
 						generatedCount++;
-						if (snapshotByEmployee.TryGetValue(employee.Id, out var snapshot))
-						{
-							snapshot.MarkLocked();
-							await _payrollRunItemSnapshotRepository.UpdateAsync(snapshot, autoSave: false);
-						}
+						snapshot.MarkLocked();
+						await _payrollRunItemSnapshotRepository.UpdateAsync(snapshot, autoSave: false);
 					}
 				}
 				catch (BusinessException bex)
@@ -508,7 +527,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 					? $"Payroll generated and locked for {generatedCount} employees. {skippedCount} were already finalized."
 					: $"Payroll generated and locked successfully for {generatedCount} employees.";
 
-			return new PayrollLockResponse
+			var response = new PayrollLockResponse
 			{
 				Message = message,
 				Month = request.Month,
@@ -518,6 +537,25 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				EmployeesFailed = failedCount,
 				Errors = failedCount > 0 ? errors.Select(e => $"{e.EmployeeCode}: {e.Error}").ToList() : null
 			};
+			await _auditWriter.WriteAsync(
+				lockCalendar.AcademicYearId,
+				"payroll_run",
+				GuidGenerator.Create(),
+				request.Month,
+				"locked",
+				$"Locked payroll for {request.Month}.",
+				context: new
+				{
+					request.Month,
+					year,
+					month,
+					employeeCount = employees.Count,
+					generatedCount,
+					skippedCount,
+					failedCount,
+					hasPolicyMetadataSnapshots = snapshotByEmployee.Values.Any(x => x.PayrollPolicyId.HasValue || x.AttendancePolicyId.HasValue || x.WorkCalendarPolicyId.HasValue)
+				});
+			return response;
 		}
 
 	public async Task<PayrollLockResponse> MarkReviewedAsync(PayrollRunReviewRequest request)
@@ -532,6 +570,16 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		var existingByEmployee = await GetReviewsByEmployeeAsync(internalMonthYear);
 		var snapshotByEmployee = (await GetSnapshotsByMonthAsync(internalMonthYear))
 			.ToDictionary(x => x.EmployeeId, x => x);
+		var missingSnapshotEmployeeIds = targetEmployees
+			.Where(e => !snapshotByEmployee.ContainsKey(e.Id))
+			.Select(e => e.Id)
+			.ToList();
+		if (missingSnapshotEmployeeIds.Count > 0)
+		{
+			throw new BusinessException(HRErrorCodes.PayrollReviewRequiredBeforeLock)
+				.WithData("month", request.Month)
+				.WithData("employeeIds", missingSnapshotEmployeeIds);
+		}
 		var reviewedAt = Clock.Now;
 		var updated = 0;
 
@@ -608,6 +656,80 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		};
 	}
 
+	public async Task<List<PayrollAdjustmentDto>> GetAdjustmentsAsync(string month, Guid? employeeId = null)
+	{
+		var (_, _, internalMonthYear) = ParseMonth(month);
+		var employeeIds = employeeId.HasValue
+			? ResolveTargetEmployees(
+					await ResolveScopedTargetEmployeesAsync(new List<Guid> { employeeId.Value }),
+					new List<Guid> { employeeId.Value })
+				.Select(x => x.Id)
+				.ToList()
+			: (await ResolveScopedTargetEmployeesAsync(null)).Select(x => x.Id).ToList();
+
+		var adjustments = await GetAdjustmentsByEmployeeAsync(internalMonthYear, employeeIds);
+		return adjustments.Values
+			.SelectMany(x => x)
+			.OrderBy(x => x.EmployeeId)
+			.ThenBy(x => x.CreationTime)
+			.Select(MapAdjustmentToDto)
+			.ToList();
+	}
+
+	public async Task<PayrollAdjustmentDto> CreateAdjustmentAsync(PayrollAdjustmentRequest request)
+	{
+		var (_, _, internalMonthYear) = ParseMonth(request.Month);
+		var targetEmployees = await ResolveScopedTargetEmployeesAsync(new List<Guid> { request.EmployeeId });
+		await EnsureReviewCanChangeAsync(internalMonthYear, request.Month, targetEmployees);
+
+		var adjustment = new PayrollAdjustment(
+			GuidGenerator.Create(),
+			CurrentTenant.Id,
+			internalMonthYear,
+			request.EmployeeId,
+			request.Name,
+			(decimal)request.Amount,
+			request.IsEarning,
+			request.Reason,
+			request.Description);
+
+		await _payrollAdjustmentRepository.InsertAsync(adjustment, autoSave: true);
+		await InvalidateUnlockedSnapshotsAsync(internalMonthYear, new[] { request.EmployeeId });
+		return MapAdjustmentToDto(adjustment);
+	}
+
+	public async Task<PayrollAdjustmentDto> UpdateAdjustmentAsync(Guid id, PayrollAdjustmentRequest request)
+	{
+		var (_, _, internalMonthYear) = ParseMonth(request.Month);
+		var adjustment = await GetAdjustmentOrThrowAsync(id);
+		if (adjustment.MonthYear != internalMonthYear || adjustment.EmployeeId != request.EmployeeId)
+		{
+			throw new BusinessException(HRErrorCodes.PayrollAdjustmentNotFound);
+		}
+
+		var targetEmployees = await ResolveScopedTargetEmployeesAsync(new List<Guid> { request.EmployeeId });
+		await EnsureReviewCanChangeAsync(internalMonthYear, request.Month, targetEmployees);
+
+		adjustment.Update(
+			request.Name,
+			(decimal)request.Amount,
+			request.IsEarning,
+			request.Reason,
+			request.Description);
+		await _payrollAdjustmentRepository.UpdateAsync(adjustment, autoSave: true);
+		await InvalidateUnlockedSnapshotsAsync(internalMonthYear, new[] { request.EmployeeId });
+		return MapAdjustmentToDto(adjustment);
+	}
+
+	public async Task DeleteAdjustmentAsync(Guid id)
+	{
+		var adjustment = await GetAdjustmentOrThrowAsync(id);
+		var targetEmployees = await ResolveScopedTargetEmployeesAsync(new List<Guid> { adjustment.EmployeeId });
+		await EnsureReviewCanChangeAsync(adjustment.MonthYear, adjustment.MonthYear, targetEmployees);
+		await _payrollAdjustmentRepository.DeleteAsync(adjustment, autoSave: true);
+		await InvalidateUnlockedSnapshotsAsync(adjustment.MonthYear, new[] { adjustment.EmployeeId });
+	}
+
 	private async Task<List<PayrollRunItemSnapshot>> GetSnapshotsByMonthAsync(string monthYear)
 	{
 		var query = await _payrollRunItemSnapshotRepository.GetQueryableAsync();
@@ -623,6 +745,11 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		return await AsyncExecuter.ToListAsync(query.Where(x => x.MonthYear == monthYear));
 	}
 
+	private static List<EmployeePayrollComponent> GetResolvedComponents(
+		ILookup<Guid, EmployeePayrollComponent> resolvedComponentsByEmployee,
+		Guid employeeId) =>
+		resolvedComponentsByEmployee[employeeId]?.ToList() ?? new List<EmployeePayrollComponent>();
+
 	private async Task UpsertSnapshotsAsync(string monthYear, List<RunPayrollItem> items)
 	{
 		var existingByEmployee = (await GetSnapshotsByMonthAsync(monthYear))
@@ -634,10 +761,23 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			var attendancePolicyWarningsJson = JsonSerializer.Serialize(item.AttendancePolicyWarnings ?? new List<string>());
 			var earningsJson = JsonSerializer.Serialize(item.EarningComponents ?? new List<RunPayrollComponentItem>());
 			var deductionsJson = JsonSerializer.Serialize(item.DeductionComponents ?? new List<RunPayrollComponentItem>());
+			var adjustmentsJson = JsonSerializer.Serialize(item.PayrollAdjustments ?? new List<PayrollAdjustmentDto>());
 
 			if (existingByEmployee.TryGetValue(item.EmployeeId, out var existing))
 			{
-				ApplySnapshotValues(existing, item, issuesJson, attendancePolicyWarningsJson, earningsJson, deductionsJson);
+				if (existing.IsLocked)
+				{
+					continue;
+				}
+
+				var shouldResetReview = existing.ReviewStatus == ReviewStatuses.Reviewed &&
+					SnapshotValuesChanged(existing, item, issuesJson, attendancePolicyWarningsJson, earningsJson, deductionsJson, adjustmentsJson);
+				ApplySnapshotValues(existing, item, issuesJson, attendancePolicyWarningsJson, earningsJson, deductionsJson, adjustmentsJson);
+				if (shouldResetReview)
+				{
+					existing.MarkPending();
+					await DeleteReviewForEmployeeAsync(monthYear, item.EmployeeId);
+				}
 				await _payrollRunItemSnapshotRepository.UpdateAsync(existing, autoSave: false);
 				continue;
 			}
@@ -647,12 +787,57 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				CurrentTenant.Id,
 				monthYear,
 				item.EmployeeId);
-			ApplySnapshotValues(snapshot, item, issuesJson, attendancePolicyWarningsJson, earningsJson, deductionsJson);
+			ApplySnapshotValues(snapshot, item, issuesJson, attendancePolicyWarningsJson, earningsJson, deductionsJson, adjustmentsJson);
 			await _payrollRunItemSnapshotRepository.InsertAsync(snapshot, autoSave: false);
 		}
 
 		await UnitOfWorkManager.Current!.SaveChangesAsync();
 	}
+
+	private async Task DeleteReviewForEmployeeAsync(string monthYear, Guid employeeId)
+	{
+		var query = await _payrollRunReviewRepository.GetQueryableAsync();
+		var reviews = await AsyncExecuter.ToListAsync(query.Where(x =>
+			x.MonthYear == monthYear &&
+			x.EmployeeId == employeeId));
+		foreach (var review in reviews)
+		{
+			await _payrollRunReviewRepository.DeleteAsync(review, autoSave: false);
+		}
+	}
+
+	private static bool SnapshotValuesChanged(
+		PayrollRunItemSnapshot snapshot,
+		RunPayrollItem item,
+		string issuesJson,
+		string attendancePolicyWarningsJson,
+		string earningsJson,
+		string deductionsJson,
+		string adjustmentsJson) =>
+		snapshot.BasicSalary != (decimal)item.BasicSalary ||
+		snapshot.GrossSalary != (decimal)item.GrossSalary ||
+		snapshot.FullGrossSalary != (decimal)item.FullGrossSalary ||
+		snapshot.TotalDeduction != (decimal)item.TotalDeduction ||
+		snapshot.NetPay != (decimal)item.NetPay ||
+		snapshot.PresentDays != (decimal)item.PresentDays ||
+		snapshot.HalfWorkingDays != (decimal)item.HalfWorkingDays ||
+		snapshot.TotalWorkingDays != (decimal)item.TotalWorkingDays ||
+		snapshot.PayableDays != (decimal)item.PayableDays ||
+		snapshot.ProrationFactor != (decimal)item.ProrationFactor ||
+		snapshot.DayCalculationMode != item.DayCalculationMode ||
+		snapshot.PayrollPolicyId != item.PayrollPolicyId ||
+		snapshot.PayrollPolicyVersion != item.PayrollPolicyVersion ||
+		snapshot.AttendancePolicyId != item.AttendancePolicyId ||
+		snapshot.AttendancePolicyVersion != item.AttendancePolicyVersion ||
+		snapshot.WorkCalendarPolicyId != item.WorkCalendarPolicyId ||
+		snapshot.WorkCalendarPolicyVersion != item.WorkCalendarPolicyVersion ||
+		snapshot.BasisDays != (decimal)item.BasisDays ||
+		snapshot.PayableUnits != (decimal)item.PayableUnits ||
+		snapshot.IssueCodesJson != issuesJson ||
+		snapshot.AttendancePolicyWarningsJson != attendancePolicyWarningsJson ||
+		snapshot.EarningComponentsJson != earningsJson ||
+		snapshot.DeductionComponentsJson != deductionsJson ||
+		snapshot.PayrollAdjustmentsJson != adjustmentsJson;
 
 	private static void ApplySnapshotValues(
 		PayrollRunItemSnapshot snapshot,
@@ -660,7 +845,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		string issuesJson,
 		string attendancePolicyWarningsJson,
 		string earningsJson,
-		string deductionsJson)
+		string deductionsJson,
+		string adjustmentsJson)
 	{
 		snapshot.IsLocked = item.IsLocked;
 		snapshot.ReviewStatus = item.ReviewStatus;
@@ -685,11 +871,20 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		snapshot.ProrationFactor = (decimal)item.ProrationFactor;
 		snapshot.DayCalculationMode = item.DayCalculationMode;
 		snapshot.UsedDefaultDayCalculation = item.UsedDefaultDayCalculation;
-		snapshot.AttendancePolicyEvaluationRunId = item.AttendancePolicyEvaluationRunId;
+		snapshot.PayrollPolicyId = item.PayrollPolicyId;
+		snapshot.PayrollPolicyVersion = item.PayrollPolicyVersion;
+		snapshot.AttendancePolicyId = item.AttendancePolicyId;
+		snapshot.AttendancePolicyVersion = item.AttendancePolicyVersion;
+		snapshot.WorkCalendarPolicyId = item.WorkCalendarPolicyId;
+		snapshot.WorkCalendarPolicyVersion = item.WorkCalendarPolicyVersion;
+		snapshot.HolidayImpactJson = item.HolidayImpactJson;
+		snapshot.BasisDays = (decimal)item.BasisDays;
+		snapshot.PayableUnits = (decimal)item.PayableUnits;
 		snapshot.PayrollAttendanceSource = item.PayrollAttendanceSource;
 		snapshot.AttendancePolicyWarningsJson = attendancePolicyWarningsJson;
 		snapshot.EarningComponentsJson = earningsJson;
 		snapshot.DeductionComponentsJson = deductionsJson;
+		snapshot.PayrollAdjustmentsJson = adjustmentsJson;
 	}
 
 	private static RunPayrollItem MapSnapshotToItem(PayrollRunItemSnapshot row)
@@ -720,87 +915,26 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			ProrationFactor = (double)row.ProrationFactor,
 			DayCalculationMode = row.DayCalculationMode,
 			UsedDefaultDayCalculation = row.UsedDefaultDayCalculation,
-			AttendancePolicyEvaluationRunId = row.AttendancePolicyEvaluationRunId,
+			PayrollPolicyId = row.PayrollPolicyId,
+			PayrollPolicyVersion = row.PayrollPolicyVersion,
+			AttendancePolicyId = row.AttendancePolicyId,
+			AttendancePolicyVersion = row.AttendancePolicyVersion,
+			WorkCalendarPolicyId = row.WorkCalendarPolicyId,
+			WorkCalendarPolicyVersion = row.WorkCalendarPolicyVersion,
+			HolidayImpactJson = row.HolidayImpactJson,
+			BasisDays = (double)row.BasisDays,
+			PayableUnits = (double)row.PayableUnits,
 			PayrollAttendanceSource = row.PayrollAttendanceSource,
 			AttendancePolicyWarnings = JsonSerializer.Deserialize<List<string>>(row.AttendancePolicyWarningsJson)
 				?? new List<string>(),
 			EarningComponents = JsonSerializer.Deserialize<List<RunPayrollComponentItem>>(row.EarningComponentsJson)
 				?? new List<RunPayrollComponentItem>(),
 			DeductionComponents = JsonSerializer.Deserialize<List<RunPayrollComponentItem>>(row.DeductionComponentsJson)
-				?? new List<RunPayrollComponentItem>()
+				?? new List<RunPayrollComponentItem>(),
+			PayrollAdjustments = JsonSerializer.Deserialize<List<PayrollAdjustmentDto>>(row.PayrollAdjustmentsJson)
+				?? new List<PayrollAdjustmentDto>()
 		};
 	}
-
-	internal static bool AreAttendancePolicySnapshotsStale(
-		List<PayrollRunItemSnapshot> snapshots,
-		AttendancePolicyPayrollContext context)
-	{
-		if (snapshots.Count == 0)
-		{
-			return false;
-		}
-
-		if (context.Configuration?.PayrollIntegrationMode != AttendancePayrollIntegrationMode.ApprovedResults)
-		{
-			return snapshots.Any(x =>
-				x.AttendancePolicyEvaluationRunId.HasValue ||
-				!string.Equals(x.PayrollAttendanceSource, "raw_attendance", StringComparison.OrdinalIgnoreCase) ||
-				HasAttendancePolicyWarnings(x.AttendancePolicyWarningsJson));
-		}
-
-		foreach (var snapshot in snapshots)
-		{
-			if (snapshot.AttendancePolicyEvaluationRunId != context.PublishedRun?.Id)
-			{
-				return true;
-			}
-
-			var hasEmployeeResults = context.ResultsByEmployee.ContainsKey(snapshot.EmployeeId);
-			var expectedSource = context.PublishedRun != null && hasEmployeeResults
-				? "published_attendance_policy"
-				: "raw_attendance";
-			if (!string.Equals(snapshot.PayrollAttendanceSource, expectedSource, StringComparison.OrdinalIgnoreCase))
-			{
-				return true;
-			}
-
-			var snapshotWarnings = JsonSerializer.Deserialize<List<string>>(snapshot.AttendancePolicyWarningsJson)
-				?? new List<string>();
-			var expectedWarnings = BuildExpectedAttendancePolicyWarnings(context, hasEmployeeResults);
-			if (!WarningSetsEqual(snapshotWarnings, expectedWarnings))
-			{
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	private static List<string> BuildExpectedAttendancePolicyWarnings(
-		AttendancePolicyPayrollContext context,
-		bool hasEmployeeResults)
-	{
-		var warnings = context.Warnings.ToList();
-		if (context.PublishedRun != null && !hasEmployeeResults)
-		{
-			warnings.Add("Published attendance evaluation exists, but this employee has no evaluation results.");
-		}
-
-		return warnings;
-	}
-
-	private static bool WarningSetsEqual(IReadOnlyCollection<string> current, IReadOnlyCollection<string> expected)
-	{
-		var currentSet = NormalizeWarnings(current);
-		var expectedSet = NormalizeWarnings(expected);
-		return currentSet.SetEquals(expectedSet);
-	}
-
-	private static HashSet<string> NormalizeWarnings(IEnumerable<string> warnings) =>
-		warnings
-			.Where(x => !string.IsNullOrWhiteSpace(x))
-			.Select(x => x.Trim())
-			.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
 	private static bool HasAttendancePolicyWarnings(string warningsJson)
 	{
@@ -860,90 +994,6 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			.ToDictionary(g => g.Key, g => g.ToList());
 	}
 
-	private async Task<AttendancePolicyPayrollContext> GetAttendancePolicyPayrollContextAsync(
-		Guid? academicYearId,
-		int year,
-		int month,
-		string internalMonthYear,
-		IReadOnlyCollection<Guid> targetEmployeeIds)
-	{
-		if (!academicYearId.HasValue)
-		{
-			return new AttendancePolicyPayrollContext(null, null, new Dictionary<Guid, List<AttendancePolicyEvaluationResult>>(), new HashSet<Guid>(), new List<string>());
-		}
-
-		var configuration = await _attendanceConfigurationRepository.FindByAcademicYearIdAsync(academicYearId.Value);
-		var warnings = new List<string>();
-		if (configuration == null || configuration.PayrollIntegrationMode != AttendancePayrollIntegrationMode.ApprovedResults)
-		{
-			return new AttendancePolicyPayrollContext(configuration, null, new Dictionary<Guid, List<AttendancePolicyEvaluationResult>>(), new HashSet<Guid>(), warnings);
-		}
-
-		var runQuery = await _attendancePolicyEvaluationRunRepository.GetQueryableAsync();
-		if (CurrentTenant.Id.HasValue)
-		{
-			runQuery = runQuery.Where(x => x.TenantId == CurrentTenant.Id);
-		}
-		else
-		{
-			runQuery = runQuery.Where(x => x.TenantId == null);
-		}
-
-		var publishedRun = (await AsyncExecuter.ToListAsync(
-				runQuery.Where(x =>
-					x.AcademicYearId == academicYearId.Value &&
-					x.Year == year &&
-					x.Month == month &&
-					x.Status == AttendancePolicyEvaluationRunStatus.Published)
-					.OrderByDescending(x => x.PublishedAt ?? x.CreationTime)))
-			.FirstOrDefault();
-
-		if (publishedRun == null)
-		{
-			warnings.Add("Active attendance policy is configured for approved payroll results, but no published evaluation exists for this payroll month.");
-			return new AttendancePolicyPayrollContext(configuration, null, new Dictionary<Guid, List<AttendancePolicyEvaluationResult>>(), new HashSet<Guid>(), warnings);
-		}
-
-		var activeHash = AttendanceConfigurationHasher.Compute(configuration);
-		if (!string.Equals(activeHash, publishedRun.ConfigHash, StringComparison.OrdinalIgnoreCase))
-		{
-			warnings.Add("Published attendance evaluation was created from an older attendance configuration.");
-		}
-
-		var monthStart = new DateTime(year, month, 1);
-		var monthEnd = new DateTime(year, month, DateTime.DaysInMonth(year, month));
-		if ((configuration.EffectiveFrom.HasValue && configuration.EffectiveFrom.Value.Date > monthStart) ||
-			(configuration.EffectiveTo.HasValue && configuration.EffectiveTo.Value.Date < monthEnd))
-		{
-			warnings.Add("Payroll month overlaps attendance policy effective boundaries.");
-		}
-
-		var resultQuery = await _attendancePolicyEvaluationResultRepository.GetQueryableAsync();
-		if (CurrentTenant.Id.HasValue)
-		{
-			resultQuery = resultQuery.Where(x => x.TenantId == CurrentTenant.Id);
-		}
-		else
-		{
-			resultQuery = resultQuery.Where(x => x.TenantId == null);
-		}
-
-		var results = await AsyncExecuter.ToListAsync(
-			resultQuery.Where(x =>
-				x.AttendancePolicyEvaluationRunId == publishedRun.Id &&
-				targetEmployeeIds.Contains(x.EmployeeId)));
-		var resultsByEmployee = results.GroupBy(x => x.EmployeeId).ToDictionary(x => x.Key, x => x.ToList());
-		var missingResultEmployeeIds = targetEmployeeIds
-			.Where(employeeId => !resultsByEmployee.ContainsKey(employeeId))
-			.ToHashSet();
-		return new AttendancePolicyPayrollContext(
-			configuration,
-			publishedRun,
-			resultsByEmployee,
-			missingResultEmployeeIds,
-			warnings);
-	}
-
 	/// <summary>
 	/// Build payroll item for an employee using pre-loaded data (no DB calls)
 	/// </summary>
@@ -952,47 +1002,36 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		List<EmployeeAttendance> attendanceRecords,
 		EmployeePayrollDetails? payrollDetails,
 		List<EmployeePayrollComponent> components,
+		List<PayrollAdjustment> adjustments,
 		PayrollBasisDaysResult basis,
 		int year,
 		int month,
 		IReadOnlyList<Holiday> holidays,
 		IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>? leaveUnitsByDate,
-		AttendancePolicyEvaluationRun? attendancePolicyRun,
-		List<AttendancePolicyEvaluationResult>? attendancePolicyResults,
-		List<string> attendancePolicyWarnings,
+		HrResolvedPolicies resolvedPolicies,
+		string holidayImpactJson,
 		bool isLocked,
 		PayrollRunReview? review,
-		decimal? previousMonthNetPay)
+		decimal? previousMonthNetPay,
+		IReadOnlyList<string>? additionalIssueCodes = null)
 	{
-		var hasPublishedEvaluation = attendancePolicyRun != null && attendancePolicyResults is { Count: > 0 };
-		var itemAttendancePolicyWarnings = attendancePolicyWarnings.ToList();
-		if (attendancePolicyRun != null && !hasPublishedEvaluation)
-		{
-			itemAttendancePolicyWarnings.Add("Published attendance evaluation exists, but this employee has no evaluation results.");
-		}
-		var attendanceSummary = hasPublishedEvaluation
-			? PayrollAttendanceCalculator.CalculatePayableDays(
-				attendancePolicyResults!
-					.Select(x => new PayrollApprovedAttendanceDay(x.AttendanceDate, x.EvaluatedStatus, x.EvaluatedPayableUnits))
-					.ToList(),
-				basis,
-				year,
-				month,
-				holidays,
-				leaveUnitsByDate)
-			: PayrollAttendanceCalculator.CalculatePayableDays(
-				attendanceRecords,
-				basis,
-				year,
-				month,
-				holidays,
-				leaveUnitsByDate);
+		var itemAttendancePolicyWarnings = new List<string>();
+		var attendanceSummary = PayrollAttendanceCalculator.CalculatePayableDays(
+			attendanceRecords,
+			basis,
+			year,
+			month,
+			holidays,
+			leaveUnitsByDate);
+		var allComponents = components
+			.Concat(adjustments.Select(ToPayrollComponent))
+			.ToList();
 		var computation = PayrollComputation.Calculate(
 			attendanceSummary.PresentDays,
 			attendanceSummary.HalfWorkingDays,
 			attendanceSummary.PayableDays,
 			basis.BasisDays,
-			components);
+			allComponents);
 		var netPay = computation.NetPay;
 		var netPayDelta = previousMonthNetPay.HasValue ? netPay - previousMonthNetPay.Value : (decimal?)null;
 		var netPayDeltaPercent = previousMonthNetPay.HasValue && previousMonthNetPay.Value != 0
@@ -1017,8 +1056,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			PreviousMonthNetPay = previousMonthNetPay.HasValue ? (double)previousMonthNetPay.Value : null,
 			NetPayDelta = netPayDelta.HasValue ? (double)netPayDelta.Value : null,
 			NetPayDeltaPercent = netPayDeltaPercent.HasValue ? (double)netPayDeltaPercent.Value : null,
-			IssueCodes = BuildIssueCodes(payrollDetails, components, basis.BasisDays, computation.PayableDays, netPay, previousMonthNetPay, netPayDeltaPercent)
-				.Concat(itemAttendancePolicyWarnings.Select(ToAttendancePolicyIssueCode))
+			IssueCodes = (additionalIssueCodes ?? Array.Empty<string>())
+				.Concat(BuildIssueCodes(payrollDetails, components, basis.BasisDays, computation.PayableDays, netPay, previousMonthNetPay, netPayDeltaPercent))
 				.Distinct()
 				.ToList(),
 			PresentDays = attendanceSummary.PresentDays,
@@ -1028,12 +1067,135 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			ProrationFactor = (double)computation.ProrationFactor,
 			DayCalculationMode = PayrollDayCalculationApiLabels.ToApiString(basis.EffectiveMode),
 			UsedDefaultDayCalculation = basis.UsedTenantDefault,
-			AttendancePolicyEvaluationRunId = attendancePolicyRun?.Id,
-			PayrollAttendanceSource = hasPublishedEvaluation ? "published_attendance_policy" : "raw_attendance",
+			PayrollPolicyId = resolvedPolicies.PayrollPolicy.Id,
+			PayrollPolicyVersion = resolvedPolicies.PayrollPolicy.Version,
+			AttendancePolicyId = resolvedPolicies.AttendancePolicy.Id,
+			AttendancePolicyVersion = resolvedPolicies.AttendancePolicy.Version,
+			WorkCalendarPolicyId = resolvedPolicies.PayrollWorkCalendarPolicy.Id,
+			WorkCalendarPolicyVersion = resolvedPolicies.PayrollWorkCalendarPolicy.Version,
+			HolidayImpactJson = holidayImpactJson,
+			BasisDays = (double)basis.BasisDays,
+			PayableUnits = (double)computation.PayableDays,
+			PayrollAttendanceSource = "raw_attendance",
 			AttendancePolicyWarnings = itemAttendancePolicyWarnings,
 			EarningComponents = computation.Earnings.Select(ToRunPayrollComponentItem).ToList(),
-			DeductionComponents = computation.Deductions.Select(ToRunPayrollComponentItem).ToList()
+			DeductionComponents = computation.Deductions.Select(ToRunPayrollComponentItem).ToList(),
+			PayrollAdjustments = adjustments.Select(MapAdjustmentToDto).ToList()
 		};
+	}
+
+	private static RunPayrollItem BuildPayrollSetupIssueItem(
+		Employee employee,
+		List<EmployeeAttendance> attendanceRecords,
+		EmployeePayrollDetails? payrollDetails,
+		List<EmployeePayrollComponent> components,
+		List<PayrollAdjustment> adjustments,
+		int year,
+		int month,
+		bool isLocked,
+		PayrollRunReview? review,
+		decimal? previousMonthNetPay,
+		IReadOnlyList<string> issueCodes)
+	{
+		var basis = new PayrollBasisDaysResult(
+			DateTime.DaysInMonth(year, month),
+			DayCalculationType.TotalMonthDays,
+			UsedTenantDefault: true,
+			SaturdayWorkPolicy.FullDay);
+		var attendanceSummary = PayrollAttendanceCalculator.CalculatePayableDays(
+			attendanceRecords,
+			basis,
+			year,
+			month,
+			Array.Empty<Holiday>());
+		var allComponents = components
+			.Concat(adjustments.Select(ToPayrollComponent))
+			.ToList();
+		var computation = PayrollComputation.Calculate(
+			attendanceSummary.PresentDays,
+			attendanceSummary.HalfWorkingDays,
+			attendanceSummary.PayableDays,
+			basis.BasisDays,
+			allComponents);
+		var netPay = computation.NetPay;
+		var netPayDelta = previousMonthNetPay.HasValue ? netPay - previousMonthNetPay.Value : (decimal?)null;
+		var netPayDeltaPercent = previousMonthNetPay.HasValue && previousMonthNetPay.Value != 0
+			? netPayDelta / previousMonthNetPay.Value * 100m
+			: (decimal?)null;
+
+		return new RunPayrollItem
+		{
+			EmployeeId = employee.Id,
+			IsLocked = isLocked,
+			ReviewStatus = isLocked ? ReviewStatuses.Locked : review == null ? ReviewStatuses.Pending : ReviewStatuses.Reviewed,
+			ReviewedByUserId = review?.ReviewedByUserId,
+			ReviewedAt = review?.ReviewedAt,
+			EmployeeName = FormatEmployeeName(employee),
+			EmployeeIdentifier = employee.EmployeeCode ?? string.Empty,
+			IsTeaching = employee.EmployeeGroup == EmployeeGroupType.Teaching,
+			BasicSalary = (double)computation.BasicSalary,
+			GrossSalary = (double)computation.GrossSalary,
+			FullGrossSalary = (double)computation.FullGrossSalary,
+			TotalDeduction = (double)computation.TotalDeduction,
+			NetPay = (double)netPay,
+			PreviousMonthNetPay = previousMonthNetPay.HasValue ? (double)previousMonthNetPay.Value : null,
+			NetPayDelta = netPayDelta.HasValue ? (double)netPayDelta.Value : null,
+			NetPayDeltaPercent = netPayDeltaPercent.HasValue ? (double)netPayDeltaPercent.Value : null,
+			IssueCodes = issueCodes
+				.Concat(BuildIssueCodes(payrollDetails, components, basis.BasisDays, computation.PayableDays, netPay, previousMonthNetPay, netPayDeltaPercent))
+				.Distinct()
+				.ToList(),
+			PresentDays = attendanceSummary.PresentDays,
+			HalfWorkingDays = attendanceSummary.HalfWorkingDays,
+			TotalWorkingDays = (double)basis.BasisDays,
+			PayableDays = (double)computation.PayableDays,
+			ProrationFactor = (double)computation.ProrationFactor,
+			DayCalculationMode = PayrollDayCalculationApiLabels.ToApiString(basis.EffectiveMode),
+			UsedDefaultDayCalculation = true,
+			HolidayImpactJson = "[]",
+			BasisDays = (double)basis.BasisDays,
+			PayableUnits = (double)computation.PayableDays,
+			PayrollAttendanceSource = "raw_attendance",
+			EarningComponents = computation.Earnings.Select(ToRunPayrollComponentItem).ToList(),
+			DeductionComponents = computation.Deductions.Select(ToRunPayrollComponentItem).ToList(),
+			PayrollAdjustments = adjustments.Select(MapAdjustmentToDto).ToList()
+		};
+	}
+
+	private PayrollBasisDaysResult ResolvePayrollBasisForPreview(
+		PayrollPolicy policy,
+		int year,
+		int month,
+		IReadOnlyDictionary<DateOnly, decimal> workingUnitsByDate,
+		List<string> issueCodes)
+	{
+		try
+		{
+			return PayrollBasisDays.ResolvePolicy(
+				policy,
+				year,
+				month,
+				workingUnitsByDate.Values.Sum(),
+				workingUnitsByDate);
+		}
+		catch (InvalidOperationException ex) when (
+			policy.DayCalculationType == DayCalculationType.ManualDays &&
+			ex.Message.StartsWith("ManualDays must be set", StringComparison.Ordinal))
+		{
+			_logger.LogWarning(
+				ex,
+				"Payroll policy {PayrollPolicyId} is ManualDays but has no manual basis value for {Year}-{Month:00}. Falling back to calendar days for preview.",
+				policy.Id,
+				year,
+				month);
+			issueCodes.Add(IssueCodes.PayrollPolicyConfiguration);
+			return new PayrollBasisDaysResult(
+				DateTime.DaysInMonth(year, month),
+				DayCalculationType.TotalMonthDays,
+				UsedTenantDefault: true,
+				policy.SaturdayWorkPolicy,
+				workingUnitsByDate);
+		}
 	}
 
 	private static List<PayrollTargetEmployee> ResolveTargetEmployees(
@@ -1055,6 +1217,43 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		}
 
 		return requestedSet.Select(id => scopedById[id]).ToList();
+	}
+
+	internal static string BuildHolidayImpactJson(
+		int year,
+		int month,
+		IReadOnlyList<Holiday> holidays,
+		IReadOnlyList<PayrollHolidayOverride> holidayOverrides)
+	{
+		var items = PayrollMonthCalendar.GetResolvedHolidayDaysInMonth(year, month, holidays, holidayOverrides)
+			.Select(x => new
+			{
+				date = x.Date.ToString("yyyy-MM-dd"),
+				calendarHolidayId = x.CalendarHolidayId,
+				holidayName = x.HolidayName,
+				payrollImpact = x.IncludedInPayroll ? "paid" : "unpaid",
+				x.IsPayrollOnly
+			})
+			.ToList();
+
+		return JsonSerializer.Serialize(items);
+	}
+
+	private async Task<List<Holiday>> GetIncludedWorkCalendarHolidaysAsync(Guid workCalendarPolicyId, int year, int month)
+	{
+		var start = new DateTime(year, month, 1);
+		var end = new DateTime(year, month, DateTime.DaysInMonth(year, month));
+		var query = await _workCalendarHolidayRepository.GetQueryableAsync();
+		var rows = await AsyncExecuter.ToListAsync(query.Where(x =>
+			x.WorkCalendarPolicyId == workCalendarPolicyId &&
+			x.IsIncluded &&
+			x.ToDate >= start &&
+			x.FromDate <= end));
+		return rows
+			.OrderBy(x => x.FromDate)
+			.ThenBy(x => x.HolidayName)
+			.Select(x => x.ToCalendarHoliday(CurrentTenant.Id))
+			.ToList();
 	}
 
 	private async Task<List<PayrollTargetEmployee>> ResolveScopedTargetEmployeesAsync(List<Guid>? requestedEmployeeIds)
@@ -1094,6 +1293,136 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		{
 			Name = item.Source.Name,
 			Amount = (double)item.Amount
+		};
+
+	private static List<SalarySlipLineItem> BuildSalarySlipLineItems(string componentsJson)
+	{
+		var components = JsonSerializer.Deserialize<List<RunPayrollComponentItem>>(componentsJson) ?? new List<RunPayrollComponentItem>();
+		return components
+			.Select(x => new SalarySlipLineItem(
+				x.Name,
+				Math.Round((decimal)x.Amount, 2, MidpointRounding.AwayFromZero)))
+			.ToList();
+	}
+
+	private static DayCalculationType ParseDayCalculationMode(string value) => value switch
+	{
+		"working-days" => DayCalculationType.WorkingDays,
+		"total-month-days" => DayCalculationType.TotalMonthDays,
+		"manual-days" => DayCalculationType.ManualDays,
+		_ => throw new BusinessException(HRErrorCodes.PayrollBlockingIssuesBeforeLock)
+			.WithData("reason", "Invalid payroll day calculation mode on reviewed snapshot.")
+			.WithData("dayCalculationMode", value)
+	};
+
+	private static void EnsureSnapshotTotalsMatchLineItems(
+		PayrollRunItemSnapshot snapshot,
+		IReadOnlyList<SalarySlipLineItem> earnings,
+		IReadOnlyList<SalarySlipLineItem> deductions)
+	{
+		var totalEarnings = Math.Round(earnings.Sum(x => x.Amount), 2, MidpointRounding.AwayFromZero);
+		var totalDeductions = Math.Round(deductions.Sum(x => x.Amount), 2, MidpointRounding.AwayFromZero);
+		var netPay = Math.Round(totalEarnings - totalDeductions, 2, MidpointRounding.AwayFromZero);
+		if (totalEarnings != Math.Round(snapshot.GrossSalary, 2, MidpointRounding.AwayFromZero) ||
+		    totalDeductions != Math.Round(snapshot.TotalDeduction, 2, MidpointRounding.AwayFromZero) ||
+		    netPay != Math.Round(snapshot.NetPay, 2, MidpointRounding.AwayFromZero))
+		{
+			throw new BusinessException(HRErrorCodes.PayrollBlockingIssuesBeforeLock)
+				.WithData("employeeId", snapshot.EmployeeId)
+				.WithData("month", snapshot.MonthYear)
+				.WithData("reason", "Reviewed payroll snapshot totals do not match snapshot line items.");
+		}
+	}
+
+	private static EmployeePayrollComponent ToPayrollComponent(PayrollAdjustment adjustment) =>
+		new(
+			adjustment.Id,
+			adjustment.EmployeeId,
+			adjustment.Name,
+			componentId: null,
+			adjustment.Description ?? adjustment.Reason,
+			adjustment.Amount,
+			isFixed: true,
+			isTemp: true,
+			applicableMonth: DateTime.Parse($"{adjustment.MonthYear}-01"),
+			SalaryComponentType.Fixed,
+			SalaryComponentDependency.None,
+			adjustment.IsEarning,
+			usesMasterValue: false);
+
+	private async Task<Dictionary<Guid, List<PayrollAdjustment>>> GetAdjustmentsByEmployeeAsync(
+		string monthYear,
+		IReadOnlyCollection<Guid> employeeIds)
+	{
+		if (employeeIds.Count == 0)
+		{
+			return new Dictionary<Guid, List<PayrollAdjustment>>();
+		}
+
+		var query = await _payrollAdjustmentRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			query = query.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+		else
+		{
+			query = query.Where(x => x.TenantId == null);
+		}
+
+		return (await AsyncExecuter.ToListAsync(query.Where(x =>
+				x.MonthYear == monthYear &&
+				employeeIds.Contains(x.EmployeeId))))
+			.GroupBy(x => x.EmployeeId)
+			.ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreationTime).ToList());
+	}
+
+	private async Task<PayrollAdjustment> GetAdjustmentOrThrowAsync(Guid id)
+	{
+		var query = await _payrollAdjustmentRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			query = query.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+		else
+		{
+			query = query.Where(x => x.TenantId == null);
+		}
+
+		return await AsyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Id == id))
+			?? throw new BusinessException(HRErrorCodes.PayrollAdjustmentNotFound);
+	}
+
+	private async Task InvalidateUnlockedSnapshotsAsync(string monthYear, IEnumerable<Guid> employeeIds)
+	{
+		var idSet = employeeIds.ToHashSet();
+		var snapshots = (await GetSnapshotsByMonthAsync(monthYear))
+			.Where(x => idSet.Contains(x.EmployeeId) && !x.IsLocked)
+			.ToList();
+
+		foreach (var snapshot in snapshots)
+		{
+			await _payrollRunItemSnapshotRepository.DeleteAsync(snapshot, autoSave: false);
+		}
+
+		if (snapshots.Count > 0)
+		{
+			await UnitOfWorkManager.Current!.SaveChangesAsync();
+		}
+	}
+
+	private static PayrollAdjustmentDto MapAdjustmentToDto(PayrollAdjustment adjustment) =>
+		new()
+		{
+			Id = adjustment.Id,
+			MonthYear = adjustment.MonthYear,
+			EmployeeId = adjustment.EmployeeId,
+			Name = adjustment.Name,
+			Amount = (double)adjustment.Amount,
+			IsEarning = adjustment.IsEarning,
+			Reason = adjustment.Reason,
+			Description = adjustment.Description,
+			CreationTime = adjustment.CreationTime,
+			CreatorId = adjustment.CreatorId
 		};
 
 	private async Task<Dictionary<Guid, PayrollRunReview>> GetReviewsByEmployeeAsync(string monthYear)
@@ -1176,25 +1505,81 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		return issues;
 	}
 
-	private static string ToAttendancePolicyIssueCode(string warning)
+	private static RunPayrollReadinessSummary BuildReadinessSummary(
+		string month,
+		List<RunPayrollItem> items,
+		bool isGenerated,
+		int? employeeCountOverride = null,
+		int? lockedCountOverride = null)
 	{
-		if (warning.Contains("no published evaluation", StringComparison.OrdinalIgnoreCase))
+		var missingAttendanceCount = items.Count(x => x.IssueCodes.Contains(IssueCodes.NoAttendance));
+		var missingSalaryStructureCount = items.Count(x => x.IssueCodes.Contains(IssueCodes.MissingSalaryStructure));
+		var policyConfigurationIssueCount = items.Count(x => x.IssueCodes.Contains(IssueCodes.PayrollPolicyConfiguration));
+		var reviewedCount = items.Count(x => x.ReviewStatus == ReviewStatuses.Reviewed);
+		var lockedCount = lockedCountOverride ?? items.Count(x => x.IsLocked || x.ReviewStatus == ReviewStatuses.Locked);
+		var employeeCount = employeeCountOverride ?? items.Count;
+		var blockingIssues = new List<string>();
+		var recommendedActions = new List<string>();
+
+		if (missingAttendanceCount > 0)
 		{
-			return IssueCodes.AttendancePolicyEvaluationMissing;
+			blockingIssues.Add(IssueCodes.NoAttendance);
+			recommendedActions.Add("review-attendance");
+			recommendedActions.Add("import-attendance");
 		}
 
-		if (warning.Contains("no evaluation results", StringComparison.OrdinalIgnoreCase))
+		if (missingSalaryStructureCount > 0)
 		{
-			return IssueCodes.AttendancePolicyEvaluationResultMissing;
+			blockingIssues.Add(IssueCodes.MissingSalaryStructure);
+			recommendedActions.Add("assign-salary-structure");
 		}
 
-		if (warning.Contains("older attendance configuration", StringComparison.OrdinalIgnoreCase))
+		if (policyConfigurationIssueCount > 0)
 		{
-			return IssueCodes.AttendancePolicyEvaluationConfigStale;
+			blockingIssues.Add(IssueCodes.PayrollPolicyConfiguration);
+			recommendedActions.Add("fix-payroll-policy");
 		}
 
-		return IssueCodes.AttendancePolicyEffectiveBoundary;
+		if (items.Any(x => x.IssueCodes.Contains(IssueCodes.NegativeNetPay)))
+		{
+			blockingIssues.Add(IssueCodes.NegativeNetPay);
+			recommendedActions.Add("review-payroll-rows");
+		}
+
+		return new RunPayrollReadinessSummary
+		{
+			Month = month,
+			CanPreview = true,
+			CanLock = !isGenerated && items.Count > 0 && items.Count == employeeCount && blockingIssues.Count == 0 && reviewedCount == employeeCount,
+			EmployeeCount = employeeCount,
+			SnapshotCount = items.Count,
+			ReviewedCount = reviewedCount,
+			LockedCount = lockedCount,
+			AttendanceFoundCount = items.Count - missingAttendanceCount,
+			MissingAttendanceCount = missingAttendanceCount,
+			MissingSalaryStructureCount = missingSalaryStructureCount,
+			PolicyConfigurationIssueCount = policyConfigurationIssueCount,
+			BlockingIssues = blockingIssues.Distinct().ToList(),
+			RecommendedActions = recommendedActions.Distinct().ToList()
+		};
 	}
+
+	private static bool HasBlockingLockIssue(string issuesJson)
+	{
+		var issues = JsonSerializer.Deserialize<List<string>>(issuesJson) ?? new List<string>();
+		return issues.Contains(IssueCodes.NoAttendance)
+		       || issues.Contains(IssueCodes.MissingSalaryStructure)
+		       || issues.Contains(IssueCodes.NegativeNetPay)
+		       || issues.Contains(IssueCodes.PayrollPolicyConfiguration);
+	}
+
+	private static bool IsPayrollPolicySetupException(BusinessException ex) =>
+		ex.Code is
+			"ShikshaMitra:DefaultPayrollPolicyRequired" or
+			"ShikshaMitra:DefaultAttendancePolicyRequired" or
+			"ShikshaMitra:WorkCalendarPolicyMustBeActive" or
+			"ShikshaMitra:PolicyMustBeActive" or
+			"ShikshaMitra:InvalidWorkCalendarPolicy";
 
 	private static bool IsSnapshotSchemaMissing(Exception ex)
 	{

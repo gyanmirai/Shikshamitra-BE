@@ -12,6 +12,7 @@ using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.TenantSettings.Divisions;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
@@ -547,11 +548,16 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         }
     }
 
-    [Authorize(ShikshaMitraPermissions.UserScope.View)]
+    [Authorize]
     public async Task<UserScopeHierarchyDto> GetUserScopeHierarchyAsync(Guid userId, Guid? academicYearId = null)
     {
         try
         {
+            if (CurrentUser.Id != userId)
+            {
+                await AuthorizationService.CheckAsync(ShikshaMitraPermissions.UserScope.View);
+            }
+
             _logger.LogDebug("Getting hierarchical scope information for user {UserId}, AcademicYear filter: {AcademicYearId}",
                 userId, academicYearId?.ToString() ?? "All");
 

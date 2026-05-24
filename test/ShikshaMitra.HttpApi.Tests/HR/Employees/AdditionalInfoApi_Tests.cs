@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.AdditionalInfo;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -115,6 +116,23 @@ public class AdditionalInfoApi_Tests : ShikshaMitraApiTestBase
 		body.IsLibraryMember.ShouldBeTrue();
 		body.IsTransportMember.ShouldBeTrue();
 		body.PersonWithDisability.ShouldBeTrue();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Forbid_Non_Hr_User_From_Updating_Additional_Info()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "AddInfoAuth");
+		using var nonHrClient = Factory.CreateClient();
+		nonHrClient.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, Guid.NewGuid().ToString());
+		nonHrClient.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "Teacher");
+
+		var response = await nonHrClient.PutAsJsonAsync(
+			$"{BaseUrl}/{empId}/additional-info",
+			new AdditionalInfoContract { SecondLanguage = "Hindi" },
+			JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
 
 	#endregion

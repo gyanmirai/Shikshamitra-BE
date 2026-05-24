@@ -1,0 +1,42 @@
+using System;
+using System.Collections.Generic;
+using Volo.Abp.Application.Dtos;
+
+namespace ShikshaMitra.HR.Audit;
+
+public class HrAuditEventListRequestDto : PagedAndSortedResultRequestDto
+{
+	public Guid? AcademicYearId { get; set; }
+	public string? EntityType { get; set; }
+	public Guid? EntityId { get; set; }
+	public string? Action { get; set; }
+	public Guid? ActorUserId { get; set; }
+	public DateTime? FromDate { get; set; }
+	public DateTime? ToDate { get; set; }
+	public string? Search { get; set; }
+}
+
+public class HrAuditEventDto : EntityDto<Guid>
+{
+	public Guid? AcademicYearId { get; set; }
+	public string EntityType { get; set; } = string.Empty;
+	public Guid EntityId { get; set; }
+	public string EntityName { get; set; } = string.Empty;
+	public string Action { get; set; } = string.Empty;
+	public Guid? ActorUserId { get; set; }
+	public string? ActorNameSnapshot { get; set; }
+	public DateTime OccurredAt { get; set; }
+	public string? Reason { get; set; }
+	public string Summary { get; set; } = string.Empty;
+	public List<HrAuditChangedFieldDto> ChangedFields { get; set; } = [];
+	public string? ContextJson { get; set; }
+	public string? CorrelationId { get; set; }
+	public Guid? SourceAuditLogId { get; set; }
+}
+
+public class HrAuditChangedFieldDto
+{
+	public string Field { get; set; } = string.Empty;
+	public string? OldValue { get; set; }
+	public string? NewValue { get; set; }
+}

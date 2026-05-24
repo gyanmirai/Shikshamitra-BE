@@ -1,17 +1,21 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using ShikshaMitra;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Employees.WorkExperienceContracts;
 using ShikshaMitra.TenantSettings;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using Shouldly;
+using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Security.Claims;
 using Xunit;
 
 namespace ShikshaMitra.HR.Employees;
@@ -23,8 +27,10 @@ public class EmployeeWorkExperienceAppService_Tests : ShikshaMitraApplicationTes
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+	private readonly IRepository<EducationMediumStage, Guid> _mediumStageRepository;
 	private readonly ICurrentTenant _currentTenant;
 	private readonly IGuidGenerator _guidGenerator;
+	private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
 
 	public EmployeeWorkExperienceAppService_Tests()
 	{
@@ -33,8 +39,10 @@ public class EmployeeWorkExperienceAppService_Tests : ShikshaMitraApplicationTes
 		_employeeRepository = GetRequiredService<IEmployeeRepository>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
 		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+		_mediumStageRepository = GetRequiredService<IRepository<EducationMediumStage, Guid>>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
+		_currentPrincipalAccessor = GetRequiredService<ICurrentPrincipalAccessor>();
 	}
 
 	[Fact]
@@ -140,10 +148,32 @@ public class EmployeeWorkExperienceAppService_Tests : ShikshaMitraApplicationTes
 		fromDb.WorkExperiences[0].Designation.ShouldBe("QA");
 	}
 
+	[Fact]
+	public async Task UpsertAsync_Should_Reject_Non_Hr_User()
+	{
+		var employeeId = await CreateEmployeeAsync();
+
+		using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid())))
+		{
+			await Should.ThrowAsync<AbpAuthorizationException>(() =>
+				_workExperienceAppService.UpsertAsync(
+					employeeId,
+					new List<WorkExperienceContract>
+					{
+						new()
+						{
+							MediumStageName = "Blocked Org",
+							Designation = "Blocked"
+						}
+					}));
+		}
+	}
+
 	private async Task<Guid> CreateEmployeeAsync()
 	{
 		var roleId = await EnsureRoleExistsAsync();
 		var shiftId = await EnsureShiftExistsAsync();
+		var organizationId = await EnsureOrganizationExistsAsync();
 		var dto = new CreateEmployeePersonalInfoDto
 		{
 			FirstName = "Wx",
@@ -155,12 +185,18 @@ public class EmployeeWorkExperienceAppService_Tests : ShikshaMitraApplicationTes
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
 			EmployeeStatusType = EmployeeStatusType.Active,
 			RoleId = roleId,
-			ShiftId = shiftId
+			ShiftId = shiftId,
+			OrganizationIds = [organizationId]
 		};
 
 		var created = await _personalInfoAppService.CreateAsync(dto);
 		created.ShouldNotBeNull();
 		return created!.Id;
+	}
+
+	private async Task<Guid> EnsureOrganizationExistsAsync()
+	{
+		return await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 	}
 
 	private async Task<Guid> EnsureRoleExistsAsync()
@@ -195,5 +231,18 @@ public class EmployeeWorkExperienceAppService_Tests : ShikshaMitraApplicationTes
 		};
 		await _shiftRepository.InsertAsync(shift, autoSave: true);
 		return shift.Id;
+	}
+
+	private ClaimsPrincipal BuildPrincipal(Guid userId)
+	{
+		var claims = new List<Claim>
+		{
+			new(AbpClaimTypes.UserId, userId.ToString()),
+			new(AbpClaimTypes.UserName, $"user-{userId:N}"),
+			new(AbpClaimTypes.Email, $"user-{userId:N}@test.local"),
+			new(AbpClaimTypes.TenantId, (_currentTenant.Id ?? Guid.Empty).ToString())
+		};
+
+		return new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
 	}
 }

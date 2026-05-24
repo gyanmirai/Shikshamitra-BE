@@ -23,10 +23,14 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 public class ReportingManagerController : AbpControllerBase
 {
 	private readonly IReportingManagerAppService _reportingManagerAppService;
+	private readonly IEmployeeAuthorizationService _authorizationService;
 
-	public ReportingManagerController(IReportingManagerAppService reportingManagerAppService)
+	public ReportingManagerController(
+		IReportingManagerAppService reportingManagerAppService,
+		IEmployeeAuthorizationService authorizationService)
 	{
 		_reportingManagerAppService = reportingManagerAppService;
+		_authorizationService = authorizationService;
 	}
 
 	/// <summary>
@@ -37,6 +41,7 @@ public class ReportingManagerController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<ReportingManagerResponse> GetAsync([FromRoute, Required] Guid employeeId)
 	{
+		await _authorizationService.CheckEmployeeAccessAsync(employeeId);
 		var result = await _reportingManagerAppService.GetReportingManagerAsync(employeeId);
 		return ReportingManagerContractMapper.ToResponse(result);
 	}
@@ -51,6 +56,7 @@ public class ReportingManagerController : AbpControllerBase
 		[FromRoute, Required] Guid employeeId,
 		[FromBody, Required] ReportingManagerRequest request)
 	{
+		await _authorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 		var assignDto = ReportingManagerContractMapper.ToAssignDto(request);
 		await _reportingManagerAppService.AssignReportingManagerAsync(employeeId, assignDto);
 

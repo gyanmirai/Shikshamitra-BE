@@ -42,6 +42,8 @@ public class EFCoreGroupRepository : EfCoreRepository<ShikshaMitraDbContext, Gro
         var dbContext = await GetDbContextAsync();
 
         var query = dbContext.Groups
+            .AsNoTracking()
+            .AsSplitQuery()
             .Include(x => x.StudentRules)
             .Include(x => x.EmployeeRules)
             .Include(x => x.Members)

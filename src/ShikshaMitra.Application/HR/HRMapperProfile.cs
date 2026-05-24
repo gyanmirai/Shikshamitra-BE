@@ -16,6 +16,7 @@ using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.SalaryStructure;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Students;
+using System.Linq;
 
 namespace ShikshaMitra.HR;
 
@@ -23,7 +24,22 @@ public class HRMapperProfile : Profile
 {
 	public HRMapperProfile()
 	{
-		CreateMap<Employee, EmployeeDto>();
+		CreateMap<Employee, EmployeeDto>()
+			.ForMember(dest => dest.OrganizationIds,
+				opt => opt.MapFrom(src => src.OrganizationAssignments.Select(x => x.EducationMediumStageId).Distinct()))
+			.ForMember(dest => dest.Organizations,
+				opt => opt.MapFrom(src => src.OrganizationAssignments
+					.Where(x => x.EducationMediumStage != null)
+					.Select(x => new EmployeeOrganizationDto
+					{
+						Id = x.EducationMediumStageId,
+						Name = x.EducationMediumStage!.Name
+					})))
+			.ForMember(dest => dest.OrganizationNames,
+				opt => opt.MapFrom(src => src.OrganizationAssignments
+					.Where(x => x.EducationMediumStage != null)
+					.Select(x => x.EducationMediumStage!.Name)
+					.Distinct()));
 		CreateMap<CreateUpdateEmployeeDto, Employee>();
 
 		CreateMap<WorkExperience, WorkExperienceDto>();

@@ -7,6 +7,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Employees.Search;
 using ShikshaMitra.TenantSettings;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
@@ -24,6 +25,7 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+	private readonly IRepository<EducationMediumStage, Guid> _mediumStageRepository;
 	private readonly ICurrentTenant _currentTenant;
 	private readonly IGuidGenerator _guidGenerator;
 	private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
@@ -35,6 +37,7 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 		_employeeRepository = GetRequiredService<IEmployeeRepository>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
 		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+		_mediumStageRepository = GetRequiredService<IRepository<EducationMediumStage, Guid>>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
 		_currentPrincipalAccessor = GetRequiredService<ICurrentPrincipalAccessor>();
@@ -90,6 +93,7 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 	{
 		var roleId = await EnsureRoleExistsAsync();
 		var shiftId = await EnsureShiftExistsAsync();
+		var organizationId = await EnsureOrganizationExistsAsync();
 		var uniq = Guid.NewGuid().ToString("N")[..8];
 
 		return new CreateEmployeePersonalInfoDto
@@ -103,8 +107,14 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
 			EmployeeStatusType = EmployeeStatusType.Active,
 			RoleId = roleId,
-			ShiftId = shiftId
+			ShiftId = shiftId,
+			OrganizationIds = [organizationId]
 		};
+	}
+
+	private async Task<Guid> EnsureOrganizationExistsAsync()
+	{
+		return await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 	}
 
 	private async Task<Guid> EnsureRoleExistsAsync()

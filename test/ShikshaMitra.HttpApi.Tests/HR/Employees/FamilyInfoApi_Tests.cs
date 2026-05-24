@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.FamilyInfo;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -57,6 +58,30 @@ public class FamilyInfoApi_Tests : ShikshaMitraApiTestBase
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/family-info", request, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Forbid_Non_Hr_User_From_Updating_Family_Info()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "FamAuth");
+		using var nonHrClient = Factory.CreateClient();
+		nonHrClient.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, Guid.NewGuid().ToString());
+		nonHrClient.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "Teacher");
+
+		var response = await nonHrClient.PutAsJsonAsync(
+			$"{BaseUrl}/{empId}/family-info",
+			new FamilyInfoRequest
+			{
+				FatherDetails = new FamilyMemberInfo
+				{
+					Name = "Rajesh Kumar",
+					MobileNo = "9876543210",
+				},
+			},
+			JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
 
 	#endregion

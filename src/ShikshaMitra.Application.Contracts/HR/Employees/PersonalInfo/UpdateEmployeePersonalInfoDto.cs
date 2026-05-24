@@ -76,6 +76,8 @@ public class UpdateEmployeePersonalInfoDto : IValidatableObject
 
 	public Guid? ShiftId { get; set; }
 
+	public List<Guid> OrganizationIds { get; set; } = [];
+
 	#endregion
 
 	#region Validation

@@ -5,6 +5,8 @@ using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
 using System;
@@ -27,10 +29,9 @@ public class SalarySlipManager : DomainService
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly IEmployeePayrollComponentRepository _payrollComponentRepository;
 	private readonly IRepository<EmployeeAttendance, Guid> _attendanceRepository;
-	private readonly IAttendanceConfigurationRepository _attendanceConfigurationRepository;
-	private readonly IRepository<AttendancePolicyEvaluationRun, Guid> _attendancePolicyEvaluationRunRepository;
-	private readonly IRepository<AttendancePolicyEvaluationResult, Guid> _attendancePolicyEvaluationResultRepository;
-	private readonly IDayCalculationSettingRepository _dayCalculationSettingRepository;
+	private readonly IRepository<PayrollAdjustment, Guid> _payrollAdjustmentRepository;
+	private readonly IRepository<WorkCalendarHoliday, Guid> _workCalendarHolidayRepository;
+	private readonly HrPolicyResolver _hrPolicyResolver;
 	private readonly PayrollCalendarResolver _payrollCalendarResolver;
 	private readonly PayrollApprovedLeaveResolver _payrollApprovedLeaveResolver;
 	private readonly PayrollComponentVersionResolver _componentVersionResolver;
@@ -41,10 +42,9 @@ public class SalarySlipManager : DomainService
 		IEmployeeRepository employeeRepository,
 		IEmployeePayrollComponentRepository payrollComponentRepository,
 		IRepository<EmployeeAttendance, Guid> attendanceRepository,
-		IAttendanceConfigurationRepository attendanceConfigurationRepository,
-		IRepository<AttendancePolicyEvaluationRun, Guid> attendancePolicyEvaluationRunRepository,
-		IRepository<AttendancePolicyEvaluationResult, Guid> attendancePolicyEvaluationResultRepository,
-		IDayCalculationSettingRepository dayCalculationSettingRepository,
+		IRepository<PayrollAdjustment, Guid> payrollAdjustmentRepository,
+		IRepository<WorkCalendarHoliday, Guid> workCalendarHolidayRepository,
+		HrPolicyResolver hrPolicyResolver,
 		PayrollCalendarResolver payrollCalendarResolver,
 		PayrollApprovedLeaveResolver payrollApprovedLeaveResolver,
 		PayrollComponentVersionResolver componentVersionResolver,
@@ -54,10 +54,9 @@ public class SalarySlipManager : DomainService
 		_employeeRepository = employeeRepository;
 		_payrollComponentRepository = payrollComponentRepository;
 		_attendanceRepository = attendanceRepository;
-		_attendanceConfigurationRepository = attendanceConfigurationRepository;
-		_attendancePolicyEvaluationRunRepository = attendancePolicyEvaluationRunRepository;
-		_attendancePolicyEvaluationResultRepository = attendancePolicyEvaluationResultRepository;
-		_dayCalculationSettingRepository = dayCalculationSettingRepository;
+		_payrollAdjustmentRepository = payrollAdjustmentRepository;
+		_workCalendarHolidayRepository = workCalendarHolidayRepository;
+		_hrPolicyResolver = hrPolicyResolver;
 		_payrollCalendarResolver = payrollCalendarResolver;
 		_payrollApprovedLeaveResolver = payrollApprovedLeaveResolver;
 		_componentVersionResolver = componentVersionResolver;
@@ -103,26 +102,30 @@ public class SalarySlipManager : DomainService
 		var year = int.Parse(normalizedMonthYear[..4]);
 		var month = int.Parse(normalizedMonthYear[5..7]);
 		var calendar = await _payrollCalendarResolver.ResolveAsync(year, month, cancellationToken);
-		var daySetting = await _dayCalculationSettingRepository.FindEffectiveAsync(CurrentTenant.Id, calendar.AcademicYearId, cancellationToken);
-		var saturdayWorkPolicy = daySetting?.GetEffectiveSaturdayWorkPolicyForMonth(year, month) ?? SaturdayWorkPolicy.FullDay;
-		var holidayOverrides = daySetting?.GetEffectiveHolidayOverridesForMonth(year, month) ?? Array.Empty<PayrollHolidayOverride>();
+		var resolvedPolicies = await _hrPolicyResolver.ResolveAsync(
+			employeeId,
+			new DateTime(year, month, 1),
+			calendar.AcademicYearId,
+			cancellationToken);
+		var holidayOverrides = resolvedPolicies.PayrollPolicy.GetHolidayOverrides();
+		var workCalendarHolidays = await GetIncludedWorkCalendarHolidaysAsync(resolvedPolicies.PayrollWorkCalendarPolicy.Id, year, month, cancellationToken);
 		var workingUnitsByDate = PayrollMonthCalendar.BuildWorkingUnitsByDate(
 			year,
 			month,
-			calendar.Holidays,
-			saturdayWorkPolicy,
-			holidayOverrides);
-		var basis = PayrollBasisDays.Resolve(daySetting, year, month, workingUnitsByDate.Values.Sum(), workingUnitsByDate);
+			workCalendarHolidays,
+			resolvedPolicies.PayrollPolicy.SaturdayWorkPolicy,
+			holidayOverrides,
+			resolvedPolicies.PayrollWorkCalendarPolicy);
+		var basis = PayrollBasisDays.ResolvePolicy(
+			resolvedPolicies.PayrollPolicy,
+			year,
+			month,
+			workingUnitsByDate.Values.Sum(),
+			workingUnitsByDate);
 
 		var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
 		var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
 		var attendance = await GetAttendanceForEmployeeMonthAsync(employeeId, startDate, endDate);
-		var approvedAttendance = await GetApprovedAttendanceForEmployeeMonthAsync(
-			employeeId,
-			calendar.AcademicYearId,
-			year,
-			month,
-			cancellationToken);
 		var leaveUnitsByEmployee = await _payrollApprovedLeaveResolver.ResolveLeaveUnitsByEmployeeAsync(
 			new[] { employeeId },
 			year,
@@ -130,27 +133,23 @@ public class SalarySlipManager : DomainService
 			cancellationToken);
 		var components = await _payrollComponentRepository.GetByEmployeeIdAsync(employeeId, cancellationToken);
 		components = await _componentVersionResolver.ResolveAsync(components, normalizedMonthYear);
-		var attendanceSummary = approvedAttendance.Count > 0
-			? PayrollAttendanceCalculator.CalculatePayableDays(
-				approvedAttendance,
-				basis,
-				year,
-				month,
-				calendar.Holidays,
-				leaveUnitsByEmployee.GetValueOrDefault(employeeId))
-			: PayrollAttendanceCalculator.CalculatePayableDays(
-				attendance,
-				basis,
-				year,
-				month,
-				calendar.Holidays,
-				leaveUnitsByEmployee.GetValueOrDefault(employeeId));
+		var adjustments = await GetAdjustmentsForEmployeeMonthAsync(employeeId, normalizedMonthYear, cancellationToken);
+		var allComponents = components
+			.Concat(adjustments.Select(ToPayrollComponent))
+			.ToList();
+		var attendanceSummary = PayrollAttendanceCalculator.CalculatePayableDays(
+			attendance,
+			basis,
+			year,
+			month,
+			workCalendarHolidays,
+			leaveUnitsByEmployee.GetValueOrDefault(employeeId));
 		var computation = PayrollComputation.Calculate(
 			attendanceSummary.PresentDays,
 			attendanceSummary.HalfWorkingDays,
 			attendanceSummary.PayableDays,
 			basis.BasisDays,
-			components);
+			allComponents);
 
 		if (components.Count == 0)
 		{
@@ -200,6 +199,63 @@ public class SalarySlipManager : DomainService
 		return existingSlip;
 	}
 
+	public async Task<SalarySlip> GenerateOrGetSalarySlipFromSnapshotAsync(
+		PayrollRunItemSnapshot snapshot,
+		List<SalarySlipLineItem> earningLineItems,
+		List<SalarySlipLineItem> deductionLineItems,
+		DayCalculationType dayCalculationMode,
+		CancellationToken cancellationToken = default)
+	{
+		var existingSlip = await _salarySlipRepository.GetByEmployeeAndMonthAsync(
+			snapshot.EmployeeId,
+			snapshot.MonthYear,
+			cancellationToken);
+
+		if (existingSlip != null && existingSlip.Status == SalarySlipStatus.Finalized)
+		{
+			throw new BusinessException(HRErrorCodes.SalarySlipAlreadyFinalized);
+		}
+
+		if (existingSlip == null)
+		{
+			var salarySlip = new SalarySlip(
+				GuidGenerator.Create(),
+				CurrentTenant.Id,
+				snapshot.EmployeeId,
+				snapshot.MonthYear,
+				earningLineItems,
+				deductionLineItems);
+
+			ApplySnapshotMetadata(salarySlip, snapshot, dayCalculationMode);
+			await _salarySlipRepository.InsertAsync(salarySlip, cancellationToken: cancellationToken);
+			return salarySlip;
+		}
+
+		existingSlip.UpdateLineItems(earningLineItems, deductionLineItems);
+		ApplySnapshotMetadata(existingSlip, snapshot, dayCalculationMode);
+		await _salarySlipRepository.UpdateAsync(existingSlip, cancellationToken: cancellationToken);
+		return existingSlip;
+	}
+
+	private static void ApplySnapshotMetadata(
+		SalarySlip salarySlip,
+		PayrollRunItemSnapshot snapshot,
+		DayCalculationType dayCalculationMode)
+	{
+		salarySlip.SetPayrollComputationSnapshot(
+			snapshot.BasisDays,
+			snapshot.PayableDays,
+			snapshot.ProrationFactor,
+			dayCalculationMode);
+		salarySlip.SetPolicySnapshot(
+			snapshot.PayrollPolicyId,
+			snapshot.PayrollPolicyVersion,
+			snapshot.AttendancePolicyId,
+			snapshot.AttendancePolicyVersion,
+			snapshot.WorkCalendarPolicyId,
+			snapshot.WorkCalendarPolicyVersion);
+	}
+
 	private async Task<List<EmployeeAttendance>> GetAttendanceForEmployeeMonthAsync(
 		Guid employeeId,
 		DateOnly startDate,
@@ -218,76 +274,62 @@ public class SalarySlipManager : DomainService
 				a.AttendanceDate <= endDate));
 	}
 
-	private async Task<List<PayrollApprovedAttendanceDay>> GetApprovedAttendanceForEmployeeMonthAsync(
+	private async Task<List<PayrollAdjustment>> GetAdjustmentsForEmployeeMonthAsync(
 		Guid employeeId,
-		Guid? academicYearId,
+		string monthYear,
+		CancellationToken cancellationToken)
+	{
+		var query = await _payrollAdjustmentRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			query = query.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+		else
+		{
+			query = query.Where(x => x.TenantId == null);
+		}
+
+		return await AsyncExecuter.ToListAsync(
+			query
+				.Where(x => x.EmployeeId == employeeId && x.MonthYear == monthYear)
+				.OrderBy(x => x.CreationTime),
+			cancellationToken);
+	}
+
+	private static EmployeePayrollComponent ToPayrollComponent(PayrollAdjustment adjustment) =>
+		new(
+			adjustment.Id,
+			adjustment.EmployeeId,
+			adjustment.Name,
+			componentId: null,
+			adjustment.Description ?? adjustment.Reason,
+			adjustment.Amount,
+			isFixed: true,
+			isTemp: true,
+			applicableMonth: DateTime.Parse($"{adjustment.MonthYear}-01"),
+			SalaryComponentType.Fixed,
+			SalaryComponentDependency.None,
+			adjustment.IsEarning,
+			usesMasterValue: false);
+
+	private async Task<List<Holiday>> GetIncludedWorkCalendarHolidaysAsync(
+		Guid workCalendarPolicyId,
 		int year,
 		int month,
 		CancellationToken cancellationToken)
 	{
-		if (!academicYearId.HasValue)
-		{
-			return new List<PayrollApprovedAttendanceDay>();
-		}
-
-		var configuration = await _attendanceConfigurationRepository.FindByAcademicYearIdAsync(
-			academicYearId.Value,
-			cancellationToken);
-		if (configuration?.PayrollIntegrationMode != AttendancePayrollIntegrationMode.ApprovedResults)
-		{
-			return new List<PayrollApprovedAttendanceDay>();
-		}
-
-		var runQuery = await _attendancePolicyEvaluationRunRepository.GetQueryableAsync();
-		if (CurrentTenant.Id.HasValue)
-		{
-			runQuery = runQuery.Where(x => x.TenantId == CurrentTenant.Id);
-		}
-		else
-		{
-			runQuery = runQuery.Where(x => x.TenantId == null);
-		}
-
-		var publishedRun = (await AsyncExecuter.ToListAsync(
-				runQuery
-					.Where(x =>
-						x.AcademicYearId == academicYearId.Value &&
-						x.Year == year &&
-						x.Month == month &&
-						x.Status == AttendancePolicyEvaluationRunStatus.Published)
-					.OrderByDescending(x => x.PublishedAt ?? x.CreationTime),
-				cancellationToken))
-			.FirstOrDefault();
-		if (publishedRun == null)
-		{
-			return new List<PayrollApprovedAttendanceDay>();
-		}
-
-		var resultQuery = await _attendancePolicyEvaluationResultRepository.GetQueryableAsync();
-		if (CurrentTenant.Id.HasValue)
-		{
-			resultQuery = resultQuery.Where(x => x.TenantId == CurrentTenant.Id);
-		}
-		else
-		{
-			resultQuery = resultQuery.Where(x => x.TenantId == null);
-		}
-
-		var rows = await AsyncExecuter.ToListAsync(
-			resultQuery.Where(x =>
-				x.AttendancePolicyEvaluationRunId == publishedRun.Id &&
-				x.EmployeeId == employeeId),
-			cancellationToken);
-		if (rows.Count == 0)
-		{
-			throw new BusinessException("ShikshaMitra:PublishedAttendanceEvaluationResultsIncomplete")
-				.WithData("employeeId", employeeId)
-				.WithData("year", year)
-				.WithData("month", month);
-		}
-
+		var start = new DateTime(year, month, 1);
+		var end = new DateTime(year, month, DateTime.DaysInMonth(year, month));
+		var query = await _workCalendarHolidayRepository.GetQueryableAsync();
+		var rows = await AsyncExecuter.ToListAsync(query.Where(x =>
+			x.WorkCalendarPolicyId == workCalendarPolicyId &&
+			x.IsIncluded &&
+			x.ToDate >= start &&
+			x.FromDate <= end), cancellationToken);
 		return rows
-			.Select(x => new PayrollApprovedAttendanceDay(x.AttendanceDate, x.EvaluatedStatus, x.EvaluatedPayableUnits))
+			.OrderBy(x => x.FromDate)
+			.ThenBy(x => x.HolidayName)
+			.Select(x => x.ToCalendarHoliday(CurrentTenant.Id))
 			.ToList();
 	}
 

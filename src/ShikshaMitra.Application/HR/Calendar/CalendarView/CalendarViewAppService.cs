@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Application.Contracts.Groups;
 using ShikshaMitra.Application.Contracts.HR.Calendar.CalendarView;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.Calendar;
 using ShikshaMitra.HR.Calendar.HolidayTypes;
@@ -23,6 +25,7 @@ namespace ShikshaMitra.Application.HR.Calendar.CalendarView;
 /// Provides unified view of events and holidays with visibility filtering
 /// </summary>
 [RemoteService(false)]
+[Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.View)]
 public class CalendarViewAppService : ApplicationService, ICalendarViewAppService
 {
     private readonly IEventRepository _eventRepository;

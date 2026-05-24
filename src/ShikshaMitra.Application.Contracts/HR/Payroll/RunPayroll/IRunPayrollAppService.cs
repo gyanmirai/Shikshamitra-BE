@@ -1,4 +1,6 @@
-﻿using System.Threading.Tasks;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
@@ -11,15 +13,16 @@ public interface IRunPayrollAppService : IApplicationService
 	/// <summary>
 	/// Get payroll preview for a specific month (paginated)
 	/// </summary>
-	/// <param name="input">Input with month, page, and pageSize</param>
-	/// <returns>Payroll preview with employee items</returns>
 	Task<RunPayrollResponse> GetPreviewAsync(GetRunPayrollInput input);
+
+	/// <summary>
+	/// Get lightweight payroll readiness for a month without computing or saving preview snapshots.
+	/// </summary>
+	Task<RunPayrollReadinessSummary> GetReadinessAsync(string month);
 
 	/// <summary>
 	/// Generate and lock payroll for a month
 	/// </summary>
-	/// <param name="request">Request with month</param>
-	/// <returns>Lock confirmation response</returns>
 	Task<PayrollLockResponse> LockPayrollAsync(RunPayrollRequest request);
 
 	/// <summary>
@@ -31,5 +34,12 @@ public interface IRunPayrollAppService : IApplicationService
 	/// Removes review markers for selected employee payroll rows before lock.
 	/// </summary>
 	Task<PayrollLockResponse> UnmarkReviewedAsync(PayrollRunReviewRequest request);
-}
 
+	Task<List<PayrollAdjustmentDto>> GetAdjustmentsAsync(string month, Guid? employeeId = null);
+
+	Task<PayrollAdjustmentDto> CreateAdjustmentAsync(PayrollAdjustmentRequest request);
+
+	Task<PayrollAdjustmentDto> UpdateAdjustmentAsync(Guid id, PayrollAdjustmentRequest request);
+
+	Task DeleteAdjustmentAsync(Guid id);
+}

@@ -32,11 +32,25 @@ All controllers are `[Authorize]`.
 | PUT | `/api/leave-policies/{id}` | Update leave policy |
 | DELETE | `/api/leave-policies/{id}` | Soft-delete leave policy |
 
-### Attendance Configuration (`/api/attendance/configuration`)
+### Attendance Evaluations (`/api/hr/attendance/evaluations`)
 
 | Method | Route | Description |
 |---|---|---|
-| POST | `/api/attendance/configuration?academicYearId={id}` | Create or update attendance configuration (upsert) |
+| POST | `/api/hr/attendance/evaluations/preview` | Preview a policy-grouped attendance evaluation batch without saving runs |
+| POST | `/api/hr/attendance/evaluations` | Create policy-specific attendance evaluation runs for a full month |
+| GET | `/api/hr/attendance/evaluations` | List saved evaluation runs by academic year, month, and year |
+| GET | `/api/hr/attendance/evaluations/{runId}` | Get one evaluation run |
+| GET | `/api/hr/attendance/evaluations/{runId}/results` | Page through evaluation results |
+| POST | `/api/hr/attendance/evaluations/{runId}/review` | Mark a `needs_review` run reviewed so it can be approved |
+| POST | `/api/hr/attendance/evaluations/{runId}/approve` | Approve an evaluated run |
+| POST | `/api/hr/attendance/evaluations/{runId}/publish` | Publish an approved run |
+| POST | `/api/hr/attendance/evaluations/{runId}/cancel` | Cancel a non-published run |
+
+### HR Policy Holiday Impact (`/api/hr/policy-holiday-impact-preview`)
+
+| Method | Route | Description |
+|---|---|---|
+| GET | `/api/hr/policy-holiday-impact-preview` | Preview attendance and payroll holiday treatment by policy/calendar/date range |
 
 ### Attendance Tracking (`/api/attendance-tracking`)
 
@@ -127,23 +141,43 @@ Response `200`: paginated `LeavePolicyListResponse`
 
 ---
 
-## Attendance Configuration Contract
+## Attendance Evaluation Contract
 
-### POST `/api/attendance/configuration`
+### POST `/api/hr/attendance/evaluations/preview`
+Body:
+- `academicYearId` (Guid, required)
+- `month` (1-12, required)
+- `year` (number, required)
+- `departmentId`, `roleId`, `shiftId`, `employeeType` (optional preview filters)
+
+Response `200`: `AttendancePolicyEvaluationBatchResponse`
+- `runs`: policy-specific evaluation run responses
+- `warnings`: combined batch warnings
+- `totalAffectedEmployeeCount`
+- `policyCount`
+
+Preview requests do not persist runs. Filtered previews are not publishable.
+
+### POST `/api/hr/attendance/evaluations`
+Body:
+- `academicYearId` (Guid, required)
+- `month` (1-12, required)
+- `year` (number, required)
+
+Response `200`: `AttendancePolicyEvaluationBatchResponse`
+
+Create requests persist one run per resolved attendance policy for the selected full month.
+
+### GET `/api/hr/policy-holiday-impact-preview`
 Query:
 - `academicYearId` (Guid, required)
+- `workCalendarPolicyId` (Guid, optional)
+- `payrollPolicyId` (Guid, optional; active default is used when omitted)
+- `attendancePolicyId` (Guid, optional; active default is used when omitted)
+- `month` (`YYYY-MM`, optional)
+- `fromDate`, `toDate` (optional; ignored when `month` is provided)
 
-Body:
-- `dailyRules.hoursBasedPayPercentage` (number, required)
-- `lateEarlyRules.graceTime` (number, required)
-- `lateEarlyRules.maxLateAllowedPerMonth` (number, required)
-- `lateEarlyRules.penaltyType` (`none|deduct_half_day|deduct_full_day`, required)
-- `overtime.enabled` (bool, required)
-- `overtime.rate` (`1.5x|2.0x|flat`, required when `enabled=true`)
-- `overtime.minOvertimeMinutes` (number, required when `enabled=true`)
-
-Response `200`:
-- `{ "success": true, "message": "Attendance configuration saved successfully" }`
+Response rows include holiday date/name, work calendar source, attendance working/punch behavior, payroll paid/payable-unit behavior, override source, and `hasDifference`.
 
 ---
 

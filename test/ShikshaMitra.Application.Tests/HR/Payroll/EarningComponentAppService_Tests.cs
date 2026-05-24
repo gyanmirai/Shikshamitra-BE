@@ -704,6 +704,12 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             [
                 new SalaryComponentContract
                 {
+                    ComponentId = baseEarning.Id,
+                    Name = baseEarning.Name,
+                    Amount = 50000m
+                },
+                new SalaryComponentContract
+                {
                     ComponentId = percentageEarning.Id,
                     Name = percentageEarning.Name
                 }
@@ -712,7 +718,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
 
         var saved = (await _employeePayrollComponentRepository.GetEarningsByEmployeeIdAsync(employee.Id))
             .Single(x => x.ComponentId == percentageEarning.Id);
-        saved.Amount.ShouldBe(12m);
+        saved.Amount.ShouldBe(6000m);
         saved.ComponentType.ShouldBe(SalaryComponentType.Percentage);
         saved.IsFixed.ShouldBeFalse();
     }
@@ -783,6 +789,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
     public async Task Should_Save_ReAdded_Percentage_Deduction_When_Line_Amount_Is_Zero()
     {
         var employee = await CreateEmployeeAsync("deduction-percentage-readd-payroll");
+        var baseEarning = await CreateTestEarningComponentAsync($"Base Payroll Deduction Percentage {Guid.NewGuid():N}");
         var percentageDeduction = await _deductionComponentAppService.CreateAsync(new CreateDeductionComponentDto
         {
             Name = $"Payroll PF Percentage {Guid.NewGuid():N}",
@@ -798,6 +805,15 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
 
         await _employeePayrollAppService.UpdatePayrollContractAsync(employee.Id, new PayrollContract
         {
+            EarningComponents =
+            [
+                new SalaryComponentContract
+                {
+                    ComponentId = baseEarning.Id,
+                    Name = baseEarning.Name,
+                    Amount = 50000m
+                }
+            ],
             DeductionComponents =
             [
                 new SalaryComponentContract
@@ -810,11 +826,29 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
 
         await _employeePayrollAppService.UpdatePayrollContractAsync(employee.Id, new PayrollContract
         {
+            EarningComponents =
+            [
+                new SalaryComponentContract
+                {
+                    ComponentId = baseEarning.Id,
+                    Name = baseEarning.Name,
+                    Amount = 50000m
+                }
+            ],
             DeductionComponents = []
         });
 
         await _employeePayrollAppService.UpdatePayrollContractAsync(employee.Id, new PayrollContract
         {
+            EarningComponents =
+            [
+                new SalaryComponentContract
+                {
+                    ComponentId = baseEarning.Id,
+                    Name = baseEarning.Name,
+                    Amount = 50000m
+                }
+            ],
             DeductionComponents =
             [
                 new SalaryComponentContract
@@ -829,7 +863,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
 
         var saved = (await _employeePayrollComponentRepository.GetDeductionsByEmployeeIdAsync(employee.Id))
             .Single(x => x.ComponentId == percentageDeduction.Id);
-        saved.Amount.ShouldBe(12m);
+        saved.Amount.ShouldBe(6000m);
         saved.ComponentType.ShouldBe(SalaryComponentType.Percentage);
         saved.DependOn.ShouldBe(SalaryComponentDependency.Basic);
         saved.IsFixed.ShouldBeFalse();
@@ -1799,6 +1833,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
     {
         var roleId = await EnsureRoleExistsAsync();
         var shiftId = await EnsureShiftExistsAsync();
+        var organizationId = await Employees.EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
         var unique = Guid.NewGuid().ToString("N")[..6];
 
         return await _employeePersonalInfoAppService.CreateAsync(new CreateEmployeePersonalInfoDto
@@ -1812,7 +1847,8 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             DateOfJoining = new DateOnly(2024, 1, 1),
             EmployeeStatusType = EmployeeStatusType.Active,
             RoleId = roleId,
-            ShiftId = shiftId
+            ShiftId = shiftId,
+            OrganizationIds = [organizationId]
         });
     }
 

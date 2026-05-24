@@ -5,6 +5,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 
@@ -98,6 +99,43 @@ public static class PayrollMonthCalendar
 		SaturdayWorkPolicy saturdayWorkPolicy,
 		IReadOnlyList<PayrollHolidayOverride> holidayOverrides)
 	{
+		return BuildWorkingUnitsByDate(
+			year,
+			month,
+			holidays,
+			saturdayWorkPolicy,
+			holidayOverrides,
+			AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern.SaturdaySunday,
+			Array.Empty<int>());
+	}
+
+	public static Dictionary<DateOnly, decimal> BuildWorkingUnitsByDate(
+		int year,
+		int month,
+		IReadOnlyList<Holiday> holidays,
+		SaturdayWorkPolicy saturdayWorkPolicy,
+		IReadOnlyList<PayrollHolidayOverride> holidayOverrides,
+		WorkCalendarPolicy workCalendarPolicy)
+	{
+		return BuildWorkingUnitsByDate(
+			year,
+			month,
+			holidays,
+			saturdayWorkPolicy,
+			holidayOverrides,
+			workCalendarPolicy.WeeklyOffPattern,
+			workCalendarPolicy.GetCustomWeeklyOffs());
+	}
+
+	private static Dictionary<DateOnly, decimal> BuildWorkingUnitsByDate(
+		int year,
+		int month,
+		IReadOnlyList<Holiday> holidays,
+		SaturdayWorkPolicy saturdayWorkPolicy,
+		IReadOnlyList<PayrollHolidayOverride> holidayOverrides,
+		AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern weeklyOffPattern,
+		IReadOnlyList<int> customWeeklyOffs)
+	{
 		var firstDay = new DateTime(year, month, 1);
 		var lastDay = new DateTime(year, month, DateTime.DaysInMonth(year, month));
 		var includedHolidayDates = GetResolvedHolidayDaysInMonth(year, month, holidays, holidayOverrides)
@@ -109,7 +147,7 @@ public static class PayrollMonthCalendar
 		for (var date = firstDay; date <= lastDay; date = date.AddDays(1))
 		{
 			var dateOnly = DateOnly.FromDateTime(date);
-			var unit = GetBaseWorkingUnit(date.DayOfWeek, saturdayWorkPolicy);
+			var unit = GetBaseWorkingUnit(date.DayOfWeek, saturdayWorkPolicy, weeklyOffPattern, customWeeklyOffs);
 			if (unit > 0m && includedHolidayDates.Contains(dateOnly))
 			{
 				unit = 0m;
@@ -192,11 +230,19 @@ public static class PayrollMonthCalendar
 		return resolved.Select(x => x.Date.ToDateTime(TimeOnly.MinValue));
 	}
 
-	private static decimal GetBaseWorkingUnit(DayOfWeek dayOfWeek, SaturdayWorkPolicy saturdayWorkPolicy)
+	private static decimal GetBaseWorkingUnit(
+		DayOfWeek dayOfWeek,
+		SaturdayWorkPolicy saturdayWorkPolicy,
+		AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern weeklyOffPattern,
+		IReadOnlyList<int> customWeeklyOffs)
 	{
+		if (IsWeeklyOff(dayOfWeek, weeklyOffPattern, customWeeklyOffs))
+		{
+			return 0m;
+		}
+
 		return dayOfWeek switch
 		{
-			DayOfWeek.Sunday => 0m,
 			DayOfWeek.Saturday => saturdayWorkPolicy switch
 			{
 				SaturdayWorkPolicy.FullDay => 1m,
@@ -207,55 +253,55 @@ public static class PayrollMonthCalendar
 			_ => 1m
 		};
 	}
+
+	private static bool IsWeeklyOff(
+		DayOfWeek dayOfWeek,
+		AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern weeklyOffPattern,
+		IReadOnlyList<int> customWeeklyOffs)
+	{
+		return weeklyOffPattern switch
+		{
+			AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern.Sunday => dayOfWeek == DayOfWeek.Sunday,
+			AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern.Custom => customWeeklyOffs.Contains((int)dayOfWeek),
+			_ => dayOfWeek == DayOfWeek.Sunday
+		};
+	}
 }
 
 public static class PayrollBasisDays
 {
-	public static PayrollBasisDaysResult Resolve(
-		DayCalculationSetting? setting,
+	public static PayrollBasisDaysResult ResolvePolicy(
+		PayrollPolicy policy,
 		int year,
 		int month,
 		decimal workingWeekdaysMinusHolidayWeekdays,
 		IReadOnlyDictionary<DateOnly, decimal>? workingUnitsByDate = null)
 	{
-		if (setting is null)
-		{
-			return new PayrollBasisDaysResult(
-				workingWeekdaysMinusHolidayWeekdays,
-				DayCalculationType.WorkingDays,
-				UsedTenantDefault: true,
-				SaturdayWorkPolicy.FullDay,
-				workingUnitsByDate);
-		}
-
-		var effectiveMode = setting.GetEffectiveDayCalculationTypeForMonth(year, month);
-		var effectiveSaturdayPolicy = setting.GetEffectiveSaturdayWorkPolicyForMonth(year, month);
-
-		return effectiveMode switch
+		return policy.DayCalculationType switch
 		{
 			DayCalculationType.WorkingDays => new PayrollBasisDaysResult(
 				workingWeekdaysMinusHolidayWeekdays,
 				DayCalculationType.WorkingDays,
 				UsedTenantDefault: false,
-				effectiveSaturdayPolicy,
+				policy.SaturdayWorkPolicy,
 				workingUnitsByDate),
 
 			DayCalculationType.TotalMonthDays => new PayrollBasisDaysResult(
 				DateTime.DaysInMonth(year, month),
 				DayCalculationType.TotalMonthDays,
 				UsedTenantDefault: false,
-				effectiveSaturdayPolicy,
+				policy.SaturdayWorkPolicy,
 				workingUnitsByDate),
 
 			DayCalculationType.ManualDays => new PayrollBasisDaysResult(
-				setting.GetEffectiveManualDaysForMonth(year, month)
+				policy.GetManualDaysForMonth(year, month)
 					?? throw new InvalidOperationException($"ManualDays must be set for {year}-{month:00} when mode is ManualDays."),
 				DayCalculationType.ManualDays,
 				UsedTenantDefault: false,
-				effectiveSaturdayPolicy,
+				policy.SaturdayWorkPolicy,
 				workingUnitsByDate),
 
-			_ => throw new ArgumentOutOfRangeException(nameof(setting), effectiveMode, "Unknown day calculation type.")
+			_ => throw new ArgumentOutOfRangeException(nameof(policy), policy.DayCalculationType, "Unknown day calculation type.")
 		};
 	}
 }
@@ -288,6 +334,15 @@ public static class PayrollProrationCalculator
 
 public static class PayrollAttendanceCalculator
 {
+	public static decimal GetPayableUnitsForStatus(
+		EmployeeAttendanceStatusType status,
+		decimal maxUnits) => status switch
+	{
+		EmployeeAttendanceStatusType.Present => maxUnits,
+		EmployeeAttendanceStatusType.HalfDayLeave => maxUnits * 0.5m,
+		_ => 0m
+	};
+
 	public static PayrollAttendancePayableDays CalculatePayableDays(
 		IReadOnlyList<PayrollApprovedAttendanceDay> approvedDays,
 		PayrollBasisDaysResult basis,
@@ -328,47 +383,6 @@ public static class PayrollAttendanceCalculator
 					: 1m;
 				return Math.Clamp(a.PayableUnits, 0m, maxUnits);
 			});
-
-		if (basis.EffectiveMode == DayCalculationType.TotalMonthDays)
-		{
-			var unpaidDeduction = monthRecords.Sum(a =>
-			{
-				var leaveUnits = GetLeaveUnits(a.Date, leaveUnitsByDate);
-				return a.Status switch
-				{
-					EmployeeAttendanceStatusType.FullDayLeave => Math.Max(0m, 1m - leaveUnits.PaidUnits),
-					EmployeeAttendanceStatusType.HalfDayLeave => Math.Max(0m, 0.5m - leaveUnits.PaidUnits),
-					_ => 0m
-				};
-			});
-			var attendanceDates = monthRecords
-				.Where(a => a.Status == EmployeeAttendanceStatusType.Present)
-				.Select(a => a.Date)
-				.ToHashSet();
-			if (leaveUnitsByDate is { Count: > 0 })
-			{
-				foreach (var (date, leaveUnits) in leaveUnitsByDate)
-				{
-					if (date < startDate || date > endDate || attendanceDates.Contains(date))
-					{
-						continue;
-					}
-
-					var existingDeduction = monthRecords
-						.Where(a => a.Date == date)
-						.Sum(a => a.Status switch
-						{
-							EmployeeAttendanceStatusType.FullDayLeave => Math.Max(0m, 1m - GetLeaveUnits(date, leaveUnitsByDate).PaidUnits),
-							EmployeeAttendanceStatusType.HalfDayLeave => Math.Max(0m, 0.5m - GetLeaveUnits(date, leaveUnitsByDate).PaidUnits),
-							_ => 0m
-						});
-					unpaidDeduction += Math.Max(0m, Math.Clamp(leaveUnits.UnpaidUnits, 0m, 1m) - existingDeduction);
-				}
-			}
-
-			var totalMonthPayableDays = Math.Max(0m, basis.BasisDays - unpaidDeduction);
-			return new PayrollAttendancePayableDays(present, half, totalMonthPayableDays);
-		}
 
 		var payableDays = payableByDate.Values.Sum();
 		if (leaveUnitsByDate is { Count: > 0 })
@@ -416,48 +430,6 @@ public static class PayrollAttendanceCalculator
 			.Select(g => g.Last())
 			.ToList();
 
-		if (basis.EffectiveMode == DayCalculationType.TotalMonthDays)
-		{
-			var presentDays = monthRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.Present);
-			var halfDays = monthRecords.Count(a => a.StatusType == EmployeeAttendanceStatusType.HalfDayLeave);
-			var unpaidDeduction = monthRecords.Sum(a =>
-			{
-				var leaveUnits = GetLeaveUnits(a.AttendanceDate, leaveUnitsByDate);
-				return a.StatusType switch
-				{
-					EmployeeAttendanceStatusType.FullDayLeave => Math.Max(0m, 1m - leaveUnits.PaidUnits),
-					EmployeeAttendanceStatusType.HalfDayLeave => Math.Max(0m, 0.5m - leaveUnits.PaidUnits),
-					_ => 0m
-				};
-			});
-			var attendanceDates = monthRecords
-				.Where(a => a.StatusType == EmployeeAttendanceStatusType.Present)
-				.Select(a => a.AttendanceDate)
-				.ToHashSet();
-			if (leaveUnitsByDate is { Count: > 0 })
-			{
-				foreach (var (date, leaveUnits) in leaveUnitsByDate)
-				{
-					if (date < startDate || date > endDate || attendanceDates.Contains(date))
-					{
-						continue;
-					}
-
-					var existingDeduction = monthRecords
-						.Where(a => a.AttendanceDate == date)
-						.Sum(a => a.StatusType switch
-						{
-							EmployeeAttendanceStatusType.FullDayLeave => Math.Max(0m, 1m - GetLeaveUnits(date, leaveUnitsByDate).PaidUnits),
-							EmployeeAttendanceStatusType.HalfDayLeave => Math.Max(0m, 0.5m - GetLeaveUnits(date, leaveUnitsByDate).PaidUnits),
-							_ => 0m
-						});
-					unpaidDeduction += Math.Max(0m, Math.Clamp(leaveUnits.UnpaidUnits, 0m, 1m) - existingDeduction);
-				}
-			}
-			var totalMonthPayableDays = Math.Max(0m, basis.BasisDays - unpaidDeduction);
-			return new PayrollAttendancePayableDays(presentDays, halfDays, totalMonthPayableDays);
-		}
-
 		var workingUnitsByDate = basis.WorkingUnitsByDate
 			?? PayrollMonthCalendar.BuildWorkingUnitsByDate(
 				year,
@@ -482,12 +454,7 @@ public static class PayrollAttendanceCalculator
 					? GetWorkingUnit(a.AttendanceDate, workingUnitsByDate)
 					: 1m;
 
-				return a.StatusType switch
-				{
-					EmployeeAttendanceStatusType.Present => dayUnit,
-					EmployeeAttendanceStatusType.HalfDayLeave => dayUnit * 0.5m,
-					_ => 0m
-				};
+				return GetPayableUnitsForStatus(a.StatusType, dayUnit);
 			});
 
 		var payableDays = attendancePayableByDate.Values.Sum();

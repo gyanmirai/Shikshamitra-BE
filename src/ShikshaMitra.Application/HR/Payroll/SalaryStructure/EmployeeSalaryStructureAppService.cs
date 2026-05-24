@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -112,11 +113,13 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 			})
 			.ToList();
 
-		var earningAmountsByComponentId = ResolveEarningAmounts(resolvedEarnings);
+		var earningAmountLines = resolvedEarnings.Select(ToAmountLine).ToList();
+		var deductionAmountLines = resolvedDeductions.Select(ToAmountLine).ToList();
+		var earningAmountsByComponentId = PayrollComponentAmountResolver.ResolveEarningAmounts(earningAmountLines);
 		var grossAmount = earningAmountsByComponentId.Values.Sum();
-		var deductionAmountsByComponentId = ResolveDeductionAmounts(
-			resolvedDeductions,
-			resolvedEarnings,
+		var deductionAmountsByComponentId = PayrollComponentAmountResolver.ResolveDeductionAmounts(
+			deductionAmountLines,
+			earningAmountLines,
 			earningAmountsByComponentId,
 			grossAmount);
 
@@ -497,7 +500,33 @@ public class EmployeeSalaryStructureAppService : ApplicationService, IEmployeeSa
 	}
 
 	private static decimal ResolveAmountComponentFallback(SalaryComponentDto line, decimal? masterAmount) =>
-		line.Amount ?? masterAmount ?? 0m;
+		PayrollComponentAmountResolver.ResolveAmountComponentFallback(line.Amount, masterAmount);
+
+	private static PayrollComponentAmountLine<EarningComponent> ToAmountLine(
+		ResolvedSalaryComponent<EarningComponent> resolved)
+	{
+		var line = resolved.Line;
+		return new PayrollComponentAmountLine<EarningComponent>(
+			line.Id,
+			line.ComponentId,
+			resolved.Master?.Name ?? line.Name,
+			line.Amount,
+			line.IsTemp,
+			resolved.Master);
+	}
+
+	private static PayrollComponentAmountLine<DeductionComponent> ToAmountLine(
+		ResolvedSalaryComponent<DeductionComponent> resolved)
+	{
+		var line = resolved.Line;
+		return new PayrollComponentAmountLine<DeductionComponent>(
+			line.Id,
+			line.ComponentId,
+			resolved.Master?.Name ?? line.Name,
+			line.Amount,
+			line.IsTemp,
+			resolved.Master);
+	}
 
 	private static decimal CalculatePercentageAmount(decimal baseAmount, decimal? percentage) =>
 		Math.Round(baseAmount * (percentage ?? 0m) / 100m, 2, MidpointRounding.AwayFromZero);

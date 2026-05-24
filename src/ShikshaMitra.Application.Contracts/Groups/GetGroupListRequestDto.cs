@@ -17,4 +17,10 @@ public class GetGroupListRequestDto : PagedAndSortedResultRequestDto
     /// Optional filter by name or description
     /// </summary>
     public string? Filter { get; set; }
+
+    /// <summary>
+    /// Includes rule, member, and resolved selection details in list results.
+    /// Keep this false for lookup/dropdown use cases.
+    /// </summary>
+    public bool IncludeDetails { get; set; }
 }

@@ -105,6 +105,10 @@ public class CreateEmployeePersonalInfoDto : IValidatableObject
 
 	public Guid? ShiftId { get; set; }
 
+	public List<Guid> OrganizationIds { get; set; } = [];
+
+	public CreateEmployeePolicyOverrideDto? PolicyOverride { get; set; }
+
 	#endregion
 
 	#region Validation
@@ -158,4 +162,15 @@ public class CreateEmployeePersonalInfoDto : IValidatableObject
 	}
 
 	#endregion
+}
+
+public class CreateEmployeePolicyOverrideDto
+{
+	public Guid AcademicYearId { get; set; }
+	public Guid AttendancePolicyId { get; set; }
+	public Guid PayrollPolicyId { get; set; }
+	public DateTime EffectiveFrom { get; set; }
+	public DateTime? EffectiveTo { get; set; }
+	public string? AssignmentReason { get; set; }
+	public string? ConfirmationToken { get; set; }
 }

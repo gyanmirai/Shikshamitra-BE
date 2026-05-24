@@ -15,12 +15,15 @@ namespace ShikshaMitra.HR.Employees.WorkExperienceContracts;
 [Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 public class EmployeeWorkExperienceAppService(
 	IEmployeeRepository employeeRepository,
-	EmployeeManager employeeManager)
+	EmployeeManager employeeManager,
+	IEmployeeAuthorizationService employeeAuthorizationService)
 	: ApplicationService, IEmployeeWorkExperienceAppService
 {
 	/// <inheritdoc />
 	public async Task<List<WorkExperienceContract>> GetAsync(Guid employeeId)
 	{
+		await employeeAuthorizationService.CheckEmployeeAccessAsync(employeeId);
+
 		var employee = await employeeRepository.GetAsync(employeeId)
 			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
 
@@ -32,6 +35,8 @@ public class EmployeeWorkExperienceAppService(
 	/// <inheritdoc />
 	public async Task UpsertAsync(Guid employeeId, List<WorkExperienceContract> input)
 	{
+		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
+
 		// Map DTOs to domain entities
 		var workExperiences = input
 			.Select(MapContractToWorkExperience)

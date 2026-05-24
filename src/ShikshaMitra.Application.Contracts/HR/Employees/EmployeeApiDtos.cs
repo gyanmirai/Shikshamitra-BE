@@ -56,11 +56,29 @@ public class EmployeeSummary
 
     public string? MobileNo { get; set; }
 
+    public string? Department { get; set; }
+
+    public string? Designation { get; set; }
+
+    public string? BloodGroup { get; set; }
+
+    public string? Address { get; set; }
+
     public bool IsTeaching { get; set; }
 
     public ShiftInfo? Shift { get; set; }
 
+    public List<EmployeeOrganizationDto> Organizations { get; set; } = new();
+
+    public List<string> OrganizationNames { get; set; } = new();
+
     public int Status { get; set; }
+}
+
+public class EmployeeOrganizationDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
 }
 
 /// <summary>

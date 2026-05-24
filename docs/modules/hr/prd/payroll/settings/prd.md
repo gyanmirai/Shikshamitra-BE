@@ -4,6 +4,8 @@
 
 Manages the tenant-scoped payroll master configuration used by payroll runs and salary structures. The current API surface covers day calculation settings, earning components, deduction components, provident fund (PF) rules, and pay elements. Professional tax configuration exists at the domain layer but is not yet exposed via an API controller.
 
+New HR policy architecture introduces `PayrollPolicy` as the payroll-owned replacement for tenant-wide day calculation configuration. Payroll policies reference shared `WorkCalendarPolicy` records and may be assigned through scoped `HrPolicyAssignment` records.
+
 ## Actors
 
 | Actor | Description |
@@ -26,6 +28,15 @@ Manages the tenant-scoped payroll master configuration used by payroll runs and 
 4. When `working-days` is selected, no extra day count is required.
 5. When `manual-days` is selected, a manual day count must be provided and remain within the allowed month range.
 6. Successful save returns a simple success response. The active row is read during **payroll preview**, **payroll lock**, and **salary slip generation** to compute basis days and LOP proration (see payroll operations PRD). If no row exists, the system defaults to **`working-days`** behaviour.
+
+### 1a. Payroll Policies
+
+1. Admin creates multiple payroll policies per academic year using `/api/hr/payroll/policies`.
+2. Each policy references one `WorkCalendarPolicy`.
+3. One active payroll policy can be marked as default per tenant and academic year.
+4. Employee-specific policy assignment overrides the default policy for the assignment date range.
+5. Payroll policy owns day calculation mode, Saturday work units, manual month days, payroll holiday overrides, and locked month settings.
+6. Calendar holidays remain neutral; payroll policy decides paid/unpaid and basis-day impact.
 
 ### 2. Earning Components
 
@@ -128,6 +139,7 @@ Note: Pay Elements currently use class-level authorization only — no granular 
 ## Dependencies
 
 - [Payroll Operations](../prd.md) -- consumes payroll settings during payroll preview and lock flows
+- [HR Policy Architecture](../../../implementation/hr-policy-architecture.md) -- shared calendar, payroll policy, attendance policy, and employee assignment model
 - [Employees](../../employees/prd.md) -- employee payroll structures depend on configured salary components and PF rules
 - [Canonical curated contract](../../../contracts/curated/payroll-settings-api.md)
 - [Raw contract source](../../../contracts/raw/payroll-settings-api.raw.2026-03-28.md)

@@ -1,5 +1,6 @@
 ﻿using ShikshaMitra.Common;
 using ShikshaMitra.TenantSettings;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -64,6 +65,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	// Navigation property for Family Members (now in separate table)
 	public virtual ICollection<EmployeeFamilyMember> FamilyMembers { get; private set; } = new List<EmployeeFamilyMember>();
+	public virtual ICollection<EmployeeOrganizationAssignment> OrganizationAssignments { get; private set; } = new List<EmployeeOrganizationAssignment>();
 
 	// Reporting Manager
 	public Guid? ReportingManagerId { get; private set; }
@@ -173,8 +175,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		RoleId = Check.NotNull(roleId, nameof(roleId)) ?? throw new ArgumentNullException(nameof(roleId));
 		IdentificationMark1 = identificationMark1;
 		City = city;
-		State = state;
-		Country = country;
+		State = Clone(state);
+		Country = Clone(country);
 		PinCode = pinCode;
 		BankDetails = bankDetails;
 		WorkExperiences = workExperiences ?? [];
@@ -242,8 +244,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		RoleId = Check.NotNull(roleId, nameof(roleId)) ?? throw new ArgumentNullException(nameof(roleId));
 		IdentificationMark1 = identificationMark1;
 		City = city;
-		State = state;
-		Country = country;
+		State = Clone(state);
+		Country = Clone(country);
 		PinCode = pinCode;
 		ShiftId = shiftId;
 		return this;
@@ -292,6 +294,12 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		UserId = id;
 	}
 
+	private static State? Clone(State? state) =>
+		state == null ? null : new State(state.Name, state.IsoCode);
+
+	private static Country? Clone(Country? country) =>
+		country == null ? null : new Country(country.Name, country.IsoCode);
+
 	public void AssignReportingManager(Guid reportingManagerId)
 	{
 		ReportingManagerId = reportingManagerId;
@@ -301,4 +309,30 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		ReportingManagerId = null;
 	}
+}
+
+public class EmployeeOrganizationAssignment : FullAuditedEntity<Guid>, IMultiTenant
+{
+	public Guid? TenantId { get; private set; }
+	public Guid EmployeeId { get; private set; }
+	public Guid EducationMediumStageId { get; private set; }
+
+	private EmployeeOrganizationAssignment()
+	{
+	}
+
+	public EmployeeOrganizationAssignment(
+		Guid id,
+		Guid? tenantId,
+		Guid employeeId,
+		Guid educationMediumStageId)
+		: base(id)
+	{
+		TenantId = tenantId;
+		EmployeeId = Check.NotNull(employeeId, nameof(employeeId));
+		EducationMediumStageId = Check.NotNull(educationMediumStageId, nameof(educationMediumStageId));
+	}
+
+	public virtual Employee? Employee { get; private set; }
+	public virtual EducationMediumStage? EducationMediumStage { get; private set; }
 }

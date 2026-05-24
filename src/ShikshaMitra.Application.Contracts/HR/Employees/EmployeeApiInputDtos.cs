@@ -14,5 +14,9 @@ public class GetEmployeeListInput : PagedAndSortedResultRequestDto
 
     public Guid? RoleId { get; set; }
 
+    public Guid? MediumStageId { get; set; }
+
+    public string? Designation { get; set; }
+
     public string? Search { get; set; }
 }

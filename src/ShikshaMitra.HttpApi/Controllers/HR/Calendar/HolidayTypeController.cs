@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Calendar;
 using Volo.Abp.Application.Dtos;
 
@@ -10,6 +12,7 @@ namespace ShikshaMitra.Controllers.HR.Calendar;
 /// </summary>
 [ApiController]
 [Route("api/calendar/holiday-types")]
+[Authorize]
 public class HolidayTypeController : ControllerBase
 {
     private readonly IHolidayTypeAppService _appService;
@@ -24,6 +27,7 @@ public class HolidayTypeController : ControllerBase
     /// </summary>
     /// <returns>Paginated list of holiday types</returns>
     [HttpGet]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.View)]
     public async Task<ActionResult<PagedResultDto<HolidayTypeDto>>> GetListAsync([FromQuery] GetHolidayTypeListRequestDto input)
     {
         var result = await _appService.GetListAsync(input);
@@ -36,6 +40,7 @@ public class HolidayTypeController : ControllerBase
     /// <param name="id">Holiday type ID</param>
     /// <returns>Holiday type details</returns>
     [HttpGet("{id}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.View)]
     public async Task<ActionResult<HolidayTypeDto>> GetAsync(Guid id)
     {
         var result = await _appService.GetAsync(id);
@@ -48,6 +53,7 @@ public class HolidayTypeController : ControllerBase
     /// <param name="input">Holiday type creation data</param>
     /// <returns>Created holiday type details</returns>
     [HttpPost]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.Add)]
     public async Task<ActionResult<HolidayTypeDto>> CreateAsync([FromBody] CreateUpdateHolidayTypeDto input)
     {
         var result = await _appService.CreateAsync(input);
@@ -61,6 +67,7 @@ public class HolidayTypeController : ControllerBase
     /// <param name="input">Holiday type update data</param>
     /// <returns>Updated holiday type details</returns>
     [HttpPut("{id}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.Add)]
     public async Task<ActionResult<HolidayTypeDto>> UpdateAsync(Guid id, [FromBody] CreateUpdateHolidayTypeDto input)
     {
         var result = await _appService.UpdateAsync(id, input);
@@ -72,6 +79,7 @@ public class HolidayTypeController : ControllerBase
     /// </summary>
     /// <param name="id">Holiday type ID</param>
     [HttpDelete("{id}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.Delete)]
     public async Task<IActionResult> DeleteAsync(Guid id)
     {
         await _appService.DeleteAsync(id);

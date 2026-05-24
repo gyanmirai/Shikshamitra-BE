@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.WorkExperienceContracts;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -67,6 +68,31 @@ public class WorkExperienceApi_Tests : ShikshaMitraApiTestBase
 		body[0].City.ShouldBe("Mumbai");
 		DateOnly.FromDateTime(body[0].StartDate!.Value).ShouldBe(DateOnly.FromDateTime(start));
 		DateOnly.FromDateTime(body[0].EndDate!.Value).ShouldBe(DateOnly.FromDateTime(end));
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Forbid_Non_Hr_User_From_Updating_Work_Experience()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "WExpAuth");
+		using var nonHrClient = Factory.CreateClient();
+		nonHrClient.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, Guid.NewGuid().ToString());
+		nonHrClient.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "Teacher");
+
+		var response = await nonHrClient.PutAsJsonAsync(
+			$"{BaseUrl}/{empId}/work-experience",
+			new List<WorkExperienceContract>
+			{
+				new()
+				{
+					MediumStageName = "Previous School",
+					Designation = "Assistant Teacher",
+					StartDate = new DateTime(2023, 4, 14, 12, 0, 0, DateTimeKind.Utc),
+				}
+			},
+			JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
 
 	/// <summary>

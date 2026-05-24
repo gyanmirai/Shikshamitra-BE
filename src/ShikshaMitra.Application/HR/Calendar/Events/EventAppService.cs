@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.Calendar.Events;
 using ShikshaMitra.HR.Calendar.EventTypes;
@@ -38,6 +39,11 @@ public class EventAppService : CrudAppService<
         _eventRepository = eventRepository;
         _eventTypeRepository = eventTypeRepository;
         _asyncExecuter = asyncExecuter;
+        GetPolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.View;
+        GetListPolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.View;
+        CreatePolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.Add;
+        UpdatePolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.Add;
+        DeletePolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.Delete;
     }
 
     public override async Task<PagedResultDto<EventDto>> GetListAsync(GetEventListRequestDto input)

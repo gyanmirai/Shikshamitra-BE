@@ -20,6 +20,12 @@ public class UpdateEmployeePersonalInfoDtoValidator : AbstractValidator<UpdateEm
 
 		RuleFor(x => x.ShiftId).Must(id => id.HasValue && id.Value != Guid.Empty)
 			.WithMessage("Shift is required.");
+		RuleFor(x => x.OrganizationIds)
+			.NotEmpty()
+			.WithMessage("At least one organization is required.");
+		RuleForEach(x => x.OrganizationIds)
+			.NotEmpty()
+			.WithMessage("Organization is required.");
 
 		RuleFor(x => x.MiddleName).MaximumLength(256);
 		RuleFor(x => x.ShortName).MaximumLength(128);

@@ -32,12 +32,16 @@ public class PayrollRunItemSnapshotConfiguration : IEntityTypeConfiguration<Payr
 		builder.Property(x => x.HalfWorkingDays).HasPrecision(18, 2);
 		builder.Property(x => x.TotalWorkingDays).HasPrecision(18, 2);
 		builder.Property(x => x.PayableDays).HasPrecision(18, 2);
+		builder.Property(x => x.BasisDays).HasPrecision(18, 2);
+		builder.Property(x => x.PayableUnits).HasPrecision(18, 2);
 		builder.Property(x => x.ProrationFactor).HasPrecision(18, 4);
 
 		builder.Property(x => x.IssueCodesJson).HasColumnType("jsonb");
+		builder.Property(x => x.HolidayImpactJson).HasColumnType("jsonb");
 		builder.Property(x => x.AttendancePolicyWarningsJson).HasColumnType("jsonb");
 		builder.Property(x => x.EarningComponentsJson).HasColumnType("jsonb");
 		builder.Property(x => x.DeductionComponentsJson).HasColumnType("jsonb");
+		builder.Property(x => x.PayrollAdjustmentsJson).HasColumnType("jsonb");
 
 		builder.HasIndex(x => new { x.TenantId, x.MonthYear, x.EmployeeId })
 			.IsUnique()
@@ -46,5 +50,8 @@ public class PayrollRunItemSnapshotConfiguration : IEntityTypeConfiguration<Payr
 
 		builder.HasIndex(x => new { x.MonthYear, x.ReviewStatus })
 			.HasDatabaseName("IX_HR_PayrollRunItems_Month_ReviewStatus");
+
+		builder.HasIndex(x => new { x.TenantId, x.MonthYear, x.EmployeeId, x.IsLocked })
+			.HasDatabaseName("IX_HR_PayrollRunItems_Tenant_Month_Employee_Locked");
 	}
 }

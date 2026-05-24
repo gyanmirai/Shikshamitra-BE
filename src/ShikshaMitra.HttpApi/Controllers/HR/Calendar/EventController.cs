@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Application.Contracts.HR.Calendar.Events;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Controllers;
-using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.HttpApi.Controllers.HR.Calendar;
@@ -15,6 +16,7 @@ namespace ShikshaMitra.HttpApi.Controllers.HR.Calendar;
 [ApiController]
 [Route("api/calendar/events")]
 [Produces("application/json")]
+[Authorize]
 public class EventController : ShikshaMitraController
 {
     private readonly IEventAppService _eventAppService;
@@ -35,6 +37,7 @@ public class EventController : ShikshaMitraController
     /// <param name="input">Filter and pagination parameters</param>
     /// <returns>Paginated list of events</returns>
     [HttpGet]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.View)]
     [ProducesResponseType(typeof(PagedResultDto<EventDto>), 200)]
     public async Task<ActionResult<PagedResultDto<EventDto>>> GetListAsync([FromQuery] GetEventListRequestDto input)
     {
@@ -48,6 +51,7 @@ public class EventController : ShikshaMitraController
     /// <param name="id">Event ID (GUID)</param>
     /// <returns>Event details</returns>
     [HttpGet("{id}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.View)]
     [ProducesResponseType(typeof(EventDto), 200)]
     [ProducesResponseType(404)]
     public async Task<ActionResult<EventDto>> GetAsync(Guid id)
@@ -84,6 +88,7 @@ public class EventController : ShikshaMitraController
     /// <param name="input">Event creation data</param>
     /// <returns>Created event with ID</returns>
     [HttpPost]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.Add)]
     [ProducesResponseType(typeof(EventDto), 201)]
     [ProducesResponseType(400)]
     public async Task<ActionResult<EventDto>> CreateAsync([FromQuery] Guid academicYearId, [FromBody] CreateUpdateEventDto input)
@@ -112,6 +117,7 @@ public class EventController : ShikshaMitraController
     /// <param name="input">Updated event data</param>
     /// <returns>Updated event</returns>
     [HttpPut("{id}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.Add)]
     [ProducesResponseType(typeof(EventDto), 200)]
     [ProducesResponseType(404)]
     [ProducesResponseType(400)]
@@ -127,6 +133,7 @@ public class EventController : ShikshaMitraController
     /// <param name="id">Event ID to delete</param>
     /// <returns>No content</returns>
     [HttpDelete("{id}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.Delete)]
     [ProducesResponseType(204)]
     [ProducesResponseType(404)]
     public async Task<ActionResult> DeleteAsync(Guid id)
@@ -141,6 +148,7 @@ public class EventController : ShikshaMitraController
     /// <param name="typeId">Event Type ID (GUID)</param>
     /// <returns>List of events of specified type</returns>
     [HttpGet("by-type/{typeId}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.View)]
     [ProducesResponseType(typeof(List<EventDto>), 200)]
     public async Task<ActionResult<List<EventDto>>> GetByTypeAsync(Guid typeId)
     {
@@ -157,6 +165,7 @@ public class EventController : ShikshaMitraController
     /// <param name="input">Filter and pagination parameters</param>
     /// <returns>Paginated list of events with specified status</returns>
     [HttpGet("by-status/{status}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.View)]
     [ProducesResponseType(typeof(PagedResultDto<EventDto>), 200)]
     public async Task<ActionResult<PagedResultDto<EventDto>>> GetByStatusAsync([FromRoute] int status, [FromQuery] GetEventListRequestDto input)
     {

@@ -16,6 +16,7 @@ using Volo.Abp.Domain.Entities;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Volo.Abp.Uow;
+using IdentityUser = Volo.Abp.Identity.IdentityUser;
 
 namespace ShikshaMitra.HR.Employees;
 
@@ -910,6 +911,18 @@ public class EmployeeAppService(
 			queryable = queryable.Where(e => e.RoleId == input.RoleId.Value);
 		}
 
+		if (input.MediumStageId.HasValue)
+		{
+			queryable = queryable.Where(e =>
+				e.OrganizationAssignments.Any(x => x.EducationMediumStageId == input.MediumStageId.Value));
+		}
+
+		if (!string.IsNullOrWhiteSpace(input.Designation))
+		{
+			var designation = input.Designation.Trim().ToLower();
+			queryable = queryable.Where(e => e.Designation != null && e.Designation.ToLower().Contains(designation));
+		}
+
 		queryable = ApplySearchFilter(queryable, input.Search);
 
 		// Get total count before pagination
@@ -958,7 +971,8 @@ public class EmployeeAppService(
 			(e.MiddleName != null && e.MiddleName.ToLower().Contains(searchTerm)) ||
 			(e.EmployeeCode != null && e.EmployeeCode.ToLower().Contains(searchTerm)) ||
 			(e.Email != null && e.Email.ToLower().Contains(searchTerm)) ||
-			(e.MobileNo != null && e.MobileNo.Contains(searchTerm))
+			(e.MobileNo != null && e.MobileNo.Contains(searchTerm)) ||
+			(e.Designation != null && e.Designation.ToLower().Contains(searchTerm))
 		);
 	}
 
@@ -976,6 +990,10 @@ public class EmployeeAppService(
 			Doj = employee.DateOfJoining?.ToDateTime(TimeOnly.MinValue),
 			Email = employee.Email,
 			MobileNo = employee.MobileNo,
+			Department = employee.Department,
+			Designation = employee.Designation,
+			BloodGroup = employee.BloodGroup,
+			Address = string.Join(", ", new[] { employee.Address1, employee.Address2, employee.Address3 }.Where(x => !string.IsNullOrWhiteSpace(x))),
 			IsTeaching = employee.EmployeeGroup == EmployeeGroupType.Teaching,
 			Shift = employee.Shift != null ? new ShiftInfo
 			{
@@ -984,6 +1002,21 @@ public class EmployeeAppService(
 				StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"),
 				EndTime = employee.Shift.EndTime.ToString("HH:mm:ss")
 			} : null,
+			Organizations = employee.OrganizationAssignments
+				.Where(x => x.EducationMediumStage != null)
+				.Select(x => new EmployeeOrganizationDto
+				{
+					Id = x.EducationMediumStageId,
+					Name = x.EducationMediumStage!.Name
+				})
+				.OrderBy(x => x.Name)
+				.ToList(),
+			OrganizationNames = employee.OrganizationAssignments
+				.Where(x => x.EducationMediumStage != null)
+				.Select(x => x.EducationMediumStage!.Name)
+				.Distinct()
+				.OrderBy(x => x)
+				.ToList(),
 			Status = (int) (employee.EmployeeStatusType ?? EmployeeStatusType.Active)
 		};
 	}

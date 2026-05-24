@@ -33,7 +33,8 @@ Follow [payroll operations PRD](../../prd/payroll/prd.md).
 | Area | Permission |
 |---|---|
 | Run Payroll — Preview | `PayrollManagement_RunPayroll.View` |
-| Run Payroll — Lock | `PayrollManagement_RunPayroll.Add` |
+| Run Payroll — Lock | `HR.PayrollManagement.RunPayroll.Lock` |
+| Run Payroll — Audit | `HR.PayrollManagement.RunPayroll.ViewAudit` |
 | Employee Salary Structure — Get | `Employee_EmployeeList.View` |
 | Employee Salary Structure — Update | `Employee_EmployeeList.Add` |
 | Attendance Import Logs (list/detail/rows) | `PayrollManagement_RunPayroll.View` |

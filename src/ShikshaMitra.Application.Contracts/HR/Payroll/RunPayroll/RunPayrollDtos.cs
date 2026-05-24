@@ -37,6 +37,28 @@ public class RunPayrollResponse
 	/// Payroll items for employees
 	/// </summary>
 	public List<RunPayrollItem> Items { get; set; } = new();
+
+	/// <summary>
+	/// Month-level readiness summary for the payroll workbench.
+	/// </summary>
+	public RunPayrollReadinessSummary Readiness { get; set; } = new();
+}
+
+public class RunPayrollReadinessSummary
+{
+	public string Month { get; set; } = string.Empty;
+	public bool CanPreview { get; set; }
+	public bool CanLock { get; set; }
+	public int EmployeeCount { get; set; }
+	public int SnapshotCount { get; set; }
+	public int ReviewedCount { get; set; }
+	public int LockedCount { get; set; }
+	public int AttendanceFoundCount { get; set; }
+	public int MissingAttendanceCount { get; set; }
+	public int MissingSalaryStructureCount { get; set; }
+	public int PolicyConfigurationIssueCount { get; set; }
+	public List<string> BlockingIssues { get; set; } = new();
+	public List<string> RecommendedActions { get; set; } = new();
 }
 
 /// <summary>
@@ -140,7 +162,7 @@ public class RunPayrollItem
 	public double HalfWorkingDays { get; set; }
 
 	/// <summary>
-	/// Payroll basis days (denominator) per tenant day-calculation setting: working-days, total calendar days, or manual.
+	/// Payroll basis days (denominator) from the resolved payroll policy: working-days, total calendar days, or manual.
 	/// </summary>
 	public double TotalWorkingDays { get; set; }
 
@@ -160,11 +182,19 @@ public class RunPayrollItem
 	public string DayCalculationMode { get; set; } = string.Empty;
 
 	/// <summary>
-	/// True when no tenant day-calculation row exists and working-days default was used.
+	/// True when a fallback policy default was used.
 	/// </summary>
 	public bool UsedDefaultDayCalculation { get; set; }
 
-	public Guid? AttendancePolicyEvaluationRunId { get; set; }
+	public Guid? PayrollPolicyId { get; set; }
+	public int? PayrollPolicyVersion { get; set; }
+	public Guid? AttendancePolicyId { get; set; }
+	public int? AttendancePolicyVersion { get; set; }
+	public Guid? WorkCalendarPolicyId { get; set; }
+	public int? WorkCalendarPolicyVersion { get; set; }
+	public string HolidayImpactJson { get; set; } = "[]";
+	public double BasisDays { get; set; }
+	public double PayableUnits { get; set; }
 	public string PayrollAttendanceSource { get; set; } = "raw_attendance";
 	public List<string> AttendancePolicyWarnings { get; set; } = new();
 
@@ -177,6 +207,11 @@ public class RunPayrollItem
 	/// Itemized deduction components contributing to total deduction
 	/// </summary>
 	public List<RunPayrollComponentItem> DeductionComponents { get; set; } = new();
+
+	/// <summary>
+	/// Payroll-only financial adjustments included in this preview/lock.
+	/// </summary>
+	public List<PayrollAdjustmentDto> PayrollAdjustments { get; set; } = new();
 }
 
 /// <summary>
@@ -186,6 +221,31 @@ public class RunPayrollComponentItem
 {
 	public string Name { get; set; } = string.Empty;
 	public double Amount { get; set; }
+}
+
+public class PayrollAdjustmentDto
+{
+	public Guid Id { get; set; }
+	public string MonthYear { get; set; } = string.Empty;
+	public Guid EmployeeId { get; set; }
+	public string Name { get; set; } = string.Empty;
+	public double Amount { get; set; }
+	public bool IsEarning { get; set; }
+	public string Reason { get; set; } = string.Empty;
+	public string? Description { get; set; }
+	public DateTime? CreationTime { get; set; }
+	public Guid? CreatorId { get; set; }
+}
+
+public class PayrollAdjustmentRequest
+{
+	public string Month { get; set; } = string.Empty;
+	public Guid EmployeeId { get; set; }
+	public string Name { get; set; } = string.Empty;
+	public double Amount { get; set; }
+	public bool IsEarning { get; set; }
+	public string Reason { get; set; } = string.Empty;
+	public string? Description { get; set; }
 }
 
 /// <summary>

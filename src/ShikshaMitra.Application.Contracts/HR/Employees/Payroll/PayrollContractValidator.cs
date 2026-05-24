@@ -48,6 +48,10 @@ public class PayrollContractValidator : AbstractValidator<PayrollContract>
 		RuleFor(x => x)
 			.Must(x => !HasOverlappingMasterIds(x.EarningComponents, x.DeductionComponents))
 			.WithMessage("A component id cannot appear in both earning and deduction lists.");
+
+		RuleFor(x => x.PolicyOverride)
+			.SetValidator(new EmployeePayrollPolicyOverrideContractValidator()!)
+			.When(x => x.PolicyOverride != null);
 	}
 
 	private static bool HasNoDuplicateResolutionKeys(
@@ -75,6 +79,20 @@ public class PayrollContractValidator : AbstractValidator<PayrollContract>
 			.ToHashSet();
 		return (deductions ?? []).Any(c =>
 			c.ComponentId is { } id && id != Guid.Empty && earningIds.Contains(id));
+	}
+}
+
+public class EmployeePayrollPolicyOverrideContractValidator : AbstractValidator<EmployeePayrollPolicyOverrideContract>
+{
+	public EmployeePayrollPolicyOverrideContractValidator()
+	{
+		RuleFor(x => x.AcademicYearId).NotEmpty();
+		RuleFor(x => x.PayrollPolicyId).NotEmpty();
+		RuleFor(x => x.AttendancePolicyId).NotEmpty();
+		RuleFor(x => x.EffectiveFrom).NotEmpty();
+		RuleFor(x => x.EffectiveTo)
+			.Must((x, effectiveTo) => !effectiveTo.HasValue || effectiveTo.Value.Date >= x.EffectiveFrom.Date)
+			.WithMessage("Policy override effective-to must be on or after effective-from.");
 	}
 }
 

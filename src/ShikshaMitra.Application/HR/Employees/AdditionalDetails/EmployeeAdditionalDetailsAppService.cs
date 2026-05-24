@@ -12,12 +12,15 @@ namespace ShikshaMitra.HR.Employees.AdditionalDetails;
 [Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 public class EmployeeAdditionalDetailsAppService(
 	IEmployeeRepository employeeRepository,
-	IEmployeeAdditionalDetailsRepository additionalDetailsRepository)
+	IEmployeeAdditionalDetailsRepository additionalDetailsRepository,
+	IEmployeeAuthorizationService employeeAuthorizationService)
 	: ApplicationService, IEmployeeAdditionalDetailsAppService
 {
 	/// <inheritdoc />
 	public async Task<EmployeeAdditionalDetailsDto> GetAsync(Guid employeeId)
 	{
+		await employeeAuthorizationService.CheckEmployeeAccessAsync(employeeId);
+
 		// Verify employee exists
 		var employee = await employeeRepository.FindAsync(employeeId);
 		if (employee == null)
@@ -46,6 +49,8 @@ public class EmployeeAdditionalDetailsAppService(
 		Guid employeeId,
 		EmployeeAdditionalDetailsUpsertDto input)
 	{
+		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
+
 		// Verify employee exists
 		var employee = await employeeRepository.FindAsync(employeeId);
 		if (employee == null)
@@ -99,6 +104,8 @@ public class EmployeeAdditionalDetailsAppService(
 		Guid employeeId,
 		EmployeeAdditionalDetailsPatchDto input)
 	{
+		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
+
 		// Verify employee exists
 		var employee = await employeeRepository.FindAsync(employeeId);
 		if (employee == null)

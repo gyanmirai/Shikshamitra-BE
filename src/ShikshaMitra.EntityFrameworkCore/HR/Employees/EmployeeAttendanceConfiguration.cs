@@ -55,6 +55,9 @@ public class EmployeeAttendanceConfiguration : IEntityTypeConfiguration<Employee
 		builder.HasIndex(e => new { e.TenantId, e.AttendanceDate })
 			.HasDatabaseName("IX_EmployeeAttendances_Tenant_Date");
 
+		builder.HasIndex(e => new { e.TenantId, e.AttendanceDate, e.EducationMediumStageId, e.StatusType })
+			.HasDatabaseName("IX_EmployeeAttendances_Tenant_Date_Stage_Status");
+
 		// Relationships
 		builder.HasOne(e => e.Employee)
 			.WithMany()

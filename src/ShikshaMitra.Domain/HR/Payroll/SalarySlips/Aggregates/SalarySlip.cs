@@ -96,6 +96,13 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// </summary>
 	public DayCalculationType? PayrollDayCalculationMode { get; private set; }
 
+	public Guid? PayrollPolicyId { get; private set; }
+	public int? PayrollPolicyVersion { get; private set; }
+	public Guid? AttendancePolicyId { get; private set; }
+	public int? AttendancePolicyVersion { get; private set; }
+	public Guid? WorkCalendarPolicyId { get; private set; }
+	public int? WorkCalendarPolicyVersion { get; private set; }
+
 	private SalarySlip() { } // For ORM
 
 	internal SalarySlip(
@@ -202,6 +209,25 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PayableDays = payableDays;
 		ProrationFactor = factor;
 		PayrollDayCalculationMode = dayMode;
+	}
+
+	internal void SetPolicySnapshot(
+		Guid? payrollPolicyId,
+		int? payrollPolicyVersion,
+		Guid? attendancePolicyId,
+		int? attendancePolicyVersion,
+		Guid? workCalendarPolicyId,
+		int? workCalendarPolicyVersion)
+	{
+		if (Status == SalarySlipStatus.Finalized)
+			throw new InvalidOperationException("Cannot update finalized salary slip");
+
+		PayrollPolicyId = payrollPolicyId;
+		PayrollPolicyVersion = payrollPolicyVersion;
+		AttendancePolicyId = attendancePolicyId;
+		AttendancePolicyVersion = attendancePolicyVersion;
+		WorkCalendarPolicyId = workCalendarPolicyId;
+		WorkCalendarPolicyVersion = workCalendarPolicyVersion;
 	}
 }
 

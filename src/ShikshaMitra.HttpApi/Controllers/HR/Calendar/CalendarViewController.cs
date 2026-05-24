@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Application.Contracts.HR.Calendar.CalendarView;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Controllers;
 using Volo.Abp.Application.Dtos;
 
@@ -14,6 +16,7 @@ namespace ShikshaMitra.HttpApi.Controllers.HR.Calendar;
 [ApiController]
 [Route("api/calendar")]
 [Produces("application/json")]
+[Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.View)]
 public class CalendarViewController : ShikshaMitraController
 {
     private readonly ICalendarViewAppService _calendarViewAppService;

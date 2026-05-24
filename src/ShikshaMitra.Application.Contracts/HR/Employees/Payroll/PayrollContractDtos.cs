@@ -13,6 +13,7 @@ public class PayrollContract
 	public SalaryDetailsContract? SalaryDetails { get; set; }
 	public List<SalaryComponentContract>? EarningComponents { get; set; }
 	public List<SalaryComponentContract>? DeductionComponents { get; set; }
+	public EmployeePayrollPolicyOverrideContract? PolicyOverride { get; set; }
 }
 
 /// <summary>
@@ -45,6 +46,26 @@ public class SalaryDetailsContract
 	public string? UanNumber { get; set; }
 	public string? PunchId { get; set; }
 	public decimal? TotalWorkingHourPerMonth { get; set; }
+}
+
+public class EmployeePayrollPolicyOverrideContract
+{
+	[Required]
+	public Guid AcademicYearId { get; set; }
+
+	[Required]
+	public Guid PayrollPolicyId { get; set; }
+
+	[Required]
+	public Guid AttendancePolicyId { get; set; }
+
+	[Required]
+	public DateTime EffectiveFrom { get; set; }
+
+	public DateTime? EffectiveTo { get; set; }
+
+	public string? AssignmentReason { get; set; }
+	public string? ConfirmationToken { get; set; }
 }
 
 /// <summary>

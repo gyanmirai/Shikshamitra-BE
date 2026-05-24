@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.ReportingManagerInfo;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -46,6 +47,24 @@ public class ReportingManagerApi_Tests : ShikshaMitraApiTestBase
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/reporting-manager", request, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Forbid_Non_Hr_User_From_Assigning_Reporting_Manager()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMAuthAssignee");
+		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMAuthManager");
+		using var nonHrClient = Factory.CreateClient();
+		nonHrClient.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, Guid.NewGuid().ToString());
+		nonHrClient.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "Teacher");
+
+		var response = await nonHrClient.PutAsJsonAsync(
+			$"{BaseUrl}/{empId}/reporting-manager",
+			new ReportingManagerRequest { ReportingManagerId = managerId },
+			JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
 
 	#endregion

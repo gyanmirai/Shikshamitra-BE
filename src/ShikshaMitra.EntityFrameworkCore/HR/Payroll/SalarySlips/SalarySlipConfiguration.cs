@@ -35,6 +35,9 @@ public class SalarySlipConfiguration : IEntityTypeConfiguration<SalarySlip>
 		builder.HasIndex(x => x.Status)
 			.HasDatabaseName("IX_HR_SalarySlips_Status");
 
+		builder.HasIndex(x => new { x.TenantId, x.MonthYear, x.EmployeeId, x.Status })
+			.HasDatabaseName("IX_HR_SalarySlips_Tenant_Month_Employee_Status");
+
 		// Properties
 		builder.Property(x => x.MonthYear)
 			.IsRequired()
@@ -79,6 +82,10 @@ public class SalarySlipConfiguration : IEntityTypeConfiguration<SalarySlip>
 
 		builder.Property(x => x.PayrollDayCalculationMode)
 			.HasConversion<int?>();
+
+		builder.Property(x => x.PayrollPolicyVersion);
+		builder.Property(x => x.AttendancePolicyVersion);
+		builder.Property(x => x.WorkCalendarPolicyVersion);
 
 		// JSON columns for line items (EF Core 8+ feature)
 		// PostgreSQL uses jsonb for efficient JSON storage

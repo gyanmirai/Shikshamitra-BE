@@ -29,7 +29,8 @@ API-level tests for the HR module endpoints. These validate the full HTTP pipeli
 | DeductionComponentController | `DeductionComponentApi_Tests` | CRUD, search, flat amount, lifecycle | Critical, Important, Extended |
 | PayElementController | `PayElementApi_Tests` | CRUD, 404, dependent element | Critical, Important |
 | PfRuleController | `PfRuleApi_Tests` | CRUD, 404, search | Critical, Important |
-| DayCalculationController | `DayCalculationApi_Tests` | Calendar mode, manual mode | Critical, Important |
+| PayrollPoliciesController | `HrPolicyApi_Tests` | CRUD payroll policies, defaults, archived-policy rejection, holiday overrides | Critical, Important |
+| PolicyHolidayImpactController | `HrPolicyApi_Tests` | Default fallback, work-calendar context, date/month filters, payroll and attendance holiday impact rows | Critical, Important |
 | EmployeeSalaryStructureController | `EmployeeSalaryStructureApi_Tests` | GET, PUT with components | Critical |
 | RunPayrollController | `RunPayrollApi_Tests` | GET preview, POST lock, invalid format | Critical, Important, Extended |
 | SalarySlipController | `SalarySlipApi_Tests` | GET slip, missing params, invalid format | Important |
@@ -51,7 +52,7 @@ API-level tests for the HR module endpoints. These validate the full HTTP pipeli
 |-----------|-----------|-------|-------|
 | LeaveTypesController | `LeaveTypeApi_Tests` | `/api/hr-leave-types` create + get-by-id, list search with `academicYearId` | Critical, Important |
 | LeavePoliciesController | `LeavePolicyApi_Tests` | `/api/leave-policies` create + get-by-id, list search with `academicYearId` | Critical, Important |
-| AttendanceConfigurationController | `AttendanceConfigurationApi_Tests` | `/api/attendance/configuration` upsert success, overtime validation failure | Critical, Important |
+| AttendanceEvaluationsController | `AttendancePolicyEvaluationApi_Tests` | `/api/hr/attendance/evaluations` preview/create/review/approve/publish lifecycle | Critical, Important |
 | LeaveManagementController | `LeaveManagementApi_Tests` | GET list (academicYearId; optional `month-year` for month scope or full AY when omitted), balances, calendar (ISO-8601 offset and date-only compatibility), Excel export (with/without `month-year`), GET by Guid404, delete404, invalid page/pageSize 400 | Critical, Important |
 | AttendanceTrackingController | `AttendanceTrackingApi_Tests` | Date-wise, employee-wise | Critical, Important |
 | AutomatedNotificationsController | `AutomatedNotificationsApi_Tests` | CRUD | Critical, Important |

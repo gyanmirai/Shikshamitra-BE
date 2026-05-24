@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
@@ -12,6 +13,7 @@ using Volo.Abp.Authorization;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Security.Claims;
 using Volo.Abp.Validation;
 using Xunit;
 
@@ -26,6 +28,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     private readonly IIdentityRoleRepository _roleRepository;
     private readonly ICurrentTenant _currentTenant;
     private readonly IGuidGenerator _guidGenerator;
+    private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
 
     public EmployeeAppService_Tests()
     {
@@ -33,6 +36,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         _roleRepository = GetRequiredService<IIdentityRoleRepository>();
         _currentTenant = GetRequiredService<ICurrentTenant>();
         _guidGenerator = GetRequiredService<IGuidGenerator>();
+        _currentPrincipalAccessor = GetRequiredService<ICurrentPrincipalAccessor>();
     }
 
     #region Create Tests
@@ -382,10 +386,13 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         };
 
         // Act & Assert
-        await Should.ThrowAsync<AbpAuthorizationException>(async () =>
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid())))
         {
-            await _employeeAppService.UpdateFamilyInfo(created.Id, updateInput);
-        });
+            await Should.ThrowAsync<AbpAuthorizationException>(async () =>
+            {
+                await _employeeAppService.UpdateFamilyInfo(created.Id, updateInput);
+            });
+        }
     }
 
     #endregion
@@ -1565,6 +1572,19 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         await _roleRepository.InsertAsync(role, autoSave: true);
 
         return id;
+    }
+
+    private ClaimsPrincipal BuildPrincipal(Guid userId)
+    {
+        var claims = new List<Claim>
+        {
+            new(AbpClaimTypes.UserId, userId.ToString()),
+            new(AbpClaimTypes.UserName, $"user-{userId:N}"),
+            new(AbpClaimTypes.Email, $"user-{userId:N}@test.local"),
+            new(AbpClaimTypes.TenantId, (_currentTenant.Id ?? Guid.Empty).ToString())
+        };
+
+        return new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
     }
 
     #endregion

@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -9,33 +10,34 @@ using Serilog.Events;
 
 namespace ShikshaMitra.DbMigrator;
 
-class Program
+static class Program
 {
-    static async Task Main(string[] args)
-    {
-        Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Information()
-            .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-            .MinimumLevel.Override("Volo.Abp", LogEventLevel.Warning)
+	static async Task Main(string[] args)
+	{
+		Log.Logger = new LoggerConfiguration()
+			.MinimumLevel.Information()
+			.MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+			.MinimumLevel.Override("Volo.Abp", LogEventLevel.Warning)
 #if DEBUG
-                .MinimumLevel.Override("ShikshaMitra", LogEventLevel.Debug)
+				.MinimumLevel.Override("ShikshaMitra", LogEventLevel.Debug)
 #else
-                .MinimumLevel.Override("ShikshaMitra", LogEventLevel.Information)
+				.MinimumLevel.Override("ShikshaMitra", LogEventLevel.Information)
 #endif
-                .Enrich.FromLogContext()
-            .WriteTo.Async(c => c.File("Logs/logs.txt"))
-            .WriteTo.Async(c => c.Console())
-            .CreateLogger();
+				.Enrich.FromLogContext()
+			.WriteTo.Async(c => c.File("Logs/logs.txt"))
+			.WriteTo.Async(c => c.Console())
+			.CreateLogger();
 
-        await CreateHostBuilder(args).RunConsoleAsync();
-    }
+		await CreateHostBuilder(args).RunConsoleAsync();
+	}
 
-    public static IHostBuilder CreateHostBuilder(string[] args) =>
-        Host.CreateDefaultBuilder(args)
-            .AddAppSettingsSecretsJson()
-            .ConfigureLogging((context, logging) => logging.ClearProviders())
-            .ConfigureServices((hostContext, services) =>
-            {
-                services.AddHostedService<DbMigratorHostedService>();
-            });
+	public static IHostBuilder CreateHostBuilder(string[] args) =>
+		Host.CreateDefaultBuilder(args)
+			.UseContentRoot(AppContext.BaseDirectory)
+			.AddAppSettingsSecretsJson()
+			.ConfigureLogging((context, logging) => logging.ClearProviders())
+			.ConfigureServices((hostContext, services) =>
+			{
+				services.AddHostedService<DbMigratorHostedService>();
+			});
 }

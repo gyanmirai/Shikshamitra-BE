@@ -2,9 +2,11 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ShikshaMitra.OpenIddict;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra;
 
@@ -21,6 +23,14 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 	{
 		using (var scope = _serviceProvider.CreateScope())
 		{
+			var openIddictSeeder = scope.ServiceProvider.GetRequiredService<OpenIddictDataSeedContributor>();
+			await openIddictSeeder.SeedAsync(context);
+			var unitOfWorkManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+			if (unitOfWorkManager.Current != null)
+			{
+				await unitOfWorkManager.Current.SaveChangesAsync();
+			}
+
 			// Seed tenants first.
 			var tenantSeeder = scope.ServiceProvider.GetRequiredService<Seeders.TenantSeederContributor>();
 			await tenantSeeder.SeedAsync(context);

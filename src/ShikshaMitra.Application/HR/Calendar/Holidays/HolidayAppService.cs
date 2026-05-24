@@ -1,4 +1,5 @@
 using ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.Calendar;
 using ShikshaMitra.HR.Calendar.Holidays;
@@ -37,11 +38,11 @@ public class HolidayAppService : CrudAppService<
     {
         _holidayRepository = holidayRepository;
         _holidayTypeRepository = holidayTypeRepository;
-        GetPolicyName = "Holiday.View";
-        GetListPolicyName = "Holiday.List";
-        CreatePolicyName = "Holiday.Create";
-        UpdatePolicyName = "Holiday.Edit";
-        DeletePolicyName = "Holiday.Delete";
+        GetPolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.View;
+        GetListPolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.View;
+        CreatePolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.Add;
+        UpdatePolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.Add;
+        DeletePolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.Delete;
     }
 
     /// <summary>

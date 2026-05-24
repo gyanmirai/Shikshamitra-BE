@@ -35,6 +35,7 @@ public static class PersonalInfoContractMapper
 			Department = request.Department?.ToString(),
 			RoleId = request.RoleId,
 			ShiftId = request.ShiftId,
+			OrganizationIds = request.OrganizationIds,
 			Address1 = request.Address1,
 			Address2 = request.Address2,
 			Address3 = request.Address3,
@@ -42,7 +43,17 @@ public static class PersonalInfoContractMapper
 			State = request.State != null ? new State(request.State.Name, request.State.IsoCode) : null,
 			City = request.City,
 			Pincode = request.PinCode,
-			EmployeeGroup = request.IsTeaching ? EmployeeGroupType.Teaching : EmployeeGroupType.NonTeaching
+			EmployeeGroup = request.IsTeaching ? EmployeeGroupType.Teaching : EmployeeGroupType.NonTeaching,
+			PolicyOverride = request.PolicyOverride == null ? null : new CreateEmployeePolicyOverrideDto
+			{
+				AcademicYearId = request.PolicyOverride.AcademicYearId,
+				AttendancePolicyId = request.PolicyOverride.AttendancePolicyId,
+				PayrollPolicyId = request.PolicyOverride.PayrollPolicyId,
+				EffectiveFrom = request.PolicyOverride.EffectiveFrom,
+				EffectiveTo = request.PolicyOverride.EffectiveTo,
+				AssignmentReason = request.PolicyOverride.AssignmentReason,
+				ConfirmationToken = request.PolicyOverride.ConfirmationToken
+			}
 		};
 	}
 
@@ -71,6 +82,7 @@ public static class PersonalInfoContractMapper
 			Department = request.Department?.ToString(),
 			RoleId = request.RoleId,
 			ShiftId = request.ShiftId,
+			OrganizationIds = request.OrganizationIds,
 			Address1 = request.Address1,
 			Address2 = request.Address2,
 			Address3 = request.Address3,
@@ -113,6 +125,9 @@ public static class PersonalInfoContractMapper
 			Department = dto.Department,
 			RoleId = dto.RoleId,
 			ShiftId = dto.ShiftId ?? Guid.Empty,
+			OrganizationIds = dto.OrganizationIds,
+			Organizations = dto.Organizations,
+			OrganizationNames = dto.OrganizationNames,
 			Address1 = dto.Address1,
 			Address2 = dto.Address2,
 			Address3 = dto.Address3,

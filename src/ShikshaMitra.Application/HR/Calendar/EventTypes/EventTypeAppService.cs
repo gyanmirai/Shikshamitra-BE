@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Dynamic.Core;
 using System.Threading.Tasks;
+using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -13,12 +14,22 @@ namespace ShikshaMitra.HR.Calendar.EventTypes;
 /// Application service for managing event types with CRUD operations
 /// </summary>
 [RemoteService(false)]
-public class EventTypeAppService(IEventTypeRepository eventTypeRepository) :
-	CrudAppService<EventType, EventTypeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEventTypeDto>(
-		eventTypeRepository),
+public class EventTypeAppService :
+	CrudAppService<EventType, EventTypeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEventTypeDto>,
 	IEventTypeAppService
 {
-	private readonly IEventTypeRepository eventTypeRepository = eventTypeRepository ?? throw new ArgumentNullException(nameof(eventTypeRepository));
+	private readonly IEventTypeRepository eventTypeRepository;
+
+	public EventTypeAppService(IEventTypeRepository eventTypeRepository)
+		: base(eventTypeRepository)
+	{
+		this.eventTypeRepository = eventTypeRepository ?? throw new ArgumentNullException(nameof(eventTypeRepository));
+		GetPolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.View;
+		GetListPolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.View;
+		CreatePolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.Add;
+		UpdatePolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.Add;
+		DeletePolicyName = ShikshaMitraSubmodulePermissions.HR.Calendar.Delete;
+	}
 
 	/// <summary>
 	/// Get paginated list of event types with optional name search

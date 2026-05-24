@@ -68,4 +68,8 @@ public class EmployeeDto : EntityDto<Guid>
 	public string? ProfilePictureBlobName { get; set; }
 
 	public ShiftManagementDto Shift { get; set; }
+
+	public List<Guid> OrganizationIds { get; set; } = [];
+	public List<EmployeeOrganizationDto> Organizations { get; set; } = [];
+	public List<string> OrganizationNames { get; set; } = [];
 }

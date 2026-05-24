@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -9,6 +10,7 @@ using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Employees.Search;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.Domain.Entities;
 
 namespace ShikshaMitra.Controllers.HR.Employees;
 
@@ -50,6 +52,7 @@ public class EmployeesController : AbpControllerBase
 		[FromQuery, Range(1, MaxEmployeePageSize)] int pageSize = 10,
 		[FromQuery] bool? isTeaching = null,
 		[FromQuery] Guid? roleId = null,
+		[FromQuery] string? designation = null,
 		[FromQuery] string? search = null)
 	{
 		pageSize = Math.Min(pageSize, MaxEmployeePageSize);
@@ -61,10 +64,29 @@ public class EmployeesController : AbpControllerBase
 			Status = status,
 			IsTeaching = isTeaching,
 			RoleId = roleId,
+			MediumStageId = mediumStageId,
+			Designation = designation,
 			Search = search
 		};
 
 		return await _searchAppService.GetFilteredListAsync(input);
+	}
+
+	/// <summary>
+	/// Get current signed-in employee (OpenAPI contract)
+	/// </summary>
+	[HttpGet("me")]
+	[ProducesResponseType(typeof(EmployeeDetails), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public virtual async Task<EmployeeDetails> GetCurrentEmployeeAsync()
+	{
+		if (!CurrentUser.Id.HasValue)
+		{
+			throw new EntityNotFoundException(typeof(EmployeeDetails), Guid.Empty);
+		}
+
+		var employee = await _personalInfoAppService.GetByUserIdAsync(CurrentUser.Id.Value);
+		return MapToEmployeeDetails(employee);
 	}
 
 	/// <summary>
@@ -97,6 +119,10 @@ public class EmployeesController : AbpControllerBase
 			Doj = employee.DateOfJoining?.ToDateTime(TimeOnly.MinValue),
 			Email = employee.Email,
 			MobileNo = employee.MobileNo,
+			Department = employee.Department,
+			Designation = employee.Designation,
+			BloodGroup = employee.BloodGroup,
+			Address = string.Join(", ", new[] { employee.Address1, employee.Address2, employee.Address3 }.Where(x => !string.IsNullOrWhiteSpace(x))),
 			IsTeaching = employee.EmployeeGroup == Common.EmployeeGroupType.Teaching,
 			Shift = employee.Shift != null ? new ShiftInfo
 			{
@@ -105,6 +131,8 @@ public class EmployeesController : AbpControllerBase
 				StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"),
 				EndTime = employee.Shift.EndTime.ToString("HH:mm:ss")
 			} : null,
+			Organizations = employee.Organizations,
+			OrganizationNames = employee.OrganizationNames,
 			Status = (int)(employee.EmployeeStatusType ?? Common.EmployeeStatusType.Active)
 		};
 	}

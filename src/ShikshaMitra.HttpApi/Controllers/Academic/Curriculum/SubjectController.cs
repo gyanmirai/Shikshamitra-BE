@@ -129,6 +129,25 @@ public class SubjectController(ISubjectAppService subjectAppService) : AbpContro
 	}
 
 	/// <summary>
+	/// Check whether a subject has linked records (allocations, timetable slots, exams, etc.).
+	/// Call this before deletion so the UI can show a confirmation popup.
+	/// </summary>
+	[HttpGet("{id}/check-usages")]
+	[Authorize(
+		ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_SettingsSubjectCreation
+			.View
+	)]
+	public async Task<IActionResult> CheckSubjectUsages(Guid academicMediumId, Guid id)
+	{
+		var subject = await subjectAppService.GetAsync(id);
+		if (subject.EducationMediumId != academicMediumId)
+			return NotFound();
+
+		var usages = await subjectAppService.CheckUsagesAsync(id);
+		return Ok(usages);
+	}
+
+	/// <summary>
 	/// Delete a subject
 	/// </summary>
 	/// <param name="academicMediumId">Education Medium ID</param>

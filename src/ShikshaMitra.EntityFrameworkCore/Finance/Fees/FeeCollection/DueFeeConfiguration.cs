@@ -13,7 +13,11 @@ public class DueFeeConfiguration : IEntityTypeConfiguration<DueFee>
 
 		// Finance-critical: prevents duplicate due fee records at the database level
 		// regardless of application-layer bugs or concurrent requests.
+		// HasFilter scopes the uniqueness to non-deleted rows so that soft-deleted
+		// DueFees do not block new inserts (and the seeder's ExistsForStudentAsync
+		// check, which uses ABP's soft-delete filter, cannot see them).
 		builder.HasIndex(x => new { x.StudentId, x.FeeHeadId, x.Month, x.Year })
-			.IsUnique();
+			.IsUnique()
+			.HasFilter("\"IsDeleted\" = false");
 	}
 }

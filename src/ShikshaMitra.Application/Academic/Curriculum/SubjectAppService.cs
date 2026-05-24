@@ -4,6 +4,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Academic.Examination.Exams;
+using ShikshaMitra.Academic.HomeworkAssignment;
+using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
+using ShikshaMitra.Academic.Timetable.Timetables;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -13,8 +17,15 @@ namespace ShikshaMitra.Academic.Curriculum;
 
 [RemoteService(IsEnabled = false)]
 public class SubjectAppService(
-	IRepository<Subject, Guid> subjectRepository,
-	SubjectManager subjectManager,
+		IRepository<Subject, Guid> subjectRepository,
+		SubjectManager subjectManager,
+		IRepository<AssignedSubject, Guid> assignedSubjectRepository,
+		IRepository<WeeklyLectureSlotSubject, Guid> weeklyLectureSlotSubjectRepository,
+		IRepository<TimetableSlotSubject, Guid> timetableSlotSubjectRepository,
+		IRepository<ExamSubject, Guid> examSubjectRepository,
+		IRepository<ExamMark, Guid> examMarkRepository,
+		IRepository<HomeworkAssignmentEntity, Guid> homeworkAssignmentRepository,
+		IRepository<AssignmentEntity, Guid> assignmentRepository,
 	ILogger<SubjectAppService> logger
 ) : ApplicationService, ISubjectAppService
 {
@@ -131,17 +142,89 @@ public class SubjectAppService(
 		try
 		{
 			var subject = await subjectRepository.GetAsync(id);
-			await subjectRepository.DeleteAsync(id);
+
+			// Cascade: subject allocations (AppStandardSubjectAssignments)
+			var allocations = await assignedSubjectRepository.GetListAsync(a => a.SubjectId == id);
+			foreach (var allocation in allocations)
+				await assignedSubjectRepository.DeleteAsync(allocation);
+
+			// Cascade: weekly lecture-slot subjects (AppWeeklyLectureSlotSubjects)
+			var weeklySlots = await weeklyLectureSlotSubjectRepository.GetListAsync(w => w.SubjectId == id);
+			foreach (var slot in weeklySlots)
+				await weeklyLectureSlotSubjectRepository.DeleteAsync(slot);
+
+			// Cascade: timetable-slot subjects (AppTimetableSlotSubjects — no soft delete)
+			var timetableSlots = await timetableSlotSubjectRepository.GetListAsync(t => t.SubjectId == id);
+			foreach (var slot in timetableSlots)
+				await timetableSlotSubjectRepository.DeleteAsync(slot, autoSave: true);
+
+			// Cascade: exam results/marks (AppExamMarks) — must come before exam subjects
+			var examMarks = await examMarkRepository.GetListAsync(m => m.SubjectId == id);
+			foreach (var mark in examMarks)
+				await examMarkRepository.DeleteAsync(mark);
+
+			// Cascade: exam subjects (AppExamSubjects — no soft delete; ExamSubjectDivisions cascade at DB level)
+			var examSubjects = await examSubjectRepository.GetListAsync(e => e.SubjectId == id);
+			foreach (var es in examSubjects)
+				await examSubjectRepository.DeleteAsync(es, autoSave: true);
+
+			// Cascade: homeworks (AppHomeworkAssignments)
+			var homeworks = await homeworkAssignmentRepository.GetListAsync(h => h.SubjectId == id);
+			foreach (var hw in homeworks)
+				await homeworkAssignmentRepository.DeleteAsync(hw);
+
+			// Cascade: assignments (AppAssignments)
+			var assignments = await assignmentRepository.GetListAsync(a => a.SubjectId == id);
+			foreach (var asgn in assignments)
+				await assignmentRepository.DeleteAsync(asgn);
+
+			await subjectRepository.DeleteAsync(subject);
 		}
-		catch (UserFriendlyException ex)
+		catch (BusinessException)
 		{
-			logger.LogError(ex.Message);
 			throw;
 		}
 		catch (Exception ex)
 		{
 			logger.LogError(ex, "Error deleting subject with ID {SubjectId}", id);
 			throw new UserFriendlyException("Error occurred while deleting subject");
+		}
+	}
+
+	public async Task<SubjectUsageCheckDto> CheckUsagesAsync(Guid id)
+	{
+		try
+		{
+			var subject = await subjectRepository.GetAsync(id);
+
+			var allocations = await assignedSubjectRepository.CountAsync(a => a.SubjectId == id);
+			var weeklySlots = await weeklyLectureSlotSubjectRepository.CountAsync(w => w.SubjectId == id);
+			var timetableSlots = await timetableSlotSubjectRepository.CountAsync(t => t.SubjectId == id);
+			var examSubjects = await examSubjectRepository.CountAsync(e => e.SubjectId == id);
+			var examResults = await examMarkRepository.CountAsync(m => m.SubjectId == id);
+			var homeworks = await homeworkAssignmentRepository.CountAsync(h => h.SubjectId == id);
+			var assignments = await assignmentRepository.CountAsync(a => a.SubjectId == id);
+
+			var total = allocations + weeklySlots + timetableSlots + examSubjects + examResults + homeworks + assignments;
+
+			return new SubjectUsageCheckDto
+			{
+				SubjectId = id,
+				SubjectName = subject.Name,
+				HasUsages = total > 0,
+				Allocations = allocations,
+				WeeklyLectureSlots = weeklySlots,
+				TimetableSlots = timetableSlots,
+				ExamSubjects = examSubjects,
+				ExamResults = examResults,
+				Homeworks = homeworks,
+				Assignments = assignments
+			};
+		}
+		catch (Exception ex)
+		{
+			logger.LogError(ex, "Error checking usages for subject {SubjectId}", id);
+			throw new UserFriendlyException("Error occurred while checking subject usages");
 		}
 	}
 }

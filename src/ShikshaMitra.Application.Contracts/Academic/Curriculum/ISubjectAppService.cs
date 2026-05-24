@@ -44,4 +44,11 @@ public interface ISubjectAppService
 	/// </summary>
 	/// <param name="id">Subject ID</param>
 	Task DeleteAsync(Guid id);
+
+	/// <summary>
+	/// Check whether a subject has any linked records (allocations, timetable slots, exams, etc.)
+	/// before deciding to delete it.
+	/// </summary>
+	/// <param name="id">Subject ID</param>
+	Task<SubjectUsageCheckDto> CheckUsagesAsync(Guid id);
 }

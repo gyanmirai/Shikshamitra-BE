@@ -82,32 +82,8 @@ public class EmployeeReportAppService(
 			return query;
 		}
 
-		var attendanceQuery = await employeeAttendanceRepository.GetQueryableAsync();
-		if (CurrentTenant.Id.HasValue)
-		{
-			attendanceQuery = attendanceQuery.Where(a => a.TenantId == CurrentTenant.Id);
-		}
-
-		var employeeStageRows = await AsyncExecuter.ToListAsync(
-			attendanceQuery
-				.Where(a => a.EducationMediumStageId.HasValue)
-				.Select(a => new { a.EmployeeId, a.EducationMediumStageId }));
-		var employeeStageMap = employeeStageRows
-			.GroupBy(x => x.EmployeeId)
-			.ToDictionary(
-				x => x.Key,
-				x => (IReadOnlyCollection<Guid>)x
-					.Select(row => row.EducationMediumStageId!.Value)
-					.Distinct()
-					.ToList());
-		var scopedStageEmployeeIds = await hrScopeAccessService.FilterEmployeeIdsByStagesAsync(
-			employeeStageMap.Keys.ToList(),
-			employeeStageMap,
-			scope,
-			includeUnknownStageEmployees: false);
-
-		// Deny unknown-stage employees for scoped users to avoid cross-scope exposure.
-		return query.Where(e => scopedStageEmployeeIds.Contains(e.Id));
+		var accessibleStageIds = await hrScopeAccessService.ResolveAccessibleStageIdsAsync(scope);
+		return query.Where(e => e.OrganizationAssignments.Any(a => accessibleStageIds.Contains(a.EducationMediumStageId)));
 	}
 
 	private async Task<UserScopeContext> EnsureCanReadScopedEmployeesAsync()

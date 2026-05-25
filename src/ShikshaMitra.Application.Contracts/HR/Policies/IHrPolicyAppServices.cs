@@ -16,6 +16,7 @@ public interface IWorkCalendarPolicyAppService : IApplicationService
 	Task<WorkCalendarPolicyDto> UpdateAsync(Guid id, CreateUpdateWorkCalendarPolicyDto input);
 	Task<WorkCalendarPolicyDto> CloneAsync(Guid id, HrPolicyCloneRequestDto input);
 	Task DeleteAsync(Guid id);
+	Task<WorkCalendarPolicyDto> UnarchiveAsync(Guid id);
 }
 
 public interface IPayrollPolicyAppService : IApplicationService
@@ -26,6 +27,7 @@ public interface IPayrollPolicyAppService : IApplicationService
 	Task<PayrollPolicyDto> UpdateAsync(Guid id, CreateUpdatePayrollPolicyDto input);
 	Task<PayrollPolicyDto> CloneAsync(Guid id, HrPolicyCloneRequestDto input);
 	Task DeleteAsync(Guid id);
+	Task<PayrollPolicyDto> UnarchiveAsync(Guid id);
 	Task<PayrollPolicyDto> SetDefaultAsync(Guid id);
 }
 
@@ -37,6 +39,7 @@ public interface IAttendancePolicyAppService : IApplicationService
 	Task<AttendancePolicyDto> UpdateAsync(Guid id, CreateUpdateAttendancePolicyDto input);
 	Task<AttendancePolicyDto> CloneAsync(Guid id, HrPolicyCloneRequestDto input);
 	Task DeleteAsync(Guid id);
+	Task<AttendancePolicyDto> UnarchiveAsync(Guid id);
 	Task<AttendancePolicyDto> SetDefaultAsync(Guid id);
 }
 
@@ -64,6 +67,7 @@ public interface IHrPolicyVersionAppService : IApplicationService
 	Task<PagedResultDto<HrPolicyVersionDto>> GetListAsync(string policyType, Guid policyId, PagedAndSortedResultRequestDto input);
 	Task<HrPolicyVersionDto> GetAsync(string policyType, Guid policyId, Guid versionId);
 	Task<HrPolicyVersionCompareDto> CompareAsync(string policyType, Guid policyId, Guid fromVersionId, Guid toVersionId);
+	Task<HrPolicyImpactPreviewDto> GetRestorePreviewAsync(string policyType, Guid policyId, Guid versionId);
 	Task<object> RestoreDraftAsync(string policyType, Guid policyId, Guid versionId, HrPolicyRestoreDraftRequestDto input);
 }
 

@@ -39,6 +39,10 @@ public class AttendancePoliciesController(IAttendancePolicyAppService appService
 	public Task DeleteAsync(Guid id) =>
 		appService.DeleteAsync(id);
 
+	[HttpPost("{id:guid}/unarchive")]
+	public Task<AttendancePolicyDto> UnarchiveAsync(Guid id) =>
+		appService.UnarchiveAsync(id);
+
 	[HttpPost("{id:guid}/set-default")]
 	public Task<AttendancePolicyDto> SetDefaultAsync(Guid id) =>
 		appService.SetDefaultAsync(id);

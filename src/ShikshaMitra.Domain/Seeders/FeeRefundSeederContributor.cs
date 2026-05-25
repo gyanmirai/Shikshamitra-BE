@@ -222,15 +222,15 @@ public class FeeRefundSeederContributor : BaseSeederContributor
         var existingDueFees = await _dueFeeRepository
             .GetListAsync(df => df.StudentId == studentId && df.FeeHeadId == feeHeadId);
 
-        var existingByMonth = existingDueFees
-            .ToDictionary(df => df.Month);
+        var existingByMonthAndYear = existingDueFees
+            .ToDictionary(df => (df.Month, df.Year));
 
         var result = new Dictionary<MonthEnum, DueFee>();
         var toInsert = new List<DueFee>();
 
         foreach (var (month, amount) in SeedMonths)
         {
-            if (existingByMonth.TryGetValue(month, out var existing))
+            if (existingByMonthAndYear.TryGetValue((month, calendarYear), out var existing))
             {
                 result[month] = existing;
                 continue;
@@ -258,7 +258,7 @@ public class FeeRefundSeederContributor : BaseSeederContributor
         }
 
         if (toInsert.Count > 0)
-            await _dueFeeRepository.InsertManyAsync(toInsert, autoSave: false);
+            await _dueFeeRepository.InsertManyAsync(toInsert, autoSave: true);
 
         return result;
     }

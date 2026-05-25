@@ -166,6 +166,36 @@ public class HrUserScopeAccessService : ApplicationService, ITransientDependency
 			.ToList();
 	}
 
+	public async Task<List<Guid>> ResolveAccessibleStageIdsAsync(UserScopeContext scope)
+	{
+		if (HrUserScopeAccess.HasHrWideAccess(scope))
+		{
+			return new List<Guid>();
+		}
+
+		var stageQuery = await _stageRepository.GetQueryableAsync();
+		var mediumQuery = await _mediumRepository.GetQueryableAsync();
+		var boardQuery = await _boardRepository.GetQueryableAsync();
+
+		var rows = await AsyncExecuter.ToListAsync(
+			from stage in stageQuery
+			join medium in mediumQuery on stage.EducationMediumId equals medium.Id
+			join board in boardQuery on medium.EducationBoardId equals board.Id
+			select new
+			{
+				StageId = stage.Id,
+				MediumId = medium.Id,
+				BoardId = board.Id,
+				board.AcademicYearId
+			});
+
+		return rows
+			.Where(x => scope.CanAccessMediumStage(x.StageId, x.MediumId, x.BoardId, x.AcademicYearId))
+			.Select(x => x.StageId)
+			.Distinct()
+			.ToList();
+	}
+
 	private async Task<Dictionary<Guid, MediumStageScope>> ResolveStageScopesAsync(IReadOnlyCollection<Guid> stageIds)
 	{
 		if (stageIds.Count == 0)

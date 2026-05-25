@@ -47,4 +47,8 @@ public class WorkCalendarPoliciesController(IWorkCalendarPolicyAppService appSer
 	[HttpDelete("{id:guid}")]
 	public Task DeleteAsync(Guid id) =>
 		appService.DeleteAsync(id);
+
+	[HttpPost("{id:guid}/unarchive")]
+	public Task<WorkCalendarPolicyDto> UnarchiveAsync(Guid id) =>
+		appService.UnarchiveAsync(id);
 }

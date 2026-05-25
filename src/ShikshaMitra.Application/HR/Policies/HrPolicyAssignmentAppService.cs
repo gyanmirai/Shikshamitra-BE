@@ -296,7 +296,9 @@ public class HrPolicyAssignmentAppService(
 	public async Task<EffectiveEmployeePoliciesDto> GetEffectivePoliciesAsync(Guid employeeId, DateTime date)
 	{
 		var resolved = await policyResolver.ResolveAsync(employeeId, date);
-		return ToEffectivePoliciesDto(resolved);
+		var dto = ToEffectivePoliciesDto(resolved);
+		await EnrichEffectiveTargetDisplayNamesAsync(dto);
+		return dto;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.View)]
@@ -308,7 +310,9 @@ public class HrPolicyAssignmentAppService(
 			input.Date,
 			input.AcademicYearId);
 
-		return ToEffectivePoliciesDto(resolved);
+		var dto = ToEffectivePoliciesDto(resolved);
+		await EnrichEffectiveTargetDisplayNamesAsync(dto);
+		return dto;
 	}
 
 	private async Task EnsureAssignmentImpactConfirmedAsync(string action, Guid? assignmentId, CreateUpdateHrPolicyAssignmentDto input)
@@ -616,6 +620,7 @@ public class HrPolicyAssignmentAppService(
 		return new EffectiveEmployeePoliciesDto
 		{
 			EmployeeId = resolved.EmployeeId,
+			AcademicYearId = resolved.AcademicYearId,
 			Date = resolved.Date,
 			Assignment = resolved.Assignment == null ? null : HrPolicyMapping.ToDto(resolved.Assignment),
 			PolicySource = resolved.Assignment == null ? "default" : HrPolicyMapping.MapAssignmentTargetType(resolved.Assignment.TargetType),
@@ -646,6 +651,137 @@ public class HrPolicyAssignmentAppService(
 
 	private static string BuildAssignmentAuditName(HrPolicyAssignment assignment) =>
 		$"{HrPolicyMapping.MapAssignmentTargetType(assignment.TargetType)}: {assignment.TargetDisplayName ?? assignment.TargetKey}";
+
+	private async Task EnrichEffectiveTargetDisplayNamesAsync(EffectiveEmployeePoliciesDto dto)
+	{
+		var employeeIds = new HashSet<Guid>();
+		var groupIds = new HashSet<Guid>();
+		CollectTargetId(dto.MatchedTargetType, dto.MatchedTargetKey, employeeIds, groupIds);
+		if (dto.Assignment != null)
+		{
+			CollectTargetId(dto.Assignment.TargetType, dto.Assignment.TargetKey, employeeIds, groupIds);
+		}
+		foreach (var step in dto.ResolutionSteps)
+		{
+			CollectTargetId(step.TargetType, step.TargetKey, employeeIds, groupIds);
+		}
+
+		var employeeNames = await ResolveEmployeeDisplayNamesAsync(employeeIds);
+		var groupNames = await ResolveGroupDisplayNamesAsync(dto.AcademicYearId, groupIds);
+
+		dto.MatchedTargetDisplayName = ResolveTargetDisplayName(
+			dto.MatchedTargetType,
+			dto.MatchedTargetKey,
+			dto.MatchedTargetDisplayName,
+			employeeNames,
+			groupNames);
+		if (dto.Assignment != null)
+		{
+			dto.Assignment.TargetDisplayName = ResolveTargetDisplayName(
+				dto.Assignment.TargetType,
+				dto.Assignment.TargetKey,
+				dto.Assignment.TargetDisplayName,
+				employeeNames,
+				groupNames);
+		}
+
+		foreach (var step in dto.ResolutionSteps)
+		{
+			step.TargetDisplayName = ResolveTargetDisplayName(
+				step.TargetType,
+				step.TargetKey,
+				step.TargetDisplayName,
+				employeeNames,
+				groupNames);
+		}
+	}
+
+	private static void CollectTargetId(string? targetType, string? targetKey, HashSet<Guid> employeeIds, HashSet<Guid> groupIds)
+	{
+		if (!Guid.TryParse(targetKey, out var id))
+		{
+			return;
+		}
+
+		if (string.Equals(targetType, "employee", StringComparison.OrdinalIgnoreCase))
+		{
+			employeeIds.Add(id);
+		}
+		else if (string.Equals(targetType, "group", StringComparison.OrdinalIgnoreCase))
+		{
+			groupIds.Add(id);
+		}
+	}
+
+	private async Task<Dictionary<string, string>> ResolveEmployeeDisplayNamesAsync(IReadOnlyCollection<Guid> employeeIds)
+	{
+		if (employeeIds.Count == 0)
+		{
+			return new Dictionary<string, string>();
+		}
+
+		var query = await employeeRepository.GetQueryableAsync();
+		var employees = await AsyncExecuter.ToListAsync(query.Where(x => employeeIds.Contains(x.Id)));
+		return employees.ToDictionary(x => x.Id.ToString("D").ToLowerInvariant(), BuildEmployeeDisplayName);
+	}
+
+	private async Task<Dictionary<string, string>> ResolveGroupDisplayNamesAsync(Guid academicYearId, IReadOnlyCollection<Guid> groupIds)
+	{
+		if (groupIds.Count == 0)
+		{
+			return new Dictionary<string, string>();
+		}
+
+		var groups = await groupRepository.GetListWithDetailsAsync(academicYearId);
+		return groups
+			.Where(x => groupIds.Contains(x.Id))
+			.ToDictionary(x => x.Id.ToString("D").ToLowerInvariant(), x => x.Name);
+	}
+
+	private static string? ResolveTargetDisplayName(
+		string? targetType,
+		string? targetKey,
+		string? currentDisplayName,
+		IReadOnlyDictionary<string, string> employeeNames,
+		IReadOnlyDictionary<string, string> groupNames)
+	{
+		if (!string.IsNullOrWhiteSpace(currentDisplayName))
+		{
+			return currentDisplayName;
+		}
+
+		var normalizedKey = targetKey?.Trim().ToLowerInvariant();
+		if (string.IsNullOrWhiteSpace(normalizedKey))
+		{
+			return currentDisplayName;
+		}
+
+		if (string.Equals(targetType, "employee", StringComparison.OrdinalIgnoreCase) &&
+			employeeNames.TryGetValue(normalizedKey, out var employeeName))
+		{
+			return employeeName;
+		}
+
+		if (string.Equals(targetType, "group", StringComparison.OrdinalIgnoreCase) &&
+			groupNames.TryGetValue(normalizedKey, out var groupName))
+		{
+			return groupName;
+		}
+
+		return currentDisplayName;
+	}
+
+	private static string BuildEmployeeDisplayName(Employee employee)
+	{
+		if (!string.IsNullOrWhiteSpace(employee.EmployeeName))
+		{
+			return employee.EmployeeName;
+		}
+
+		var name = string.Join(" ", new[] { employee.FirstName, employee.MiddleName, employee.LastName }
+			.Where(part => !string.IsNullOrWhiteSpace(part)));
+		return string.IsNullOrWhiteSpace(name) ? employee.EmployeeCode : name;
+	}
 
 	private static object BuildAssignmentAuditContext(HrPolicyAssignment assignment) => new
 	{

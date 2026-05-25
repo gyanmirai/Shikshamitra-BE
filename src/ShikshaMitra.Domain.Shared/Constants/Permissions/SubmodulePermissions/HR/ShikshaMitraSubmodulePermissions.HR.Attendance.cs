@@ -76,5 +76,20 @@ public static partial class ShikshaMitraSubmodulePermissions
 			};
 		}
 
+		public static class AttendanceAndLeave_Evaluations
+		{
+			private const string SubmoduleName = $"{ModuleName}.AttendanceAndLeave.Evaluations";
+			private const string SubmoduleDisplayName = $"{DisplayName}.AttendanceAndLeave.Evaluations";
+
+			public const string ViewAudit = $"{SubmoduleName}.ViewAudit";
+
+			public static readonly string[] All = { ViewAudit };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ ViewAudit, $"{SubmoduleDisplayName}.ViewAudit" }
+			};
+		}
+
 	}
 }

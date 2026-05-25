@@ -46,8 +46,9 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Delete = $"{SubmoduleName}.Delete";
 			public const string Lock = $"{SubmoduleName}.Lock";
 			public const string ViewAudit = $"{SubmoduleName}.ViewAudit";
+			public const string Adjustments = $"{SubmoduleName}.Adjustments";
 
-			public static readonly string[] All = { View, Add, Delete, Lock, ViewAudit };
+			public static readonly string[] All = { View, Add, Delete, Lock, ViewAudit, Adjustments };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
@@ -55,7 +56,8 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ Add, $"{SubmoduleDisplayName}.Add" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" },
 				{ Lock, $"{SubmoduleDisplayName}.Lock" },
-				{ ViewAudit, $"{SubmoduleDisplayName}.ViewAudit" }
+				{ ViewAudit, $"{SubmoduleDisplayName}.ViewAudit" },
+				{ Adjustments, $"{SubmoduleDisplayName}.Adjustments" }
 			};
 		}
 

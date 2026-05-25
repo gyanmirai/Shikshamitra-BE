@@ -123,4 +123,56 @@ public class HRPdfService(IPdfService pdfService)
 		return await pdfService.GeneratePdfAsBytes(pdfDocument);
 	}
 
+	public async Task<byte[]> GenerateReportPdf(HrReportPreviewDto report)
+	{
+		var header = new RowElement
+		{
+			Elements = report.Columns.Select(column => (IElement)new TextElement
+			{
+				Text = column.Label,
+				FontWeight = FontWeight.Bold,
+				Padding = 4,
+				PaddingUnit = Unit.Point
+			}).ToList(),
+			Spacing = 8
+		};
+
+		var rows = report.Rows.Take(500).Select(row => (IElement)new RowElement
+		{
+			Elements = report.Columns.Select(column => (IElement)new TextElement
+			{
+				Text = row.TryGetValue(column.Id, out var value) ? value ?? string.Empty : string.Empty,
+				Padding = 4,
+				PaddingUnit = Unit.Point
+			}).ToList(),
+			Spacing = 8
+		});
+
+		var document = new PDFDocument
+		{
+			Page = new PageSpecs
+			{
+				BackgroundColor = "#ffffff",
+				Margin = 20,
+				MarginUnit = Unit.Point
+			},
+			Header = new TextElement
+			{
+				Text = report.ReportType,
+				FontSize = 20,
+				FontWeight = FontWeight.Bold,
+				Alignment = TextAlignment.Center,
+				Padding = 10,
+				PaddingUnit = Unit.Point
+			},
+			Content = new ColumnElement
+			{
+				Elements = new[] { (IElement)header }.Concat(rows).ToList(),
+				Spacing = 12
+			}
+		};
+
+		return await pdfService.GeneratePdfAsBytes(document);
+	}
+
 }

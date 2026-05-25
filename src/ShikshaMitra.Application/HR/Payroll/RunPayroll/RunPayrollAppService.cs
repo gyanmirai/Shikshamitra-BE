@@ -156,98 +156,9 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				.Where(x => scopedEmployeeIds.Contains(x.EmployeeId))
 				.OrderBy(x => x.EmployeeName)
 				.ToList();
-			var calendar = await _payrollCalendarResolver.ResolveAsync(year, month);
-			var employeeIds = scopedEmployees.Select(e => e.Id).ToList();
-
-			if (input.ForceRefresh || inScopeSnapshots.Count == 0)
+			if (input.ForceRefresh || inScopeSnapshots.Count < scopedEmployees.Count)
 			{
-				var previousMonthNetPayByEmployee = (await _salarySlipRepository.GetByMonthAsync(GetPreviousMonth(internalMonthYear)))
-					.Where(x => x.Status == SalarySlipStatus.Finalized)
-					.GroupBy(x => x.EmployeeId)
-					.ToDictionary(g => g.Key, g => (decimal?)g.OrderByDescending(x => x.ProcessedDate).First().NetSalary);
-				var reviewByEmployee = await GetReviewsByEmployeeAsync(internalMonthYear);
-				var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
-				var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
-				var attendanceByEmployee = await GetAttendanceRecordsAsync(employeeIds, startDate, endDate);
-				var leaveUnitsByEmployee = await _payrollApprovedLeaveResolver.ResolveLeaveUnitsByEmployeeAsync(
-					employeeIds,
-					year,
-					month);
-				var payrollDetailsByEmployee = await _payrollDetailsRepository.GetByEmployeeIdsAsync(employeeIds);
-				var componentsByEmployee = await _payrollComponentRepository.GetByEmployeeIdsAsync(employeeIds);
-				var resolvedComponentsByEmployee = await _componentVersionResolver.ResolveByEmployeeAsync(
-					componentsByEmployee,
-					internalMonthYear);
-				var adjustmentsByEmployee = await GetAdjustmentsByEmployeeAsync(internalMonthYear, employeeIds);
-
-				var computedItems = new List<RunPayrollItem>();
-				foreach (var employee in scopedEmployees)
-				{
-					try
-					{
-						var resolvedPolicies = await _hrPolicyResolver.ResolveAsync(
-							employee.Id,
-							new DateTime(year, month, 1),
-							calendar.AcademicYearId);
-						var holidayOverrides = resolvedPolicies.PayrollPolicy.GetHolidayOverrides();
-						var workCalendarHolidays = await GetIncludedWorkCalendarHolidaysAsync(resolvedPolicies.PayrollWorkCalendarPolicy.Id, year, month);
-						var workingUnitsByDate = PayrollMonthCalendar.BuildWorkingUnitsByDate(
-							year,
-							month,
-							workCalendarHolidays,
-							resolvedPolicies.PayrollPolicy.SaturdayWorkPolicy,
-							holidayOverrides,
-							resolvedPolicies.PayrollWorkCalendarPolicy);
-						var payrollPolicyIssueCodes = new List<string>();
-						var basis = ResolvePayrollBasisForPreview(
-							resolvedPolicies.PayrollPolicy,
-							year,
-							month,
-							workingUnitsByDate,
-							payrollPolicyIssueCodes);
-						computedItems.Add(BuildPayrollItem(
-							employee,
-							attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
-							payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
-							GetResolvedComponents(resolvedComponentsByEmployee, employee.Id),
-							adjustmentsByEmployee.GetValueOrDefault(employee.Id) ?? new List<PayrollAdjustment>(),
-							basis,
-							year,
-							month,
-							workCalendarHolidays,
-							leaveUnitsByEmployee.GetValueOrDefault(employee.Id),
-							resolvedPolicies,
-							BuildHolidayImpactJson(year, month, workCalendarHolidays, holidayOverrides),
-							finalizedEmployeeIds.Contains(employee.Id),
-							reviewByEmployee.GetValueOrDefault(employee.Id),
-							previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
-							payrollPolicyIssueCodes
-						));
-					}
-					catch (BusinessException ex) when (IsPayrollPolicySetupException(ex))
-					{
-						_logger.LogWarning(
-							ex,
-							"Payroll preview setup issue for employee {EmployeeId} in {Month}. ErrorCode={ErrorCode}",
-							employee.Id,
-							internalMonthYear,
-							ex.Code);
-						computedItems.Add(BuildPayrollSetupIssueItem(
-							employee,
-							attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
-							payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
-							GetResolvedComponents(resolvedComponentsByEmployee, employee.Id),
-							adjustmentsByEmployee.GetValueOrDefault(employee.Id) ?? new List<PayrollAdjustment>(),
-							year,
-							month,
-							finalizedEmployeeIds.Contains(employee.Id),
-							reviewByEmployee.GetValueOrDefault(employee.Id),
-							previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
-							new[] { IssueCodes.PayrollPolicyConfiguration }));
-					}
-				}
-
-				await UpsertSnapshotsAsync(internalMonthYear, computedItems);
+				await RefreshSnapshotsAsync(internalMonthYear, year, month, scopedEmployees, preserveReviewedSnapshots: false);
 				persistedSnapshots = await GetSnapshotsByMonthAsync(internalMonthYear);
 				inScopeSnapshots = persistedSnapshots
 					.Where(x => scopedEmployeeIds.Contains(x.EmployeeId))
@@ -630,6 +541,19 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		var existingByEmployee = await GetReviewsByEmployeeAsync(internalMonthYear);
 		var snapshotByEmployee = (await GetSnapshotsByMonthAsync(internalMonthYear))
 			.ToDictionary(x => x.EmployeeId, x => x);
+		var adjustmentEmployeeIds = (await GetAdjustmentsByEmployeeAsync(
+				internalMonthYear,
+				targetEmployees.Select(x => x.Id).ToList()))
+			.Where(x => x.Value.Count > 0)
+			.Select(x => x.Key)
+			.ToList();
+		if (adjustmentEmployeeIds.Count > 0)
+		{
+			throw new BusinessException(HRErrorCodes.PayrollReviewContainsAdjustments)
+				.WithData("month", request.Month)
+				.WithData("employeeIds", adjustmentEmployeeIds);
+		}
+
 		var removed = 0;
 		foreach (var employee in targetEmployees)
 		{
@@ -678,9 +602,10 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 	public async Task<PayrollAdjustmentDto> CreateAdjustmentAsync(PayrollAdjustmentRequest request)
 	{
-		var (_, _, internalMonthYear) = ParseMonth(request.Month);
+		var (year, month, internalMonthYear) = ParseMonth(request.Month);
 		var targetEmployees = await ResolveScopedTargetEmployeesAsync(new List<Guid> { request.EmployeeId });
 		await EnsureReviewCanChangeAsync(internalMonthYear, request.Month, targetEmployees);
+		await EnsureAdjustmentCanChangeAsync(internalMonthYear, request.Month, request.EmployeeId);
 
 		var adjustment = new PayrollAdjustment(
 			GuidGenerator.Create(),
@@ -694,13 +619,18 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			request.Description);
 
 		await _payrollAdjustmentRepository.InsertAsync(adjustment, autoSave: true);
-		await InvalidateUnlockedSnapshotsAsync(internalMonthYear, new[] { request.EmployeeId });
+		await RefreshSnapshotsForEmployeeIdsAsync(
+			internalMonthYear,
+			year,
+			month,
+			new[] { request.EmployeeId },
+			preserveReviewedSnapshots: true);
 		return MapAdjustmentToDto(adjustment);
 	}
 
 	public async Task<PayrollAdjustmentDto> UpdateAdjustmentAsync(Guid id, PayrollAdjustmentRequest request)
 	{
-		var (_, _, internalMonthYear) = ParseMonth(request.Month);
+		var (year, month, internalMonthYear) = ParseMonth(request.Month);
 		var adjustment = await GetAdjustmentOrThrowAsync(id);
 		if (adjustment.MonthYear != internalMonthYear || adjustment.EmployeeId != request.EmployeeId)
 		{
@@ -709,6 +639,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		var targetEmployees = await ResolveScopedTargetEmployeesAsync(new List<Guid> { request.EmployeeId });
 		await EnsureReviewCanChangeAsync(internalMonthYear, request.Month, targetEmployees);
+		await EnsureAdjustmentCanChangeAsync(internalMonthYear, request.Month, request.EmployeeId);
 
 		adjustment.Update(
 			request.Name,
@@ -717,17 +648,57 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			request.Reason,
 			request.Description);
 		await _payrollAdjustmentRepository.UpdateAsync(adjustment, autoSave: true);
-		await InvalidateUnlockedSnapshotsAsync(internalMonthYear, new[] { request.EmployeeId });
+		await RefreshSnapshotsForEmployeeIdsAsync(
+			internalMonthYear,
+			year,
+			month,
+			new[] { request.EmployeeId },
+			preserveReviewedSnapshots: true);
 		return MapAdjustmentToDto(adjustment);
 	}
 
 	public async Task DeleteAdjustmentAsync(Guid id)
 	{
 		var adjustment = await GetAdjustmentOrThrowAsync(id);
+		var (year, month, internalMonthYear) = ParseMonth(adjustment.MonthYear);
 		var targetEmployees = await ResolveScopedTargetEmployeesAsync(new List<Guid> { adjustment.EmployeeId });
 		await EnsureReviewCanChangeAsync(adjustment.MonthYear, adjustment.MonthYear, targetEmployees);
+		await EnsureAdjustmentCanChangeAsync(adjustment.MonthYear, adjustment.MonthYear, adjustment.EmployeeId);
 		await _payrollAdjustmentRepository.DeleteAsync(adjustment, autoSave: true);
-		await InvalidateUnlockedSnapshotsAsync(adjustment.MonthYear, new[] { adjustment.EmployeeId });
+		await RefreshSnapshotsForEmployeeIdsAsync(
+			internalMonthYear,
+			year,
+			month,
+			new[] { adjustment.EmployeeId },
+			preserveReviewedSnapshots: true);
+	}
+
+	private async Task EnsureAdjustmentCanChangeAsync(string internalMonthYear, string requestMonth, Guid employeeId)
+	{
+		var query = await _payrollRunItemSnapshotRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			query = query.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+		else
+		{
+			query = query.Where(x => x.TenantId == null);
+		}
+
+		var snapshot = await AsyncExecuter.FirstOrDefaultAsync(query.Where(x =>
+			x.MonthYear == internalMonthYear &&
+			x.EmployeeId == employeeId));
+
+		if (snapshot != null && !snapshot.IsLocked && snapshot.ReviewStatus == ReviewStatuses.Reviewed)
+		{
+			return;
+		}
+
+		throw new BusinessException(HRErrorCodes.PayrollAdjustmentRequiresReviewedPreview)
+			.WithData("month", requestMonth)
+			.WithData("employeeId", employeeId)
+			.WithData("reviewStatus", snapshot?.ReviewStatus ?? ReviewStatuses.Pending)
+			.WithData("isLocked", snapshot?.IsLocked ?? false);
 	}
 
 	private async Task<List<PayrollRunItemSnapshot>> GetSnapshotsByMonthAsync(string monthYear)
@@ -745,12 +716,141 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		return await AsyncExecuter.ToListAsync(query.Where(x => x.MonthYear == monthYear));
 	}
 
+	private async Task RefreshSnapshotsForEmployeeIdsAsync(
+		string internalMonthYear,
+		int year,
+		int month,
+		IReadOnlyCollection<Guid> employeeIds,
+		bool preserveReviewedSnapshots)
+	{
+		var idSet = employeeIds.ToHashSet();
+		var employeeQuery = await GetScopedActiveEmployeeQueryAsync(includeUnknownStageEmployees: false);
+		var scopedEmployees = await AsyncExecuter.ToListAsync(
+			employeeQuery
+				.Where(e => idSet.Contains(e.Id))
+				.OrderBy(e => e.FirstName)
+				.ThenBy(e => e.LastName));
+
+		await RefreshSnapshotsAsync(internalMonthYear, year, month, scopedEmployees, preserveReviewedSnapshots);
+	}
+
+	private async Task RefreshSnapshotsAsync(
+		string internalMonthYear,
+		int year,
+		int month,
+		List<Employee> scopedEmployees,
+		bool preserveReviewedSnapshots)
+	{
+		if (scopedEmployees.Count == 0)
+		{
+			return;
+		}
+
+		var calendar = await _payrollCalendarResolver.ResolveAsync(year, month);
+		var employeeIds = scopedEmployees.Select(e => e.Id).ToList();
+		var existingSlips = await _salarySlipRepository.GetByMonthAsync(internalMonthYear);
+		var finalizedEmployeeIds = existingSlips
+			.Where(x => x.Status == SalarySlipStatus.Finalized)
+			.Select(x => x.EmployeeId)
+			.ToHashSet();
+		var previousMonthNetPayByEmployee = (await _salarySlipRepository.GetByMonthAsync(GetPreviousMonth(internalMonthYear)))
+			.Where(x => x.Status == SalarySlipStatus.Finalized)
+			.GroupBy(x => x.EmployeeId)
+			.ToDictionary(g => g.Key, g => (decimal?)g.OrderByDescending(x => x.ProcessedDate).First().NetSalary);
+		var reviewByEmployee = await GetReviewsByEmployeeAsync(internalMonthYear);
+		var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
+		var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
+		var attendanceByEmployee = await GetAttendanceRecordsAsync(employeeIds, startDate, endDate);
+		var leaveUnitsByEmployee = await _payrollApprovedLeaveResolver.ResolveLeaveUnitsByEmployeeAsync(
+			employeeIds,
+			year,
+			month);
+		var payrollDetailsByEmployee = await _payrollDetailsRepository.GetByEmployeeIdsAsync(employeeIds);
+		var componentsByEmployee = await _payrollComponentRepository.GetByEmployeeIdsAsync(employeeIds);
+		var resolvedComponentsByEmployee = await _componentVersionResolver.ResolveByEmployeeAsync(
+			componentsByEmployee,
+			internalMonthYear);
+		var adjustmentsByEmployee = await GetAdjustmentsByEmployeeAsync(internalMonthYear, employeeIds);
+
+		var computedItems = new List<RunPayrollItem>();
+		foreach (var employee in scopedEmployees)
+		{
+			try
+			{
+				var resolvedPolicies = await _hrPolicyResolver.ResolveAsync(
+					employee.Id,
+					new DateTime(year, month, 1),
+					calendar.AcademicYearId);
+				var holidayOverrides = resolvedPolicies.PayrollPolicy.GetHolidayOverrides();
+				var workCalendarHolidays = await GetIncludedWorkCalendarHolidaysAsync(resolvedPolicies.PayrollWorkCalendarPolicy.Id, year, month);
+				var workingUnitsByDate = PayrollMonthCalendar.BuildWorkingUnitsByDate(
+					year,
+					month,
+					workCalendarHolidays,
+					resolvedPolicies.PayrollPolicy.SaturdayWorkPolicy,
+					holidayOverrides,
+					resolvedPolicies.PayrollWorkCalendarPolicy);
+				var payrollPolicyIssueCodes = new List<string>();
+				var basis = ResolvePayrollBasisForPreview(
+					resolvedPolicies.PayrollPolicy,
+					year,
+					month,
+					workingUnitsByDate,
+					payrollPolicyIssueCodes);
+				computedItems.Add(BuildPayrollItem(
+					employee,
+					attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
+					payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
+					GetResolvedComponents(resolvedComponentsByEmployee, employee.Id),
+					adjustmentsByEmployee.GetValueOrDefault(employee.Id) ?? new List<PayrollAdjustment>(),
+					basis,
+					year,
+					month,
+					workCalendarHolidays,
+					leaveUnitsByEmployee.GetValueOrDefault(employee.Id),
+					resolvedPolicies,
+					BuildHolidayImpactJson(year, month, workCalendarHolidays, holidayOverrides),
+					finalizedEmployeeIds.Contains(employee.Id),
+					reviewByEmployee.GetValueOrDefault(employee.Id),
+					previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
+					payrollPolicyIssueCodes
+				));
+			}
+			catch (BusinessException ex) when (IsPayrollPolicySetupException(ex))
+			{
+				_logger.LogWarning(
+					ex,
+					"Payroll preview setup issue for employee {EmployeeId} in {Month}. ErrorCode={ErrorCode}",
+					employee.Id,
+					internalMonthYear,
+					ex.Code);
+				computedItems.Add(BuildPayrollSetupIssueItem(
+					employee,
+					attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
+					payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
+					GetResolvedComponents(resolvedComponentsByEmployee, employee.Id),
+					adjustmentsByEmployee.GetValueOrDefault(employee.Id) ?? new List<PayrollAdjustment>(),
+					year,
+					month,
+					finalizedEmployeeIds.Contains(employee.Id),
+					reviewByEmployee.GetValueOrDefault(employee.Id),
+					previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
+					new[] { IssueCodes.PayrollPolicyConfiguration }));
+			}
+		}
+
+		await UpsertSnapshotsAsync(internalMonthYear, computedItems, preserveReviewedSnapshots);
+	}
+
 	private static List<EmployeePayrollComponent> GetResolvedComponents(
 		ILookup<Guid, EmployeePayrollComponent> resolvedComponentsByEmployee,
 		Guid employeeId) =>
 		resolvedComponentsByEmployee[employeeId]?.ToList() ?? new List<EmployeePayrollComponent>();
 
-	private async Task UpsertSnapshotsAsync(string monthYear, List<RunPayrollItem> items)
+	private async Task UpsertSnapshotsAsync(
+		string monthYear,
+		List<RunPayrollItem> items,
+		bool preserveReviewedSnapshots = false)
 	{
 		var existingByEmployee = (await GetSnapshotsByMonthAsync(monthYear))
 			.ToDictionary(x => x.EmployeeId, x => x);
@@ -770,7 +870,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 					continue;
 				}
 
-				var shouldResetReview = existing.ReviewStatus == ReviewStatuses.Reviewed &&
+				var shouldResetReview = !preserveReviewedSnapshots &&
+					existing.ReviewStatus == ReviewStatuses.Reviewed &&
 					SnapshotValuesChanged(existing, item, issuesJson, attendancePolicyWarningsJson, earningsJson, deductionsJson, adjustmentsJson);
 				ApplySnapshotValues(existing, item, issuesJson, attendancePolicyWarningsJson, earningsJson, deductionsJson, adjustmentsJson);
 				if (shouldResetReview)
@@ -1390,24 +1491,6 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		return await AsyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Id == id))
 			?? throw new BusinessException(HRErrorCodes.PayrollAdjustmentNotFound);
-	}
-
-	private async Task InvalidateUnlockedSnapshotsAsync(string monthYear, IEnumerable<Guid> employeeIds)
-	{
-		var idSet = employeeIds.ToHashSet();
-		var snapshots = (await GetSnapshotsByMonthAsync(monthYear))
-			.Where(x => idSet.Contains(x.EmployeeId) && !x.IsLocked)
-			.ToList();
-
-		foreach (var snapshot in snapshots)
-		{
-			await _payrollRunItemSnapshotRepository.DeleteAsync(snapshot, autoSave: false);
-		}
-
-		if (snapshots.Count > 0)
-		{
-			await UnitOfWorkManager.Current!.SaveChangesAsync();
-		}
 	}
 
 	private static PayrollAdjustmentDto MapAdjustmentToDto(PayrollAdjustment adjustment) =>

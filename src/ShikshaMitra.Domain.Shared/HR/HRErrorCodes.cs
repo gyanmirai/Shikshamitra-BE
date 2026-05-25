@@ -174,6 +174,8 @@ public static class HRErrorCodes
 	public const string PayrollAdjustmentReasonRequired = "HR:Payroll:030024";
 	public const string PayrollAdjustmentNotFound = "HR:Payroll:030025";
 	public const string PayrollBlockingIssuesBeforeLock = "HR:Payroll:030026";
+	public const string PayrollAdjustmentRequiresReviewedPreview = "HR:Payroll:030027";
+	public const string PayrollReviewContainsAdjustments = "HR:Payroll:030028";
 
 	// ── Calendar: 04xxxx ─────────────────────────────────────────
 

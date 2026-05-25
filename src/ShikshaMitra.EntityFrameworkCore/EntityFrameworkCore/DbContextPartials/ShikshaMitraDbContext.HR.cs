@@ -17,6 +17,7 @@ using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.ProfessionalManagement;
+using ShikshaMitra.HR.Reports;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -62,6 +63,7 @@ public partial class ShikshaMitraDbContext
     public DbSet<HrAuditEvent> HrAuditEvents { get; set; }
     public DbSet<ProfessionalReviewCycle> ProfessionalReviewCycles { get; set; }
     public DbSet<ProfessionalReview> ProfessionalReviews { get; set; }
+    public DbSet<HrReportExportJob> HrReportExportJobs { get; set; }
 
     public DbSet<HolidayType> HolidayTypes { get; set; }
     public DbSet<EventType> EventTypes { get; set; }

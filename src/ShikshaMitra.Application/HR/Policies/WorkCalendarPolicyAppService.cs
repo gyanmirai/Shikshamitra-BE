@@ -217,6 +217,27 @@ public class WorkCalendarPolicyAppService(
 		await auditWriter.WriteAsync(dto.AcademicYearId, "work_calendar_policy", dto.Id, dto.Name, "archived", $"Archived work calendar policy {dto.Name}");
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.Archive)]
+	public async Task<WorkCalendarPolicyDto> UnarchiveAsync(Guid id)
+	{
+		var entity = await repository.GetAsync(id);
+		if (entity.Status != HrPolicyStatus.Archived)
+		{
+			var currentDto = HrPolicyMapping.ToDto(entity);
+			currentDto.Holidays = await GetHolidaysAsync(entity.Id);
+			currentDto.HolidaySummary = HrPolicyMapping.BuildHolidaySummary(currentDto.Holidays);
+			return currentDto;
+		}
+		entity.Unarchive();
+		await repository.UpdateAsync(entity, autoSave: true);
+		var dto = HrPolicyMapping.ToDto(entity);
+		dto.Holidays = await GetHolidaysAsync(entity.Id);
+		dto.HolidaySummary = HrPolicyMapping.BuildHolidaySummary(dto.Holidays);
+		await versionAppService.CaptureAsync("work_calendar", dto, "unarchived");
+		await auditWriter.WriteAsync(dto.AcademicYearId, "work_calendar_policy", dto.Id, dto.Name, "unarchived", $"Unarchived work calendar policy {dto.Name} as draft.");
+		return dto;
+	}
+
 	private async Task<Dictionary<Guid, WorkCalendarHolidaySummaryDto>> GetHolidaySummariesAsync(List<Guid> policyIds)
 	{
 		if (policyIds.Count == 0)
@@ -240,18 +261,26 @@ public class WorkCalendarPolicyAppService(
 				.WithData("field", nameof(academicYearId));
 		}
 
-		await holidaySnapshotRepository.DeleteAsync(x => x.WorkCalendarPolicyId == workCalendarPolicyId, autoSave: true);
 		if (holidays is null || holidays.Count == 0)
 		{
+			await holidaySnapshotRepository.DeleteAsync(x => x.WorkCalendarPolicyId == workCalendarPolicyId, autoSave: true);
 			return;
 		}
 
 		var academicYear = await academicYearRepository.GetAsync(academicYearId);
-		foreach (var row in holidays
+		var normalizedRows = holidays
 			.OrderBy(x => ResolveHolidayFromDate(x))
-			.ThenBy(x => x.HolidayName))
+			.ThenBy(x => x.HolidayName)
+			.ToList();
+		foreach (var row in normalizedRows)
 		{
 			ValidateHolidayRow(row, academicYear);
+		}
+		ValidateIncludedHolidayOverlaps(normalizedRows);
+
+		await holidaySnapshotRepository.DeleteAsync(x => x.WorkCalendarPolicyId == workCalendarPolicyId, autoSave: true);
+		foreach (var row in normalizedRows)
+		{
 			var fromDate = ResolveHolidayFromDate(row);
 			var toDate = ResolveHolidayToDate(row);
 			var entity = new WorkCalendarHoliday(
@@ -268,7 +297,55 @@ public class WorkCalendarPolicyAppService(
 				row.Notes);
 			await holidaySnapshotRepository.InsertAsync(entity, autoSave: false);
 		}
+		if (UnitOfWorkManager.Current is not null)
+		{
+			await UnitOfWorkManager.Current.SaveChangesAsync();
+		}
 	}
+
+	private static void ValidateIncludedHolidayOverlaps(List<WorkCalendarHolidayDto> holidays)
+	{
+		var includedRows = holidays
+			.Where(x => x.IsIncluded)
+			.Select(x => new
+			{
+				Row = x,
+				FromDate = ResolveHolidayFromDate(x),
+				ToDate = ResolveHolidayToDate(x)
+			})
+			.OrderBy(x => x.FromDate)
+			.ThenBy(x => x.ToDate)
+			.ThenBy(x => x.Row.HolidayName)
+			.ToList();
+
+		for (var index = 1; index < includedRows.Count; index++)
+		{
+			var current = includedRows[index];
+			for (var priorIndex = index - 1; priorIndex >= 0; priorIndex--)
+			{
+				var prior = includedRows[priorIndex];
+				if (prior.ToDate.Date < current.FromDate.Date)
+				{
+					break;
+				}
+
+				if (RangesOverlap(prior.FromDate, prior.ToDate, current.FromDate, current.ToDate))
+				{
+					var overlapFrom = prior.FromDate.Date > current.FromDate.Date ? prior.FromDate.Date : current.FromDate.Date;
+					var overlapTo = prior.ToDate.Date < current.ToDate.Date ? prior.ToDate.Date : current.ToDate.Date;
+					throw new BusinessException("ShikshaMitra:WorkCalendarHolidayOverlap")
+						.WithData("field", nameof(WorkCalendarHolidayDto.FromDate))
+						.WithData("holidayName", current.Row.HolidayName)
+						.WithData("conflictingHolidayName", prior.Row.HolidayName)
+						.WithData("fromDate", overlapFrom.ToString("yyyy-MM-dd"))
+						.WithData("toDate", overlapTo.ToString("yyyy-MM-dd"));
+				}
+			}
+		}
+	}
+
+	private static bool RangesOverlap(DateTime leftFrom, DateTime leftTo, DateTime rightFrom, DateTime rightTo) =>
+		leftFrom.Date <= rightTo.Date && rightFrom.Date <= leftTo.Date;
 
 	private static void ValidateHolidayRow(WorkCalendarHolidayDto row, AcademicYear academicYear)
 	{

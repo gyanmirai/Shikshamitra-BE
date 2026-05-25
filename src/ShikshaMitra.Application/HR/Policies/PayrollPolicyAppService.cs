@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Audit;
+using ShikshaMitra.HR.Payroll.Settings;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -84,7 +86,18 @@ public class PayrollPolicyAppService(
 		await EnsureWorkCalendarAsync(input.WorkCalendarPolicyId, input.AcademicYearId);
 		var entity = await repository.GetAsync(id);
 		var before = HrPolicyMapping.ToDto(entity);
-		if (entity.Status != HrPolicyStatus.Draft || HrPolicyMapping.ParsePolicyStatus(input.Status) != HrPolicyStatus.Draft)
+		var status = HrPolicyMapping.ParsePolicyStatus(input.Status);
+		var dayCalculationType = HrPolicyMapping.ParseDayCalculationType(input.DayCalculationType);
+		var manualMonthDays = HrPolicyMapping.ToManualMonths(input.ManualMonthDays);
+		var saturdayWorkPolicy = HrPolicyMapping.ParseSaturdayWorkPolicy(input.SaturdayWorkPolicy);
+		var holidayOverrides = HrPolicyMapping.ToHolidayOverrides(input.HolidayOverrides);
+
+		if (IsUnchanged(entity, input, status, dayCalculationType, manualMonthDays, saturdayWorkPolicy, holidayOverrides))
+		{
+			return before;
+		}
+
+		if (entity.Status != HrPolicyStatus.Draft || status != HrPolicyStatus.Draft)
 		{
 			var preview = await policySafetyAppService.PreviewPolicyImpactAsync(new HrPolicyImpactPreviewRequestDto
 			{
@@ -98,13 +111,13 @@ public class PayrollPolicyAppService(
 		}
 		entity.Update(
 			input.Name,
-			HrPolicyMapping.ParsePolicyStatus(input.Status),
+			status,
 			input.IsDefault,
-			HrPolicyMapping.ParseDayCalculationType(input.DayCalculationType),
+			dayCalculationType,
 			input.ManualDays,
-			HrPolicyMapping.ToManualMonths(input.ManualMonthDays),
-			HrPolicyMapping.ParseSaturdayWorkPolicy(input.SaturdayWorkPolicy),
-			HrPolicyMapping.ToHolidayOverrides(input.HolidayOverrides));
+			manualMonthDays,
+			saturdayWorkPolicy,
+			holidayOverrides);
 
 		if (entity.IsDefault)
 		{
@@ -163,6 +176,22 @@ public class PayrollPolicyAppService(
 		await auditWriter.WriteAsync(archivedDto.AcademicYearId, "payroll_policy", archivedDto.Id, archivedDto.Name, "archived", $"Archived payroll policy {archivedDto.Name}");
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.Archive)]
+	public async Task<PayrollPolicyDto> UnarchiveAsync(Guid id)
+	{
+		var entity = await repository.GetAsync(id);
+		if (entity.Status != HrPolicyStatus.Archived)
+		{
+			return HrPolicyMapping.ToDto(entity);
+		}
+		entity.Unarchive();
+		await repository.UpdateAsync(entity, autoSave: true);
+		var dto = HrPolicyMapping.ToDto(entity);
+		await versionAppService.CaptureAsync("payroll", dto, "unarchived");
+		await auditWriter.WriteAsync(dto.AcademicYearId, "payroll_policy", dto.Id, dto.Name, "unarchived", $"Unarchived payroll policy {dto.Name} as draft.");
+		return dto;
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.SetDefault)]
 	public async Task<PayrollPolicyDto> SetDefaultAsync(Guid id)
 	{
@@ -211,4 +240,42 @@ public class PayrollPolicyAppService(
 			await auditWriter.WriteAsync(dto.AcademicYearId, "payroll_policy", dto.Id, dto.Name, "set_default", $"Cleared default payroll policy {dto.Name}");
 		}
 	}
+
+	private static bool IsUnchanged(
+		PayrollPolicy entity,
+		CreateUpdatePayrollPolicyDto input,
+		HrPolicyStatus status,
+		DayCalculationType dayCalculationType,
+		IReadOnlyList<DayCalculationManualMonth> manualMonthDays,
+		SaturdayWorkPolicy saturdayWorkPolicy,
+		IReadOnlyList<PayrollHolidayOverride> holidayOverrides)
+	{
+		return entity.AcademicYearId == input.AcademicYearId &&
+			entity.WorkCalendarPolicyId == input.WorkCalendarPolicyId &&
+			string.Equals(entity.Name, input.Name.Trim(), StringComparison.Ordinal) &&
+			entity.Status == status &&
+			entity.IsDefault == input.IsDefault &&
+			entity.DayCalculationType == dayCalculationType &&
+			entity.ManualDays == input.ManualDays &&
+			entity.SaturdayWorkPolicy == saturdayWorkPolicy &&
+			ManualMonthsEqual(entity.GetManualMonthDays(), manualMonthDays) &&
+			HolidayOverridesEqual(entity.GetHolidayOverrides(), holidayOverrides);
+	}
+
+	private static bool ManualMonthsEqual(
+		IReadOnlyList<DayCalculationManualMonth> left,
+		IReadOnlyList<DayCalculationManualMonth> right) =>
+		left.Count == right.Count && left.Zip(right).All(pair =>
+			pair.First.Year == pair.Second.Year &&
+			pair.First.Month == pair.Second.Month &&
+			pair.First.ManualDays == pair.Second.ManualDays);
+
+	private static bool HolidayOverridesEqual(
+		IReadOnlyList<PayrollHolidayOverride> left,
+		IReadOnlyList<PayrollHolidayOverride> right) =>
+		left.Count == right.Count && left.Zip(right).All(pair =>
+			pair.First.Date.Date == pair.Second.Date.Date &&
+			string.Equals(pair.First.HolidayName, pair.Second.HolidayName, StringComparison.Ordinal) &&
+			pair.First.IncludedInPayroll == pair.Second.IncludedInPayroll &&
+			pair.First.CalendarHolidayId == pair.Second.CalendarHolidayId);
 }

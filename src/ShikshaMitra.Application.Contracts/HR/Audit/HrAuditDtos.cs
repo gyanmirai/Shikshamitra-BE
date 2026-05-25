@@ -26,9 +26,14 @@ public class HrAuditEventDto : EntityDto<Guid>
 	public Guid? ActorUserId { get; set; }
 	public string? ActorNameSnapshot { get; set; }
 	public DateTime OccurredAt { get; set; }
+	public DateTime OccurredAtUtc { get; set; }
+	public string OccurredAtDisplay { get; set; } = string.Empty;
+	public string ActorDisplayName { get; set; } = string.Empty;
+	public string ActionLabel { get; set; } = string.Empty;
 	public string? Reason { get; set; }
 	public string Summary { get; set; } = string.Empty;
 	public List<HrAuditChangedFieldDto> ChangedFields { get; set; } = [];
+	public int ChangedFieldCount { get; set; }
 	public string? ContextJson { get; set; }
 	public string? CorrelationId { get; set; }
 	public Guid? SourceAuditLogId { get; set; }

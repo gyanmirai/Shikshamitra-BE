@@ -16,8 +16,9 @@ public class DueFeeConfiguration : IEntityTypeConfiguration<DueFee>
 		// HasFilter scopes the uniqueness to non-deleted rows so that soft-deleted
 		// DueFees do not block new inserts (and the seeder's ExistsForStudentAsync
 		// check, which uses ABP's soft-delete filter, cannot see them).
-		builder.HasIndex(x => new { x.StudentId, x.FeeHeadId, x.Month, x.Year })
+		builder.HasIndex(x => new { x.TenantId, x.StudentId, x.FeeHeadId, x.Month, x.Year })
 			.IsUnique()
-			.HasFilter("\"IsDeleted\" = false");
+			.HasFilter("\"IsDeleted\" = false")
+			.HasDatabaseName("IX_DueFees_TenantId_StudentId_FeeHeadId_Month_Year");
 	}
 }

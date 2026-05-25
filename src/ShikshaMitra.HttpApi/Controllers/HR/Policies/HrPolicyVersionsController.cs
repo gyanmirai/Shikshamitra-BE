@@ -34,6 +34,13 @@ public class HrPolicyVersionsController(IHrPolicyVersionAppService appService) :
 		[FromQuery] Guid toVersionId) =>
 		appService.CompareAsync(policyType, policyId, fromVersionId, toVersionId);
 
+	[HttpGet("{versionId:guid}/restore-preview")]
+	public Task<HrPolicyImpactPreviewDto> GetRestorePreviewAsync(
+		string policyType,
+		Guid policyId,
+		Guid versionId) =>
+		appService.GetRestorePreviewAsync(policyType, policyId, versionId);
+
 	[HttpPost("{versionId:guid}/restore-draft")]
 	public Task<object> RestoreDraftAsync(
 		string policyType,

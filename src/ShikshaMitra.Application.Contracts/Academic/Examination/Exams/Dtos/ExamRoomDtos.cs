@@ -31,7 +31,6 @@ public class ExamRoomDivisionDto
     public Guid DivisionId { get; set; }
 
     [Required]
-    [MinLength(1)]
     public List<Guid> RoomIds { get; set; } = new();
 
     [Required]

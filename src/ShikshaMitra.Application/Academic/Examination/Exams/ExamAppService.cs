@@ -88,6 +88,7 @@ public class ExamAppService(
 
 		var schedules = input.Subjects.Select(s => (
 			s.SubjectId,
+			s.ElectiveGroupId,
 			s.ExamDate,
 			s.StartTime,
 			s.EndTime,
@@ -113,15 +114,14 @@ public class ExamAppService(
 			? (await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id))).ToDictionary(s => s.Id)
 			: new Dictionary<Guid, Subject>();
 
-		// Some exam subjects may store an ElectiveGroupId directly instead of a SubjectId
-		// (e.g. when the frontend sends the group ID when adding an elective group to the exam).
+		// Case 1: SubjectId is an ElectiveGroupId directly (Combined scheduling mode)
 		var directElectiveGroupIds = subjectIds.Where(id => !subjectDict.ContainsKey(id)).ToList();
 		var directElectiveGroupDict = directElectiveGroupIds.Count > 0
 			? (await electiveGroupRepository.GetListAsync(eg => directElectiveGroupIds.Contains(eg.Id))).ToDictionary(eg => eg.Id)
 			: new Dictionary<Guid, ElectiveGroup>();
 
-		// For directly-stored elective groups, fetch all their assigned subjects for this standard
-		var directElectiveGroupSubjectsMap = new Dictionary<Guid, List<ExamElectiveGroupSubjectDto>>();
+		// For Case 1 groups, fetch member subjects (name + color only — schedule is on the group row)
+		var combinedGroupSubjectsMap = new Dictionary<Guid, List<ExamElectiveGroupSubjectDto>>();
 		if (directElectiveGroupDict.Count > 0)
 		{
 			var groupSubjectAssignments = await assignmentRepository.GetListAsync(
@@ -131,7 +131,7 @@ public class ExamAppService(
 				? (await subjectRepository.GetListAsync(s => groupSubjectIds.Contains(s.Id))).ToDictionary(s => s.Id)
 				: new Dictionary<Guid, Subject>();
 
-			directElectiveGroupSubjectsMap = groupSubjectAssignments
+			combinedGroupSubjectsMap = groupSubjectAssignments
 				.Where(a => a.ElectiveGroupId.HasValue)
 				.GroupBy(a => a.ElectiveGroupId!.Value)
 				.ToDictionary(
@@ -139,108 +139,136 @@ public class ExamAppService(
 					g => g.Select(a =>
 					{
 						groupSubjectDict.TryGetValue(a.SubjectId, out var s);
-						return new ExamElectiveGroupSubjectDto
-						{
-							SubjectId = a.SubjectId,
-							SubjectName = s?.Name,
-							Color = s?.Color
-						};
+						return new ExamElectiveGroupSubjectDto { SubjectId = a.SubjectId, SubjectName = s?.Name, Color = s?.Color };
 					}).ToList()
 				);
 		}
 
-		// Fetch assigned subjects for this standard → SubjectCode + ElectiveGroupId
+		// Fetch assignment data for individual-subject rows → SubjectCode + ElectiveGroupId
 		var assignedDict = (await assignmentRepository.GetListAsync(
 				a => a.StandardId == exam.StandardId && subjectIds.Contains(a.SubjectId)))
 			.GroupBy(a => a.SubjectId)
 			.ToDictionary(g => g.Key, g => g.First());
 
-		// Fetch elective group metadata (Name, Color)
-		var electiveGroupIds = assignedDict.Values
+		// Elective group metadata for Case 2 (Separate mode)
+		var separateElectiveGroupIds = assignedDict.Values
 			.Where(a => a.ElectiveGroupId.HasValue)
 			.Select(a => a.ElectiveGroupId!.Value)
 			.Distinct()
 			.ToList();
-		var electiveGroupDict = electiveGroupIds.Count > 0
-			? (await electiveGroupRepository.GetListAsync(eg => electiveGroupIds.Contains(eg.Id))).ToDictionary(eg => eg.Id)
+		var electiveGroupDict = separateElectiveGroupIds.Count > 0
+			? (await electiveGroupRepository.GetListAsync(eg => separateElectiveGroupIds.Contains(eg.Id))).ToDictionary(eg => eg.Id)
 			: new Dictionary<Guid, ElectiveGroup>();
 
-		// Build elective group → subjects map from the exam's own assigned subjects
-		var electiveGroupSubjectsMap = assignedDict.Values
-			.Where(a => a.ElectiveGroupId.HasValue)
-			.GroupBy(a => a.ElectiveGroupId!.Value)
-			.ToDictionary(
-				g => g.Key,
-				g => g.Select(a =>
-				{
-					subjectDict.TryGetValue(a.SubjectId, out var s);
-					return new ExamElectiveGroupSubjectDto
-					{
-						SubjectId = a.SubjectId,
-						SubjectName = s?.Name,
-						Color = s?.Color
-					};
-				}).ToList()
-			);
+		var result = new List<ExamScheduleSubjectDto>();
 
-		return new ExamScheduleResponseDto
+		// ── Case 1: Combined mode (SubjectId = ElectiveGroupId) ────────────────────────────────
+		foreach (var s in exam.ExamSubjects.Where(s => directElectiveGroupDict.ContainsKey(s.SubjectId)))
 		{
-			Subjects = exam.ExamSubjects
-				.Where(s => subjectDict.ContainsKey(s.SubjectId) || directElectiveGroupDict.ContainsKey(s.SubjectId))
-				.Select(s =>
+			directElectiveGroupDict.TryGetValue(s.SubjectId, out var eg);
+			result.Add(new ExamScheduleSubjectDto
+			{
+				SubjectId = s.SubjectId,
+				SubjectName = null,
+				SubjectCode = null,
+				Color = null,
+				ElectiveGroupId = s.SubjectId,
+				ElectiveGroupName = eg?.Name,
+				ElectiveGroupColor = eg?.Color,
+				ElectiveGroupSubjects = combinedGroupSubjectsMap.GetValueOrDefault(s.SubjectId, []),
+				ExamDate = s.ExamDate,
+				StartTime = s.StartTime,
+				EndTime = s.EndTime,
+				TotalMarks = s.TotalMarks,
+				PassingMarks = s.PassingMarks,
+				Notes = s.Notes,
+				GradeScalingId = s.GradeScalingId
+			});
+		}
+
+		// ── Case 2: Individual subject rows ───────────────────────────────────────────────────
+		var individualSubjects = exam.ExamSubjects
+			.Where(s => subjectDict.ContainsKey(s.SubjectId))
+			.ToList();
+
+		// Case 2a: Separate-mode elective subjects — group by ElectiveGroupId, nest per-subject schedules
+		var emittedSubjectIds = new HashSet<Guid>();
+		var separateGroups = individualSubjects
+			.Where(s => assignedDict.TryGetValue(s.SubjectId, out var a) && a.ElectiveGroupId.HasValue)
+			.GroupBy(s => assignedDict[s.SubjectId].ElectiveGroupId!.Value);
+
+		foreach (var group in separateGroups)
+		{
+			var egId = group.Key;
+			electiveGroupDict.TryGetValue(egId, out var eg);
+
+			var groupSubjects = group.Select(s =>
+			{
+				subjectDict.TryGetValue(s.SubjectId, out var subject);
+				return new ExamElectiveGroupSubjectDto
 				{
-					// Case 1: SubjectId is stored as an ElectiveGroupId directly
-					if (directElectiveGroupDict.TryGetValue(s.SubjectId, out var directEg))
-					{
-						return new ExamScheduleSubjectDto
-						{
-							SubjectId = s.SubjectId,
-							SubjectName = null,
-							SubjectCode = null,
-							Color = null,
-							ElectiveGroupId = s.SubjectId,
-							ElectiveGroupName = directEg.Name,
-							ElectiveGroupColor = directEg.Color,
-							ElectiveGroupSubjects = directElectiveGroupSubjectsMap.GetValueOrDefault(s.SubjectId, []),
-							Notes = s.Notes,
-							ExamDate = s.ExamDate,
-							StartTime = s.StartTime,
-							EndTime = s.EndTime,
-							TotalMarks = s.TotalMarks,
-							PassingMarks = s.PassingMarks,
-							GradeScalingId = s.GradeScalingId
-						};
-					}
+					SubjectId = s.SubjectId,
+					SubjectName = subject?.Name,
+					Color = subject?.Color,
+					ExamDate = s.ExamDate,
+					StartTime = s.StartTime,
+					EndTime = s.EndTime,
+					TotalMarks = s.TotalMarks,
+					PassingMarks = s.PassingMarks,
+					Notes = s.Notes,
+					GradeScalingId = s.GradeScalingId
+				};
+			}).ToList();
 
-					// Case 2: Normal subject (may belong to an elective group via assignment)
-					subjectDict.TryGetValue(s.SubjectId, out var subject);
-					assignedDict.TryGetValue(s.SubjectId, out var assigned);
-					ElectiveGroup? eg = null;
-					if (assigned?.ElectiveGroupId.HasValue == true)
-						electiveGroupDict.TryGetValue(assigned.ElectiveGroupId!.Value, out eg);
+			result.Add(new ExamScheduleSubjectDto
+			{
+				SubjectId = egId,
+				SubjectName = null,
+				SubjectCode = null,
+				Color = null,
+				ElectiveGroupId = egId,
+				ElectiveGroupName = eg?.Name,
+				ElectiveGroupColor = eg?.Color,
+				ElectiveGroupSubjects = groupSubjects,
+				// Group-level schedule fields are null in separate mode — schedules live inside ElectiveGroupSubjects
+				ExamDate = null,
+				StartTime = null,
+				EndTime = null,
+				TotalMarks = null,
+				PassingMarks = null,
+				Notes = null,
+				GradeScalingId = null
+			});
 
-					return new ExamScheduleSubjectDto
-					{
-						SubjectId = s.SubjectId,
-						SubjectName = subject?.Name,
-						SubjectCode = assigned?.SubjectCode,
-						Color = subject?.Color,
-						ElectiveGroupId = assigned?.ElectiveGroupId,
-						ElectiveGroupName = eg?.Name,
-						ElectiveGroupColor = eg?.Color,
-						ElectiveGroupSubjects = eg != null && assigned?.ElectiveGroupId.HasValue == true
-							? electiveGroupSubjectsMap.GetValueOrDefault(assigned.ElectiveGroupId!.Value, [])
-							: [],
-						Notes = s.Notes,
-						ExamDate = s.ExamDate,
-						StartTime = s.StartTime,
-						EndTime = s.EndTime,
-						TotalMarks = s.TotalMarks,
-						PassingMarks = s.PassingMarks,
-						GradeScalingId = s.GradeScalingId
-					};
-				}).ToList()
-		};
+			foreach (var s in group) emittedSubjectIds.Add(s.SubjectId);
+		}
+
+		// Case 2b: Regular (non-elective) subjects
+		foreach (var s in individualSubjects.Where(s => !emittedSubjectIds.Contains(s.SubjectId)))
+		{
+			subjectDict.TryGetValue(s.SubjectId, out var subject);
+			assignedDict.TryGetValue(s.SubjectId, out var assigned);
+			result.Add(new ExamScheduleSubjectDto
+			{
+				SubjectId = s.SubjectId,
+				SubjectName = subject?.Name,
+				SubjectCode = assigned?.SubjectCode,
+				Color = subject?.Color,
+				ElectiveGroupId = null,
+				ElectiveGroupName = null,
+				ElectiveGroupColor = null,
+				ElectiveGroupSubjects = [],
+				ExamDate = s.ExamDate,
+				StartTime = s.StartTime,
+				EndTime = s.EndTime,
+				TotalMarks = s.TotalMarks,
+				PassingMarks = s.PassingMarks,
+				Notes = s.Notes,
+				GradeScalingId = s.GradeScalingId
+			});
+		}
+
+		return new ExamScheduleResponseDto { Subjects = result };
 	}
 
 	public async Task AssignRoomsAsync(Guid examId, ExamRoomAssignmentRequestDto input)

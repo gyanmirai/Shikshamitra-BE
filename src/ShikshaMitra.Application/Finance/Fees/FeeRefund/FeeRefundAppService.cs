@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -59,7 +59,11 @@ public class FeeRefundAppService(
                 .WithData("Id", id);
 
         var studentMap = await BuildStudentMapAsync([request.StudentId]);
-        return MapToDto(request, studentMap);
+        var dto = MapToDto(request, studentMap);
+
+        await PopulateRefundDetailsAsync(dto, request);
+
+        return dto;
     }
 
     // ── Eligibility ──────────────────────────────────────────────────────────
@@ -247,5 +251,69 @@ public class FeeRefundAppService(
             DivisionName     = student?.Division?.Name,
             StudentContactNo = student?.ContactDetail?.PrimaryContactNo,
         };
+    }
+
+    private async Task PopulateRefundDetailsAsync(FeeRefundRequestDto dto, FeeRefundRequest request)
+    {
+        dto.RefundRequestId = request.Id;
+
+        var lineDueFeeIds = request.Lines.Select(l => l.DueFeeId).ToList();
+        var dueFees = await dueFeeRepository.GetListAsync(
+            df => df.StudentId == request.StudentId && (df.PaidAmount > 0 || lineDueFeeIds.Contains(df.Id)));
+
+        if (dueFees.Count == 0)
+        {
+            dto.TotalFeeHeads = 0;
+            dto.TotalPaidAmount = 0;
+            dto.TotalRefundedAmount = 0;
+            dto.FeeHeads = [];
+            return;
+        }
+
+        var feeHeadIds = dueFees.Select(df => df.FeeHeadId).Distinct().ToList();
+        var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
+        var feeHeadMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
+
+        var lineMap = request.Lines.ToDictionary(l => l.DueFeeId, l => l.Amount);
+
+        var grouped = dueFees
+            .GroupBy(df => df.FeeHeadId)
+            .Select(g =>
+            {
+                var headId = g.Key;
+                var headName = feeHeadMap.TryGetValue(headId, out var name) ? name : headId.ToString();
+
+                var items = g
+                    .OrderBy(df => df.Year)
+                    .ThenBy(df => df.Month)
+                    .Select(df => new RefundMonthItemDto
+                    {
+                        InstallmentId = df.Id,
+                        Month = df.Month.ToString(),
+                        Total = df.OriginalAmount,
+                        Paid = df.PaidAmount,
+                        RefundAmount = lineMap.TryGetValue(df.Id, out var amt) ? amt : 0,
+                        Status = (int)df.Status
+                    })
+                    .ToList();
+
+                var totalPaid = items.Sum(i => i.Paid);
+                var totalRefunded = g.Sum(df => df.RefundedAmount);
+
+                return new RefundFeeHeadDto
+                {
+                    FeeHeadId = headId,
+                    FeeHeadName = headName,
+                    TotalPaid = totalPaid,
+                    TotalRefunded = totalRefunded,
+                    Items = items
+                };
+            })
+            .ToList();
+
+        dto.FeeHeads = grouped;
+        dto.TotalFeeHeads = grouped.Count;
+        dto.TotalPaidAmount = grouped.Sum(fh => fh.TotalPaid);
+        dto.TotalRefundedAmount = grouped.Sum(fh => fh.TotalRefunded);
     }
 }

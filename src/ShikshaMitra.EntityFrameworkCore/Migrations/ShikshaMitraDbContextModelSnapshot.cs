@@ -3569,8 +3569,9 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("StudentId", "FeeHeadId", "Month", "Year")
+                    b.HasIndex("TenantId", "StudentId", "FeeHeadId", "Month", "Year")
                         .IsUnique()
+                        .HasDatabaseName("IX_DueFees_TenantId_StudentId_FeeHeadId_Month_Year")
                         .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("DueFees", (string)null);
@@ -7760,6 +7761,12 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("AcademicYearId", "TargetType", "TargetKey", "EffectiveFrom", "EffectiveTo", "IsActive")
                         .HasDatabaseName("IX_HR_PolicyAssignments_Resolver");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "IsActive", "AttendancePolicyId")
+                        .HasDatabaseName("IX_HR_PolicyAssignments_AttendancePolicy_Impact");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "IsActive", "PayrollPolicyId")
+                        .HasDatabaseName("IX_HR_PolicyAssignments_PayrollPolicy_Impact");
 
                     b.ToTable("HR_PolicyAssignments", (string)null);
                 });

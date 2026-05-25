@@ -105,6 +105,13 @@ public class PayrollPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Version++;
 	}
 
+	public void Unarchive()
+	{
+		Status = HrPolicyStatus.Draft;
+		IsDefault = false;
+		Version++;
+	}
+
 	public IReadOnlyList<DayCalculationManualMonth> GetManualMonthDays() =>
 		DeserializeList<DayCalculationManualMonth>(ManualMonthDaysJson);
 

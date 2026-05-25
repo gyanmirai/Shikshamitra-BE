@@ -3,14 +3,20 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Groups;
+using ShikshaMitra.Common;
 using ShikshaMitra.HR.Audit;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.HolidayTypes;
+using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.PersonalInfo;
+using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Guids;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using Xunit;
@@ -27,7 +33,10 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	private readonly IHrPolicySafetyAppService _policySafety;
 	private readonly IHrPolicyVersionAppService _policyVersions;
 	private readonly IHrAuditTrailAppService _auditTrail;
+	private readonly IEmployeePersonalInfoAppService _employeePersonalInfo;
+	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IRepository<WorkCalendarPolicy, Guid> _workCalendarPolicyRepository;
+	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
 	private readonly IAcademicYearRepository _academicYearRepository;
 	private readonly AcademicYearManager _academicYearManager;
 	private readonly IRepository<HolidayType, Guid> _holidayTypeRepository;
@@ -35,6 +44,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	private readonly IRepository<Group, Guid> _groupRepository;
 	private readonly ICurrentTenant _currentTenant;
 	private readonly IUnitOfWorkManager _unitOfWorkManager;
+	private readonly IGuidGenerator _guidGenerator;
 
 	public HrPolicyAppService_Tests()
 	{
@@ -46,7 +56,10 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		_policySafety = GetRequiredService<IHrPolicySafetyAppService>();
 		_policyVersions = GetRequiredService<IHrPolicyVersionAppService>();
 		_auditTrail = GetRequiredService<IHrAuditTrailAppService>();
+		_employeePersonalInfo = GetRequiredService<IEmployeePersonalInfoAppService>();
+		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
 		_workCalendarPolicyRepository = GetRequiredService<IRepository<WorkCalendarPolicy, Guid>>();
+		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
 		_academicYearRepository = GetRequiredService<IAcademicYearRepository>();
 		_academicYearManager = GetRequiredService<AcademicYearManager>();
 		_holidayTypeRepository = GetRequiredService<IRepository<HolidayType, Guid>>();
@@ -54,6 +67,87 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		_groupRepository = GetRequiredService<IRepository<Group, Guid>>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		_unitOfWorkManager = GetRequiredService<IUnitOfWorkManager>();
+		_guidGenerator = GetRequiredService<IGuidGenerator>();
+	}
+
+	[Fact]
+	public async Task WorkCalendar_Should_Reject_Manual_Holiday_Overlapping_Included_Central_Holiday()
+	{
+		var academicYearId = await CreateAcademicYearAsync();
+		var input = BuildWorkCalendarInput(academicYearId, [
+			BuildWorkCalendarHoliday(academicYearId, "Central Holiday", new DateTime(2026, 5, 10), source: "central_calendar", calendarHolidayId: Guid.NewGuid()),
+			BuildWorkCalendarHoliday(academicYearId, "Manual Holiday", new DateTime(2026, 5, 10), source: "manual")
+		]);
+
+		var ex = await Should.ThrowAsync<BusinessException>(() => _workCalendars.CreateAsync(input));
+
+		ex.Code.ShouldBe("ShikshaMitra:WorkCalendarHolidayOverlap");
+		ex.Data["holidayName"].ShouldBe("Manual Holiday");
+		ex.Data["conflictingHolidayName"].ShouldBe("Central Holiday");
+		ex.Data["fromDate"].ShouldBe("2026-05-10");
+		ex.Data["toDate"].ShouldBe("2026-05-10");
+	}
+
+	[Fact]
+	public async Task WorkCalendar_Should_Reject_Overlapping_Multi_Day_Holiday_Ranges()
+	{
+		var academicYearId = await CreateAcademicYearAsync();
+		var input = BuildWorkCalendarInput(academicYearId, [
+			BuildWorkCalendarHoliday(academicYearId, "Quarter Break", new DateTime(2026, 6, 1), new DateTime(2026, 6, 3), source: "manual"),
+			BuildWorkCalendarHoliday(academicYearId, "Local Closure", new DateTime(2026, 6, 3), new DateTime(2026, 6, 5), source: "manual")
+		]);
+
+		var ex = await Should.ThrowAsync<BusinessException>(() => _workCalendars.CreateAsync(input));
+
+		ex.Code.ShouldBe("ShikshaMitra:WorkCalendarHolidayOverlap");
+		ex.Data["fromDate"].ShouldBe("2026-06-03");
+		ex.Data["toDate"].ShouldBe("2026-06-03");
+	}
+
+	[Fact]
+	public async Task WorkCalendar_Should_Allow_Updating_Unchanged_Manual_Holiday()
+	{
+		var academicYearId = await CreateAcademicYearAsync();
+		var input = BuildWorkCalendarInput(academicYearId, [
+			BuildWorkCalendarHoliday(academicYearId, "Manual Holiday", new DateTime(2026, 7, 1), source: "manual")
+		]);
+		var created = await _workCalendars.CreateAsync(input);
+
+		var updated = await _workCalendars.UpdateAsync(created.Id, input);
+
+		updated.Holidays.Count.ShouldBe(1);
+		updated.Holidays.Single().HolidayName.ShouldBe("Manual Holiday");
+	}
+
+	[Fact]
+	public async Task WorkCalendar_Should_Allow_Manual_Holiday_Over_Removed_Central_Holiday()
+	{
+		var academicYearId = await CreateAcademicYearAsync();
+		var input = BuildWorkCalendarInput(academicYearId, [
+			BuildWorkCalendarHoliday(academicYearId, "Removed Central Holiday", new DateTime(2026, 8, 15), source: "central_calendar", calendarHolidayId: Guid.NewGuid(), isIncluded: false),
+			BuildWorkCalendarHoliday(academicYearId, "Manual Replacement", new DateTime(2026, 8, 15), source: "manual")
+		]);
+
+		var created = await _workCalendars.CreateAsync(input);
+
+		created.Holidays.Count.ShouldBe(2);
+		created.HolidaySummary.IncludedCount.ShouldBe(1);
+		created.HolidaySummary.RemovedCount.ShouldBe(1);
+	}
+
+	[Fact]
+	public async Task WorkCalendar_Should_Allow_Adjacent_Non_Overlapping_Holiday_Ranges()
+	{
+		var academicYearId = await CreateAcademicYearAsync();
+		var input = BuildWorkCalendarInput(academicYearId, [
+			BuildWorkCalendarHoliday(academicYearId, "First Break", new DateTime(2026, 9, 1), new DateTime(2026, 9, 2), source: "manual"),
+			BuildWorkCalendarHoliday(academicYearId, "Second Break", new DateTime(2026, 9, 3), new DateTime(2026, 9, 4), source: "manual")
+		]);
+
+		var created = await _workCalendars.CreateAsync(input);
+
+		created.Holidays.Count.ShouldBe(2);
+		created.HolidaySummary.IncludedCount.ShouldBe(2);
 	}
 
 	[Fact]
@@ -200,6 +294,13 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		var compare = await _policyVersions.CompareAsync("payroll", context.PayrollPolicy.Id, first.Id, latest.Id);
 		compare.Differences.ShouldContain(x => x.Field.Equals("name", StringComparison.OrdinalIgnoreCase));
 		compare.Differences.ShouldContain(x => x.Field.Equals("dayCalculationType", StringComparison.OrdinalIgnoreCase));
+		compare.Differences.ShouldContain(x =>
+			x.FieldKey == "dayCalculationType" &&
+			x.Category == "Payroll rules" &&
+			x.ToDisplayValue == "Manual Days");
+		compare.Differences.ShouldAllBe(x =>
+			!x.FromDisplayValue.Contains(context.WorkCalendar.Id.ToString(), StringComparison.OrdinalIgnoreCase) &&
+			!x.ToDisplayValue.Contains(context.WorkCalendar.Id.ToString(), StringComparison.OrdinalIgnoreCase));
 
 		var restored = await _policyVersions.RestoreDraftAsync("payroll", context.PayrollPolicy.Id, latest.Id, new HrPolicyRestoreDraftRequestDto
 		{
@@ -210,6 +311,30 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		restoredPayroll.Status.ShouldBe("draft");
 		restoredPayroll.IsDefault.ShouldBeFalse();
 		restoredPayroll.DayCalculationType.ShouldBe("manual-days");
+	}
+
+	[Fact]
+	public async Task WorkCalendar_Version_Restore_Should_Restore_Holiday_Snapshots()
+	{
+		var academicYearId = await CreateAcademicYearAsync();
+		var created = await _workCalendars.CreateAsync(BuildWorkCalendarInput(academicYearId, [
+			BuildWorkCalendarHoliday(academicYearId, "Founders Day", new DateTime(2026, 5, 1), source: "manual")
+		]));
+		var versions = await _policyVersions.GetListAsync("work_calendar", created.Id, new Volo.Abp.Application.Dtos.PagedAndSortedResultRequestDto
+		{
+			MaxResultCount = 10
+		});
+
+		var restored = await _policyVersions.RestoreDraftAsync("work_calendar", created.Id, versions.Items.Single().Id, new HrPolicyRestoreDraftRequestDto
+		{
+			ChangeReason = "Restore holiday snapshot"
+		});
+
+		var restoredCalendar = restored.ShouldBeOfType<WorkCalendarPolicyDto>();
+		restoredCalendar.Id.ShouldNotBe(created.Id);
+		restoredCalendar.Holidays.Count.ShouldBe(1);
+		restoredCalendar.Holidays.Single().HolidayName.ShouldBe("Founders Day");
+		restoredCalendar.HolidaySummary.IncludedCount.ShouldBe(1);
 	}
 
 	[Fact]
@@ -274,6 +399,60 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	}
 
 	[Fact]
+	public async Task Unarchive_Should_NoOp_When_Policy_Is_Not_Archived()
+	{
+		var context = await CreatePolicyContextAsync();
+		var before = await _auditTrail.GetEntityEventsAsync("payroll_policy", context.PayrollPolicy.Id, new HrAuditEventListRequestDto
+		{
+			MaxResultCount = 20
+		});
+
+		var result = await _payrollPolicies.UnarchiveAsync(context.PayrollPolicy.Id);
+		var after = await _auditTrail.GetEntityEventsAsync("payroll_policy", context.PayrollPolicy.Id, new HrAuditEventListRequestDto
+		{
+			MaxResultCount = 20
+		});
+
+		result.Status.ShouldBe("active");
+		result.Version.ShouldBe(context.PayrollPolicy.Version);
+		after.TotalCount.ShouldBe(before.TotalCount);
+		after.Items.ShouldNotContain(x => x.Action == "unarchived");
+	}
+
+	[Fact]
+	public async Task Unarchive_Should_Write_Audit_When_Policy_Was_Archived()
+	{
+		var context = await CreatePolicyContextAsync();
+		var policy = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Archive Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "working-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+
+		await _payrollPolicies.DeleteAsync(policy.Id);
+		var archived = await _auditTrail.GetEntityEventsAsync("payroll_policy", policy.Id, new HrAuditEventListRequestDto
+		{
+			MaxResultCount = 20
+		});
+
+		var result = await _payrollPolicies.UnarchiveAsync(policy.Id);
+		var after = await _auditTrail.GetEntityEventsAsync("payroll_policy", policy.Id, new HrAuditEventListRequestDto
+		{
+			MaxResultCount = 20
+		});
+
+		result.Status.ShouldBe("draft");
+		result.Version.ShouldBeGreaterThan(policy.Version);
+		after.TotalCount.ShouldBe(archived.TotalCount + 1);
+		after.Items.Count(x => x.Action == "unarchived").ShouldBe(1);
+	}
+
+	[Fact]
 	public async Task Policy_Impact_Should_Return_Audit_And_Affected_Assignment_Summary()
 	{
 		var context = await CreatePolicyContextAsync();
@@ -294,6 +473,91 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		impact.CurrentVersion.ShouldBe(context.PayrollPolicy.Version);
 		audit.PolicyId.ShouldBe(context.PayrollPolicy.Id);
 		audit.Version.ShouldBe(context.PayrollPolicy.Version);
+	}
+
+	[Fact]
+	public async Task Payroll_Archive_Impact_Should_Not_Invent_Employees_For_Unassigned_Policy()
+	{
+		var context = await CreatePolicyContextAsync();
+		var unassignedPayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Unassigned Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "working-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+
+		var impact = await _policySafety.PreviewPolicyImpactAsync(new HrPolicyImpactPreviewRequestDto
+		{
+			PolicyType = "payroll",
+			PolicyId = unassignedPayroll.Id,
+			AcademicYearId = context.AcademicYearId,
+			Action = "archive"
+		});
+
+		impact.AffectedAssignmentCount.ShouldBe(0);
+		impact.AffectedEmployeeCount.ShouldBe(0);
+		impact.AffectedEmployees.ShouldBeEmpty();
+		impact.Warnings.ShouldNotContain(x => x.Code == "ShikshaMitra:AffectedEmployees");
+		impact.RequiresConfirmation.ShouldBeFalse();
+	}
+
+	[Fact]
+	public async Task Payroll_SetDefault_Impact_Should_Not_Invent_Employees_For_Unassigned_Policy()
+	{
+		var context = await CreatePolicyContextAsync();
+		var unassignedPayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Default Candidate Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "working-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+
+		var impact = await _policySafety.PreviewPolicyImpactAsync(new HrPolicyImpactPreviewRequestDto
+		{
+			PolicyType = "payroll",
+			PolicyId = unassignedPayroll.Id,
+			AcademicYearId = context.AcademicYearId,
+			Action = "set-default"
+		});
+
+		impact.AffectedAssignmentCount.ShouldBe(0);
+		impact.AffectedEmployeeCount.ShouldBe(0);
+		impact.AffectedEmployees.ShouldBeEmpty();
+		impact.Warnings.ShouldNotContain(x => x.Code == "ShikshaMitra:AffectedEmployees");
+		impact.RequiresConfirmation.ShouldBeFalse();
+	}
+
+	[Fact]
+	public async Task Payroll_Archive_Impact_Should_Report_Assigned_Employees()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		await _assignments.CreateAsync(BuildAssignment(
+			context,
+			"employee",
+			employee.Id.ToString("D"),
+			employee.FullName));
+
+		var impact = await _policySafety.PreviewPolicyImpactAsync(new HrPolicyImpactPreviewRequestDto
+		{
+			PolicyType = "payroll",
+			PolicyId = context.PayrollPolicy.Id,
+			AcademicYearId = context.AcademicYearId,
+			Action = "archive"
+		});
+
+		impact.AffectedAssignmentCount.ShouldBeGreaterThanOrEqualTo(1);
+		impact.AffectedEmployeeCount.ShouldBeGreaterThanOrEqualTo(1);
+		impact.AffectedEmployees.ShouldContain(x => x.EmployeeId == employee.Id);
+		impact.Warnings.ShouldContain(x => x.Code == "ShikshaMitra:AffectedEmployees");
 	}
 
 	[Fact]
@@ -449,6 +713,44 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		return new PolicyContext(academicYearId, calendar, payroll, attendance);
 	}
 
+	private static CreateUpdateWorkCalendarPolicyDto BuildWorkCalendarInput(
+		Guid academicYearId,
+		List<WorkCalendarHolidayDto> holidays) => new()
+	{
+		AcademicYearId = academicYearId,
+		Name = $"Calendar {Guid.NewGuid():N}",
+		Status = "active",
+		EffectiveFrom = new DateTime(2026, 4, 1),
+		EffectiveTo = new DateTime(2027, 3, 31),
+		WeeklyOffPattern = "saturday_sunday",
+		HolidaySyncMode = "linked_with_overrides",
+		Holidays = holidays
+	};
+
+	private static WorkCalendarHolidayDto BuildWorkCalendarHoliday(
+		Guid academicYearId,
+		string name,
+		DateTime fromDate,
+		DateTime? toDate = null,
+		string source = "manual",
+		Guid? calendarHolidayId = null,
+		bool isIncluded = true)
+	{
+		var resolvedToDate = toDate ?? fromDate;
+		return new WorkCalendarHolidayDto
+		{
+			AcademicYearId = academicYearId,
+			Date = fromDate,
+			FromDate = fromDate,
+			ToDate = resolvedToDate,
+			DayCount = (resolvedToDate.Date - fromDate.Date).Days + 1,
+			HolidayName = name,
+			Source = source,
+			CalendarHolidayId = calendarHolidayId,
+			IsIncluded = isIncluded
+		};
+	}
+
 	private CreateUpdateHrPolicyAssignmentDto BuildAssignment(
 		PolicyContext context,
 		string targetType,
@@ -484,6 +786,58 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			[]);
 		await _groupRepository.InsertAsync(group, autoSave: true);
 		return group;
+	}
+
+	private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync()
+	{
+		var roleId = await EnsureRoleExistsAsync();
+		var shiftId = await EnsureShiftExistsAsync();
+		var organizationId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+		return await _employeePersonalInfo.CreateAsync(new CreateEmployeePersonalInfoDto
+		{
+			FirstName = "Policy",
+			LastName = "Impact",
+			MobileNo = "9876543210",
+			Email = $"policy.impact.{_guidGenerator.Create():N}@test.com",
+			DateOfBirth = DateOnly.FromDateTime(new DateTime(1992, 3, 10)),
+			GenderType = GenderType.Male,
+			DateOfJoining = DateOnly.FromDateTime(new DateTime(2026, 4, 1)),
+			EmployeeStatusType = EmployeeStatusType.Active,
+			RoleId = roleId,
+			ShiftId = shiftId,
+			OrganizationIds = [organizationId]
+		});
+	}
+
+	private async Task<Guid> EnsureRoleExistsAsync()
+	{
+		var existing = (await _roleRepository.GetListAsync()).FirstOrDefault();
+		if (existing != null)
+		{
+			return existing.Id;
+		}
+
+		var id = _guidGenerator.Create();
+		await _roleRepository.InsertAsync(new IdentityRole(id, $"PolicyImpactRole-{id:N}", _currentTenant.Id), autoSave: true);
+		return id;
+	}
+
+	private async Task<Guid> EnsureShiftExistsAsync()
+	{
+		var existing = (await _shiftRepository.GetListAsync()).FirstOrDefault();
+		if (existing != null)
+		{
+			return existing.Id;
+		}
+
+		var shift = new ShiftManagement
+		{
+			ShiftName = $"PolicyImpactShift-{_guidGenerator.Create():N}",
+			StartTime = new TimeOnly(9, 0),
+			EndTime = new TimeOnly(17, 0)
+		};
+		await _shiftRepository.InsertAsync(shift, autoSave: true);
+		return shift.Id;
 	}
 
 	private async Task<Guid> CreateAcademicYearAsync()

@@ -272,6 +272,8 @@
     "HR:Payroll:030024": "Payroll adjustment reason is required.",
     "HR:Payroll:030025": "Payroll adjustment was not found.",
     "HR:Payroll:030026": "Resolve critical payroll setup issues before locking payroll.",
+    "HR:Payroll:030027": "Payroll adjustments can be changed only after the payroll row is reviewed and before it is locked.",
+    "HR:Payroll:030028": "Remove payroll-only adjustments before removing review from this payroll row.",
     "HR:Calendar:040005": "Calendar item with ID '{itemId}' was not found.",
     "ShikshaMitra:DueFee:10001": "Due fees have already been generated for this student.",
 

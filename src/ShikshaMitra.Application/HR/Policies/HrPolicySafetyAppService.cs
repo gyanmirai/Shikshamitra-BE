@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Groups;
 using ShikshaMitra.HR.Audit;
@@ -50,20 +51,12 @@ public class HrPolicySafetyAppService(
 		preview.ProposedVersion = preview.CurrentVersion.HasValue ? preview.CurrentVersion.Value + 1 : 1;
 		var workCalendarRefs = await ResolveWorkCalendarReferencesAsync(policyType, input.PolicyId, academicYearId);
 
-		var assignmentQuery = await assignmentRepository.GetQueryableAsync();
-		var assignments = await AsyncExecuter.ToListAsync(assignmentQuery.Where(x => x.AcademicYearId == academicYearId && x.IsActive));
-		var affectedAssignments = assignments.Where(x => IsAssignmentAffected(x, policyType, input.PolicyId, workCalendarRefs)).ToList();
+		var affectedAssignments = await GetAffectedAssignmentsAsync(policyType, input.PolicyId, academicYearId, workCalendarRefs);
 		preview.AffectedAssignmentCount = affectedAssignments.Count;
 
-		var employeeQuery = await employeeRepository.GetQueryableAsync();
-		var employees = await AsyncExecuter.ToListAsync(employeeQuery.Take(500));
-		var affectedEmployees = await ResolveAffectedEmployeesAsync(employees, affectedAssignments);
-		if (affectedEmployees.Count == 0 && preview.Action is "set-default" or "archive")
-		{
-			affectedEmployees = employees.Take(25).ToList();
-		}
+		var affectedEmployees = await ResolveAffectedEmployeesAsync(academicYearId, affectedAssignments);
 		preview.AffectedEmployeeCount = affectedEmployees.Count;
-		preview.AffectedEmployees = affectedEmployees.Take(25).Select(ToAffectedEmployeeDto).ToList();
+		preview.AffectedEmployees = affectedEmployees.Sample.Select(ToAffectedEmployeeDto).ToList();
 
 		await FillPayrollRiskAsync(preview, policyType, input.PolicyId);
 		AddWorkCalendarReferenceWarning(preview, workCalendarRefs);
@@ -168,42 +161,106 @@ public class HrPolicySafetyAppService(
 			attendancePolicies.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().Take(5).ToList());
 	}
 
-	private static bool IsAssignmentAffected(HrPolicyAssignment assignment, string policyType, Guid? policyId, WorkCalendarPolicyReferences workCalendarRefs) =>
-		!policyId.HasValue ||
-		(policyType == "payroll" && assignment.PayrollPolicyId == policyId.Value) ||
-		(policyType == "attendance" && assignment.AttendancePolicyId == policyId.Value) ||
-		(policyType == "work_calendar" &&
-			(workCalendarRefs.PayrollPolicyIds.Contains(assignment.PayrollPolicyId) ||
-				workCalendarRefs.AttendancePolicyIds.Contains(assignment.AttendancePolicyId)));
-
-	private async Task<List<Employee>> ResolveAffectedEmployeesAsync(IReadOnlyList<Employee> employees, IReadOnlyList<HrPolicyAssignment> assignments)
+	private async Task<List<HrPolicyAssignment>> GetAffectedAssignmentsAsync(
+		string policyType,
+		Guid? policyId,
+		Guid academicYearId,
+		WorkCalendarPolicyReferences workCalendarRefs)
 	{
-		var result = new List<Employee>();
+		var query = (await assignmentRepository.GetQueryableAsync())
+			.Where(x => x.AcademicYearId == academicYearId && x.IsActive);
+
+		if (!policyId.HasValue)
+		{
+			return await AsyncExecuter.ToListAsync(query);
+		}
+
+		query = policyType switch
+		{
+			"payroll" => query.Where(x => x.PayrollPolicyId == policyId.Value),
+			"attendance" => query.Where(x => x.AttendancePolicyId == policyId.Value),
+			"work_calendar" when workCalendarRefs.IsEmpty => query.Where(_ => false),
+			"work_calendar" => query.Where(x =>
+				workCalendarRefs.PayrollPolicyIds.Contains(x.PayrollPolicyId) ||
+				workCalendarRefs.AttendancePolicyIds.Contains(x.AttendancePolicyId)),
+			_ => query.Where(_ => false)
+		};
+
+		return await AsyncExecuter.ToListAsync(query);
+	}
+
+	private async Task<AffectedEmployeePreview> ResolveAffectedEmployeesAsync(Guid academicYearId, IReadOnlyList<HrPolicyAssignment> assignments)
+	{
+		if (assignments.Count == 0)
+		{
+			return AffectedEmployeePreview.Empty;
+		}
+
+		var directEmployeeIds = assignments
+			.Where(assignment => assignment.TargetType == HrPolicyAssignmentTargetType.Employee && Guid.TryParse(assignment.TargetKey, out _))
+			.Select(assignment => Guid.Parse(assignment.TargetKey))
+			.ToHashSet();
 		var groupIds = assignments
 			.Where(assignment => assignment.TargetType == HrPolicyAssignmentTargetType.Group && Guid.TryParse(assignment.TargetKey, out _))
 			.Select(assignment => Guid.Parse(assignment.TargetKey))
-			.Distinct()
+			.ToHashSet();
+
+		var groups = groupIds.Count == 0
+			? new Dictionary<Guid, Group>()
+			: (await groupRepository.GetListWithDetailsAsync(academicYearId))
+				.Where(group => groupIds.Contains(group.Id))
+				.ToDictionary(group => group.Id);
+		var groupsHaveRuleBasedMembership = groups.Values.Any(HasRuleBasedEmployeeMembership);
+		var employeeQuery = ActiveEmployeeQuery(await employeeRepository.GetQueryableAsync());
+
+		if (groups.Count == 0)
+		{
+			return await BuildEmployeePreviewFromIdsAsync(employeeQuery, directEmployeeIds);
+		}
+
+		if (!groupsHaveRuleBasedMembership)
+		{
+			var employeeIds = groups.Values
+				.SelectMany(group => group.Members)
+				.Where(member => member.MemberType == GroupMemberType.Employee)
+				.Select(member => member.MemberId)
+				.Concat(directEmployeeIds)
+				.ToHashSet();
+			return await BuildEmployeePreviewFromIdsAsync(employeeQuery, employeeIds);
+		}
+
+		var employees = await AsyncExecuter.ToListAsync(employeeQuery);
+		var matchedEmployees = employees
+			.Where(employee =>
+				directEmployeeIds.Contains(employee.Id) ||
+				assignments.Any(assignment => Matches(employee, assignment, groups)))
+			.GroupBy(employee => employee.Id)
+			.Select(group => group.First())
 			.ToList();
-		var groups = new Dictionary<Guid, Group>();
-		foreach (var groupId in groupIds)
-		{
-			var group = await groupRepository.GetWithDetailsAsync(groupId);
-			if (group != null)
-			{
-				groups[groupId] = group;
-			}
-		}
 
-		foreach (var employee in employees)
-		{
-			if (assignments.Any(assignment => Matches(employee, assignment, groups)))
-			{
-				result.Add(employee);
-			}
-		}
-
-		return result;
+		return new AffectedEmployeePreview(matchedEmployees.Count, matchedEmployees.Take(25).ToList());
 	}
+
+	private async Task<AffectedEmployeePreview> BuildEmployeePreviewFromIdsAsync(
+		IQueryable<Employee> employeeQuery,
+		IReadOnlyCollection<Guid> employeeIds)
+	{
+		if (employeeIds.Count == 0)
+		{
+			return AffectedEmployeePreview.Empty;
+		}
+
+		var query = employeeQuery.Where(employee => employeeIds.Contains(employee.Id));
+		var count = await AsyncExecuter.CountAsync(query);
+		var sample = await AsyncExecuter.ToListAsync(query.Take(25));
+		return new AffectedEmployeePreview(count, sample);
+	}
+
+	private static IQueryable<Employee> ActiveEmployeeQuery(IQueryable<Employee> query) =>
+		query.Where(employee => !employee.EmployeeStatusType.HasValue || employee.EmployeeStatusType == EmployeeStatusType.Active);
+
+	private static bool HasRuleBasedEmployeeMembership(Group group) =>
+		group.RuleBasedRoleIds.Count > 0 || group.GetRuleBasedEmployeeRules().Any();
 
 	private static bool Matches(Employee employee, HrPolicyAssignment assignment, IReadOnlyDictionary<Guid, Group> groups) => assignment.TargetType switch
 	{
@@ -462,5 +519,10 @@ public class HrPolicySafetyAppService(
 	{
 		public static WorkCalendarPolicyReferences Empty { get; } = new([], [], [], []);
 		public bool IsEmpty => PayrollPolicyIds.Count == 0 && AttendancePolicyIds.Count == 0;
+	}
+
+	private sealed record AffectedEmployeePreview(int Count, List<Employee> Sample)
+	{
+		public static AffectedEmployeePreview Empty { get; } = new(0, []);
 	}
 }

@@ -53,6 +53,43 @@ public class AttendanceRegisterController(IAttendanceRegisterAppService attendan
 		});
 	}
 
+	[HttpGet("grouped")]
+	[ProducesResponseType(typeof(GroupedAttendanceRegisterResponse), StatusCodes.Status200OK)]
+	public virtual Task<GroupedAttendanceRegisterResponse> GetGroupedAsync(
+		[FromQuery, Required] string startDate,
+		[FromQuery, Required] string endDate,
+		[FromQuery] Guid? educationMediumStageId = null,
+		[FromQuery] Guid? employeeId = null,
+		[FromQuery] EmployeeGroupType? employeeGroup = null,
+		[FromQuery] string? department = null,
+		[FromQuery] Guid? roleId = null,
+		[FromQuery] bool? isTeaching = null,
+		[FromQuery] EmployeeAttendanceStatusType? status = null,
+		[FromQuery] AttendanceRegisterPayrollState payrollState = AttendanceRegisterPayrollState.All,
+		[FromQuery] AttendanceRegisterExceptionFilter exceptionFilter = AttendanceRegisterExceptionFilter.All,
+		[FromQuery] string? search = null,
+		[FromQuery, Range(0, int.MaxValue)] int skipCount = 0,
+		[FromQuery, Range(1, 500)] int maxResultCount = 50)
+	{
+		return attendanceRegisterAppService.GetGroupedAsync(new GetGroupedAttendanceRegisterInput
+		{
+			StartDate = startDate,
+			EndDate = endDate,
+			EducationMediumStageId = educationMediumStageId,
+			EmployeeId = employeeId,
+			EmployeeGroup = employeeGroup,
+			Department = department,
+			RoleId = roleId,
+			IsTeaching = isTeaching,
+			Status = status,
+			PayrollState = payrollState,
+			ExceptionFilter = exceptionFilter,
+			Search = search,
+			SkipCount = skipCount,
+			MaxResultCount = maxResultCount
+		});
+	}
+
 	[HttpPost("adjust")]
 	[ProducesResponseType(typeof(AttendanceRegisterAdjustmentResult), StatusCodes.Status200OK)]
 	public virtual Task<AttendanceRegisterAdjustmentResult> AdjustAsync(

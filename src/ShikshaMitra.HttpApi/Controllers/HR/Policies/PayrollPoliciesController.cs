@@ -39,6 +39,10 @@ public class PayrollPoliciesController(IPayrollPolicyAppService appService) : Ab
 	public Task DeleteAsync(Guid id) =>
 		appService.DeleteAsync(id);
 
+	[HttpPost("{id:guid}/unarchive")]
+	public Task<PayrollPolicyDto> UnarchiveAsync(Guid id) =>
+		appService.UnarchiveAsync(id);
+
 	[HttpPost("{id:guid}/set-default")]
 	public Task<PayrollPolicyDto> SetDefaultAsync(Guid id) =>
 		appService.SetDefaultAsync(id);

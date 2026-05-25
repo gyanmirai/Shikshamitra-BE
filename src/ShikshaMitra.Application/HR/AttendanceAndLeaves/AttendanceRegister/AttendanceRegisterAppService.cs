@@ -28,6 +28,7 @@ public class AttendanceRegisterAppService(
 	IStaffAttendanceDayLockRepository staffAttendanceDayLockRepository,
 	IRepository<SalarySlip, Guid> salarySlipRepository,
 	IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
+	IRepository<PayrollRunReview, Guid> payrollRunReviewRepository,
 	IUserScopeService userScopeService,
 	HrUserScopeAccessService hrScopeAccessService,
 	HrAuditWriter auditWriter)
@@ -38,34 +39,8 @@ public class AttendanceRegisterAppService(
 
 	public async Task<AttendanceRegisterResponse> GetAsync(GetAttendanceRegisterInput input)
 	{
-		var (startDate, endDate) = ParseDateRange(input.StartDate, input.EndDate);
-		var scope = await EnsureCanUseRegisterAsync();
-		if (input.EducationMediumStageId.HasValue)
-		{
-			await EnsureStageInScopeAsync(scope, input.EducationMediumStageId);
-		}
-
-		var query = await BuildFilteredQueryAsync(input, startDate, endDate, scope);
-		var totalBeforePayrollFilter = await AsyncExecuter.CountAsync(query);
-		var allRowsForSummary = await AsyncExecuter.ToListAsync(query.Select(x => new RegisterProjection
-		{
-			AttendanceId = x.Attendance.Id,
-			EmployeeId = x.Attendance.EmployeeId,
-			AttendanceDate = x.Attendance.AttendanceDate,
-			Status = x.Attendance.StatusType,
-			EducationMediumStageId = x.Attendance.EducationMediumStageId,
-			EmployeeName = ((x.Employee.FirstName ?? "") + " " + (x.Employee.LastName ?? "")).Trim(),
-			EmployeeCode = x.Employee.EmployeeCode,
-			Department = x.Employee.Department,
-			EmployeeGroup = x.Employee.EmployeeGroup,
-			RoleId = x.Employee.RoleId,
-			TimeIn = x.Attendance.TimeIn,
-			TimeOut = x.Attendance.TimeOut,
-			Remarks = x.Attendance.Remarks
-		}));
-
-		var lockLookup = await BuildLockLookupAsync(allRowsForSummary);
-		var filteredRows = ApplyPayrollStateFilter(allRowsForSummary, lockLookup, input.PayrollState);
+		var (filteredRows, lockLookup) = await ResolveRegisterRowsAsync(input);
+		var allDayLocks = await BuildDayLockLookupAsync(filteredRows.Select(x => x.AttendanceDate));
 		var totalCount = filteredRows.Count;
 		var maxResultCount = NormalizeMaxResultCount(input.MaxResultCount);
 		var skipCount = Math.Max(input.SkipCount, 0);
@@ -84,8 +59,41 @@ public class AttendanceRegisterAppService(
 			CurrentPage = maxResultCount == 0 ? 1 : (skipCount / maxResultCount) + 1,
 			PageSize = maxResultCount,
 			TotalPages = totalCount == 0 ? 0 : (int)Math.Ceiling((double)totalCount / maxResultCount),
-			Summary = BuildSummary(filteredRows, lockLookup),
+			Summary = BuildSummary(filteredRows, lockLookup, allDayLocks, filteredRows.Select(x => x.EmployeeId).Distinct().Count()),
 			Items = pageRows.Select(x => MapRow(x, lockLookup, stageNames, dayLocks)).ToList()
+		};
+	}
+
+	public async Task<GroupedAttendanceRegisterResponse> GetGroupedAsync(GetGroupedAttendanceRegisterInput input)
+	{
+		var (filteredRows, lockLookup) = await ResolveRegisterRowsAsync(input);
+		var allDayLocks = await BuildDayLockLookupAsync(filteredRows.Select(x => x.AttendanceDate));
+		var groupedRows = filteredRows
+			.GroupBy(x => x.EmployeeId)
+			.Select(group => BuildGroupedEmployee(group.ToList(), lockLookup, allDayLocks))
+			.Where(group => MatchesExceptionFilter(group, input.ExceptionFilter))
+			.OrderByDescending(group => group.HasExceptions)
+			.ThenByDescending(group => group.Absent)
+			.ThenByDescending(group => group.MissingPunch)
+			.ThenByDescending(group => group.HalfDay)
+			.ThenByDescending(group => group.Locked)
+			.ThenBy(group => group.EmployeeName)
+			.ToList();
+
+		var totalCount = groupedRows.Count;
+		var maxResultCount = NormalizeMaxResultCount(input.MaxResultCount);
+		var skipCount = Math.Max(input.SkipCount, 0);
+		var pageGroups = groupedRows.Skip(skipCount).Take(maxResultCount).ToList();
+		var stageNames = await BuildStageNameLookupAsync(pageGroups.Select(x => x.EducationMediumStageId).Where(x => x.HasValue).Select(x => x!.Value));
+
+		return new GroupedAttendanceRegisterResponse
+		{
+			TotalCount = totalCount,
+			CurrentPage = maxResultCount == 0 ? 1 : (skipCount / maxResultCount) + 1,
+			PageSize = maxResultCount,
+			TotalPages = totalCount == 0 ? 0 : (int)Math.Ceiling((double)totalCount / maxResultCount),
+			Summary = BuildSummary(groupedRows.SelectMany(x => x.RawDays).ToList(), lockLookup, allDayLocks, groupedRows.Count),
+			Items = pageGroups.Select(x => MapGroupedEmployee(x, lockLookup, stageNames, allDayLocks)).ToList()
 		};
 	}
 
@@ -170,8 +178,8 @@ public class AttendanceRegisterAppService(
 			};
 
 			row.StatusType = status;
-			row.TimeIn = timeIn;
-			row.TimeOut = timeOut;
+			row.TimeIn = ApplyTimeToDate(row.AttendanceDate, timeIn);
+			row.TimeOut = ApplyTimeToDate(row.AttendanceDate, timeOut);
 			row.Remarks = remarks;
 			await employeeAttendanceRepository.UpdateAsync(row, autoSave: false);
 			changedEmployeeMonths.Add((row.EmployeeId, ToMonthYear(row.AttendanceDate)));
@@ -279,6 +287,37 @@ public class AttendanceRegisterAppService(
 		return query;
 	}
 
+	private async Task<(List<RegisterProjection> Rows, Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> LockLookup)> ResolveRegisterRowsAsync(GetAttendanceRegisterInput input)
+	{
+		var (startDate, endDate) = ParseDateRange(input.StartDate, input.EndDate);
+		var scope = await EnsureCanUseRegisterAsync();
+		if (input.EducationMediumStageId.HasValue)
+		{
+			await EnsureStageInScopeAsync(scope, input.EducationMediumStageId);
+		}
+
+		var query = await BuildFilteredQueryAsync(input, startDate, endDate, scope);
+		var allRowsForSummary = await AsyncExecuter.ToListAsync(query.Select(x => new RegisterProjection
+		{
+			AttendanceId = x.Attendance.Id,
+			EmployeeId = x.Attendance.EmployeeId,
+			AttendanceDate = x.Attendance.AttendanceDate,
+			Status = x.Attendance.StatusType,
+			EducationMediumStageId = x.Attendance.EducationMediumStageId,
+			EmployeeName = ((x.Employee.FirstName ?? "") + " " + (x.Employee.LastName ?? "")).Trim(),
+			EmployeeCode = x.Employee.EmployeeCode,
+			Department = x.Employee.Department,
+			EmployeeGroup = x.Employee.EmployeeGroup,
+			RoleId = x.Employee.RoleId,
+			TimeIn = x.Attendance.TimeIn,
+			TimeOut = x.Attendance.TimeOut,
+			Remarks = x.Attendance.Remarks
+		}));
+
+		var lockLookup = await BuildLockLookupAsync(allRowsForSummary);
+		return (ApplyPayrollStateFilter(allRowsForSummary, lockLookup, input.PayrollState), lockLookup);
+	}
+
 	private async Task<Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo>> BuildLockLookupAsync(List<RegisterProjection> rows)
 	{
 		var keys = rows.Select(x => (x.EmployeeId, MonthYear: ToMonthYear(x.AttendanceDate))).Distinct().ToList();
@@ -370,17 +409,92 @@ public class AttendanceRegisterAppService(
 
 	private static AttendanceRegisterSummaryDto BuildSummary(
 		List<RegisterProjection> rows,
-		Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> lockLookup)
+		Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> lockLookup,
+		HashSet<DateOnly> dayLocks,
+		int staffCount)
 	{
 		return new AttendanceRegisterSummaryDto
 		{
+			StaffCount = staffCount,
 			Present = rows.Count(x => x.Status == EmployeeAttendanceStatusType.Present),
 			HalfDay = rows.Count(x => x.Status == EmployeeAttendanceStatusType.HalfDayLeave),
 			Absent = rows.Count(x => x.Status == EmployeeAttendanceStatusType.FullDayLeave),
-			Locked = rows.Count(x => IsPayrollLocked(x, lockLookup)),
-			Editable = rows.Count(x => !IsPayrollLocked(x, lockLookup))
+			Locked = rows.Count(x => IsLocked(x, lockLookup, dayLocks)),
+			Editable = rows.Count(x => !IsLocked(x, lockLookup, dayLocks)),
+			MissingPunch = rows.Count(IsMissingPunch)
 		};
 	}
+
+	private static GroupedRegisterProjection BuildGroupedEmployee(
+		List<RegisterProjection> rows,
+		Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> lockLookup,
+		HashSet<DateOnly> dayLocks)
+	{
+		var first = rows.OrderBy(x => x.AttendanceDate).First();
+		var orderedRows = rows.OrderBy(x => x.AttendanceDate).ToList();
+		var absent = orderedRows.Count(x => x.Status == EmployeeAttendanceStatusType.FullDayLeave);
+		var halfDay = orderedRows.Count(x => x.Status == EmployeeAttendanceStatusType.HalfDayLeave);
+		var missingPunch = orderedRows.Count(IsMissingPunch);
+		var locked = orderedRows.Count(x => IsLocked(x, lockLookup, dayLocks));
+		return new GroupedRegisterProjection
+		{
+			EmployeeId = first.EmployeeId,
+			EmployeeName = first.EmployeeName,
+			EmployeeCode = first.EmployeeCode,
+			Department = first.Department,
+			EmployeeGroup = first.EmployeeGroup,
+			EducationMediumStageId = first.EducationMediumStageId,
+			RoleId = first.RoleId,
+			RecordedDays = orderedRows.Count,
+			Present = orderedRows.Count(x => x.Status == EmployeeAttendanceStatusType.Present),
+			HalfDay = halfDay,
+			Absent = absent,
+			Editable = orderedRows.Count(x => !IsLocked(x, lockLookup, dayLocks)),
+			Locked = locked,
+			MissingPunch = missingPunch,
+			HasExceptions = absent > 0 || halfDay > 0 || missingPunch > 0 || locked > 0,
+			RawDays = orderedRows
+		};
+	}
+
+	private static bool MatchesExceptionFilter(GroupedRegisterProjection group, AttendanceRegisterExceptionFilter filter) =>
+		filter switch
+		{
+			AttendanceRegisterExceptionFilter.NeedsAttention => group.HasExceptions,
+			AttendanceRegisterExceptionFilter.Absent => group.Absent > 0,
+			AttendanceRegisterExceptionFilter.HalfDay => group.HalfDay > 0,
+			AttendanceRegisterExceptionFilter.MissingPunch => group.MissingPunch > 0,
+			AttendanceRegisterExceptionFilter.Locked => group.Locked > 0,
+			_ => true
+		};
+
+	private static GroupedAttendanceRegisterEmployeeDto MapGroupedEmployee(
+		GroupedRegisterProjection group,
+		Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> lockLookup,
+		Dictionary<Guid, string> stageNames,
+		HashSet<DateOnly> dayLocks) =>
+		new()
+		{
+			EmployeeId = group.EmployeeId,
+			EmployeeName = group.EmployeeName,
+			EmployeeCode = group.EmployeeCode,
+			Department = group.Department,
+			EmployeeGroup = group.EmployeeGroup?.ToString(),
+			EducationMediumStageId = group.EducationMediumStageId,
+			EducationMediumStageName = group.EducationMediumStageId.HasValue
+				? stageNames.GetValueOrDefault(group.EducationMediumStageId.Value)
+				: null,
+			RoleId = group.RoleId,
+			RecordedDays = group.RecordedDays,
+			Present = group.Present,
+			HalfDay = group.HalfDay,
+			Absent = group.Absent,
+			Editable = group.Editable,
+			Locked = group.Locked,
+			MissingPunch = group.MissingPunch,
+			HasExceptions = group.HasExceptions,
+			Days = group.RawDays.Select(x => MapRow(x, lockLookup, stageNames, dayLocks)).ToList()
+		};
 
 	private static AttendanceRegisterRowDto MapRow(
 		RegisterProjection row,
@@ -433,6 +547,10 @@ public class AttendanceRegisterAppService(
 		{
 			query = query.Where(x => x.TenantId == CurrentTenant.Id);
 		}
+		else
+		{
+			query = query.Where(x => x.TenantId == null);
+		}
 
 		var snapshots = await AsyncExecuter.ToListAsync(query.Where(x =>
 			employeeIds.Contains(x.EmployeeId) &&
@@ -441,6 +559,24 @@ public class AttendanceRegisterAppService(
 		foreach (var snapshot in snapshots.Where(x => keys.Contains((x.EmployeeId, x.MonthYear))))
 		{
 			await payrollRunItemSnapshotRepository.DeleteAsync(snapshot, autoSave: false);
+		}
+
+		var reviewQuery = await payrollRunReviewRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			reviewQuery = reviewQuery.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+		else
+		{
+			reviewQuery = reviewQuery.Where(x => x.TenantId == null);
+		}
+
+		var reviews = await AsyncExecuter.ToListAsync(reviewQuery.Where(x =>
+			employeeIds.Contains(x.EmployeeId) &&
+			months.Contains(x.MonthYear)));
+		foreach (var review in reviews.Where(x => keys.Contains((x.EmployeeId, x.MonthYear))))
+		{
+			await payrollRunReviewRepository.DeleteAsync(review, autoSave: false);
 		}
 	}
 
@@ -529,6 +665,17 @@ public class AttendanceRegisterAppService(
 				? parsed
 				: null;
 
+	private static DateTimeOffset? ApplyTimeToDate(DateOnly attendanceDate, DateTimeOffset? time)
+	{
+		if (!time.HasValue)
+		{
+			return null;
+		}
+
+		var dateTime = attendanceDate.ToDateTime(TimeOnly.FromDateTime(time.Value.DateTime));
+		return new DateTimeOffset(dateTime, time.Value.Offset);
+	}
+
 	private static string? Truncate(string? value, int maxLength)
 	{
 		if (string.IsNullOrWhiteSpace(value))
@@ -554,6 +701,10 @@ public class AttendanceRegisterAppService(
 	private static DateOnly ParseMonthDate(string monthYear) => new(int.Parse(monthYear[..4]), int.Parse(monthYear[5..7]), 1);
 	private static bool IsPayrollLocked(RegisterProjection row, Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> lockLookup) =>
 		lockLookup.GetValueOrDefault((row.EmployeeId, ToMonthYear(row.AttendanceDate)), new PayrollLockInfo(false, null)).IsLocked;
+	private static bool IsLocked(RegisterProjection row, Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> lockLookup, HashSet<DateOnly> dayLocks) =>
+		dayLocks.Contains(row.AttendanceDate) || IsPayrollLocked(row, lockLookup);
+	private static bool IsMissingPunch(RegisterProjection row) =>
+		row.Status == EmployeeAttendanceStatusType.Present && (!row.TimeIn.HasValue || !row.TimeOut.HasValue);
 	private static int NormalizeMaxResultCount(int maxResultCount) => maxResultCount is <= 0 or > 500 ? 50 : maxResultCount;
 
 	private sealed class RegisterQueryRow
@@ -577,6 +728,26 @@ public class AttendanceRegisterAppService(
 		public DateTimeOffset? TimeIn { get; set; }
 		public DateTimeOffset? TimeOut { get; set; }
 		public string? Remarks { get; set; }
+	}
+
+	private sealed class GroupedRegisterProjection
+	{
+		public Guid EmployeeId { get; set; }
+		public string EmployeeName { get; set; } = string.Empty;
+		public string EmployeeCode { get; set; } = string.Empty;
+		public string? Department { get; set; }
+		public EmployeeGroupType? EmployeeGroup { get; set; }
+		public Guid? EducationMediumStageId { get; set; }
+		public Guid? RoleId { get; set; }
+		public int RecordedDays { get; set; }
+		public int Present { get; set; }
+		public int HalfDay { get; set; }
+		public int Absent { get; set; }
+		public int Editable { get; set; }
+		public int Locked { get; set; }
+		public int MissingPunch { get; set; }
+		public bool HasExceptions { get; set; }
+		public List<RegisterProjection> RawDays { get; set; } = [];
 	}
 
 	private sealed record PayrollLockInfo(bool IsLocked, string? Reason);

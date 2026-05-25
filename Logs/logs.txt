@@ -169,3 +169,1050 @@
 2026-05-23 14:39:46.969 -07:00 [INF] Successfully completed SSVM tenant database migrations.
 2026-05-23 14:39:46.969 -07:00 [INF] Successfully completed all database migrations.
 2026-05-23 14:39:46.969 -07:00 [INF] You can safely end this process...
+2026-05-24 18:14:04.684 -07:00 [INF] Started database migrations...
+2026-05-24 18:14:04.687 -07:00 [INF] Migrating schema for host database...
+2026-05-24 18:14:06.513 -07:00 [WRN] The entity type 'EmployeeDocument' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:14:06.517 -07:00 [WRN] The entity type 'AllocatedTeacher' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:14:06.517 -07:00 [WRN] The entity type 'FeeRefundLine' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:14:07.465 -07:00 [WRN] Entity 'ElectiveGroup' has a global query filter defined and is the required end of a relationship with the entity 'ElectiveGroupComponent'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:14:07.465 -07:00 [WRN] Entity 'Employee' has a global query filter defined and is the required end of a relationship with the entity 'EmployeePayrollComponent'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:14:07.465 -07:00 [WRN] Entity 'Employee' has a global query filter defined and is the required end of a relationship with the entity 'EmployeePayrollDetails'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:14:07.465 -07:00 [WRN] Entity 'LibrarySection' has a global query filter defined and is the required end of a relationship with the entity 'LibraryShelf'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:14:07.465 -07:00 [WRN] Entity 'Building' has a global query filter defined and is the required end of a relationship with the entity 'Floor'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:14:07.487 -07:00 [WRN] The property 'ExamSubjectDivision.RoomIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:14:07.504 -07:00 [WRN] The property 'Group.NameBasedDivisionIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:14:07.504 -07:00 [WRN] The property 'Group.NameBasedRoleIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:14:07.504 -07:00 [WRN] The property 'Group.RuleBasedDivisionIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:14:07.504 -07:00 [WRN] The property 'Group.RuleBasedRoleIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:14:07.522 -07:00 [WRN] The property 'Event.AudienceIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:14:07.523 -07:00 [WRN] The property 'Holiday.AudienceIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:14:07.528 -07:00 [WRN] The property 'AttendanceImportBatch.ErrorsSummary' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:14:07.528 -07:00 [WRN] The property 'AttendanceImportBatch.WarningsSummary' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:14:07.528 -07:00 [WRN] The property 'AttendanceImportRow.Errors' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:14:07.529 -07:00 [WRN] The property 'AttendanceImportRow.Warnings' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:14:07.530 -07:00 [WRN] The property 'SalarySlip.Deductions' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:14:07.530 -07:00 [WRN] The property 'SalarySlip.Earnings' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:14:07.543 -07:00 [WRN] The property 'StudentFamilyDetail.SiblingStudentIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:14:08.382 -07:00 [INF] Executing host database seed...
+2026-05-24 18:14:14.345 -07:00 [INF] [HRSeeder] Start seeding for TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:14:14.837 -07:00 [INF] [HRSeeder] HR policy baseline ensured academicYears=3, calendarsTouched=3, policiesTouched=6, demoHolidaysTouched=24, demoScenarios=true
+2026-05-24 18:14:14.838 -07:00 [INF] [HRSeeder] Phase 1 complete (payroll components)
+2026-05-24 18:14:14.842 -07:00 [INF] [HRSeeder] Phase 2 complete (shift management)
+2026-05-24 18:14:14.850 -07:00 [INF] [HRSeeder] Phase 3 complete (leave types/policies)
+2026-05-24 18:14:22.350 -07:00 [INF] [HRSeeder] Phase 4 complete (employees seeded=0)
+2026-05-24 18:14:47.008 -07:00 [INF] [HRSeeder] Seeded employee completeness backfilled created=0, updated=19
+2026-05-24 18:14:47.008 -07:00 [INF] [HRSeeder] Phase 5 complete (employee completeness backfill)
+2026-05-24 18:14:49.387 -07:00 [INF] [HRSeeder] Employee status distribution applied active=17, inactive=2, updated=0
+2026-05-24 18:14:49.387 -07:00 [INF] [HRSeeder] Phase 6 complete (active employees=17)
+2026-05-24 18:14:51.761 -07:00 [INF] [HRSeeder] Demo HR policy assignments inserted=0, group employee members added=0
+2026-05-24 18:14:51.761 -07:00 [INF] [HRSeeder] Phase 7 complete (HR policy assignments)
+2026-05-24 18:14:58.942 -07:00 [INF] [HRSeeder] Attendance sample seeded rows=17 for employees=17
+2026-05-24 18:14:58.952 -07:00 [INF] [HRSeeder] Previous completed month attendance ensured range="2026-04-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:14:58.979 -07:00 [INF] [HRSeeder] Past-year payroll attendance seeded academicYear=2025-2026, range="2026-02-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:14:59.040 -07:00 [INF] [HRSeeder] Leave scenario sample seeded rows=0
+2026-05-24 18:14:59.040 -07:00 [INF] [HRSeeder] Phase 8 complete (sample payroll/attendance/leaves)
+2026-05-24 18:14:59.040 -07:00 [INF] [HRSeeder] Finished seeding for TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:14:59.149 -07:00 [INF] [StudentSeeder] Students already exist, skipping. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:14:59.486 -07:00 [INF] [FeeRefundSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:14:59.487 -07:00 [DBG] [FeeRefundSeeder] Using AcademicYear: "3a216ad2-1196-bd94-e732-c792f33463e7" – 2026-2027
+2026-05-24 18:15:00.373 -07:00 [DBG] [FeeRefundSeeder] Using Student: "3a216ad3-3826-2a6c-7933-14f5faa4f9e8" (GR 10001)
+2026-05-24 18:15:00.400 -07:00 [DBG] [FeeRefundSeeder] Created FeeCategory: "3a216edf-eb9f-b3cf-cae0-4bcf43bc6aa8" – Seed – Tuition
+2026-05-24 18:15:00.447 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "June"/2026 – ₹1500 (fully paid)
+2026-05-24 18:15:00.447 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "July"/2026 – ₹2000 (fully paid)
+2026-05-24 18:15:00.447 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "August"/2026 – ₹1500 (fully paid)
+2026-05-24 18:15:00.448 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "September"/2026 – ₹1800 (fully paid)
+2026-05-24 18:15:00.509 -07:00 [DBG] [FeeRefundSeeder] Inserted Pending refund: REF-SEED-000001
+2026-05-24 18:15:00.510 -07:00 [DBG] [FeeRefundSeeder] Inserted UnderReview refund: REF-SEED-000002
+2026-05-24 18:15:00.631 -07:00 [DBG] [FeeRefundSeeder] Inserted Approved refund: REF-SEED-000003
+2026-05-24 18:15:00.631 -07:00 [INF] [FeeRefundSeeder] Seed completed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:15:01.337 -07:00 [INF] [FeeCollectionSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:15:01.794 -07:00 [DBG] [FeeCollectionSeeder] Setup resolved: Board="3a216ad2-1198-81b1-5c0a-29eeca144f6c", Medium="3a216ad2-119d-a4bb-fa57-ee3deb9fb512", Stage="3a216ad2-11a3-a3bf-1ea6-c6ad19a13397", Standards=3
+2026-05-24 18:15:03.820 -07:00 [INF] [FeeCollectionSeeder] Found 90 enrolled students.
+2026-05-24 18:15:03.894 -07:00 [INF] [FeeCollectionSeeder] Seed completed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:15:04.004 -07:00 [INF] [FeeReceiptSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:15:09.810 -07:00 [INF] [FeeReceiptSeeder] Found 90 students to use for seed receipts.
+2026-05-24 18:15:10.083 -07:00 [ERR] An exception occurred in the database while saving changes for context type 'ShikshaMitra.EntityFrameworkCore.ShikshaMitraDbContext'.
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> Npgsql.PostgresException (0x80004005): 23505: duplicate key value violates unique constraint "IX_DueFees_StudentId_FeeHeadId_Month_Year"
+
+DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+   at Npgsql.Internal.NpgsqlConnector.ReadMessageLong(Boolean async, DataRowLoadingMode dataRowLoadingMode, Boolean readingNotifications, Boolean isReadingPrependedMessage)
+   at System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder`1.StateMachineBox`1.System.Threading.Tasks.Sources.IValueTaskSource<TResult>.GetResult(Int16 token)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+  Exception data:
+    Severity: ERROR
+    SqlState: 23505
+    MessageText: duplicate key value violates unique constraint "IX_DueFees_StudentId_FeeHeadId_Month_Year"
+    Detail: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+    SchemaName: public
+    TableName: DueFees
+    ConstraintName: IX_DueFees_StudentId_FeeHeadId_Month_Year
+    File: nbtinsert.c
+    Line: 673
+    Routine: _bt_check_unique
+   --- End of inner exception stack trace ---
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalDatabase.SaveChangesAsync(IList`1 entries, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> Npgsql.PostgresException (0x80004005): 23505: duplicate key value violates unique constraint "IX_DueFees_StudentId_FeeHeadId_Month_Year"
+
+DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+   at Npgsql.Internal.NpgsqlConnector.ReadMessageLong(Boolean async, DataRowLoadingMode dataRowLoadingMode, Boolean readingNotifications, Boolean isReadingPrependedMessage)
+   at System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder`1.StateMachineBox`1.System.Threading.Tasks.Sources.IValueTaskSource<TResult>.GetResult(Int16 token)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+  Exception data:
+    Severity: ERROR
+    SqlState: 23505
+    MessageText: duplicate key value violates unique constraint "IX_DueFees_StudentId_FeeHeadId_Month_Year"
+    Detail: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+    SchemaName: public
+    TableName: DueFees
+    ConstraintName: IX_DueFees_StudentId_FeeHeadId_Month_Year
+    File: nbtinsert.c
+    Line: 673
+    Routine: _bt_check_unique
+   --- End of inner exception stack trace ---
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalDatabase.SaveChangesAsync(IList`1 entries, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+2026-05-24 18:16:06.461 -07:00 [INF] Started database migrations...
+2026-05-24 18:16:06.464 -07:00 [INF] Migrating schema for host database...
+2026-05-24 18:16:08.133 -07:00 [WRN] The entity type 'EmployeeDocument' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:16:08.137 -07:00 [WRN] The entity type 'AllocatedTeacher' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:16:08.137 -07:00 [WRN] The entity type 'FeeRefundLine' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:16:09.031 -07:00 [WRN] Entity 'ElectiveGroup' has a global query filter defined and is the required end of a relationship with the entity 'ElectiveGroupComponent'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:16:09.031 -07:00 [WRN] Entity 'Employee' has a global query filter defined and is the required end of a relationship with the entity 'EmployeePayrollComponent'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:16:09.031 -07:00 [WRN] Entity 'Employee' has a global query filter defined and is the required end of a relationship with the entity 'EmployeePayrollDetails'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:16:09.031 -07:00 [WRN] Entity 'LibrarySection' has a global query filter defined and is the required end of a relationship with the entity 'LibraryShelf'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:16:09.031 -07:00 [WRN] Entity 'Building' has a global query filter defined and is the required end of a relationship with the entity 'Floor'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:16:09.051 -07:00 [WRN] The property 'ExamSubjectDivision.RoomIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:16:09.067 -07:00 [WRN] The property 'Group.NameBasedDivisionIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:16:09.067 -07:00 [WRN] The property 'Group.NameBasedRoleIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:16:09.067 -07:00 [WRN] The property 'Group.RuleBasedDivisionIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:16:09.067 -07:00 [WRN] The property 'Group.RuleBasedRoleIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:16:09.085 -07:00 [WRN] The property 'Event.AudienceIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:16:09.086 -07:00 [WRN] The property 'Holiday.AudienceIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:16:09.090 -07:00 [WRN] The property 'AttendanceImportBatch.ErrorsSummary' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:16:09.091 -07:00 [WRN] The property 'AttendanceImportBatch.WarningsSummary' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:16:09.091 -07:00 [WRN] The property 'AttendanceImportRow.Errors' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:16:09.091 -07:00 [WRN] The property 'AttendanceImportRow.Warnings' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:16:09.092 -07:00 [WRN] The property 'SalarySlip.Deductions' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:16:09.092 -07:00 [WRN] The property 'SalarySlip.Earnings' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:16:09.111 -07:00 [WRN] The property 'StudentFamilyDetail.SiblingStudentIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:16:10.014 -07:00 [INF] Executing host database seed...
+2026-05-24 18:16:15.742 -07:00 [INF] [HRSeeder] Start seeding for TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:16:16.235 -07:00 [INF] [HRSeeder] HR policy baseline ensured academicYears=3, calendarsTouched=3, policiesTouched=6, demoHolidaysTouched=24, demoScenarios=true
+2026-05-24 18:16:16.235 -07:00 [INF] [HRSeeder] Phase 1 complete (payroll components)
+2026-05-24 18:16:16.239 -07:00 [INF] [HRSeeder] Phase 2 complete (shift management)
+2026-05-24 18:16:16.247 -07:00 [INF] [HRSeeder] Phase 3 complete (leave types/policies)
+2026-05-24 18:16:23.749 -07:00 [INF] [HRSeeder] Phase 4 complete (employees seeded=0)
+2026-05-24 18:16:48.272 -07:00 [INF] [HRSeeder] Seeded employee completeness backfilled created=0, updated=19
+2026-05-24 18:16:48.272 -07:00 [INF] [HRSeeder] Phase 5 complete (employee completeness backfill)
+2026-05-24 18:16:50.672 -07:00 [INF] [HRSeeder] Employee status distribution applied active=17, inactive=2, updated=0
+2026-05-24 18:16:50.672 -07:00 [INF] [HRSeeder] Phase 6 complete (active employees=17)
+2026-05-24 18:16:53.075 -07:00 [INF] [HRSeeder] Demo HR policy assignments inserted=0, group employee members added=0
+2026-05-24 18:16:53.075 -07:00 [INF] [HRSeeder] Phase 7 complete (HR policy assignments)
+2026-05-24 18:17:00.380 -07:00 [INF] [HRSeeder] Attendance sample seeded rows=17 for employees=17
+2026-05-24 18:17:00.390 -07:00 [INF] [HRSeeder] Previous completed month attendance ensured range="2026-04-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:17:00.409 -07:00 [INF] [HRSeeder] Past-year payroll attendance seeded academicYear=2025-2026, range="2026-02-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:17:00.471 -07:00 [INF] [HRSeeder] Leave scenario sample seeded rows=0
+2026-05-24 18:17:00.471 -07:00 [INF] [HRSeeder] Phase 8 complete (sample payroll/attendance/leaves)
+2026-05-24 18:17:00.471 -07:00 [INF] [HRSeeder] Finished seeding for TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:17:00.580 -07:00 [INF] [StudentSeeder] Students already exist, skipping. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:17:00.924 -07:00 [INF] [FeeRefundSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:17:00.926 -07:00 [DBG] [FeeRefundSeeder] Using AcademicYear: "3a216ad2-1196-bd94-e732-c792f33463e7" – 2026-2027
+2026-05-24 18:17:01.793 -07:00 [DBG] [FeeRefundSeeder] Using Student: "3a216ad3-3826-2a6c-7933-14f5faa4f9e8" (GR 10001)
+2026-05-24 18:17:01.818 -07:00 [DBG] [FeeRefundSeeder] Created FeeCategory: "3a216ee1-c5ea-5db7-47aa-ddbf6ee9738e" – Seed – Tuition
+2026-05-24 18:17:01.862 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "June"/2026 – ₹1500 (fully paid)
+2026-05-24 18:17:01.862 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "July"/2026 – ₹2000 (fully paid)
+2026-05-24 18:17:01.862 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "August"/2026 – ₹1500 (fully paid)
+2026-05-24 18:17:01.862 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "September"/2026 – ₹1800 (fully paid)
+2026-05-24 18:17:01.922 -07:00 [DBG] [FeeRefundSeeder] Inserted Pending refund: REF-SEED-000001
+2026-05-24 18:17:01.923 -07:00 [DBG] [FeeRefundSeeder] Inserted UnderReview refund: REF-SEED-000002
+2026-05-24 18:17:02.032 -07:00 [DBG] [FeeRefundSeeder] Inserted Approved refund: REF-SEED-000003
+2026-05-24 18:17:02.032 -07:00 [INF] [FeeRefundSeeder] Seed completed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:17:02.741 -07:00 [INF] [FeeCollectionSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:17:03.160 -07:00 [DBG] [FeeCollectionSeeder] Setup resolved: Board="3a216ad2-1198-81b1-5c0a-29eeca144f6c", Medium="3a216ad2-119d-a4bb-fa57-ee3deb9fb512", Stage="3a216ad2-11a3-a3bf-1ea6-c6ad19a13397", Standards=3
+2026-05-24 18:17:05.235 -07:00 [INF] [FeeCollectionSeeder] Found 90 enrolled students.
+2026-05-24 18:17:05.309 -07:00 [INF] [FeeCollectionSeeder] Seed completed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:17:05.420 -07:00 [INF] [FeeReceiptSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:17:11.252 -07:00 [INF] [FeeReceiptSeeder] Found 90 students to use for seed receipts.
+2026-05-24 18:17:11.512 -07:00 [ERR] An exception occurred in the database while saving changes for context type 'ShikshaMitra.EntityFrameworkCore.ShikshaMitraDbContext'.
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> Npgsql.PostgresException (0x80004005): 23505: duplicate key value violates unique constraint "IX_DueFees_StudentId_FeeHeadId_Month_Year"
+
+DETAIL: Key ("StudentId", "FeeHeadId", "Month", "Year")=(3a216ad3-3826-2a6c-7933-14f5faa4f9e8, 3a216ad3-46eb-48cb-ec89-d6df3a75a623, 5, 2026) already exists.
+   at Npgsql.Internal.NpgsqlConnector.ReadMessageLong(Boolean async, DataRowLoadingMode dataRowLoadingMode, Boolean readingNotifications, Boolean isReadingPrependedMessage)
+   at System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder`1.StateMachineBox`1.System.Threading.Tasks.Sources.IValueTaskSource<TResult>.GetResult(Int16 token)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+  Exception data:
+    Severity: ERROR
+    SqlState: 23505
+    MessageText: duplicate key value violates unique constraint "IX_DueFees_StudentId_FeeHeadId_Month_Year"
+    Detail: Key ("StudentId", "FeeHeadId", "Month", "Year")=(3a216ad3-3826-2a6c-7933-14f5faa4f9e8, 3a216ad3-46eb-48cb-ec89-d6df3a75a623, 5, 2026) already exists.
+    SchemaName: public
+    TableName: DueFees
+    ConstraintName: IX_DueFees_StudentId_FeeHeadId_Month_Year
+    File: nbtinsert.c
+    Line: 673
+    Routine: _bt_check_unique
+   --- End of inner exception stack trace ---
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalDatabase.SaveChangesAsync(IList`1 entries, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> Npgsql.PostgresException (0x80004005): 23505: duplicate key value violates unique constraint "IX_DueFees_StudentId_FeeHeadId_Month_Year"
+
+DETAIL: Key ("StudentId", "FeeHeadId", "Month", "Year")=(3a216ad3-3826-2a6c-7933-14f5faa4f9e8, 3a216ad3-46eb-48cb-ec89-d6df3a75a623, 5, 2026) already exists.
+   at Npgsql.Internal.NpgsqlConnector.ReadMessageLong(Boolean async, DataRowLoadingMode dataRowLoadingMode, Boolean readingNotifications, Boolean isReadingPrependedMessage)
+   at System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder`1.StateMachineBox`1.System.Threading.Tasks.Sources.IValueTaskSource<TResult>.GetResult(Int16 token)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+  Exception data:
+    Severity: ERROR
+    SqlState: 23505
+    MessageText: duplicate key value violates unique constraint "IX_DueFees_StudentId_FeeHeadId_Month_Year"
+    Detail: Key ("StudentId", "FeeHeadId", "Month", "Year")=(3a216ad3-3826-2a6c-7933-14f5faa4f9e8, 3a216ad3-46eb-48cb-ec89-d6df3a75a623, 5, 2026) already exists.
+    SchemaName: public
+    TableName: DueFees
+    ConstraintName: IX_DueFees_StudentId_FeeHeadId_Month_Year
+    File: nbtinsert.c
+    Line: 673
+    Routine: _bt_check_unique
+   --- End of inner exception stack trace ---
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalDatabase.SaveChangesAsync(IList`1 entries, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Volo.Abp.EntityFrameworkCore.AbpDbContext`1.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+2026-05-24 18:19:04.446 -07:00 [INF] Started database migrations...
+2026-05-24 18:19:04.450 -07:00 [INF] Migrating schema for host database...
+2026-05-24 18:19:06.287 -07:00 [WRN] The entity type 'EmployeeDocument' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:19:06.291 -07:00 [WRN] The entity type 'AllocatedTeacher' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:19:06.291 -07:00 [WRN] The entity type 'FeeRefundLine' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:19:07.285 -07:00 [WRN] Entity 'ElectiveGroup' has a global query filter defined and is the required end of a relationship with the entity 'ElectiveGroupComponent'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:19:07.285 -07:00 [WRN] Entity 'Employee' has a global query filter defined and is the required end of a relationship with the entity 'EmployeePayrollComponent'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:19:07.285 -07:00 [WRN] Entity 'Employee' has a global query filter defined and is the required end of a relationship with the entity 'EmployeePayrollDetails'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:19:07.285 -07:00 [WRN] Entity 'LibrarySection' has a global query filter defined and is the required end of a relationship with the entity 'LibraryShelf'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:19:07.285 -07:00 [WRN] Entity 'Building' has a global query filter defined and is the required end of a relationship with the entity 'Floor'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:19:07.307 -07:00 [WRN] The property 'ExamSubjectDivision.RoomIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:19:07.325 -07:00 [WRN] The property 'Group.NameBasedDivisionIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:19:07.325 -07:00 [WRN] The property 'Group.NameBasedRoleIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:19:07.325 -07:00 [WRN] The property 'Group.RuleBasedDivisionIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:19:07.325 -07:00 [WRN] The property 'Group.RuleBasedRoleIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:19:07.344 -07:00 [WRN] The property 'Event.AudienceIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:19:07.345 -07:00 [WRN] The property 'Holiday.AudienceIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:19:07.350 -07:00 [WRN] The property 'AttendanceImportBatch.ErrorsSummary' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:19:07.350 -07:00 [WRN] The property 'AttendanceImportBatch.WarningsSummary' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:19:07.351 -07:00 [WRN] The property 'AttendanceImportRow.Errors' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:19:07.351 -07:00 [WRN] The property 'AttendanceImportRow.Warnings' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:19:07.352 -07:00 [WRN] The property 'SalarySlip.Deductions' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:19:07.352 -07:00 [WRN] The property 'SalarySlip.Earnings' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:19:07.366 -07:00 [WRN] The property 'StudentFamilyDetail.SiblingStudentIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:19:08.221 -07:00 [INF] Executing host database seed...
+2026-05-24 18:19:14.416 -07:00 [INF] [HRSeeder] Start seeding for TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:19:14.900 -07:00 [INF] [HRSeeder] HR policy baseline ensured academicYears=3, calendarsTouched=3, policiesTouched=6, demoHolidaysTouched=24, demoScenarios=true
+2026-05-24 18:19:14.900 -07:00 [INF] [HRSeeder] Phase 1 complete (payroll components)
+2026-05-24 18:19:14.905 -07:00 [INF] [HRSeeder] Phase 2 complete (shift management)
+2026-05-24 18:19:14.912 -07:00 [INF] [HRSeeder] Phase 3 complete (leave types/policies)
+2026-05-24 18:19:22.428 -07:00 [INF] [HRSeeder] Phase 4 complete (employees seeded=0)
+2026-05-24 18:19:47.054 -07:00 [INF] [HRSeeder] Seeded employee completeness backfilled created=0, updated=19
+2026-05-24 18:19:47.054 -07:00 [INF] [HRSeeder] Phase 5 complete (employee completeness backfill)
+2026-05-24 18:19:49.453 -07:00 [INF] [HRSeeder] Employee status distribution applied active=17, inactive=2, updated=0
+2026-05-24 18:19:49.453 -07:00 [INF] [HRSeeder] Phase 6 complete (active employees=17)
+2026-05-24 18:19:51.893 -07:00 [INF] [HRSeeder] Demo HR policy assignments inserted=0, group employee members added=0
+2026-05-24 18:19:51.893 -07:00 [INF] [HRSeeder] Phase 7 complete (HR policy assignments)
+2026-05-24 18:19:59.174 -07:00 [INF] [HRSeeder] Attendance sample seeded rows=17 for employees=17
+2026-05-24 18:19:59.184 -07:00 [INF] [HRSeeder] Previous completed month attendance ensured range="2026-04-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:19:59.212 -07:00 [INF] [HRSeeder] Past-year payroll attendance seeded academicYear=2025-2026, range="2026-02-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:19:59.277 -07:00 [INF] [HRSeeder] Leave scenario sample seeded rows=0
+2026-05-24 18:19:59.277 -07:00 [INF] [HRSeeder] Phase 8 complete (sample payroll/attendance/leaves)
+2026-05-24 18:19:59.277 -07:00 [INF] [HRSeeder] Finished seeding for TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:19:59.384 -07:00 [INF] [StudentSeeder] Students already exist, skipping. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:19:59.728 -07:00 [INF] [FeeRefundSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:19:59.730 -07:00 [DBG] [FeeRefundSeeder] Using AcademicYear: "3a216ad2-1196-bd94-e732-c792f33463e7" – 2026-2027
+2026-05-24 18:20:00.590 -07:00 [DBG] [FeeRefundSeeder] Using Student: "3a216ad3-3826-2a6c-7933-14f5faa4f9e8" (GR 10001)
+2026-05-24 18:20:00.617 -07:00 [DBG] [FeeRefundSeeder] Created FeeCategory: "3a216ee4-8059-7954-5eef-12bb7d370c8f" – Seed – Tuition
+2026-05-24 18:20:00.660 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "June"/2026 – ₹1500 (fully paid)
+2026-05-24 18:20:00.660 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "July"/2026 – ₹2000 (fully paid)
+2026-05-24 18:20:00.660 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "August"/2026 – ₹1500 (fully paid)
+2026-05-24 18:20:00.661 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "September"/2026 – ₹1800 (fully paid)
+2026-05-24 18:20:00.718 -07:00 [DBG] [FeeRefundSeeder] Inserted Pending refund: REF-SEED-000001
+2026-05-24 18:20:00.719 -07:00 [DBG] [FeeRefundSeeder] Inserted UnderReview refund: REF-SEED-000002
+2026-05-24 18:20:00.841 -07:00 [DBG] [FeeRefundSeeder] Inserted Approved refund: REF-SEED-000003
+2026-05-24 18:20:00.842 -07:00 [INF] [FeeRefundSeeder] Seed completed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:20:01.524 -07:00 [INF] [FeeCollectionSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:20:01.969 -07:00 [DBG] [FeeCollectionSeeder] Setup resolved: Board="3a216ad2-1198-81b1-5c0a-29eeca144f6c", Medium="3a216ad2-119d-a4bb-fa57-ee3deb9fb512", Stage="3a216ad2-11a3-a3bf-1ea6-c6ad19a13397", Standards=3
+2026-05-24 18:20:03.996 -07:00 [INF] [FeeCollectionSeeder] Found 90 enrolled students.
+2026-05-24 18:20:04.075 -07:00 [INF] [FeeCollectionSeeder] Seed completed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:20:04.192 -07:00 [INF] [FeeReceiptSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:20:10.144 -07:00 [INF] [FeeReceiptSeeder] Found 90 students to use for seed receipts.
+2026-05-24 18:20:10.411 -07:00 [ERR] An exception occurred in the database while saving changes for context type 'ShikshaMitra.EntityFrameworkCore.ShikshaMitraDbContext'.
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> Npgsql.PostgresException (0x80004005): 23505: duplicate key value violates unique constraint "IX_DueFees_StudentId_FeeHeadId_Month_Year"
+
+DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+   at Npgsql.Internal.NpgsqlConnector.ReadMessageLong(Boolean async, DataRowLoadingMode dataRowLoadingMode, Boolean readingNotifications, Boolean isReadingPrependedMessage)
+   at System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder`1.StateMachineBox`1.System.Threading.Tasks.Sources.IValueTaskSource<TResult>.GetResult(Int16 token)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+  Exception data:
+    Severity: ERROR
+    SqlState: 23505
+    MessageText: duplicate key value violates unique constraint "IX_DueFees_StudentId_FeeHeadId_Month_Year"
+    Detail: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+    SchemaName: public
+    TableName: DueFees
+    ConstraintName: IX_DueFees_StudentId_FeeHeadId_Month_Year
+    File: nbtinsert.c
+    Line: 673
+    Routine: _bt_check_unique
+   --- End of inner exception stack trace ---
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalDatabase.SaveChangesAsync(IList`1 entries, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> Npgsql.PostgresException (0x80004005): 23505: duplicate key value violates unique constraint "IX_DueFees_StudentId_FeeHeadId_Month_Year"
+
+DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+   at Npgsql.Internal.NpgsqlConnector.ReadMessageLong(Boolean async, DataRowLoadingMode dataRowLoadingMode, Boolean readingNotifications, Boolean isReadingPrependedMessage)
+   at System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder`1.StateMachineBox`1.System.Threading.Tasks.Sources.IValueTaskSource<TResult>.GetResult(Int16 token)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+  Exception data:
+    Severity: ERROR
+    SqlState: 23505
+    MessageText: duplicate key value violates unique constraint "IX_DueFees_StudentId_FeeHeadId_Month_Year"
+    Detail: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+    SchemaName: public
+    TableName: DueFees
+    ConstraintName: IX_DueFees_StudentId_FeeHeadId_Month_Year
+    File: nbtinsert.c
+    Line: 673
+    Routine: _bt_check_unique
+   --- End of inner exception stack trace ---
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalDatabase.SaveChangesAsync(IList`1 entries, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+2026-05-24 18:20:38.821 -07:00 [INF] Started database migrations...
+2026-05-24 18:20:38.825 -07:00 [INF] Migrating schema for host database...
+2026-05-24 18:20:40.615 -07:00 [WRN] The entity type 'EmployeeDocument' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:20:40.619 -07:00 [WRN] The entity type 'AllocatedTeacher' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:20:40.620 -07:00 [WRN] The entity type 'FeeRefundLine' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:20:41.529 -07:00 [WRN] Entity 'ElectiveGroup' has a global query filter defined and is the required end of a relationship with the entity 'ElectiveGroupComponent'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:20:41.529 -07:00 [WRN] Entity 'Employee' has a global query filter defined and is the required end of a relationship with the entity 'EmployeePayrollComponent'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:20:41.529 -07:00 [WRN] Entity 'Employee' has a global query filter defined and is the required end of a relationship with the entity 'EmployeePayrollDetails'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:20:41.529 -07:00 [WRN] Entity 'LibrarySection' has a global query filter defined and is the required end of a relationship with the entity 'LibraryShelf'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:20:41.529 -07:00 [WRN] Entity 'Building' has a global query filter defined and is the required end of a relationship with the entity 'Floor'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:20:41.550 -07:00 [WRN] The property 'ExamSubjectDivision.RoomIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:20:41.567 -07:00 [WRN] The property 'Group.NameBasedDivisionIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:20:41.567 -07:00 [WRN] The property 'Group.NameBasedRoleIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:20:41.567 -07:00 [WRN] The property 'Group.RuleBasedDivisionIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:20:41.567 -07:00 [WRN] The property 'Group.RuleBasedRoleIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:20:41.586 -07:00 [WRN] The property 'Event.AudienceIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:20:41.586 -07:00 [WRN] The property 'Holiday.AudienceIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:20:41.593 -07:00 [WRN] The property 'AttendanceImportBatch.ErrorsSummary' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:20:41.594 -07:00 [WRN] The property 'AttendanceImportBatch.WarningsSummary' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:20:41.594 -07:00 [WRN] The property 'AttendanceImportRow.Errors' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:20:41.594 -07:00 [WRN] The property 'AttendanceImportRow.Warnings' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:20:41.596 -07:00 [WRN] The property 'SalarySlip.Deductions' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:20:41.596 -07:00 [WRN] The property 'SalarySlip.Earnings' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:20:41.609 -07:00 [WRN] The property 'StudentFamilyDetail.SiblingStudentIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:20:42.627 -07:00 [INF] Executing host database seed...
+2026-05-24 18:20:48.401 -07:00 [INF] [HRSeeder] Start seeding for TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:20:48.893 -07:00 [INF] [HRSeeder] HR policy baseline ensured academicYears=3, calendarsTouched=3, policiesTouched=6, demoHolidaysTouched=24, demoScenarios=true
+2026-05-24 18:20:48.893 -07:00 [INF] [HRSeeder] Phase 1 complete (payroll components)
+2026-05-24 18:20:48.897 -07:00 [INF] [HRSeeder] Phase 2 complete (shift management)
+2026-05-24 18:20:48.904 -07:00 [INF] [HRSeeder] Phase 3 complete (leave types/policies)
+2026-05-24 18:20:56.394 -07:00 [INF] [HRSeeder] Phase 4 complete (employees seeded=0)
+2026-05-24 18:21:21.318 -07:00 [INF] [HRSeeder] Seeded employee completeness backfilled created=0, updated=19
+2026-05-24 18:21:21.318 -07:00 [INF] [HRSeeder] Phase 5 complete (employee completeness backfill)
+2026-05-24 18:21:23.729 -07:00 [INF] [HRSeeder] Employee status distribution applied active=17, inactive=2, updated=0
+2026-05-24 18:21:23.730 -07:00 [INF] [HRSeeder] Phase 6 complete (active employees=17)
+2026-05-24 18:21:26.190 -07:00 [INF] [HRSeeder] Demo HR policy assignments inserted=0, group employee members added=0
+2026-05-24 18:21:26.190 -07:00 [INF] [HRSeeder] Phase 7 complete (HR policy assignments)
+2026-05-24 18:21:33.546 -07:00 [INF] [HRSeeder] Attendance sample seeded rows=17 for employees=17
+2026-05-24 18:21:33.555 -07:00 [INF] [HRSeeder] Previous completed month attendance ensured range="2026-04-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:21:33.584 -07:00 [INF] [HRSeeder] Past-year payroll attendance seeded academicYear=2025-2026, range="2026-02-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:21:33.647 -07:00 [INF] [HRSeeder] Leave scenario sample seeded rows=0
+2026-05-24 18:21:33.647 -07:00 [INF] [HRSeeder] Phase 8 complete (sample payroll/attendance/leaves)
+2026-05-24 18:21:33.647 -07:00 [INF] [HRSeeder] Finished seeding for TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:21:33.756 -07:00 [INF] [StudentSeeder] Students already exist, skipping. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:21:34.097 -07:00 [INF] [FeeRefundSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:21:34.099 -07:00 [DBG] [FeeRefundSeeder] Using AcademicYear: "3a216ad2-1196-bd94-e732-c792f33463e7" – 2026-2027
+2026-05-24 18:21:34.987 -07:00 [DBG] [FeeRefundSeeder] Using Student: "3a216ad3-3826-2a6c-7933-14f5faa4f9e8" (GR 10001)
+2026-05-24 18:21:35.012 -07:00 [DBG] [FeeRefundSeeder] Created FeeCategory: "3a216ee5-f114-5d43-249e-3b9a470f42e2" – Seed – Tuition
+2026-05-24 18:21:35.060 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "June"/2026 – ₹1500 (fully paid)
+2026-05-24 18:21:35.060 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "July"/2026 – ₹2000 (fully paid)
+2026-05-24 18:21:35.060 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "August"/2026 – ₹1500 (fully paid)
+2026-05-24 18:21:35.061 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "September"/2026 – ₹1800 (fully paid)
+2026-05-24 18:21:35.119 -07:00 [DBG] [FeeRefundSeeder] Inserted Pending refund: REF-SEED-000001
+2026-05-24 18:21:35.120 -07:00 [DBG] [FeeRefundSeeder] Inserted UnderReview refund: REF-SEED-000002
+2026-05-24 18:21:35.235 -07:00 [DBG] [FeeRefundSeeder] Inserted Approved refund: REF-SEED-000003
+2026-05-24 18:21:35.235 -07:00 [INF] [FeeRefundSeeder] Seed completed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:21:35.940 -07:00 [INF] [FeeCollectionSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:21:36.406 -07:00 [DBG] [FeeCollectionSeeder] Setup resolved: Board="3a216ad2-1198-81b1-5c0a-29eeca144f6c", Medium="3a216ad2-119d-a4bb-fa57-ee3deb9fb512", Stage="3a216ad2-11a3-a3bf-1ea6-c6ad19a13397", Standards=3
+2026-05-24 18:21:38.411 -07:00 [INF] [FeeCollectionSeeder] Found 90 enrolled students.
+2026-05-24 18:21:38.487 -07:00 [INF] [FeeCollectionSeeder] Seed completed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:21:38.599 -07:00 [INF] [FeeReceiptSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:21:44.421 -07:00 [INF] [FeeReceiptSeeder] Found 90 students to use for seed receipts.
+2026-05-24 18:21:44.730 -07:00 [ERR] An exception occurred in the database while saving changes for context type 'ShikshaMitra.EntityFrameworkCore.ShikshaMitraDbContext'.
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> Npgsql.PostgresException (0x80004005): 23505: duplicate key value violates unique constraint "IX_DueFees_StudentId_FeeHeadId_Month_Year"
+
+DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+   at Npgsql.Internal.NpgsqlConnector.ReadMessageLong(Boolean async, DataRowLoadingMode dataRowLoadingMode, Boolean readingNotifications, Boolean isReadingPrependedMessage)
+   at System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder`1.StateMachineBox`1.System.Threading.Tasks.Sources.IValueTaskSource<TResult>.GetResult(Int16 token)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+  Exception data:
+    Severity: ERROR
+    SqlState: 23505
+    MessageText: duplicate key value violates unique constraint "IX_DueFees_StudentId_FeeHeadId_Month_Year"
+    Detail: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+    SchemaName: public
+    TableName: DueFees
+    ConstraintName: IX_DueFees_StudentId_FeeHeadId_Month_Year
+    File: nbtinsert.c
+    Line: 673
+    Routine: _bt_check_unique
+   --- End of inner exception stack trace ---
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalDatabase.SaveChangesAsync(IList`1 entries, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> Npgsql.PostgresException (0x80004005): 23505: duplicate key value violates unique constraint "IX_DueFees_StudentId_FeeHeadId_Month_Year"
+
+DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+   at Npgsql.Internal.NpgsqlConnector.ReadMessageLong(Boolean async, DataRowLoadingMode dataRowLoadingMode, Boolean readingNotifications, Boolean isReadingPrependedMessage)
+   at System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder`1.StateMachineBox`1.System.Threading.Tasks.Sources.IValueTaskSource<TResult>.GetResult(Int16 token)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+  Exception data:
+    Severity: ERROR
+    SqlState: 23505
+    MessageText: duplicate key value violates unique constraint "IX_DueFees_StudentId_FeeHeadId_Month_Year"
+    Detail: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+    SchemaName: public
+    TableName: DueFees
+    ConstraintName: IX_DueFees_StudentId_FeeHeadId_Month_Year
+    File: nbtinsert.c
+    Line: 673
+    Routine: _bt_check_unique
+   --- End of inner exception stack trace ---
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalDatabase.SaveChangesAsync(IList`1 entries, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+2026-05-24 18:23:26.008 -07:00 [INF] Started database migrations...
+2026-05-24 18:23:26.011 -07:00 [INF] Migrating schema for host database...
+2026-05-24 18:23:27.825 -07:00 [WRN] The entity type 'EmployeeDocument' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:23:27.829 -07:00 [WRN] The entity type 'AllocatedTeacher' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:23:27.830 -07:00 [WRN] The entity type 'FeeRefundLine' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:23:28.740 -07:00 [WRN] Entity 'ElectiveGroup' has a global query filter defined and is the required end of a relationship with the entity 'ElectiveGroupComponent'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:23:28.740 -07:00 [WRN] Entity 'Employee' has a global query filter defined and is the required end of a relationship with the entity 'EmployeePayrollComponent'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:23:28.740 -07:00 [WRN] Entity 'Employee' has a global query filter defined and is the required end of a relationship with the entity 'EmployeePayrollDetails'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:23:28.740 -07:00 [WRN] Entity 'LibrarySection' has a global query filter defined and is the required end of a relationship with the entity 'LibraryShelf'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:23:28.740 -07:00 [WRN] Entity 'Building' has a global query filter defined and is the required end of a relationship with the entity 'Floor'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:23:28.760 -07:00 [WRN] The property 'ExamSubjectDivision.RoomIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:23:28.775 -07:00 [WRN] The property 'Group.NameBasedDivisionIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:23:28.775 -07:00 [WRN] The property 'Group.NameBasedRoleIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:23:28.775 -07:00 [WRN] The property 'Group.RuleBasedDivisionIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:23:28.775 -07:00 [WRN] The property 'Group.RuleBasedRoleIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:23:28.792 -07:00 [WRN] The property 'Event.AudienceIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:23:28.793 -07:00 [WRN] The property 'Holiday.AudienceIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:23:28.797 -07:00 [WRN] The property 'AttendanceImportBatch.ErrorsSummary' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:23:28.797 -07:00 [WRN] The property 'AttendanceImportBatch.WarningsSummary' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:23:28.797 -07:00 [WRN] The property 'AttendanceImportRow.Errors' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:23:28.797 -07:00 [WRN] The property 'AttendanceImportRow.Warnings' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:23:28.798 -07:00 [WRN] The property 'SalarySlip.Deductions' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:23:28.798 -07:00 [WRN] The property 'SalarySlip.Earnings' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:23:28.809 -07:00 [WRN] The property 'StudentFamilyDetail.SiblingStudentIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:23:29.671 -07:00 [INF] Executing host database seed...
+2026-05-24 18:23:35.541 -07:00 [INF] [HRSeeder] Start seeding for TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:23:36.027 -07:00 [INF] [HRSeeder] HR policy baseline ensured academicYears=3, calendarsTouched=3, policiesTouched=6, demoHolidaysTouched=24, demoScenarios=true
+2026-05-24 18:23:36.028 -07:00 [INF] [HRSeeder] Phase 1 complete (payroll components)
+2026-05-24 18:23:36.032 -07:00 [INF] [HRSeeder] Phase 2 complete (shift management)
+2026-05-24 18:23:36.039 -07:00 [INF] [HRSeeder] Phase 3 complete (leave types/policies)
+2026-05-24 18:23:43.545 -07:00 [INF] [HRSeeder] Phase 4 complete (employees seeded=0)
+2026-05-24 18:24:07.949 -07:00 [INF] [HRSeeder] Seeded employee completeness backfilled created=0, updated=19
+2026-05-24 18:24:07.949 -07:00 [INF] [HRSeeder] Phase 5 complete (employee completeness backfill)
+2026-05-24 18:24:10.304 -07:00 [INF] [HRSeeder] Employee status distribution applied active=17, inactive=2, updated=0
+2026-05-24 18:24:10.304 -07:00 [INF] [HRSeeder] Phase 6 complete (active employees=17)
+2026-05-24 18:24:12.713 -07:00 [INF] [HRSeeder] Demo HR policy assignments inserted=0, group employee members added=0
+2026-05-24 18:24:12.713 -07:00 [INF] [HRSeeder] Phase 7 complete (HR policy assignments)
+2026-05-24 18:24:19.915 -07:00 [INF] [HRSeeder] Attendance sample seeded rows=17 for employees=17
+2026-05-24 18:24:19.924 -07:00 [INF] [HRSeeder] Previous completed month attendance ensured range="2026-04-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:24:19.943 -07:00 [INF] [HRSeeder] Past-year payroll attendance seeded academicYear=2025-2026, range="2026-02-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:24:20.006 -07:00 [INF] [HRSeeder] Leave scenario sample seeded rows=0
+2026-05-24 18:24:20.006 -07:00 [INF] [HRSeeder] Phase 8 complete (sample payroll/attendance/leaves)
+2026-05-24 18:24:20.006 -07:00 [INF] [HRSeeder] Finished seeding for TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:24:20.114 -07:00 [INF] [StudentSeeder] Students already exist, skipping. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:24:20.466 -07:00 [INF] [FeeRefundSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:24:20.468 -07:00 [DBG] [FeeRefundSeeder] Using AcademicYear: "3a216ad2-1196-bd94-e732-c792f33463e7" – 2026-2027
+2026-05-24 18:24:21.323 -07:00 [DBG] [FeeRefundSeeder] Using Student: "3a216ad3-3826-2a6c-7933-14f5faa4f9e8" (GR 10001)
+2026-05-24 18:24:21.349 -07:00 [DBG] [FeeRefundSeeder] Created FeeCategory: "3a216ee8-7ad5-8442-2455-82ebde3fa4f3" – Seed – Tuition
+2026-05-24 18:24:21.393 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "June"/2026 – ₹1500 (fully paid)
+2026-05-24 18:24:21.393 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "July"/2026 – ₹2000 (fully paid)
+2026-05-24 18:24:21.393 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "August"/2026 – ₹1500 (fully paid)
+2026-05-24 18:24:21.393 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "September"/2026 – ₹1800 (fully paid)
+2026-05-24 18:24:21.454 -07:00 [DBG] [FeeRefundSeeder] Inserted Pending refund: REF-SEED-000001
+2026-05-24 18:24:21.455 -07:00 [DBG] [FeeRefundSeeder] Inserted UnderReview refund: REF-SEED-000002
+2026-05-24 18:24:21.566 -07:00 [DBG] [FeeRefundSeeder] Inserted Approved refund: REF-SEED-000003
+2026-05-24 18:24:21.566 -07:00 [INF] [FeeRefundSeeder] Seed completed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:24:22.274 -07:00 [INF] [FeeCollectionSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:24:22.694 -07:00 [DBG] [FeeCollectionSeeder] Setup resolved: Board="3a216ad2-1198-81b1-5c0a-29eeca144f6c", Medium="3a216ad2-119d-a4bb-fa57-ee3deb9fb512", Stage="3a216ad2-11a3-a3bf-1ea6-c6ad19a13397", Standards=3
+2026-05-24 18:24:24.767 -07:00 [INF] [FeeCollectionSeeder] Found 90 enrolled students.
+2026-05-24 18:24:24.843 -07:00 [INF] [FeeCollectionSeeder] Seed completed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:24:24.956 -07:00 [INF] [FeeReceiptSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:24:30.798 -07:00 [INF] [FeeReceiptSeeder] Found 90 students to use for seed receipts.
+2026-05-24 18:24:31.079 -07:00 [ERR] An exception occurred in the database while saving changes for context type 'ShikshaMitra.EntityFrameworkCore.ShikshaMitraDbContext'.
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> Npgsql.PostgresException (0x80004005): 23505: duplicate key value violates unique constraint "IX_DueFees_TenantId_StudentId_FeeHeadId_Month_Year"
+
+DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+   at Npgsql.Internal.NpgsqlConnector.ReadMessageLong(Boolean async, DataRowLoadingMode dataRowLoadingMode, Boolean readingNotifications, Boolean isReadingPrependedMessage)
+   at System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder`1.StateMachineBox`1.System.Threading.Tasks.Sources.IValueTaskSource<TResult>.GetResult(Int16 token)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+  Exception data:
+    Severity: ERROR
+    SqlState: 23505
+    MessageText: duplicate key value violates unique constraint "IX_DueFees_TenantId_StudentId_FeeHeadId_Month_Year"
+    Detail: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+    SchemaName: public
+    TableName: DueFees
+    ConstraintName: IX_DueFees_TenantId_StudentId_FeeHeadId_Month_Year
+    File: nbtinsert.c
+    Line: 673
+    Routine: _bt_check_unique
+   --- End of inner exception stack trace ---
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalDatabase.SaveChangesAsync(IList`1 entries, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> Npgsql.PostgresException (0x80004005): 23505: duplicate key value violates unique constraint "IX_DueFees_TenantId_StudentId_FeeHeadId_Month_Year"
+
+DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+   at Npgsql.Internal.NpgsqlConnector.ReadMessageLong(Boolean async, DataRowLoadingMode dataRowLoadingMode, Boolean readingNotifications, Boolean isReadingPrependedMessage)
+   at System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder`1.StateMachineBox`1.System.Threading.Tasks.Sources.IValueTaskSource<TResult>.GetResult(Int16 token)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+  Exception data:
+    Severity: ERROR
+    SqlState: 23505
+    MessageText: duplicate key value violates unique constraint "IX_DueFees_TenantId_StudentId_FeeHeadId_Month_Year"
+    Detail: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+    SchemaName: public
+    TableName: DueFees
+    ConstraintName: IX_DueFees_TenantId_StudentId_FeeHeadId_Month_Year
+    File: nbtinsert.c
+    Line: 673
+    Routine: _bt_check_unique
+   --- End of inner exception stack trace ---
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalDatabase.SaveChangesAsync(IList`1 entries, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Volo.Abp.EntityFrameworkCore.AbpDbContext`1.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+2026-05-24 18:24:46.675 -07:00 [INF] Started database migrations...
+2026-05-24 18:24:46.678 -07:00 [INF] Migrating schema for host database...
+2026-05-24 18:24:48.453 -07:00 [WRN] The entity type 'EmployeeDocument' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:24:48.456 -07:00 [WRN] The entity type 'AllocatedTeacher' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:24:48.457 -07:00 [WRN] The entity type 'FeeRefundLine' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:24:49.344 -07:00 [WRN] Entity 'ElectiveGroup' has a global query filter defined and is the required end of a relationship with the entity 'ElectiveGroupComponent'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:24:49.345 -07:00 [WRN] Entity 'Employee' has a global query filter defined and is the required end of a relationship with the entity 'EmployeePayrollComponent'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:24:49.345 -07:00 [WRN] Entity 'Employee' has a global query filter defined and is the required end of a relationship with the entity 'EmployeePayrollDetails'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:24:49.345 -07:00 [WRN] Entity 'LibrarySection' has a global query filter defined and is the required end of a relationship with the entity 'LibraryShelf'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:24:49.345 -07:00 [WRN] Entity 'Building' has a global query filter defined and is the required end of a relationship with the entity 'Floor'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:24:49.365 -07:00 [WRN] The property 'ExamSubjectDivision.RoomIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:24:49.381 -07:00 [WRN] The property 'Group.NameBasedDivisionIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:24:49.381 -07:00 [WRN] The property 'Group.NameBasedRoleIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:24:49.381 -07:00 [WRN] The property 'Group.RuleBasedDivisionIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:24:49.381 -07:00 [WRN] The property 'Group.RuleBasedRoleIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:24:49.399 -07:00 [WRN] The property 'Event.AudienceIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:24:49.399 -07:00 [WRN] The property 'Holiday.AudienceIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:24:49.404 -07:00 [WRN] The property 'AttendanceImportBatch.ErrorsSummary' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:24:49.405 -07:00 [WRN] The property 'AttendanceImportBatch.WarningsSummary' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:24:49.405 -07:00 [WRN] The property 'AttendanceImportRow.Errors' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:24:49.405 -07:00 [WRN] The property 'AttendanceImportRow.Warnings' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:24:49.406 -07:00 [WRN] The property 'SalarySlip.Deductions' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:24:49.406 -07:00 [WRN] The property 'SalarySlip.Earnings' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:24:49.418 -07:00 [WRN] The property 'StudentFamilyDetail.SiblingStudentIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:24:50.216 -07:00 [INF] Executing host database seed...
+2026-05-24 18:24:55.925 -07:00 [INF] [HRSeeder] Start seeding for TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:24:56.402 -07:00 [INF] [HRSeeder] HR policy baseline ensured academicYears=3, calendarsTouched=3, policiesTouched=6, demoHolidaysTouched=24, demoScenarios=true
+2026-05-24 18:24:56.402 -07:00 [INF] [HRSeeder] Phase 1 complete (payroll components)
+2026-05-24 18:24:56.406 -07:00 [INF] [HRSeeder] Phase 2 complete (shift management)
+2026-05-24 18:24:56.413 -07:00 [INF] [HRSeeder] Phase 3 complete (leave types/policies)
+2026-05-24 18:25:03.885 -07:00 [INF] [HRSeeder] Phase 4 complete (employees seeded=0)
+2026-05-24 18:25:28.353 -07:00 [INF] [HRSeeder] Seeded employee completeness backfilled created=0, updated=19
+2026-05-24 18:25:28.353 -07:00 [INF] [HRSeeder] Phase 5 complete (employee completeness backfill)
+2026-05-24 18:25:30.801 -07:00 [INF] [HRSeeder] Employee status distribution applied active=17, inactive=2, updated=0
+2026-05-24 18:25:30.801 -07:00 [INF] [HRSeeder] Phase 6 complete (active employees=17)
+2026-05-24 18:25:33.193 -07:00 [INF] [HRSeeder] Demo HR policy assignments inserted=0, group employee members added=0
+2026-05-24 18:25:33.193 -07:00 [INF] [HRSeeder] Phase 7 complete (HR policy assignments)
+2026-05-24 18:25:40.461 -07:00 [INF] [HRSeeder] Attendance sample seeded rows=17 for employees=17
+2026-05-24 18:25:40.471 -07:00 [INF] [HRSeeder] Previous completed month attendance ensured range="2026-04-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:25:40.485 -07:00 [INF] [HRSeeder] Past-year payroll attendance seeded academicYear=2025-2026, range="2026-02-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:25:40.560 -07:00 [INF] [HRSeeder] Leave scenario sample seeded rows=0
+2026-05-24 18:25:40.560 -07:00 [INF] [HRSeeder] Phase 8 complete (sample payroll/attendance/leaves)
+2026-05-24 18:25:40.560 -07:00 [INF] [HRSeeder] Finished seeding for TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:25:40.671 -07:00 [INF] [StudentSeeder] Students already exist, skipping. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:25:41.019 -07:00 [INF] [FeeRefundSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:25:41.021 -07:00 [DBG] [FeeRefundSeeder] Using AcademicYear: "3a216ad2-1196-bd94-e732-c792f33463e7" – 2026-2027
+2026-05-24 18:25:41.887 -07:00 [DBG] [FeeRefundSeeder] Using Student: "3a216ad3-3826-2a6c-7933-14f5faa4f9e8" (GR 10001)
+2026-05-24 18:25:41.913 -07:00 [DBG] [FeeRefundSeeder] Created FeeCategory: "3a216ee9-b589-4cfa-5e58-9d496e9fac74" – Seed – Tuition
+2026-05-24 18:25:41.957 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "June"/2026 – ₹1500 (fully paid)
+2026-05-24 18:25:41.958 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "July"/2026 – ₹2000 (fully paid)
+2026-05-24 18:25:41.958 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "August"/2026 – ₹1500 (fully paid)
+2026-05-24 18:25:41.958 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "September"/2026 – ₹1800 (fully paid)
+2026-05-24 18:25:42.016 -07:00 [DBG] [FeeRefundSeeder] Inserted Pending refund: REF-SEED-000001
+2026-05-24 18:25:42.017 -07:00 [DBG] [FeeRefundSeeder] Inserted UnderReview refund: REF-SEED-000002
+2026-05-24 18:25:42.131 -07:00 [DBG] [FeeRefundSeeder] Inserted Approved refund: REF-SEED-000003
+2026-05-24 18:25:42.131 -07:00 [INF] [FeeRefundSeeder] Seed completed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:25:42.837 -07:00 [INF] [FeeCollectionSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:25:43.296 -07:00 [DBG] [FeeCollectionSeeder] Setup resolved: Board="3a216ad2-1198-81b1-5c0a-29eeca144f6c", Medium="3a216ad2-119d-a4bb-fa57-ee3deb9fb512", Stage="3a216ad2-11a3-a3bf-1ea6-c6ad19a13397", Standards=3
+2026-05-24 18:25:45.284 -07:00 [INF] [FeeCollectionSeeder] Found 90 enrolled students.
+2026-05-24 18:25:45.358 -07:00 [INF] [FeeCollectionSeeder] Seed completed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:25:45.469 -07:00 [INF] [FeeReceiptSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:25:51.328 -07:00 [INF] [FeeReceiptSeeder] Found 90 students to use for seed receipts.
+2026-05-24 18:25:51.611 -07:00 [ERR] An exception occurred in the database while saving changes for context type 'ShikshaMitra.EntityFrameworkCore.ShikshaMitraDbContext'.
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> Npgsql.PostgresException (0x80004005): 23505: duplicate key value violates unique constraint "IX_DueFees_TenantId_StudentId_FeeHeadId_Month_Year"
+
+DETAIL: Key ("TenantId", "StudentId", "FeeHeadId", "Month", "Year")=(11111111-1111-1111-1111-111111111111, 3a216ad3-3826-2a6c-7933-14f5faa4f9e8, 3a216ad3-46eb-48cb-ec89-d6df3a75a623, 8, 2026) already exists.
+   at Npgsql.Internal.NpgsqlConnector.ReadMessageLong(Boolean async, DataRowLoadingMode dataRowLoadingMode, Boolean readingNotifications, Boolean isReadingPrependedMessage)
+   at System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder`1.StateMachineBox`1.System.Threading.Tasks.Sources.IValueTaskSource<TResult>.GetResult(Int16 token)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+  Exception data:
+    Severity: ERROR
+    SqlState: 23505
+    MessageText: duplicate key value violates unique constraint "IX_DueFees_TenantId_StudentId_FeeHeadId_Month_Year"
+    Detail: Key ("TenantId", "StudentId", "FeeHeadId", "Month", "Year")=(11111111-1111-1111-1111-111111111111, 3a216ad3-3826-2a6c-7933-14f5faa4f9e8, 3a216ad3-46eb-48cb-ec89-d6df3a75a623, 8, 2026) already exists.
+    SchemaName: public
+    TableName: DueFees
+    ConstraintName: IX_DueFees_TenantId_StudentId_FeeHeadId_Month_Year
+    File: nbtinsert.c
+    Line: 673
+    Routine: _bt_check_unique
+   --- End of inner exception stack trace ---
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalDatabase.SaveChangesAsync(IList`1 entries, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> Npgsql.PostgresException (0x80004005): 23505: duplicate key value violates unique constraint "IX_DueFees_TenantId_StudentId_FeeHeadId_Month_Year"
+
+DETAIL: Key ("TenantId", "StudentId", "FeeHeadId", "Month", "Year")=(11111111-1111-1111-1111-111111111111, 3a216ad3-3826-2a6c-7933-14f5faa4f9e8, 3a216ad3-46eb-48cb-ec89-d6df3a75a623, 8, 2026) already exists.
+   at Npgsql.Internal.NpgsqlConnector.ReadMessageLong(Boolean async, DataRowLoadingMode dataRowLoadingMode, Boolean readingNotifications, Boolean isReadingPrependedMessage)
+   at System.Runtime.CompilerServices.PoolingAsyncValueTaskMethodBuilder`1.StateMachineBox`1.System.Threading.Tasks.Sources.IValueTaskSource<TResult>.GetResult(Int16 token)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.NpgsqlDataReader.NextResult(Boolean async, Boolean isConsuming, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+  Exception data:
+    Severity: ERROR
+    SqlState: 23505
+    MessageText: duplicate key value violates unique constraint "IX_DueFees_TenantId_StudentId_FeeHeadId_Month_Year"
+    Detail: Key ("TenantId", "StudentId", "FeeHeadId", "Month", "Year")=(11111111-1111-1111-1111-111111111111, 3a216ad3-3826-2a6c-7933-14f5faa4f9e8, 3a216ad3-46eb-48cb-ec89-d6df3a75a623, 8, 2026) already exists.
+    SchemaName: public
+    TableName: DueFees
+    ConstraintName: IX_DueFees_TenantId_StudentId_FeeHeadId_Month_Year
+    File: nbtinsert.c
+    Line: 673
+    Routine: _bt_check_unique
+   --- End of inner exception stack trace ---
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal.NpgsqlModificationCommandBatch.Consume(RelationalDataReader reader, Boolean async, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalDatabase.SaveChangesAsync(IList`1 entries, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Volo.Abp.EntityFrameworkCore.AbpDbContext`1.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+2026-05-24 18:26:38.079 -07:00 [INF] Started database migrations...
+2026-05-24 18:26:38.083 -07:00 [INF] Migrating schema for host database...
+2026-05-24 18:26:39.854 -07:00 [WRN] The entity type 'EmployeeDocument' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:26:39.858 -07:00 [WRN] The entity type 'AllocatedTeacher' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:26:39.858 -07:00 [WRN] The entity type 'FeeRefundLine' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:26:40.732 -07:00 [WRN] Entity 'ElectiveGroup' has a global query filter defined and is the required end of a relationship with the entity 'ElectiveGroupComponent'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:26:40.732 -07:00 [WRN] Entity 'Employee' has a global query filter defined and is the required end of a relationship with the entity 'EmployeePayrollComponent'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:26:40.733 -07:00 [WRN] Entity 'Employee' has a global query filter defined and is the required end of a relationship with the entity 'EmployeePayrollDetails'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:26:40.733 -07:00 [WRN] Entity 'LibrarySection' has a global query filter defined and is the required end of a relationship with the entity 'LibraryShelf'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:26:40.733 -07:00 [WRN] Entity 'Building' has a global query filter defined and is the required end of a relationship with the entity 'Floor'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:26:40.752 -07:00 [WRN] The property 'ExamSubjectDivision.RoomIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:26:40.769 -07:00 [WRN] The property 'Group.NameBasedDivisionIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:26:40.769 -07:00 [WRN] The property 'Group.NameBasedRoleIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:26:40.769 -07:00 [WRN] The property 'Group.RuleBasedDivisionIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:26:40.769 -07:00 [WRN] The property 'Group.RuleBasedRoleIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:26:40.786 -07:00 [WRN] The property 'Event.AudienceIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:26:40.786 -07:00 [WRN] The property 'Holiday.AudienceIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:26:40.791 -07:00 [WRN] The property 'AttendanceImportBatch.ErrorsSummary' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:26:40.791 -07:00 [WRN] The property 'AttendanceImportBatch.WarningsSummary' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:26:40.791 -07:00 [WRN] The property 'AttendanceImportRow.Errors' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:26:40.792 -07:00 [WRN] The property 'AttendanceImportRow.Warnings' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:26:40.793 -07:00 [WRN] The property 'SalarySlip.Deductions' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:26:40.793 -07:00 [WRN] The property 'SalarySlip.Earnings' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:26:40.805 -07:00 [WRN] The property 'StudentFamilyDetail.SiblingStudentIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:26:41.603 -07:00 [INF] Executing host database seed...
+2026-05-24 18:26:47.509 -07:00 [INF] [HRSeeder] Start seeding for TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:26:47.994 -07:00 [INF] [HRSeeder] HR policy baseline ensured academicYears=3, calendarsTouched=3, policiesTouched=6, demoHolidaysTouched=24, demoScenarios=true
+2026-05-24 18:26:47.994 -07:00 [INF] [HRSeeder] Phase 1 complete (payroll components)
+2026-05-24 18:26:47.998 -07:00 [INF] [HRSeeder] Phase 2 complete (shift management)
+2026-05-24 18:26:48.005 -07:00 [INF] [HRSeeder] Phase 3 complete (leave types/policies)
+2026-05-24 18:26:55.394 -07:00 [INF] [HRSeeder] Phase 4 complete (employees seeded=0)
+2026-05-24 18:27:19.818 -07:00 [INF] [HRSeeder] Seeded employee completeness backfilled created=0, updated=19
+2026-05-24 18:27:19.818 -07:00 [INF] [HRSeeder] Phase 5 complete (employee completeness backfill)
+2026-05-24 18:27:22.163 -07:00 [INF] [HRSeeder] Employee status distribution applied active=17, inactive=2, updated=0
+2026-05-24 18:27:22.163 -07:00 [INF] [HRSeeder] Phase 6 complete (active employees=17)
+2026-05-24 18:27:24.567 -07:00 [INF] [HRSeeder] Demo HR policy assignments inserted=0, group employee members added=0
+2026-05-24 18:27:24.567 -07:00 [INF] [HRSeeder] Phase 7 complete (HR policy assignments)
+2026-05-24 18:27:31.888 -07:00 [INF] [HRSeeder] Attendance sample seeded rows=17 for employees=17
+2026-05-24 18:27:31.898 -07:00 [INF] [HRSeeder] Previous completed month attendance ensured range="2026-04-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:27:31.925 -07:00 [INF] [HRSeeder] Past-year payroll attendance seeded academicYear=2025-2026, range="2026-02-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:27:31.987 -07:00 [INF] [HRSeeder] Leave scenario sample seeded rows=0
+2026-05-24 18:27:31.987 -07:00 [INF] [HRSeeder] Phase 8 complete (sample payroll/attendance/leaves)
+2026-05-24 18:27:31.987 -07:00 [INF] [HRSeeder] Finished seeding for TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:27:32.095 -07:00 [INF] [StudentSeeder] Students already exist, skipping. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:27:32.445 -07:00 [INF] [FeeRefundSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:27:32.447 -07:00 [DBG] [FeeRefundSeeder] Using AcademicYear: "3a216ad2-1196-bd94-e732-c792f33463e7" – 2026-2027
+2026-05-24 18:27:33.328 -07:00 [DBG] [FeeRefundSeeder] Using Student: "3a216ad3-3826-2a6c-7933-14f5faa4f9e8" (GR 10001)
+2026-05-24 18:27:33.354 -07:00 [DBG] [FeeRefundSeeder] Created FeeCategory: "3a216eeb-68da-f968-ad30-654d0ac65072" – Seed – Tuition
+2026-05-24 18:27:33.399 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "June"/2026 – ₹1500 (fully paid)
+2026-05-24 18:27:33.399 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "July"/2026 – ₹2000 (fully paid)
+2026-05-24 18:27:33.399 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "August"/2026 – ₹1500 (fully paid)
+2026-05-24 18:27:33.399 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "September"/2026 – ₹1800 (fully paid)
+2026-05-24 18:27:33.783 -07:00 [DBG] [FeeRefundSeeder] Inserted Pending refund: REF-SEED-000001
+2026-05-24 18:27:33.784 -07:00 [DBG] [FeeRefundSeeder] Inserted UnderReview refund: REF-SEED-000002
+2026-05-24 18:27:33.814 -07:00 [DBG] [FeeRefundSeeder] Inserted Approved refund: REF-SEED-000003
+2026-05-24 18:27:33.814 -07:00 [INF] [FeeRefundSeeder] Seed completed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:27:34.512 -07:00 [INF] [FeeCollectionSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:27:34.941 -07:00 [DBG] [FeeCollectionSeeder] Setup resolved: Board="3a216ad2-1198-81b1-5c0a-29eeca144f6c", Medium="3a216ad2-119d-a4bb-fa57-ee3deb9fb512", Stage="3a216ad2-11a3-a3bf-1ea6-c6ad19a13397", Standards=3
+2026-05-24 18:27:37.017 -07:00 [INF] [FeeCollectionSeeder] Found 90 enrolled students.
+2026-05-24 18:27:38.279 -07:00 [DBG] [FeeCollectionSeeder] Inserted receipt REC-SEED-000001 (student 0, month 0, Cash)
+2026-05-24 18:27:38.307 -07:00 [DBG] [FeeCollectionSeeder] Inserted receipt REC-SEED-000002 (student 0, month 1, UPI)
+2026-05-24 18:27:38.336 -07:00 [DBG] [FeeCollectionSeeder] Inserted receipt REC-SEED-000003 (student 1, month 0, Cash partial)
+2026-05-24 18:27:38.336 -07:00 [INF] [FeeCollectionSeeder] Seed completed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:27:38.453 -07:00 [INF] [FeeReceiptSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:27:44.228 -07:00 [INF] [FeeReceiptSeeder] Found 90 students to use for seed receipts.
+2026-05-24 18:27:45.788 -07:00 [INF] [FeeReceiptSeeder] Seed completed for tenant "11111111-1111-1111-1111-111111111111". Receipts: FIN×3, KFE×2(1 verified), KCH×2. FIN-SEED-000005 + KCH-SEED-000005 share the same transaction.
+2026-05-24 18:27:45.892 -07:00 [INF] [ReconciliationSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:27:51.727 -07:00 [WRN] [ReconciliationSeeder] No students with outstanding DueFees — using all enrolled students.
+2026-05-24 18:27:51.742 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad3-3826-2a6c-7933-14f5faa4f9e8" — txn REC-RECON-CHEQUE seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:27:51.747 -07:00 [DBG] [ReconciliationSeeder] Pending "Cheque": KFE-RECON-CHEQUE (txn=REC-RECON-CHEQUE, allocated=0)
+2026-05-24 18:27:51.749 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad3-382c-03cc-52f3-e0a5651a218a" — txn REC-RECON-DD seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:27:51.750 -07:00 [DBG] [ReconciliationSeeder] Pending "DemandDraft": KFE-RECON-DD (txn=REC-RECON-DD, allocated=0)
+2026-05-24 18:27:51.752 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad3-382d-07ba-6fab-826809f97e09" — txn REC-RECON-NEFT seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:27:51.753 -07:00 [DBG] [ReconciliationSeeder] Pending "BankTransfer": KFE-RECON-NEFT (txn=REC-RECON-NEFT, allocated=0)
+2026-05-24 18:27:51.756 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad3-382d-0934-9f44-d4feb24c0ec4" — txn REC-RECON-CC seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:27:51.757 -07:00 [DBG] [ReconciliationSeeder] Pending "CreditCard": KFE-RECON-CC (txn=REC-RECON-CC, allocated=0)
+2026-05-24 18:27:51.758 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad3-382d-0db8-2abb-1f6d6b79a25f" — txn REC-RECON-UPI seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:27:51.759 -07:00 [DBG] [ReconciliationSeeder] Pending "UPI": KFE-RECON-UPI (txn=REC-RECON-UPI, allocated=0)
+2026-05-24 18:27:51.760 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad3-382d-1083-6064-e66def1c5b64" — txn REC-RECON-OG seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:27:51.761 -07:00 [DBG] [ReconciliationSeeder] Pending "OnlinePaymentGateway": KFE-RECON-OG (txn=REC-RECON-OG, allocated=0)
+2026-05-24 18:27:51.763 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad3-382d-10ee-0e3e-a172df735bd5" — txn REC-RECON-WAL seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:27:51.764 -07:00 [DBG] [ReconciliationSeeder] Pending "WalletPrepaidCard": KFE-RECON-WAL (txn=REC-RECON-WAL, allocated=0)
+2026-05-24 18:27:51.767 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad3-382d-1370-51f3-7d4da00067ef" — txn REC-RECON-BT-OK seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:27:51.775 -07:00 [DBG] [ReconciliationSeeder] Approved BankTransfer: KFE-RECON-BT-APPROVED → FIN-RECON-BT-APPROVED
+2026-05-24 18:27:51.777 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad3-382d-1428-235c-edbe13dcf27a" — txn REC-RECON-UPI-RJ seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:27:51.794 -07:00 [DBG] [ReconciliationSeeder] Rejected UPI: KFE-RECON-UPI-REJECT (txn reversed, DueFee restored=false)
+2026-05-24 18:27:51.794 -07:00 [INF] [ReconciliationSeeder] Seed completed. TenantId="11111111-1111-1111-1111-111111111111". Created 7 pending + 1 approved + 1 rejected reconciliation entries.
+2026-05-24 18:27:51.986 -07:00 [INF] [ConcessionTypeSeeder] Concession types already seeded — skipping.
+2026-05-24 18:28:00.281 -07:00 [INF] No employee alias match found for seeded login admin-ddvs. AliasEmails=admin1@gmail.com, ddvs@gmail.com
+2026-05-24 18:28:02.926 -07:00 [INF] No employee alias match found for seeded login admin-ops. AliasEmails=admin2@ddvs.com
+2026-05-24 18:28:08.080 -07:00 [INF] No employee alias match found for seeded login principal-cbse. AliasEmails=principle1@ddvs.com
+2026-05-24 18:28:18.497 -07:00 [INF] No employee alias match found for seeded login student-demo. AliasEmails=student1@ddvs.com, student.demo@school.edu
+2026-05-24 18:28:20.090 -07:00 [INF] [HRSeeder] Start seeding for TenantId="22222222-2222-2222-2222-222222222222"
+2026-05-24 18:28:20.220 -07:00 [INF] [HRSeeder] HR policy baseline ensured academicYears=3, calendarsTouched=3, policiesTouched=6, demoHolidaysTouched=24, demoScenarios=true
+2026-05-24 18:28:20.220 -07:00 [INF] [HRSeeder] Phase 1 complete (payroll components)
+2026-05-24 18:28:20.222 -07:00 [INF] [HRSeeder] Phase 2 complete (shift management)
+2026-05-24 18:28:20.225 -07:00 [INF] [HRSeeder] Phase 3 complete (leave types/policies)
+2026-05-24 18:28:26.469 -07:00 [INF] [HRSeeder] Phase 4 complete (employees seeded=0)
+2026-05-24 18:28:53.300 -07:00 [INF] [HRSeeder] Seeded employee completeness backfilled created=0, updated=19
+2026-05-24 18:28:53.300 -07:00 [INF] [HRSeeder] Phase 5 complete (employee completeness backfill)
+2026-05-24 18:28:56.014 -07:00 [INF] [HRSeeder] Employee status distribution applied active=17, inactive=2, updated=0
+2026-05-24 18:28:56.014 -07:00 [INF] [HRSeeder] Phase 6 complete (active employees=17)
+2026-05-24 18:28:58.602 -07:00 [INF] [HRSeeder] Demo HR policy assignments inserted=0, group employee members added=0
+2026-05-24 18:28:58.602 -07:00 [INF] [HRSeeder] Phase 7 complete (HR policy assignments)
+2026-05-24 18:29:11.670 -07:00 [INF] [HRSeeder] Attendance sample seeded rows=17 for employees=17
+2026-05-24 18:29:11.681 -07:00 [INF] [HRSeeder] Previous completed month attendance ensured range="2026-04-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:29:11.696 -07:00 [INF] [HRSeeder] Past-year payroll attendance seeded academicYear=2025-2026, range="2026-02-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:29:11.720 -07:00 [INF] [HRSeeder] Leave scenario sample seeded rows=0
+2026-05-24 18:29:11.720 -07:00 [INF] [HRSeeder] Phase 8 complete (sample payroll/attendance/leaves)
+2026-05-24 18:29:11.721 -07:00 [INF] [HRSeeder] Finished seeding for TenantId="22222222-2222-2222-2222-222222222222"
+2026-05-24 18:29:11.725 -07:00 [INF] [StudentSeeder] Students already exist, skipping. TenantId="22222222-2222-2222-2222-222222222222"
+2026-05-24 18:29:11.730 -07:00 [INF] [FeeRefundSeeder] Starting seed. TenantId="22222222-2222-2222-2222-222222222222"
+2026-05-24 18:29:11.731 -07:00 [DBG] [FeeRefundSeeder] Using AcademicYear: "3a216ad3-b07b-6e93-0dc3-1f6a57500977" – 2026-2027
+2026-05-24 18:29:12.572 -07:00 [DBG] [FeeRefundSeeder] Using Student: "3a216ad5-055d-e453-4e87-5fe5e5b6a8fb" (GR 10001)
+2026-05-24 18:29:12.582 -07:00 [DBG] [FeeRefundSeeder] Created FeeCategory: "3a216eec-ec85-99e4-9789-a6e37c6ccdaf" – Seed – Tuition
+2026-05-24 18:29:12.606 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "June"/2026 – ₹1500 (fully paid)
+2026-05-24 18:29:12.606 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "July"/2026 – ₹2000 (fully paid)
+2026-05-24 18:29:12.606 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "August"/2026 – ₹1500 (fully paid)
+2026-05-24 18:29:12.606 -07:00 [DBG] [FeeRefundSeeder] Prepared DueFee: "September"/2026 – ₹1800 (fully paid)
+2026-05-24 18:29:12.894 -07:00 [DBG] [FeeRefundSeeder] Inserted Pending refund: REF-SEED-000001
+2026-05-24 18:29:12.896 -07:00 [DBG] [FeeRefundSeeder] Inserted UnderReview refund: REF-SEED-000002
+2026-05-24 18:29:13.001 -07:00 [DBG] [FeeRefundSeeder] Inserted Approved refund: REF-SEED-000003
+2026-05-24 18:29:13.001 -07:00 [INF] [FeeRefundSeeder] Seed completed. TenantId="22222222-2222-2222-2222-222222222222"
+2026-05-24 18:29:13.008 -07:00 [INF] [FeeCollectionSeeder] Starting seed. TenantId="22222222-2222-2222-2222-222222222222"
+2026-05-24 18:29:13.604 -07:00 [DBG] [FeeCollectionSeeder] Setup resolved: Board="3a216ad3-b07d-97e3-da14-cb77f999833e", Medium="3a216ad3-b07f-a22e-1c06-4e57620b2ff7", Stage="3a216ad3-b083-85fb-bdc6-2cb128f57c16", Standards=3
+2026-05-24 18:29:16.146 -07:00 [INF] [FeeCollectionSeeder] Found 90 enrolled students.
+2026-05-24 18:29:19.624 -07:00 [DBG] [FeeCollectionSeeder] Inserted receipt REC-SEED-000001 (student 0, month 0, Cash)
+2026-05-24 18:29:19.686 -07:00 [DBG] [FeeCollectionSeeder] Inserted receipt REC-SEED-000002 (student 0, month 1, UPI)
+2026-05-24 18:29:19.746 -07:00 [DBG] [FeeCollectionSeeder] Inserted receipt REC-SEED-000003 (student 1, month 0, Cash partial)
+2026-05-24 18:29:19.746 -07:00 [INF] [FeeCollectionSeeder] Seed completed. TenantId="22222222-2222-2222-2222-222222222222"
+2026-05-24 18:29:19.747 -07:00 [INF] [FeeReceiptSeeder] Starting seed. TenantId="22222222-2222-2222-2222-222222222222"
+2026-05-24 18:29:26.478 -07:00 [INF] [FeeReceiptSeeder] Found 90 students to use for seed receipts.
+2026-05-24 18:29:29.893 -07:00 [INF] [FeeReceiptSeeder] Seed completed for tenant "22222222-2222-2222-2222-222222222222". Receipts: FIN×3, KFE×2(1 verified), KCH×2. FIN-SEED-000005 + KCH-SEED-000005 share the same transaction.
+2026-05-24 18:29:29.895 -07:00 [INF] [ReconciliationSeeder] Starting seed. TenantId="22222222-2222-2222-2222-222222222222"
+2026-05-24 18:29:36.762 -07:00 [WRN] [ReconciliationSeeder] No students with outstanding DueFees — using all enrolled students.
+2026-05-24 18:29:36.774 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad5-055d-e453-4e87-5fe5e5b6a8fb" — txn REC-RECON-CHEQUE seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:29:36.776 -07:00 [DBG] [ReconciliationSeeder] Pending "Cheque": KFE-RECON-CHEQUE (txn=REC-RECON-CHEQUE, allocated=0)
+2026-05-24 18:29:36.781 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad5-055e-03e1-2f32-0051ec792dd3" — txn REC-RECON-DD seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:29:36.783 -07:00 [DBG] [ReconciliationSeeder] Pending "DemandDraft": KFE-RECON-DD (txn=REC-RECON-DD, allocated=0)
+2026-05-24 18:29:36.787 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad5-055e-04d1-6e28-37adc77e6066" — txn REC-RECON-NEFT seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:29:36.789 -07:00 [DBG] [ReconciliationSeeder] Pending "BankTransfer": KFE-RECON-NEFT (txn=REC-RECON-NEFT, allocated=0)
+2026-05-24 18:29:36.792 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad5-055e-0877-6682-0446180202e8" — txn REC-RECON-CC seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:29:36.794 -07:00 [DBG] [ReconciliationSeeder] Pending "CreditCard": KFE-RECON-CC (txn=REC-RECON-CC, allocated=0)
+2026-05-24 18:29:36.798 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad5-055e-0b34-6e7c-43f37fa911ec" — txn REC-RECON-UPI seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:29:36.799 -07:00 [DBG] [ReconciliationSeeder] Pending "UPI": KFE-RECON-UPI (txn=REC-RECON-UPI, allocated=0)
+2026-05-24 18:29:36.803 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad5-055e-11a9-094c-a3af6db4e976" — txn REC-RECON-OG seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:29:36.805 -07:00 [DBG] [ReconciliationSeeder] Pending "OnlinePaymentGateway": KFE-RECON-OG (txn=REC-RECON-OG, allocated=0)
+2026-05-24 18:29:36.808 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad5-055e-1289-3c2b-1e679f7bfeb4" — txn REC-RECON-WAL seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:29:36.810 -07:00 [DBG] [ReconciliationSeeder] Pending "WalletPrepaidCard": KFE-RECON-WAL (txn=REC-RECON-WAL, allocated=0)
+2026-05-24 18:29:36.813 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad5-055e-1344-a156-4fbe245fdeec" — txn REC-RECON-BT-OK seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:29:36.836 -07:00 [DBG] [ReconciliationSeeder] Approved BankTransfer: KFE-RECON-BT-APPROVED → FIN-RECON-BT-APPROVED
+2026-05-24 18:29:36.840 -07:00 [WRN] [ReconciliationSeeder] No allocatable DueFee for student "3a216ad5-055e-13cd-096e-5755a2cb75bc" — txn REC-RECON-UPI-RJ seeded without allocation (list UI still works, reject rollback won't).
+2026-05-24 18:29:36.892 -07:00 [DBG] [ReconciliationSeeder] Rejected UPI: KFE-RECON-UPI-REJECT (txn reversed, DueFee restored=false)
+2026-05-24 18:29:36.892 -07:00 [INF] [ReconciliationSeeder] Seed completed. TenantId="22222222-2222-2222-2222-222222222222". Created 7 pending + 1 approved + 1 rejected reconciliation entries.
+2026-05-24 18:29:37.061 -07:00 [INF] [ConcessionTypeSeeder] Concession types already seeded — skipping.
+2026-05-24 18:29:37.317 -07:00 [INF] Skipping minimal academic setup seeder. Full academic setup is handled by AcademicSetupSeederContributor.
+2026-05-24 18:29:38.193 -07:00 [INF] Successfully completed host database migrations.
+2026-05-24 18:29:38.214 -07:00 [INF] Executing DDVS tenant database seed...
+2026-05-24 18:29:38.487 -07:00 [INF] Skipping minimal academic setup seeder. Full academic setup is handled by AcademicSetupSeederContributor.
+2026-05-24 18:29:38.500 -07:00 [INF] Successfully completed DDVS tenant database migrations.
+2026-05-24 18:29:38.500 -07:00 [INF] Executing SSVM tenant database seed...
+2026-05-24 18:29:38.839 -07:00 [INF] Skipping minimal academic setup seeder. Full academic setup is handled by AcademicSetupSeederContributor.
+2026-05-24 18:29:38.846 -07:00 [INF] Successfully completed SSVM tenant database migrations.
+2026-05-24 18:29:38.846 -07:00 [INF] Successfully completed all database migrations.
+2026-05-24 18:29:38.846 -07:00 [INF] You can safely end this process...
+2026-05-24 18:29:49.364 -07:00 [INF] Started database migrations...
+2026-05-24 18:29:49.368 -07:00 [INF] Migrating schema for host database...
+2026-05-24 18:29:51.125 -07:00 [WRN] The entity type 'EmployeeDocument' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:29:51.129 -07:00 [WRN] The entity type 'AllocatedTeacher' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:29:51.130 -07:00 [WRN] The entity type 'FeeRefundLine' was first mapped explicitly and then ignored. Consider not mapping the entity type in the first place.
+2026-05-24 18:29:52.180 -07:00 [WRN] Entity 'ElectiveGroup' has a global query filter defined and is the required end of a relationship with the entity 'ElectiveGroupComponent'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:29:52.180 -07:00 [WRN] Entity 'Employee' has a global query filter defined and is the required end of a relationship with the entity 'EmployeePayrollComponent'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:29:52.180 -07:00 [WRN] Entity 'Employee' has a global query filter defined and is the required end of a relationship with the entity 'EmployeePayrollDetails'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:29:52.180 -07:00 [WRN] Entity 'LibrarySection' has a global query filter defined and is the required end of a relationship with the entity 'LibraryShelf'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:29:52.180 -07:00 [WRN] Entity 'Building' has a global query filter defined and is the required end of a relationship with the entity 'Floor'. This may lead to unexpected results when the required entity is filtered out. Either configure the navigation as optional, or define matching query filters for both entities in the navigation. See https://go.microsoft.com/fwlink/?linkid=2131316 for more information.
+2026-05-24 18:29:52.201 -07:00 [WRN] The property 'ExamSubjectDivision.RoomIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:29:52.219 -07:00 [WRN] The property 'Group.NameBasedDivisionIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:29:52.219 -07:00 [WRN] The property 'Group.NameBasedRoleIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:29:52.219 -07:00 [WRN] The property 'Group.RuleBasedDivisionIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:29:52.219 -07:00 [WRN] The property 'Group.RuleBasedRoleIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:29:52.239 -07:00 [WRN] The property 'Event.AudienceIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:29:52.239 -07:00 [WRN] The property 'Holiday.AudienceIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:29:52.246 -07:00 [WRN] The property 'AttendanceImportBatch.ErrorsSummary' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:29:52.246 -07:00 [WRN] The property 'AttendanceImportBatch.WarningsSummary' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:29:52.247 -07:00 [WRN] The property 'AttendanceImportRow.Errors' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:29:52.247 -07:00 [WRN] The property 'AttendanceImportRow.Warnings' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:29:52.248 -07:00 [WRN] The property 'SalarySlip.Deductions' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:29:52.248 -07:00 [WRN] The property 'SalarySlip.Earnings' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:29:52.271 -07:00 [WRN] The property 'StudentFamilyDetail.SiblingStudentIds' is a collection or enumeration type with a value converter but with no value comparer. Set a value comparer to ensure the collection/enumeration elements are compared correctly.
+2026-05-24 18:29:53.152 -07:00 [INF] Executing host database seed...
+2026-05-24 18:29:59.247 -07:00 [INF] [HRSeeder] Start seeding for TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:29:59.741 -07:00 [INF] [HRSeeder] HR policy baseline ensured academicYears=3, calendarsTouched=3, policiesTouched=6, demoHolidaysTouched=24, demoScenarios=true
+2026-05-24 18:29:59.741 -07:00 [INF] [HRSeeder] Phase 1 complete (payroll components)
+2026-05-24 18:29:59.746 -07:00 [INF] [HRSeeder] Phase 2 complete (shift management)
+2026-05-24 18:29:59.755 -07:00 [INF] [HRSeeder] Phase 3 complete (leave types/policies)
+2026-05-24 18:30:08.552 -07:00 [INF] [HRSeeder] Phase 4 complete (employees seeded=0)
+2026-05-24 18:30:35.557 -07:00 [INF] [HRSeeder] Seeded employee completeness backfilled created=0, updated=19
+2026-05-24 18:30:35.557 -07:00 [INF] [HRSeeder] Phase 5 complete (employee completeness backfill)
+2026-05-24 18:30:38.381 -07:00 [INF] [HRSeeder] Employee status distribution applied active=17, inactive=2, updated=0
+2026-05-24 18:30:38.382 -07:00 [INF] [HRSeeder] Phase 6 complete (active employees=17)
+2026-05-24 18:30:41.181 -07:00 [INF] [HRSeeder] Demo HR policy assignments inserted=0, group employee members added=0
+2026-05-24 18:30:41.181 -07:00 [INF] [HRSeeder] Phase 7 complete (HR policy assignments)
+2026-05-24 18:30:49.445 -07:00 [INF] [HRSeeder] Attendance sample seeded rows=0 for employees=17
+2026-05-24 18:30:49.456 -07:00 [INF] [HRSeeder] Previous completed month attendance ensured range="2026-04-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:30:49.472 -07:00 [INF] [HRSeeder] Past-year payroll attendance seeded academicYear=2025-2026, range="2026-02-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:30:49.549 -07:00 [INF] [HRSeeder] Leave scenario sample seeded rows=0
+2026-05-24 18:30:49.549 -07:00 [INF] [HRSeeder] Phase 8 complete (sample payroll/attendance/leaves)
+2026-05-24 18:30:49.549 -07:00 [INF] [HRSeeder] Finished seeding for TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:30:49.688 -07:00 [INF] [StudentSeeder] Students already exist, skipping. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:30:50.104 -07:00 [INF] [FeeRefundSeeder] Refund data already present (3 records). Skipping. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:30:50.947 -07:00 [INF] [FeeCollectionSeeder] Fee collection data already present (18 receipts). Skipping. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:30:51.080 -07:00 [INF] [FeeReceiptSeeder] Starting seed. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:30:58.536 -07:00 [INF] [FeeReceiptSeeder] Found 90 students to use for seed receipts.
+2026-05-24 18:30:58.636 -07:00 [DBG] [FeeReceiptSeeder] Receipt FIN-SEED-000001 already exists — skipping.
+2026-05-24 18:30:58.638 -07:00 [DBG] [FeeReceiptSeeder] Receipt FIN-SEED-000002 already exists — skipping.
+2026-05-24 18:30:58.639 -07:00 [DBG] [FeeReceiptSeeder] Transaction CHEQUE-SEED-000003 already exists — reusing.
+2026-05-24 18:30:58.649 -07:00 [DBG] [FeeReceiptSeeder] Transaction DD-SEED-000004 already exists — reusing.
+2026-05-24 18:30:58.654 -07:00 [DBG] [FeeReceiptSeeder] Receipt KFE-SEED-000004 already exists — skipping.
+2026-05-24 18:30:58.654 -07:00 [DBG] [FeeReceiptSeeder] Transaction MIXED-SEED-000005 already exists — reusing.
+2026-05-24 18:30:58.659 -07:00 [DBG] [FeeReceiptSeeder] Receipt FIN-SEED-000005 already exists — skipping.
+2026-05-24 18:30:58.660 -07:00 [DBG] [FeeReceiptSeeder] Receipt KCH-SEED-000005 already exists — skipping.
+2026-05-24 18:30:58.660 -07:00 [DBG] [FeeReceiptSeeder] Transaction CHARGE-SEED-000006 already exists — reusing.
+2026-05-24 18:30:58.661 -07:00 [DBG] [FeeReceiptSeeder] Receipt KCH-SEED-000006 already exists — skipping.
+2026-05-24 18:30:58.662 -07:00 [INF] [FeeReceiptSeeder] Seed completed for tenant "11111111-1111-1111-1111-111111111111". Receipts: FIN×3, KFE×2(1 verified), KCH×2. FIN-SEED-000005 + KCH-SEED-000005 share the same transaction.
+2026-05-24 18:30:58.775 -07:00 [INF] [ReconciliationSeeder] Seed data already present (KFE-RECON-CHEQUE). Skipping. TenantId="11111111-1111-1111-1111-111111111111"
+2026-05-24 18:30:58.897 -07:00 [INF] [ConcessionTypeSeeder] Concession types already seeded — skipping.
+2026-05-24 18:31:08.687 -07:00 [INF] No employee alias match found for seeded login admin-ddvs. AliasEmails=admin1@gmail.com, ddvs@gmail.com
+2026-05-24 18:31:11.665 -07:00 [INF] No employee alias match found for seeded login admin-ops. AliasEmails=admin2@ddvs.com
+2026-05-24 18:31:17.999 -07:00 [INF] No employee alias match found for seeded login principal-cbse. AliasEmails=principle1@ddvs.com
+2026-05-24 18:31:29.577 -07:00 [INF] No employee alias match found for seeded login student-demo. AliasEmails=student1@ddvs.com, student.demo@school.edu
+2026-05-24 18:31:31.390 -07:00 [INF] [HRSeeder] Start seeding for TenantId="22222222-2222-2222-2222-222222222222"
+2026-05-24 18:31:31.515 -07:00 [INF] [HRSeeder] HR policy baseline ensured academicYears=3, calendarsTouched=3, policiesTouched=6, demoHolidaysTouched=24, demoScenarios=true
+2026-05-24 18:31:31.515 -07:00 [INF] [HRSeeder] Phase 1 complete (payroll components)
+2026-05-24 18:31:31.518 -07:00 [INF] [HRSeeder] Phase 2 complete (shift management)
+2026-05-24 18:31:31.521 -07:00 [INF] [HRSeeder] Phase 3 complete (leave types/policies)
+2026-05-24 18:31:38.193 -07:00 [INF] [HRSeeder] Phase 4 complete (employees seeded=0)
+2026-05-24 18:32:06.713 -07:00 [INF] [HRSeeder] Seeded employee completeness backfilled created=0, updated=19
+2026-05-24 18:32:06.713 -07:00 [INF] [HRSeeder] Phase 5 complete (employee completeness backfill)
+2026-05-24 18:32:09.312 -07:00 [INF] [HRSeeder] Employee status distribution applied active=17, inactive=2, updated=0
+2026-05-24 18:32:09.312 -07:00 [INF] [HRSeeder] Phase 6 complete (active employees=17)
+2026-05-24 18:32:11.937 -07:00 [INF] [HRSeeder] Demo HR policy assignments inserted=0, group employee members added=0
+2026-05-24 18:32:11.937 -07:00 [INF] [HRSeeder] Phase 7 complete (HR policy assignments)
+2026-05-24 18:32:24.354 -07:00 [INF] [HRSeeder] Attendance sample seeded rows=0 for employees=17
+2026-05-24 18:32:24.362 -07:00 [INF] [HRSeeder] Previous completed month attendance ensured range="2026-04-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:32:24.376 -07:00 [INF] [HRSeeder] Past-year payroll attendance seeded academicYear=2025-2026, range="2026-02-01".."2026-04-30", rows=0, employees=17
+2026-05-24 18:32:24.396 -07:00 [INF] [HRSeeder] Leave scenario sample seeded rows=0
+2026-05-24 18:32:24.396 -07:00 [INF] [HRSeeder] Phase 8 complete (sample payroll/attendance/leaves)
+2026-05-24 18:32:24.396 -07:00 [INF] [HRSeeder] Finished seeding for TenantId="22222222-2222-2222-2222-222222222222"
+2026-05-24 18:32:24.400 -07:00 [INF] [StudentSeeder] Students already exist, skipping. TenantId="22222222-2222-2222-2222-222222222222"
+2026-05-24 18:32:24.403 -07:00 [INF] [FeeRefundSeeder] Refund data already present (3 records). Skipping. TenantId="22222222-2222-2222-2222-222222222222"
+2026-05-24 18:32:24.409 -07:00 [INF] [FeeCollectionSeeder] Fee collection data already present (18 receipts). Skipping. TenantId="22222222-2222-2222-2222-222222222222"
+2026-05-24 18:32:24.410 -07:00 [INF] [FeeReceiptSeeder] Starting seed. TenantId="22222222-2222-2222-2222-222222222222"
+2026-05-24 18:32:31.044 -07:00 [INF] [FeeReceiptSeeder] Found 90 students to use for seed receipts.
+2026-05-24 18:32:31.062 -07:00 [DBG] [FeeReceiptSeeder] Receipt FIN-SEED-000001 already exists — skipping.
+2026-05-24 18:32:31.063 -07:00 [DBG] [FeeReceiptSeeder] Receipt FIN-SEED-000002 already exists — skipping.
+2026-05-24 18:32:31.063 -07:00 [DBG] [FeeReceiptSeeder] Transaction CHEQUE-SEED-000003 already exists — reusing.
+2026-05-24 18:32:31.067 -07:00 [DBG] [FeeReceiptSeeder] Transaction DD-SEED-000004 already exists — reusing.
+2026-05-24 18:32:31.071 -07:00 [DBG] [FeeReceiptSeeder] Receipt KFE-SEED-000004 already exists — skipping.
+2026-05-24 18:32:31.071 -07:00 [DBG] [FeeReceiptSeeder] Transaction MIXED-SEED-000005 already exists — reusing.
+2026-05-24 18:32:31.074 -07:00 [DBG] [FeeReceiptSeeder] Receipt FIN-SEED-000005 already exists — skipping.
+2026-05-24 18:32:31.075 -07:00 [DBG] [FeeReceiptSeeder] Receipt KCH-SEED-000005 already exists — skipping.
+2026-05-24 18:32:31.075 -07:00 [DBG] [FeeReceiptSeeder] Transaction CHARGE-SEED-000006 already exists — reusing.
+2026-05-24 18:32:31.076 -07:00 [DBG] [FeeReceiptSeeder] Receipt KCH-SEED-000006 already exists — skipping.
+2026-05-24 18:32:31.077 -07:00 [INF] [FeeReceiptSeeder] Seed completed for tenant "22222222-2222-2222-2222-222222222222". Receipts: FIN×3, KFE×2(1 verified), KCH×2. FIN-SEED-000005 + KCH-SEED-000005 share the same transaction.
+2026-05-24 18:32:31.079 -07:00 [INF] [ReconciliationSeeder] Seed data already present (KFE-RECON-CHEQUE). Skipping. TenantId="22222222-2222-2222-2222-222222222222"
+2026-05-24 18:32:31.083 -07:00 [INF] [ConcessionTypeSeeder] Concession types already seeded — skipping.
+2026-05-24 18:32:31.243 -07:00 [INF] Skipping minimal academic setup seeder. Full academic setup is handled by AcademicSetupSeederContributor.
+2026-05-24 18:32:31.670 -07:00 [INF] Successfully completed host database migrations.
+2026-05-24 18:32:31.688 -07:00 [INF] Executing DDVS tenant database seed...
+2026-05-24 18:32:31.943 -07:00 [INF] Skipping minimal academic setup seeder. Full academic setup is handled by AcademicSetupSeederContributor.
+2026-05-24 18:32:31.949 -07:00 [INF] Successfully completed DDVS tenant database migrations.
+2026-05-24 18:32:31.949 -07:00 [INF] Executing SSVM tenant database seed...
+2026-05-24 18:32:32.246 -07:00 [INF] Skipping minimal academic setup seeder. Full academic setup is handled by AcademicSetupSeederContributor.
+2026-05-24 18:32:32.251 -07:00 [INF] Successfully completed SSVM tenant database migrations.
+2026-05-24 18:32:32.251 -07:00 [INF] Successfully completed all database migrations.
+2026-05-24 18:32:32.251 -07:00 [INF] You can safely end this process...

@@ -27,5 +27,9 @@ public class HrPolicyAssignmentConfiguration : IEntityTypeConfiguration<HrPolicy
 			.HasDatabaseName("IX_HR_PolicyAssignments_Target_Active");
 		builder.HasIndex(x => new { x.AcademicYearId, x.TargetType, x.TargetKey, x.EffectiveFrom, x.EffectiveTo, x.IsActive })
 			.HasDatabaseName("IX_HR_PolicyAssignments_Resolver");
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsActive, x.PayrollPolicyId })
+			.HasDatabaseName("IX_HR_PolicyAssignments_PayrollPolicy_Impact");
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsActive, x.AttendancePolicyId })
+			.HasDatabaseName("IX_HR_PolicyAssignments_AttendancePolicy_Impact");
 	}
 }

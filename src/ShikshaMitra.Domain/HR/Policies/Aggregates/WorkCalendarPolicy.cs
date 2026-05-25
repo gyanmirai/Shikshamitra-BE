@@ -83,6 +83,12 @@ public class WorkCalendarPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Version++;
 	}
 
+	public void Unarchive()
+	{
+		Status = HrPolicyStatus.Draft;
+		Version++;
+	}
+
 	public IReadOnlyList<int> GetCustomWeeklyOffs()
 	{
 		if (string.IsNullOrWhiteSpace(CustomWeeklyOffsJson))

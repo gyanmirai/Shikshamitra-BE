@@ -13,6 +13,16 @@ public enum AttendanceRegisterPayrollState
 	Locked = 2
 }
 
+public enum AttendanceRegisterExceptionFilter
+{
+	All = 0,
+	NeedsAttention = 1,
+	Absent = 2,
+	HalfDay = 3,
+	MissingPunch = 4,
+	Locked = 5
+}
+
 public class GetAttendanceRegisterInput : PagedAndSortedResultRequestDto
 {
 	public string StartDate { get; set; } = string.Empty;
@@ -28,6 +38,11 @@ public class GetAttendanceRegisterInput : PagedAndSortedResultRequestDto
 	public string? Search { get; set; }
 }
 
+public class GetGroupedAttendanceRegisterInput : GetAttendanceRegisterInput
+{
+	public AttendanceRegisterExceptionFilter ExceptionFilter { get; set; } = AttendanceRegisterExceptionFilter.All;
+}
+
 public class AttendanceRegisterResponse
 {
 	public int TotalCount { get; set; }
@@ -40,11 +55,44 @@ public class AttendanceRegisterResponse
 
 public class AttendanceRegisterSummaryDto
 {
+	public int StaffCount { get; set; }
 	public int Present { get; set; }
 	public int HalfDay { get; set; }
 	public int Absent { get; set; }
 	public int Editable { get; set; }
 	public int Locked { get; set; }
+	public int MissingPunch { get; set; }
+}
+
+public class GroupedAttendanceRegisterResponse
+{
+	public int TotalCount { get; set; }
+	public int CurrentPage { get; set; }
+	public int PageSize { get; set; }
+	public int TotalPages { get; set; }
+	public AttendanceRegisterSummaryDto Summary { get; set; } = new();
+	public IReadOnlyList<GroupedAttendanceRegisterEmployeeDto> Items { get; set; } = Array.Empty<GroupedAttendanceRegisterEmployeeDto>();
+}
+
+public class GroupedAttendanceRegisterEmployeeDto
+{
+	public Guid EmployeeId { get; set; }
+	public string EmployeeName { get; set; } = string.Empty;
+	public string EmployeeCode { get; set; } = string.Empty;
+	public string? Department { get; set; }
+	public string? EmployeeGroup { get; set; }
+	public Guid? EducationMediumStageId { get; set; }
+	public string? EducationMediumStageName { get; set; }
+	public Guid? RoleId { get; set; }
+	public int RecordedDays { get; set; }
+	public int Present { get; set; }
+	public int HalfDay { get; set; }
+	public int Absent { get; set; }
+	public int Editable { get; set; }
+	public int Locked { get; set; }
+	public int MissingPunch { get; set; }
+	public bool HasExceptions { get; set; }
+	public IReadOnlyList<AttendanceRegisterRowDto> Days { get; set; } = Array.Empty<AttendanceRegisterRowDto>();
 }
 
 public class AttendanceRegisterRowDto
@@ -110,6 +158,7 @@ public class AttendanceRegisterAdjustmentRowResult
 public interface IAttendanceRegisterAppService
 {
 	Task<AttendanceRegisterResponse> GetAsync(GetAttendanceRegisterInput input);
+	Task<GroupedAttendanceRegisterResponse> GetGroupedAsync(GetGroupedAttendanceRegisterInput input);
 	Task<AttendanceRegisterAdjustmentResult> AdjustAsync(AttendanceRegisterAdjustRequest input);
 	Task<AttendanceRegisterAdjustmentResult> BulkAdjustAsync(AttendanceRegisterBulkAdjustRequest input);
 }

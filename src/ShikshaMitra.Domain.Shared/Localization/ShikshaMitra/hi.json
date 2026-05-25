@@ -65,6 +65,8 @@
     "HR:Payroll:030009": "EmployeeId आवश्यक है।",
     "HR:Payroll:030010": "वेतन पर्ची प्राप्त करते समय त्रुटि हुई। कृपया पुनः प्रयास करें।",
     "HR:Payroll:030019": "Payroll snapshot schema लागू नहीं है। DB migration 20260428034756_PayrollRunItemSnapshots चलाएँ और पुनः प्रयास करें।",
+    "HR:Payroll:030027": "Payroll adjustment केवल payroll row reviewed होने के बाद और lock होने से पहले बदला जा सकता है।",
+    "HR:Payroll:030028": "Payroll row से review हटाने से पहले payroll-only adjustments हटाएँ।",
     "HR:Calendar:040005": "आईडी '{itemId}' वाला कैलेंडर आइटम नहीं मिला।"
   }
 }

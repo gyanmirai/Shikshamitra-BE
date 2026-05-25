@@ -224,6 +224,7 @@ public class UpsertEmployeePolicyOverrideDto
 public class EffectiveEmployeePoliciesDto
 {
 	public Guid EmployeeId { get; set; }
+	public Guid AcademicYearId { get; set; }
 	public DateTime Date { get; set; }
 	public HrPolicyAssignmentDto? Assignment { get; set; }
 	public string PolicySource { get; set; } = "default";
@@ -454,6 +455,9 @@ public class HrPolicyVersionDto : EntityDto<Guid>
 	public string? ChangeReason { get; set; }
 	public DateTime CreationTime { get; set; }
 	public Guid? CreatorId { get; set; }
+	public string? CreatedByName { get; set; }
+	public string Summary { get; set; } = string.Empty;
+	public int ChangedFieldCount { get; set; }
 	public string SnapshotJson { get; set; } = "{}";
 }
 
@@ -471,6 +475,13 @@ public class HrPolicyVersionDifferenceDto
 	public string Field { get; set; } = string.Empty;
 	public string? FromValue { get; set; }
 	public string? ToValue { get; set; }
+	public string FieldKey { get; set; } = string.Empty;
+	public string FieldLabel { get; set; } = string.Empty;
+	public string Category { get; set; } = string.Empty;
+	public string FromDisplayValue { get; set; } = string.Empty;
+	public string ToDisplayValue { get; set; } = string.Empty;
+	public string? FromRawValue { get; set; }
+	public string? ToRawValue { get; set; }
 }
 
 public class HrPolicyRestoreDraftRequestDto

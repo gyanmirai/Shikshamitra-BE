@@ -22,6 +22,19 @@ public class HrAuditWriter(
 	IGuidGenerator guidGenerator) : ITransientDependency
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+	private static readonly string[] DefaultIgnoredDiffFields =
+	[
+		"id",
+		"tenantId",
+		"creatorId",
+		"creationTime",
+		"lastModifierId",
+		"lastModificationTime",
+		"deleterId",
+		"deletionTime",
+		"isDeleted"
+	];
+	private string? actorNameCache;
 
 	public async Task WriteAsync(
 		Guid? academicYearId,
@@ -60,7 +73,7 @@ public class HrAuditWriter(
 
 	public static List<HrAuditChangedFieldDto> Diff<T>(T before, T after, params string[] ignoredFields)
 	{
-		var ignored = ignoredFields.Select(x => x.ToLowerInvariant()).ToHashSet();
+		var ignored = DefaultIgnoredDiffFields.Concat(ignoredFields).Select(x => x.ToLowerInvariant()).ToHashSet();
 		using var beforeDoc = JsonDocument.Parse(JsonSerializer.Serialize(before, JsonOptions));
 		using var afterDoc = JsonDocument.Parse(JsonSerializer.Serialize(after, JsonOptions));
 		var beforeValues = beforeDoc.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.GetRawText());
@@ -80,12 +93,19 @@ public class HrAuditWriter(
 
 	private async Task<string?> ResolveActorNameAsync()
 	{
+		if (actorNameCache != null)
+		{
+			return actorNameCache;
+		}
+
 		if (!currentUser.Id.HasValue)
 		{
-			return currentUser.UserName;
+			actorNameCache = currentUser.UserName;
+			return actorNameCache;
 		}
 		var user = await userRepository.FindAsync(currentUser.Id.Value);
-		return user?.Name ?? user?.UserName ?? currentUser.UserName;
+		actorNameCache = user?.Name ?? user?.UserName ?? currentUser.UserName;
+		return actorNameCache;
 	}
 
 	private static string? Trim(string? value)

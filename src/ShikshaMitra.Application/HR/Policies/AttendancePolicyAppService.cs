@@ -185,6 +185,22 @@ public class AttendancePolicyAppService(
 		await auditWriter.WriteAsync(entity.AcademicYearId, "attendance_policy", entity.Id, entity.Name, "archived", $"Archived attendance policy {entity.Name}.");
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.Archive)]
+	public async Task<AttendancePolicyDto> UnarchiveAsync(Guid id)
+	{
+		var entity = await repository.GetAsync(id);
+		if (entity.Status != HrPolicyStatus.Archived)
+		{
+			return HrPolicyMapping.ToDto(entity);
+		}
+		entity.Unarchive();
+		await repository.UpdateAsync(entity, autoSave: true);
+		var dto = HrPolicyMapping.ToDto(entity);
+		await versionAppService.CaptureAsync("attendance", dto, "unarchived");
+		await auditWriter.WriteAsync(entity.AcademicYearId, "attendance_policy", entity.Id, entity.Name, "unarchived", $"Unarchived attendance policy {entity.Name} as draft.");
+		return dto;
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.SetDefault)]
 	public async Task<AttendancePolicyDto> SetDefaultAsync(Guid id)
 	{

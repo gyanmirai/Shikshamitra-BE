@@ -248,7 +248,7 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
                 isOneTime: true,
                 amount:    DevFeeAmount));
 
-            await _dueFeeRepository.InsertManyAsync(dueFees, autoSave: false);
+            await _dueFeeRepository.InsertManyAsync(dueFees, autoSave: true);
             studentsWithNewDueFees.Add(student);
         }
 

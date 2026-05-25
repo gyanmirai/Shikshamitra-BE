@@ -160,6 +160,13 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Version++;
 	}
 
+	public void Unarchive()
+	{
+		Status = HrPolicyStatus.Draft;
+		IsDefault = false;
+		Version++;
+	}
+
 	private static void Validate(
 		string name,
 		HrPolicyStatus status,

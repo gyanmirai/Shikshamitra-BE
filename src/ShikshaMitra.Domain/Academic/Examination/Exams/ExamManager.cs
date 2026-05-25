@@ -36,11 +36,16 @@ public class ExamManager(
         exam.UpdateSubjects(subjectIds);
     }
 
-    public void SaveSchedule(Exam exam, List<(Guid subjectId, DateTime? examDate, DateTime? startTime, DateTime? endTime, double? totalMarks, double? passingMarks, string? notes, Guid? gradeScalingId)> schedules)
+    public void SaveSchedule(Exam exam, List<(Guid subjectId, Guid? electiveGroupId, DateTime? examDate, DateTime? startTime, DateTime? endTime, double? totalMarks, double? passingMarks, string? notes, Guid? gradeScalingId)> schedules)
     {
         foreach (var schedule in schedules)
         {
-            var subject = exam.ExamSubjects.ToList().FirstOrDefault(x => x.SubjectId == schedule.subjectId);
+            // Separate mode: ExamSubject.SubjectId = actual subjectId → first lookup hits.
+            // Combined mode: ExamSubject.SubjectId = electiveGroupId → first lookup misses, fallback hits.
+            var subject = exam.ExamSubjects.FirstOrDefault(x => x.SubjectId == schedule.subjectId)
+                       ?? (schedule.electiveGroupId.HasValue
+                           ? exam.ExamSubjects.FirstOrDefault(x => x.SubjectId == schedule.electiveGroupId.Value)
+                           : null);
             if (subject != null)
             {
                 subject.UpdateSchedule(schedule.examDate, schedule.startTime, schedule.endTime, schedule.totalMarks, schedule.passingMarks, schedule.notes, schedule.gradeScalingId);

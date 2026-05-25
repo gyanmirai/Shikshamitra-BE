@@ -17,6 +17,12 @@ public class ExamSubjectScheduleDto
     [Required]
     public Guid SubjectId { get; set; }
 
+    /// <summary>
+    /// For elective subjects: provide the group ID so the schedule save can locate
+    /// the correct ExamSubject row (Combined mode stores groupId in SubjectId column).
+    /// </summary>
+    public Guid? ElectiveGroupId { get; set; }
+
     public string? Notes { get; set; }
 
     public DateTime? ExamDate { get; set; }
@@ -61,4 +67,13 @@ public class ExamElectiveGroupSubjectDto
     public Guid SubjectId { get; set; }
     public string? SubjectName { get; set; }
     public string? Color { get; set; }
+
+    // Populated only in Separate scheduling mode
+    public DateTime? ExamDate { get; set; }
+    public DateTime? StartTime { get; set; }
+    public DateTime? EndTime { get; set; }
+    public double? TotalMarks { get; set; }
+    public double? PassingMarks { get; set; }
+    public string? Notes { get; set; }
+    public Guid? GradeScalingId { get; set; }
 }

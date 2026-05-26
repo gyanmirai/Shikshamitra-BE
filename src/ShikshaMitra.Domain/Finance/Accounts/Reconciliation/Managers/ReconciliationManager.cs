@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ShikshaMitra.Finance.Charges;
+using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
@@ -27,6 +29,8 @@ public class ReconciliationManager(
     IRepository<FeeRecordMetadata, Guid> metadataRepository,
     IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
     IDueFeeRepository dueFeeRepository,
+    IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
+    IRepository<Charge, Guid> chargeRepository,
     FeeReceiptManager feeReceiptManager,
     FeeCollectionManager feeCollectionManager,
     IClock clock,
@@ -72,6 +76,56 @@ public class ReconciliationManager(
         await receiptRepository.InsertAsync(finalReceipt, autoSave: false);
 
         provisional.MarkVerified(finalReceipt.Id, remarks);
+
+        // Update the parent FeeRecordMetadata Status to Paid or Partial
+        var metadata = await metadataRepository.FindAsync(provisional.FeeCollectionTransactionId, cancellationToken: cancellationToken);
+        if (metadata != null)
+        {
+            var calculatedStatus = FeeCollectionStatus.Paid;
+
+            // Check if any allocated DueFee remains unpaid (OutstandingAmount > 0)
+            var allocations = await allocationRepository.GetListAsync(
+                a => a.FeeRecordMetadataId == metadata.Id,
+                cancellationToken: cancellationToken);
+            if (allocations.Count > 0)
+            {
+                var dueFeeIds = allocations.Select(a => a.DueFeeId).Distinct().ToList();
+                var dueFees = await dueFeeRepository.GetListAsync(
+                    df => dueFeeIds.Contains(df.Id),
+                    cancellationToken: cancellationToken);
+                if (dueFees.Any(df => df.OutstandingAmount > 0))
+                {
+                    calculatedStatus = FeeCollectionStatus.Partial;
+                }
+            }
+
+            // Check if any associated Charge remains unpaid
+            var chargeRecords = await chargeCollectionRecordRepository.GetListAsync(
+                r => r.FeeRecordMetadataId == metadata.Id,
+                cancellationToken: cancellationToken);
+            if (chargeRecords.Count > 0 && calculatedStatus == FeeCollectionStatus.Paid)
+            {
+                var chargeIds = chargeRecords.Select(r => r.ChargeId).Distinct().ToList();
+                var charges = await chargeRepository.GetListAsync(
+                    c => chargeIds.Contains(c.Id),
+                    cancellationToken: cancellationToken);
+
+                var allPaymentsForCharges = await chargeCollectionRecordRepository.GetListAsync(
+                    r => chargeIds.Contains(r.ChargeId),
+                    cancellationToken: cancellationToken);
+                var paidPerCharge = allPaymentsForCharges
+                    .GroupBy(r => r.ChargeId)
+                    .ToDictionary(g => g.Key, g => (decimal)g.Sum(r => r.Amount));
+
+                if (charges.Any(c => c.Amount - paidPerCharge.GetValueOrDefault(c.Id, 0m) > 0m))
+                {
+                    calculatedStatus = FeeCollectionStatus.Partial;
+                }
+            }
+
+            metadata.Status = calculatedStatus;
+            await metadataRepository.UpdateAsync(metadata, autoSave: false);
+        }
 
         return provisional;
     }

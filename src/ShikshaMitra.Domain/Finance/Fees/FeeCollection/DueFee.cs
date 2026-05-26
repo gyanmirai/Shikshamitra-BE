@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Finance.Collections;
+using ShikshaMitra.Finance.Collections;
 using ShikshaMitra.Finance.FeeCollection;
 using System;
 using Volo.Abp;
@@ -70,7 +70,7 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		PaidAmount += amount;
 		OutstandingAmount = Math.Max(0d, OriginalAmount - PaidAmount);
-		Status = OutstandingAmount <= 0d ? FeeStatus.Paid : FeeStatus.PartiallyPaid;
+		Status = OutstandingAmount <= 0d ? FeeStatus.Paid : FeeStatus.Partial;
 	}
 
 	/// <summary>
@@ -116,6 +116,6 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		PaidAmount -= amount;
 		OutstandingAmount = Math.Max(0d, OriginalAmount - PaidAmount);
-		Status = PaidAmount <= 0d ? FeeStatus.Pending : FeeStatus.PartiallyPaid;
+		Status = PaidAmount <= 0d ? FeeStatus.Pending : FeeStatus.Partial;
 	}
 }

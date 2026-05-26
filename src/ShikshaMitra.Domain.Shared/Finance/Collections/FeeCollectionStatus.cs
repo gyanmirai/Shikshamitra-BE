@@ -1,4 +1,4 @@
-﻿namespace ShikshaMitra.Finance.FeeCollection;
+namespace ShikshaMitra.Finance.FeeCollection;
 
 /// <summary>
 /// Payment status for a fee collection transaction.
@@ -19,4 +19,10 @@ public enum FeeCollectionStatus
     /// DueFee allocations are reversed and the collection is treated as void.
     /// </summary>
     Reversed = 3,
+
+    /// <summary>Some payment has been received, but outstanding balance remains.</summary>
+    Partial = 4,
+
+    /// <summary>The transaction needs bank/instrument clearance/verification.</summary>
+    InReconciliation = 5,
 }

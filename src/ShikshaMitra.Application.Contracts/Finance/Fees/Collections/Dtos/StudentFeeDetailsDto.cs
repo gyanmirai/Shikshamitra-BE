@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Finance.FeeCollection;
+using ShikshaMitra.Finance.FeeCollection;
 using System;
 using System.Collections.Generic;
 
@@ -70,6 +70,7 @@ public class FeePaymentHistoryDto
     public double Amount { get; set; }
     public List<PaymentMethodEnum> PaymentMethods { get; set; } = [];
     public string? ReceiptUrl { get; set; }
+    public FeeCollectionStatus Status { get; set; }
 }
 
 /// <summary>Applied concession with amount for the student.</summary>

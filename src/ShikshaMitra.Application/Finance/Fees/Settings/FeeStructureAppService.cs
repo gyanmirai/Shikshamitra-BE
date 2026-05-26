@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Collections;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
@@ -129,8 +129,8 @@ public class FeeStructureAppService(
                     IsOneTime = d.IsOneTime,
                     IsOptional = d.IsOptional,
 					IsRefundable = d.IsRefundable,
-					PayableMonth = d.PayableMonth,
-					PayableYear = d.PayableYear
+					PayableMonth = d.IsOneTime ? d.PayableMonth : null,
+					PayableYear = d.IsOneTime ? d.PayableYear : null
 				}).ToList()
             })        };
     }

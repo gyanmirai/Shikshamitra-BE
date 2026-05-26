@@ -48,7 +48,7 @@ public class DueFee_ReversePayment_Tests
         df.ReversePayment(400d);
 
         Assert.Equal(600d, df.PaidAmount);
-        Assert.Equal(FeeStatus.PartiallyPaid, df.Status);
+        Assert.Equal(FeeStatus.Partial, df.Status);
     }
 
     [Fact]

@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Collections;
 using System;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -43,7 +43,7 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
         IsOneTime = isOneTime;
         IsOptional = isOptional;
 		IsRefundable = isRefundable;
-		PayableMonth = payableMonth;
-		PayableYear = payableYear;
+		PayableMonth = isOneTime ? payableMonth : null;
+		PayableYear = isOneTime ? payableYear : null;
     }
 }

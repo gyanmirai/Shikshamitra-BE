@@ -29,6 +29,23 @@ public class CollectFeeInput
     [MaxLength(1000)]
     public string? Notes { get; set; }
 
+    /// <summary>
+    /// Cashier's confirmation that the payment amount has been received in the bank account.
+    /// <para>
+    /// Required (non-null) when the transaction uses a <em>CashierDecided</em> payment method
+    /// (UPI, CreditCard, DebitCard, BankTransfer, OnlinePaymentGateway, WalletPrepaidCard).
+    /// </para>
+    /// <para>
+    /// Must be <c>null</c> for Cash-only or Cheque/DemandDraft-only transactions.
+    /// </para>
+    /// <para>
+    /// When <c>true</c> the fee receipt is issued as a FinalFee (FIN-*).
+    /// When <c>false</c> the transaction enters the reconciliation queue with a
+    /// ProvisionalFee (KFE-*) receipt.
+    /// </para>
+    /// </summary>
+    public bool? BankReceiptConfirmed { get; set; }
+
     /// <summary>List of fee heads being paid (1–50 items).</summary>
     [Required]
     [MinLength(1)]

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Finance.FeeCollection;
+using ShikshaMitra.Finance.Fees.Receipts;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
@@ -21,21 +22,21 @@ namespace ShikshaMitra.Finance.Fees.FeeCollection;
 public class FeeCollectionManager(
 	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
 	IDueFeeRepository dueFeeRepository,
+	IReceiptNumberSequenceRepository receiptNumberSequenceRepository,
 	IClock clock,
 	ICurrentTenant currentTenant,
 	ICurrentUser currentUser
 ) : DomainService
 {
 	/// <summary>
-	/// Generates a unique receipt number in the format <c>REC-{YYYY}-{NNNNNN}</c>.
-	/// The sequence is derived from the total row count of existing receipts plus one.
+	/// Generates a unique, concurrent-safe receipt number in the format <c>REC-{YYYY}-{NNNNNN}</c>
+	/// using the <see cref="ReceiptNumberSequence"/> table (kind = null slot).
 	/// </summary>
 	public async Task<string> GenerateReceiptNumberAsync()
 	{
 		var year = clock.Now.Year;
-		var count = await feeRecordMetadataRepository.CountAsync();
-		var sequence = (count + 1).ToString("D6");
-		return $"REC-{year}-{sequence}";
+		var sequence = await receiptNumberSequenceRepository.IncrementAndGetAsync(year, kind: null);
+		return $"REC-{year}-{sequence:D6}";
 	}
 
 	/// <summary>
@@ -210,6 +211,11 @@ public class FeeCollectionManager(
 				appName: Get("appName")),
 
 			PaymentMethodEnum.CreditCard => new CreditCardDetails(
+				transactionId: Get("transactionId"),
+				cardLast4: Get("cardLast4"),
+				bankName: Get("bankName")),
+
+			PaymentMethodEnum.DebitCard => new CreditCardDetails(
 				transactionId: Get("transactionId"),
 				cardLast4: Get("cardLast4"),
 				bankName: Get("bankName")),

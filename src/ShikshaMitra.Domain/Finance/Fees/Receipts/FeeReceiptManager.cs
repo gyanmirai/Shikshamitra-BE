@@ -19,14 +19,14 @@ namespace ShikshaMitra.Finance.Fees.Receipts;
 /// </para>
 /// </summary>
 public class FeeReceiptManager(
-    IFeePaymentReceiptRepository receiptRepository,
+    IReceiptNumberSequenceRepository sequenceRepository,
     IClock clock,
     ICurrentTenant currentTenant
 ) : DomainService
 {
     /// <summary>
-    /// Generates a unique receipt number using a kind-specific prefix and a
-    /// zero-padded sequence derived from the current receipt count.
+    /// Generates a unique, concurrent-safe receipt number using kind-specific prefix and
+    /// an atomically-incremented sequence counter.
     /// <list type="bullet">
     ///   <item><see cref="FeeReceiptKind.FinalFee"/> → <c>FIN-{yyyy}-{nnnnnn}</c></item>
     ///   <item><see cref="FeeReceiptKind.ProvisionalFee"/> → <c>KFE-{yyyy}-{nnnnnn}</c></item>
@@ -36,8 +36,7 @@ public class FeeReceiptManager(
     public async Task<string> GenerateReceiptNumberAsync(FeeReceiptKind kind)
     {
         var year = clock.Now.Year;
-        var count = await receiptRepository.GetCountByKindAsync(kind);
-        var sequence = (count + 1).ToString("D6");
+        var sequence = await sequenceRepository.IncrementAndGetAsync(year, kind);
         var prefix = kind switch
         {
             FeeReceiptKind.FinalFee          => "FIN",
@@ -45,7 +44,7 @@ public class FeeReceiptManager(
             FeeReceiptKind.ProvisionalCharge => "KCH",
             _                               => "REC",
         };
-        return $"{prefix}-{year}-{sequence}";
+        return $"{prefix}-{year}-{sequence:D6}";
     }
 
     /// <summary>
@@ -105,6 +104,7 @@ public class FeeReceiptManager(
         double feeLinesTotal,
         double chargeLinesTotal,
         IEnumerable<PaymentMethodEnum> paymentMethods,
+        bool? bankReceiptConfirmed = null,
         string? remarks = null)
     {
         var receipts = new List<FeePaymentReceipt>();
@@ -112,7 +112,7 @@ public class FeeReceiptManager(
 
         if (feeLinesTotal > 0)
         {
-            var kind = FeeReceiptPaymentPolicy.DetermineFeeReceiptKind(methods);
+            var kind = FeeReceiptPaymentPolicy.DetermineFeeReceiptKind(methods, bankReceiptConfirmed);
             var number = await GenerateReceiptNumberAsync(kind);
             receipts.Add(CreateReceipt(
                 feeCollectionTransactionId, studentId, academicYearId, boardId, educationMediumId,

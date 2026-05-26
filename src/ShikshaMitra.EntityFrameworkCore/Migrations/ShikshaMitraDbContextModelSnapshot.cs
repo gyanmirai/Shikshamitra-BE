@@ -3981,6 +3981,48 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("FeePaymentReceipts", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.Fees.Receipts.ReceiptNumberSequence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<long>("NextValue")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
+
+                    b.Property<int>("StoredKind")
+                        .HasColumnType("integer")
+                        .HasColumnName("Kind");
+
+                    b.Property<Guid>("StoredTenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoredTenantId", "Year", "StoredKind")
+                        .IsUnique()
+                        .HasDatabaseName("IX_FinanceReceiptNumberSequences_Tenant_Year_Kind");
+
+                    b.ToTable("FinanceReceiptNumberSequences", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.Settings.ConcessionTypes.ConcessionType", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7756,17 +7798,17 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "AcademicYearId", "TargetType", "TargetKey", "IsActive")
-                        .HasDatabaseName("IX_HR_PolicyAssignments_Target_Active");
-
-                    b.HasIndex("AcademicYearId", "TargetType", "TargetKey", "EffectiveFrom", "EffectiveTo", "IsActive")
-                        .HasDatabaseName("IX_HR_PolicyAssignments_Resolver");
-
                     b.HasIndex("TenantId", "AcademicYearId", "IsActive", "AttendancePolicyId")
                         .HasDatabaseName("IX_HR_PolicyAssignments_AttendancePolicy_Impact");
 
                     b.HasIndex("TenantId", "AcademicYearId", "IsActive", "PayrollPolicyId")
                         .HasDatabaseName("IX_HR_PolicyAssignments_PayrollPolicy_Impact");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "TargetType", "TargetKey", "IsActive")
+                        .HasDatabaseName("IX_HR_PolicyAssignments_Target_Active");
+
+                    b.HasIndex("AcademicYearId", "TargetType", "TargetKey", "EffectiveFrom", "EffectiveTo", "IsActive")
+                        .HasDatabaseName("IX_HR_PolicyAssignments_Resolver");
 
                     b.ToTable("HR_PolicyAssignments", (string)null);
                 });
@@ -8302,6 +8344,107 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId", "Status");
 
                     b.ToTable("AppProfessionalReviewCycles", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.Reports.HrReportExportJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BlobName")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<string>("FilterJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("ReportType")
+                        .IsRequired()
+                        .HasMaxLength(96)
+                        .HasColumnType("character varying(96)");
+
+                    b.Property<Guid>("RequestedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "RequestedByUserId", "CreationTime")
+                        .HasDatabaseName("IX_HR_ReportExportJobs_Tenant_User_Created");
+
+                    b.HasIndex("TenantId", "Status", "ExpiresAt")
+                        .HasDatabaseName("IX_HR_ReportExportJobs_Tenant_Status_Expires");
+
+                    b.ToTable("HR_ReportExportJobs", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Books.Book", b =>

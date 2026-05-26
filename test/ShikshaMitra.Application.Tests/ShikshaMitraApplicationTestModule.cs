@@ -1,10 +1,17 @@
+using System;
+using System.Collections.Concurrent;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.Finance.Fees.Receipts;
+using ShikshaMitra.Finance.Receipts;
 using Volo.Abp;
+using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore.Sqlite;
 using Volo.Abp.FeatureManagement;
@@ -14,6 +21,27 @@ using Volo.Abp.SettingManagement;
 using Volo.Abp.Uow;
 
 namespace ShikshaMitra;
+
+/// <summary>
+/// Extends the standard EF Core repository so all ABP IRepository members are
+/// satisfied, but replaces IncrementAndGetAsync with a thread-safe in-memory
+/// counter so SQLite tests never execute the PostgreSQL-specific upsert SQL.
+/// </summary>
+internal sealed class FakeReceiptNumberSequenceRepository(
+    IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
+    : EfCoreRepository<ShikshaMitraDbContext, ReceiptNumberSequence, Guid>(dbContextProvider),
+      IReceiptNumberSequenceRepository
+{
+    // Static so values persist across test-method boundary within the same process run.
+    private static readonly ConcurrentDictionary<string, long> _sequences = new();
+
+    public Task<long> IncrementAndGetAsync(int year, FeeReceiptKind? kind, CancellationToken ct = default)
+    {
+        var key = $"{year}:{kind?.ToString() ?? "null"}";
+        var next = _sequences.AddOrUpdate(key, 1L, (_, current) => current + 1);
+        return Task.FromResult(next);
+    }
+}
 
 [DependsOn(
     typeof(ShikshaMitraApplicationModule),
@@ -45,6 +73,10 @@ public class ShikshaMitraApplicationTestModule : AbpModule
 
         context.Services.AddAlwaysDisableUnitOfWorkTransaction();
         ConfigureInMemorySqlite(context.Services);
+
+        // Replace the PostgreSQL-specific sequence repository with an in-memory fake
+        // so that application tests using SQLite don't fail on PostgreSQL-only SQL syntax.
+        context.Services.AddTransient<IReceiptNumberSequenceRepository, FakeReceiptNumberSequenceRepository>();
     }
 
     public override void OnApplicationShutdown(ApplicationShutdownContext context)

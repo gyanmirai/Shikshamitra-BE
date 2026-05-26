@@ -1,12 +1,13 @@
+﻿using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Audit;
+using ShikshaMitra.HR.Calendar.Holidays;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.Constants.Permissions;
-using ShikshaMitra.HR.Audit;
-using ShikshaMitra.HR.Calendar.Holidays;
-using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -140,7 +141,18 @@ public class WorkCalendarPolicyAppService(
 	{
 		var entity = await repository.GetAsync(id);
 		var before = HrPolicyMapping.ToDto(entity);
-		if (entity.Status != HrPolicyStatus.Draft || HrPolicyMapping.ParsePolicyStatus(input.Status) != HrPolicyStatus.Draft)
+		var status = HrPolicyMapping.ParsePolicyStatus(input.Status);
+		var weeklyOffPattern = HrPolicyMapping.ParseWeeklyOffPattern(input.WeeklyOffPattern);
+		var holidaySyncMode = HrPolicyMapping.ParseHolidaySyncMode(input.HolidaySyncMode);
+		var existingHolidays = await GetHolidaysAsync(entity.Id);
+		if (IsUnchanged(entity, input, existingHolidays, status, weeklyOffPattern, holidaySyncMode))
+		{
+			before.Holidays = existingHolidays;
+			before.HolidaySummary = HrPolicyMapping.BuildHolidaySummary(existingHolidays);
+			return before;
+		}
+
+		if (entity.Status != HrPolicyStatus.Draft || status != HrPolicyStatus.Draft)
 		{
 			var preview = await policySafetyAppService.PreviewPolicyImpactAsync(new HrPolicyImpactPreviewRequestDto
 			{
@@ -154,12 +166,12 @@ public class WorkCalendarPolicyAppService(
 		}
 		entity.Update(
 			input.Name,
-			HrPolicyMapping.ParsePolicyStatus(input.Status),
+			status,
 			input.EffectiveFrom,
 			input.EffectiveTo,
-			HrPolicyMapping.ParseWeeklyOffPattern(input.WeeklyOffPattern),
+			weeklyOffPattern,
 			input.CustomWeeklyOffs,
-			HrPolicyMapping.ParseHolidaySyncMode(input.HolidaySyncMode));
+			holidaySyncMode);
 
 		await repository.UpdateAsync(entity, autoSave: true);
 		await ReplaceHolidaysAsync(entity.Id, input.AcademicYearId, input.Holidays);
@@ -400,4 +412,77 @@ public class WorkCalendarPolicyAppService(
 
 	private static DateTime ResolveHolidayToDate(WorkCalendarHolidayDto row) =>
 		(row.ToDate ?? row.FromDate ?? row.Date).Date;
+
+	private static bool IsUnchanged(
+		WorkCalendarPolicy entity,
+		CreateUpdateWorkCalendarPolicyDto input,
+		IReadOnlyList<WorkCalendarHolidayDto> existingHolidays,
+		HrPolicyStatus status,
+		AttendanceWeeklyOffPattern weeklyOffPattern,
+		WorkCalendarHolidaySyncMode holidaySyncMode)
+	{
+		return entity.AcademicYearId == input.AcademicYearId &&
+			string.Equals(entity.Name, input.Name.Trim(), StringComparison.Ordinal) &&
+			entity.Status == status &&
+			NullableDatesEqual(entity.EffectiveFrom, input.EffectiveFrom) &&
+			NullableDatesEqual(entity.EffectiveTo, input.EffectiveTo) &&
+			entity.WeeklyOffPattern == weeklyOffPattern &&
+			IntListsEqual(entity.GetCustomWeeklyOffs(), NormalizeWeeklyOffs(input.CustomWeeklyOffs)) &&
+			entity.HolidaySyncMode == holidaySyncMode &&
+			HolidaysEqual(existingHolidays, input.Holidays);
+	}
+
+	private static IReadOnlyList<int> NormalizeWeeklyOffs(IReadOnlyList<int>? values) =>
+		values?.Distinct().OrderBy(x => x).ToList() ?? [];
+
+	private static bool NullableDatesEqual(DateTime? left, DateTime? right) =>
+		left?.Date == right?.Date;
+
+	private static bool IntListsEqual(IReadOnlyList<int> left, IReadOnlyList<int> right) =>
+		left.Count == right.Count && left.Zip(right).All(pair => pair.First == pair.Second);
+
+	private static bool HolidaysEqual(
+		IReadOnlyList<WorkCalendarHolidayDto> left,
+		IReadOnlyList<WorkCalendarHolidayDto>? right)
+	{
+		var leftRows = NormalizeHolidayRows(left);
+		var rightRows = NormalizeHolidayRows(right ?? []);
+		return leftRows.Count == rightRows.Count && leftRows.Zip(rightRows).All(pair =>
+			pair.First.AcademicYearId == pair.Second.AcademicYearId &&
+			pair.First.FromDate == pair.Second.FromDate &&
+			pair.First.ToDate == pair.Second.ToDate &&
+			string.Equals(pair.First.HolidayName, pair.Second.HolidayName, StringComparison.Ordinal) &&
+			string.Equals(pair.First.Source, pair.Second.Source, StringComparison.Ordinal) &&
+			pair.First.CalendarHolidayId == pair.Second.CalendarHolidayId &&
+			pair.First.IsIncluded == pair.Second.IsIncluded &&
+			string.Equals(pair.First.Notes, pair.Second.Notes, StringComparison.Ordinal));
+	}
+
+	private static List<NormalizedHolidayRow> NormalizeHolidayRows(IReadOnlyList<WorkCalendarHolidayDto> rows) =>
+		rows
+			.Select(row => new NormalizedHolidayRow(
+				row.AcademicYearId,
+				ResolveHolidayFromDate(row),
+				ResolveHolidayToDate(row),
+				row.HolidayName.Trim(),
+				row.Source,
+				row.CalendarHolidayId,
+				row.IsIncluded,
+				row.Notes?.Trim() ?? string.Empty))
+			.OrderBy(row => row.FromDate)
+			.ThenBy(row => row.ToDate)
+			.ThenBy(row => row.HolidayName)
+			.ThenBy(row => row.Source)
+			.ThenBy(row => row.CalendarHolidayId)
+			.ToList();
+
+	private sealed record NormalizedHolidayRow(
+		Guid AcademicYearId,
+		DateTime FromDate,
+		DateTime ToDate,
+		string HolidayName,
+		string Source,
+		Guid? CalendarHolidayId,
+		bool IsIncluded,
+		string Notes);
 }

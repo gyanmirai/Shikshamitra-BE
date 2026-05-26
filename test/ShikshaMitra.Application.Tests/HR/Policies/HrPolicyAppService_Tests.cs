@@ -1,9 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using ShikshaMitra.Common;
 using ShikshaMitra.Groups;
-using ShikshaMitra.Common;
 using ShikshaMitra.HR.Audit;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.HolidayTypes;
@@ -13,12 +9,17 @@ using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
+using Volo.Abp.Validation;
 using Xunit;
 
 namespace ShikshaMitra.HR.Policies;
@@ -268,6 +269,94 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	}
 
 	[Fact]
+	public async Task Payroll_Update_Should_Persist_New_WorkCalendar_When_Old_Calendar_Is_Archived()
+	{
+		var context = await CreatePolicyContextAsync();
+		await ArchiveCalendarDirectlyAsync(context.WorkCalendar.Id);
+		var replacement = await CreateWorkCalendarAsync(context.AcademicYearId, "Replacement");
+
+		var updated = await _payrollPolicies.UpdateAsync(context.PayrollPolicy.Id, new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = replacement.Id,
+			Name = context.PayrollPolicy.Name,
+			Status = "active",
+			IsDefault = true,
+			DayCalculationType = context.PayrollPolicy.DayCalculationType,
+			SaturdayWorkPolicy = context.PayrollPolicy.SaturdayWorkPolicy
+		});
+
+		updated.WorkCalendarPolicyId.ShouldBe(replacement.Id);
+		(await _payrollPolicies.GetAsync(context.PayrollPolicy.Id)).WorkCalendarPolicyId.ShouldBe(replacement.Id);
+	}
+
+	[Fact]
+	public async Task Draft_Payroll_Update_Should_Persist_New_WorkCalendar()
+	{
+		var context = await CreatePolicyContextAsync();
+		var draft = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Draft Payroll {Guid.NewGuid():N}",
+			Status = "draft",
+			IsDefault = false,
+			DayCalculationType = "working-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+		var replacement = await CreateWorkCalendarAsync(context.AcademicYearId, "DraftReplacement");
+
+		var updated = await _payrollPolicies.UpdateAsync(draft.Id, new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = replacement.Id,
+			Name = draft.Name,
+			Status = "draft",
+			IsDefault = false,
+			DayCalculationType = "working-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+
+		updated.WorkCalendarPolicyId.ShouldBe(replacement.Id);
+	}
+
+	[Fact]
+	public async Task Attendance_Update_Should_Persist_New_WorkCalendar()
+	{
+		var context = await CreatePolicyContextAsync();
+		var replacement = await CreateWorkCalendarAsync(context.AcademicYearId, "AttendanceReplacement");
+
+		var updated = await _attendancePolicies.UpdateAsync(context.AttendancePolicy.Id, new CreateUpdateAttendancePolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = replacement.Id,
+			Name = context.AttendancePolicy.Name,
+			Status = "active",
+			IsDefault = true,
+			FullDayThresholdPercentage = context.AttendancePolicy.FullDayThresholdPercentage,
+			HalfDayThresholdPercentage = context.AttendancePolicy.HalfDayThresholdPercentage,
+			AbsentThresholdPercentage = context.AttendancePolicy.AbsentThresholdPercentage,
+			MissingPunchBehavior = context.AttendancePolicy.MissingPunchBehavior,
+			ManualCorrectionAllowed = context.AttendancePolicy.ManualCorrectionAllowed,
+			GraceTime = context.AttendancePolicy.GraceTime,
+			MaxLateAllowedPerMonth = context.AttendancePolicy.MaxLateAllowedPerMonth,
+			PenaltyType = context.AttendancePolicy.PenaltyType,
+			PenaltyCountThreshold = context.AttendancePolicy.PenaltyCountThreshold,
+			EarlyExitEnabled = context.AttendancePolicy.EarlyExitEnabled,
+			EarlyExitGraceTime = context.AttendancePolicy.EarlyExitGraceTime,
+			OvertimeEnabled = context.AttendancePolicy.OvertimeEnabled,
+			OvertimeRate = context.AttendancePolicy.OvertimeRate,
+			MinOvertimeMinutes = context.AttendancePolicy.MinOvertimeMinutes,
+			HolidayWorkBehavior = context.AttendancePolicy.HolidayWorkBehavior,
+			SandwichRuleEnabled = context.AttendancePolicy.SandwichRuleEnabled,
+			PayrollPreviewEnabled = context.AttendancePolicy.PayrollPreviewEnabled
+		});
+
+		updated.WorkCalendarPolicyId.ShouldBe(replacement.Id);
+		(await _attendancePolicies.GetAsync(context.AttendancePolicy.Id)).WorkCalendarPolicyId.ShouldBe(replacement.Id);
+	}
+
+	[Fact]
 	public async Task Policy_Versions_Should_Capture_Compare_And_Restore_Draft()
 	{
 		var context = await CreatePolicyContextAsync();
@@ -298,6 +387,11 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			x.FieldKey == "dayCalculationType" &&
 			x.Category == "Payroll rules" &&
 			x.ToDisplayValue == "Manual Days");
+		var timestampDifference = compare.Differences.FirstOrDefault(x =>
+			x.FieldKey is "creationTime" or "lastModificationTime");
+		timestampDifference.ShouldNotBeNull();
+		timestampDifference!.ToDisplayValue.ShouldNotContain("T");
+		timestampDifference.ToDisplayValue.ShouldContain(" ");
 		compare.Differences.ShouldAllBe(x =>
 			!x.FromDisplayValue.Contains(context.WorkCalendar.Id.ToString(), StringComparison.OrdinalIgnoreCase) &&
 			!x.ToDisplayValue.Contains(context.WorkCalendar.Id.ToString(), StringComparison.OrdinalIgnoreCase));
@@ -311,6 +405,154 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		restoredPayroll.Status.ShouldBe("draft");
 		restoredPayroll.IsDefault.ShouldBeFalse();
 		restoredPayroll.DayCalculationType.ShouldBe("manual-days");
+	}
+
+	[Fact]
+	public async Task AttendancePolicy_Should_Reject_Out_Of_Range_Rule_Values()
+	{
+		var context = await CreatePolicyContextAsync();
+
+		await Should.ThrowAsync<AbpValidationException>(() => _attendancePolicies.CreateAsync(new CreateUpdateAttendancePolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Invalid Attendance {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			FullDayThresholdPercentage = 75,
+			HalfDayThresholdPercentage = 50,
+			AbsentThresholdPercentage = 0,
+			MissingPunchBehavior = "requires_review",
+			ManualCorrectionAllowed = true,
+			GraceTime = 241,
+			MaxLateAllowedPerMonth = 0,
+			PenaltyType = "none",
+			PenaltyCountThreshold = 0,
+			EarlyExitEnabled = false,
+			EarlyExitGraceTime = 0,
+			OvertimeEnabled = false,
+			HolidayWorkBehavior = "paid",
+			PayrollPreviewEnabled = true
+		}));
+
+		await Should.ThrowAsync<AbpValidationException>(() => _attendancePolicies.UpdateAsync(context.AttendancePolicy.Id, new CreateUpdateAttendancePolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = context.AttendancePolicy.Name,
+			Status = context.AttendancePolicy.Status,
+			IsDefault = context.AttendancePolicy.IsDefault,
+			FullDayThresholdPercentage = context.AttendancePolicy.FullDayThresholdPercentage,
+			HalfDayThresholdPercentage = context.AttendancePolicy.HalfDayThresholdPercentage,
+			AbsentThresholdPercentage = context.AttendancePolicy.AbsentThresholdPercentage,
+			MissingPunchBehavior = context.AttendancePolicy.MissingPunchBehavior,
+			ManualCorrectionAllowed = context.AttendancePolicy.ManualCorrectionAllowed,
+			GraceTime = context.AttendancePolicy.GraceTime,
+			MaxLateAllowedPerMonth = 32,
+			PenaltyType = context.AttendancePolicy.PenaltyType,
+			PenaltyCountThreshold = context.AttendancePolicy.PenaltyCountThreshold,
+			EarlyExitEnabled = context.AttendancePolicy.EarlyExitEnabled,
+			EarlyExitGraceTime = context.AttendancePolicy.EarlyExitGraceTime,
+			OvertimeEnabled = context.AttendancePolicy.OvertimeEnabled,
+			OvertimeRate = context.AttendancePolicy.OvertimeRate,
+			MinOvertimeMinutes = context.AttendancePolicy.MinOvertimeMinutes,
+			HolidayWorkBehavior = context.AttendancePolicy.HolidayWorkBehavior,
+			SandwichRuleEnabled = context.AttendancePolicy.SandwichRuleEnabled,
+			PayrollPreviewEnabled = context.AttendancePolicy.PayrollPreviewEnabled
+		}));
+	}
+
+	[Fact]
+	public async Task WorkCalendar_Update_Should_NoOp_When_Unchanged()
+	{
+		var context = await CreatePolicyContextAsync();
+		var beforeEvents = await _auditTrail.GetEntityEventsAsync("work_calendar_policy", context.WorkCalendar.Id, new HrAuditEventListRequestDto
+		{
+			MaxResultCount = 20
+		});
+		var beforeVersions = await _policyVersions.GetListAsync("work_calendar", context.WorkCalendar.Id, new Volo.Abp.Application.Dtos.PagedAndSortedResultRequestDto
+		{
+			MaxResultCount = 20
+		});
+
+		var result = await _workCalendars.UpdateAsync(context.WorkCalendar.Id, new CreateUpdateWorkCalendarPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			Name = context.WorkCalendar.Name,
+			Status = context.WorkCalendar.Status,
+			EffectiveFrom = context.WorkCalendar.EffectiveFrom,
+			EffectiveTo = context.WorkCalendar.EffectiveTo,
+			WeeklyOffPattern = context.WorkCalendar.WeeklyOffPattern,
+			CustomWeeklyOffs = context.WorkCalendar.CustomWeeklyOffs,
+			HolidaySyncMode = context.WorkCalendar.HolidaySyncMode,
+			Holidays = []
+		});
+
+		var afterEvents = await _auditTrail.GetEntityEventsAsync("work_calendar_policy", context.WorkCalendar.Id, new HrAuditEventListRequestDto
+		{
+			MaxResultCount = 20
+		});
+		var afterVersions = await _policyVersions.GetListAsync("work_calendar", context.WorkCalendar.Id, new Volo.Abp.Application.Dtos.PagedAndSortedResultRequestDto
+		{
+			MaxResultCount = 20
+		});
+
+		result.Version.ShouldBe(context.WorkCalendar.Version);
+		afterEvents.TotalCount.ShouldBe(beforeEvents.TotalCount);
+		afterVersions.TotalCount.ShouldBe(beforeVersions.TotalCount);
+	}
+
+	[Fact]
+	public async Task Attendance_Update_Should_NoOp_When_Unchanged()
+	{
+		var context = await CreatePolicyContextAsync();
+		var beforeEvents = await _auditTrail.GetEntityEventsAsync("attendance_policy", context.AttendancePolicy.Id, new HrAuditEventListRequestDto
+		{
+			MaxResultCount = 20
+		});
+		var beforeVersions = await _policyVersions.GetListAsync("attendance", context.AttendancePolicy.Id, new Volo.Abp.Application.Dtos.PagedAndSortedResultRequestDto
+		{
+			MaxResultCount = 20
+		});
+
+		var result = await _attendancePolicies.UpdateAsync(context.AttendancePolicy.Id, new CreateUpdateAttendancePolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.AttendancePolicy.WorkCalendarPolicyId,
+			Name = context.AttendancePolicy.Name,
+			Status = context.AttendancePolicy.Status,
+			IsDefault = context.AttendancePolicy.IsDefault,
+			FullDayThresholdPercentage = context.AttendancePolicy.FullDayThresholdPercentage,
+			HalfDayThresholdPercentage = context.AttendancePolicy.HalfDayThresholdPercentage,
+			AbsentThresholdPercentage = context.AttendancePolicy.AbsentThresholdPercentage,
+			MissingPunchBehavior = context.AttendancePolicy.MissingPunchBehavior,
+			ManualCorrectionAllowed = context.AttendancePolicy.ManualCorrectionAllowed,
+			GraceTime = context.AttendancePolicy.GraceTime,
+			MaxLateAllowedPerMonth = context.AttendancePolicy.MaxLateAllowedPerMonth,
+			PenaltyType = context.AttendancePolicy.PenaltyType,
+			PenaltyCountThreshold = context.AttendancePolicy.PenaltyCountThreshold,
+			EarlyExitEnabled = context.AttendancePolicy.EarlyExitEnabled,
+			EarlyExitGraceTime = context.AttendancePolicy.EarlyExitGraceTime,
+			OvertimeEnabled = context.AttendancePolicy.OvertimeEnabled,
+			OvertimeRate = context.AttendancePolicy.OvertimeRate,
+			MinOvertimeMinutes = context.AttendancePolicy.MinOvertimeMinutes,
+			HolidayWorkBehavior = context.AttendancePolicy.HolidayWorkBehavior,
+			SandwichRuleEnabled = context.AttendancePolicy.SandwichRuleEnabled,
+			PayrollPreviewEnabled = context.AttendancePolicy.PayrollPreviewEnabled
+		});
+
+		var afterEvents = await _auditTrail.GetEntityEventsAsync("attendance_policy", context.AttendancePolicy.Id, new HrAuditEventListRequestDto
+		{
+			MaxResultCount = 20
+		});
+		var afterVersions = await _policyVersions.GetListAsync("attendance", context.AttendancePolicy.Id, new Volo.Abp.Application.Dtos.PagedAndSortedResultRequestDto
+		{
+			MaxResultCount = 20
+		});
+
+		result.Version.ShouldBe(context.AttendancePolicy.Version);
+		afterEvents.TotalCount.ShouldBe(beforeEvents.TotalCount);
+		afterVersions.TotalCount.ShouldBe(beforeVersions.TotalCount);
 	}
 
 	[Fact]
@@ -576,8 +818,105 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		});
 
 		impact.AffectedAssignmentCount.ShouldBeGreaterThanOrEqualTo(1);
-		impact.Warnings.ShouldContain(x => x.Code == "ShikshaMitra:WorkCalendarPolicyReferenced");
+		impact.Warnings.ShouldContain(x => x.Code == "ShikshaMitra:WorkCalendarPolicyInUse" && x.Severity == "blocking");
 		impact.RequiresConfirmation.ShouldBeTrue();
+	}
+
+	[Fact]
+	public async Task WorkCalendar_Archive_Should_Block_When_Referenced_By_Active_Policies()
+	{
+		var context = await CreatePolicyContextAsync();
+
+		var ex = await Should.ThrowAsync<BusinessException>(() => _workCalendars.DeleteAsync(context.WorkCalendar.Id));
+
+		ex.Code.ShouldBe("ShikshaMitra:HrPolicyImpactBlocking");
+		var warnings = ex.Data["warnings"]?.ToString() ?? string.Empty;
+		warnings.ShouldContain(context.PayrollPolicy.Name);
+		warnings.ShouldContain(context.AttendancePolicy.Name);
+	}
+
+	[Fact]
+	public async Task WorkCalendar_Archive_Should_Block_When_Referenced_By_Draft_Payroll()
+	{
+		var academicYearId = await CreateAcademicYearAsync();
+		var calendar = await CreateWorkCalendarAsync(academicYearId, "DraftPayrollRef");
+		await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = academicYearId,
+			WorkCalendarPolicyId = calendar.Id,
+			Name = $"Draft Payroll {Guid.NewGuid():N}",
+			Status = "draft",
+			IsDefault = false,
+			DayCalculationType = "working-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+
+		var ex = await Should.ThrowAsync<BusinessException>(() => _workCalendars.DeleteAsync(calendar.Id));
+
+		ex.Code.ShouldBe("ShikshaMitra:HrPolicyImpactBlocking");
+		(ex.Data["warnings"]?.ToString() ?? string.Empty).ShouldContain("Draft Payroll");
+	}
+
+	[Fact]
+	public async Task WorkCalendar_Archive_Should_Block_When_Referenced_By_Draft_Attendance()
+	{
+		var academicYearId = await CreateAcademicYearAsync();
+		var calendar = await CreateWorkCalendarAsync(academicYearId, "DraftAttendanceRef");
+		await _attendancePolicies.CreateAsync(new CreateUpdateAttendancePolicyDto
+		{
+			AcademicYearId = academicYearId,
+			WorkCalendarPolicyId = calendar.Id,
+			Name = $"Draft Attendance {Guid.NewGuid():N}",
+			Status = "draft",
+			IsDefault = false,
+			FullDayThresholdPercentage = 75,
+			HalfDayThresholdPercentage = 50,
+			AbsentThresholdPercentage = 0,
+			MissingPunchBehavior = "requires_review",
+			ManualCorrectionAllowed = true,
+			HolidayWorkBehavior = "paid"
+		});
+
+		var ex = await Should.ThrowAsync<BusinessException>(() => _workCalendars.DeleteAsync(calendar.Id));
+
+		ex.Code.ShouldBe("ShikshaMitra:HrPolicyImpactBlocking");
+		(ex.Data["warnings"]?.ToString() ?? string.Empty).ShouldContain("Draft Attendance");
+	}
+
+	[Fact]
+	public async Task WorkCalendar_Archive_Should_Succeed_After_References_Are_Reassigned()
+	{
+		var context = await CreatePolicyContextAsync();
+		var replacement = await CreateWorkCalendarAsync(context.AcademicYearId, "ArchiveReplacement");
+		await _payrollPolicies.UpdateAsync(context.PayrollPolicy.Id, new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = replacement.Id,
+			Name = context.PayrollPolicy.Name,
+			Status = "active",
+			IsDefault = true,
+			DayCalculationType = context.PayrollPolicy.DayCalculationType,
+			SaturdayWorkPolicy = context.PayrollPolicy.SaturdayWorkPolicy
+		});
+		await _attendancePolicies.UpdateAsync(context.AttendancePolicy.Id, new CreateUpdateAttendancePolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = replacement.Id,
+			Name = context.AttendancePolicy.Name,
+			Status = "active",
+			IsDefault = true,
+			FullDayThresholdPercentage = context.AttendancePolicy.FullDayThresholdPercentage,
+			HalfDayThresholdPercentage = context.AttendancePolicy.HalfDayThresholdPercentage,
+			AbsentThresholdPercentage = context.AttendancePolicy.AbsentThresholdPercentage,
+			MissingPunchBehavior = context.AttendancePolicy.MissingPunchBehavior,
+			ManualCorrectionAllowed = context.AttendancePolicy.ManualCorrectionAllowed,
+			HolidayWorkBehavior = context.AttendancePolicy.HolidayWorkBehavior,
+			PayrollPreviewEnabled = context.AttendancePolicy.PayrollPreviewEnabled
+		});
+
+		await _workCalendars.DeleteAsync(context.WorkCalendar.Id);
+
+		(await _workCalendars.GetAsync(context.WorkCalendar.Id)).Status.ShouldBe("archived");
 	}
 
 	[Fact]
@@ -758,19 +1097,19 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		string? targetDisplayName = null,
 		DateTime? effectiveFrom = null,
 		DateTime? effectiveTo = null) => new()
-	{
-		AcademicYearId = context.AcademicYearId,
-		TargetType = targetType,
-		TargetKey = targetKey,
-		TargetDisplayName = targetDisplayName ?? targetKey.Trim(),
-		PayrollPolicyId = context.PayrollPolicy.Id,
-		AttendancePolicyId = context.AttendancePolicy.Id,
-		EffectiveFrom = effectiveFrom ?? new DateTime(2026, 4, 1),
-		EffectiveTo = effectiveTo,
-		IsActive = true,
-		Priority = 10,
-		AssignmentReason = "Test assignment"
-	};
+		{
+			AcademicYearId = context.AcademicYearId,
+			TargetType = targetType,
+			TargetKey = targetKey,
+			TargetDisplayName = targetDisplayName ?? targetKey.Trim(),
+			PayrollPolicyId = context.PayrollPolicy.Id,
+			AttendancePolicyId = context.AttendancePolicy.Id,
+			EffectiveFrom = effectiveFrom ?? new DateTime(2026, 4, 1),
+			EffectiveTo = effectiveTo,
+			IsActive = true,
+			Priority = 10,
+			AssignmentReason = "Test assignment"
+		};
 
 	private async Task<Group> CreateGroupAsync(Guid academicYearId, string name)
 	{
@@ -851,6 +1190,25 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		await _academicYearRepository.InsertAsync(created, autoSave: true);
 		await uow.CompleteAsync();
 		return created.Id;
+	}
+
+	private Task<WorkCalendarPolicyDto> CreateWorkCalendarAsync(Guid academicYearId, string namePrefix) =>
+		_workCalendars.CreateAsync(new CreateUpdateWorkCalendarPolicyDto
+		{
+			AcademicYearId = academicYearId,
+			Name = $"{namePrefix} Calendar {Guid.NewGuid():N}",
+			Status = "active",
+			EffectiveFrom = new DateTime(2026, 4, 1),
+			EffectiveTo = new DateTime(2027, 3, 31),
+			WeeklyOffPattern = "saturday_sunday",
+			HolidaySyncMode = "linked_with_overrides"
+		});
+
+	private async Task ArchiveCalendarDirectlyAsync(Guid calendarId)
+	{
+		var calendar = await _workCalendarPolicyRepository.GetAsync(calendarId);
+		calendar.Archive();
+		await _workCalendarPolicyRepository.UpdateAsync(calendar, autoSave: true);
 	}
 
 	private async Task<Holiday> CreateHolidayAsync(Guid academicYearId, string name, DateTime date)

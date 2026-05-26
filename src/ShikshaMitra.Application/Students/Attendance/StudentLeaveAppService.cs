@@ -227,9 +227,9 @@ public class StudentLeaveAppService(
 		StudentName = leave.Student != null
 				? $"{leave.Student.FirstName} {leave.Student.LastName}".Trim()
 				: string.Empty,
-		OrganizationName = null, // TODO: Map from EducationMedium if navigation exists
-		ClassName = null, // TODO: Map from Standard if navigation exists
-		DivisionName = null, // TODO: Map from Division if navigation exists
+		OrganizationName = leave.Student?.AcademicMedium?.Name,
+		ClassName = leave.Student?.Standard?.Name,
+		DivisionName = leave.Student?.Division?.Name,
 		StudentLeaveTypeId = leave.StudentLeaveTypeId,
 		LeaveTypeName = leave.StudentLeaveType?.LeaveTypeName ?? string.Empty,
 		LeaveTypeColor = leave.StudentLeaveType?.Color ?? "#000000",

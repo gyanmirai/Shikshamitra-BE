@@ -1,6 +1,6 @@
+﻿using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using System;
 using System.Collections.Generic;
-using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -9,6 +9,10 @@ namespace ShikshaMitra.HR.Policies;
 
 public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	private const int MaxGraceMinutes = 240;
+	private const int MaxLateAllowed = 31;
+	private const int MaxOvertimeMinutes = 1440;
+
 	public Guid? TenantId { get; protected set; }
 	public Guid AcademicYearId { get; protected set; }
 	public Guid WorkCalendarPolicyId { get; protected set; }
@@ -69,6 +73,7 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		WorkCalendarPolicyId = workCalendarPolicyId;
 		Version = 0;
 		Update(
+			workCalendarPolicyId,
 			name,
 			status,
 			isDefault,
@@ -92,6 +97,7 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	public void Update(
+		Guid workCalendarPolicyId,
 		string name,
 		HrPolicyStatus status,
 		bool isDefault,
@@ -115,6 +121,7 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		Validate(name, status, isDefault, fullDayThresholdPercentage, halfDayThresholdPercentage, absentThresholdPercentage, graceTime, maxLateAllowedPerMonth, penaltyCountThreshold, earlyExitGraceTime, overtimeEnabled, overtimeRate, minOvertimeMinutes);
 
+		WorkCalendarPolicyId = workCalendarPolicyId;
 		Name = name.Trim();
 		Status = status;
 		IsDefault = isDefault;
@@ -202,12 +209,15 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException("ShikshaMitra:InvalidAttendanceThresholdOrder");
 		}
 
-		if (graceTime < 0 || maxLateAllowedPerMonth < 0 || penaltyCountThreshold < 0 || earlyExitGraceTime < 0)
+		if (graceTime is < 0 or > MaxGraceMinutes ||
+			maxLateAllowedPerMonth is < 0 or > MaxLateAllowed ||
+			penaltyCountThreshold is < 0 or > MaxLateAllowed ||
+			earlyExitGraceTime is < 0 or > MaxGraceMinutes)
 		{
 			throw new BusinessException("ShikshaMitra:InvalidAttendancePolicyRule");
 		}
 
-		if (overtimeEnabled && (!overtimeRate.HasValue || !minOvertimeMinutes.HasValue || minOvertimeMinutes < 0))
+		if (overtimeEnabled && (!overtimeRate.HasValue || !minOvertimeMinutes.HasValue || minOvertimeMinutes is < 0 or > MaxOvertimeMinutes))
 		{
 			throw new BusinessException("ShikshaMitra:OvertimeRateAndMinMinutesRequired");
 		}

@@ -48,10 +48,11 @@ public class PayrollPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		AcademicYearId = academicYearId;
 		WorkCalendarPolicyId = workCalendarPolicyId;
 		Version = 0;
-		Update(name, status, isDefault, dayCalculationType, manualDays, manualMonthDays, saturdayWorkPolicy, holidayOverrides, lockedMonthSettings);
+		Update(workCalendarPolicyId, name, status, isDefault, dayCalculationType, manualDays, manualMonthDays, saturdayWorkPolicy, holidayOverrides, lockedMonthSettings);
 	}
 
 	public void Update(
+		Guid workCalendarPolicyId,
 		string name,
 		HrPolicyStatus status,
 		bool isDefault,
@@ -72,6 +73,7 @@ public class PayrollPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException("ShikshaMitra:DefaultPolicyMustBeActive");
 		}
 
+		WorkCalendarPolicyId = workCalendarPolicyId;
 		Name = name.Trim();
 		Status = status;
 		IsDefault = isDefault;

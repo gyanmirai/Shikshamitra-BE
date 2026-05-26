@@ -74,15 +74,89 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 	private static Dictionary<string, string[]> BuildRolePermissions()
 	{
 		var tenantAdminPermissions = TenantAdminPermissions();
+		var applicationPermissions = AllApplicationPermissions();
+		var academicStaffPermissions = ModulePermissions(
+			ShikshaMitraModulePermissions.Dashboard,
+			ShikshaMitraModulePermissions.Students,
+			ShikshaMitraModulePermissions.Academics,
+			ShikshaMitraModulePermissions.ClassManagement,
+			ShikshaMitraModulePermissions.Calendar);
+		var officeStaffPermissions = ModulePermissions(
+			ShikshaMitraModulePermissions.Dashboard,
+			ShikshaMitraModulePermissions.Students,
+			ShikshaMitraModulePermissions.HR,
+			ShikshaMitraModulePermissions.Communication,
+			ShikshaMitraModulePermissions.Calendar,
+			ShikshaMitraModulePermissions.InstituteSetup);
+		var financeStaffPermissions = ModulePermissions(
+			ShikshaMitraModulePermissions.Dashboard,
+			ShikshaMitraModulePermissions.Students,
+			ShikshaMitraModulePermissions.Finance);
+		var hrStaffPermissions = ModulePermissions(
+			ShikshaMitraModulePermissions.Dashboard,
+			ShikshaMitraModulePermissions.HR,
+			ShikshaMitraModulePermissions.Calendar,
+			ShikshaMitraModulePermissions.InstituteSetup);
+		var studentFamilyPermissions = ModulePermissions(
+			ShikshaMitraModulePermissions.Dashboard,
+			ShikshaMitraModulePermissions.Students,
+			ShikshaMitraModulePermissions.Calendar);
 
-		// Normal tenant role grants are configured through the Security module and must not be reset here.
+		// Seed baseline access for deterministic staff personas. Tenant admins can still adjust
+		// grants through the Security module; this only inserts missing grants.
 		return new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
 		{
 			["admin"] = tenantAdminPermissions,
 			["super-admin"] = tenantAdminPermissions,
-			["Director"] = tenantAdminPermissions
+			["Director"] = tenantAdminPermissions,
+			["Principal"] = applicationPermissions,
+			["Vice Principal"] = applicationPermissions,
+			["Administrative Manager"] = applicationPermissions,
+			["IT Administrator"] = applicationPermissions,
+			["HOD"] = academicStaffPermissions,
+			["Teacher"] = academicStaffPermissions,
+			["Clerk"] = officeStaffPermissions,
+			["Office Assistant"] = officeStaffPermissions,
+			["Finance Officer"] = financeStaffPermissions,
+			["HR Manager"] = hrStaffPermissions,
+			["Student"] = studentFamilyPermissions,
+			["Parent"] = studentFamilyPermissions
 		};
 	}
+
+	private static string[] ModulePermissions(params string[] modulePermissions)
+	{
+		var detailedModuleKeys = modulePermissions
+			.Select(ToDetailedModuleKey)
+			.Where(key => key != null)
+			.Cast<string>()
+			.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+		return modulePermissions
+			.Concat(ShikshaMitraSubModulePermissions.All
+				.Where(permission => BelongsToAnyModule(permission, modulePermissions)))
+			.Concat(ShikshaMitraSubmodulePermissions.AllModules
+				.Where(module => detailedModuleKeys.Contains(module.Key))
+				.Select(module => module.Key))
+			.Concat(ShikshaMitraSubmodulePermissions.AllModules
+				.Where(module => detailedModuleKeys.Contains(module.Key))
+				.SelectMany(module => module.Value.Submodules.Values)
+				.SelectMany(submodule => submodule.Permissions))
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToArray();
+	}
+
+	private static string? ToDetailedModuleKey(string modulePermission)
+	{
+		var prefix = $"{ShikshaMitraModulePermissions.GroupName}.";
+		return modulePermission.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+			? modulePermission[prefix.Length..]
+			: null;
+	}
+
+	private static bool BelongsToAnyModule(string permission, IEnumerable<string> modulePermissions) =>
+		modulePermissions.Any(modulePermission =>
+			permission.StartsWith($"{modulePermission}.", StringComparison.OrdinalIgnoreCase));
 
 	private static string[] AllApplicationPermissions() =>
 		AllModulePermissions()

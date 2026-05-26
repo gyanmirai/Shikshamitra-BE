@@ -24,6 +24,7 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 	private readonly IRepository<TenantSettings.AcademicYears.AcademicYear, Guid> _academicYearRepository;
 	private readonly IRepository<TenantSettings.Standards.Standard, Guid> _standardRepository;
 	private readonly IRepository<TenantSettings.Divisions.Division, Guid> _divisionRepository;
+	private readonly IRepository<TenantSettings.EducationMediums.EducationMedium, Guid> _educationMediumRepository;
 
 	public StudentAttendanceAppService(
 		IRepository<Student, Guid> studentRepository,
@@ -32,7 +33,8 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 		AttendanceManager attendanceManager,
 		IRepository<TenantSettings.AcademicYears.AcademicYear, Guid> academicYearRepository,
 		IRepository<TenantSettings.Standards.Standard, Guid> standardRepository,
-		IRepository<TenantSettings.Divisions.Division, Guid> divisionRepository)
+		IRepository<TenantSettings.Divisions.Division, Guid> divisionRepository,
+		IRepository<TenantSettings.EducationMediums.EducationMedium, Guid> educationMediumRepository)
 	{
 		_studentRepository = studentRepository;
 		_attendanceDayRepository = attendanceDayRepository;
@@ -40,6 +42,7 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 		_academicYearRepository = academicYearRepository;
 		_standardRepository = standardRepository;
 		_divisionRepository = divisionRepository;
+		_educationMediumRepository = educationMediumRepository;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.View)]
@@ -52,6 +55,12 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 		var students = await _studentRepository.GetListAsync(s =>
 			s.StandardId == input.StandardId &&
 			s.DivisionId == input.DivisionId);
+
+		var standard = await _standardRepository.GetAsync(input.StandardId);
+		var division = await _divisionRepository.GetAsync(input.DivisionId);
+		var educationMediumIds = students.Select(s => s.AcademicMediumId).Distinct().ToList();
+		var educationMediums = await _educationMediumRepository.GetListAsync(m => educationMediumIds.Contains(m.Id));
+		var educationMediumNames = educationMediums.ToDictionary(m => m.Id, m => m.Name);
 
 		// Get existing attendance day if any
 		var attendanceDay = await _attendanceDayRepository.FindByDateAndDivisionAsync(
@@ -76,6 +85,9 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 				FirstName = student.FirstName,
 				MiddleName = student.MiddleName,
 				LastName = student.LastName,
+				OrganizationName = educationMediumNames.GetValueOrDefault(student.AcademicMediumId),
+				ClassName = standard.Name,
+				DivisionName = division.Name,
 				Status = attendanceEntry?.Status ?? AttendanceStatus.Pending,
 				Remarks = attendanceEntry?.Remarks
 			});

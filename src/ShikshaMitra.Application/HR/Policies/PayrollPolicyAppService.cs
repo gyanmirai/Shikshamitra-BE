@@ -110,6 +110,7 @@ public class PayrollPolicyAppService(
 			await confirmationService.EnsureConfirmedAsync(preview);
 		}
 		entity.Update(
+			input.WorkCalendarPolicyId,
 			input.Name,
 			status,
 			input.IsDefault,

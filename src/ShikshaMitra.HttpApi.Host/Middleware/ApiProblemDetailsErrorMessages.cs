@@ -20,8 +20,8 @@ internal static class ApiProblemDetailsErrorMessages
 
 		var trimmed = detail.Trim();
 		return trimmed.StartsWith("BusinessException:", StringComparison.OrdinalIgnoreCase) ||
-		       trimmed.Contains("STACK TRACE:", StringComparison.OrdinalIgnoreCase) ||
-		       trimmed.StartsWith("Exception of type '", StringComparison.OrdinalIgnoreCase);
+			   trimmed.Contains("STACK TRACE:", StringComparison.OrdinalIgnoreCase) ||
+			   trimmed.StartsWith("Exception of type '", StringComparison.OrdinalIgnoreCase);
 	}
 
 	internal static bool IsGenericInternalDetail(string? detail)

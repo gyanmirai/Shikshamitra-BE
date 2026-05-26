@@ -43,6 +43,12 @@ public class CollectFeeOutput
     /// </summary>
     public string? FeeReceiptNumber { get; set; }
 
+    /// <summary>
+    /// Database ID of the primary fee receipt (FIN-* or KFE-*) created for this transaction.
+    /// Use this to open the receipt preview dialog. Null when no fee lines were present.
+    /// </summary>
+    public Guid? FeeReceiptId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 }
 

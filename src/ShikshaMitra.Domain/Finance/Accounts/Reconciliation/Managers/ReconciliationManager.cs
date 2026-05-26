@@ -167,9 +167,11 @@ public class ReconciliationManager(
 
         // Mark the collection transaction as Reversed
         var metadata = await metadataRepository.FindAsync(
-            provisional.FeeCollectionTransactionId, cancellationToken: cancellationToken);
+            provisional.FeeCollectionTransactionId, cancellationToken: cancellationToken)
+            ?? throw new BusinessException(ReconciliationErrorCodes.ReceiptNotFound)
+                .WithData("FeeCollectionTransactionId", provisional.FeeCollectionTransactionId);
 
-        metadata?.MarkReversed(remarks);
+        metadata.MarkReversed(remarks);
 
         return provisional;
     }

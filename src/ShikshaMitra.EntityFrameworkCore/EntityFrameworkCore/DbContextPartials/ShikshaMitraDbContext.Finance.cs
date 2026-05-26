@@ -71,6 +71,7 @@ public partial class ShikshaMitraDbContext
 	public DbSet<StudentFeeRecord> StudentFeeRecords { get; set; }
 	public DbSet<FeePaymentReceipt> FeePaymentReceipts { get; set; }
 	public DbSet<FeeCollectionDueFeeAllocation> FeeCollectionDueFeeAllocations { get; set; }
+	public DbSet<ReceiptNumberSequence> ReceiptNumberSequences { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Fee Refunds

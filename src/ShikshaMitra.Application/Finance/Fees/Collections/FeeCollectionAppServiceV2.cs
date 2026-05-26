@@ -565,6 +565,7 @@ public class FeeCollectionAppServiceV2(
 			feeLinesTotal: feeLinesTotal,
 			chargeLinesTotal: chargeLinesTotal,
 			paymentMethods: paymentMethods,
+			bankReceiptConfirmed: input.BankReceiptConfirmed,
 			remarks: input.Notes);
 
 		if (receipts.Count > 0)
@@ -582,6 +583,7 @@ public class FeeCollectionAppServiceV2(
 			Id = metadata.Id,
 			ReceiptNumber = receiptNumber,
 			FeeReceiptNumber = feeReceipt?.ReceiptNumber,
+			FeeReceiptId = feeReceipt?.Id,
 			StudentId = input.StudentId,
 			AcademicYearId = input.AcademicYearId,
 			TotalAmount = input.TotalAmount,
@@ -691,9 +693,18 @@ public class FeeCollectionAppServiceV2(
 		var chargeDtos = new List<ChargeDetailDto>();
 		if (approvedCharges.Count > 0)
 		{
-			var chargeCollQ = await chargeCollectionRecordRepository.GetQueryableAsync();
+			var chargeCollQ  = await chargeCollectionRecordRepository.GetQueryableAsync();
+			var chargeMetaQ  = await feeRecordMetadataRepository.GetQueryableAsync();
+
+			// Exclude charges from reversed transactions (e.g. rejected cheque payments)
+			// so that partial-pay recalculation reflects the true unpaid amount.
+			var reversedTxIds = chargeMetaQ
+				.Where(m => m.Status == FeeCollectionStatus.Reversed)
+				.Select(m => m.Id);
+
 			var paidPerCharge = chargeCollQ
-				.Where(r => r.StudentId == studentId)
+				.Where(r => r.StudentId == studentId
+						 && !reversedTxIds.Contains(r.FeeRecordMetadataId))
 				.GroupBy(r => r.ChargeId)
 				.Select(g => new { ChargeId = g.Key, Paid = g.Sum(r => r.Amount) })
 				.ToDictionary(x => x.ChargeId, x => x.Paid);
@@ -741,6 +752,9 @@ public class FeeCollectionAppServiceV2(
 		var feeStructureAssignment = await studentFeeStructureRepository
 			.FirstOrDefaultAsync(x => x.StudentId == studentId);
 
+		// Shared queryable — used for reversed-transaction filtering and payment history.
+		var metaQ = await feeRecordMetadataRepository.GetQueryableAsync();
+
 		if (feeStructureAssignment != null)
 		{
 			var detailsQ = await feeStructureDetailRepository.GetQueryableAsync();
@@ -757,9 +771,17 @@ public class FeeCollectionAppServiceV2(
 								   NetAmount = detail.Amount,
 							   }).ToList();
 
-			var feeCollQ = await feeCollectionRecordRepository.GetQueryableAsync();
+			var feeCollQ  = await feeCollectionRecordRepository.GetQueryableAsync();
+
+			// Exclude fee records belonging to reversed (rejected) transactions so that
+			// a bounced cheque / rejected reconciliation does not inflate paid amounts.
+			var reversedTxIds = metaQ
+				.Where(m => m.Status == FeeCollectionStatus.Reversed)
+				.Select(m => m.Id);
+
 			var paidPerHead = feeCollQ
-				.Where(r => r.StudentId == studentId)
+				.Where(r => r.StudentId == studentId
+						 && !reversedTxIds.Contains(r.FeeRecordMetadataId))
 				.GroupBy(r => r.FeeHeadId)
 				.Select(g => new { FeeHeadId = g.Key, Paid = g.Sum(r => r.Amount) })
 				.ToDictionary(x => x.FeeHeadId, x => x.Paid);
@@ -793,8 +815,13 @@ public class FeeCollectionAppServiceV2(
 		if (studentCharges.Count > 0)
 		{
 			var chargeCollQ = await chargeCollectionRecordRepository.GetQueryableAsync();
+			var chargeReversedTxIds = metaQ
+				.Where(m => m.Status == FeeCollectionStatus.Reversed)
+				.Select(m => m.Id);
+
 			var paidPerCharge = chargeCollQ
-				.Where(r => r.StudentId == studentId)
+				.Where(r => r.StudentId == studentId
+						 && !chargeReversedTxIds.Contains(r.FeeRecordMetadataId))
 				.GroupBy(r => r.ChargeId)
 				.Select(g => new { ChargeId = g.Key, Paid = g.Sum(r => r.Amount) })
 				.ToDictionary(x => x.ChargeId, x => x.Paid);
@@ -817,10 +844,9 @@ public class FeeCollectionAppServiceV2(
 		}
 
 		// ── Payment history ───────────────────────────────────────────────
-		var metadataQ = await feeRecordMetadataRepository.GetQueryableAsync();
 		var paymentMethodQ = await paymentMethodRecordRepository.GetQueryableAsync();
 
-		var metadataForStudent = metadataQ
+		var metadataForStudent = metaQ
 			.Where(m => m.StudentId == studentId && m.AcademicYearId == academicYearId)
 			.OrderByDescending(m => m.CreationTime)
 			.ToList();

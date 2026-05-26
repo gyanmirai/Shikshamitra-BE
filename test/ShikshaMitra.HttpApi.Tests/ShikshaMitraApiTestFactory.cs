@@ -17,6 +17,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.Finance.Fees.Receipts;
+using ShikshaMitra.Infrastructure;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Seeders;
@@ -196,6 +198,9 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 		{
 			AddTestAuthentication(services);
 			services.AddTransient<StudentSeederContributor, NoOpStudentSeeder>();
+			// Replace the PostgreSQL-specific receipt number repo with an in-memory fake
+			// so SQLite doesn't receive the INSERT … ON CONFLICT … RETURNING syntax.
+			services.AddTransient<IReceiptNumberSequenceRepository, FakeReceiptNumberSequenceRepository>();
 			// ABP's bundling module enables the wwwroot/libs check which blocks all
 			// API requests when npm packages are not installed. PostConfigure runs
 			// after all Configure<> calls to ensure this override wins.

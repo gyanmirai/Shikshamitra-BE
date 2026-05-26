@@ -137,6 +137,18 @@ public static class ReconciliationTestHelper
             AcademicYearId = academicYearId,
             TotalAmount = amount,
             Notes = "Reconciliation test payment",
+            // Cheque/DD are AlwaysProvisional — BankReceiptConfirmed must be null.
+            // CashierDecided methods (UPI/Card/etc.) require BankReceiptConfirmed = false
+            // to generate a provisional receipt and enter the reconciliation queue.
+            BankReceiptConfirmed = method is
+                PaymentMethodEnum.UPI or
+                PaymentMethodEnum.CreditCard or
+                PaymentMethodEnum.DebitCard or
+                PaymentMethodEnum.BankTransfer or
+                PaymentMethodEnum.OnlinePaymentGateway or
+                PaymentMethodEnum.WalletPrepaidCard
+                ? false
+                : null,
             SelectedFeeHeads = new System.Collections.Generic.List<SelectedFeeHeadDto>
             {
                 new() { FeeHeadId = feeHeadId, Amount = amount },

@@ -8,6 +8,17 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 
 public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
 {
+    // Payment methods that require the cashier to confirm bank receipt
+    private static readonly System.Collections.Generic.HashSet<PaymentMethodEnum> CashierDecidedMethods =
+    [
+        PaymentMethodEnum.UPI,
+        PaymentMethodEnum.CreditCard,
+        PaymentMethodEnum.DebitCard,
+        PaymentMethodEnum.BankTransfer,
+        PaymentMethodEnum.OnlinePaymentGateway,
+        PaymentMethodEnum.WalletPrepaidCard,
+    ];
+
     public CollectFeeInputValidator()
     {
         RuleFor(x => x.StudentId)
@@ -26,6 +37,23 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
         RuleFor(x => x.Notes)
             .MaximumLength(1000).When(x => x.Notes != null);
 
+        // ── BankReceiptConfirmed rules ────────────────────────────────────────
+        // When ANY payment method is CashierDecided, the flag is mandatory.
+        RuleFor(x => x.BankReceiptConfirmed)
+            .NotNull()
+            .WithMessage(
+                "BankReceiptConfirmed is required when using UPI, card, bank transfer, or online gateway.")
+            .When(x => x.Payments.Any(p => CashierDecidedMethods.Contains(p.PaymentMethod)));
+
+        // For Cash/Cheque/DD only transactions, the flag must not be supplied.
+        RuleFor(x => x.BankReceiptConfirmed)
+            .Null()
+            .WithMessage(
+                "BankReceiptConfirmed must be null for Cash, Cheque, or Demand Draft payments.")
+            .When(x => x.Payments.Any()
+                     && x.Payments.All(p => !CashierDecidedMethods.Contains(p.PaymentMethod)));
+
+        // ── Fee heads ─────────────────────────────────────────────────────────
         RuleFor(x => x.SelectedFeeHeads)
             .NotEmpty().WithMessage("At least one fee head is required.")
             .Must(x => x.Count <= 50).WithMessage("Maximum 50 fee heads allowed per transaction.");
@@ -54,6 +82,7 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
             });
         });
 
+        // ── Charges ───────────────────────────────────────────────────────────
         RuleFor(x => x.SelectedCharges)
             .Must(c => c == null || c.Count <= 20).WithMessage("Maximum 20 charges allowed per transaction.");
 
@@ -63,6 +92,7 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
             charge.RuleFor(x => x.Amount).GreaterThan(0);
         });
 
+        // ── Payments ──────────────────────────────────────────────────────────
         RuleFor(x => x.Payments)
             .NotEmpty().WithMessage("At least one payment method is required.")
             .Must(p => p.Count <= 5).WithMessage("Maximum 5 payment methods allowed per transaction.");
@@ -74,7 +104,6 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
                 .IsInEnum().WithMessage("Invalid payment method value.");
 
             // Cheque, DD, BankTransfer, and UPI require a non-empty details dictionary.
-            // Field-level validation is handled by the domain layer.
             payment.When(x =>
                 x.PaymentMethod == PaymentMethodEnum.Cheque ||
                 x.PaymentMethod == PaymentMethodEnum.DemandDraft ||
@@ -89,6 +118,7 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
             });
         });
 
+        // ── Payment sum ───────────────────────────────────────────────────────
         RuleFor(x => x)
             .Must(x =>
             {

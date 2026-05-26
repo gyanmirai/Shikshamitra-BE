@@ -239,7 +239,7 @@ public class HRSeederContributor : BaseSeederContributor
 			configuration.GetValue(
 				PastAttendanceMonthsToSeedConfigKey,
 				configuration.GetValue(PastPayrollMonthsToSeedConfigKey, 3)),
-			1,
+			0,   // 0 = skip attendance/payroll seeding entirely (used in tests)
 			12);
 
 	private async Task SeedLeaveTypesAndPoliciesAsync()
@@ -1987,6 +1987,12 @@ public class HRSeederContributor : BaseSeederContributor
 			return;
 		}
 
+		// Skip attendance seeding when months = 0 (e.g. in integration tests).
+		if (PastAttendanceMonthsToSeed() == 0)
+		{
+			return;
+		}
+
 		var today = DateTime.UtcNow.Date;
 		var previousMonthStartDate = new DateTime(today.Year, today.Month, 1).AddMonths(-1);
 		var previousMonthEndDate = previousMonthStartDate.AddMonths(1).AddDays(-1);
@@ -2552,9 +2558,16 @@ public class HRSeederContributor : BaseSeederContributor
 			return;
 		}
 
+		// Respect the configurable window; 0 means skip attendance seeding entirely (e.g. in tests).
+		var monthWindow = PastAttendanceMonthsToSeed();
+		if (monthWindow == 0)
+		{
+			return;
+		}
+
 		var today = DateOnly.FromDateTime(DateTime.UtcNow);
 		var windowStartMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1)
-			.AddMonths(-(SampleAttendanceMonthWindow - 1));
+			.AddMonths(-(monthWindow - 1));
 		var windowStart = DateOnly.FromDateTime(windowStartMonth);
 
 		List<EmployeeAttendance> existingRows;

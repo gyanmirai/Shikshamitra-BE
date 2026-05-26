@@ -32,6 +32,18 @@ public class FeeRefundRequestDto
 
     public List<FeeRefundLineDto> Lines { get; set; } = [];
 
+    // ── Enhanced Response Fields for Refund Request View Screen ──
+
+    public Guid RefundRequestId { get; set; }
+
+    public int TotalFeeHeads { get; set; }
+
+    public double TotalPaidAmount { get; set; }
+
+    public double TotalRefundedAmount { get; set; }
+
+    public List<RefundFeeHeadDto> FeeHeads { get; set; } = [];
+
     // ── Denormalized student snapshot (populated by the list / get endpoints) ──
 
     /// <summary>Full display name: FirstName [MiddleName] LastName.</summary>
@@ -62,3 +74,32 @@ public class FeeRefundLineDto
 
     public double Amount { get; set; }
 }
+
+public class RefundFeeHeadDto
+{
+    public Guid FeeHeadId { get; set; }
+
+    public string FeeHeadName { get; set; } = string.Empty;
+
+    public double TotalPaid { get; set; }
+
+    public double TotalRefunded { get; set; }
+
+    public List<RefundMonthItemDto> Items { get; set; } = [];
+}
+
+public class RefundMonthItemDto
+{
+    public Guid InstallmentId { get; set; }
+
+    public string Month { get; set; } = string.Empty;
+
+    public double Total { get; set; }
+
+    public double Paid { get; set; }
+
+    public double RefundAmount { get; set; }
+
+    public int Status { get; set; }
+}
+

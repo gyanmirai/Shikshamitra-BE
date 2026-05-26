@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 
 namespace ShikshaMitra.Academic.Examination.SeatAllocation.Dtos;
 
@@ -20,6 +21,7 @@ public class SeatLayoutItemDto
 public class SeatLayoutResponseDto
 {
     public Guid? RoomId { get; set; }
+    public RoomDto? Room { get; set; }
     public int TotalSeats { get; set; }
     public int AllocatedCount { get; set; }
     public List<SeatLayoutItemDto> Items { get; set; } = [];

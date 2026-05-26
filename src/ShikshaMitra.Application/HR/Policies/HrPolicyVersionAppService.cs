@@ -102,7 +102,7 @@ public class HrPolicyVersionAppService(
 		var normalized = NormalizePolicyType(policyType);
 		var restored = normalized switch
 		{
-			"work_calendar" => (object) await RestoreWorkCalendarAsync(version, input),
+			"work_calendar" => (object)await RestoreWorkCalendarAsync(version, input),
 			"payroll" => HrPolicyMapping.ToDto(await RestorePayrollPolicyAsync(version, input)),
 			"attendance" => HrPolicyMapping.ToDto(await RestoreAttendancePolicyAsync(version, input)),
 			_ => throw new BusinessException("ShikshaMitra:InvalidPolicyType")

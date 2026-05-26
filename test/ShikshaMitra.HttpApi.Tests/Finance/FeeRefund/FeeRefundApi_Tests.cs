@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
@@ -230,6 +231,39 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
     {
         var response = await Client.GetAsync($"{BaseUrl}/{Guid.NewGuid()}");
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Get_Refund_Request_With_Details()
+    {
+        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, 2000d);
+        if (dueFeeId == Guid.Empty) return;
+
+        var refundDto = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, studentId, dueFeeId, 600d);
+
+        // Fetch detailed GET /api/fee-refunds/{id}
+        var response = await Client.GetAsync($"{BaseUrl}/{refundDto.Id}");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var body = await response.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.RefundRequestId.ShouldBe(refundDto.Id);
+        body.TotalFeeHeads.ShouldBeGreaterThan(0);
+        body.TotalPaidAmount.ShouldBe(2000d);
+        body.TotalRefundedAmount.ShouldBe(0d); // Pending refund should not affect refunded totals
+
+        body.FeeHeads.ShouldNotBeEmpty();
+        var head = body.FeeHeads.Find(fh => fh.Items.Any(item => item.InstallmentId == dueFeeId));
+        head.ShouldNotBeNull();
+        head.TotalPaid.ShouldBe(2000d);
+        head.TotalRefunded.ShouldBe(0d);
+
+        var installment = head.Items.Find(item => item.InstallmentId == dueFeeId);
+        installment.ShouldNotBeNull();
+        installment.Paid.ShouldBe(2000d);
+        installment.RefundAmount.ShouldBe(600d);
+        installment.Status.ShouldBe(1); // Paid status mapping
     }
 
     // ── Helper types for test deserialization ────────────────────────────────

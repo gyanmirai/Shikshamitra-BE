@@ -94,6 +94,7 @@ public class ExamSeatAllocationAppService(
         return new SeatLayoutResponseDto
         {
             RoomId = input.RoomId,
+            Room = ObjectMapper.Map<Room, RoomDto>(room),
             TotalSeats = totalSeats,
             AllocatedCount = allAllocations.Count,
             Items = pagedItems,

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
@@ -12,26 +13,36 @@ using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.Security.UserScope;
+using Volo.Abp.BackgroundJobs;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
 using Volo.Abp.Validation;
 
 namespace ShikshaMitra.HR.Dashboard;
 
 [Authorize(ShikshaMitraSubmodulePermissions.HR.Dashboard.View)]
+[RemoteService(false)]
 public class HRDashboardAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeeAttendanceRepository attendanceRepository,
 	IEmployeeLeaveRepository leaveRepository,
 	IRepository<LeavePolicy, Guid> leavePolicyRepository,
+	IRepository<HrDashboardPreview, Guid> previewRepository,
 	IRunPayrollAppService runPayrollAppService,
+	IBackgroundJobManager backgroundJobManager,
+	IDataFilter dataFilter,
 	IUserScopeService userScopeService,
 	HrUserScopeAccessService hrScopeAccessService)
 	: ApplicationService, IHRDashboardAppService
 {
 	private const int DefaultRangeDays = 7;
 	private const int MaxRangeDays = 31;
+	private const int PayloadVersion = 1;
+	private static readonly TimeSpan RefreshStaleAfter = TimeSpan.FromMinutes(15);
+	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
 	public async Task<HRDashboardSummaryDto> GetSummaryAsync(HRDashboardSummaryRequestDto input)
 	{
@@ -137,6 +148,171 @@ public class HRDashboardAppService(
 			Payroll = payroll,
 			Celebrations = celebrations,
 			Insights = insights
+		};
+	}
+
+	public async Task<HRDashboardPreviewDto> GetPreviewAsync(string dashboardKey)
+	{
+		dashboardKey = NormalizeDashboardKey(dashboardKey);
+		await CheckDashboardPermissionAsync(dashboardKey);
+
+		var preview = await FindPreviewAsync(dashboardKey);
+		return preview == null ? EmptyPreview(dashboardKey) : ToPreviewDto(preview);
+	}
+
+	public async Task<HRDashboardPreviewDto> RefreshPreviewAsync(string dashboardKey)
+	{
+		dashboardKey = NormalizeDashboardKey(dashboardKey);
+		await CheckDashboardPermissionAsync(dashboardKey);
+
+		var now = Clock.Now;
+		var preview = await FindPreviewAsync(dashboardKey);
+		if (preview == null)
+		{
+			preview = new HrDashboardPreview(GuidGenerator.Create(), CurrentTenant.Id, dashboardKey);
+			await previewRepository.InsertAsync(preview, autoSave: true);
+		}
+
+		var isAlreadyRefreshing = preview.Status == HrDashboardPreviewStatus.Refreshing &&
+			preview.RefreshStartedAt.HasValue &&
+			now - preview.RefreshStartedAt.Value < RefreshStaleAfter;
+		if (!isAlreadyRefreshing)
+		{
+			preview.MarkRefreshing(CurrentUser.Id, now);
+			await previewRepository.UpdateAsync(preview, autoSave: true);
+			await backgroundJobManager.EnqueueAsync(new HrDashboardPreviewRefreshJobArgs
+			{
+				TenantId = CurrentTenant.Id,
+				PreviewId = preview.Id,
+				DashboardKey = dashboardKey,
+				RequestedByUserId = CurrentUser.Id
+			});
+		}
+
+		return ToPreviewDto(preview);
+	}
+
+	[AllowAnonymous]
+	public async Task RefreshExistingPreviewsAsync()
+	{
+		List<HrDashboardPreview> previews;
+		using (dataFilter.Disable<IMultiTenant>())
+		{
+			previews = await AsyncExecuter.ToListAsync((await previewRepository.GetQueryableAsync())
+				.Where(x => x.Status != HrDashboardPreviewStatus.Refreshing ||
+					!x.RefreshStartedAt.HasValue ||
+					Clock.Now - x.RefreshStartedAt.Value >= RefreshStaleAfter));
+		}
+
+		foreach (var preview in previews)
+		{
+			await backgroundJobManager.EnqueueAsync(new HrDashboardPreviewRefreshJobArgs
+			{
+				TenantId = preview.TenantId,
+				PreviewId = preview.Id,
+				DashboardKey = preview.DashboardKey
+			});
+		}
+	}
+
+	[AllowAnonymous]
+	public async Task ExecutePreviewRefreshAsync(HrDashboardPreviewRefreshJobArgs args)
+	{
+		var preview = await previewRepository.FindAsync(args.PreviewId);
+		if (preview == null)
+		{
+			return;
+		}
+
+		try
+		{
+			var payloadJson = await BuildPreviewPayloadJsonAsync(preview.DashboardKey);
+			preview.MarkReady(payloadJson, PayloadVersion, Clock.Now);
+		}
+		catch (Exception ex)
+		{
+			preview.MarkFailed(ex.Message, Clock.Now);
+		}
+
+		await previewRepository.UpdateAsync(preview, autoSave: true);
+	}
+
+	private async Task<string> BuildPreviewPayloadJsonAsync(string dashboardKey)
+	{
+		var defaults = new HRDashboardSummaryRequestDto
+		{
+			Date = Clock.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+			Month = Clock.Now.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+			Range = 7
+		};
+		var summary = await GetSummaryAsync(defaults);
+
+		return dashboardKey switch
+		{
+			HrDashboardKeys.Main => JsonSerializer.Serialize(summary, JsonOptions),
+			HrDashboardKeys.Attendance => JsonSerializer.Serialize(BuildAttendancePreview(summary), JsonOptions),
+			HrDashboardKeys.Payroll => JsonSerializer.Serialize(BuildPayrollPreview(summary), JsonOptions),
+			_ => throw new BusinessException("HR:Dashboard:InvalidKey")
+		};
+	}
+
+	private static HRDashboardAttendancePreviewDto BuildAttendancePreview(HRDashboardSummaryDto summary)
+	{
+		var totalStaff = summary.Workforce.TotalActiveStaff;
+		var missing = summary.AttendanceToday.MissingAttendance;
+		return new HRDashboardAttendancePreviewDto
+		{
+			Date = summary.Date,
+			TotalStaff = totalStaff,
+			Present = summary.AttendanceToday.Present,
+			Absent = summary.AttendanceToday.Absent,
+			HalfDay = summary.AttendanceToday.HalfDay,
+			MissingAttendance = missing,
+			AttendanceRate = summary.AttendanceToday.AttendanceRate,
+			Trend = summary.AttendanceTrend,
+			TopDefaulters = summary.Workforce.RecentEmployees
+				.Take(7)
+				.Select(e => new HRDashboardAttendanceDefaulterDto
+				{
+					EmployeeId = e.Id,
+					EmployeeName = e.Name,
+					EmployeeIdentifier = e.EmployeeIdentifier,
+					MissingAttendance = missing > 0 ? 1 : 0,
+					Absences = summary.AttendanceToday.Absent
+				})
+				.ToList(),
+			ShiftSummary =
+			[
+				new HRDashboardShiftSummaryDto
+				{
+					ShiftName = "All Staff",
+					StaffCount = totalStaff,
+					Present = summary.AttendanceToday.Present,
+					Missing = missing
+				}
+			]
+		};
+	}
+
+	private static HRDashboardPayrollPreviewDto BuildPayrollPreview(HRDashboardSummaryDto summary)
+	{
+		var payroll = summary.Payroll;
+		return new HRDashboardPayrollPreviewDto
+		{
+			Month = payroll.Month,
+			CanPreview = payroll.CanPreview,
+			CanLock = payroll.CanLock,
+			EmployeeCount = payroll.EmployeeCount,
+			ReviewedCount = payroll.ReviewedCount,
+			LockedCount = payroll.LockedCount,
+			PendingCount = payroll.PendingCount,
+			MissingAttendanceCount = payroll.MissingAttendanceCount,
+			MissingSalaryStructureCount = payroll.MissingSalaryStructureCount,
+			PolicyConfigurationIssueCount = payroll.PolicyConfigurationIssueCount,
+			EstimatedGrossAmount = payroll.EstimatedGrossAmount,
+			EstimatedNetAmount = payroll.EstimatedNetAmount,
+			BlockingIssues = payroll.BlockingIssues,
+			RecommendedActions = payroll.RecommendedActions
 		};
 	}
 
@@ -631,6 +807,65 @@ public class HRDashboardAppService(
 		}
 
 		return scope;
+	}
+
+	private async Task<HrDashboardPreview?> FindPreviewAsync(string dashboardKey)
+	{
+		return await AsyncExecuter.FirstOrDefaultAsync((await previewRepository.GetQueryableAsync())
+			.Where(x => x.TenantId == CurrentTenant.Id && x.DashboardKey == dashboardKey));
+	}
+
+	private static HRDashboardPreviewDto EmptyPreview(string dashboardKey)
+	{
+		return new HRDashboardPreviewDto
+		{
+			DashboardKey = dashboardKey,
+			Status = HrDashboardPreviewStatus.Empty,
+			PayloadJson = "{}",
+			PayloadVersion = PayloadVersion
+		};
+	}
+
+	private static HRDashboardPreviewDto ToPreviewDto(HrDashboardPreview preview)
+	{
+		return new HRDashboardPreviewDto
+		{
+			DashboardKey = preview.DashboardKey,
+			Status = preview.Status,
+			PayloadJson = preview.PayloadJson,
+			PayloadVersion = preview.PayloadVersion,
+			LastRefreshedAt = preview.LastRefreshedAt,
+			RefreshStartedAt = preview.RefreshStartedAt,
+			RefreshRequestedByUserId = preview.RefreshRequestedByUserId,
+			LastError = preview.LastError
+		};
+	}
+
+	private static string NormalizeDashboardKey(string dashboardKey)
+	{
+		var normalized = HrDashboardKeys.All.FirstOrDefault(key =>
+			string.Equals(key, dashboardKey, StringComparison.OrdinalIgnoreCase));
+		if (normalized == null)
+		{
+			throw new AbpValidationException(
+				"Dashboard key is invalid.",
+				[new ValidationResult("Dashboard key must be Main, Attendance, or Payroll.", ["dashboardKey"])]);
+		}
+
+		return normalized;
+	}
+
+	private async Task CheckDashboardPermissionAsync(string dashboardKey)
+	{
+		var permission = dashboardKey switch
+		{
+			HrDashboardKeys.Main => ShikshaMitraSubmodulePermissions.HR.Dashboard.View,
+			HrDashboardKeys.Attendance => ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_Dashboard.View,
+			HrDashboardKeys.Payroll => ShikshaMitraSubmodulePermissions.HR.PayrollManagement_Dashboard.View,
+			_ => ShikshaMitraSubmodulePermissions.HR.Dashboard.View
+		};
+
+		await AuthorizationService.CheckAsync(permission);
 	}
 
 	private sealed record ActiveEmployeeDashboardRow(

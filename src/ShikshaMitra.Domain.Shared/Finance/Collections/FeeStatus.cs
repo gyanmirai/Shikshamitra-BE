@@ -1,8 +1,8 @@
-﻿namespace ShikshaMitra.Finance.Collections;
+namespace ShikshaMitra.Finance.Collections;
 
 public enum FeeStatus
 {
 	Pending,
-	Paid,
-	PartiallyPaid
+	Partial,
+	Paid
 }

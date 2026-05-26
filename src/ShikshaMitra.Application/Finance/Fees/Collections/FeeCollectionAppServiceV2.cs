@@ -475,9 +475,12 @@ public class FeeCollectionAppServiceV2(
 
 		// 2. Determine collection status
 		var received = input.ReceivedAmount ?? input.TotalAmount;
-		var status = received >= input.TotalAmount
-			? FeeCollectionStatus.Paid
-			: FeeCollectionStatus.Pending;
+		var paymentMethods = input.Payments.Select(p => p.PaymentMethod).ToList();
+		var status = FeeReceiptPaymentPolicy.RequiresVerification(paymentMethods)
+			? FeeCollectionStatus.InReconciliation
+			: (received >= input.TotalAmount
+				? FeeCollectionStatus.Paid
+				: (received > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending));
 
 		// When receivedAmount < totalAmount (partial payment), scale all fee/charge amounts
 		// proportionally so that DueFee outstanding balances and collection records reflect
@@ -514,7 +517,6 @@ public class FeeCollectionAppServiceV2(
 		}
 
 		// 7. Payment-method records
-		var paymentMethods = input.Payments.Select(p => p.PaymentMethod).ToList();
 		var paymentRecords = feeCollectionManager.CreatePaymentRecords(
 			input.StudentId,
 			metadata.Id,
@@ -658,7 +660,7 @@ public class FeeCollectionAppServiceV2(
 					Due = d.OutstandingAmount,
 					Status = d.OutstandingAmount <= 0d
 						? FeeCollectionStatus.Paid
-						: FeeCollectionStatus.Pending,
+						: (d.PaidAmount > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 				}).ToList();
 
 				ledger.Add(new FeeLedgerMonthDto
@@ -708,7 +710,7 @@ public class FeeCollectionAppServiceV2(
 					Amount = net,
 					PaidAmount = paid,
 					PendingAmount = pending,
-					Status = pending <= 0d ? FeeCollectionStatus.Paid : FeeCollectionStatus.Pending,
+					Status = pending <= 0d ? FeeCollectionStatus.Paid : (paid > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 				};
 			}).ToList();
 		}
@@ -774,7 +776,7 @@ public class FeeCollectionAppServiceV2(
 					PaidAmount = paid,
 					PendingAmount = pending,
 					Description = def.Description,
-					Status = pending <= 0d ? FeeCollectionStatus.Paid : FeeCollectionStatus.Pending,
+					Status = pending <= 0d ? FeeCollectionStatus.Paid : (paid > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 				};
 			}).ToList();
 		}
@@ -809,7 +811,7 @@ public class FeeCollectionAppServiceV2(
 					Amount = net,
 					PaidAmount = paid,
 					PendingAmount = pending,
-					Status = pending <= 0d ? FeeCollectionStatus.Paid : FeeCollectionStatus.Pending,
+					Status = pending <= 0d ? FeeCollectionStatus.Paid : (paid > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 				};
 			}).ToList();
 		}
@@ -841,6 +843,7 @@ public class FeeCollectionAppServiceV2(
 				Amount = m.TotalPaidFee,
 				PaymentMethods = methodsByMetadata.TryGetValue(m.Id, out var methods) ? methods : [],
 				ReceiptUrl = null,
+				Status = m.Status,
 			}).ToList();
 		}
 

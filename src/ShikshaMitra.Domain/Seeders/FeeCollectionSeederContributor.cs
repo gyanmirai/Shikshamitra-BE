@@ -461,8 +461,8 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
                     isOneTime:       false,
                     isOptional:      false,
                     isRefundable:    true,
-                    payableMonth:    month,
-                    payableYear:     year));
+                    payableMonth:    null,
+                    payableYear:     null));
             }
 
             // One-time development fee (due in first month)

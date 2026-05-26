@@ -205,10 +205,35 @@ public class TestLoginSeederContributor : BaseSeederContributor
 				}
 			}
 
-			managedUser.SetEmailConfirmed(true);
-			managedUser.Name = spec.FirstName;
-			managedUser.Surname = spec.LastName;
-			await _userManager.UpdateAsync(managedUser);
+			var userChanged = false;
+			if (!managedUser.EmailConfirmed)
+			{
+				managedUser.SetEmailConfirmed(true);
+				userChanged = true;
+			}
+
+			if (!string.Equals(managedUser.Name, spec.FirstName, StringComparison.Ordinal))
+			{
+				managedUser.Name = spec.FirstName;
+				userChanged = true;
+			}
+
+			if (!string.Equals(managedUser.Surname, spec.LastName, StringComparison.Ordinal))
+			{
+				managedUser.Surname = spec.LastName;
+				userChanged = true;
+			}
+
+			if (userChanged)
+			{
+				var updateResult = await _userManager.UpdateAsync(managedUser);
+				if (!updateResult.Succeeded)
+				{
+					throw new Exception(
+						$"Failed to update seeded test user '{spec.Email}': " +
+						string.Join(", ", updateResult.Errors));
+				}
+			}
 
 			await ResetPasswordAsync(managedUser, TempPassword);
 		}
@@ -309,6 +334,12 @@ public class TestLoginSeederContributor : BaseSeederContributor
 	private async Task ResetPasswordAsync(IdentityUser user, string password)
 	{
 		var managedUser = await _userManager.FindByIdAsync(user.Id.ToString()) ?? user;
+		if (!string.IsNullOrWhiteSpace(managedUser.PasswordHash) &&
+		    await _userManager.CheckPasswordAsync(managedUser, password))
+		{
+			return;
+		}
+
 		IdentityResult result;
 		if (string.IsNullOrWhiteSpace(managedUser.PasswordHash))
 		{

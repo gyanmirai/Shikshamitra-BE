@@ -3729,17 +3729,55 @@ public class HRSeederContributor : BaseSeederContributor
 			}
 		}
 
-		managedUser.Name = firstName;
-		managedUser.Surname = lastName;
-		managedUser.SetEmailConfirmed(true);
-		managedUser.SetPhoneNumber(mobileNo, false);
-		await _userManager.UpdateAsync(managedUser);
+		var userChanged = false;
+		if (!string.Equals(managedUser.Name, firstName, StringComparison.Ordinal))
+		{
+			managedUser.Name = firstName;
+			userChanged = true;
+		}
+
+		if (!string.Equals(managedUser.Surname, lastName, StringComparison.Ordinal))
+		{
+			managedUser.Surname = lastName;
+			userChanged = true;
+		}
+
+		if (!managedUser.EmailConfirmed)
+		{
+			managedUser.SetEmailConfirmed(true);
+			userChanged = true;
+		}
+
+		if (!string.Equals(managedUser.PhoneNumber, mobileNo, StringComparison.Ordinal) ||
+		    managedUser.PhoneNumberConfirmed)
+		{
+			managedUser.SetPhoneNumber(mobileNo, false);
+			userChanged = true;
+		}
+
+		if (userChanged)
+		{
+			var updateResult = await _userManager.UpdateAsync(managedUser);
+			if (!updateResult.Succeeded)
+			{
+				throw new Exception(
+					$"Failed to update seeded HR user '{email}': " +
+					string.Join(", ", updateResult.Errors.Select(e => e.Description)));
+			}
+		}
+
 		await ResetPasswordAsync(managedUser, TempPassword);
 	}
 
 	private async Task ResetPasswordAsync(IdentityUser user, string password)
 	{
 		var managedUser = await _userManager.FindByIdAsync(user.Id.ToString()) ?? user;
+		if (!string.IsNullOrWhiteSpace(managedUser.PasswordHash) &&
+		    await _userManager.CheckPasswordAsync(managedUser, password))
+		{
+			return;
+		}
+
 		IdentityResult result;
 		if (string.IsNullOrWhiteSpace(managedUser.PasswordHash))
 		{

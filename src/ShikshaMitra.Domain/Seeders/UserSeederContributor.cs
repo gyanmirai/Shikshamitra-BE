@@ -132,10 +132,36 @@ public class UserSeederContributor : BaseSeederContributor
 			}
 		}
 
-		managedUser.Name = userInfo.Name;
-		managedUser.Surname = userInfo.Surname;
-		managedUser.SetEmailConfirmed(true);
-		await _userManager.UpdateAsync(managedUser);
+		var userChanged = false;
+		if (!string.Equals(managedUser.Name, userInfo.Name, System.StringComparison.Ordinal))
+		{
+			managedUser.Name = userInfo.Name;
+			userChanged = true;
+		}
+
+		if (!string.Equals(managedUser.Surname, userInfo.Surname, System.StringComparison.Ordinal))
+		{
+			managedUser.Surname = userInfo.Surname;
+			userChanged = true;
+		}
+
+		if (!managedUser.EmailConfirmed)
+		{
+			managedUser.SetEmailConfirmed(true);
+			userChanged = true;
+		}
+
+		if (userChanged)
+		{
+			var updateResult = await _userManager.UpdateAsync(managedUser);
+			if (!updateResult.Succeeded)
+			{
+				throw new System.Exception(
+					$"Failed to update seeded user '{userInfo.Email}': " +
+					string.Join(", ", updateResult.Errors.Select(e => e.Description)));
+			}
+		}
+
 		await EnsureRoleMembershipAsync(managedUser, userInfo.RoleName);
 	}
 

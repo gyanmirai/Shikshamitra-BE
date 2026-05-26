@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.HR.Policies;
@@ -159,14 +160,19 @@ public class CreateUpdateAttendancePolicyDto
 	public double AbsentThresholdPercentage { get; set; }
 	public string MissingPunchBehavior { get; set; } = "requires_review";
 	public bool ManualCorrectionAllowed { get; set; } = true;
+	[Range(0, 240)]
 	public int GraceTime { get; set; }
+	[Range(0, 31)]
 	public int MaxLateAllowedPerMonth { get; set; }
 	public string PenaltyType { get; set; } = "none";
+	[Range(0, 31)]
 	public int PenaltyCountThreshold { get; set; }
 	public bool EarlyExitEnabled { get; set; }
+	[Range(0, 240)]
 	public int EarlyExitGraceTime { get; set; }
 	public bool OvertimeEnabled { get; set; }
 	public string? OvertimeRate { get; set; }
+	[Range(0, 1440)]
 	public int? MinOvertimeMinutes { get; set; }
 	public string HolidayWorkBehavior { get; set; } = "comp_off";
 	public bool SandwichRuleEnabled { get; set; }

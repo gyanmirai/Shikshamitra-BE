@@ -1,9 +1,10 @@
+﻿using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Audit;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.Constants.Permissions;
-using ShikshaMitra.HR.Audit;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -69,7 +70,26 @@ public class AttendancePolicyAppService(
 	{
 		await EnsureWorkCalendarAsync(input.WorkCalendarPolicyId, input.AcademicYearId);
 		var entity = await repository.GetAsync(id);
-		if (entity.Status != HrPolicyStatus.Draft || HrPolicyMapping.ParsePolicyStatus(input.Status) != HrPolicyStatus.Draft)
+		var status = HrPolicyMapping.ParsePolicyStatus(input.Status);
+		var missingPunchBehavior = HrPolicyMapping.ParseMissingPunchBehavior(input.MissingPunchBehavior);
+		var penaltyType = HrPolicyMapping.ParsePenaltyType(input.PenaltyType);
+		var overtimeRate = HrPolicyMapping.ParseOvertimeRate(input.OvertimeRate);
+		var holidayWorkBehavior = HrPolicyMapping.ParseHolidayWorkBehavior(input.HolidayWorkBehavior);
+		var before = HrPolicyMapping.ToDto(entity);
+
+		if (IsUnchanged(
+			entity,
+			input,
+			status,
+			missingPunchBehavior,
+			penaltyType,
+			overtimeRate,
+			holidayWorkBehavior))
+		{
+			return before;
+		}
+
+		if (entity.Status != HrPolicyStatus.Draft || status != HrPolicyStatus.Draft)
 		{
 			var preview = await policySafetyAppService.PreviewPolicyImpactAsync(new HrPolicyImpactPreviewRequestDto
 			{
@@ -81,26 +101,26 @@ public class AttendancePolicyAppService(
 			});
 			await confirmationService.EnsureConfirmedAsync(preview);
 		}
-		var before = HrPolicyMapping.ToDto(entity);
 		entity.Update(
+			input.WorkCalendarPolicyId,
 			input.Name,
-			HrPolicyMapping.ParsePolicyStatus(input.Status),
+			status,
 			input.IsDefault,
 			input.FullDayThresholdPercentage,
 			input.HalfDayThresholdPercentage,
 			input.AbsentThresholdPercentage,
-			HrPolicyMapping.ParseMissingPunchBehavior(input.MissingPunchBehavior),
+			missingPunchBehavior,
 			input.ManualCorrectionAllowed,
 			input.GraceTime,
 			input.MaxLateAllowedPerMonth,
-			HrPolicyMapping.ParsePenaltyType(input.PenaltyType),
+			penaltyType,
 			input.PenaltyCountThreshold,
 			input.EarlyExitEnabled,
 			input.EarlyExitGraceTime,
 			input.OvertimeEnabled,
-			HrPolicyMapping.ParseOvertimeRate(input.OvertimeRate),
+			overtimeRate,
 			input.MinOvertimeMinutes,
-			HrPolicyMapping.ParseHolidayWorkBehavior(input.HolidayWorkBehavior),
+			holidayWorkBehavior,
 			input.SandwichRuleEnabled,
 			input.PayrollPreviewEnabled);
 
@@ -274,5 +294,38 @@ public class AttendancePolicyAppService(
 			await versionAppService.CaptureAsync("attendance", HrPolicyMapping.ToDto(item), "set-default-cleared");
 			await auditWriter.WriteAsync(item.AcademicYearId, "attendance_policy", item.Id, item.Name, "set_default", $"Cleared default attendance policy {item.Name}.");
 		}
+	}
+
+	private static bool IsUnchanged(
+		AttendancePolicy entity,
+		CreateUpdateAttendancePolicyDto input,
+		HrPolicyStatus status,
+		AttendanceMissingPunchBehavior missingPunchBehavior,
+		AttendancePenaltyType penaltyType,
+		AttendanceOvertimeRate? overtimeRate,
+		AttendanceHolidayWorkBehavior holidayWorkBehavior)
+	{
+		return entity.AcademicYearId == input.AcademicYearId &&
+			entity.WorkCalendarPolicyId == input.WorkCalendarPolicyId &&
+			string.Equals(entity.Name, input.Name.Trim(), StringComparison.Ordinal) &&
+			entity.Status == status &&
+			entity.IsDefault == input.IsDefault &&
+			entity.FullDayThresholdPercentage == input.FullDayThresholdPercentage &&
+			entity.HalfDayThresholdPercentage == input.HalfDayThresholdPercentage &&
+			entity.AbsentThresholdPercentage == input.AbsentThresholdPercentage &&
+			entity.MissingPunchBehavior == missingPunchBehavior &&
+			entity.ManualCorrectionAllowed == input.ManualCorrectionAllowed &&
+			entity.GraceTime == input.GraceTime &&
+			entity.MaxLateAllowedPerMonth == input.MaxLateAllowedPerMonth &&
+			entity.PenaltyType == penaltyType &&
+			entity.PenaltyCountThreshold == input.PenaltyCountThreshold &&
+			entity.EarlyExitEnabled == input.EarlyExitEnabled &&
+			entity.EarlyExitGraceTime == input.EarlyExitGraceTime &&
+			entity.OvertimeEnabled == input.OvertimeEnabled &&
+			entity.OvertimeRate == overtimeRate &&
+			entity.MinOvertimeMinutes == input.MinOvertimeMinutes &&
+			entity.HolidayWorkBehavior == holidayWorkBehavior &&
+			entity.SandwichRuleEnabled == input.SandwichRuleEnabled &&
+			entity.PayrollPreviewEnabled == input.PayrollPreviewEnabled;
 	}
 }

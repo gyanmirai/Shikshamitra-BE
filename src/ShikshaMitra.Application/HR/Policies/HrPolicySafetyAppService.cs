@@ -49,7 +49,8 @@ public class HrPolicySafetyAppService(
 
 		await FillCurrentVersionAsync(preview);
 		preview.ProposedVersion = preview.CurrentVersion.HasValue ? preview.CurrentVersion.Value + 1 : 1;
-		var workCalendarRefs = await ResolveWorkCalendarReferencesAsync(policyType, input.PolicyId, academicYearId);
+		var includeDraftReferences = string.Equals(preview.Action, "archive", StringComparison.OrdinalIgnoreCase);
+		var workCalendarRefs = await ResolveWorkCalendarReferencesAsync(policyType, input.PolicyId, academicYearId, includeDraftReferences);
 
 		var affectedAssignments = await GetAffectedAssignmentsAsync(policyType, input.PolicyId, academicYearId, workCalendarRefs);
 		preview.AffectedAssignmentCount = affectedAssignments.Count;
@@ -136,7 +137,11 @@ public class HrPolicySafetyAppService(
 		};
 	}
 
-	private async Task<WorkCalendarPolicyReferences> ResolveWorkCalendarReferencesAsync(string policyType, Guid? policyId, Guid academicYearId)
+	private async Task<WorkCalendarPolicyReferences> ResolveWorkCalendarReferencesAsync(
+		string policyType,
+		Guid? policyId,
+		Guid academicYearId,
+		bool includeDraftReferences)
 	{
 		if (policyType != "work_calendar" || !policyId.HasValue)
 		{
@@ -147,12 +152,12 @@ public class HrPolicySafetyAppService(
 		var payrollPolicies = await AsyncExecuter.ToListAsync(payrollQuery.Where(x =>
 			x.AcademicYearId == academicYearId &&
 			x.WorkCalendarPolicyId == policyId.Value &&
-			x.Status == HrPolicyStatus.Active));
+			(includeDraftReferences ? x.Status != HrPolicyStatus.Archived : x.Status == HrPolicyStatus.Active)));
 		var attendanceQuery = await attendancePolicyRepository.GetQueryableAsync();
 		var attendancePolicies = await AsyncExecuter.ToListAsync(attendanceQuery.Where(x =>
 			x.AcademicYearId == academicYearId &&
 			x.WorkCalendarPolicyId == policyId.Value &&
-			x.Status == HrPolicyStatus.Active));
+			(includeDraftReferences ? x.Status != HrPolicyStatus.Archived : x.Status == HrPolicyStatus.Active)));
 
 		return new WorkCalendarPolicyReferences(
 			payrollPolicies.Select(x => x.Id).ToHashSet(),
@@ -307,18 +312,20 @@ public class HrPolicySafetyAppService(
 		var referencedPolicies = new List<string>();
 		if (refs.PayrollPolicyNames.Count > 0)
 		{
-			referencedPolicies.Add($"payroll: {string.Join(", ", refs.PayrollPolicyNames)}");
+			referencedPolicies.Add($"payroll ({refs.PayrollPolicyCount}): {string.Join(", ", refs.PayrollPolicyNames)}");
 		}
 		if (refs.AttendancePolicyNames.Count > 0)
 		{
-			referencedPolicies.Add($"attendance: {string.Join(", ", refs.AttendancePolicyNames)}");
+			referencedPolicies.Add($"attendance ({refs.AttendancePolicyCount}): {string.Join(", ", refs.AttendancePolicyNames)}");
 		}
 
 		preview.Warnings.Add(new HrPolicyImpactWarningDto
 		{
-			Severity = "warning",
-			Code = "ShikshaMitra:WorkCalendarPolicyReferenced",
-			Message = $"This work calendar is referenced by active policies ({string.Join("; ", referencedPolicies)})."
+			Severity = string.Equals(preview.Action, "archive", StringComparison.OrdinalIgnoreCase) ? "blocking" : "warning",
+			Code = string.Equals(preview.Action, "archive", StringComparison.OrdinalIgnoreCase)
+				? "ShikshaMitra:WorkCalendarPolicyInUse"
+				: "ShikshaMitra:WorkCalendarPolicyReferenced",
+			Message = $"This work calendar is referenced by payroll or attendance policies ({string.Join("; ", referencedPolicies)}). Reassign or archive those policies before archiving this calendar."
 		});
 	}
 
@@ -519,6 +526,8 @@ public class HrPolicySafetyAppService(
 	{
 		public static WorkCalendarPolicyReferences Empty { get; } = new([], [], [], []);
 		public bool IsEmpty => PayrollPolicyIds.Count == 0 && AttendancePolicyIds.Count == 0;
+		public int PayrollPolicyCount => PayrollPolicyIds.Count;
+		public int AttendancePolicyCount => AttendancePolicyIds.Count;
 	}
 
 	private sealed record AffectedEmployeePreview(int Count, List<Employee> Sample)

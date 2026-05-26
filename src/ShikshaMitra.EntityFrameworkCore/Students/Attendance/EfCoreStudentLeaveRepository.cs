@@ -94,6 +94,11 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 
 		return await query
 			.Include(x => x.Student)
+				.ThenInclude(x => x!.AcademicMedium)
+			.Include(x => x.Student)
+				.ThenInclude(x => x!.Standard)
+			.Include(x => x.Student)
+				.ThenInclude(x => x!.Division)
 			.Include(x => x.StudentLeaveType)
 			.Where(x => x.Id == id)
 			.FirstOrDefaultAsync(GetCancellationToken(cancellationToken));
@@ -130,6 +135,11 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 
 		query = query
 			.Include(x => x.Student)
+				.ThenInclude(x => x!.AcademicMedium)
+			.Include(x => x.Student)
+				.ThenInclude(x => x!.Standard)
+			.Include(x => x.Student)
+				.ThenInclude(x => x!.Division)
 			.Include(x => x.StudentLeaveType);
 
 		query = query.OrderBy(sorting ?? nameof(StudentLeave.LeaveDate) + " DESC");

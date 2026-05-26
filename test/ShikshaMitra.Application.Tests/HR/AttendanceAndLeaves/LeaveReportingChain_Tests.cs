@@ -84,6 +84,26 @@ public class LeaveReportingChain_Tests : ShikshaMitraApplicationTestBase<Shiksha
 		});
 	}
 
+	[Fact]
+	public async Task AssignReportingManager_Should_Reject_Inactive_Manager()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var manager = await _employeePersonalInfo.CreateAsync(
+				await BuildCreateDtoAsync($"inactive.mgr.{Guid.NewGuid():N}@t.com", EmployeeStatusType.Inactive));
+			var reportee = await _employeePersonalInfo.CreateAsync(
+				await BuildCreateDtoAsync($"inactive.rep.{Guid.NewGuid():N}@t.com"));
+
+			var ex = await Should.ThrowAsync<BusinessException>(async () =>
+				await _reportingManager.AssignReportingManagerAsync(reportee.Id, new AssignReportingManagerDto
+				{
+					ReportingManagerId = manager.Id
+				}));
+
+			ex.Code.ShouldBe("ShikshaMitra:ReportingManagerMustBeActive");
+		});
+	}
+
 	private async Task<(Guid ManagerId, Guid ReporteeId)> CreateManagerAndReporteeAsync()
 	{
 		var manager = await _employeePersonalInfo.CreateAsync(await BuildCreateDtoAsync($"mgr.{Guid.NewGuid():N}@t.com"));
@@ -105,7 +125,9 @@ public class LeaveReportingChain_Tests : ShikshaMitraApplicationTestBase<Shiksha
 		return (top.Id, mid.Id, leaf.Id);
 	}
 
-	private async Task<CreateEmployeePersonalInfoDto> BuildCreateDtoAsync(string email)
+	private async Task<CreateEmployeePersonalInfoDto> BuildCreateDtoAsync(
+		string email,
+		EmployeeStatusType employeeStatusType = EmployeeStatusType.Active)
 	{
 		var roleId = await EnsureRoleExistsAsync();
 		var shiftId = await EnsureShiftExistsAsync();
@@ -119,7 +141,7 @@ public class LeaveReportingChain_Tests : ShikshaMitraApplicationTestBase<Shiksha
 			DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 5, 15)),
 			GenderType = GenderType.Male,
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
-			EmployeeStatusType = EmployeeStatusType.Active,
+			EmployeeStatusType = employeeStatusType,
 			RoleId = roleId,
 			ShiftId = shiftId,
 			OrganizationIds = [organizationId]

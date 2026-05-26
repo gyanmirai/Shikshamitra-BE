@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Common;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Authorization;
@@ -32,6 +33,14 @@ public class ReportingManagerAppService(
 		// Validate reporting manager exists
 		var reportingManager = await employeeRepository.GetAsync(input.ReportingManagerId)
 			?? throw new EntityNotFoundException(typeof(Employee), input.ReportingManagerId);
+
+		if ((reportingManager.EmployeeStatusType ?? EmployeeStatusType.Active) != EmployeeStatusType.Active)
+		{
+			throw new BusinessException("ShikshaMitra:ReportingManagerMustBeActive")
+				.WithData("EmployeeId", employeeId)
+				.WithData("ReportingManagerId", input.ReportingManagerId)
+				.WithData("ReportingManagerStatus", reportingManager.EmployeeStatusType);
+		}
 
 		// Business rule: Employee cannot report to themselves
 		if (employeeId == input.ReportingManagerId)

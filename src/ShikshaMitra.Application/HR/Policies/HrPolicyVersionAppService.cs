@@ -1,11 +1,12 @@
+﻿using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR.Audit;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.Constants.Permissions;
-using ShikshaMitra.HR.Audit;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -101,7 +102,7 @@ public class HrPolicyVersionAppService(
 		var normalized = NormalizePolicyType(policyType);
 		var restored = normalized switch
 		{
-			"work_calendar" => (object)await RestoreWorkCalendarAsync(version, input),
+			"work_calendar" => (object) await RestoreWorkCalendarAsync(version, input),
 			"payroll" => HrPolicyMapping.ToDto(await RestorePayrollPolicyAsync(version, input)),
 			"attendance" => HrPolicyMapping.ToDto(await RestoreAttendancePolicyAsync(version, input)),
 			_ => throw new BusinessException("ShikshaMitra:InvalidPolicyType")
@@ -124,9 +125,9 @@ public class HrPolicyVersionAppService(
 		var snapshotJson = JsonSerializer.Serialize(policyDto, JsonOptions);
 		var version = normalized switch
 		{
-			"work_calendar" => BuildWorkCalendarVersion((WorkCalendarPolicyDto)policyDto, snapshotJson, action, reason),
-			"payroll" => BuildPayrollVersion((PayrollPolicyDto)policyDto, snapshotJson, action, reason),
-			"attendance" => BuildAttendanceVersion((AttendancePolicyDto)policyDto, snapshotJson, action, reason),
+			"work_calendar" => BuildWorkCalendarVersion((WorkCalendarPolicyDto) policyDto, snapshotJson, action, reason),
+			"payroll" => BuildPayrollVersion((PayrollPolicyDto) policyDto, snapshotJson, action, reason),
+			"attendance" => BuildAttendanceVersion((AttendancePolicyDto) policyDto, snapshotJson, action, reason),
 			_ => throw new BusinessException("ShikshaMitra:InvalidPolicyType")
 		};
 
@@ -463,6 +464,10 @@ public class HrPolicyVersionAppService(
 			{
 				return "Not set";
 			}
+			if (IsDateDisplayField(field) && TryFormatVersionDateTime(text, out var formattedDate))
+			{
+				return formattedDate;
+			}
 			if (Guid.TryParse(text, out var id))
 			{
 				return ResolveGuidDisplay(field, id, displayContext);
@@ -497,6 +502,39 @@ public class HrPolicyVersionAppService(
 		}
 
 		return displayContext.PolicyNames.GetValueOrDefault(id) ?? "Unknown policy";
+	}
+
+	private static bool IsDateDisplayField(string field) =>
+		field.Equals("creationTime", StringComparison.OrdinalIgnoreCase) ||
+		field.Equals("lastModificationTime", StringComparison.OrdinalIgnoreCase) ||
+		field.Equals("effectiveFrom", StringComparison.OrdinalIgnoreCase) ||
+		field.Equals("effectiveTo", StringComparison.OrdinalIgnoreCase);
+
+	private static bool TryFormatVersionDateTime(string value, out string formatted)
+	{
+		var normalized = value.Trim();
+		if (normalized.Length >= 9 &&
+			char.IsDigit(normalized[0]) &&
+			char.IsDigit(normalized[1]) &&
+			char.IsDigit(normalized[2]) &&
+			char.IsDigit(normalized[3]) &&
+			char.IsDigit(normalized[4]) &&
+			char.IsDigit(normalized[5]) &&
+			char.IsDigit(normalized[6]) &&
+			char.IsDigit(normalized[7]) &&
+			normalized[8] == 'T')
+		{
+			normalized = $"{normalized[..4]}-{normalized[4..6]}-{normalized[6..8]}{normalized[8..]}";
+		}
+
+		if (DateTimeOffset.TryParse(normalized, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed))
+		{
+			formatted = parsed.ToString("dd MMM yyyy, hh:mm tt", CultureInfo.InvariantCulture);
+			return true;
+		}
+
+		formatted = string.Empty;
+		return false;
 	}
 
 	private static string FormatArrayValue(string field, JsonElement value, VersionDisplayContext displayContext)

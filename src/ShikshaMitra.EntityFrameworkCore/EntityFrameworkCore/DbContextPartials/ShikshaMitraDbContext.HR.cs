@@ -13,6 +13,7 @@ using ShikshaMitra.HR.Payroll.AttendanceImports;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.Audit;
+using ShikshaMitra.HR.Dashboard;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
@@ -61,6 +62,7 @@ public partial class ShikshaMitraDbContext
     public DbSet<HrPolicyAssignment> HrPolicyAssignments { get; set; }
     public DbSet<HrPolicyVersion> HrPolicyVersions { get; set; }
     public DbSet<HrAuditEvent> HrAuditEvents { get; set; }
+    public DbSet<HrDashboardPreview> HrDashboardPreviews { get; set; }
     public DbSet<ProfessionalReviewCycle> ProfessionalReviewCycles { get; set; }
     public DbSet<ProfessionalReview> ProfessionalReviews { get; set; }
     public DbSet<HrReportExportJob> HrReportExportJobs { get; set; }

@@ -595,5 +595,6 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 	{
 		OnApplicationInitialization(context);
 		await context.AddBackgroundWorkerAsync<ExamAutoCompleteWorker>();
+		await context.AddBackgroundWorkerAsync<HrDashboardPreviewRefreshWorker>();
 	}
 }

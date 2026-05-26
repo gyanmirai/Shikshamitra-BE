@@ -32,4 +32,22 @@ public class HRDashboardController(IHRDashboardAppService dashboardAppService) :
 			Range = range
 		});
 	}
+
+	[HttpGet("previews/{dashboardKey}")]
+	[ProducesResponseType(typeof(HRDashboardPreviewDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	public virtual async Task<HRDashboardPreviewDto> GetPreviewAsync([FromRoute] string dashboardKey)
+	{
+		return await dashboardAppService.GetPreviewAsync(dashboardKey);
+	}
+
+	[HttpPost("previews/{dashboardKey}/refresh")]
+	[ProducesResponseType(typeof(HRDashboardPreviewDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	public virtual async Task<HRDashboardPreviewDto> RefreshPreviewAsync([FromRoute] string dashboardKey)
+	{
+		return await dashboardAppService.RefreshPreviewAsync(dashboardKey);
+	}
 }

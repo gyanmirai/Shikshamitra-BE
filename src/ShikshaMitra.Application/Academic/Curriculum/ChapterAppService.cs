@@ -66,13 +66,13 @@ public class ChapterAppService(
 
 		var chapter = assignedSubject.Chapters.First(c => c.Id == id);
 		chapter.UpdateDetails(
-			updateChapterDto.ChapterNumber,
+			updateChapterDto.ChapterNo,
 			updateChapterDto.ChapterName,
 			updateChapterDto.Description
 		);
 		chapter.UpdateDates(
-			updateChapterDto.ChapterStartTime,
-			updateChapterDto.ChapterEndTime
+			updateChapterDto.StartDate,
+			updateChapterDto.EndDate
 		);
 		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
 

@@ -123,6 +123,54 @@ public class EmployeeListApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Filter_By_NonTeaching()
+	{
+		await EmployeeTestHelper.CreateEmployeeAsync(Client, "NonTeachFilter", isTeaching: false);
+
+		var response = await Client.GetAsync($"{BaseUrl}?isTeaching=false&page=1&pageSize=10");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<EmployeeListResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Items.ShouldNotBeNull();
+		body.Items.ShouldAllBe(e => !e.IsTeaching);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Filter_Teaching_And_NonTeaching_With_Search()
+	{
+		var marker = $"Group{Guid.NewGuid():N}"[..17];
+		var teachingEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"{marker}Teach",
+			isTeaching: true);
+		var nonTeachingEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"{marker}NonTeach",
+			isTeaching: false);
+
+		var teachingResponse = await Client.GetAsync(
+			$"{BaseUrl}?isTeaching=true&search={Uri.EscapeDataString(marker)}&page=1&pageSize=10");
+		var nonTeachingResponse = await Client.GetAsync(
+			$"{BaseUrl}?isTeaching=false&search={Uri.EscapeDataString(marker)}&page=1&pageSize=10");
+
+		teachingResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		nonTeachingResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var teachingBody = await teachingResponse.Content.ReadFromJsonAsync<EmployeeListResponse>(JsonOptions);
+		var nonTeachingBody = await nonTeachingResponse.Content.ReadFromJsonAsync<EmployeeListResponse>(JsonOptions);
+
+		teachingBody.ShouldNotBeNull();
+		nonTeachingBody.ShouldNotBeNull();
+		teachingBody.Items.ShouldContain(e => e.Id == teachingEmployee.Id);
+		teachingBody.Items.ShouldNotContain(e => e.Id == nonTeachingEmployee.Id);
+		nonTeachingBody.Items.ShouldContain(e => e.Id == nonTeachingEmployee.Id);
+		nonTeachingBody.Items.ShouldNotContain(e => e.Id == teachingEmployee.Id);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Filter_By_RoleId()
 	{
 		var randomRoleId = Guid.NewGuid();

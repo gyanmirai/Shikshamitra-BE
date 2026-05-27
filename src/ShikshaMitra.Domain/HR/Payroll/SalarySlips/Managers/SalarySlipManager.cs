@@ -77,7 +77,7 @@ public class SalarySlipManager : DomainService
 		_logger.LogInformation("Generating salary slip for Employee: {EmployeeId}, Month: {MonthYear}",
 			employeeId, normalizedMonthYear);
 
-		await _employeeRepository.GetAsync(employeeId, cancellationToken: cancellationToken);
+		var employee = await _employeeRepository.GetAsync(employeeId, cancellationToken: cancellationToken);
 
 		var existingSlip = await _salarySlipRepository.GetByEmployeeAndMonthAsync(employeeId, normalizedMonthYear, cancellationToken);
 
@@ -101,6 +101,7 @@ public class SalarySlipManager : DomainService
 
 		var year = int.Parse(normalizedMonthYear[..4]);
 		var month = int.Parse(normalizedMonthYear[5..7]);
+		EnsureEmployeeEligibleForPayrollMonth(employee, year, month);
 		var calendar = await _payrollCalendarResolver.ResolveAsync(year, month, cancellationToken);
 		var resolvedPolicies = await _hrPolicyResolver.ResolveAsync(
 			employeeId,
@@ -143,7 +144,8 @@ public class SalarySlipManager : DomainService
 			year,
 			month,
 			workCalendarHolidays,
-			leaveUnitsByEmployee.GetValueOrDefault(employeeId));
+			leaveUnitsByEmployee.GetValueOrDefault(employeeId),
+			GetEffectiveEmploymentStartDate(employee));
 		var computation = PayrollComputation.Calculate(
 			attendanceSummary.PresentDays,
 			attendanceSummary.HalfWorkingDays,
@@ -340,6 +342,24 @@ public class SalarySlipManager : DomainService
 	{
 		NormalizeMonthYear(monthYear);
 	}
+
+	private static void EnsureEmployeeEligibleForPayrollMonth(Employee employee, int year, int month)
+	{
+		var effectiveStartDate = GetEffectiveEmploymentStartDate(employee);
+		var monthEndDate = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
+		if (effectiveStartDate <= monthEndDate)
+		{
+			return;
+		}
+
+		throw new BusinessException(HRErrorCodes.SalarySlipEmployeeNotActiveInMonth)
+			.WithData("employeeId", employee.Id)
+			.WithData("month", $"{year}-{month:00}")
+			.WithData("effectiveStartDate", effectiveStartDate);
+	}
+
+	private static DateOnly GetEffectiveEmploymentStartDate(Employee employee) =>
+		employee.DateOfJoining ?? DateOnly.FromDateTime(employee.CreationTime.Date);
 
 	private static string NormalizeMonthYear(string monthYear)
 	{

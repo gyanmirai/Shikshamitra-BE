@@ -136,12 +136,10 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				"Generating payroll preview for {Month} (Year: {Year}, Month: {MonthNum}, Page: {Page}, PageSize: {PageSize})",
 				input.Month, year, month, input.Page, input.PageSize);
 
-			// Get all active employees in caller scope.
-			var employeeQuery = await GetScopedActiveEmployeeQueryAsync(includeUnknownStageEmployees: false);
-			var scopedEmployees = await AsyncExecuter.ToListAsync(
-				employeeQuery
-					.OrderBy(e => e.FirstName)
-					.ThenBy(e => e.LastName));
+			// Get payroll-eligible active employees in caller scope.
+			var scopedActiveEmployees = await GetScopedActiveEmployeesAsync(includeUnknownStageEmployees: false);
+			var scopedEmployees = FilterPayrollEligibleEmployees(scopedActiveEmployees, year, month);
+			await CleanupIneligiblePayrollRowsAsync(internalMonthYear, scopedActiveEmployees, scopedEmployees);
 			var scopedEmployeeIds = scopedEmployees.Select(e => e.Id).ToHashSet();
 
 			var existingSlips = await _salarySlipRepository.GetByMonthAsync(internalMonthYear);
@@ -207,9 +205,11 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 	public async Task<RunPayrollReadinessSummary> GetReadinessAsync(string month)
 	{
-		var (_, _, internalMonthYear) = ParseMonth(month);
-		var employeeQuery = await GetScopedActiveEmployeeQueryAsync(includeUnknownStageEmployees: false);
-		var scopedEmployeeIds = (await AsyncExecuter.ToListAsync(employeeQuery.Select(e => e.Id))).ToHashSet();
+		var (year, monthNumber, internalMonthYear) = ParseMonth(month);
+		var scopedActiveEmployees = await GetScopedActiveEmployeesAsync(includeUnknownStageEmployees: false);
+		var scopedEmployees = FilterPayrollEligibleEmployees(scopedActiveEmployees, year, monthNumber);
+		await CleanupIneligiblePayrollRowsAsync(internalMonthYear, scopedActiveEmployees, scopedEmployees);
+		var scopedEmployeeIds = scopedEmployees.Select(e => e.Id).ToHashSet();
 
 		var snapshots = (await GetSnapshotsByMonthAsync(internalMonthYear))
 			.Where(x => scopedEmployeeIds.Contains(x.EmployeeId))
@@ -249,11 +249,12 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		// Get all active employees in caller scope.
 		// For write/finalize flow, unknown-stage employees are denied by default.
-		var employeeQuery = await GetScopedActiveEmployeeQueryAsync(includeUnknownStageEmployees: false);
-		var scopedEmployees = await AsyncExecuter.ToListAsync(
-			employeeQuery
-				.Select(e => new PayrollTargetEmployee(e.Id, e.EmployeeCode, e.EmployeeName))
-		);
+		var scopedActiveEmployees = await GetScopedActiveEmployeesAsync(includeUnknownStageEmployees: false);
+		var eligibleEmployees = FilterPayrollEligibleEmployees(scopedActiveEmployees, year, month);
+		await CleanupIneligiblePayrollRowsAsync(internalMonthYear, scopedActiveEmployees, eligibleEmployees);
+		var scopedEmployees = eligibleEmployees
+			.Select(e => new PayrollTargetEmployee(e.Id, e.EmployeeCode, e.EmployeeName))
+			.ToList();
 
 		if (scopedEmployees.Count == 0)
 		{
@@ -471,11 +472,11 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 	public async Task<PayrollLockResponse> MarkReviewedAsync(PayrollRunReviewRequest request)
 	{
-		var (_, _, internalMonthYear) = ParseMonth(request.Month);
+		var (year, month, internalMonthYear) = ParseMonth(request.Month);
 		var employeeIds = NormalizeReviewEmployeeIds(request.EmployeeIds);
 		var actorUserId = CurrentUser.Id ?? throw new BusinessException(HRErrorCodes.AttendanceImportPreviewInvalid);
 
-		var targetEmployees = await ResolveScopedTargetEmployeesAsync(employeeIds);
+		var targetEmployees = await ResolveScopedTargetEmployeesAsync(year, month, employeeIds);
 		await EnsureReviewCanChangeAsync(internalMonthYear, request.Month, targetEmployees);
 
 		var existingByEmployee = await GetReviewsByEmployeeAsync(internalMonthYear);
@@ -533,9 +534,9 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 	public async Task<PayrollLockResponse> UnmarkReviewedAsync(PayrollRunReviewRequest request)
 	{
-		var (_, _, internalMonthYear) = ParseMonth(request.Month);
+		var (year, month, internalMonthYear) = ParseMonth(request.Month);
 		var employeeIds = NormalizeReviewEmployeeIds(request.EmployeeIds);
-		var targetEmployees = await ResolveScopedTargetEmployeesAsync(employeeIds);
+		var targetEmployees = await ResolveScopedTargetEmployeesAsync(year, month, employeeIds);
 		await EnsureReviewCanChangeAsync(internalMonthYear, request.Month, targetEmployees);
 
 		var existingByEmployee = await GetReviewsByEmployeeAsync(internalMonthYear);
@@ -582,14 +583,14 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 	public async Task<List<PayrollAdjustmentDto>> GetAdjustmentsAsync(string month, Guid? employeeId = null)
 	{
-		var (_, _, internalMonthYear) = ParseMonth(month);
+		var (year, monthNumber, internalMonthYear) = ParseMonth(month);
 		var employeeIds = employeeId.HasValue
 			? ResolveTargetEmployees(
-					await ResolveScopedTargetEmployeesAsync(new List<Guid> { employeeId.Value }),
+					await ResolveScopedTargetEmployeesAsync(year, monthNumber, new List<Guid> { employeeId.Value }),
 					new List<Guid> { employeeId.Value })
 				.Select(x => x.Id)
 				.ToList()
-			: (await ResolveScopedTargetEmployeesAsync(null)).Select(x => x.Id).ToList();
+			: (await ResolveScopedTargetEmployeesAsync(year, monthNumber, null)).Select(x => x.Id).ToList();
 
 		var adjustments = await GetAdjustmentsByEmployeeAsync(internalMonthYear, employeeIds);
 		return adjustments.Values
@@ -603,7 +604,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	public async Task<PayrollAdjustmentDto> CreateAdjustmentAsync(PayrollAdjustmentRequest request)
 	{
 		var (year, month, internalMonthYear) = ParseMonth(request.Month);
-		var targetEmployees = await ResolveScopedTargetEmployeesAsync(new List<Guid> { request.EmployeeId });
+		var targetEmployees = await ResolveScopedTargetEmployeesAsync(year, month, new List<Guid> { request.EmployeeId });
 		await EnsureReviewCanChangeAsync(internalMonthYear, request.Month, targetEmployees);
 		await EnsureAdjustmentCanChangeAsync(internalMonthYear, request.Month, request.EmployeeId);
 
@@ -637,7 +638,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			throw new BusinessException(HRErrorCodes.PayrollAdjustmentNotFound);
 		}
 
-		var targetEmployees = await ResolveScopedTargetEmployeesAsync(new List<Guid> { request.EmployeeId });
+		var targetEmployees = await ResolveScopedTargetEmployeesAsync(year, month, new List<Guid> { request.EmployeeId });
 		await EnsureReviewCanChangeAsync(internalMonthYear, request.Month, targetEmployees);
 		await EnsureAdjustmentCanChangeAsync(internalMonthYear, request.Month, request.EmployeeId);
 
@@ -661,7 +662,7 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	{
 		var adjustment = await GetAdjustmentOrThrowAsync(id);
 		var (year, month, internalMonthYear) = ParseMonth(adjustment.MonthYear);
-		var targetEmployees = await ResolveScopedTargetEmployeesAsync(new List<Guid> { adjustment.EmployeeId });
+		var targetEmployees = await ResolveScopedTargetEmployeesAsync(year, month, new List<Guid> { adjustment.EmployeeId });
 		await EnsureReviewCanChangeAsync(adjustment.MonthYear, adjustment.MonthYear, targetEmployees);
 		await EnsureAdjustmentCanChangeAsync(adjustment.MonthYear, adjustment.MonthYear, adjustment.EmployeeId);
 		await _payrollAdjustmentRepository.DeleteAsync(adjustment, autoSave: true);
@@ -724,12 +725,12 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		bool preserveReviewedSnapshots)
 	{
 		var idSet = employeeIds.ToHashSet();
-		var employeeQuery = await GetScopedActiveEmployeeQueryAsync(includeUnknownStageEmployees: false);
-		var scopedEmployees = await AsyncExecuter.ToListAsync(
-			employeeQuery
+		var scopedEmployees = FilterPayrollEligibleEmployees(
+			(await GetScopedActiveEmployeesAsync(includeUnknownStageEmployees: false))
 				.Where(e => idSet.Contains(e.Id))
-				.OrderBy(e => e.FirstName)
-				.ThenBy(e => e.LastName));
+				.ToList(),
+			year,
+			month);
 
 		await RefreshSnapshotsAsync(internalMonthYear, year, month, scopedEmployees, preserveReviewedSnapshots);
 	}
@@ -813,7 +814,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 					finalizedEmployeeIds.Contains(employee.Id),
 					reviewByEmployee.GetValueOrDefault(employee.Id),
 					previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
-					payrollPolicyIssueCodes
+					payrollPolicyIssueCodes,
+					GetEffectiveEmploymentStartDate(employee)
 				));
 			}
 			catch (BusinessException ex) when (IsPayrollPolicySetupException(ex))
@@ -835,7 +837,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 					finalizedEmployeeIds.Contains(employee.Id),
 					reviewByEmployee.GetValueOrDefault(employee.Id),
 					previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
-					new[] { IssueCodes.PayrollPolicyConfiguration }));
+					new[] { IssueCodes.PayrollPolicyConfiguration },
+					GetEffectiveEmploymentStartDate(employee)));
 			}
 		}
 
@@ -1114,7 +1117,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		bool isLocked,
 		PayrollRunReview? review,
 		decimal? previousMonthNetPay,
-		IReadOnlyList<string>? additionalIssueCodes = null)
+		IReadOnlyList<string>? additionalIssueCodes = null,
+		DateOnly? employmentStartDate = null)
 	{
 		var itemAttendancePolicyWarnings = new List<string>();
 		var attendanceSummary = PayrollAttendanceCalculator.CalculatePayableDays(
@@ -1123,7 +1127,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			year,
 			month,
 			holidays,
-			leaveUnitsByDate);
+			leaveUnitsByDate,
+			employmentStartDate);
 		var allComponents = components
 			.Concat(adjustments.Select(ToPayrollComponent))
 			.ToList();
@@ -1196,7 +1201,8 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		bool isLocked,
 		PayrollRunReview? review,
 		decimal? previousMonthNetPay,
-		IReadOnlyList<string> issueCodes)
+		IReadOnlyList<string> issueCodes,
+		DateOnly? employmentStartDate = null)
 	{
 		var basis = new PayrollBasisDaysResult(
 			DateTime.DaysInMonth(year, month),
@@ -1208,7 +1214,9 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			basis,
 			year,
 			month,
-			Array.Empty<Holiday>());
+			Array.Empty<Holiday>(),
+			leaveUnitsByDate: null,
+			employmentStartDate);
 		var allComponents = components
 			.Concat(adjustments.Select(ToPayrollComponent))
 			.ToList();
@@ -1357,12 +1365,17 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			.ToList();
 	}
 
-	private async Task<List<PayrollTargetEmployee>> ResolveScopedTargetEmployeesAsync(List<Guid>? requestedEmployeeIds)
+	private async Task<List<PayrollTargetEmployee>> ResolveScopedTargetEmployeesAsync(
+		int year,
+		int month,
+		List<Guid>? requestedEmployeeIds)
 	{
-		var scopedEmployees = await AsyncExecuter.ToListAsync(
-			(await GetScopedActiveEmployeeQueryAsync(includeUnknownStageEmployees: false))
-				.Select(e => new PayrollTargetEmployee(e.Id, e.EmployeeCode, e.EmployeeName))
-		);
+		var scopedEmployees = FilterPayrollEligibleEmployees(
+				await GetScopedActiveEmployeesAsync(includeUnknownStageEmployees: false),
+				year,
+				month)
+			.Select(e => new PayrollTargetEmployee(e.Id, e.EmployeeCode, e.EmployeeName))
+			.ToList();
 
 		return ResolveTargetEmployees(scopedEmployees, requestedEmployeeIds);
 	}
@@ -1701,6 +1714,113 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 	}
 
 	#endregion
+
+	private async Task<List<Employee>> GetScopedActiveEmployeesAsync(bool includeUnknownStageEmployees)
+	{
+		var employeeQuery = await GetScopedActiveEmployeeQueryAsync(includeUnknownStageEmployees);
+		return await AsyncExecuter.ToListAsync(
+			employeeQuery
+				.OrderBy(e => e.FirstName)
+				.ThenBy(e => e.LastName));
+	}
+
+	private async Task CleanupIneligiblePayrollRowsAsync(
+		string monthYear,
+		List<Employee> scopedActiveEmployees,
+		List<Employee> eligibleEmployees)
+	{
+		var ineligibleEmployeeIds = scopedActiveEmployees
+			.Select(e => e.Id)
+			.Except(eligibleEmployees.Select(e => e.Id))
+			.ToHashSet();
+		if (ineligibleEmployeeIds.Count == 0)
+		{
+			return;
+		}
+
+		var snapshotQuery = await _payrollRunItemSnapshotRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			snapshotQuery = snapshotQuery.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+		else
+		{
+			snapshotQuery = snapshotQuery.Where(x => x.TenantId == null);
+		}
+
+		var snapshots = await AsyncExecuter.ToListAsync(snapshotQuery.Where(x =>
+			x.MonthYear == monthYear &&
+			ineligibleEmployeeIds.Contains(x.EmployeeId)));
+		var lockedSnapshotEmployeeIds = snapshots
+			.Where(x => x.IsLocked)
+			.Select(x => x.EmployeeId)
+			.ToHashSet();
+		var cleanupEmployeeIds = ineligibleEmployeeIds
+			.Except(lockedSnapshotEmployeeIds)
+			.ToHashSet();
+		if (cleanupEmployeeIds.Count == 0)
+		{
+			return;
+		}
+
+		foreach (var snapshot in snapshots.Where(x => cleanupEmployeeIds.Contains(x.EmployeeId)))
+		{
+			await _payrollRunItemSnapshotRepository.DeleteAsync(snapshot, autoSave: false);
+		}
+
+		var reviewQuery = await _payrollRunReviewRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			reviewQuery = reviewQuery.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+		else
+		{
+			reviewQuery = reviewQuery.Where(x => x.TenantId == null);
+		}
+		var reviews = await AsyncExecuter.ToListAsync(reviewQuery.Where(x =>
+			x.MonthYear == monthYear &&
+			cleanupEmployeeIds.Contains(x.EmployeeId)));
+		foreach (var review in reviews)
+		{
+			await _payrollRunReviewRepository.DeleteAsync(review, autoSave: false);
+		}
+
+		var adjustmentQuery = await _payrollAdjustmentRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			adjustmentQuery = adjustmentQuery.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+		else
+		{
+			adjustmentQuery = adjustmentQuery.Where(x => x.TenantId == null);
+		}
+		var adjustments = await AsyncExecuter.ToListAsync(adjustmentQuery.Where(x =>
+			x.MonthYear == monthYear &&
+			cleanupEmployeeIds.Contains(x.EmployeeId)));
+		foreach (var adjustment in adjustments)
+		{
+			await _payrollAdjustmentRepository.DeleteAsync(adjustment, autoSave: false);
+		}
+
+		await UnitOfWorkManager.Current!.SaveChangesAsync();
+	}
+
+	private static List<Employee> FilterPayrollEligibleEmployees(
+		List<Employee> employees,
+		int year,
+		int month)
+	{
+		var monthEnd = GetPayrollMonthEndDate(year, month);
+		return employees
+			.Where(e => GetEffectiveEmploymentStartDate(e) <= monthEnd)
+			.ToList();
+	}
+
+	private static DateOnly GetEffectiveEmploymentStartDate(Employee employee) =>
+		employee.DateOfJoining ?? DateOnly.FromDateTime(employee.CreationTime.Date);
+
+	private static DateOnly GetPayrollMonthEndDate(int year, int month) =>
+		new(year, month, DateTime.DaysInMonth(year, month));
 
 	private async Task<IQueryable<Employee>> GetScopedActiveEmployeeQueryAsync(bool includeUnknownStageEmployees)
 	{

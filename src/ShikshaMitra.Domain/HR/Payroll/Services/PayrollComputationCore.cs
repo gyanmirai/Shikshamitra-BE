@@ -349,10 +349,14 @@ public static class PayrollAttendanceCalculator
 		int year,
 		int month,
 		IReadOnlyList<Holiday> holidays,
-		IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>? leaveUnitsByDate = null)
+		IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>? leaveUnitsByDate = null,
+		DateOnly? employmentStartDate = null)
 	{
-		var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
+		var monthStartDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
 		var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
+		var startDate = employmentStartDate.HasValue && employmentStartDate.Value > monthStartDate
+			? employmentStartDate.Value
+			: monthStartDate;
 		var monthRecords = approvedDays
 			.Where(a => a.Date >= startDate && a.Date <= endDate)
 			.GroupBy(a => a.Date)
@@ -420,10 +424,14 @@ public static class PayrollAttendanceCalculator
 		int year,
 		int month,
 		IReadOnlyList<Holiday> holidays,
-		IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>? leaveUnitsByDate = null)
+		IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>? leaveUnitsByDate = null,
+		DateOnly? employmentStartDate = null)
 	{
-		var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
+		var monthStartDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
 		var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
+		var startDate = employmentStartDate.HasValue && employmentStartDate.Value > monthStartDate
+			? employmentStartDate.Value
+			: monthStartDate;
 		var monthRecords = attendanceRecords
 			.Where(a => a.AttendanceDate >= startDate && a.AttendanceDate <= endDate)
 			.GroupBy(a => a.AttendanceDate)

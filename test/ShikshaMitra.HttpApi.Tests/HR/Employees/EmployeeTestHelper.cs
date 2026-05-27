@@ -30,9 +30,11 @@ public static class EmployeeTestHelper
 	/// </summary>
 	public static async Task<PersonalInfoResponse> CreateEmployeeAsync(
 		HttpClient client,
-		string? firstNameSuffix = null)
+		string? firstNameSuffix = null,
+		bool isTeaching = true)
 	{
 		var personalInfo = BuildPersonalInfoRequest(firstNameSuffix);
+		personalInfo.IsTeaching = isTeaching;
 		var jsonData = JsonSerializer.Serialize(personalInfo, JsonOptions);
 
 		using var content = new MultipartFormDataContent();

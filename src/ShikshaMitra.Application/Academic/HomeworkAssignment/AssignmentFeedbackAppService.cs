@@ -220,6 +220,9 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 			);
 		}
 
+		// Set SubmissionDate if not yet recorded (InPersonSubmission / OnlineText paths)
+		submission.SubmissionDate ??= DateTimeOffset.UtcNow;
+
 		// 6. Update feedback
 		submission.UpdateFeedback(
 			input.Marks,
@@ -303,6 +306,9 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 				CurrentTenant.Id
 			);
 		}
+
+		// Set SubmissionDate if not yet recorded (InPersonSubmission / OnlineText paths)
+		submission.SubmissionDate ??= DateTimeOffset.UtcNow;
 
 		// 5. Update status
 		submission.UpdateStatus(input.Status);

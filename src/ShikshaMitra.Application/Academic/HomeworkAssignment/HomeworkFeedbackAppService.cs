@@ -248,6 +248,9 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			);
 		}
 
+		// Set SubmissionDate if not yet recorded (InPersonSubmission / OnlineText paths)
+		submission.SubmissionDate ??= DateTimeOffset.UtcNow;
+
 		// 5. Update feedback
 		submission.UpdateFeedback(
 			input.Marks,
@@ -347,6 +350,9 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 				CurrentTenant.Id
 			);
 		}
+
+		// Set SubmissionDate if not yet recorded (InPersonSubmission / OnlineText paths)
+		submission.SubmissionDate ??= DateTimeOffset.UtcNow;
 
 		// 3. Update status
 		submission.UpdateStatus(input.Status);

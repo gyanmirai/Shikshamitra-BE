@@ -39,42 +39,24 @@ public static class FeeRefundTestHelper
     /// </summary>
     public static async Task<(Guid StudentId, Guid DueFeeId)> SeedStudentWithPaidDueFeeAsync(
         HttpClient client,
+        IServiceProvider services,
         double feeAmount = 1000d)
     {
         var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(client);
         var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(client);
 
-        // Fetch DueFees for this student to get the generated DueFeeId
-        var dueFeeId = await GetFirstDueFeeIdAsync(client, studentId);
-        if (dueFeeId == Guid.Empty)
-        {
-            // No DueFee rows yet — collect fee without allocation first,
-            // then fall back to zero-allocation (backward-compat path)
-            var input = FeeCollectionTestHelper.BuildCollectFeeInput(
-                studentId, DefaultAcademicYearId, feeHeadId, feeAmount);
-            var resp = await client.PostAsJsonAsync(FeeCollectionUrl, input, JsonOptions);
-            resp.EnsureSuccessStatusCode();
-            return (studentId, Guid.Empty);
-        }
+        // Seed DueFee record first
+        var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(services, studentId, feeHeadId, feeAmount);
 
         // Collect fee with explicit allocation to DueFee row
         var collectInput = new CollectFeeInput
         {
             StudentId = studentId,
             AcademicYearId = DefaultAcademicYearId,
-            TotalAmount = feeAmount,
             Notes = "Test payment with allocation",
-            SelectedFeeHeads = new List<SelectedFeeHeadDto>
+            DueFeePayments = new List<DueFeePaymentDto>
             {
-                new()
-                {
-                    FeeHeadId = feeHeadId,
-                    Amount = feeAmount,
-                    Allocations = new List<DueFeeAllocationDto>
-                    {
-                        new() { DueFeeId = dueFeeId, Amount = feeAmount },
-                    },
-                },
+                new() { DueFeeId = dueFeeId, FeeHeadId = feeHeadId, Amount = feeAmount },
             },
             Payments = new List<FeePaymentDto>
             {
@@ -86,19 +68,6 @@ public static class FeeRefundTestHelper
         collectResp.EnsureSuccessStatusCode();
 
         return (studentId, dueFeeId);
-    }
-
-    /// <summary>Queries the eligibility endpoint and returns the first DueFeeId found.</summary>
-    private static async Task<Guid> GetFirstDueFeeIdAsync(HttpClient client, Guid studentId)
-    {
-        var url = $"{FeeRefundUrl}/eligibility?studentId={studentId}&academicYearId={DefaultAcademicYearId}";
-        var resp = await client.GetAsync(url);
-        if (!resp.IsSuccessStatusCode) return Guid.Empty;
-
-        var body = await resp.Content.ReadFromJsonAsync<RefundEligibilityDto>(JsonOptions);
-        return body?.FeeHeads.SelectMany(fh => fh.Months)
-                    .FirstOrDefault(m => m.Refundable > 0)?.DueFeeId
-               ?? Guid.Empty;
     }
 
     /// <summary>

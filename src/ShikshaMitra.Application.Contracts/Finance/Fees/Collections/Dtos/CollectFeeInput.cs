@@ -6,7 +6,62 @@ using ShikshaMitra.Finance.FeeCollection;
 
 namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
 
-/// <summary>Input model to record a fee payment for a student.</summary>
+/// <summary>
+/// Input model to record a fee payment for a student.
+/// <para>
+/// <b>Validation Matrix:</b>
+/// <list type="table">
+///   <listheader>
+///     <term>Scenario</term>
+///     <term>dueFeePayments</term>
+///     <term>chargePayments</term>
+///     <term>Expected</term>
+///   </listheader>
+///   <item>
+///     <description>Full fee only</description>
+///     <description>[{ dueFeeId, feeHeadId, amount: 1500 }]</description>
+///     <description>[]</description>
+///     <description>DueFee fully paid</description>
+///   </item>
+///   <item>
+///     <description>Partial fee</description>
+///     <description>[{ dueFeeId, feeHeadId, amount: 500 }] (due was 1500)</description>
+///     <description>[]</description>
+///     <description>DueFee status Partial</description>
+///   </item>
+///   <item>
+///     <description>Multi-month same head</description>
+///     <description>Two entries, same feeHeadId, different dueFeeId</description>
+///     <description>[]</description>
+///     <description>Two allocations, one FeeCollectionRecord sum</description>
+///   </item>
+///   <item>
+///     <description>Fees + charges</description>
+///     <description>One or more due-fee lines</description>
+///     <description>One or more charge lines</description>
+///     <description>Both persisted</description>
+///   </item>
+///   <item>
+///     <description>Charge only</description>
+///     <description>[]</description>
+///     <description>[{ chargeId, amount }]</description>
+///     <description>Valid</description>
+///   </item>
+///   <item>
+///     <description>Overpay</description>
+///     <description>amount > outstanding</description>
+///     <description>—</description>
+///     <description>400 validation error</description>
+///   </item>
+///   <item>
+///     <description>Payment mismatch</description>
+///     <description>lines sum 3000, payments sum 2500</description>
+///     <description>—</description>
+///     <description>400 validation error</description>
+///   </item>
+/// </list>
+/// </para>
+/// </summary>
 public class CollectFeeInput
 {
     /// <summary>Unique identifier of the student paying fees.</summary>
@@ -17,42 +72,21 @@ public class CollectFeeInput
     [Required]
     public Guid AcademicYearId { get; set; }
 
-    /// <summary>Total amount being collected (sum of all fee heads and charges).</summary>
-    [Range(0.01, 10_000_000)]
-    public double TotalAmount { get; set; }
-
-    /// <summary>Actual amount received from payments (may be less than total for partial payments).</summary>
-    [Range(0, 10_000_000)]
-    public double? ReceivedAmount { get; set; }
-
     /// <summary>Optional remarks or notes about the payment.</summary>
     [MaxLength(1000)]
     public string? Notes { get; set; }
 
     /// <summary>
     /// Cashier's confirmation that the payment amount has been received in the bank account.
-    /// <para>
-    /// Required (non-null) when the transaction uses a <em>CashierDecided</em> payment method
-    /// (UPI, CreditCard, DebitCard, BankTransfer, OnlinePaymentGateway, WalletPrepaidCard).
-    /// </para>
-    /// <para>
-    /// Must be <c>null</c> for Cash-only or Cheque/DemandDraft-only transactions.
-    /// </para>
-    /// <para>
-    /// When <c>true</c> the fee receipt is issued as a FinalFee (FIN-*).
-    /// When <c>false</c> the transaction enters the reconciliation queue with a
-    /// ProvisionalFee (KFE-*) receipt.
-    /// </para>
+    /// Required when using cashier-decided payment methods (UPI, cards, transfer, gateway).
     /// </summary>
-    public bool? BankReceiptConfirmed { get; set; }
+    public bool? PaymentConfirmed { get; set; }
 
-    /// <summary>List of fee heads being paid (1–50 items).</summary>
-    [Required]
-    [MinLength(1)]
-    public List<SelectedFeeHeadDto> SelectedFeeHeads { get; set; } = [];
+    /// <summary>Flat list of due fee line-item allocations.</summary>
+    public List<DueFeePaymentDto> DueFeePayments { get; set; } = [];
 
-    /// <summary>List of additional charges being paid (0–20 items).</summary>
-    public List<SelectedChargeDto>? SelectedCharges { get; set; }
+    /// <summary>Flat list of charge payments.</summary>
+    public List<ChargePaymentDto> ChargePayments { get; set; } = [];
 
     /// <summary>Split payment details by payment method (1–5 items).</summary>
     [Required]
@@ -60,39 +94,21 @@ public class CollectFeeInput
     public List<FeePaymentDto> Payments { get; set; } = [];
 }
 
-/// <summary>
-/// A fee head being paid in this transaction.
-/// When <see cref="Allocations"/> is provided the sum of all allocation amounts must equal
-/// <see cref="Amount"/>; each allocation points to a specific <see cref="DueFee"/> row so that
-/// monthly balances stay authoritative for future refund eligibility.
-/// </summary>
-public class SelectedFeeHeadDto
-{
-    [Required]
-    public Guid FeeHeadId { get; set; }
-
-    [Range(0.01, double.MaxValue)]
-    public double Amount { get; set; }
-
-    /// <summary>
-    /// Optional per-DueFee allocation breakdown.
-    /// Leave null / empty for legacy compatibility (no DueFee rows will be updated).
-    /// </summary>
-    public List<DueFeeAllocationDto>? Allocations { get; set; }
-}
-
-/// <summary>Allocates part of a fee-head payment to a specific monthly <see cref="DueFee"/> row.</summary>
-public class DueFeeAllocationDto
+/// <summary>Allocates part of a payment to a specific monthly due fee row.</summary>
+public class DueFeePaymentDto
 {
     [Required]
     public Guid DueFeeId { get; set; }
+
+    [Required]
+    public Guid FeeHeadId { get; set; }
 
     [Range(0.01, double.MaxValue)]
     public double Amount { get; set; }
 }
 
 /// <summary>An additional charge being paid in this transaction.</summary>
-public class SelectedChargeDto
+public class ChargePaymentDto
 {
     [Required]
     public Guid ChargeId { get; set; }

@@ -57,7 +57,7 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Get_Eligibility_Returns_Positive_Refundable_After_Payment_With_Allocation()
     {
-        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, 2000d);
+        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services, 2000d);
         if (dueFeeId == Guid.Empty) return; // no DueFee rows; skip this assertion
 
         var response = await Client.GetAsync(
@@ -89,7 +89,7 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Create_Refund_Returns_201_With_Pending_Status()
     {
-        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, 1500d);
+        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services, 1500d);
         if (dueFeeId == Guid.Empty) return;
 
         var input = new CreateFeeRefundRequestDto
@@ -119,7 +119,7 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Create_Refund_Returns_Error_When_Amount_Exceeds_Refundable_Balance()
     {
-        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, 1000d);
+        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services, 1000d);
         if (dueFeeId == Guid.Empty) return;
 
         var input = new CreateFeeRefundRequestDto
@@ -143,7 +143,7 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Approve_Refund_Reduces_DueFee_Refundable_Balance()
     {
-        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, 2000d);
+        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services, 2000d);
         if (dueFeeId == Guid.Empty) return;
 
         var refundDto = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, studentId, dueFeeId, 600d);
@@ -175,7 +175,7 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Reject_Refund_Does_Not_Mutate_DueFee()
     {
-        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, 1000d);
+        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services, 1000d);
         if (dueFeeId == Guid.Empty) return;
 
         var refundDto = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, studentId, dueFeeId, 300d);
@@ -205,7 +205,7 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Return_Error_When_Approving_Already_Approved_Refund()
     {
-        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, 2000d);
+        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services, 2000d);
         if (dueFeeId == Guid.Empty) return;
 
         var refundDto = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, studentId, dueFeeId, 400d);
@@ -237,7 +237,7 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Get_Refund_Request_With_Details()
     {
-        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, 2000d);
+        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services, 2000d);
         if (dueFeeId == Guid.Empty) return;
 
         var refundDto = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, studentId, dueFeeId, 600d);
@@ -248,6 +248,12 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
 
         var body = await response.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions);
         body.ShouldNotBeNull();
+        body.BoardId.ShouldNotBeNull();
+        body.BoardId.Value.ShouldNotBe(Guid.Empty);
+        body.BoardName.ShouldNotBeNullOrWhiteSpace();
+        body.EducationMediumId.ShouldNotBeNull();
+        body.EducationMediumId.Value.ShouldNotBe(Guid.Empty);
+        body.EducationMediumName.ShouldNotBeNullOrWhiteSpace();
         body.RefundRequestId.ShouldBe(refundDto.Id);
         body.TotalFeeHeads.ShouldBeGreaterThan(0);
         body.TotalPaidAmount.ShouldBe(2000d);

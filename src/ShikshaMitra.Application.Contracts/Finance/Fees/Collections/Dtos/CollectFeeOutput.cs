@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Finance.FeeCollection;
+using ShikshaMitra.Finance.FeeCollection;
 using System;
 using System.Collections.Generic;
 
@@ -49,7 +49,19 @@ public class CollectFeeOutput
     /// </summary>
     public Guid? FeeReceiptId { get; set; }
 
+    public double ReceivedAmount { get; set; }
+
+    public List<PaidDueFeeInfoDto> PaidDueFees { get; set; } = [];
+
     public DateTimeOffset CreatedAt { get; set; }
+}
+
+/// <summary>Information about a paid due fee.</summary>
+public class PaidDueFeeInfoDto
+{
+    public Guid DueFeeId { get; set; }
+    public Guid FeeHeadId { get; set; }
+    public double AmountPaid { get; set; }
 }
 
 /// <summary>Information about a paid fee head.</summary>

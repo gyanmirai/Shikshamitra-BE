@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
@@ -451,72 +451,172 @@ public class FeeCollectionAppServiceV2(
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.Add)]
 	public async Task<CollectFeeOutput> CollectFeeAsync(CollectFeeInput input)
 	{
-		// 1. Validate referenced academic year and fee heads
+		// 1. Validate referenced academic year
 		await academicYearRepository.GetAsync(input.AcademicYearId);
 
-		var feeHeadIds = input.SelectedFeeHeads.Select(f => f.FeeHeadId).Distinct().ToList();
-		var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
-		if (feeHeads.Count != feeHeadIds.Count)
-			throw new BusinessException(FeeCollectionErrorCodes.InvalidFeeHead);
-
-		var chargeMap = new Dictionary<Guid, Charge>();
-		if (input.SelectedCharges is { Count: > 0 })
+		// 1b. Load student for receipt context
+		var student = await studentRepository.GetAsync(input.StudentId);
+		if (student.AcademicYearId != input.AcademicYearId)
 		{
-			var chargeIds = input.SelectedCharges.Select(c => c.ChargeId).Distinct().ToList();
+			throw new BusinessException(FeeCollectionErrorCodes.StudentAcademicYearMismatch);
+		}
+
+		// 2. Validate and load referenced DueFees
+		var dueFeeMap = new Dictionary<Guid, DueFee>();
+		var feeHeadMap = new Dictionary<Guid, FeeHead>();
+		if (input.DueFeePayments is { Count: > 0 })
+		{
+			var dueFeeIds = input.DueFeePayments.Select(dfp => dfp.DueFeeId).Distinct().ToList();
+			var dueFees = await dueFeeRepository.GetListAsync(df => dueFeeIds.Contains(df.Id));
+			if (dueFees.Count != dueFeeIds.Count)
+			{
+				throw new BusinessException(DueFeeErrorCodes.DueFeeNotFound);
+			}
+
+			dueFeeMap = dueFees.ToDictionary(df => df.Id);
+
+			var feeHeadIds = input.DueFeePayments.Select(dfp => dfp.FeeHeadId).Distinct().ToList();
+			var feeHeadsList = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
+			if (feeHeadsList.Count != feeHeadIds.Count)
+			{
+				throw new BusinessException(FeeCollectionErrorCodes.InvalidFeeHead);
+			}
+			feeHeadMap = feeHeadsList.ToDictionary(fh => fh.Id);
+
+			foreach (var dfp in input.DueFeePayments)
+			{
+				var df = dueFeeMap[dfp.DueFeeId];
+				if (df.StudentId != input.StudentId)
+				{
+					throw new BusinessException(FeeCollectionErrorCodes.InvalidDueFee);
+				}
+				if (df.FeeHeadId != dfp.FeeHeadId)
+				{
+					throw new BusinessException(FeeCollectionErrorCodes.InvalidFeeHead);
+				}
+				if (dfp.Amount > df.OutstandingAmount)
+				{
+					throw new BusinessException(FeeCollectionErrorCodes.AmountExceedsOutstanding)
+						.WithData("DueFeeId", df.Id)
+						.WithData("Outstanding", df.OutstandingAmount)
+						.WithData("Amount", dfp.Amount);
+				}
+			}
+		}
+
+		// 3. Validate and load charges
+		var chargeMap = new Dictionary<Guid, Charge>();
+		var pendingChargeMap = new Dictionary<Guid, double>();
+		if (input.ChargePayments is { Count: > 0 })
+		{
+			var chargeIds = input.ChargePayments.Select(cp => cp.ChargeId).Distinct().ToList();
 			var charges = await chargeRepository.GetListAsync(c =>
 				chargeIds.Contains(c.Id) && c.Status == ChargeStatus.Approved);
 			if (charges.Count != chargeIds.Count)
+			{
 				throw new BusinessException(FeeCollectionErrorCodes.InvalidCharge);
+			}
+
 			chargeMap = charges.ToDictionary(c => c.Id);
+
+			var chargeCollQ = await chargeCollectionRecordRepository.GetQueryableAsync();
+			var chargeMetaQ = await feeRecordMetadataRepository.GetQueryableAsync();
+			var reversedTxIds = chargeMetaQ
+				.Where(m => m.Status == FeeCollectionStatus.Reversed)
+				.Select(m => m.Id);
+
+			var paidPerCharge = chargeCollQ
+				.Where(r => r.StudentId == input.StudentId
+						 && !reversedTxIds.Contains(r.FeeRecordMetadataId)
+						 && chargeIds.Contains(r.ChargeId))
+				.GroupBy(r => r.ChargeId)
+				.Select(g => new { ChargeId = g.Key, Paid = g.Sum(r => r.Amount) })
+				.ToDictionary(x => x.ChargeId, x => x.Paid);
+
+			foreach (var cp in input.ChargePayments)
+			{
+				var charge = chargeMap[cp.ChargeId];
+				if (charge.StudentId != input.StudentId || charge.AcademicYearId != input.AcademicYearId)
+				{
+					throw new BusinessException(FeeCollectionErrorCodes.InvalidCharge);
+				}
+
+				var paid = paidPerCharge.GetValueOrDefault(cp.ChargeId, 0d);
+				var pending = Math.Max(0d, (double)charge.Amount - paid);
+				pendingChargeMap[cp.ChargeId] = pending;
+
+				if (cp.Amount > pending)
+				{
+					throw new BusinessException(FeeCollectionErrorCodes.AmountExceedsOutstanding)
+						.WithData("ChargeId", charge.Id)
+						.WithData("Pending", pending)
+						.WithData("Amount", cp.Amount);
+				}
+			}
 		}
 
-		// 1b. Load student for receipt context (boardId / mediumId denorm)
-		var student = await studentRepository.GetAsync(input.StudentId);
-
-		// 2. Determine collection status
-		var received = input.ReceivedAmount ?? input.TotalAmount;
+		// 4. Determine collection status
+		var received = input.DueFeePayments.Sum(dfp => dfp.Amount) + input.ChargePayments.Sum(cp => cp.Amount);
 		var paymentMethods = input.Payments.Select(p => p.PaymentMethod).ToList();
+
+		var isAnyPartial = false;
+		foreach (var dfp in input.DueFeePayments)
+		{
+			var df = dueFeeMap[dfp.DueFeeId];
+			if (dfp.Amount < df.OutstandingAmount)
+			{
+				isAnyPartial = true;
+				break;
+			}
+		}
+		if (!isAnyPartial)
+		{
+			foreach (var cp in input.ChargePayments)
+			{
+				var pending = pendingChargeMap[cp.ChargeId];
+				if (cp.Amount < pending)
+				{
+					isAnyPartial = true;
+					break;
+				}
+			}
+		}
+
 		var status = FeeReceiptPaymentPolicy.RequiresVerification(paymentMethods)
 			? FeeCollectionStatus.InReconciliation
-			: (received >= input.TotalAmount
-				? FeeCollectionStatus.Paid
-				: (received > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending));
+			: (isAnyPartial ? FeeCollectionStatus.Partial : FeeCollectionStatus.Paid);
 
-		// When receivedAmount < totalAmount (partial payment), scale all fee/charge amounts
-		// proportionally so that DueFee outstanding balances and collection records reflect
-		// only what was actually paid — not the full requested amount.
-		var partialPaymentRatio = (input.TotalAmount > 0 && received < input.TotalAmount)
-			? received / input.TotalAmount
-			: 1.0;
-
-		// 3. Generate receipt number
+		// 5. Generate receipt number
 		var receiptNumber = await feeCollectionManager.GenerateReceiptNumberAsync();
 
-		// 4. Create FeeRecordMetadata root
+		// 6. Create FeeRecordMetadata root
 		var metadata = feeCollectionManager.CreateMetadata(
 			input.StudentId, input.AcademicYearId, received, status, receiptNumber, input.Notes);
 		await feeRecordMetadataRepository.InsertAsync(metadata, autoSave: false);
 
-		// 5. Fee-head collection records — amounts are scaled to the actually-received portion
-		var feeHeadMap = feeHeads.ToDictionary(fh => fh.Id);
+		// 7. Fee-head collection records (grouped by feeHeadId)
+		var feeHeadGroups = input.DueFeePayments
+			.GroupBy(dfp => dfp.FeeHeadId)
+			.Select(g => (FeeHeadId: g.Key, Amount: g.Sum(dfp => dfp.Amount)))
+			.ToList();
 		var feeCollectionRecords = feeCollectionManager.CreateFeeCollectionRecords(
 			input.StudentId,
 			metadata.Id,
-			input.SelectedFeeHeads.Select(sfh => (sfh.FeeHeadId, sfh.Amount * partialPaymentRatio)));
+			feeHeadGroups);
 		await feeCollectionRecordRepository.InsertManyAsync(feeCollectionRecords, autoSave: false);
 
-		// 6. Charge collection records — amounts are scaled to the actually-received portion
+		// 8. Charge collection records
 		var chargeCollectionRecords = new List<ChargeCollectionRecord>();
-		if (input.SelectedCharges is { Count: > 0 })
+		if (input.ChargePayments is { Count: > 0 })
 		{
 			chargeCollectionRecords = feeCollectionManager.CreateChargeCollectionRecords(
 				input.StudentId,
 				metadata.Id,
-				input.SelectedCharges.Select(sc => (sc.ChargeId, sc.Amount * partialPaymentRatio)));
+				input.ChargePayments.Select(cp => (cp.ChargeId, cp.Amount)));
 			await chargeCollectionRecordRepository.InsertManyAsync(chargeCollectionRecords, autoSave: false);
 		}
 
-		// 7. Payment-method records
+		// 9. Payment-method records
 		var paymentRecords = feeCollectionManager.CreatePaymentRecords(
 			input.StudentId,
 			metadata.Id,
@@ -527,13 +627,9 @@ public class FeeCollectionAppServiceV2(
 			input.Notes);
 		await paymentMethodRecordRepository.InsertManyAsync(paymentRecords, autoSave: false);
 
-		// 8. Apply DueFee allocations + persist for reconciliation rollback.
-		// Allocation amounts are scaled by partialPaymentRatio so that each DueFee row's
-		// PaidAmount and OutstandingAmount reflect only the actually-received payment.
-		var allAllocations = input.SelectedFeeHeads
-			.Where(sfh => sfh.Allocations is { Count: > 0 })
-			.SelectMany(sfh => sfh.Allocations!)
-			.Select(a => (a.DueFeeId, Amount: a.Amount * partialPaymentRatio))
+		// 10. Apply DueFee allocations + persist
+		var allAllocations = input.DueFeePayments
+			.Select(dfp => (dfp.DueFeeId, dfp.Amount))
 			.ToList();
 
 		if (allAllocations.Count > 0)
@@ -552,7 +648,7 @@ public class FeeCollectionAppServiceV2(
 			await dueFeeAllocationRepository.InsertManyAsync(allocationRows, autoSave: false);
 		}
 
-		// 9. Create provisional/final receipt(s) for this transaction
+		// 11. Create provisional/final receipt(s) for this transaction
 		var feeLinesTotal = feeCollectionRecords.Sum(r => r.Amount);
 		var chargeLinesTotal = chargeCollectionRecords.Sum(r => r.Amount);
 
@@ -565,7 +661,7 @@ public class FeeCollectionAppServiceV2(
 			feeLinesTotal: feeLinesTotal,
 			chargeLinesTotal: chargeLinesTotal,
 			paymentMethods: paymentMethods,
-			bankReceiptConfirmed: input.BankReceiptConfirmed,
+			bankReceiptConfirmed: input.PaymentConfirmed,
 			remarks: input.Notes);
 
 		if (receipts.Count > 0)
@@ -586,12 +682,21 @@ public class FeeCollectionAppServiceV2(
 			FeeReceiptId = feeReceipt?.Id,
 			StudentId = input.StudentId,
 			AcademicYearId = input.AcademicYearId,
-			TotalAmount = input.TotalAmount,
+			TotalAmount = received,
+			ReceivedAmount = received,
 			Status = status,
 			CollectedBy = CurrentUser.Id ?? Guid.Empty,
 			CollectedAt = clock.Now,
 			CreatedAt = clock.Now,
 			ReceiptUrl = null,
+			PaidDueFees = input.DueFeePayments
+				.Select(dfp => new PaidDueFeeInfoDto
+				{
+					DueFeeId = dfp.DueFeeId,
+					FeeHeadId = dfp.FeeHeadId,
+					AmountPaid = dfp.Amount,
+				})
+				.ToList(),
 			PaidFeeHeads = feeCollectionRecords
 				.Select(r => new PaidFeeHeadInfoDto
 				{

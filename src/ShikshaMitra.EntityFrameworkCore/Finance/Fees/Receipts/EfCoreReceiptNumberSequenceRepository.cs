@@ -24,36 +24,62 @@ ICurrentTenant currentTenant
 ) : EfCoreRepository<ShikshaMitraDbContext, ReceiptNumberSequence, Guid>(dbContextProvider),
 IReceiptNumberSequenceRepository
 {
-/// <inheritdoc />
-public async Task<long> IncrementAndGetAsync(
-int year,
-FeeReceiptKind? kind,
-CancellationToken cancellationToken = default)
-{
-var db = await GetDbContextAsync();
+    /// <inheritdoc />
+    public async Task<long> IncrementAndGetAsync(
+        int year,
+        FeeReceiptKind? kind,
+        CancellationToken cancellationToken = default)
+    {
+        var storedTenantId = currentTenant.Id ?? ReceiptNumberSequence.HostTenantSentinel;
+        var storedKind = kind.HasValue ? (int)kind.Value : ReceiptNumberSequence.LegacyKindSentinel;
 
-var storedTenantId = currentTenant.Id ?? ReceiptNumberSequence.HostTenantSentinel;
-var storedKind = kind.HasValue ? (int)kind.Value : ReceiptNumberSequence.LegacyKindSentinel;
-var newId = Guid.NewGuid();
+        for (var retry = 0; retry < 10; retry++)
+        {
+            try
+            {
+                var dbContext = await GetDbContextAsync();
 
-// Single atomic statement:
-//   INSERT initialises NextValue = 2 for the first call (receipt #1 returned).
-//   ON CONFLICT DO UPDATE increments an existing row atomically.
-//   RETURNING NextValue - 1 so the first issued number is always 1.
-// PostgreSQL row-level lock on the UPDATE phase serialises concurrent callers.
-var sequenceValue = (await db.Database
-    .SqlQuery<long>(
-        $"""
-        INSERT INTO "FinanceReceiptNumberSequences"
-            ("Id", "TenantId", "Year", "Kind", "NextValue")
-        VALUES ({newId}, {storedTenantId}, {year}, {storedKind}, 2)
-        ON CONFLICT ("TenantId", "Year", "Kind") DO UPDATE
-            SET "NextValue" = "FinanceReceiptNumberSequences"."NextValue" + 1
-        RETURNING "FinanceReceiptNumberSequences"."NextValue" - 1 AS "Value"
-        """)
-    .ToListAsync(cancellationToken))
-    .First();
+                var sequence = await dbContext.Set<ReceiptNumberSequence>()
+                    .FirstOrDefaultAsync(s =>
+                        s.StoredTenantId == storedTenantId &&
+                        s.Year == year &&
+                        s.StoredKind == storedKind,
+                        cancellationToken);
 
-return sequenceValue;
-}
+                if (sequence == null)
+                {
+                    sequence = ReceiptNumberSequence.New(Guid.NewGuid(), currentTenant.Id, year, kind);
+                    await dbContext.Set<ReceiptNumberSequence>().AddAsync(sequence, cancellationToken);
+
+                    var returnValue = sequence.NextValue; // 1
+                    sequence.Increment(); // NextValue becomes 2
+
+                    await dbContext.SaveChangesAsync(cancellationToken);
+                    return returnValue;
+                }
+                else
+                {
+                    var returnValue = sequence.NextValue;
+                    sequence.Increment();
+
+                    await dbContext.SaveChangesAsync(cancellationToken);
+                    return returnValue;
+                }
+            }
+            catch (Exception ex) when (ex is DbUpdateConcurrencyException or DbUpdateException)
+            {
+                var dbContext = await GetDbContextAsync();
+                dbContext.ChangeTracker.Clear();
+
+                if (retry == 9)
+                {
+                    throw;
+                }
+
+                await Task.Delay(5, cancellationToken);
+            }
+        }
+
+        throw new InvalidOperationException("Failed to generate receipt number sequence due to high concurrency.");
+    }
 }

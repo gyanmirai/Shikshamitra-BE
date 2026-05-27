@@ -75,7 +75,7 @@ public class HRSeederContributor : BaseSeederContributor
 	private readonly IDocumentSettingRepository _documentSettingRepository;
 	private readonly EmployeeManager _employeeManager;
 	private readonly EmployeeDocumentManager _employeeDocumentManager;
-	private readonly IIdentityRoleRepository _roleRepository;
+	private readonly IRepository<IdentityRole, Guid> _identityRoleRepository;
 	private readonly IdentityUserManager _userManager;
 	private readonly IIdentityUserRepository _userRepository;
 	private readonly ILookupNormalizer _lookupNormalizer;
@@ -121,7 +121,7 @@ public class HRSeederContributor : BaseSeederContributor
 			IDocumentSettingRepository documentSettingRepository,
 			EmployeeManager employeeManager,
 			EmployeeDocumentManager employeeDocumentManager,
-			IIdentityRoleRepository roleRepository,
+			IRepository<IdentityRole, Guid> identityRoleRepository,
 			IdentityUserManager userManager,
 			IIdentityUserRepository userRepository,
 			ILookupNormalizer lookupNormalizer,
@@ -164,7 +164,7 @@ public class HRSeederContributor : BaseSeederContributor
 		_documentSettingRepository = documentSettingRepository;
 		_employeeManager = employeeManager;
 		_employeeDocumentManager = employeeDocumentManager;
-		_roleRepository = roleRepository;
+		_identityRoleRepository = identityRoleRepository;
 		_userManager = userManager;
 		_userRepository = userRepository;
 		_lookupNormalizer = lookupNormalizer;
@@ -1330,7 +1330,7 @@ public class HRSeederContributor : BaseSeederContributor
 				priority: 30,
 				"Administration department uses operations payroll and attendance rules.");
 
-			var teacherRole = await _roleRepository.FindByNormalizedNameAsync(_lookupNormalizer.NormalizeName("Teacher"));
+			var teacherRole = await FindRoleSeedInfoAsync("Teacher");
 			if (teacherRole != null)
 			{
 				var teacherRoleGroup = await EnsureEmployeeRoleGroupAsync(
@@ -1769,7 +1769,7 @@ public class HRSeederContributor : BaseSeederContributor
 				continue;
 			}
 
-			var role = await _roleRepository.FindByNormalizedNameAsync(_lookupNormalizer.NormalizeName(profile.RoleName));
+			var role = await FindRoleSeedInfoAsync(profile.RoleName);
 			if (role == null)
 			{
 				_logger.LogWarning(
@@ -1832,7 +1832,7 @@ public class HRSeederContributor : BaseSeederContributor
 				continue;
 			}
 
-			var role = await _roleRepository.FindByNormalizedNameAsync(_lookupNormalizer.NormalizeName(profile.RoleName));
+			var role = await FindRoleSeedInfoAsync(profile.RoleName);
 			var updated = await _employeeManager.UpdateEmployeeAsync(
 				employee.Id,
 				profile.FirstName,
@@ -3237,7 +3237,7 @@ public class HRSeederContributor : BaseSeederContributor
 
 		foreach (var emp in teachingEmployees)
 		{
-			var role = await _roleRepository.FindByNormalizedNameAsync(emp.RoleName.ToUpperInvariant());
+			var role = await FindRoleSeedInfoAsync(emp.RoleName);
 			if (role == null) continue;
 
 			// Create user first
@@ -3561,7 +3561,7 @@ public class HRSeederContributor : BaseSeederContributor
 
 		foreach (var emp in nonTeachingEmployees)
 		{
-			var role = await _roleRepository.FindByNormalizedNameAsync(emp.RoleName.ToUpperInvariant());
+			var role = await FindRoleSeedInfoAsync(emp.RoleName);
 			if (role == null) continue;
 
 			// Create user first
@@ -3890,8 +3890,7 @@ public class HRSeederContributor : BaseSeederContributor
 
 	private async Task EnsureUserInRoleAsync(IdentityUser user, string roleName)
 	{
-		var normalizedRoleName = _lookupNormalizer.NormalizeName(roleName);
-		var role = await _roleRepository.FindByNormalizedNameAsync(normalizedRoleName);
+		var role = await FindRoleSeedInfoAsync(roleName);
 		if (role == null || string.IsNullOrWhiteSpace(role.Name))
 		{
 			return;
@@ -3912,6 +3911,17 @@ public class HRSeederContributor : BaseSeederContributor
 			);
 		}
 	}
+
+	private async Task<SeedRoleInfo?> FindRoleSeedInfoAsync(string roleName)
+	{
+		var normalizedRoleName = _lookupNormalizer.NormalizeName(roleName);
+		return (await _identityRoleRepository.GetQueryableAsync())
+			.Where(role => role.NormalizedName == normalizedRoleName)
+			.Select(role => new SeedRoleInfo(role.Id, role.Name))
+			.FirstOrDefault();
+	}
+
+	private sealed record SeedRoleInfo(Guid Id, string Name);
 
 	private async Task<string> GenerateUniqueUsernameAsync(string firstName, string lastName)
 	{

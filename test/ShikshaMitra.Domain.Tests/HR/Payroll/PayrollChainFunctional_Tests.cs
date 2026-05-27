@@ -170,6 +170,58 @@ public class PayrollChainFunctional_Tests
 		result.PayableDays.ShouldBe(1.5m);
 	}
 
+	[Fact]
+	public void Attendance_Before_Joining_Date_Should_Not_Count_For_Payroll()
+	{
+		var basis = new PayrollBasisDaysResult(
+			BasisDays: 30m,
+			EffectiveMode: DayCalculationType.TotalMonthDays,
+			UsedTenantDefault: false,
+			SaturdayWorkPolicy.FullDay,
+			BuildWeekdayUnits(2026, 4));
+		var attendance = new List<EmployeeAttendance>
+		{
+			BuildAttendance(new DateOnly(2026, 4, 24), EmployeeAttendanceStatusType.Present),
+			BuildAttendance(new DateOnly(2026, 4, 25), EmployeeAttendanceStatusType.Present),
+			BuildAttendance(new DateOnly(2026, 4, 30), EmployeeAttendanceStatusType.Present)
+		};
+
+		var result = PayrollAttendanceCalculator.CalculatePayableDays(
+			attendance,
+			basis,
+			2026,
+			4,
+			holidays: [],
+			leaveUnitsByDate: null,
+			employmentStartDate: new DateOnly(2026, 4, 25));
+
+		result.PresentDays.ShouldBe(2);
+		result.PayableDays.ShouldBe(2m);
+	}
+
+	[Fact]
+	public void Approved_Paid_Leave_Before_Joining_Date_Should_Not_Restore_Payable_Units()
+	{
+		var basis = BuildWorkingDaysBasis(2026, 4);
+		var attendance = new List<EmployeeAttendance>();
+		var leaveUnits = new Dictionary<DateOnly, PayrollLeaveUnits>
+		{
+			[new DateOnly(2026, 4, 24)] = new(PaidUnits: 1m, UnpaidUnits: 0m),
+			[new DateOnly(2026, 4, 27)] = new(PaidUnits: 1m, UnpaidUnits: 0m)
+		};
+
+		var result = PayrollAttendanceCalculator.CalculatePayableDays(
+			attendance,
+			basis,
+			2026,
+			4,
+			holidays: [],
+			leaveUnits,
+			employmentStartDate: new DateOnly(2026, 4, 25));
+
+		result.PayableDays.ShouldBe(1m);
+	}
+
 	private static PayrollBasisDaysResult BuildWorkingDaysBasis(int year, int month)
 	{
 		var workingUnits = BuildWeekdayUnits(year, month);

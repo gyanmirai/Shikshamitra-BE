@@ -109,6 +109,8 @@ public class PayrollPolicyAppService(
 			});
 			await confirmationService.EnsureConfirmedAsync(preview);
 		}
+
+		await EnsureDefaultRemainsAsync(entity, input.IsDefault, status);
 		entity.Update(
 			input.WorkCalendarPolicyId,
 			input.Name,
@@ -162,6 +164,7 @@ public class PayrollPolicyAppService(
 	public async Task DeleteAsync(Guid id)
 	{
 		var entity = await repository.GetAsync(id);
+		await EnsureDefaultRemainsAsync(entity, isDefaultAfterUpdate: false, statusAfterUpdate: HrPolicyStatus.Archived);
 		var preview = await policySafetyAppService.PreviewPolicyImpactAsync(new HrPolicyImpactPreviewRequestDto
 		{
 			PolicyType = "payroll",
@@ -239,6 +242,29 @@ public class PayrollPolicyAppService(
 			var dto = HrPolicyMapping.ToDto(item);
 			await versionAppService.CaptureAsync("payroll", dto, "set-default-cleared");
 			await auditWriter.WriteAsync(dto.AcademicYearId, "payroll_policy", dto.Id, dto.Name, "set_default", $"Cleared default payroll policy {dto.Name}");
+		}
+	}
+
+	private async Task EnsureDefaultRemainsAsync(
+		PayrollPolicy entity,
+		bool isDefaultAfterUpdate,
+		HrPolicyStatus statusAfterUpdate)
+	{
+		if (!entity.IsDefault || (isDefaultAfterUpdate && statusAfterUpdate == HrPolicyStatus.Active))
+		{
+			return;
+		}
+
+		var query = await repository.GetQueryableAsync();
+		var hasOtherActiveDefault = await AsyncExecuter.AnyAsync(query.Where(x =>
+			x.AcademicYearId == entity.AcademicYearId &&
+			x.Id != entity.Id &&
+			x.IsDefault &&
+			x.Status == HrPolicyStatus.Active));
+
+		if (!hasOtherActiveDefault)
+		{
+			throw new BusinessException("ShikshaMitra:DefaultPayrollPolicyRequired");
 		}
 	}
 

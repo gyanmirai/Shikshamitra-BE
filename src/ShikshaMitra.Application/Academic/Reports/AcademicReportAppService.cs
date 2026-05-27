@@ -95,7 +95,7 @@ public class AcademicReportAppService(
     {
         var job = await GetAuthorizedJobAsync(jobId);
 
-        if (job.Status != AcademicReportExportStatus.Completed || string.IsNullOrEmpty(job.BlobName))
+        if (job.Status != HrReportExportStatus.Completed || string.IsNullOrEmpty(job.BlobName))
         {
             throw new BusinessException("Academic:Reports:050001").WithData("Status", job.Status); // Not Ready
         }
@@ -150,7 +150,7 @@ public class AcademicReportAppService(
             ReportType = job.ReportType,
             Format = job.Format ?? "N/A",
             Status = job.Status,
-            FileName = job.Status == AcademicReportExportStatus.Completed
+            FileName = job.Status == HrReportExportStatus.Completed
                        ? $"{job.ReportType.Replace(" ", "_")}_{job.CreationTime:yyyyMMddHHmmss}.{extension}"
                        : null,
             ErrorMessage = job.ErrorMessage,

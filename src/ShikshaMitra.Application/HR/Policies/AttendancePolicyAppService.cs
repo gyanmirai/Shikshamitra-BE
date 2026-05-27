@@ -101,6 +101,7 @@ public class AttendancePolicyAppService(
 			});
 			await confirmationService.EnsureConfirmedAsync(preview);
 		}
+		await EnsureDefaultRemainsAsync(entity, input.IsDefault, status);
 		entity.Update(
 			input.WorkCalendarPolicyId,
 			input.Name,
@@ -191,6 +192,7 @@ public class AttendancePolicyAppService(
 	public async Task DeleteAsync(Guid id)
 	{
 		var entity = await repository.GetAsync(id);
+		await EnsureDefaultRemainsAsync(entity, isDefaultAfterUpdate: false, statusAfterUpdate: HrPolicyStatus.Archived);
 		var preview = await policySafetyAppService.PreviewPolicyImpactAsync(new HrPolicyImpactPreviewRequestDto
 		{
 			PolicyType = "attendance",
@@ -293,6 +295,29 @@ public class AttendancePolicyAppService(
 			await repository.UpdateAsync(item, autoSave: false);
 			await versionAppService.CaptureAsync("attendance", HrPolicyMapping.ToDto(item), "set-default-cleared");
 			await auditWriter.WriteAsync(item.AcademicYearId, "attendance_policy", item.Id, item.Name, "set_default", $"Cleared default attendance policy {item.Name}.");
+		}
+	}
+
+	private async Task EnsureDefaultRemainsAsync(
+		AttendancePolicy entity,
+		bool isDefaultAfterUpdate,
+		HrPolicyStatus statusAfterUpdate)
+	{
+		if (!entity.IsDefault || (isDefaultAfterUpdate && statusAfterUpdate == HrPolicyStatus.Active))
+		{
+			return;
+		}
+
+		var query = await repository.GetQueryableAsync();
+		var hasOtherActiveDefault = await AsyncExecuter.AnyAsync(query.Where(x =>
+			x.AcademicYearId == entity.AcademicYearId &&
+			x.Id != entity.Id &&
+			x.IsDefault &&
+			x.Status == HrPolicyStatus.Active));
+
+		if (!hasOtherActiveDefault)
+		{
+			throw new BusinessException("ShikshaMitra:DefaultAttendancePolicyRequired");
 		}
 	}
 

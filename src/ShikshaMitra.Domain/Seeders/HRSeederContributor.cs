@@ -629,10 +629,40 @@ public class HRSeederContributor : BaseSeederContributor
 			x.Name == name);
 		if (existing != null)
 		{
+			if (isDefault && !await _payrollPolicyRepository.AnyAsync(x =>
+				x.AcademicYearId == academicYear.Id &&
+				x.IsDefault &&
+				x.Status == HrPolicyStatus.Active))
+			{
+				if (existing.Status == HrPolicyStatus.Active)
+				{
+					existing.SetDefault(true);
+				}
+				else
+				{
+					existing.Update(
+						workCalendar.Id,
+						name,
+						HrPolicyStatus.Active,
+						isDefault: true,
+						dayCalculationType,
+						manualDays,
+						manualMonthDays,
+						saturdayWorkPolicy,
+						holidayOverrides,
+						lockedMonthSettings: Array.Empty<PayrollLockedMonthSetting>());
+				}
+
+				await _payrollPolicyRepository.UpdateAsync(existing, autoSave: false);
+			}
+
 			return existing;
 		}
 
-		if (isDefault && await _payrollPolicyRepository.AnyAsync(x => x.AcademicYearId == academicYear.Id && x.IsDefault))
+		if (isDefault && await _payrollPolicyRepository.AnyAsync(x =>
+			x.AcademicYearId == academicYear.Id &&
+			x.IsDefault &&
+			x.Status == HrPolicyStatus.Active))
 		{
 			isDefault = false;
 		}
@@ -683,10 +713,51 @@ public class HRSeederContributor : BaseSeederContributor
 			x.Name == name);
 		if (existing != null)
 		{
+			if (isDefault && !await _attendancePolicyRepository.AnyAsync(x =>
+				x.AcademicYearId == academicYear.Id &&
+				x.IsDefault &&
+				x.Status == HrPolicyStatus.Active))
+			{
+				if (existing.Status == HrPolicyStatus.Active)
+				{
+					existing.SetDefault(true);
+				}
+				else
+				{
+					existing.Update(
+						workCalendar.Id,
+						name,
+						HrPolicyStatus.Active,
+						isDefault: true,
+						fullDayThresholdPercentage,
+						halfDayThresholdPercentage,
+						absentThresholdPercentage,
+						missingPunchBehavior,
+						manualCorrectionAllowed,
+						graceTime,
+						maxLateAllowedPerMonth,
+						penaltyType,
+						penaltyCountThreshold,
+						earlyExitEnabled,
+						earlyExitGraceTime,
+						overtimeEnabled,
+						overtimeRate,
+						minOvertimeMinutes,
+						holidayWorkBehavior,
+						sandwichRuleEnabled,
+						payrollPreviewEnabled);
+				}
+
+				await _attendancePolicyRepository.UpdateAsync(existing, autoSave: false);
+			}
+
 			return existing;
 		}
 
-		if (isDefault && await _attendancePolicyRepository.AnyAsync(x => x.AcademicYearId == academicYear.Id && x.IsDefault))
+		if (isDefault && await _attendancePolicyRepository.AnyAsync(x =>
+			x.AcademicYearId == academicYear.Id &&
+			x.IsDefault &&
+			x.Status == HrPolicyStatus.Active))
 		{
 			isDefault = false;
 		}

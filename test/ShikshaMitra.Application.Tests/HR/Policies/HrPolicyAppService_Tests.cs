@@ -357,6 +357,108 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	}
 
 	[Fact]
+	public async Task Payroll_Update_Should_Reject_Removing_Only_Default()
+	{
+		var context = await CreatePolicyContextAsync();
+
+		var ex = await Should.ThrowAsync<BusinessException>(() => _payrollPolicies.UpdateAsync(
+			context.PayrollPolicy.Id,
+			new CreateUpdatePayrollPolicyDto
+			{
+				AcademicYearId = context.AcademicYearId,
+				WorkCalendarPolicyId = context.WorkCalendar.Id,
+				Name = context.PayrollPolicy.Name,
+				Status = "active",
+				IsDefault = false,
+				DayCalculationType = context.PayrollPolicy.DayCalculationType,
+				SaturdayWorkPolicy = context.PayrollPolicy.SaturdayWorkPolicy
+			}));
+
+		ex.Code.ShouldBe("ShikshaMitra:DefaultPayrollPolicyRequired");
+		(await _payrollPolicies.GetAsync(context.PayrollPolicy.Id)).IsDefault.ShouldBeTrue();
+	}
+
+	[Fact]
+	public async Task Attendance_Update_Should_Reject_Removing_Only_Default()
+	{
+		var context = await CreatePolicyContextAsync();
+
+		var ex = await Should.ThrowAsync<BusinessException>(() => _attendancePolicies.UpdateAsync(
+			context.AttendancePolicy.Id,
+			new CreateUpdateAttendancePolicyDto
+			{
+				AcademicYearId = context.AcademicYearId,
+				WorkCalendarPolicyId = context.WorkCalendar.Id,
+				Name = context.AttendancePolicy.Name,
+				Status = "active",
+				IsDefault = false,
+				FullDayThresholdPercentage = context.AttendancePolicy.FullDayThresholdPercentage,
+				HalfDayThresholdPercentage = context.AttendancePolicy.HalfDayThresholdPercentage,
+				AbsentThresholdPercentage = context.AttendancePolicy.AbsentThresholdPercentage,
+				MissingPunchBehavior = context.AttendancePolicy.MissingPunchBehavior,
+				ManualCorrectionAllowed = context.AttendancePolicy.ManualCorrectionAllowed,
+				GraceTime = context.AttendancePolicy.GraceTime,
+				MaxLateAllowedPerMonth = context.AttendancePolicy.MaxLateAllowedPerMonth,
+				PenaltyType = context.AttendancePolicy.PenaltyType,
+				PenaltyCountThreshold = context.AttendancePolicy.PenaltyCountThreshold,
+				EarlyExitEnabled = context.AttendancePolicy.EarlyExitEnabled,
+				EarlyExitGraceTime = context.AttendancePolicy.EarlyExitGraceTime,
+				OvertimeEnabled = context.AttendancePolicy.OvertimeEnabled,
+				OvertimeRate = context.AttendancePolicy.OvertimeRate,
+				MinOvertimeMinutes = context.AttendancePolicy.MinOvertimeMinutes,
+				HolidayWorkBehavior = context.AttendancePolicy.HolidayWorkBehavior,
+				SandwichRuleEnabled = context.AttendancePolicy.SandwichRuleEnabled,
+				PayrollPreviewEnabled = context.AttendancePolicy.PayrollPreviewEnabled
+			}));
+
+		ex.Code.ShouldBe("ShikshaMitra:DefaultAttendancePolicyRequired");
+		(await _attendancePolicies.GetAsync(context.AttendancePolicy.Id)).IsDefault.ShouldBeTrue();
+	}
+
+	[Fact]
+	public async Task Payroll_Delete_Should_Reject_Default_Policy()
+	{
+		var context = await CreatePolicyContextAsync();
+
+		var ex = await Should.ThrowAsync<BusinessException>(() => _payrollPolicies.DeleteAsync(context.PayrollPolicy.Id));
+
+		ex.Code.ShouldBe("ShikshaMitra:DefaultPayrollPolicyRequired");
+		(await _payrollPolicies.GetAsync(context.PayrollPolicy.Id)).Status.ShouldBe("active");
+	}
+
+	[Fact]
+	public async Task Attendance_Delete_Should_Reject_Default_Policy()
+	{
+		var context = await CreatePolicyContextAsync();
+
+		var ex = await Should.ThrowAsync<BusinessException>(() => _attendancePolicies.DeleteAsync(context.AttendancePolicy.Id));
+
+		ex.Code.ShouldBe("ShikshaMitra:DefaultAttendancePolicyRequired");
+		(await _attendancePolicies.GetAsync(context.AttendancePolicy.Id)).Status.ShouldBe("active");
+	}
+
+	[Fact]
+	public async Task Payroll_SetDefault_Should_Clear_Previous_Default()
+	{
+		var context = await CreatePolicyContextAsync();
+		var candidate = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Replacement Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "working-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+
+		var updated = await _payrollPolicies.SetDefaultAsync(candidate.Id);
+
+		updated.IsDefault.ShouldBeTrue();
+		(await _payrollPolicies.GetAsync(context.PayrollPolicy.Id)).IsDefault.ShouldBeFalse();
+	}
+
+	[Fact]
 	public async Task Policy_Versions_Should_Capture_Compare_And_Restore_Draft()
 	{
 		var context = await CreatePolicyContextAsync();

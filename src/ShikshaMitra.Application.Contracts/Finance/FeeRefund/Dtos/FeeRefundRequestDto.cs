@@ -63,6 +63,14 @@ public class FeeRefundRequestDto
 
     /// <summary>Student's primary contact number.</summary>
     public string? StudentContactNo { get; set; }
+
+    public Guid? BoardId { get; set; }
+
+    public string? BoardName { get; set; }
+
+    public Guid? EducationMediumId { get; set; }
+
+    public string? EducationMediumName { get; set; }
 }
 
 /// <summary>Response DTO for a single refund line.</summary>

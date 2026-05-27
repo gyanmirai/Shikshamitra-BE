@@ -88,7 +88,7 @@ public class ReconciliationApi_Tests : ShikshaMitraApiTestBase
         // Seed a provisional receipt
         var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
         await ReconciliationTestHelper.SeedProvisionalReceiptAsync(
-            Client, AcademicYearId, feeHeadId, method: PaymentMethodEnum.Cheque);
+            Client, Factory.Services, AcademicYearId, feeHeadId, method: PaymentMethodEnum.Cheque);
 
         var response = await Client.GetAsync(
             $"{BaseUrl}?academicYearId={AcademicYearId}&paymentMethod=Cheque&page=1&pageSize=10");
@@ -142,7 +142,7 @@ public class ReconciliationApi_Tests : ShikshaMitraApiTestBase
 
         // Seed provisional cheque receipt
         await ReconciliationTestHelper.SeedProvisionalReceiptAsync(
-            Client, AcademicYearId, feeHeadId, method: PaymentMethodEnum.Cheque);
+            Client, Factory.Services, AcademicYearId, feeHeadId, method: PaymentMethodEnum.Cheque);
 
         // Get count after
         var after = await GetTabCountsAsync();
@@ -171,7 +171,7 @@ public class ReconciliationApi_Tests : ShikshaMitraApiTestBase
     {
         var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
         var (receiptId, _, _) = await ReconciliationTestHelper.SeedProvisionalReceiptAsync(
-            Client, AcademicYearId, feeHeadId, method: PaymentMethodEnum.Cheque);
+            Client, Factory.Services, AcademicYearId, feeHeadId, method: PaymentMethodEnum.Cheque);
 
         if (receiptId == Guid.Empty)
             return; // Could not resolve receipt ID — skip in environments without full seeding
@@ -205,7 +205,7 @@ public class ReconciliationApi_Tests : ShikshaMitraApiTestBase
     {
         var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
         var (receiptId, _, _) = await ReconciliationTestHelper.SeedProvisionalReceiptAsync(
-            Client, AcademicYearId, feeHeadId, method: PaymentMethodEnum.DemandDraft);
+            Client, Factory.Services, AcademicYearId, feeHeadId, method: PaymentMethodEnum.DemandDraft);
 
         if (receiptId == Guid.Empty)
             return;
@@ -242,7 +242,7 @@ public class ReconciliationApi_Tests : ShikshaMitraApiTestBase
     {
         var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
         var (receiptId, _, _) = await ReconciliationTestHelper.SeedProvisionalReceiptAsync(
-            Client, AcademicYearId, feeHeadId, method: PaymentMethodEnum.Cheque);
+            Client, Factory.Services, AcademicYearId, feeHeadId, method: PaymentMethodEnum.Cheque);
 
         if (receiptId == Guid.Empty)
             return;
@@ -263,7 +263,7 @@ public class ReconciliationApi_Tests : ShikshaMitraApiTestBase
     {
         var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
         var (receiptId, transactionId, _) = await ReconciliationTestHelper.SeedProvisionalReceiptAsync(
-            Client, AcademicYearId, feeHeadId, method: PaymentMethodEnum.Cheque);
+            Client, Factory.Services, AcademicYearId, feeHeadId, method: PaymentMethodEnum.Cheque);
 
         if (receiptId == Guid.Empty)
             return;
@@ -297,7 +297,7 @@ public class ReconciliationApi_Tests : ShikshaMitraApiTestBase
     {
         var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
         var (receiptId, _, _) = await ReconciliationTestHelper.SeedProvisionalReceiptAsync(
-            Client, AcademicYearId, feeHeadId, method: PaymentMethodEnum.UPI);
+            Client, Factory.Services, AcademicYearId, feeHeadId, method: PaymentMethodEnum.UPI);
 
         if (receiptId == Guid.Empty)
             return;
@@ -326,7 +326,7 @@ public class ReconciliationApi_Tests : ShikshaMitraApiTestBase
     {
         var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
         var (receiptId, _, studentId) = await ReconciliationTestHelper.SeedProvisionalReceiptAsync(
-            Client, AcademicYearId, feeHeadId, amount: 2000d, method: PaymentMethodEnum.Cheque);
+            Client, Factory.Services, AcademicYearId, feeHeadId, amount: 2000d, method: PaymentMethodEnum.Cheque);
 
         // Verify it appears in the list
         var listResponse = await Client.GetAsync(

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.Finance.FeeCollection;
@@ -13,20 +13,24 @@ public class CollectFeeInputValidator_Tests
 {
     private readonly CollectFeeInputValidator _validator = new();
 
-    private static CollectFeeInput ValidInput() => new()
+    private static CollectFeeInput ValidInput()
     {
-        StudentId = Guid.NewGuid(),
-        AcademicYearId = Guid.NewGuid(),
-        TotalAmount = 1000d,
-        SelectedFeeHeads = new List<SelectedFeeHeadDto>
+        var dueFeeId = Guid.NewGuid();
+        var feeHeadId = Guid.NewGuid();
+        return new CollectFeeInput
         {
-            new() { FeeHeadId = Guid.NewGuid(), Amount = 1000d },
-        },
-        Payments = new List<FeePaymentDto>
-        {
-            new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = 1000d },
-        },
-    };
+            StudentId = Guid.NewGuid(),
+            AcademicYearId = Guid.NewGuid(),
+            DueFeePayments = new List<DueFeePaymentDto>
+            {
+                new() { DueFeeId = dueFeeId, FeeHeadId = feeHeadId, Amount = 1000d },
+            },
+            Payments = new List<FeePaymentDto>
+            {
+                new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = 1000d },
+            },
+        };
+    }
 
     [Fact]
     public void Should_Pass_For_Valid_Input()
@@ -48,28 +52,28 @@ public class CollectFeeInputValidator_Tests
     }
 
     [Fact]
-    public void Should_Reject_Zero_TotalAmount()
+    public void Should_Reject_Zero_Amount_In_DueFeePayments()
     {
         var input = ValidInput();
-        input.TotalAmount = 0;
+        input.DueFeePayments[0].Amount = 0;
         input.Payments[0].Amount = 0;
 
         var result = _validator.Validate(input);
 
         result.IsValid.ShouldBeFalse();
-        result.Errors.ShouldContain(e => e.PropertyName == "TotalAmount");
     }
 
     [Fact]
-    public void Should_Reject_Empty_FeeHeads()
+    public void Should_Reject_Empty_DueFeeAndChargePayments()
     {
         var input = ValidInput();
-        input.SelectedFeeHeads = new List<SelectedFeeHeadDto>();
+        input.DueFeePayments = new List<DueFeePaymentDto>();
+        input.ChargePayments = new List<ChargePaymentDto>();
 
         var result = _validator.Validate(input);
 
         result.IsValid.ShouldBeFalse();
-        result.Errors.ShouldContain(e => e.PropertyName.Contains("SelectedFeeHeads"));
+        result.Errors.ShouldContain(e => e.PropertyName == "");
     }
 
     [Fact]
@@ -85,10 +89,9 @@ public class CollectFeeInputValidator_Tests
     }
 
     [Fact]
-    public void Should_Reject_When_Payment_Sum_Does_Not_Match_Total()
+    public void Should_Reject_When_Payment_Sum_Does_Not_Match_Lines_Total()
     {
         var input = ValidInput();
-        // Total 1000, received (null) defaults to 1000, but payment is 500
         input.Payments[0].Amount = 500d;
 
         var result = _validator.Validate(input);
@@ -97,12 +100,14 @@ public class CollectFeeInputValidator_Tests
     }
 
     [Fact]
-    public void Should_Accept_Partial_Payment_When_ReceivedAmount_Matches()
+    public void Should_Pass_For_Valid_DueFee_And_Charge_Payment()
     {
         var input = ValidInput();
-        input.TotalAmount = 1000d;
-        input.ReceivedAmount = 500d;
-        input.Payments[0].Amount = 500d;
+        input.ChargePayments = new List<ChargePaymentDto>
+        {
+            new() { ChargeId = Guid.NewGuid(), Amount = 500d },
+        };
+        input.Payments[0].Amount = 1500d;
 
         var result = _validator.Validate(input);
 
@@ -110,44 +115,36 @@ public class CollectFeeInputValidator_Tests
     }
 
     [Fact]
-    public void Should_Reject_Allocation_Sum_Mismatch()
+    public void Should_Reject_Duplicate_DueFeeId()
     {
         var input = ValidInput();
-        var feeHeadId = input.SelectedFeeHeads[0].FeeHeadId;
-        input.SelectedFeeHeads[0].Allocations = new List<DueFeeAllocationDto>
-        {
-            new() { DueFeeId = Guid.NewGuid(), Amount = 300d }, // should be 1000
-        };
+        var dueFeeId = input.DueFeePayments[0].DueFeeId;
+        var feeHeadId = input.DueFeePayments[0].FeeHeadId;
+        input.DueFeePayments.Add(new DueFeePaymentDto { DueFeeId = dueFeeId, FeeHeadId = feeHeadId, Amount = 500d });
+        input.Payments[0].Amount = 1500d;
 
         var result = _validator.Validate(input);
 
         result.IsValid.ShouldBeFalse();
+        result.Errors.ShouldContain(e => e.PropertyName.Contains("DueFeePayments"));
     }
 
     [Fact]
-    public void Should_Pass_When_Allocation_Sum_Matches_FeeHead_Amount()
+    public void Should_Reject_Duplicate_ChargeId()
     {
         var input = ValidInput();
-        input.SelectedFeeHeads[0].Allocations = new List<DueFeeAllocationDto>
+        var chargeId = Guid.NewGuid();
+        input.ChargePayments = new List<ChargePaymentDto>
         {
-            new() { DueFeeId = Guid.NewGuid(), Amount = 600d },
-            new() { DueFeeId = Guid.NewGuid(), Amount = 400d },
+            new() { ChargeId = chargeId, Amount = 200d },
+            new() { ChargeId = chargeId, Amount = 300d },
         };
-
-        var result = _validator.Validate(input);
-
-        result.IsValid.ShouldBeTrue();
-    }
-
-    [Fact]
-    public void Should_Reject_FeeHead_With_Zero_Amount()
-    {
-        var input = ValidInput();
-        input.SelectedFeeHeads[0].Amount = 0d;
+        input.Payments[0].Amount = 1500d;
 
         var result = _validator.Validate(input);
 
         result.IsValid.ShouldBeFalse();
+        result.Errors.ShouldContain(e => e.PropertyName.Contains("ChargePayments"));
     }
 
     [Fact]
@@ -164,7 +161,6 @@ public class CollectFeeInputValidator_Tests
 
     // ── BankReceiptConfirmed validation ───────────────────────────────────────
 
-    // Helper: builds minimal required details for methods that need them
     private static Dictionary<string, object?> MinimalDetails(PaymentMethodEnum method) =>
         method switch
         {
@@ -189,7 +185,6 @@ public class CollectFeeInputValidator_Tests
         {
             new() { PaymentMethod = method, Amount = 1000d, Details = MinimalDetails(method) },
         };
-        // BankReceiptConfirmed not set (null) → should fail
 
         var result = _validator.Validate(input);
 
@@ -217,7 +212,7 @@ public class CollectFeeInputValidator_Tests
         {
             new() { PaymentMethod = method, Amount = 1000d, Details = MinimalDetails(method) },
         };
-        input.BankReceiptConfirmed = bankConfirmed;
+        input.PaymentConfirmed = bankConfirmed;
 
         var result = _validator.Validate(input);
 
@@ -237,7 +232,7 @@ public class CollectFeeInputValidator_Tests
         {
             new() { PaymentMethod = method, Amount = 1000d, Details = MinimalDetails(method) },
         };
-        input.BankReceiptConfirmed = true; // must be null for Cash/Cheque/DD
+        input.PaymentConfirmed = true;
 
         var result = _validator.Validate(input);
 
@@ -248,7 +243,7 @@ public class CollectFeeInputValidator_Tests
     [Fact]
     public void Should_Accept_Cash_Without_BankReceiptConfirmed()
     {
-        var input = ValidInput(); // Cash + no BankReceiptConfirmed
+        var input = ValidInput();
         var result = _validator.Validate(input);
         result.IsValid.ShouldBeTrue();
     }
@@ -261,7 +256,6 @@ public class CollectFeeInputValidator_Tests
         {
             new() { PaymentMethod = PaymentMethodEnum.Cheque, Amount = 1000d, Details = MinimalDetails(PaymentMethodEnum.Cheque) },
         };
-        // BankReceiptConfirmed = null (not set) → OK for Cheque
 
         var result = _validator.Validate(input);
 

@@ -1,12 +1,17 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Finance.Collections;
 using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
+using ShikshaMitra.Finance.Fees.FeeCollection;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Finance.FeeCollectionTests;
 
@@ -30,17 +35,20 @@ public static class FeeCollectionTestHelper
     // ── Data builders ─────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Creates a student and a fee head, then records a cash payment.
+    /// Creates a student and a fee head, seeds a DueFee, then records a cash payment.
     /// Returns the <see cref="CollectFeeOutput"/> from the API.
     /// </summary>
-    public static async Task<(CollectFeeOutput Output, Guid StudentId, Guid BoardId)> CollectFeeAsync(
+    public static async Task<(CollectFeeOutput Output, Guid StudentId, Guid BoardId, Guid DueFeeId)> CollectFeeAsync(
         HttpClient client,
+        IServiceProvider services,
         double feeAmount = 1000d)
     {
         var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(client);
         var feeHeadId = await CreateFeeHeadAsync(client);
 
-        var input = BuildCollectFeeInput(studentId, DefaultAcademicYearId, feeHeadId, feeAmount);
+        var dueFeeId = await SeedDueFeeAsync(services, studentId, feeHeadId, feeAmount);
+
+        var input = BuildCollectFeeInput(studentId, DefaultAcademicYearId, feeHeadId, dueFeeId, feeAmount);
 
         var response = await client.PostAsJsonAsync(FeeCollectionUrl, input, JsonOptions);
         response.EnsureSuccessStatusCode();
@@ -48,7 +56,42 @@ public static class FeeCollectionTestHelper
         var output = await response.Content.ReadFromJsonAsync<CollectFeeOutput>(JsonOptions)
             ?? throw new InvalidOperationException("Null CollectFeeOutput from response");
 
-        return (output, studentId, boardId);
+        return (output, studentId, boardId, dueFeeId);
+    }
+
+    /// <summary>
+    /// Seeds a DueFee obligation directly in the database.
+    /// </summary>
+    public static async Task<Guid> SeedDueFeeAsync(
+        IServiceProvider services,
+        Guid studentId,
+        Guid feeHeadId,
+        double amount = 1000d)
+    {
+        using var scope = services.CreateScope();
+        var dueFeeRepo = scope.ServiceProvider.GetRequiredService<IDueFeeRepository>();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+
+        var dueFeeId = Guid.NewGuid();
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        using (currentTenant.Change(Guid.Parse("11111111-1111-1111-1111-111111111111")))
+        {
+            var dueFee = new DueFee(
+                id: dueFeeId,
+                tenantId: Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                studentId: studentId,
+                feeHeadId: feeHeadId,
+                month: MonthEnum.June,
+                year: 2025,
+                isOneTime: false,
+                amount: amount);
+
+            await dueFeeRepo.InsertAsync(dueFee, autoSave: true);
+            await uow.CompleteAsync();
+        }
+
+        return dueFeeId;
     }
 
     /// <summary>
@@ -67,26 +110,24 @@ public static class FeeCollectionTestHelper
         Guid studentId,
         Guid academicYearId,
         Guid feeHeadId,
-        double amount = 1000d,
-        double? receivedAmount = null)
+        Guid dueFeeId,
+        double amount = 1000d)
     {
         return new CollectFeeInput
         {
             StudentId = studentId,
             AcademicYearId = academicYearId,
-            TotalAmount = amount,
-            ReceivedAmount = receivedAmount,
             Notes = "Test payment",
-            SelectedFeeHeads = new List<SelectedFeeHeadDto>
+            DueFeePayments = new List<DueFeePaymentDto>
             {
-                new() { FeeHeadId = feeHeadId, Amount = amount },
+                new() { DueFeeId = dueFeeId, FeeHeadId = feeHeadId, Amount = amount },
             },
             Payments = new List<FeePaymentDto>
             {
                 new()
                 {
                     PaymentMethod = PaymentMethodEnum.Cash,
-                    Amount = receivedAmount ?? amount,
+                    Amount = amount,
                 },
             },
         };

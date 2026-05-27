@@ -63,4 +63,10 @@ public class ReceiptNumberSequence : AggregateRoot<Guid>
 			StoredKind = kind.HasValue ? (int)kind.Value : LegacyKindSentinel,
 			NextValue = 1,
 		};
+
+	/// <summary>Increments the sequence value.</summary>
+	public void Increment()
+	{
+		NextValue++;
+	}
 }

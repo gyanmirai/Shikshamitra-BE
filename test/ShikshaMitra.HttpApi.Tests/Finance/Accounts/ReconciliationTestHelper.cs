@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
@@ -28,6 +28,7 @@ public static class ReconciliationTestHelper
     public static async Task<(Guid ReceiptId, Guid TransactionId, Guid StudentId)>
         SeedProvisionalReceiptAsync(
             HttpClient client,
+            IServiceProvider services,
             Guid academicYearId,
             Guid feeHeadId,
             double amount = 1500d,
@@ -35,7 +36,9 @@ public static class ReconciliationTestHelper
     {
         var (studentId, _) = await Finance.ConcessionRequests.ConcessionRequestTestHelper.CreateStudentAsync(client);
 
-        var input = BuildNonCashCollectFeeInput(studentId, academicYearId, feeHeadId, amount, method);
+        var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(services, studentId, feeHeadId, amount);
+
+        var input = BuildNonCashCollectFeeInput(studentId, academicYearId, feeHeadId, dueFeeId, amount, method);
         var response = await client.PostAsJsonAsync(FeeCollectionUrl, input, JsonOptions);
         response.EnsureSuccessStatusCode();
 
@@ -78,6 +81,7 @@ public static class ReconciliationTestHelper
         Guid studentId,
         Guid academicYearId,
         Guid feeHeadId,
+        Guid dueFeeId,
         double amount,
         PaymentMethodEnum method)
     {
@@ -135,12 +139,11 @@ public static class ReconciliationTestHelper
         {
             StudentId = studentId,
             AcademicYearId = academicYearId,
-            TotalAmount = amount,
             Notes = "Reconciliation test payment",
             // Cheque/DD are AlwaysProvisional — BankReceiptConfirmed must be null.
             // CashierDecided methods (UPI/Card/etc.) require BankReceiptConfirmed = false
             // to generate a provisional receipt and enter the reconciliation queue.
-            BankReceiptConfirmed = method is
+            PaymentConfirmed = method is
                 PaymentMethodEnum.UPI or
                 PaymentMethodEnum.CreditCard or
                 PaymentMethodEnum.DebitCard or
@@ -149,9 +152,9 @@ public static class ReconciliationTestHelper
                 PaymentMethodEnum.WalletPrepaidCard
                 ? false
                 : null,
-            SelectedFeeHeads = new System.Collections.Generic.List<SelectedFeeHeadDto>
+            DueFeePayments = new System.Collections.Generic.List<DueFeePaymentDto>
             {
-                new() { FeeHeadId = feeHeadId, Amount = amount },
+                new() { DueFeeId = dueFeeId, FeeHeadId = feeHeadId, Amount = amount },
             },
             Payments = new System.Collections.Generic.List<FeePaymentDto> { payment },
         };

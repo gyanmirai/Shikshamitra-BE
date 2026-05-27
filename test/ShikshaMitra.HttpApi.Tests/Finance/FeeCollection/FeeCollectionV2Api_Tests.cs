@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http.Json;
@@ -95,7 +95,7 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Collect_Fee_Returns_201_With_Receipt_Number()
     {
-        var (output, _, _) = await FeeCollectionTestHelper.CollectFeeAsync(Client, feeAmount: 1000d);
+        var (output, _, _, _) = await FeeCollectionTestHelper.CollectFeeAsync(Client, Factory.Services, feeAmount: 1000d);
 
         output.Id.ShouldNotBe(Guid.Empty);
         output.ReceiptNumber.ShouldNotBeNullOrWhiteSpace();
@@ -111,13 +111,14 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
     {
         var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
         var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+        var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(Factory.Services, studentId, feeHeadId, amount: 500d);
 
         var input = FeeCollectionTestHelper.BuildCollectFeeInput(
             studentId,
             FeeCollectionTestHelper.DefaultAcademicYearId,
             feeHeadId,
-            amount: 500d,
-            receivedAmount: 500d);
+            dueFeeId,
+            amount: 500d);
 
         var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
 
@@ -130,24 +131,25 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
-    public async Task Should_Collect_Fee_Returns_Pending_Status_When_Partial_Amount_Received()
+    public async Task Should_Collect_Fee_Returns_Partial_Status_When_Partial_Amount_Received()
     {
         var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
         var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+        var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(Factory.Services, studentId, feeHeadId, amount: 1000d);
 
         var input = FeeCollectionTestHelper.BuildCollectFeeInput(
             studentId,
             FeeCollectionTestHelper.DefaultAcademicYearId,
             feeHeadId,
-            amount: 1000d,
-            receivedAmount: 400d);
+            dueFeeId,
+            amount: 400d);
 
         var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
         var output = await response.Content.ReadFromJsonAsync<CollectFeeOutput>(JsonOptions);
         output.ShouldNotBeNull();
-        output.Status.ShouldBe(FeeCollectionStatus.Pending);
+        output.Status.ShouldBe(FeeCollectionStatus.Partial);
     }
 
     [Fact]
@@ -155,11 +157,14 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
     public async Task Should_Collect_Fee_Returns_Error_For_Invalid_FeeHead()
     {
         var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var dummyFeeHeadId = Guid.NewGuid();
+        var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(Factory.Services, studentId, dummyFeeHeadId, amount: 500d);
 
         var input = FeeCollectionTestHelper.BuildCollectFeeInput(
             studentId,
             FeeCollectionTestHelper.DefaultAcademicYearId,
-            feeHeadId: Guid.NewGuid(),
+            dummyFeeHeadId,
+            dueFeeId,
             amount: 500d);
 
         var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
@@ -173,16 +178,17 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
     {
         var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
         var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+        var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(Factory.Services, studentId, feeHeadId, amount: 750d);
 
         var input = new CollectFeeInput
         {
             StudentId = studentId,
             AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
-            TotalAmount = 750d,
             Notes = "UPI payment test",
-            SelectedFeeHeads = new List<SelectedFeeHeadDto>
+            PaymentConfirmed = true,
+            DueFeePayments = new List<DueFeePaymentDto>
             {
-                new() { FeeHeadId = feeHeadId, Amount = 750d },
+                new() { DueFeeId = dueFeeId, FeeHeadId = feeHeadId, Amount = 750d },
             },
             Payments = new List<FeePaymentDto>
             {
@@ -233,7 +239,7 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Get_Student_Fee_Details_Reflects_Payment_History_After_Collection()
     {
-        var (output, studentId, _) = await FeeCollectionTestHelper.CollectFeeAsync(Client, feeAmount: 500d);
+        var (output, studentId, _, _) = await FeeCollectionTestHelper.CollectFeeAsync(Client, Factory.Services, feeAmount: 500d);
 
         var url = $"{BaseUrl}/{studentId}/fee-details?academicYearId={FeeCollectionTestHelper.DefaultAcademicYearId}";
 
@@ -358,19 +364,20 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
     {
         var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
         var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+        var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(Factory.Services, studentId, feeHeadId, amount: 500d);
 
         var input = new CollectFeeInput
         {
             StudentId = studentId,
             AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
-            TotalAmount = 500d,
-            SelectedFeeHeads = new List<SelectedFeeHeadDto>
+            PaymentConfirmed = true,
+            DueFeePayments = new List<DueFeePaymentDto>
             {
-                new() { FeeHeadId = feeHeadId, Amount = 500d },
+                new() { DueFeeId = dueFeeId, FeeHeadId = feeHeadId, Amount = 500d },
             },
             Payments = new List<FeePaymentDto>
             {
-                new() { PaymentMethod = PaymentMethodEnum.CreditCard, Amount = 500d },
+                new() { PaymentMethod = PaymentMethodEnum.CreditCard, Amount = 500d, Details = new() { { "transactionId", "CC123" } } },
             },
         };
 
@@ -385,19 +392,20 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
     {
         var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
         var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+        var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(Factory.Services, studentId, feeHeadId, amount: 600d);
 
         var input = new CollectFeeInput
         {
             StudentId = studentId,
             AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
-            TotalAmount = 600d,
-            SelectedFeeHeads = new List<SelectedFeeHeadDto>
+            PaymentConfirmed = true,
+            DueFeePayments = new List<DueFeePaymentDto>
             {
-                new() { FeeHeadId = feeHeadId, Amount = 600d },
+                new() { DueFeeId = dueFeeId, FeeHeadId = feeHeadId, Amount = 600d },
             },
             Payments = new List<FeePaymentDto>
             {
-                new() { PaymentMethod = PaymentMethodEnum.OnlinePaymentGateway, Amount = 600d },
+                new() { PaymentMethod = PaymentMethodEnum.OnlinePaymentGateway, Amount = 600d, Details = new() { { "transactionId", "PG123" } } },
             },
         };
 
@@ -412,19 +420,20 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
     {
         var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
         var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+        var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(Factory.Services, studentId, feeHeadId, amount: 400d);
 
         var input = new CollectFeeInput
         {
             StudentId = studentId,
             AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
-            TotalAmount = 400d,
-            SelectedFeeHeads = new List<SelectedFeeHeadDto>
+            PaymentConfirmed = true,
+            DueFeePayments = new List<DueFeePaymentDto>
             {
-                new() { FeeHeadId = feeHeadId, Amount = 400d },
+                new() { DueFeeId = dueFeeId, FeeHeadId = feeHeadId, Amount = 400d },
             },
             Payments = new List<FeePaymentDto>
             {
-                new() { PaymentMethod = PaymentMethodEnum.WalletPrepaidCard, Amount = 400d },
+                new() { PaymentMethod = PaymentMethodEnum.WalletPrepaidCard, Amount = 400d, Details = new() { { "transactionId", "W123" } } },
             },
         };
 
@@ -439,20 +448,19 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
     {
         var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
         var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+        var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(Factory.Services, studentId, feeHeadId, amount: 800d);
 
         var input = new CollectFeeInput
         {
             StudentId = studentId,
             AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
-            TotalAmount = 800d,
-            SelectedFeeHeads = new List<SelectedFeeHeadDto>
+            DueFeePayments = new List<DueFeePaymentDto>
             {
-                new() { FeeHeadId = feeHeadId, Amount = 800d },
+                new() { DueFeeId = dueFeeId, FeeHeadId = feeHeadId, Amount = 800d },
             },
             Payments = new List<FeePaymentDto>
             {
                 new() { PaymentMethod = PaymentMethodEnum.Cheque, Amount = 800d },
-                // No Details provided — should fail validation
             },
         };
 
@@ -467,15 +475,15 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
     {
         var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
         var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+        var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(Factory.Services, studentId, feeHeadId, amount: 800d);
 
         var input = new CollectFeeInput
         {
             StudentId = studentId,
             AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
-            TotalAmount = 800d,
-            SelectedFeeHeads = new List<SelectedFeeHeadDto>
+            DueFeePayments = new List<DueFeePaymentDto>
             {
-                new() { FeeHeadId = feeHeadId, Amount = 800d },
+                new() { DueFeeId = dueFeeId, FeeHeadId = feeHeadId, Amount = 800d },
             },
             Payments = new List<FeePaymentDto>
             {

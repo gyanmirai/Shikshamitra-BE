@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using FluentValidation;
 using ShikshaMitra.Finance.FeeCollection;
@@ -27,69 +27,53 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
         RuleFor(x => x.AcademicYearId)
             .NotEmpty();
 
-        RuleFor(x => x.TotalAmount)
-            .GreaterThan(0).WithMessage("Total amount must be greater than zero.");
-
-        RuleFor(x => x.ReceivedAmount)
-            .GreaterThanOrEqualTo(0).When(x => x.ReceivedAmount.HasValue)
-            .WithMessage("Received amount cannot be negative.");
-
         RuleFor(x => x.Notes)
             .MaximumLength(1000).When(x => x.Notes != null);
 
         // ── BankReceiptConfirmed rules ────────────────────────────────────────
         // When ANY payment method is CashierDecided, the flag is mandatory.
-        RuleFor(x => x.BankReceiptConfirmed)
+        RuleFor(x => x.PaymentConfirmed)
             .NotNull()
             .WithMessage(
                 "BankReceiptConfirmed is required when using UPI, card, bank transfer, or online gateway.")
             .When(x => x.Payments.Any(p => CashierDecidedMethods.Contains(p.PaymentMethod)));
 
         // For Cash/Cheque/DD only transactions, the flag must not be supplied.
-        RuleFor(x => x.BankReceiptConfirmed)
+        RuleFor(x => x.PaymentConfirmed)
             .Null()
             .WithMessage(
                 "BankReceiptConfirmed must be null for Cash, Cheque, or Demand Draft payments.")
             .When(x => x.Payments.Any()
                      && x.Payments.All(p => !CashierDecidedMethods.Contains(p.PaymentMethod)));
 
-        // ── Fee heads ─────────────────────────────────────────────────────────
-        RuleFor(x => x.SelectedFeeHeads)
-            .NotEmpty().WithMessage("At least one fee head is required.")
-            .Must(x => x.Count <= 50).WithMessage("Maximum 50 fee heads allowed per transaction.");
+        // ── Line-level collections (At least one is required) ──────────────────
+        RuleFor(x => x)
+            .Must(x => x.DueFeePayments.Count + x.ChargePayments.Count >= 1)
+            .WithMessage("At least one due fee or charge payment is required.");
 
-        RuleForEach(x => x.SelectedFeeHeads).ChildRules(feeHead =>
+        RuleFor(x => x.DueFeePayments)
+            .Must(x => x.Count <= 200)
+            .WithMessage("Maximum 200 due fee lines allowed per transaction.")
+            .Must(list => list.Select(dfp => dfp.DueFeeId).Distinct().Count() == list.Count)
+            .WithMessage("Duplicate dueFeeId in DueFeePayments is not allowed.");
+
+        RuleForEach(x => x.DueFeePayments).ChildRules(dfp =>
         {
-            feeHead.RuleFor(x => x.FeeHeadId).NotEmpty();
-            feeHead.RuleFor(x => x.Amount).GreaterThan(0);
-
-            feeHead.When(x => x.Allocations is { Count: > 0 }, () =>
-            {
-                feeHead.RuleFor(x => x.Allocations)
-                    .Must((fh, allocs) =>
-                    {
-                        if (allocs is null) return true;
-                        var allocSum = allocs.Sum(a => a.Amount);
-                        return Math.Abs(allocSum - fh.Amount) < 0.01;
-                    })
-                    .WithMessage("Sum of allocations must equal the fee-head amount.");
-
-                feeHead.RuleForEach(x => x.Allocations).ChildRules(alloc =>
-                {
-                    alloc.RuleFor(a => a.DueFeeId).NotEmpty();
-                    alloc.RuleFor(a => a.Amount).GreaterThan(0);
-                });
-            });
+            dfp.RuleFor(x => x.DueFeeId).NotEmpty();
+            dfp.RuleFor(x => x.FeeHeadId).NotEmpty();
+            dfp.RuleFor(x => x.Amount).GreaterThan(0).WithMessage("Due fee payment amount must be greater than zero.");
         });
 
-        // ── Charges ───────────────────────────────────────────────────────────
-        RuleFor(x => x.SelectedCharges)
-            .Must(c => c == null || c.Count <= 20).WithMessage("Maximum 20 charges allowed per transaction.");
+        RuleFor(x => x.ChargePayments)
+            .Must(x => x.Count <= 20)
+            .WithMessage("Maximum 20 charges allowed per transaction.")
+            .Must(list => list.Select(cp => cp.ChargeId).Distinct().Count() == list.Count)
+            .WithMessage("Duplicate chargeId in ChargePayments is not allowed.");
 
-        RuleForEach(x => x.SelectedCharges).ChildRules(charge =>
+        RuleForEach(x => x.ChargePayments).ChildRules(cp =>
         {
-            charge.RuleFor(x => x.ChargeId).NotEmpty();
-            charge.RuleFor(x => x.Amount).GreaterThan(0);
+            cp.RuleFor(x => x.ChargeId).NotEmpty();
+            cp.RuleFor(x => x.Amount).GreaterThan(0).WithMessage("Charge payment amount must be greater than zero.");
         });
 
         // ── Payments ──────────────────────────────────────────────────────────
@@ -123,9 +107,9 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
             .Must(x =>
             {
                 var paymentsTotal = x.Payments.Sum(p => p.Amount);
-                var received = x.ReceivedAmount ?? x.TotalAmount;
-                return Math.Abs(paymentsTotal - received) < 0.01;
+                var linesTotal = x.DueFeePayments.Sum(dfp => dfp.Amount) + x.ChargePayments.Sum(cp => cp.Amount);
+                return Math.Abs(paymentsTotal - linesTotal) < 0.01;
             })
-            .WithMessage("Sum of payment amounts must equal the received amount.");
+            .WithMessage("Sum of payment amounts must equal the total fee and charge payments.");
     }
 }

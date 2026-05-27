@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,6 +7,8 @@ using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
+using ShikshaMitra.Finance.Collections;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
@@ -59,9 +61,9 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     {
         using (_currentTenant.Change(TestTenantId))
         {
-            var (academicYearId, feeHeadId, studentId) = await SeedCoreDataAsync();
+            var (academicYearId, feeHeadId, studentId, dueFeeId) = await SeedCoreDataAsync();
 
-            var input = MakeInput(studentId, academicYearId, feeHeadId,
+            var input = MakeInput(studentId, academicYearId, feeHeadId, dueFeeId,
                 method: PaymentMethodEnum.Cash,
                 bankReceiptConfirmed: null); // must be null for Cash
 
@@ -80,9 +82,9 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     {
         using (_currentTenant.Change(TestTenantId))
         {
-            var (academicYearId, feeHeadId, studentId) = await SeedCoreDataAsync();
+            var (academicYearId, feeHeadId, studentId, dueFeeId) = await SeedCoreDataAsync();
 
-            var input = MakeInput(studentId, academicYearId, feeHeadId,
+            var input = MakeInput(studentId, academicYearId, feeHeadId, dueFeeId,
                 method: PaymentMethodEnum.UPI,
                 bankReceiptConfirmed: true,
                 details: new() { { "transactionId", "UPI-OK-001" }, { "upiId", "test@upi" } });
@@ -102,9 +104,9 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     {
         using (_currentTenant.Change(TestTenantId))
         {
-            var (academicYearId, feeHeadId, studentId) = await SeedCoreDataAsync();
+            var (academicYearId, feeHeadId, studentId, dueFeeId) = await SeedCoreDataAsync();
 
-            var input = MakeInput(studentId, academicYearId, feeHeadId,
+            var input = MakeInput(studentId, academicYearId, feeHeadId, dueFeeId,
                 method: PaymentMethodEnum.UPI,
                 bankReceiptConfirmed: false,
                 details: new() { { "transactionId", "UPI-PEND-001" }, { "upiId", "test@upi" } });
@@ -124,9 +126,9 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     {
         using (_currentTenant.Change(TestTenantId))
         {
-            var (academicYearId, feeHeadId, studentId) = await SeedCoreDataAsync();
+            var (academicYearId, feeHeadId, studentId, dueFeeId) = await SeedCoreDataAsync();
 
-            var input = MakeInput(studentId, academicYearId, feeHeadId,
+            var input = MakeInput(studentId, academicYearId, feeHeadId, dueFeeId,
                 method: PaymentMethodEnum.CreditCard,
                 bankReceiptConfirmed: false,
                 details: new() { { "transactionId", "CC001" }, { "cardLast4", "4242" }, { "bankName", "HDFC" } });
@@ -146,9 +148,9 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     {
         using (_currentTenant.Change(TestTenantId))
         {
-            var (academicYearId, feeHeadId, studentId) = await SeedCoreDataAsync();
+            var (academicYearId, feeHeadId, studentId, dueFeeId) = await SeedCoreDataAsync();
 
-            var input = MakeInput(studentId, academicYearId, feeHeadId,
+            var input = MakeInput(studentId, academicYearId, feeHeadId, dueFeeId,
                 method: PaymentMethodEnum.Cheque,
                 bankReceiptConfirmed: null, // must be null for Cheque
                 details: new()
@@ -173,9 +175,9 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     {
         using (_currentTenant.Change(TestTenantId))
         {
-            var (academicYearId, feeHeadId, studentId) = await SeedCoreDataAsync();
+            var (academicYearId, feeHeadId, studentId, dueFeeId) = await SeedCoreDataAsync();
 
-            var input = MakeInput(studentId, academicYearId, feeHeadId,
+            var input = MakeInput(studentId, academicYearId, feeHeadId, dueFeeId,
                 method: PaymentMethodEnum.DemandDraft,
                 bankReceiptConfirmed: null,
                 details: new()
@@ -200,9 +202,9 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     {
         using (_currentTenant.Change(TestTenantId))
         {
-            var (academicYearId, feeHeadId, studentId) = await SeedCoreDataAsync();
+            var (academicYearId, feeHeadId, studentId, dueFeeId) = await SeedCoreDataAsync();
 
-            var input = MakeInput(studentId, academicYearId, feeHeadId,
+            var input = MakeInput(studentId, academicYearId, feeHeadId, dueFeeId,
                 method: PaymentMethodEnum.DebitCard,
                 bankReceiptConfirmed: true,
                 details: new() { { "transactionId", "DC001" }, { "cardLast4", "1234" }, { "bankName", "Axis" } });
@@ -222,12 +224,12 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     {
         using (_currentTenant.Change(TestTenantId))
         {
-            var (academicYearId, feeHeadId, studentId) = await SeedCoreDataAsync();
+            var (academicYearId, feeHeadId, studentId, dueFeeId) = await SeedCoreDataAsync();
 
             var out1 = await _service.CollectFeeAsync(
-                MakeInput(studentId, academicYearId, feeHeadId, PaymentMethodEnum.Cash, null));
+                MakeInput(studentId, academicYearId, feeHeadId, dueFeeId, PaymentMethodEnum.Cash, null));
             var out2 = await _service.CollectFeeAsync(
-                MakeInput(studentId, academicYearId, feeHeadId, PaymentMethodEnum.Cash, null));
+                MakeInput(studentId, academicYearId, feeHeadId, dueFeeId, PaymentMethodEnum.Cash, null));
 
             out1.FeeReceiptNumber.ShouldNotBe(out2.FeeReceiptNumber,
                 "Each collection must produce a unique receipt number");
@@ -241,9 +243,9 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     {
         using (_currentTenant.Change(TestTenantId))
         {
-            var (academicYearId, feeHeadId, studentId) = await SeedCoreDataAsync();
+            var (academicYearId, feeHeadId, studentId, dueFeeId) = await SeedCoreDataAsync();
 
-            var input = MakeInput(studentId, academicYearId, feeHeadId, PaymentMethodEnum.Cash, null);
+            var input = MakeInput(studentId, academicYearId, feeHeadId, dueFeeId, PaymentMethodEnum.Cash, null);
             var output = await _service.CollectFeeAsync(input);
 
             output.StudentId.ShouldBe(studentId);
@@ -260,10 +262,10 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     /// <summary>
     /// Seeds the minimum entities required to call CollectFeeAsync:
     /// AcademicYear → EducationBoard → EducationMedium → EducationMediumStage
-    /// → FeeCategory → FeeHead → Student.
-    /// Returns (academicYearId, feeHeadId, studentId).
+    /// → FeeCategory → FeeHead → Student → DueFee.
+    /// Returns (academicYearId, feeHeadId, studentId, dueFeeId).
     /// </summary>
-    private async Task<(Guid AcademicYearId, Guid FeeHeadId, Guid StudentId)> SeedCoreDataAsync()
+    private async Task<(Guid AcademicYearId, Guid FeeHeadId, Guid StudentId, Guid DueFeeId)> SeedCoreDataAsync()
     {
         var yearId    = Guid.NewGuid();
         var boardId   = Guid.NewGuid();
@@ -308,13 +310,28 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
             status: StudentLifeCycleStatusEnum.Enrolled);
         await _studentRepo.InsertAsync(student, autoSave: true);
 
-        return (yearId, feeHeadId, studentId);
+        // 8. DueFee — seed a due fee so we can pay against it
+        var dueFeeId = Guid.NewGuid();
+        var dueFee = new DueFee(
+            id: dueFeeId,
+            tenantId: TestTenantId,
+            studentId: studentId,
+            feeHeadId: feeHeadId,
+            month: MonthEnum.June,
+            year: 2025,
+            isOneTime: false,
+            amount: 2000d); // 2000d so sequential payments of 1000d both work
+        var dueFeeRepo = GetRequiredService<IDueFeeRepository>();
+        await dueFeeRepo.InsertAsync(dueFee, autoSave: true);
+
+        return (yearId, feeHeadId, studentId, dueFeeId);
     }
 
     private static CollectFeeInput MakeInput(
         Guid studentId,
         Guid academicYearId,
         Guid feeHeadId,
+        Guid dueFeeId,
         PaymentMethodEnum method,
         bool? bankReceiptConfirmed,
         Dictionary<string, object?>? details = null)
@@ -323,9 +340,8 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
         {
             StudentId           = studentId,
             AcademicYearId      = academicYearId,
-            TotalAmount         = 1000d,
-            BankReceiptConfirmed = bankReceiptConfirmed,
-            SelectedFeeHeads    = [new() { FeeHeadId = feeHeadId, Amount = 1000d }],
+            PaymentConfirmed = bankReceiptConfirmed,
+            DueFeePayments      = [new() { DueFeeId = dueFeeId, FeeHeadId = feeHeadId, Amount = 1000d }],
             Payments            =
             [
                 new FeePaymentDto

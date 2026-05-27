@@ -250,6 +250,10 @@ public class FeeRefundAppService(
             ClassName        = student?.Standard?.Name,
             DivisionName     = student?.Division?.Name,
             StudentContactNo = student?.ContactDetail?.PrimaryContactNo,
+            BoardId          = student?.AcademicBoardId,
+            BoardName        = student?.AcademicBoard?.Type.ToString(),
+            EducationMediumId = student?.AcademicMediumId,
+            EducationMediumName = student?.AcademicMedium?.Name,
         };
     }
 

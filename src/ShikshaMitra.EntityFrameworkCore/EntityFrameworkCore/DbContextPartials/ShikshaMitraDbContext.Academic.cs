@@ -56,6 +56,7 @@ public partial class ShikshaMitraDbContext
     public DbSet<ExamType> ExamTypes { get; set; }
     public DbSet<Exam> Exams { get; set; }
     public DbSet<ExamSubject> ExamSubjects { get; set; }
+    public DbSet<ExamSubjectDivision> ExamSubjectDivisions { get; set; }
     public DbSet<ExamMark> ExamMarks { get; set; }
     public DbSet<ExamSeatAllocation> ExamSeatAllocations { get; set; }
 

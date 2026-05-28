@@ -57,4 +57,14 @@ public class TimetableController(
     {
         return await timetableAppService.GetSlotConfigByStandardAsync(standardId);
     }
+
+    [HttpGet("by-standard/{standardId}/division/{divisionId}/report/pdf")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
+    public async Task<IActionResult> GetClasswiseTimetablePdfAsync(
+        [FromRoute] Guid standardId,
+        [FromRoute] Guid divisionId)
+    {
+        var pdfBytes = await timetableAppService.GetClasswiseTimetablePdfAsync(standardId, divisionId);
+        return File(pdfBytes, "application/pdf", $"timetable-{standardId}-{divisionId}.pdf");
+    }
 }

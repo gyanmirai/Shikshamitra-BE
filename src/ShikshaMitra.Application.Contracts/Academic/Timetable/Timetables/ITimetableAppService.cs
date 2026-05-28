@@ -17,4 +17,6 @@ public interface ITimetableAppService
     Task AssignRoomsAsync(AssignRoomsDto input);
 
     Task<SlotConfigResponseDto> GetSlotConfigByStandardAsync(Guid standardId);
+
+    Task<byte[]> GetClasswiseTimetablePdfAsync(Guid standardId, Guid divisionId);
 }

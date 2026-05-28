@@ -196,10 +196,18 @@ public class ExamSeatAllocationAppService(
             }
         }
 
+        // Delete allocations for students that are no longer in the submitted list (removed from seat)
+        var incomingStudentIds = input.Students.Select(s => s.StudentId).ToHashSet();
+        var toDelete = existingAllocations
+            .Where(a => !incomingStudentIds.Contains(a.StudentId))
+            .ToList();
+
         if (toInsert.Count > 0)
             await seatAllocationRepository.InsertManyAsync(toInsert, autoSave: true);
         if (toUpdate.Count > 0)
             await seatAllocationRepository.UpdateManyAsync(toUpdate, autoSave: true);
+        if (toDelete.Count > 0)
+            await seatAllocationRepository.DeleteManyAsync(toDelete, autoSave: true);
 
         return new SaveSeatAllocationResponseDto
         {

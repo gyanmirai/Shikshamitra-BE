@@ -55,10 +55,18 @@ public class ExamManager(
 
     public void AssignRooms(Exam exam, bool isRoomAssigned, List<(Guid subjectId, List<(Guid divisionId, List<Guid> roomIds, int capacity)> divisions)> assignments)
     {
-        // Logic to update room assignments
-        // NOTE: The requirement mentions 'isRoomAssigned' flag at the request level, check if we need to store it on Exam?
-        // Checking Exam entity, I don't see IsRoomAssigned property.
-        // Assuming strictly updating the ExamSubjectDivision entities.
+        if (!isRoomAssigned)
+        {
+            // Clear all existing room assignments across every subject
+            foreach (var subject in exam.ExamSubjects)
+            {
+                foreach (var assignment in subject.RoomAssignments.ToList())
+                {
+                    subject.RemoveRoomAssignment(assignment.Id);
+                }
+            }
+            return;
+        }
 
         foreach (var assignment in assignments)
         {

@@ -36,6 +36,7 @@ public class ExamAppService(
 	IRepository<ExamMark, Guid> examMarkRepository,
 	IRepository<Student, Guid> studentRepository,
 	IRepository<GradingScale, Guid> gradingScaleRepository,
+	IRepository<ExamSubjectDivision, Guid> examSubjectDivisionRepository,
 	ExamManager examManager) : ApplicationService, IExamAppService
 {
 	public async Task<Guid> CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input)
@@ -274,6 +275,16 @@ public class ExamAppService(
 	public async Task AssignRoomsAsync(Guid examId, ExamRoomAssignmentRequestDto input)
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
+
+		if (!input.IsRoomAssigned)
+		{
+			var toDelete = exam.ExamSubjects
+				.SelectMany(s => s.RoomAssignments)
+				.ToList();
+			if (toDelete.Count > 0)
+				await examSubjectDivisionRepository.DeleteManyAsync(toDelete, autoSave: true);
+			return;
+		}
 
 		var assignments = input.Subjects.Select(s => (
 			s.SubjectId,

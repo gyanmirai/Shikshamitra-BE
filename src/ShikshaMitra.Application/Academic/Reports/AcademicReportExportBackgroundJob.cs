@@ -14,6 +14,7 @@ namespace ShikshaMitra.Academic.Reports;
 public class AcademicReportExportBackgroundJob(
     AcademicReportGenerator reportGenerator,
     AcademicPdfService pdfService,
+    TimetableReportsPdfService timetablePdfService,
     AcademicExcelService excelService,
     IRepository<ShikshaMitra.HR.Reports.HrReportExportJob, Guid> exportJobRepository,
     IBlobContainer blobContainer,
@@ -39,7 +40,9 @@ public class AcademicReportExportBackgroundJob(
                     : AcademicReportFormat.Excel;
 
                 var bytes = format == AcademicReportFormat.Pdf
-                    ? await pdfService.GenerateReportPdf(report)
+                    ? TimetableReportsPdfService.IsTimetableReport(report.ReportType)
+                        ? await timetablePdfService.GenerateAsync(report)
+                        : await pdfService.GenerateReportPdf(report)
                     : excelService.GenerateReportExcel(report);
 
                 var blobName = BuildBlobName(args, format);

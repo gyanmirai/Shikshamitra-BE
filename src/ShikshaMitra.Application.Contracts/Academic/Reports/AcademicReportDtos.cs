@@ -21,7 +21,10 @@ public class AcademicReportFilterDto
 {
     public Guid? AcademicYearId { get; set; }
     public List<Guid>? ClassIds { get; set; }
+    public List<Guid>? DivisionIds { get; set; }
     public List<Guid>? SubjectIds { get; set; }
+    public List<Guid>? TeacherIds { get; set; }
+    public List<Guid>? RoomIds { get; set; }
 
     /// <summary>
     /// Upcoming = 1, In Progress = 2, Completed = 3
@@ -104,4 +107,12 @@ public static class AcademicReportTypes
     public const string ClassWiseChapterAssignment = "Class-wise Chapter Assignment Report";
     public const string CurriculumCompletionReport = "Curriculum Completion Report";
     public const string ChapterRevisionTracker = "Chapter Revision Tracker";
+
+    // Timetable reports
+    public const string ClasswiseTimetable = "Class-wise Timetable Report";
+    public const string TeacherwiseTimetable = "Teacher-wise Timetable Report";
+    public const string RoomUtilizationReport = "Room Utilization Report";
+    public const string SubjectwiseTimetableDistribution = "Subject-wise Timetable Distribution";
+    public const string FreePeriodsReport = "Free Periods Report";
+    public const string TimetableChangeLog = "Timetable Change Log Report";
 }

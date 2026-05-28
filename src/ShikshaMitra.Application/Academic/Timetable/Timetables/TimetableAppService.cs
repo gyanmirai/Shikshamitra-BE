@@ -13,7 +13,9 @@ using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.TenantManagement;
 
 namespace ShikshaMitra.Academic.Timetable.Timetables;
 
@@ -29,7 +31,9 @@ public class TimetableAppService(
     IRepository<Subject, Guid> subjectRepository,
     IRepository<ElectiveGroup, Guid> electiveGroupRepository,
     IRepository<Room, Guid> roomRepository,
-    IRepository<AssignedSubject, Guid> assignedSubjectRepository
+    IRepository<AssignedSubject, Guid> assignedSubjectRepository,
+    TimetableReportPdfService timetableReportPdfService,
+    ITenantRepository tenantRepository
 ) : ApplicationService, ITimetableAppService
 {
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
@@ -447,6 +451,87 @@ public class TimetableAppService(
         }
 
         await timetableRepository.UpdateAsync(timetable);
+    }
+
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
+    public async Task<byte[]> GetClasswiseTimetablePdfAsync(Guid standardId, Guid divisionId)
+    {
+        var standard = await standardRepository.GetAsync(standardId);
+        var division = await divisionRepository.GetAsync(divisionId);
+
+        // Load tenant extra properties for header
+        Tenant? tenant = null;
+        if (CurrentTenant.Id.HasValue)
+        {
+            using (CurrentTenant.Change(null)) // switch to host to read tenant
+            {
+                tenant = await tenantRepository.FindAsync(CurrentTenant.Id.Value);
+            }
+        }
+
+        var instituteName = tenant?.GetProperty<string>("InstituteName")
+            ?? CurrentTenant.Name
+            ?? "School";
+        var addressParts = new[]
+        {
+            tenant?.GetProperty<string>("Address1"),
+            tenant?.GetProperty<string>("Address2"),
+            tenant?.GetProperty<string>("Address3"),
+            tenant?.GetProperty<string>("City"),
+            tenant?.GetProperty<string>("State")
+        }.Where(p => !string.IsNullOrWhiteSpace(p));
+        var address = string.Join(", ", addressParts);
+        var contactNumber = tenant?.GetProperty<string>("ContactNumber");
+        var logoBytes = tenant?.GetProperty<byte[]>("Logo");
+
+        // Fetch timetable data
+        var timetableDto = await GetByStandardAndDivisionAsync(standardId, divisionId);
+
+        // Ordered days
+        var dayOrder = new[] { "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY" };
+        var availableDays = dayOrder.Where(d => timetableDto.Days.ContainsKey(d)).ToList();
+
+        // Collect all unique slot rows (by sequence, start, end across all days)
+        var allSlots = availableDays
+            .SelectMany(day => timetableDto.Days[day].Select(slot => (day, slot)))
+            .GroupBy(x => (x.slot.Sequence, x.slot.StartTime, x.slot.EndTime))
+            .OrderBy(g => g.Key.Sequence)
+            .Select(g =>
+            {
+                var anySlot = g.First().slot;
+                var cells = new Dictionary<string, TimetablePdfCell>();
+                foreach (var (day, slot) in g)
+                {
+                    cells[day] = new TimetablePdfCell
+                    {
+                        SubjectNames = slot.Subjects.Select(s => s.Name).ToList(),
+                        TeacherNames = slot.Subjects.Select(s => s.TeacherName ?? string.Empty).ToList()
+                    };
+                }
+                return new TimetablePdfSlotRow
+                {
+                    Sequence = anySlot.Sequence,
+                    StartTime = anySlot.StartTime,
+                    EndTime = anySlot.EndTime,
+                    IsBreak = anySlot.Type == SlotType.Break,
+                    Cells = cells
+                };
+            }).ToList();
+
+        var pdfModel = new TimetableReportPdfModel
+        {
+            InstituteName = instituteName,
+            Address = string.IsNullOrWhiteSpace(address) ? null : address,
+            ContactNumber = contactNumber,
+            LogoBytes = logoBytes,
+            StandardName = standard.Name,
+            DivisionName = division.Name,
+            GeneratedAt = DateTime.Now,
+            Days = availableDays,
+            SlotRows = allSlots
+        };
+
+        return timetableReportPdfService.Generate(pdfModel);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]

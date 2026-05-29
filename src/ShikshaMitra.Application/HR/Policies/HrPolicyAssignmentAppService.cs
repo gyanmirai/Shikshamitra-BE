@@ -29,7 +29,8 @@ public class HrPolicyAssignmentAppService(
 	IRepository<PayrollPolicy, Guid> payrollPolicyRepository,
 	HrPolicyResolver policyResolver,
 	HrPolicyImpactConfirmationService confirmationService,
-	HrAuditWriter auditWriter)
+	HrAuditWriter auditWriter,
+	EmployeeOrganizationScopeResolver organizationScopeResolver)
 	: ApplicationService, IHrPolicyAssignmentAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.View)]
@@ -813,15 +814,18 @@ public class HrPolicyAssignmentAppService(
 
 		var employeeQuery = await employeeRepository.GetQueryableAsync();
 		var employees = await AsyncExecuter.ToListAsync(employeeQuery.Where(x => employeeIds.Contains(x.Id)));
+		var organizationsByUserId = await organizationScopeResolver.GetOrganizationsByUserIdsAsync(
+			employees.Select(x => x.UserId));
 		var organizationsByEmployeeId = employees.ToDictionary(
 			x => x.Id,
-			x => x.OrganizationAssignments
-				.Where(assignment => assignment.EducationMediumStage != null)
-				.Select(assignment => assignment.EducationMediumStage!.Name)
+			x => x.UserId.HasValue && organizationsByUserId.TryGetValue(x.UserId.Value, out var organizations)
+				? organizations
+				.Select(organization => organization.Name)
 				.Where(name => !string.IsNullOrWhiteSpace(name))
 				.Distinct()
 				.OrderBy(name => name)
-				.ToList());
+				.ToList()
+				: []);
 
 		foreach (var assignment in assignments)
 		{

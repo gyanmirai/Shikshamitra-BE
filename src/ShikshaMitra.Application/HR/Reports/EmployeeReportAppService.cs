@@ -23,6 +23,7 @@ public class EmployeeReportAppService(
 	IRepository<EmployeeAttendance, Guid> employeeAttendanceRepository,
 	IUserScopeService userScopeService,
 	HrUserScopeAccessService hrScopeAccessService,
+	EmployeeOrganizationScopeResolver organizationScopeResolver,
 	HRPdfService hrPdfService,
 	HRExcelService hrExcelService)
 	: ApplicationService, IEmployeeReportAppService
@@ -83,7 +84,8 @@ public class EmployeeReportAppService(
 		}
 
 		var accessibleStageIds = await hrScopeAccessService.ResolveAccessibleStageIdsAsync(scope);
-		return query.Where(e => e.OrganizationAssignments.Any(a => accessibleStageIds.Contains(a.EducationMediumStageId)));
+		var matchingUserIds = await organizationScopeResolver.GetUserIdsWithAnyStageAsync(accessibleStageIds);
+		return query.Where(e => e.UserId.HasValue && matchingUserIds.Contains(e.UserId.Value));
 	}
 
 	private async Task<UserScopeContext> EnsureCanReadScopedEmployeesAsync()

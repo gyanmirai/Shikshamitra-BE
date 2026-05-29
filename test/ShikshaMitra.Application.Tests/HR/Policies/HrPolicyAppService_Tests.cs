@@ -565,6 +565,44 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	}
 
 	[Fact]
+	public async Task AttendancePolicy_Should_Persist_Backend_Advanced_Rule_Values()
+	{
+		var context = await CreatePolicyContextAsync();
+
+		var updated = await _attendancePolicies.UpdateAsync(context.AttendancePolicy.Id, new CreateUpdateAttendancePolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = context.AttendancePolicy.Name,
+			Status = context.AttendancePolicy.Status,
+			IsDefault = context.AttendancePolicy.IsDefault,
+			FullDayThresholdPercentage = context.AttendancePolicy.FullDayThresholdPercentage,
+			HalfDayThresholdPercentage = context.AttendancePolicy.HalfDayThresholdPercentage,
+			AbsentThresholdPercentage = context.AttendancePolicy.AbsentThresholdPercentage,
+			MissingPunchBehavior = context.AttendancePolicy.MissingPunchBehavior,
+			ManualCorrectionAllowed = context.AttendancePolicy.ManualCorrectionAllowed,
+			GraceTime = 10,
+			MaxLateAllowedPerMonth = 3,
+			PenaltyType = "deduct_half_day",
+			PenaltyCountThreshold = 2,
+			EarlyExitEnabled = true,
+			EarlyExitGraceTime = 5,
+			OvertimeEnabled = true,
+			OvertimeRate = "1.5x",
+			MinOvertimeMinutes = 30,
+			HolidayWorkBehavior = "ot_payout",
+			SandwichRuleEnabled = true,
+			PayrollPreviewEnabled = true
+		});
+
+		updated.PenaltyType.ShouldBe("deduct_half_day");
+		updated.OvertimeRate.ShouldBe("1.5x");
+		updated.HolidayWorkBehavior.ShouldBe("ot_payout");
+		updated.MinOvertimeMinutes.ShouldBe(30);
+		updated.SandwichRuleEnabled.ShouldBeTrue();
+	}
+
+	[Fact]
 	public async Task WorkCalendar_Update_Should_NoOp_When_Unchanged()
 	{
 		var context = await CreatePolicyContextAsync();

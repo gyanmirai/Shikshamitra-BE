@@ -104,20 +104,11 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 			.ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role != null ? src.Role.Name : null))
 			.ForMember(dest => dest.EmployeeStatusType, opt => opt.MapFrom(src => src.EmployeeStatusType ?? EmployeeStatusType.Active))
 			.ForMember(dest => dest.OrganizationIds,
-				opt => opt.MapFrom(src => src.OrganizationAssignments.Select(x => x.EducationMediumStageId).Distinct()))
+				opt => opt.Ignore())
 			.ForMember(dest => dest.Organizations,
-				opt => opt.MapFrom(src => src.OrganizationAssignments
-					.Where(x => x.EducationMediumStage != null)
-					.Select(x => new EmployeeOrganizationDto
-					{
-						Id = x.EducationMediumStageId,
-						Name = x.EducationMediumStage!.Name
-					})))
+				opt => opt.Ignore())
 			.ForMember(dest => dest.OrganizationNames,
-				opt => opt.MapFrom(src => src.OrganizationAssignments
-					.Where(x => x.EducationMediumStage != null)
-					.Select(x => x.EducationMediumStage!.Name)
-					.Distinct()));
+				opt => opt.Ignore());
 
 		// Group mappings - Note: GroupDto is manually mapped in GroupAppService.MapToDto()
 		// These mappings are kept for basic property mapping but nested objects are handled manually

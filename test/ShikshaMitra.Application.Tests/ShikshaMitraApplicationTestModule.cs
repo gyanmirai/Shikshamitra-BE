@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Receipts;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
@@ -40,6 +42,36 @@ internal sealed class FakeReceiptNumberSequenceRepository(
         var key = $"{year}:{kind?.ToString() ?? "null"}";
         var next = _sequences.AddOrUpdate(key, 1L, (_, current) => current + 1);
         return Task.FromResult(next);
+    }
+}
+
+internal sealed class FakeEmployeeLeaveRepository(
+    IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
+    : EfCoreEmployeeLeaveRepository(dbContextProvider)
+{
+    private static int _nextPublicId;
+
+    public override async Task<EmployeeLeave> InsertAsync(
+        EmployeeLeave entity,
+        bool autoSave = false,
+        CancellationToken cancellationToken = default)
+    {
+        if (entity.PublicId <= 0)
+        {
+            var dbSet = await GetDbSetAsync();
+            var maxPublicId = await dbSet
+                .Select(x => (int?)x.PublicId)
+                .MaxAsync(cancellationToken) ?? 0;
+            var nextPublicId = Math.Max(
+                Interlocked.Increment(ref _nextPublicId),
+                maxPublicId + 1);
+
+            typeof(EmployeeLeave)
+                .GetProperty(nameof(EmployeeLeave.PublicId))!
+                .SetValue(entity, nextPublicId);
+        }
+
+        return await base.InsertAsync(entity, autoSave, cancellationToken);
     }
 }
 
@@ -77,6 +109,7 @@ public class ShikshaMitraApplicationTestModule : AbpModule
         // Replace the PostgreSQL-specific sequence repository with an in-memory fake
         // so that application tests using SQLite don't fail on PostgreSQL-only SQL syntax.
         context.Services.AddTransient<IReceiptNumberSequenceRepository, FakeReceiptNumberSequenceRepository>();
+        context.Services.AddTransient<IEmployeeLeaveRepository, FakeEmployeeLeaveRepository>();
     }
 
     public override void OnApplicationShutdown(ApplicationShutdownContext context)

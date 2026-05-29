@@ -61,17 +61,20 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 
 	private readonly IRepository<EmployeeICardTemplate, Guid> _repository;
 	private readonly IEmployeeRepository _employeeRepository;
+	private readonly EmployeeOrganizationScopeResolver _organizationScopeResolver;
 	private readonly IBlobContainer _blobContainer;
 	private readonly IGuidGenerator _guidGenerator;
 
 	public EmployeeICardTemplateAppService(
 		IRepository<EmployeeICardTemplate, Guid> repository,
 		IEmployeeRepository employeeRepository,
+		EmployeeOrganizationScopeResolver organizationScopeResolver,
 		IBlobContainer blobContainer,
 		IGuidGenerator guidGenerator)
 	{
 		_repository = repository;
 		_employeeRepository = employeeRepository;
+		_organizationScopeResolver = organizationScopeResolver;
 		_blobContainer = blobContainer;
 		_guidGenerator = guidGenerator;
 	}
@@ -229,8 +232,13 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 		{
 			throw new BusinessException(HRErrorCodes.EmployeeICardPdfEmployeeMissing);
 		}
+		var organizationsByUserId = await _organizationScopeResolver.GetOrganizationsByUserIdsAsync(
+			employees.Select(x => x.UserId),
+			template.AcademicYearId);
 		if (template.MediumStageId.HasValue &&
-			employees.Any(employee => employee.OrganizationAssignments.All(x => x.EducationMediumStageId != template.MediumStageId.Value)))
+			employees.Any(employee => !employee.UserId.HasValue ||
+				!organizationsByUserId.TryGetValue(employee.UserId.Value, out var organizations) ||
+				organizations.All(x => x.Id != template.MediumStageId.Value)))
 		{
 			throw new BusinessException(HRErrorCodes.EmployeeICardPdfEmployeeMissing);
 		}
@@ -285,6 +293,7 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 								card,
 								template,
 								employee,
+								ResolveOrganizationName(employee, organizationsByUserId),
 								fields,
 								logoIsRaster ? logoBytes : null,
 								photoBytesByEmployeeId.GetValueOrDefault(employee.Id),
@@ -489,6 +498,7 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 		IContainer container,
 		EmployeeICardTemplate template,
 		Employee employee,
+		string? organization,
 		IReadOnlyDictionary<string, bool> fields,
 		byte[]? logoBytes,
 		byte[]? employeePhotoBytes,
@@ -497,10 +507,6 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 		float cardWidth,
 		float cardHeight)
 	{
-		var organization = employee.OrganizationAssignments
-			.Where(x => x.EducationMediumStage != null)
-			.Select(x => x.EducationMediumStage!.Name)
-			.FirstOrDefault();
 		var address = string.Join(", ", new[] { employee.Address1, employee.Address2, employee.Address3 }.Where(x => !string.IsNullOrWhiteSpace(x)));
 		var employeeName = string.IsNullOrWhiteSpace(employee.EmployeeName) ? employee.ShortName ?? "Employee" : employee.EmployeeName;
 		var schoolName = string.IsNullOrWhiteSpace(template.SchoolName) ? template.Name : template.SchoolName;
@@ -577,6 +583,16 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 					column.Item().AlignRight().Text(template.QrCodeEnabled ? $"QR: {employee.EmployeeCode}" : $"BAR: {employee.EmployeeCode}").FontSize(6).FontColor(Colors.Grey.Darken1);
 				}
 			});
+	}
+
+	private static string? ResolveOrganizationName(
+		Employee employee,
+		IReadOnlyDictionary<Guid, List<EmployeeOrganizationDto>> organizationsByUserId)
+	{
+		return employee.UserId.HasValue &&
+			organizationsByUserId.TryGetValue(employee.UserId.Value, out var organizations)
+				? organizations.FirstOrDefault()?.Name
+				: null;
 	}
 
 	private static void AddLine(ColumnDescriptor column, string label, string? value)

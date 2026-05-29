@@ -26,20 +26,11 @@ public class HRMapperProfile : Profile
 	{
 		CreateMap<Employee, EmployeeDto>()
 			.ForMember(dest => dest.OrganizationIds,
-				opt => opt.MapFrom(src => src.OrganizationAssignments.Select(x => x.EducationMediumStageId).Distinct()))
+				opt => opt.Ignore())
 			.ForMember(dest => dest.Organizations,
-				opt => opt.MapFrom(src => src.OrganizationAssignments
-					.Where(x => x.EducationMediumStage != null)
-					.Select(x => new EmployeeOrganizationDto
-					{
-						Id = x.EducationMediumStageId,
-						Name = x.EducationMediumStage!.Name
-					})))
+				opt => opt.Ignore())
 			.ForMember(dest => dest.OrganizationNames,
-				opt => opt.MapFrom(src => src.OrganizationAssignments
-					.Where(x => x.EducationMediumStage != null)
-					.Select(x => x.EducationMediumStage!.Name)
-					.Distinct()));
+				opt => opt.Ignore());
 		CreateMap<CreateUpdateEmployeeDto, Employee>();
 
 		CreateMap<WorkExperience, WorkExperienceDto>();

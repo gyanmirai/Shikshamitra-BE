@@ -21,6 +21,7 @@ public class HrReportGenerator(
 	IRepository<PayrollRunItemSnapshot, Guid> payrollSnapshotRepository,
 	IUserScopeService userScopeService,
 	HrUserScopeAccessService hrScopeAccessService,
+	EmployeeOrganizationScopeResolver organizationScopeResolver,
 	ICurrentTenant currentTenant,
 	IAsyncQueryableExecuter asyncExecuter) : ITransientDependency
 {
@@ -279,7 +280,8 @@ public class HrReportGenerator(
 		}
 
 		var accessibleStageIds = await hrScopeAccessService.ResolveAccessibleStageIdsAsync(scope);
-		return query.Where(e => e.OrganizationAssignments.Any(a => accessibleStageIds.Contains(a.EducationMediumStageId)));
+		var matchingUserIds = await organizationScopeResolver.GetUserIdsWithAnyStageAsync(accessibleStageIds);
+		return query.Where(e => e.UserId.HasValue && matchingUserIds.Contains(e.UserId.Value));
 	}
 
 	private static IQueryable<Employee> ApplyEmployeeFilters(IQueryable<Employee> query, HrReportFilterDto filters)

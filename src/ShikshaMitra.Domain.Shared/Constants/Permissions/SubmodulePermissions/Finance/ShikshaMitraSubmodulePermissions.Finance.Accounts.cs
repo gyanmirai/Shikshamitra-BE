@@ -63,6 +63,44 @@ public static partial class ShikshaMitraSubmodulePermissions
 			};
 		}
 
+		public static class AuditTrail
+		{
+			private const string SubmoduleName = $"{ModuleName}.AuditTrail";
+			private const string SubmoduleDisplayName = $"{DisplayName}.AuditTrail";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+
+			public static readonly string[] All = { View, Add, Delete };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+			};
+		}
+
+		public static class Adjustments
+		{
+			private const string SubmoduleName = $"{ModuleName}.Adjustments";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Adjustments";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+
+			public static readonly string[] All = { View, Add, Delete };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+			};
+		}
+
 		public static class Accounts_Settings_IncomeCategory
 		{
 			private const string SubmoduleName = $"{ModuleName}.Accounts.Settings.IncomeCategory";

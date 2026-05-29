@@ -116,7 +116,6 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 		// AutoInclude ensures these are always loaded to prevent N+1 queries
 		builder.Navigation(e => e.Role).AutoInclude();
 		builder.Navigation(e => e.Shift).AutoInclude();
-		builder.Navigation(e => e.OrganizationAssignments).AutoInclude();
 		// Note: PayrollStructure is optional and might be large, so we don't auto-include it
 		// It can be included explicitly when needed using .Include() in queries
 		// Note: ReportingManager is not auto-included to avoid deep loading chains

@@ -12,6 +12,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.PersonalInfo;
+using ShikshaMitra.HR.Employees.ReportingManager;
 using ShikshaMitra.TenantSettings;
 using Shouldly;
 using Volo.Abp;
@@ -33,6 +34,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 	private readonly ILeaveTypeAppService _leaveTypeAppService;
 	private readonly ILeavePolicyAppService _leavePolicyAppService;
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
+	private readonly IReportingManagerAppService _reportingManagerAppService;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
 	private readonly IGuidGenerator _guidGenerator;
@@ -45,6 +47,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 		_leaveTypeAppService = GetRequiredService<ILeaveTypeAppService>();
 		_leavePolicyAppService = GetRequiredService<ILeavePolicyAppService>();
 		_personalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
+		_reportingManagerAppService = GetRequiredService<IReportingManagerAppService>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
 		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
@@ -333,6 +336,237 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 	}
 
 	[Fact]
+	public async Task CreateMyAsync_Should_Reject_When_Notice_Period_Is_Not_Met()
+	{
+		var shortNoticeDate = GetFutureBusinessDateBeforeMinimumNotice();
+		var academicYearId = Guid.Parse("00000000-0000-0000-0000-000000000024");
+		await SeedAcademicYearAsync(academicYearId, DateTime.Today.AddDays(-5), DateTime.Today.AddDays(30));
+		var employee = await CreateLinkedEmployeeAsync("notice.reject");
+		var policy = await CreateLeavePolicyAsync("NoticeReject", academicYearId);
+
+		using (_currentPrincipalAccessor.Change(BuildPrincipal(employee.UserId!.Value)))
+		{
+			var ex = await Should.ThrowAsync<BusinessException>(async () =>
+				await _leaveManagement.CreateMyAsync(
+					academicYearId,
+					new LeaveRequestCreateDto
+					{
+						LeavePolicyId = policy.Id,
+						StartDate = shortNoticeDate,
+						EndDate = shortNoticeDate,
+						Reason = "Short notice leave request"
+					}));
+
+			ex.Code.ShouldBe(HRErrorCodes.LeaveNoticePeriod);
+		}
+	}
+
+	[Fact]
+	public async Task CreateMyAsync_Should_Create_When_Notice_Period_Is_Met_And_Preserve_HalfDay()
+	{
+		var validLeaveDate = GetBusinessDateAtOrAfterMinimumNotice();
+		var academicYearId = Guid.Parse("00000000-0000-0000-0000-000000000025");
+		await SeedAcademicYearAsync(academicYearId, DateTime.Today.AddDays(-5), validLeaveDate.AddDays(5));
+		var employee = await CreateLinkedEmployeeAsync("notice.accept");
+		var policy = await CreateLeavePolicyAsync("NoticeAccept", academicYearId);
+
+		using (_currentPrincipalAccessor.Change(BuildPrincipal(employee.UserId!.Value)))
+		{
+			var result = await _leaveManagement.CreateMyAsync(
+				academicYearId,
+				new LeaveRequestCreateDto
+				{
+					LeavePolicyId = policy.Id,
+					StartDate = validLeaveDate,
+					EndDate = validLeaveDate,
+					HalfDay = true,
+					Reason = "Valid half-day notice request"
+				});
+
+			var persisted = await GetPersistedLeaveAsync(result.Id);
+
+			result.Id.ShouldNotBe(Guid.Empty);
+			result.PublicId.ShouldBeGreaterThan(0);
+			result.Status.ShouldBe("PENDING");
+			persisted.HalfDay.ShouldBeTrue();
+			persisted.EmployeeId.ShouldBe(employee.Id);
+		}
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Reject_Admin_Self_Create_When_Notice_Period_Is_Not_Met()
+	{
+		var shortNoticeDate = GetFutureBusinessDateBeforeMinimumNotice();
+		var academicYearId = Guid.Parse("00000000-0000-0000-0000-000000000026");
+		await SeedAcademicYearAsync(academicYearId, DateTime.Today.AddDays(-5), DateTime.Today.AddDays(30));
+		var admin = await CreateLinkedEmployeeAsync("admin.self.notice");
+		var policy = await CreateLeavePolicyAsync("AdminSelfNotice", academicYearId);
+
+		using (_currentPrincipalAccessor.Change(BuildPrincipal(admin.UserId!.Value, roles: ["admin"])))
+		{
+			var ex = await Should.ThrowAsync<BusinessException>(async () =>
+				await _leaveManagement.CreateAsync(
+					academicYearId,
+					new LeaveRequestCreateDto
+					{
+						LeavePolicyId = policy.Id,
+						StartDate = shortNoticeDate,
+						EndDate = shortNoticeDate,
+						Reason = "Admin self short-notice leave request"
+					}));
+
+			ex.Code.ShouldBe(HRErrorCodes.LeaveNoticePeriod);
+		}
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Reject_Admin_Explicit_Self_Target_When_Notice_Period_Is_Not_Met()
+	{
+		var shortNoticeDate = GetFutureBusinessDateBeforeMinimumNotice();
+		var academicYearId = Guid.Parse("00000000-0000-0000-0000-000000000027");
+		await SeedAcademicYearAsync(academicYearId, DateTime.Today.AddDays(-5), DateTime.Today.AddDays(30));
+		var admin = await CreateLinkedEmployeeAsync("admin.explicit.self.notice");
+		var policy = await CreateLeavePolicyAsync("AdminExplicitSelfNotice", academicYearId);
+
+		using (_currentPrincipalAccessor.Change(BuildPrincipal(admin.UserId!.Value, roles: ["admin"])))
+		{
+			var ex = await Should.ThrowAsync<BusinessException>(async () =>
+				await _leaveManagement.CreateAsync(
+					academicYearId,
+					new LeaveRequestCreateDto
+					{
+						ForEmployeeId = admin.Id,
+						LeavePolicyId = policy.Id,
+						StartDate = shortNoticeDate,
+						EndDate = shortNoticeDate,
+						Reason = "Admin explicit self short-notice leave request"
+					}));
+
+			ex.Code.ShouldBe(HRErrorCodes.LeaveNoticePeriod);
+		}
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Allow_Admin_OnBehalf_Past_Leave()
+	{
+		var pastLeaveDate = GetPastBusinessDate();
+		var academicYearId = Guid.Parse("00000000-0000-0000-0000-000000000028");
+		await SeedAcademicYearAsync(academicYearId, pastLeaveDate.AddDays(-5), DateTime.Today.AddDays(30));
+		var employee = await CreateLinkedEmployeeAsync("admin.past");
+		var policy = await CreateLeavePolicyAsync("AdminPast", academicYearId);
+
+		using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), roles: ["admin"])))
+		{
+			var result = await _leaveManagement.CreateAsync(
+				academicYearId,
+				new LeaveRequestCreateDto
+				{
+					ForEmployeeId = employee.Id,
+					LeavePolicyId = policy.Id,
+					StartDate = pastLeaveDate,
+					EndDate = pastLeaveDate,
+					Reason = "Admin past leave request"
+				});
+
+			var persisted = await GetPersistedLeaveAsync(result.Id);
+
+			result.Id.ShouldNotBe(Guid.Empty);
+			persisted.EmployeeId.ShouldBe(employee.Id);
+		}
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Allow_Linked_Admin_OnBehalf_Before_Notice_Period()
+	{
+		var shortNoticeDate = GetFutureBusinessDateBeforeMinimumNotice();
+		var academicYearId = Guid.Parse("00000000-0000-0000-0000-000000000029");
+		await SeedAcademicYearAsync(academicYearId, DateTime.Today.AddDays(-5), DateTime.Today.AddDays(30));
+		var admin = await CreateLinkedEmployeeAsync("linked.admin.notice");
+		var employee = await CreateLinkedEmployeeAsync("linked.admin.target.notice");
+		var policy = await CreateLeavePolicyAsync("LinkedAdminNotice", academicYearId);
+
+		using (_currentPrincipalAccessor.Change(BuildPrincipal(admin.UserId!.Value, roles: ["admin"])))
+		{
+			var result = await _leaveManagement.CreateAsync(
+				academicYearId,
+				new LeaveRequestCreateDto
+				{
+					ForEmployeeId = employee.Id,
+					LeavePolicyId = policy.Id,
+					StartDate = shortNoticeDate,
+					EndDate = shortNoticeDate,
+					Reason = "Linked admin short-notice on-behalf leave request"
+				});
+
+			var persisted = await GetPersistedLeaveAsync(result.Id);
+
+			result.Id.ShouldNotBe(Guid.Empty);
+			persisted.EmployeeId.ShouldBe(employee.Id);
+		}
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Allow_Reporting_Manager_OnBehalf_Before_Notice_Period()
+	{
+		var shortNoticeDate = GetFutureBusinessDateBeforeMinimumNotice();
+		var academicYearId = Guid.Parse("00000000-0000-0000-0000-000000000030");
+		await SeedAcademicYearAsync(academicYearId, DateTime.Today.AddDays(-5), DateTime.Today.AddDays(30));
+		var manager = await CreateLinkedEmployeeAsync("manager.notice");
+		var employee = await CreateLinkedEmployeeAsync("reportee.notice");
+		var policy = await CreateLeavePolicyAsync("ManagerNotice", academicYearId);
+		await _reportingManagerAppService.AssignReportingManagerAsync(
+			employee.Id,
+			new AssignReportingManagerDto { ReportingManagerId = manager.Id });
+
+		using (_currentPrincipalAccessor.Change(BuildPrincipal(manager.UserId!.Value)))
+		{
+			var result = await _leaveManagement.CreateAsync(
+				academicYearId,
+				new LeaveRequestCreateDto
+				{
+					ForEmployeeId = employee.Id,
+					LeavePolicyId = policy.Id,
+					StartDate = shortNoticeDate,
+					EndDate = shortNoticeDate,
+					Reason = "Manager short-notice leave request"
+				});
+
+			var persisted = await GetPersistedLeaveAsync(result.Id);
+
+			result.Id.ShouldNotBe(Guid.Empty);
+			persisted.EmployeeId.ShouldBe(employee.Id);
+		}
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Reject_Unrelated_Employee_OnBehalf_Request()
+	{
+		var shortNoticeDate = GetFutureBusinessDateBeforeMinimumNotice();
+		var academicYearId = Guid.Parse("00000000-0000-0000-0000-000000000031");
+		await SeedAcademicYearAsync(academicYearId, DateTime.Today.AddDays(-5), DateTime.Today.AddDays(30));
+		var actor = await CreateLinkedEmployeeAsync("actor.unrelated");
+		var employee = await CreateLinkedEmployeeAsync("target.unrelated");
+		var policy = await CreateLeavePolicyAsync("UnrelatedTarget", academicYearId);
+
+		using (_currentPrincipalAccessor.Change(BuildPrincipal(actor.UserId!.Value)))
+		{
+			var ex = await Should.ThrowAsync<BusinessException>(async () =>
+				await _leaveManagement.CreateAsync(
+					academicYearId,
+					new LeaveRequestCreateDto
+					{
+						ForEmployeeId = employee.Id,
+						LeavePolicyId = policy.Id,
+						StartDate = shortNoticeDate,
+						EndDate = shortNoticeDate,
+						Reason = "Unrelated on-behalf leave request"
+					}));
+
+			ex.Code.ShouldBe(HRErrorCodes.LeaveApproverNotInReportingChain);
+		}
+	}
+
+	[Fact]
 	public void IsValidStatusTransition_Cancelled_Should_Be_Valid_From_Pending()
 	{
 		var leave = EmployeeLeave.Create(
@@ -410,11 +644,12 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 		});
 	}
 
-	private async Task<LeavePolicyResponse> CreateLeavePolicyAsync(string prefix)
+	private async Task<LeavePolicyResponse> CreateLeavePolicyAsync(string prefix, Guid? academicYearId = null)
 	{
 		var uniq = Guid.NewGuid().ToString("N")[..8];
+		var targetAcademicYearId = academicYearId ?? TestAcademicYearId;
 		var leaveType = await _leaveTypeAppService.CreateLeaveTypeAsync(
-			TestAcademicYearId,
+			targetAcademicYearId,
 			new LeaveTypeCreateRequest
 			{
 				Name = $"{prefix} Type {uniq}",
@@ -422,7 +657,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 			});
 
 		return await _leavePolicyAppService.CreateLeavePolicyAsync(
-			TestAcademicYearId,
+			targetAcademicYearId,
 			new LeavePolicyCreateRequest
 			{
 				PolicyTitle = $"{prefix} Policy {uniq}",
@@ -437,10 +672,70 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 			});
 	}
 
+	private async Task SeedAcademicYearAsync(Guid academicYearId, DateTime startDate, DateTime endDate)
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var dbContext = ServiceProvider.GetRequiredService<ShikshaMitraDbContext>();
+			var now = DateTime.UtcNow;
+			await dbContext.Database.ExecuteSqlRawAsync(
+				"INSERT OR IGNORE INTO AppAcademicYears (Id, Name, StartDate, EndDate, IsDeleted, ConcurrencyStamp, ExtraProperties, CreationTime) VALUES ({0}, {1}, {2}, {3}, 0, {4}, {5}, {6})",
+				academicYearId,
+				$"Notice Test Year {academicYearId:N}",
+				startDate.Date,
+				endDate.Date,
+				Guid.NewGuid().ToString(),
+				"{}",
+				now);
+		});
+	}
+
+	private async Task<EmployeeLeave> GetPersistedLeaveAsync(Guid leaveId)
+	{
+		var dbContext = ServiceProvider.GetRequiredService<ShikshaMitraDbContext>();
+		return await dbContext.Set<EmployeeLeave>()
+			.IgnoreQueryFilters()
+			.FirstAsync(x => x.Id == leaveId);
+	}
+
+	private static DateTime GetFutureBusinessDateBeforeMinimumNotice()
+	{
+		var candidate = DateTime.Today.AddDays(1);
+		if (candidate.DayOfWeek == DayOfWeek.Sunday)
+		{
+			candidate = DateTime.Today;
+		}
+
+		return candidate;
+	}
+
+	private static DateTime GetBusinessDateAtOrAfterMinimumNotice()
+	{
+		var candidate = DateTime.Today.AddDays(2);
+		while (candidate.DayOfWeek == DayOfWeek.Sunday)
+		{
+			candidate = candidate.AddDays(1);
+		}
+
+		return candidate;
+	}
+
+	private static DateTime GetPastBusinessDate()
+	{
+		var candidate = DateTime.Today.AddDays(-1);
+		while (candidate.DayOfWeek == DayOfWeek.Sunday)
+		{
+			candidate = candidate.AddDays(-1);
+		}
+
+		return candidate;
+	}
+
 	private ClaimsPrincipal BuildPrincipal(
 		Guid userId,
 		string? userName = null,
-		string? email = null)
+		string? email = null,
+		string[]? roles = null)
 	{
 		var claims = new List<Claim>
 		{
@@ -449,6 +744,11 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 			new(AbpClaimTypes.Email, email ?? $"user-{userId:N}@test.local"),
 			new(AbpClaimTypes.TenantId, (_currentTenant.Id ?? Guid.Empty).ToString())
 		};
+		foreach (var role in roles ?? [])
+		{
+			claims.Add(new Claim(AbpClaimTypes.Role, role));
+			claims.Add(new Claim(ClaimTypes.Role, role));
+		}
 
 		return new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
 	}

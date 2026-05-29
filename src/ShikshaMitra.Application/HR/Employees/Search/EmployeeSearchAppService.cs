@@ -13,7 +13,8 @@ namespace ShikshaMitra.HR.Employees.Search;
 [RemoteService(false)]
 [Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 public class EmployeeSearchAppService(
-	IEmployeeRepository employeeRepository)
+	IEmployeeRepository employeeRepository,
+	EmployeeOrganizationScopeResolver organizationScopeResolver)
 	: ApplicationService, IEmployeeSearchAppService
 {
 	public async Task<EmployeeListResponse> GetFilteredListAsync(GetEmployeeListInput input)
@@ -48,8 +49,8 @@ public class EmployeeSearchAppService(
 
 		if (input.MediumStageId.HasValue)
 		{
-			queryable = queryable.Where(e =>
-				e.OrganizationAssignments.Any(x => x.EducationMediumStageId == input.MediumStageId.Value));
+			var matchingUserIds = await organizationScopeResolver.GetUserIdsWithAnyStageAsync([input.MediumStageId.Value]);
+			queryable = queryable.Where(e => e.UserId.HasValue && matchingUserIds.Contains(e.UserId.Value));
 		}
 
 		if (!string.IsNullOrWhiteSpace(input.Designation))
@@ -66,12 +67,14 @@ public class EmployeeSearchAppService(
 
 		var employees = await AsyncExecuter.ToListAsync(
 			queryable.Skip(input.SkipCount).Take(input.MaxResultCount));
+		var organizationsByUserId = await organizationScopeResolver.GetOrganizationsByUserIdsAsync(
+			employees.Select(x => x.UserId));
 
 		var pageSize = input.MaxResultCount > 0 ? input.MaxResultCount : 10;
 		var currentPage = (input.SkipCount / pageSize) + 1;
 		var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
-		var items = employees.Select(MapToEmployeeSummary).ToList();
+		var items = employees.Select(employee => MapToEmployeeSummary(employee, organizationsByUserId)).ToList();
 
 		return new EmployeeListResponse
 		{
@@ -165,8 +168,15 @@ public class EmployeeSearchAppService(
 			(e.Designation != null && e.Designation.ToLower().Contains(searchTerm)));
 	}
 
-	private static EmployeeSummary MapToEmployeeSummary(Employee employee)
+	private static EmployeeSummary MapToEmployeeSummary(
+		Employee employee,
+		IReadOnlyDictionary<Guid, List<EmployeeOrganizationDto>> organizationsByUserId)
 	{
+		var organizations = employee.UserId.HasValue &&
+			organizationsByUserId.TryGetValue(employee.UserId.Value, out var scopedOrganizations)
+				? scopedOrganizations
+				: [];
+
 		return new EmployeeSummary
 		{
 			Id = employee.Id,
@@ -192,18 +202,9 @@ public class EmployeeSearchAppService(
 				StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"),
 				EndTime = employee.Shift.EndTime.ToString("HH:mm:ss")
 			} : null,
-			Organizations = employee.OrganizationAssignments
-				.Where(x => x.EducationMediumStage != null)
-				.Select(x => new EmployeeOrganizationDto
-				{
-					Id = x.EducationMediumStageId,
-					Name = x.EducationMediumStage!.Name
-				})
-				.OrderBy(x => x.Name)
-				.ToList(),
-			OrganizationNames = employee.OrganizationAssignments
-				.Where(x => x.EducationMediumStage != null)
-				.Select(x => x.EducationMediumStage!.Name)
+			Organizations = organizations,
+			OrganizationNames = organizations
+				.Select(x => x.Name)
 				.Distinct()
 				.OrderBy(x => x)
 				.ToList(),

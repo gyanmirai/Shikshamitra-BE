@@ -18,13 +18,6 @@ public class CreateEmployeePersonalInfoDtoValidator : AbstractValidator<CreateEm
 			.EmailAddress().WithMessage("Invalid email address format.");
 		RuleFor(x => x.ShiftId).Must(s => s.HasValue && s.Value != Guid.Empty)
 			.WithMessage("Shift is required.");
-		RuleFor(x => x.OrganizationIds)
-			.NotEmpty()
-			.WithMessage("At least one organization is required.");
-		RuleForEach(x => x.OrganizationIds)
-			.NotEmpty()
-			.WithMessage("Organization is required.");
-
 		RuleFor(x => x.SecondaryMobileNo)
 			.Must((dto, secondary) => string.IsNullOrWhiteSpace(secondary) ||
 				NormalizeDigits(dto.MobileNo) != NormalizeDigits(secondary))

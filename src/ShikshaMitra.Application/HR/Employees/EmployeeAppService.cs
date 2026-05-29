@@ -39,7 +39,8 @@ public class EmployeeAppService(
 	IdentityUserManager userManager,
 	IIdentityUserRepository userRepository,
 	ILookupNormalizer lookupNormalizer,
-	IEmployeeEmailService emailService) :
+	IEmployeeEmailService emailService,
+	EmployeeOrganizationScopeResolver organizationScopeResolver) :
 	CrudAppService<Employee, EmployeeDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateEmployeeDto>(
 	employeeRepository),
 	IEmployeeAppService
@@ -50,7 +51,9 @@ public class EmployeeAppService(
 		Employee employee = await employeeRepository.GetEmployeeByUserIdAsync(userId)
 			?? throw new EntityNotFoundException(typeof(Employee), userId);
 
-		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
+		var dto = ObjectMapper.Map<Employee, EmployeeDto>(employee);
+		await PopulateScopedOrganizationsAsync(dto, employee.UserId);
+		return dto;
 	}
 
 	public override async Task<EmployeeDto> GetAsync(Guid id)
@@ -60,11 +63,28 @@ public class EmployeeAppService(
 			?? throw new EntityNotFoundException(typeof(Employee), id);
 
 		var employeeDto = ObjectMapper.Map<Employee, EmployeeDto>(employee);
+		await PopulateScopedOrganizationsAsync(employeeDto, employee.UserId);
 
 		// Load family members from separate table
 		await LoadFamilyMembersAsync(employeeDto, id);
 
 		return employeeDto;
+	}
+
+	private async Task PopulateScopedOrganizationsAsync(EmployeeDto dto, Guid? userId)
+	{
+		var organizationsByUserId = await organizationScopeResolver.GetOrganizationsByUserIdsAsync([userId]);
+		var organizations = userId.HasValue && organizationsByUserId.TryGetValue(userId.Value, out var scopedOrganizations)
+			? scopedOrganizations
+			: [];
+
+		dto.OrganizationIds = organizations.Select(x => x.Id).ToList();
+		dto.Organizations = organizations;
+		dto.OrganizationNames = organizations
+			.Select(x => x.Name)
+			.Distinct()
+			.OrderBy(x => x)
+			.ToList();
 	}
 
 	private async Task LoadFamilyMembersAsync(EmployeeDto employeeDto, Guid employeeId)
@@ -913,8 +933,8 @@ public class EmployeeAppService(
 
 		if (input.MediumStageId.HasValue)
 		{
-			queryable = queryable.Where(e =>
-				e.OrganizationAssignments.Any(x => x.EducationMediumStageId == input.MediumStageId.Value));
+			var matchingUserIds = await organizationScopeResolver.GetUserIdsWithAnyStageAsync([input.MediumStageId.Value]);
+			queryable = queryable.Where(e => e.UserId.HasValue && matchingUserIds.Contains(e.UserId.Value));
 		}
 
 		if (!string.IsNullOrWhiteSpace(input.Designation))
@@ -937,6 +957,8 @@ public class EmployeeAppService(
 				.Skip(input.SkipCount)
 				.Take(input.MaxResultCount)
 		);
+		var organizationsByUserId = await organizationScopeResolver.GetOrganizationsByUserIdsAsync(
+			employees.Select(x => x.UserId));
 
 		// Calculate pagination info
 		var pageSize = input.MaxResultCount > 0 ? input.MaxResultCount : 10;
@@ -944,7 +966,7 @@ public class EmployeeAppService(
 		var totalPages = (int) Math.Ceiling((double) totalCount / pageSize);
 
 		// Map to response DTOs
-		var items = employees.Select(MapToEmployeeSummary).ToList();
+		var items = employees.Select(employee => MapToEmployeeSummary(employee, organizationsByUserId)).ToList();
 
 		return new EmployeeListResponse
 		{
@@ -976,8 +998,15 @@ public class EmployeeAppService(
 		);
 	}
 
-	private EmployeeSummary MapToEmployeeSummary(Employee employee)
+	private EmployeeSummary MapToEmployeeSummary(
+		Employee employee,
+		IReadOnlyDictionary<Guid, List<EmployeeOrganizationDto>> organizationsByUserId)
 	{
+		var organizations = employee.UserId.HasValue &&
+			organizationsByUserId.TryGetValue(employee.UserId.Value, out var scopedOrganizations)
+				? scopedOrganizations
+				: [];
+
 		return new EmployeeSummary
 		{
 			Id = employee.Id,
@@ -1002,18 +1031,9 @@ public class EmployeeAppService(
 				StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"),
 				EndTime = employee.Shift.EndTime.ToString("HH:mm:ss")
 			} : null,
-			Organizations = employee.OrganizationAssignments
-				.Where(x => x.EducationMediumStage != null)
-				.Select(x => new EmployeeOrganizationDto
-				{
-					Id = x.EducationMediumStageId,
-					Name = x.EducationMediumStage!.Name
-				})
-				.OrderBy(x => x.Name)
-				.ToList(),
-			OrganizationNames = employee.OrganizationAssignments
-				.Where(x => x.EducationMediumStage != null)
-				.Select(x => x.EducationMediumStage!.Name)
+			Organizations = organizations,
+			OrganizationNames = organizations
+				.Select(x => x.Name)
 				.Distinct()
 				.OrderBy(x => x)
 				.ToList(),

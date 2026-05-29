@@ -104,6 +104,7 @@ public class LeaveValidationService : DomainService
 		DateTime endDate,
 		bool halfDay = false,
 		Guid? academicYearId = null,
+		bool enforceEmployeeTimingRules = true,
 		Guid? excludeLeaveId = null)
 	{
 		// 1. Validate date range
@@ -114,7 +115,7 @@ public class LeaveValidationService : DomainService
 
 		EnsureValidHalfDayRange(startDate, endDate, halfDay);
 
-		if (startDate.Date < DateTime.Today)
+		if (enforceEmployeeTimingRules && startDate.Date < DateTime.Today)
 		{
 			throw new BusinessException(HRErrorCodes.LeavePastDate);
 		}
@@ -170,7 +171,7 @@ public class LeaveValidationService : DomainService
 		const int minimumNoticeDays = 2;
 		var daysDifference = (startDate - DateTime.Today).Days;
 
-		if (daysDifference < minimumNoticeDays)
+		if (enforceEmployeeTimingRules && daysDifference < minimumNoticeDays)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveNoticePeriod);
 		}

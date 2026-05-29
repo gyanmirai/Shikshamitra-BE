@@ -10,6 +10,7 @@ using ShikshaMitra.HR;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings;
 using Volo.Abp;
@@ -23,6 +24,8 @@ public class TakeAttendanceAppService(
 	IRepository<Employee, Guid> employeeRepository,
 	IEmployeeAttendanceRepository employeeAttendanceRepository,
 	IStaffAttendanceDayLockRepository staffAttendanceDayLockRepository,
+	IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
+	IRepository<PayrollRunReview, Guid> payrollRunReviewRepository,
 	IUserScopeService userScopeService,
 	HrUserScopeAccessService hrScopeAccessService,
 	IRepository<ShiftManagement, Guid> shiftRepository)
@@ -43,8 +46,13 @@ public class TakeAttendanceAppService(
 		var locked = await staffAttendanceDayLockRepository.FindAsync(dateOnly);
 
 		var empQuery = await employeeRepository.GetQueryableAsync();
-		empQuery = empQuery.Where(e => e.EmployeeStatusType == EmployeeStatusType.Active);
 		var attendanceDateEndExclusive = date.Date.AddDays(1);
+		var attendanceDateEndExclusiveOffset = new DateTimeOffset(attendanceDateEndExclusive, TimeSpan.Zero);
+		empQuery = empQuery.Where(e =>
+			e.EmployeeStatusType == EmployeeStatusType.Active ||
+			(e.EmployeeStatusType == EmployeeStatusType.Left &&
+			 e.StatusLastChangedAt.HasValue &&
+			 e.StatusLastChangedAt.Value >= attendanceDateEndExclusiveOffset));
 		empQuery = empQuery.Where(e =>
 			(e.DateOfJoining.HasValue && e.DateOfJoining.Value <= dateOnly) ||
 			(!e.DateOfJoining.HasValue && e.CreationTime < attendanceDateEndExclusive));
@@ -255,6 +263,10 @@ public class TakeAttendanceAppService(
 			await UnitOfWorkManager.Current.SaveChangesAsync();
 		}
 
+		await InvalidatePayrollSnapshotsAsync(
+			dateOnly,
+			requestedEmployeeIds);
+
 		return new TakeAttendanceSaveOutput { UpsertedCount = upserted };
 	}
 
@@ -453,7 +465,7 @@ public class TakeAttendanceAppService(
 		var effectiveStartDate = employee.DateOfJoining
 			?? DateOnly.FromDateTime(employee.CreationTime.Date);
 
-		if (effectiveStartDate <= attendanceDate)
+		if (effectiveStartDate <= attendanceDate && IsEmployeeAttendanceEligibleOnDate(employee, attendanceDate))
 		{
 			return;
 		}
@@ -462,6 +474,82 @@ public class TakeAttendanceAppService(
 			.WithData("employeeId", employee.Id)
 			.WithData("attendanceDate", attendanceDate)
 			.WithData("effectiveStartDate", effectiveStartDate);
+	}
+
+	private static bool IsEmployeeAttendanceEligibleOnDate(Employee employee, DateOnly attendanceDate)
+	{
+		if (employee.EmployeeStatusType == EmployeeStatusType.Active)
+		{
+			return true;
+		}
+
+		if (employee.EmployeeStatusType != EmployeeStatusType.Left || !employee.StatusLastChangedAt.HasValue)
+		{
+			return false;
+		}
+
+		return attendanceDate < DateOnly.FromDateTime(employee.StatusLastChangedAt.Value.Date);
+	}
+
+	private async Task InvalidatePayrollSnapshotsAsync(
+		DateOnly attendanceDate,
+		IReadOnlyCollection<Guid> employeeIds)
+	{
+		if (employeeIds.Count == 0)
+		{
+			return;
+		}
+
+		var monthYear = attendanceDate.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+		var snapshotQuery = await payrollRunItemSnapshotRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			snapshotQuery = snapshotQuery.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+		else
+		{
+			snapshotQuery = snapshotQuery.Where(x => x.TenantId == null);
+		}
+
+		var snapshots = await AsyncExecuter.ToListAsync(snapshotQuery.Where(x =>
+			x.MonthYear == monthYear &&
+			employeeIds.Contains(x.EmployeeId) &&
+			!x.IsLocked &&
+			x.ReviewStatus != "REVIEWED"));
+		if (snapshots.Count == 0)
+		{
+			return;
+		}
+
+		var invalidatedEmployeeIds = snapshots.Select(x => x.EmployeeId).Distinct().ToList();
+		var autoSave = UnitOfWorkManager.Current == null;
+		foreach (var snapshot in snapshots)
+		{
+			await payrollRunItemSnapshotRepository.DeleteAsync(snapshot, autoSave);
+		}
+
+		var reviewQuery = await payrollRunReviewRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			reviewQuery = reviewQuery.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+		else
+		{
+			reviewQuery = reviewQuery.Where(x => x.TenantId == null);
+		}
+
+		var reviews = await AsyncExecuter.ToListAsync(reviewQuery.Where(x =>
+			x.MonthYear == monthYear &&
+			invalidatedEmployeeIds.Contains(x.EmployeeId)));
+		foreach (var review in reviews)
+		{
+			await payrollRunReviewRepository.DeleteAsync(review, autoSave);
+		}
+
+		if (!autoSave && UnitOfWorkManager.Current != null)
+		{
+			await UnitOfWorkManager.Current.SaveChangesAsync();
+		}
 	}
 
 	private static DateTime ParseDate(string dateString)

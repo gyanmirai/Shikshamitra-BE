@@ -261,6 +261,7 @@ public class LeaveManagementAppService(
 			LeaveTypeId = input.LeaveTypeId,
 			StartDate = input.StartDate,
 			EndDate = input.EndDate,
+			HalfDay = input.HalfDay,
 			Reason = input.Reason
 		};
 		return await CreateAsync(academicYearId, selfRequest, attachment);
@@ -294,6 +295,10 @@ public class LeaveManagementAppService(
 			?? throw new BusinessException(HRErrorCodes.LeaveTargetEmployeeRequired);
 
 		await EnsureMayCreateLeaveOnBehalfAsync(targetEmployeeId, actorContext);
+		var isExplicitOnBehalfRequest = input.ForEmployeeId.HasValue &&
+		                                (!actorContext.ActorEmployeeId.HasValue ||
+		                                 input.ForEmployeeId.Value != actorContext.ActorEmployeeId.Value);
+		var enforceEmployeeTimingRules = !isExplicitOnBehalfRequest;
 
 		var targetEmployee = await employeeRepository.FindAsync(targetEmployeeId)
 			?? throw new EntityNotFoundException(typeof(Employee), targetEmployeeId);
@@ -304,7 +309,13 @@ public class LeaveManagementAppService(
 		}
 
 		var resolvedPolicyId = await leaveValidationService.ValidateLeaveRequestAsync(
-			targetEmployee.Id, policyId, input.StartDate, input.EndDate, input.HalfDay, academicYearId);
+			targetEmployee.Id,
+			policyId,
+			input.StartDate,
+			input.EndDate,
+			input.HalfDay,
+			academicYearId,
+			enforceEmployeeTimingRules);
 
 		byte[]? attachmentBytes = await ExtractAttachmentBytesAsync(attachment);
 

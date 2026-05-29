@@ -41,9 +41,7 @@ public class EmployeePersonalInfoAppService(
 	IEmployeeEmailService emailService,
 	IDistributedEventBus distributedEventBus,
 	IHrPolicyAssignmentAppService policyAssignmentAppService,
-	IRepository<EmployeeOrganizationAssignment, Guid> employeeOrganizationAssignmentRepository,
-	IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
-	IDataFilter<IMultiTenant> multiTenantDataFilter,
+	EmployeeOrganizationScopeResolver organizationScopeResolver,
 	ILogger<EmployeePersonalInfoAppService> logger)
 	: ApplicationService, IEmployeePersonalInfoAppService
 {
@@ -69,8 +67,6 @@ public class EmployeePersonalInfoAppService(
 		string? profilePictureFileName,
 		byte[]? profilePictureContent)
 	{
-		var organizationIds = await ValidateOrganizationIdsAsync(input.OrganizationIds);
-
 		if (string.IsNullOrWhiteSpace(input.Email))
 			throw new BusinessException(HRErrorCodes.EmployeeEmailRequired);
 
@@ -107,7 +103,7 @@ public class EmployeePersonalInfoAppService(
 		Employee employee;
 		try
 		{
-			employee = await CreateAndInsertEmployeeWithRetryAsync(user.Id, input, organizationIds);
+			employee = await CreateAndInsertEmployeeWithRetryAsync(user.Id, input);
 		}
 		catch
 		{
@@ -147,13 +143,12 @@ public class EmployeePersonalInfoAppService(
 		var fullName = $"{input.FirstName} {input.LastName}".Trim();
 		await emailService.SendWelcomeEmailAsync(input.Email, fullName, username, password);
 
-		return MapToDto(await employeeRepository.GetAsync(employee.Id));
+		return await MapToDtoWithScopedOrganizationsAsync(await employeeRepository.GetAsync(employee.Id));
 	}
 
 	private async Task<Employee> CreateAndInsertEmployeeWithRetryAsync(
 		Guid userId,
-		CreateEmployeePersonalInfoDto input,
-		IReadOnlyCollection<Guid> organizationIds)
+		CreateEmployeePersonalInfoDto input)
 	{
 		for (var attempt = 1; attempt <= MaxEmployeeCodeInsertAttempts; attempt++)
 		{
@@ -179,7 +174,6 @@ public class EmployeePersonalInfoAppService(
 					shiftId: input.ShiftId);
 
 				employee = await employeeRepository.InsertAsync(employee, autoSave: true);
-				await ReplaceOrganizationAssignmentsAsync(employee.Id, organizationIds);
 				if (input.PolicyOverride != null)
 				{
 					await CreateDirectPolicyOverrideAsync(employee.Id, input.PolicyOverride);
@@ -216,51 +210,6 @@ public class EmployeePersonalInfoAppService(
 		});
 	}
 
-	private async Task<List<Guid>> ValidateOrganizationIdsAsync(IEnumerable<Guid>? organizationIds)
-	{
-		var distinctIds = (organizationIds ?? [])
-			.Where(id => id != Guid.Empty)
-			.Distinct()
-			.ToList();
-		if (distinctIds.Count == 0)
-		{
-			throw new BusinessException(HRErrorCodes.EmployeeOrganizationRequired);
-		}
-
-		using var _ = CurrentTenant.Id == null ? multiTenantDataFilter.Disable() : null;
-		var query = await educationMediumStageRepository.GetQueryableAsync();
-		var existingIds = await AsyncExecuter.ToListAsync(
-			query.Where(x => distinctIds.Contains(x.Id)).Select(x => x.Id));
-
-		if (existingIds.Count != distinctIds.Count)
-		{
-			throw new BusinessException(HRErrorCodes.EmployeeOrganizationInvalid);
-		}
-
-		return distinctIds;
-	}
-
-	private async Task ReplaceOrganizationAssignmentsAsync(
-		Guid employeeId,
-		IReadOnlyCollection<Guid> organizationIds)
-	{
-		var existing = await employeeOrganizationAssignmentRepository.GetListAsync(x => x.EmployeeId == employeeId);
-		if (existing.Count > 0)
-		{
-			await employeeOrganizationAssignmentRepository.DeleteManyAsync(existing, autoSave: false);
-		}
-
-		var assignments = organizationIds
-			.Select(id => new EmployeeOrganizationAssignment(
-				guidGenerator.Create(),
-				CurrentTenant.Id,
-				employeeId,
-				id))
-			.ToList();
-
-		await employeeOrganizationAssignmentRepository.InsertManyAsync(assignments, autoSave: false);
-	}
-
 	private static bool IsEmployeeCodeUniqueConstraintViolation(Exception exception)
 	{
 		for (var current = exception; current != null; current = current.InnerException)
@@ -283,12 +232,11 @@ public class EmployeePersonalInfoAppService(
 	{
 		// Repository.GetAsync throws EntityNotFoundException if not found
 		var employee = await employeeRepository.GetAsync(id);
-		return MapToDto(employee);
+		return await MapToDtoWithScopedOrganizationsAsync(employee);
 	}
 
 	public async Task<EmployeePersonalInfoDto> UpdateAsync(Guid id, UpdateEmployeePersonalInfoDto input)
 	{
-		var organizationIds = await ValidateOrganizationIdsAsync(input.OrganizationIds);
 		var existingEmployee = await employeeRepository.GetAsync(id);
 
 		// Update employee using EmployeeManager
@@ -328,10 +276,9 @@ public class EmployeePersonalInfoAppService(
 
 		// Save the updated employee
 		employee = await employeeRepository.UpdateAsync(employee);
-		await ReplaceOrganizationAssignmentsAsync(employee.Id, organizationIds);
 
 		// Return the mapped DTO
-		return MapToDto(await employeeRepository.GetAsync(employee.Id));
+		return await MapToDtoWithScopedOrganizationsAsync(await employeeRepository.GetAsync(employee.Id));
 	}
 
 	public async Task<EmployeeDto> GetByUserIdAsync(Guid userId)
@@ -339,7 +286,9 @@ public class EmployeePersonalInfoAppService(
 		var employee = await employeeRepository.GetEmployeeByUserIdAsync(userId)
 			?? throw new EntityNotFoundException(typeof(Employee), userId);
 
-		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
+		var dto = ObjectMapper.Map<Employee, EmployeeDto>(employee);
+		await PopulateScopedOrganizationsAsync(dto, employee.UserId);
+		return dto;
 	}
 
 	public async Task<EmployeeDto> GetWithDetailsAsync(Guid id)
@@ -358,6 +307,7 @@ public class EmployeePersonalInfoAppService(
 		employeeDto.MotherDetails = MapFamilyMemberToContactDetailsDto(mother);
 		employeeDto.SpouseDetails = MapFamilyMemberToContactDetailsDto(spouse);
 
+		await PopulateScopedOrganizationsAsync(employeeDto, employee.UserId);
 		return employeeDto;
 	}
 
@@ -431,26 +381,51 @@ public class EmployeePersonalInfoAppService(
 			Pincode = employee.PinCode,
 			ShiftId = employee.ShiftId,
 			Shift = null, // Navigation property not included in API contract
-			OrganizationIds = employee.OrganizationAssignments
-				.Select(x => x.EducationMediumStageId)
-				.Distinct()
-				.ToList(),
-			Organizations = employee.OrganizationAssignments
-				.Where(x => x.EducationMediumStage != null)
-				.Select(x => new EmployeeOrganizationDto
-				{
-					Id = x.EducationMediumStageId,
-					Name = x.EducationMediumStage!.Name
-				})
-				.OrderBy(x => x.Name)
-				.ToList(),
-			OrganizationNames = employee.OrganizationAssignments
-				.Where(x => x.EducationMediumStage != null)
-				.Select(x => x.EducationMediumStage!.Name)
-				.Distinct()
-				.OrderBy(x => x)
-				.ToList()
+			OrganizationIds = [],
+			Organizations = [],
+			OrganizationNames = []
 		};
+	}
+
+	private async Task<EmployeePersonalInfoDto> MapToDtoWithScopedOrganizationsAsync(Employee employee)
+	{
+		var dto = MapToDto(employee);
+		await PopulateScopedOrganizationsAsync(dto, employee.UserId);
+		return dto;
+	}
+
+	private async Task PopulateScopedOrganizationsAsync(EmployeePersonalInfoDto dto, Guid? userId)
+	{
+		var organizations = await ResolveScopedOrganizationsAsync(userId);
+
+		dto.OrganizationIds = organizations.Select(x => x.Id).ToList();
+		dto.Organizations = organizations;
+		dto.OrganizationNames = organizations
+			.Select(x => x.Name)
+			.Distinct()
+			.OrderBy(x => x)
+			.ToList();
+	}
+
+	private async Task PopulateScopedOrganizationsAsync(EmployeeDto dto, Guid? userId)
+	{
+		var organizations = await ResolveScopedOrganizationsAsync(userId);
+
+		dto.OrganizationIds = organizations.Select(x => x.Id).ToList();
+		dto.Organizations = organizations;
+		dto.OrganizationNames = organizations
+			.Select(x => x.Name)
+			.Distinct()
+			.OrderBy(x => x)
+			.ToList();
+	}
+
+	private async Task<List<EmployeeOrganizationDto>> ResolveScopedOrganizationsAsync(Guid? userId)
+	{
+		var organizationsByUserId = await organizationScopeResolver.GetOrganizationsByUserIdsAsync([userId]);
+		return userId.HasValue && organizationsByUserId.TryGetValue(userId.Value, out var scopedOrganizations)
+			? scopedOrganizations
+			: [];
 	}
 
 	private async Task<string> GenerateUniqueUsernameAsync(string firstName, string lastName)

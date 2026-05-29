@@ -154,7 +154,9 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 				.Where(x => scopedEmployeeIds.Contains(x.EmployeeId))
 				.OrderBy(x => x.EmployeeName)
 				.ToList();
-			if (input.ForceRefresh || inScopeSnapshots.Count < scopedEmployees.Count)
+			if (input.ForceRefresh ||
+			    inScopeSnapshots.Count < scopedEmployees.Count ||
+			    await HaveAttendanceChangesAfterSnapshotsAsync(internalMonthYear, year, month, scopedEmployeeIds, inScopeSnapshots))
 			{
 				await RefreshSnapshotsAsync(internalMonthYear, year, month, scopedEmployees, preserveReviewedSnapshots: false);
 				persistedSnapshots = await GetSnapshotsByMonthAsync(internalMonthYear);
@@ -213,15 +215,24 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 
 		var snapshots = (await GetSnapshotsByMonthAsync(internalMonthYear))
 			.Where(x => scopedEmployeeIds.Contains(x.EmployeeId))
-			.Select(MapSnapshotToItem)
 			.ToList();
+		if (snapshots.Count < scopedEmployees.Count ||
+		    await HaveAttendanceChangesAfterSnapshotsAsync(internalMonthYear, year, monthNumber, scopedEmployeeIds, snapshots))
+		{
+			await RefreshSnapshotsAsync(internalMonthYear, year, monthNumber, scopedEmployees, preserveReviewedSnapshots: false);
+			snapshots = (await GetSnapshotsByMonthAsync(internalMonthYear))
+				.Where(x => scopedEmployeeIds.Contains(x.EmployeeId))
+				.ToList();
+		}
+
+		var items = snapshots.Select(MapSnapshotToItem).ToList();
 		var existingSlips = await _salarySlipRepository.GetByMonthAsync(internalMonthYear);
 		var lockedCount = existingSlips.Count(x =>
 			x.Status == SalarySlipStatus.Finalized && scopedEmployeeIds.Contains(x.EmployeeId));
 
 		return BuildReadinessSummary(
 			internalMonthYear,
-			snapshots,
+			items,
 			isGenerated: lockedCount > 0,
 			employeeCountOverride: scopedEmployeeIds.Count,
 			lockedCountOverride: lockedCount);
@@ -1098,6 +1109,65 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			.ToDictionary(g => g.Key, g => g.ToList());
 	}
 
+	private async Task<bool> HaveAttendanceChangesAfterSnapshotsAsync(
+		string monthYear,
+		int year,
+		int month,
+		IReadOnlySet<Guid> employeeIds,
+		List<PayrollRunItemSnapshot> snapshots)
+	{
+		if (employeeIds.Count == 0)
+		{
+			return false;
+		}
+
+		var snapshotByEmployee = snapshots
+			.GroupBy(x => x.EmployeeId)
+			.ToDictionary(
+				x => x.Key,
+				x => x.OrderByDescending(row => row.LastModificationTime ?? row.CreationTime).First());
+		if (employeeIds.Any(id => !snapshotByEmployee.ContainsKey(id)))
+		{
+			return true;
+		}
+
+		var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
+		var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
+		var attendanceQuery = await _attendanceRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			attendanceQuery = attendanceQuery.Where(a => a.TenantId == CurrentTenant.Id);
+		}
+
+		var attendanceChanges = await AsyncExecuter.ToListAsync(
+			attendanceQuery
+				.Where(a =>
+					employeeIds.Contains(a.EmployeeId) &&
+					a.AttendanceDate >= startDate &&
+					a.AttendanceDate <= endDate)
+				.Select(a => new
+				{
+					a.EmployeeId,
+					ChangedAt = a.LastModificationTime ?? a.CreationTime
+				}));
+
+		foreach (var attendance in attendanceChanges)
+		{
+			var snapshot = snapshotByEmployee[attendance.EmployeeId];
+			if (!snapshot.IsLocked &&
+			    attendance.ChangedAt > (snapshot.LastModificationTime ?? snapshot.CreationTime))
+			{
+				_logger.LogDebug(
+					"Payroll snapshot for employee {EmployeeId} in {MonthYear} is stale after attendance change.",
+					attendance.EmployeeId,
+					monthYear);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	/// <summary>
 	/// Build payroll item for an employee using pre-loaded data (no DB calls)
 	/// </summary>
@@ -1760,12 +1830,18 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 			.ToHashSet();
 		if (cleanupEmployeeIds.Count == 0)
 		{
+			_logger.LogInformation(
+				"Skipped payroll ineligible-row cleanup for {MonthYear}: {IneligibleEmployeeCount} ineligible employees all have locked snapshots.",
+				monthYear,
+				ineligibleEmployeeIds.Count);
 			return;
 		}
 
+		var deletedSnapshotCount = 0;
 		foreach (var snapshot in snapshots.Where(x => cleanupEmployeeIds.Contains(x.EmployeeId)))
 		{
 			await _payrollRunItemSnapshotRepository.DeleteAsync(snapshot, autoSave: false);
+			deletedSnapshotCount++;
 		}
 
 		var reviewQuery = await _payrollRunReviewRepository.GetQueryableAsync();
@@ -1780,9 +1856,11 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		var reviews = await AsyncExecuter.ToListAsync(reviewQuery.Where(x =>
 			x.MonthYear == monthYear &&
 			cleanupEmployeeIds.Contains(x.EmployeeId)));
+		var deletedReviewCount = 0;
 		foreach (var review in reviews)
 		{
 			await _payrollRunReviewRepository.DeleteAsync(review, autoSave: false);
+			deletedReviewCount++;
 		}
 
 		var adjustmentQuery = await _payrollAdjustmentRepository.GetQueryableAsync();
@@ -1797,12 +1875,21 @@ public class RunPayrollAppService : ApplicationService, IRunPayrollAppService
 		var adjustments = await AsyncExecuter.ToListAsync(adjustmentQuery.Where(x =>
 			x.MonthYear == monthYear &&
 			cleanupEmployeeIds.Contains(x.EmployeeId)));
+		var deletedAdjustmentCount = 0;
 		foreach (var adjustment in adjustments)
 		{
 			await _payrollAdjustmentRepository.DeleteAsync(adjustment, autoSave: false);
+			deletedAdjustmentCount++;
 		}
 
 		await UnitOfWorkManager.Current!.SaveChangesAsync();
+		_logger.LogInformation(
+			"Cleaned payroll rows for {MonthYear}: {IneligibleEmployeeCount} ineligible employees, {DeletedSnapshotCount} snapshots, {DeletedReviewCount} reviews, {DeletedAdjustmentCount} adjustments deleted.",
+			monthYear,
+			ineligibleEmployeeIds.Count,
+			deletedSnapshotCount,
+			deletedReviewCount,
+			deletedAdjustmentCount);
 	}
 
 	private static List<Employee> FilterPayrollEligibleEmployees(

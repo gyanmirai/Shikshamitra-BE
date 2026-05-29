@@ -31,10 +31,15 @@ public static class EmployeeTestHelper
 	public static async Task<PersonalInfoResponse> CreateEmployeeAsync(
 		HttpClient client,
 		string? firstNameSuffix = null,
-		bool isTeaching = true)
+		bool isTeaching = true,
+		DateTime? dateOfJoining = null)
 	{
 		var personalInfo = BuildPersonalInfoRequest(firstNameSuffix);
 		personalInfo.IsTeaching = isTeaching;
+		if (dateOfJoining.HasValue)
+		{
+			personalInfo.Doj = dateOfJoining.Value;
+		}
 		var jsonData = JsonSerializer.Serialize(personalInfo, JsonOptions);
 
 		using var content = new MultipartFormDataContent();
@@ -78,9 +83,10 @@ public static class EmployeeTestHelper
 	/// </summary>
 	public static async Task<Guid> CreateEmployeeAndGetIdAsync(
 		HttpClient client,
-		string? firstNameSuffix = null)
+		string? firstNameSuffix = null,
+		DateTime? dateOfJoining = null)
 	{
-		var result = await CreateEmployeeAsync(client, firstNameSuffix);
+		var result = await CreateEmployeeAsync(client, firstNameSuffix, dateOfJoining: dateOfJoining);
 		return result.Id;
 	}
 

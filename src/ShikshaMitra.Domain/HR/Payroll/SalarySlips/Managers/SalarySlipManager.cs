@@ -81,7 +81,7 @@ public class SalarySlipManager : DomainService
 
 		var existingSlip = await _salarySlipRepository.GetByEmployeeAndMonthAsync(employeeId, normalizedMonthYear, cancellationToken);
 
-		if (existingSlip != null && existingSlip.Status == SalarySlipStatus.Finalized)
+		if (existingSlip != null && existingSlip.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 		{
 			if (forceRegenerate)
 			{
@@ -213,7 +213,7 @@ public class SalarySlipManager : DomainService
 			snapshot.MonthYear,
 			cancellationToken);
 
-		if (existingSlip != null && existingSlip.Status == SalarySlipStatus.Finalized)
+		if (existingSlip != null && existingSlip.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 		{
 			throw new BusinessException(HRErrorCodes.SalarySlipAlreadyFinalized);
 		}

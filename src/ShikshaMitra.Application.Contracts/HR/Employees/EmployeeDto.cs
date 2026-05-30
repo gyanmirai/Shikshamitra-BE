@@ -34,6 +34,8 @@ public class EmployeeDto : EntityDto<Guid>
 	public string? MobileNo { get; set; }
 	public string? SecondaryMobileNo { get; set; }
 	public string? Email { get; set; }
+	public string? PanNo { get; set; }
+	public string? AdharNo { get; set; }
 	public string? Address1 { get; set; }
 	public string? Address2 { get; set; }
 	public string? Address3 { get; set; }
@@ -44,6 +46,7 @@ public class EmployeeDto : EntityDto<Guid>
 	public EmployeeGroupType? EmployeeGroup { get; set; }
 	public string? ChangeReason { get; set; }
 	public DateTimeOffset? StatusLastChangedAt { get; set; }
+	public DateOnly? StatusEffectiveDate { get; set; }
 
 	public string? Qualification { get; set; }
 	public Guid RoleId { get; set; }

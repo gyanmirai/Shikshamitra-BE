@@ -102,6 +102,8 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 			LastName = "Employee",
 			MobileNo = $"9{DateTime.UtcNow.Ticks % 1000000000:D9}",
 			Email = $"{prefix}.{uniq}@test.com",
+			PanNo = UniquePan(),
+			AdharNo = UniqueAdhar(),
 			DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 5, 15)),
 			GenderType = GenderType.Male,
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),

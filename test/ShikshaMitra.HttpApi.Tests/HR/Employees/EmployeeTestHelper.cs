@@ -125,6 +125,8 @@ public static class EmployeeTestHelper
 			ShiftId = DefaultShiftId,
 			OrganizationIds = new List<Guid> { DefaultMediumStageId },
 			Email = TestDataHelper.UniqueEmail("emp"),
+			PanNo = TestDataHelper.UniquePan(),
+			AdharNo = TestDataHelper.UniqueAdhar(),
 			Gender = 1,
 		};
 	}
@@ -145,6 +147,8 @@ public static class EmployeeTestHelper
 			MaritalStatus = 1,
 			BloodGroup = 3,
 			Email = TestDataHelper.UniqueEmail("full"),
+			PanNo = TestDataHelper.UniquePan(),
+			AdharNo = TestDataHelper.UniqueAdhar(),
 			MobileNo = TestDataHelper.UniquePhone(),
 			SecondaryMobileNo = TestDataHelper.UniquePhone(),
 			Doj = DateTime.UtcNow.AddMonths(-12),

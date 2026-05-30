@@ -1,4 +1,4 @@
-ï»¿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -53,6 +53,8 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             LastName = "Doe",
             MobileNo = "9876543210",
             Email = "john.doe@test.com",
+            PanNo = "abcde1234f",
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 5, 15)),
             GenderType = GenderType.Male,
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
@@ -71,6 +73,8 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         result.LastName.ShouldBe(input.LastName);
         result.MobileNo.ShouldBe(input.MobileNo);
         result.Email.ShouldBe(input.Email);
+        result.PanNo.ShouldBe("ABCDE1234F");
+        result.AdharNo.ShouldBe(input.AdharNo);
         result.EmployeeCode.ShouldNotBeNullOrEmpty();
         result.EmployeeStatusType.ShouldBe(EmployeeStatusType.Active);
     }
@@ -98,6 +102,8 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             FirstName = "", // Empty first name
             LastName = "Doe",
             MobileNo = "9876543210",
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
             RoleId = roleId
@@ -119,6 +125,8 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             FirstName = "John",
             LastName = "Doe",
             MobileNo = "123", // Invalid mobile number
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
             RoleId = roleId
@@ -141,6 +149,8 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             LastName = "Doe",
             MobileNo = "9876543210",
             Email = "invalid-email", // Invalid email format
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
             RoleId = roleId
@@ -341,6 +351,8 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             LastName = "Name",
             MobileNo = "8888888888",
             Email = "updated@test.com",
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1991, 6, 20)),
             GenderType = GenderType.Female,
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 6, 1)),
@@ -357,6 +369,75 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         result.LastName.ShouldBe("Name");
         result.MobileNo.ShouldBe("8888888888");
         result.Email.ShouldBe("updated@test.com");
+        result.PanNo.ShouldBe(updateInput.PanNo);
+        result.AdharNo.ShouldBe(updateInput.AdharNo);
+    }
+
+    [Fact]
+    public async Task CreateBasicInfoAsync_Should_Require_And_Validate_Pan_And_Adhar()
+    {
+        var roleId = await EnsureRoleExistsAsync();
+        var input = new CreateEmployeeBasicInfoDto
+        {
+            FirstName = "Identity",
+            LastName = "Missing",
+            MobileNo = "9876543210",
+            Email = $"identity.missing.{Guid.NewGuid():N}@test.com",
+            DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
+            DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
+            RoleId = roleId
+        };
+
+        await Should.ThrowAsync<AbpValidationException>(() => _employeeAppService.CreateBasicInfoAsync(input));
+
+        input.PanNo = "BADPAN";
+        input.AdharNo = "123";
+
+        await Should.ThrowAsync<AbpValidationException>(() => _employeeAppService.CreateBasicInfoAsync(input));
+    }
+
+    [Fact]
+    public async Task CreateBasicInfoAsync_Should_Normalize_Pan_And_Reject_Duplicates()
+    {
+        var panNo = UniqueEmployeePan();
+        var adharNo = UniqueEmployeeAdhar();
+        var first = await CreateTestEmployeeAsync("Duplicate", "Identity", email: $"duplicate.identity.{Guid.NewGuid():N}@test.com");
+
+        var update = BuildBasicUpdate(first, panNo.ToLowerInvariant(), adharNo);
+        var updated = await _employeeAppService.UpdateBasicInfoAsync(first.Id, update);
+        updated.PanNo.ShouldBe(panNo);
+
+        var duplicatePan = BuildBasicCreate(await EnsureRoleExistsAsync(), "Duplicate", "Pan");
+        duplicatePan.PanNo = panNo.ToLowerInvariant();
+        duplicatePan.AdharNo = UniqueEmployeeAdhar();
+
+        var panException = await Should.ThrowAsync<BusinessException>(() => _employeeAppService.CreateBasicInfoAsync(duplicatePan));
+        panException.Code.ShouldBe(HRErrorCodes.EmployeePanAlreadyExists);
+
+        var duplicateAdhar = BuildBasicCreate(await EnsureRoleExistsAsync(), "Duplicate", "Adhar");
+        duplicateAdhar.PanNo = UniqueEmployeePan();
+        duplicateAdhar.AdharNo = adharNo;
+
+        var adharException = await Should.ThrowAsync<BusinessException>(() => _employeeAppService.CreateBasicInfoAsync(duplicateAdhar));
+        adharException.Code.ShouldBe(HRErrorCodes.EmployeeAdharAlreadyExists);
+    }
+
+    [Fact]
+    public async Task UpdateBasicInfoAsync_Should_Require_Identity_Fields_And_Reject_Duplicates()
+    {
+        var first = await CreateTestEmployeeAsync("Update", "IdentityOne", email: $"update.identity.one.{Guid.NewGuid():N}@test.com");
+        var second = await CreateTestEmployeeAsync("Update", "IdentityTwo", email: $"update.identity.two.{Guid.NewGuid():N}@test.com");
+
+        var missingIdentity = BuildBasicUpdate(first, null, null);
+        await Should.ThrowAsync<AbpValidationException>(() => _employeeAppService.UpdateBasicInfoAsync(first.Id, missingIdentity));
+
+        var duplicatePan = BuildBasicUpdate(first, second.PanNo, UniqueEmployeeAdhar());
+        var panException = await Should.ThrowAsync<BusinessException>(() => _employeeAppService.UpdateBasicInfoAsync(first.Id, duplicatePan));
+        panException.Code.ShouldBe(HRErrorCodes.EmployeePanAlreadyExists);
+
+        var duplicateAdhar = BuildBasicUpdate(first, UniqueEmployeePan(), second.AdharNo);
+        var adharException = await Should.ThrowAsync<BusinessException>(() => _employeeAppService.UpdateBasicInfoAsync(first.Id, duplicateAdhar));
+        adharException.Code.ShouldBe(HRErrorCodes.EmployeeAdharAlreadyExists);
     }
 
     #endregion
@@ -715,6 +796,8 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             LastName = "VeryLongLastNameThatExceedsNormalLength",
             MobileNo = "9876543210",
             Email = "long.names@test.com",
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
             RoleId = roleId
@@ -745,6 +828,8 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             LastName = "Doe",
             MobileNo = "9876543210",
             Email = "john.optional@test.com",
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
             RoleId = roleId
@@ -771,6 +856,8 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             LastName = "D'Angelo",
             MobileNo = "9876543210",
             Email = "jeanpaul.dangelo@test.com",
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
             RoleId = roleId
@@ -788,7 +875,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
     #endregion
 
-    #region Tier 2 â€” Date Validation
+    #region Tier 2 — Date Validation
 
     [Fact]
     public async Task Should_Reject_Future_Date_Of_Birth()
@@ -801,12 +888,14 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             LastName = "DOB",
             MobileNo = "9876543210",
             Email = "future.dob@test.com",
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(1)),
             DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
             RoleId = roleId
         };
 
-        // Act & Assert â€” DTO IValidatableObject rejects future DOB
+        // Act & Assert — DTO IValidatableObject rejects future DOB
         await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
@@ -816,7 +905,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     [Fact]
     public async Task Should_Reject_Underage_Employee()
     {
-        // Arrange â€” employee must be at least 18 years old at joining
+        // Arrange — employee must be at least 18 years old at joining
         var roleId = await EnsureRoleExistsAsync();
         var input = new CreateEmployeeBasicInfoDto
         {
@@ -824,12 +913,14 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             LastName = "Employee",
             MobileNo = "9876543210",
             Email = "young.employee@test.com",
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-16)),
             DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
             RoleId = roleId
         };
 
-        // Act & Assert â€” DTO IValidatableObject rejects age < 18
+        // Act & Assert — DTO IValidatableObject rejects age < 18
         await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
@@ -838,7 +929,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
     #endregion
 
-    #region Tier 2 â€” Duplicate & Missing Email
+    #region Tier 2 — Duplicate & Missing Email
 
     [Fact]
     public async Task Should_Reject_Duplicate_Email()
@@ -847,7 +938,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         var email = "duplicate.email@test.com";
         await CreateTestEmployeeAsync("First", "Employee", email: email, mobileNo: "9876543217");
 
-        // Act & Assert â€” second employee with same email should fail
+        // Act & Assert — second employee with same email should fail
         await Should.ThrowAsync<BusinessException>(async () =>
         {
             await CreateTestEmployeeAsync("Second", "Employee", email: email, mobileNo: "9876543218");
@@ -865,12 +956,14 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             LastName = "Email",
             MobileNo = "9876543210",
             Email = null, // Missing email
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
             RoleId = roleId
         };
 
-        // Act & Assert â€” app service rejects null email
+        // Act & Assert — app service rejects null email
         await Should.ThrowAsync<BusinessException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
@@ -888,12 +981,14 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             LastName = "Mobile",
             MobileNo = "   ", // Whitespace only
             Email = "blank.mobile@test.com",
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
             RoleId = roleId
         };
 
-        // Act & Assert â€” app service rejects whitespace mobile
+        // Act & Assert — app service rejects whitespace mobile
         await Should.ThrowAsync<BusinessException>(async () =>
         {
             await _employeeAppService.CreateBasicInfoAsync(input);
@@ -902,7 +997,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
     #endregion
 
-    #region Tier 2 â€” Bank Details Validation
+    #region Tier 2 — Bank Details Validation
 
     [Fact]
     public async Task Should_Accept_Valid_IFSC_Code_Format()
@@ -970,7 +1065,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     [Fact]
     public async Task Should_Accept_Null_Bank_Details_Fields()
     {
-        // Arrange â€” all bank fields are optional
+        // Arrange — all bank fields are optional
         var created = await CreateTestEmployeeAsync("Bank", "Optional", email: "bank.optional@test.com", mobileNo: "9876543222");
 
         var updateInput = new BankDetailsDto
@@ -990,7 +1085,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
     #endregion
 
-    #region Tier 2 â€” Payroll Validation
+    #region Tier 2 — Payroll Validation
 
     [Fact]
     public async Task Should_Accept_Zero_TotalWorkingHourPerMonth()
@@ -1048,7 +1143,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             Deductions = new List<PayrollComponentDto>()
         };
 
-        // Act & Assert â€” DTO validation rejects negative component amount
+        // Act & Assert — DTO validation rejects negative component amount
         await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _employeeAppService.UpdatePayrollDetailsAsync(created.Id, updateInput);
@@ -1082,7 +1177,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             Deductions = new List<PayrollComponentDto>()
         };
 
-        // Act & Assert â€” DTO validation rejects percentage without DependOn
+        // Act & Assert — DTO validation rejects percentage without DependOn
         await Should.ThrowAsync<AbpValidationException>(async () =>
         {
             await _employeeAppService.UpdatePayrollDetailsAsync(created.Id, updateInput);
@@ -1126,7 +1221,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
     #endregion
 
-    #region Tier 2 â€” Employee Without Email/Mobile Edge Cases
+    #region Tier 2 — Employee Without Email/Mobile Edge Cases
 
     [Fact]
     public async Task Should_Reject_Whitespace_Only_Email()
@@ -1139,6 +1234,8 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             LastName = "Doe",
             MobileNo = "9876543210",
             Email = "   ", // Whitespace only
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
             RoleId = roleId
@@ -1152,7 +1249,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
     #endregion
 
-    #region Tier 4 â€” Full Employee Lifecycle
+    #region Tier 4 — Full Employee Lifecycle
 
     [Fact]
     public async Task Should_Complete_Full_Employee_Lifecycle()
@@ -1171,6 +1268,8 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             LastName = "EmployeeUpdated",
             MobileNo = "8888888888",
             Email = "lifecycle.updated@test.com",
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1992, 3, 15)),
             GenderType = GenderType.Female,
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 6, 1)),
@@ -1226,7 +1325,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         additional.SecondLanguage.ShouldBe("Sanskrit");
         additional.LibraryMember.ShouldBeTrue();
 
-        // Step 6: Status transitions: Active â†’ Inactive â†’ Left â†’ Active
+        // Step 6: Status transitions: Active ? Inactive ? Left ? Active
         var inactive = await _employeeAppService.UpdateEmployeeStatus(employeeId, EmployeeStatusType.Inactive, "On leave");
         inactive.EmployeeStatusType.ShouldBe(EmployeeStatusType.Inactive);
 
@@ -1236,7 +1335,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         var reactivated = await _employeeAppService.UpdateEmployeeStatus(employeeId, EmployeeStatusType.Active, "Rejoined");
         reactivated.EmployeeStatusType.ShouldBe(EmployeeStatusType.Active);
 
-        // Step 7: Final verification â€” Get employee and verify all data persisted
+        // Step 7: Final verification — Get employee and verify all data persisted
         var finalState = await _employeeAppService.GetAsync(employeeId);
         finalState.FirstName.ShouldBe("LifecycleUpdated");
         finalState.LastName.ShouldBe("EmployeeUpdated");
@@ -1246,7 +1345,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     [Fact]
     public async Task Should_Generate_Sequential_Usernames_For_Same_Name()
     {
-        // Arrange & Act â€” create multiple employees with same first+last name
+        // Arrange & Act — create multiple employees with same first+last name
         var emp1 = await CreateTestEmployeeAsync("Samename", "User",
             email: "samename.user1@test.com", mobileNo: "9876543251");
         var emp2 = await CreateTestEmployeeAsync("Samename", "User",
@@ -1254,7 +1353,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         var emp3 = await CreateTestEmployeeAsync("Samename", "User",
             email: "samename.user3@test.com", mobileNo: "9876543253");
 
-        // Assert â€” all three should have unique employee codes
+        // Assert — all three should have unique employee codes
         emp1.EmployeeCode.ShouldNotBe(emp2.EmployeeCode);
         emp2.EmployeeCode.ShouldNotBe(emp3.EmployeeCode);
         emp1.Id.ShouldNotBe(emp2.Id);
@@ -1289,7 +1388,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         after1.Earnings.Count.ShouldBe(3);
         after1.Deductions.Count.ShouldBe(2);
 
-        // Update 2: Reduce to 1 earning, 1 minimal deduction â€” complete replacement
+        // Update 2: Reduce to 1 earning, 1 minimal deduction — complete replacement
         var update2 = new UpdateEmployeePayrollDetailsDto
         {
             PayrollDetails = new PayrollDetailsDto { TotalWorkingHourPerMonth = 160m },
@@ -1309,7 +1408,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         after2.Deductions.Count.ShouldBe(1);
         after2.PayrollDetails.TotalWorkingHourPerMonth.ShouldBe(160m);
 
-        // Update 3: Back to multiple â€” previous components should be gone
+        // Update 3: Back to multiple — previous components should be gone
         var update3 = new UpdateEmployeePayrollDetailsDto
         {
             PayrollDetails = new PayrollDetailsDto { TotalWorkingHourPerMonth = 172m },
@@ -1340,13 +1439,15 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             email: "code.stable@test.com", mobileNo: "9876543255");
         var originalCode = created.EmployeeCode;
 
-        // Act â€” update various fields
+        // Act — update various fields
         var updateInput = new UpdateEmployeeBasicInfoDto
         {
             FirstName = "CodeStableUpdated",
             LastName = "EmployeeUpdated",
             MobileNo = "7777777777",
             Email = "code.stable.updated@test.com",
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1991, 1, 1)),
             GenderType = GenderType.Male,
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 6, 1)),
@@ -1354,7 +1455,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         };
         var updated = await _employeeAppService.UpdateBasicInfoAsync(created.Id, updateInput);
 
-        // Assert â€” employee code should not change after updates
+        // Assert — employee code should not change after updates
         updated.EmployeeCode.ShouldBe(originalCode);
     }
 
@@ -1365,7 +1466,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         var created = await CreateTestEmployeeAsync("Upsert", "AdditionalDetails",
             email: "upsert.additional@test.com", mobileNo: "9876543256");
 
-        // Act 1 â€” first update creates the record
+        // Act 1 — first update creates the record
         var input1 = new UpdateEmployeeAdditionalDetailsDto
         {
             BplCardNo = "BPL-001",
@@ -1378,7 +1479,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         result1.BplCardNo.ShouldBe("BPL-001");
         result1.PersonWithDisability.ShouldBeTrue();
 
-        // Act 2 â€” second update modifies the existing record
+        // Act 2 — second update modifies the existing record
         var input2 = new UpdateEmployeeAdditionalDetailsDto
         {
             BplCardNo = "BPL-002",
@@ -1398,7 +1499,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     [Fact]
     public async Task Should_Filter_Employees_By_Status_After_Status_Change()
     {
-        // Arrange â€” create employees and change some statuses
+        // Arrange — create employees and change some statuses
         var active1 = await CreateTestEmployeeAsync("StatusFilter", "ActiveOne",
             email: "statusfilter.activeone@test.com", mobileNo: "9876543257");
         var active2 = await CreateTestEmployeeAsync("StatusFilter", "ActiveTwo",
@@ -1408,7 +1509,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
         await _employeeAppService.UpdateEmployeeStatus(willLeave.Id, EmployeeStatusType.Left, "Left the company");
 
-        // Act â€” filter by Active status
+        // Act — filter by Active status
         var activeFilter = new GetEmployeeListInput
         {
             Status = nameof(EmployeeStatusType.Active),
@@ -1443,10 +1544,10 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         var created = await CreateTestEmployeeAsync("DeleteOps", "Employee",
             email: "delete.ops@test.com", mobileNo: "9876543260");
 
-        // Act â€” delete the employee
+        // Act — delete the employee
         await _employeeAppService.DeleteAsync(created.Id);
 
-        // Assert â€” subsequent Get should throw EntityNotFoundException
+        // Assert — subsequent Get should throw EntityNotFoundException
         await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(async () =>
         {
             await _employeeAppService.GetAsync(created.Id);
@@ -1466,7 +1567,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         var created = await CreateTestEmployeeAsync("Concurrent", "Update",
             email: "concurrent.update@test.com", mobileNo: "9876543261");
 
-        // Act â€” perform multiple sequential updates (simulating concurrent access)
+        // Act — perform multiple sequential updates (simulating concurrent access)
         for (int i = 1; i <= 5; i++)
         {
             var updateInput = new UpdateEmployeeBasicInfoDto
@@ -1475,6 +1576,8 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
                 LastName = "Update",
                 MobileNo = "8888888888",
                 Email = "concurrent.update@test.com",
+                PanNo = created.PanNo,
+                AdharNo = created.AdharNo,
                 DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
                 GenderType = GenderType.Male,
                 DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
@@ -1483,7 +1586,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             await _employeeAppService.UpdateBasicInfoAsync(created.Id, updateInput);
         }
 
-        // Assert â€” final state should reflect the last update
+        // Assert — final state should reflect the last update
         var finalState = await _employeeAppService.GetAsync(created.Id);
         finalState.FirstName.ShouldBe("Iteration5");
     }
@@ -1491,7 +1594,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
     [Fact]
     public async Task Should_Maintain_Payroll_Details_After_BasicInfo_Update()
     {
-        // Arrange â€” create employee with payroll
+        // Arrange — create employee with payroll
         var created = await CreateTestEmployeeAsync("PayrollPersist", "Test",
             email: "payroll.persist@test.com", mobileNo: "9876543262");
 
@@ -1509,13 +1612,15 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         };
         await _employeeAppService.UpdatePayrollDetailsAsync(created.Id, payrollInput);
 
-        // Act â€” update basic info (should NOT affect payroll)
+        // Act — update basic info (should NOT affect payroll)
         var basicUpdate = new UpdateEmployeeBasicInfoDto
         {
             FirstName = "PayrollPersistUpdated",
             LastName = "TestUpdated",
             MobileNo = "7777777777",
             Email = "payroll.persist.updated@test.com",
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
             GenderType = GenderType.Female,
             DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
@@ -1523,7 +1628,7 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         };
         await _employeeAppService.UpdateBasicInfoAsync(created.Id, basicUpdate);
 
-        // Assert â€” payroll should remain unchanged
+        // Assert — payroll should remain unchanged
         var payrollAfter = await _employeeAppService.GetPayrollDetailsAsync(created.Id);
         payrollAfter.PayrollDetails.TotalWorkingHourPerMonth.ShouldBe(165m);
         payrollAfter.Earnings.Count.ShouldBe(1);
@@ -1549,6 +1654,8 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
             LastName = lastName,
             MobileNo = mobileNo ?? "9876543210",
             Email = email ?? $"{firstName.ToLower()}.{lastName.ToLower()}@test.com",
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
             DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 5, 15)),
             GenderType = GenderType.Male,
             DateOfJoining = DateOnly.FromDateTime(DateTime.Now.Date),
@@ -1557,6 +1664,49 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
         };
 
         return await _employeeAppService.CreateBasicInfoAsync(input);
+    }
+
+    private static CreateEmployeeBasicInfoDto BuildBasicCreate(Guid roleId, string firstName, string lastName) =>
+        new()
+        {
+            FirstName = firstName,
+            LastName = lastName,
+            MobileNo = "9876543210",
+            Email = $"{firstName}.{lastName}.{Guid.NewGuid():N}@test.com".ToLowerInvariant(),
+            PanNo = UniqueEmployeePan(),
+            AdharNo = UniqueEmployeeAdhar(),
+            DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
+            DateOfJoining = DateOnly.FromDateTime(new DateTime(2023, 1, 1)),
+            EmployeeStatusType = EmployeeStatusType.Active,
+            RoleId = roleId
+        };
+
+    private static UpdateEmployeeBasicInfoDto BuildBasicUpdate(EmployeeDto employee, string? panNo, string? adharNo) =>
+        new()
+        {
+            FirstName = employee.FirstName,
+            LastName = employee.LastName,
+            MobileNo = employee.MobileNo,
+            Email = employee.Email,
+            PanNo = panNo,
+            AdharNo = adharNo,
+            DateOfBirth = employee.DateOfBirth,
+            GenderType = employee.GenderType,
+            DateOfJoining = employee.DateOfJoining,
+            EmployeeStatusType = employee.EmployeeStatusType ?? EmployeeStatusType.Active,
+            RoleId = employee.RoleId
+        };
+
+    private static string UniqueEmployeePan()
+    {
+        var digits = Math.Abs(Guid.NewGuid().GetHashCode()).ToString("D10");
+        return $"ABCDE{digits[..4]}F";
+    }
+
+    private static string UniqueEmployeeAdhar()
+    {
+        var digits = Math.Abs(Guid.NewGuid().GetHashCode()).ToString("D10");
+        return $"98{digits[..10]}";
     }
 
     private async Task<Guid> EnsureRoleExistsAsync(Guid? roleId = null)

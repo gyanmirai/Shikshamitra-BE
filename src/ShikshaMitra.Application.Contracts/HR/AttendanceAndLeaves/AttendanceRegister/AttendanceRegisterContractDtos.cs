@@ -23,6 +23,14 @@ public enum AttendanceRegisterExceptionFilter
 	Locked = 5
 }
 
+public enum AttendanceRegisterStatus
+{
+	NotMarked = 0,
+	Present = 1,
+	HalfDay = 2,
+	Absent = 3
+}
+
 public class GetAttendanceRegisterInput : PagedAndSortedResultRequestDto
 {
 	public string StartDate { get; set; } = string.Empty;
@@ -59,6 +67,7 @@ public class AttendanceRegisterSummaryDto
 	public int Present { get; set; }
 	public int HalfDay { get; set; }
 	public int Absent { get; set; }
+	public int NotMarked { get; set; }
 	public int Editable { get; set; }
 	public int Locked { get; set; }
 	public int MissingPunch { get; set; }
@@ -97,7 +106,7 @@ public class GroupedAttendanceRegisterEmployeeDto
 
 public class AttendanceRegisterRowDto
 {
-	public Guid AttendanceId { get; set; }
+	public Guid? AttendanceId { get; set; }
 	public Guid EmployeeId { get; set; }
 	public string EmployeeName { get; set; } = string.Empty;
 	public string EmployeeCode { get; set; } = string.Empty;
@@ -112,7 +121,8 @@ public class AttendanceRegisterRowDto
 	public string? OutTime { get; set; }
 	public string? HoursWorked { get; set; }
 	public string? Remarks { get; set; }
-	public EmployeeAttendanceStatusType Status { get; set; }
+	public AttendanceRegisterStatus Status { get; set; }
+	public bool IsMarked { get; set; }
 	public bool IsDayLocked { get; set; }
 	public bool IsPayrollLocked { get; set; }
 	public bool CanEdit { get; set; }

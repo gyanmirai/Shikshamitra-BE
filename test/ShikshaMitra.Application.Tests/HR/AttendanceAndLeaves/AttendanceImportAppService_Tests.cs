@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using ClosedXML.Excel;
 using ShikshaMitra.Common;
 using Microsoft.AspNetCore.Authorization;
+using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
@@ -157,6 +158,45 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 		preview.Rows.All(x => x.Errors.Count > 0).ShouldBeTrue();
 	}
 
+	[Fact]
+	public async Task Should_Reject_Duplicate_FileName_In_Same_Payroll_Month()
+	{
+		var employee = await CreateEmployeeAsync("duplicatefile");
+		var fileName = $"duplicate-file-{Guid.NewGuid():N}.csv";
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"11-04-2026,{employee.EmployeeCode},09:00 AM,05:00 PM,,First upload,{employee.FullName},{employee.MobileNo}");
+
+		await _attendanceImportAppService.PreviewAsync(fileName, "text/csv", csv);
+
+		var duplicate = await Should.ThrowAsync<BusinessException>(() =>
+			_attendanceImportAppService.PreviewAsync(
+				$"  {fileName.ToUpperInvariant()}  ",
+				"text/csv",
+				csv));
+
+		duplicate.Code.ShouldBe(HRErrorCodes.AttendanceImportDuplicateFileName);
+	}
+
+	[Fact]
+	public async Task Should_Allow_Same_FileName_In_Different_Payroll_Month()
+	{
+		var employee = await CreateEmployeeAsync("samefilemonth");
+		var fileName = $"same-file-different-month-{Guid.NewGuid():N}.csv";
+		var aprilCsv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"11-04-2026,{employee.EmployeeCode},09:00 AM,05:00 PM,,April upload,{employee.FullName},{employee.MobileNo}");
+		var mayCsv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"11-05-2026,{employee.EmployeeCode},09:00 AM,05:00 PM,,May upload,{employee.FullName},{employee.MobileNo}");
+
+		await _attendanceImportAppService.PreviewAsync(fileName, "text/csv", aprilCsv);
+		var mayPreview = await _attendanceImportAppService.PreviewAsync(fileName, "text/csv", mayCsv);
+
+		mayPreview.CanConfirm.ShouldBeTrue();
+		mayPreview.Summary.ValidRows.ShouldBe(1);
+	}
+
 	private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync(string suffix)
 	{
 		var roleId = await EnsureRoleExistsAsync();
@@ -170,6 +210,8 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 			LastName = "Import",
 			MobileNo = BuildPhoneNumber(),
 			Email = BuildEmail(suffix),
+			PanNo = UniquePan(),
+			AdharNo = UniqueAdhar(),
 			DateOfBirth = new DateOnly(1990, 5, 15),
 			GenderType = GenderType.Male,
 			DateOfJoining = new DateOnly(2024, 1, 1),

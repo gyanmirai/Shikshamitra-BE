@@ -64,6 +64,8 @@ public class EmployeeManager(
 		string? mobileNo = null,
 		string? secondaryMobileNo = null,
 		string? email = null,
+		string? panNo = null,
+		string? adharNo = null,
 		string? address1 = null,
 		string? address2 = null,
 		string? address3 = null,
@@ -162,6 +164,8 @@ public class EmployeeManager(
 			mobileNo: mobileNo,
 			secondaryMobileNo: secondaryMobileNo,
 			email: email,
+			panNo: panNo ?? string.Empty,
+			adharNo: adharNo ?? string.Empty,
 			address1: address1,
 			address2: address2,
 			address3: address3,
@@ -215,6 +219,8 @@ public class EmployeeManager(
 		string? mobileNo = null,
 		string? secondaryMobileNo = null,
 		string? email = null,
+		string? panNo = null,
+		string? adharNo = null,
 		string? address1 = null,
 		string? address2 = null,
 		string? address3 = null,
@@ -281,6 +287,8 @@ public class EmployeeManager(
 			mobileNo: mobileNo,
 			secondaryMobileNo: secondaryMobileNo,
 			email: email,
+			panNo: panNo,
+			adharNo: adharNo,
 			address1: address1,
 			address2: address2,
 			address3: address3,
@@ -306,14 +314,15 @@ public class EmployeeManager(
 	public async Task<Employee> UpdateEmployeeStatusAsync(
 		Guid employeeId,
 		EmployeeStatusType employeeStatusType,
-		string? changeReason
+		string? changeReason,
+		DateOnly? statusEffectiveDate = null
 	)
 	{
 		// Get the employee
 		var employee = await GetEmployeeAsync(employeeId);
 
 		// Update the employee status
-		employee = employee.UpdateEmployeeStatus(employeeStatusType, changeReason);
+		employee = employee.UpdateEmployeeStatus(employeeStatusType, changeReason, statusEffectiveDate);
 		return employee;
 	}
 

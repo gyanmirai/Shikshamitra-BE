@@ -1640,6 +1640,8 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             LastName = suffix,
             MobileNo = $"91{Random.Shared.Next(10000000, 99999999)}",
             Email = $"{suffix}.{Guid.NewGuid():N}@test.com",
+            PanNo = UniquePan(),
+            AdharNo = UniqueAdhar(),
             DateOfBirth = new DateOnly(1990, 5, 15),
             GenderType = GenderType.Male,
             DateOfJoining = new DateOnly(2024, 1, 1),

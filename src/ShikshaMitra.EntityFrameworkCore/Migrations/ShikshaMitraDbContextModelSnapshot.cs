@@ -5433,6 +5433,99 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppHolidays", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.HR.Dashboard.HrDashboardPreview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<string>("DashboardKey")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<DateTime?>("LastRefreshedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("PayloadVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("RefreshRequestedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("RefreshStartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "RefreshStartedAt")
+                        .HasDatabaseName("IX_HR_DashboardPreviews_Status_RefreshStartedAt");
+
+                    b.HasIndex("TenantId", "DashboardKey")
+                        .IsUnique()
+                        .HasDatabaseName("IX_HR_DashboardPreviews_Tenant_Key");
+
+                    b.ToTable("HR_DashboardPreviews", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Employee", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5446,6 +5539,11 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<string>("Address3")
                         .HasColumnType("text");
+
+                    b.Property<string>("AdharNo")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
 
                     b.Property<string>("BloodGroup")
                         .HasColumnType("text");
@@ -5555,6 +5653,11 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("PanNo")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
                     b.Property<string>("PinCode")
                         .HasColumnType("text");
 
@@ -5582,6 +5685,9 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<string>("ShortName")
                         .HasColumnType("text");
+
+                    b.Property<DateOnly?>("StatusEffectiveDate")
+                        .HasColumnType("date");
 
                     b.Property<DateTimeOffset?>("StatusLastChangedAt")
                         .HasColumnType("timestamp with time zone");
@@ -5629,12 +5735,25 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("UserId")
                         .HasDatabaseName("IX_Employees_UserId");
 
+                    b.HasIndex("TenantId", "AdharNo")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Employees_TenantId_AdharNo_Unique")
+                        .HasFilter("\"IsDeleted\" = false");
+
                     b.HasIndex("TenantId", "EmployeeCode")
                         .IsUnique()
                         .HasDatabaseName("IX_Employees_TenantId_EmployeeCode_Unique");
 
                     b.HasIndex("TenantId", "EmployeeStatusType")
                         .HasDatabaseName("IX_Employees_TenantId_Status");
+
+                    b.HasIndex("TenantId", "PanNo")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Employees_TenantId_PanNo_Unique")
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.HasIndex("TenantId", "EmployeeStatusType", "StatusEffectiveDate")
+                        .HasDatabaseName("IX_Employees_TenantId_Status_EffectiveDate");
 
                     b.ToTable("AppEmployees", (string)null);
                 });

@@ -76,6 +76,9 @@ public class EmployeePersonalInfoAppService(
 		if (input.MobileNo.Length < 4)
 			throw new BusinessException(HRErrorCodes.EmployeeMobileTooShort);
 
+		input.PanNo = NormalizePan(input.PanNo);
+		await EnsurePanAndAdharAreUniqueAsync(input.PanNo, input.AdharNo);
+
 		var normalizedEmail = lookupNormalizer.NormalizeEmail(input.Email);
 		var existingUserByEmail = await userRepository.FindByNormalizedEmailAsync(normalizedEmail);
 		if (existingUserByEmail != null)
@@ -165,7 +168,8 @@ public class EmployeePersonalInfoAppService(
 					genderType: input.GenderType, religion: input.Religion,
 					maritalStatus: input.MaritalStatus, bloodGroup: input.BloodGroup,
 					mobileNo: input.MobileNo, secondaryMobileNo: input.SecondaryMobileNo,
-					email: input.Email, address1: input.Address1, address2: input.Address2,
+					email: input.Email, panNo: input.PanNo, adharNo: input.AdharNo,
+					address1: input.Address1, address2: input.Address2,
 					address3: input.Address3, department: input.Department,
 					designation: input.Designation, dateOfJoining: input.DateOfJoining,
 					employeeGroup: input.EmployeeGroup, qualification: input.Qualification,
@@ -238,6 +242,8 @@ public class EmployeePersonalInfoAppService(
 	public async Task<EmployeePersonalInfoDto> UpdateAsync(Guid id, UpdateEmployeePersonalInfoDto input)
 	{
 		var existingEmployee = await employeeRepository.GetAsync(id);
+		input.PanNo = NormalizePan(input.PanNo);
+		await EnsurePanAndAdharAreUniqueAsync(input.PanNo, input.AdharNo, id);
 
 		// Update employee using EmployeeManager
 		var employee = await employeeManager.UpdateEmployeeAsync(
@@ -257,6 +263,8 @@ public class EmployeePersonalInfoAppService(
 			mobileNo: input.MobileNo,
 			secondaryMobileNo: input.SecondaryMobileNo,
 			email: input.Email,
+			panNo: input.PanNo,
+			adharNo: input.AdharNo,
 			address1: input.Address1,
 			address2: input.Address2,
 			address3: input.Address3,
@@ -363,6 +371,8 @@ public class EmployeePersonalInfoAppService(
 			MobileNo = employee.MobileNo ?? string.Empty,
 			SecondaryMobileNo = employee.SecondaryMobileNo,
 			Email = employee.Email,
+			PanNo = employee.PanNo,
+			AdharNo = employee.AdharNo,
 			Department = employee.Department,
 			Designation = employee.Designation,
 			DateOfJoining = employee.DateOfJoining,
@@ -393,6 +403,44 @@ public class EmployeePersonalInfoAppService(
 		await PopulateScopedOrganizationsAsync(dto, employee.UserId);
 		return dto;
 	}
+
+	private async Task EnsurePanAndAdharAreUniqueAsync(string? panNo, string? adharNo, Guid? currentEmployeeId = null)
+	{
+		var query = await employeeRepository.GetQueryableAsync();
+
+		if (!string.IsNullOrWhiteSpace(panNo))
+		{
+			var panExists = await AsyncExecuter.AnyAsync(
+				query.Where(employee =>
+					employee.TenantId == CurrentTenant.Id &&
+					employee.PanNo == panNo &&
+					(!currentEmployeeId.HasValue || employee.Id != currentEmployeeId.Value)));
+
+			if (panExists)
+			{
+				throw new BusinessException(HRErrorCodes.EmployeePanAlreadyExists)
+					.WithData("panNo", panNo);
+			}
+		}
+
+		if (!string.IsNullOrWhiteSpace(adharNo))
+		{
+			var adharExists = await AsyncExecuter.AnyAsync(
+				query.Where(employee =>
+					employee.TenantId == CurrentTenant.Id &&
+					employee.AdharNo == adharNo &&
+					(!currentEmployeeId.HasValue || employee.Id != currentEmployeeId.Value)));
+
+			if (adharExists)
+			{
+				throw new BusinessException(HRErrorCodes.EmployeeAdharAlreadyExists)
+					.WithData("adharNo", adharNo);
+			}
+		}
+	}
+
+	private static string? NormalizePan(string? panNo) =>
+		string.IsNullOrWhiteSpace(panNo) ? panNo : panNo.Trim().ToUpperInvariant();
 
 	private async Task PopulateScopedOrganizationsAsync(EmployeePersonalInfoDto dto, Guid? userId)
 	{

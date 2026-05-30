@@ -634,6 +634,8 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 			LastName = "Employee",
 			MobileNo = $"9{DateTime.UtcNow.Ticks % 1000000000:D9}",
 			Email = email ?? $"{prefix}.{uniq}@test.local",
+			PanNo = UniquePan(),
+			AdharNo = UniqueAdhar(),
 			DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 5, 15)),
 			GenderType = GenderType.Male,
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),

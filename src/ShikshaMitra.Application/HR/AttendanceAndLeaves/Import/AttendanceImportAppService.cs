@@ -99,6 +99,7 @@ public class AttendanceImportAppService(
 		}
 
 		var monthYear = ResolveInternalPayrollMonthYear(previewRows);
+		await EnsureFileNameIsUniqueForPayrollMonthAsync(fileName, monthYear);
 		try
 		{
 			await CreateImportBatchAsync(
@@ -271,7 +272,7 @@ public class AttendanceImportAppService(
 			throw new BusinessException(HRErrorCodes.AttendanceImportFileTooLarge);
 
 		var extension = Path.GetExtension(fileName).ToLowerInvariant();
-		if (extension is not ".xlsx" and not ".csv")
+		if (extension is not ".xlsx" and not ".xls" and not ".csv")
 			throw new BusinessException(HRErrorCodes.AttendanceImportInvalidExtension);
 	}
 
@@ -282,6 +283,7 @@ public class AttendanceImportAppService(
 			return Path.GetExtension(fileName).ToLowerInvariant() switch
 			{
 				".xlsx" => ParseExcel(fileContent),
+				".xls" => ParseExcel(fileContent),
 				".csv" => ParseCsv(fileContent),
 				_ => throw new BusinessException(HRErrorCodes.AttendanceImportInvalidExtension)
 			};
@@ -568,9 +570,13 @@ public class AttendanceImportAppService(
 				continue;
 			}
 
-			if (employee.EmployeeStatusType.HasValue && employee.EmployeeStatusType.Value != EmployeeStatusType.Active)
+			if (row.AttendanceDateValue.HasValue &&
+			    !EmployeeLifecycleEligibility.IsAttendanceEligibleOnDate(
+				    employee.EmployeeStatusType,
+				    employee.StatusEffectiveDate,
+				    row.AttendanceDateValue.Value))
 			{
-				row.Errors.Add("Employee is not active.");
+				row.Errors.Add("Employee is not active on the attendance date.");
 				continue;
 			}
 
@@ -727,6 +733,35 @@ public class AttendanceImportAppService(
 		return importBatch;
 	}
 
+	private async Task EnsureFileNameIsUniqueForPayrollMonthAsync(string fileName, string? monthYear)
+	{
+		var normalizedFileName = NormalizeImportFileName(fileName);
+		if (string.IsNullOrWhiteSpace(normalizedFileName))
+		{
+			return;
+		}
+
+		var query = await attendanceImportBatchRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			query = query.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+
+		query = monthYear == null
+			? query.Where(x => x.PayrollMonthYear == null)
+			: query.Where(x => x.PayrollMonthYear == monthYear);
+
+		var existingFileNames = await AsyncExecuter.ToListAsync(query.Select(x => x.FileName));
+		if (existingFileNames.Any(x => NormalizeImportFileName(x) == normalizedFileName))
+		{
+			throw new BusinessException(
+					HRErrorCodes.AttendanceImportDuplicateFileName,
+					"An attendance import with this filename already exists for this payroll month.")
+				.WithData("fileName", fileName)
+				.WithData("payrollMonth", monthYear ?? string.Empty);
+		}
+	}
+
 	private static void ValidateRowColumnLengths(AttendanceImportPreviewRow row)
 	{
 		ValidateMaxLength(row.Action, RowActionMaxLength, "Action", row.Errors);
@@ -769,6 +804,9 @@ public class AttendanceImportAppService(
 
 	private static string NormalizeComparableValue(string? value) =>
 		string.Join(" ", (value ?? string.Empty).Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+	private static string NormalizeImportFileName(string? value) =>
+		(value ?? string.Empty).Trim().ToLowerInvariant();
 
 	private static void EnsureSinglePayrollMonth(List<AttendanceImportPreviewRow> previewRows)
 	{

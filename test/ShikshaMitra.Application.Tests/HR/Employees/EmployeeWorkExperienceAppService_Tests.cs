@@ -180,6 +180,8 @@ public class EmployeeWorkExperienceAppService_Tests : ShikshaMitraApplicationTes
 			LastName = "Test",
 			MobileNo = "9876543210",
 			Email = $"wx.{_guidGenerator.Create():N}@test.com",
+			PanNo = UniquePan(),
+			AdharNo = UniqueAdhar(),
 			DateOfBirth = DateOnly.FromDateTime(new DateTime(1992, 3, 10)),
 			GenderType = GenderType.Male,
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),

@@ -158,6 +158,10 @@ public class EmployeeAppService(
 			throw new BusinessException(HRErrorCodes.EmployeeMobileTooShort);
 		}
 
+		input.PanNo = NormalizePan(input.PanNo);
+		input.AdharNo = NormalizeAdhar(input.AdharNo);
+		await EnsurePanAndAdharAreUniqueAsync(input.PanNo, input.AdharNo);
+
 		// Check if email already exists
 		var normalizedEmail = lookupNormalizer.NormalizeEmail(input.Email);
 		var existingUserByEmail = await userRepository.FindByNormalizedEmailAsync(normalizedEmail);
@@ -277,6 +281,8 @@ public class EmployeeAppService(
 					mobileNo: input.MobileNo,
 					secondaryMobileNo: input.SecondaryMobileNo,
 					email: input.Email,
+					panNo: input.PanNo,
+					adharNo: input.AdharNo,
 					address1: input.Address1,
 					address2: input.Address2,
 					address3: input.Address3,
@@ -408,6 +414,10 @@ public class EmployeeAppService(
 
 	public async Task<EmployeeDto> UpdateBasicInfoAsync(Guid employeeId, UpdateEmployeeBasicInfoDto input)
 	{
+		input.PanNo = NormalizePan(input.PanNo);
+		input.AdharNo = NormalizeAdhar(input.AdharNo);
+		await EnsurePanAndAdharAreUniqueAsync(input.PanNo, input.AdharNo, employeeId);
+
 		// Update employee using EmployeeManager
 		Employee employee = await employeeManager.UpdateEmployeeAsync(
 			employeeId,
@@ -426,6 +436,8 @@ public class EmployeeAppService(
 			mobileNo: input.MobileNo,
 			secondaryMobileNo: input.SecondaryMobileNo,
 			email: input.Email,
+			panNo: input.PanNo,
+			adharNo: input.AdharNo,
 			address1: input.Address1,
 			address2: input.Address2,
 			address3: input.Address3,
@@ -449,6 +461,47 @@ public class EmployeeAppService(
 		// Return the updated DTO
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
 	}
+
+	private async Task EnsurePanAndAdharAreUniqueAsync(string? panNo, string? adharNo, Guid? currentEmployeeId = null)
+	{
+		var query = await employeeRepository.GetQueryableAsync();
+
+		if (!string.IsNullOrWhiteSpace(panNo))
+		{
+			var panExists = await AsyncExecuter.AnyAsync(
+				query.Where(employee =>
+					employee.TenantId == CurrentTenant.Id &&
+					employee.PanNo == panNo &&
+					(!currentEmployeeId.HasValue || employee.Id != currentEmployeeId.Value)));
+
+			if (panExists)
+			{
+				throw new BusinessException(HRErrorCodes.EmployeePanAlreadyExists)
+					.WithData("panNo", panNo);
+			}
+		}
+
+		if (!string.IsNullOrWhiteSpace(adharNo))
+		{
+			var adharExists = await AsyncExecuter.AnyAsync(
+				query.Where(employee =>
+					employee.TenantId == CurrentTenant.Id &&
+					employee.AdharNo == adharNo &&
+					(!currentEmployeeId.HasValue || employee.Id != currentEmployeeId.Value)));
+
+			if (adharExists)
+			{
+				throw new BusinessException(HRErrorCodes.EmployeeAdharAlreadyExists)
+					.WithData("adharNo", adharNo);
+			}
+		}
+	}
+
+	private static string? NormalizePan(string? panNo) =>
+		string.IsNullOrWhiteSpace(panNo) ? panNo : panNo.Trim().ToUpperInvariant();
+
+	private static string? NormalizeAdhar(string? adharNo) =>
+		string.IsNullOrWhiteSpace(adharNo) ? adharNo : adharNo.Trim();
 
 	public async Task<EmployeeDto> UpdateFamilyInfo(Guid employeeId, UpdateEmployeeFamilyDetailsDto input)
 	{
@@ -664,16 +717,42 @@ public class EmployeeAppService(
 	}
 
 	public async Task<EmployeeDto> UpdateEmployeeStatus(Guid employeeId, EmployeeStatusType employeeStatusType,
-		string? changeReason)
+		string? changeReason, DateOnly? effectiveDate = null)
 	{
+		if (employeeStatusType != EmployeeStatusType.Active)
+		{
+			await EnsureNoActiveDirectReportsAsync(employeeId);
+			effectiveDate ??= DateOnly.FromDateTime(Clock.Now.Date);
+		}
+		else
+		{
+			effectiveDate = null;
+		}
+
 		Employee employee =
-			await employeeManager.UpdateEmployeeStatusAsync(employeeId, employeeStatusType, changeReason);
+			await employeeManager.UpdateEmployeeStatusAsync(employeeId, employeeStatusType, changeReason, effectiveDate);
 
 		// Save the employee
 		employee = await employeeRepository.UpdateAsync(employee);
 
 		// Return the DTO
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);
+	}
+
+	private async Task EnsureNoActiveDirectReportsAsync(Guid employeeId)
+	{
+		var employeeQuery = await employeeRepository.GetQueryableAsync();
+		var activeDirectReportCount = await AsyncExecuter.CountAsync(
+			employeeQuery.Where(e =>
+				e.ReportingManagerId == employeeId &&
+				e.EmployeeStatusType == EmployeeStatusType.Active));
+
+		if (activeDirectReportCount > 0)
+		{
+			throw new BusinessException(HRErrorCodes.ReportingManagerHasActiveReports)
+				.WithData("EmployeeId", employeeId)
+				.WithData("ActiveDirectReportCount", activeDirectReportCount);
+		}
 	}
 
 
@@ -910,6 +989,16 @@ public class EmployeeAppService(
 			{
 				queryable = queryable.Where(e => e.EmployeeStatusType == statusType);
 			}
+		}
+
+		if (string.Equals(input.ReportingManagerStatus, "nonActive", StringComparison.OrdinalIgnoreCase))
+		{
+			queryable = queryable.Where(e =>
+				e.EmployeeStatusType == EmployeeStatusType.Active &&
+				e.ReportingManagerId.HasValue &&
+				e.ReportingManager != null &&
+				e.ReportingManager.EmployeeStatusType.HasValue &&
+				e.ReportingManager.EmployeeStatusType.Value != EmployeeStatusType.Active);
 		}
 
 		if (input.IsTeaching.HasValue)

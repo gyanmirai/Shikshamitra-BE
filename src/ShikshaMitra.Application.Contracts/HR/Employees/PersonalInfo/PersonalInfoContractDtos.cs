@@ -66,6 +66,16 @@ public class PersonalInfoRequest : IValidatableObject
 	public string? SecondaryMobileNo { get; set; }
 
 	[Required]
+	[MaxLength(10)]
+	[RegularExpression(@"^[A-Z]{5}[0-9]{4}[A-Z]$", ErrorMessage = "PAN must be in format AAAAA9999A.")]
+	public string PanNo { get; set; } = string.Empty;
+
+	[Required]
+	[MaxLength(12)]
+	[RegularExpression(@"^\d{12}$", ErrorMessage = "Aadhaar number must be 12 digits.")]
+	public string AdharNo { get; set; } = string.Empty;
+
+	[Required]
 	public DateTime Doj { get; set; }
 
 	[Required]

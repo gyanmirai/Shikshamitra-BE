@@ -27,5 +27,10 @@ public class EmployeeStatusResponseDto
 	/// Timestamp of when the status was updated.
 	/// </summary>
 	public DateTimeOffset UpdatedAt { get; set; }
+
+	/// <summary>
+	/// Effective lifecycle/payroll date for non-active statuses.
+	/// </summary>
+	public DateOnly? EffectiveDate { get; set; }
 }
 

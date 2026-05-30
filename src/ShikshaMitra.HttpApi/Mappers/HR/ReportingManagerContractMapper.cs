@@ -1,4 +1,5 @@
 using ShikshaMitra.HR.Employees.ReportingManager;
+using System;
 using System.Linq;
 
 namespace ShikshaMitra.HR.Employees.ReportingManagerInfo;
@@ -15,7 +16,7 @@ public static class ReportingManagerContractMapper
 	{
 		return new AssignReportingManagerDto
 		{
-			ReportingManagerId = request.ReportingManagerId
+			ReportingManagerId = Guid.Parse(request.ReportingManagerId!)
 		};
 	}
 

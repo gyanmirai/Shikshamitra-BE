@@ -1804,6 +1804,8 @@ public class HRSeederContributor : BaseSeederContributor
 				profile.Mobile,
 				profile.SecondaryMobile,
 				profile.Email,
+				BuildSeedPanNo(profile.Mobile, profile.Email),
+				BuildSeedAdharNo(profile.Mobile),
 				profile.Address1,
 				profile.Address2,
 				profile.Address3,
@@ -1850,6 +1852,8 @@ public class HRSeederContributor : BaseSeederContributor
 				profile.Mobile,
 				profile.SecondaryMobile,
 				profile.Email,
+				BuildSeedPanNo(profile.Mobile, profile.Email),
+				BuildSeedAdharNo(profile.Mobile),
 				profile.Address1,
 				profile.Address2,
 				profile.Address3,
@@ -2159,6 +2163,20 @@ public class HRSeederContributor : BaseSeederContributor
 		}
 
 		return $"{digits[..^1]}{suffix % 10}";
+	}
+
+	private static string BuildSeedPanNo(string mobile, string email)
+	{
+		var digits = new string(mobile.Where(char.IsDigit).ToArray()).PadLeft(4, '0');
+		var serial = digits[^4..];
+		var check = (char)('A' + (StableSeedHash(email) % 26));
+		return $"DDSMS{serial}{check}";
+	}
+
+	private static string BuildSeedAdharNo(string mobile)
+	{
+		var digits = new string(mobile.Where(char.IsDigit).ToArray()).PadLeft(9, '0');
+		return $"900{digits[^9..]}";
 	}
 
 	internal static IReadOnlyDictionary<string, SuratSeedEmployeeProfile> BuildSuratSeedEmployeeProfiles()
@@ -3261,6 +3279,8 @@ public class HRSeederContributor : BaseSeederContributor
 				mobileNo: emp.Mobile,
 				secondaryMobileNo: emp.SecondaryMobile,
 				email: emp.Email,
+				panNo: BuildSeedPanNo(emp.Mobile, emp.Email),
+				adharNo: BuildSeedAdharNo(emp.Mobile),
 				address1: emp.Address1,
 				address2: emp.Address2,
 				address3: emp.Address3,
@@ -3585,6 +3605,8 @@ public class HRSeederContributor : BaseSeederContributor
 				mobileNo: emp.Mobile,
 				secondaryMobileNo: emp.SecondaryMobile,
 				email: emp.Email,
+				panNo: BuildSeedPanNo(emp.Mobile, emp.Email),
+				adharNo: BuildSeedAdharNo(emp.Mobile),
 				address1: emp.Address1,
 				address2: emp.Address2,
 				address3: emp.Address3,

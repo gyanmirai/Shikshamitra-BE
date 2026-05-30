@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Volo.Abp;
@@ -13,6 +14,15 @@ namespace ShikshaMitra;
 public abstract class ShikshaMitraTestBase<TStartupModule> : AbpIntegratedTest<TStartupModule>
     where TStartupModule : IAbpModule
 {
+    private static int _panCounter = Random.Shared.Next(4000, 7000);
+    private static int _adharCounter = Random.Shared.Next(400000000, 700000000);
+
+    protected static string UniquePan() =>
+        $"TESTA{Interlocked.Increment(ref _panCounter) % 10000:0000}Z";
+
+    protected static string UniqueAdhar() =>
+        $"900{Interlocked.Increment(ref _adharCounter) % 1000000000:000000000}";
+
     protected override void SetAbpApplicationCreationOptions(AbpApplicationCreationOptions options)
     {
         options.UseAutofac();

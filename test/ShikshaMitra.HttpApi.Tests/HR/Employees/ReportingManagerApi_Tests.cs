@@ -41,7 +41,7 @@ public class ReportingManagerApi_Tests : ShikshaMitraApiTestBase
 
 		var request = new ReportingManagerRequest
 		{
-			ReportingManagerId = managerId,
+			ReportingManagerId = managerId.ToString(),
 		};
 
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/reporting-manager", request, JsonOptions);
@@ -61,7 +61,7 @@ public class ReportingManagerApi_Tests : ShikshaMitraApiTestBase
 
 		var response = await nonHrClient.PutAsJsonAsync(
 			$"{BaseUrl}/{empId}/reporting-manager",
-			new ReportingManagerRequest { ReportingManagerId = managerId },
+			new ReportingManagerRequest { ReportingManagerId = managerId.ToString() },
 			JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
@@ -94,6 +94,41 @@ public class ReportingManagerApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.NotFound, HttpStatusCode.InternalServerError);
 	}
 
+	[Theory]
+	[InlineData(null)]
+	[InlineData("")]
+	[InlineData("00000000-0000-0000-0000-000000000000")]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_BadRequest_When_Assigning_Empty_Reporting_Manager(string? reportingManagerId)
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMEmpty");
+
+		var response = await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{empId}/reporting-manager",
+			new { reportingManagerId },
+			JsonOptions);
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, rawPayload);
+		rawPayload.ShouldContain("Reporting manager is required");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_BadRequest_When_Assigning_Without_Reporting_Manager_Field()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMMissing");
+
+		var response = await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{empId}/reporting-manager",
+			new { },
+			JsonOptions);
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, rawPayload);
+		rawPayload.ShouldContain("Reporting manager is required");
+	}
+
 	#endregion
 
 	#region Tier 2 — Extended
@@ -105,7 +140,7 @@ public class ReportingManagerApi_Tests : ShikshaMitraApiTestBase
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMVerifyEmp");
 		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RMVerifyMgr");
 
-		var request = new ReportingManagerRequest { ReportingManagerId = managerId };
+		var request = new ReportingManagerRequest { ReportingManagerId = managerId.ToString() };
 		await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/reporting-manager", request, JsonOptions);
 
 		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/reporting-manager");
@@ -127,12 +162,12 @@ public class ReportingManagerApi_Tests : ShikshaMitraApiTestBase
 
 		await Client.PutAsJsonAsync(
 			$"{BaseUrl}/{empId}/reporting-manager",
-			new ReportingManagerRequest { ReportingManagerId = managerA },
+			new ReportingManagerRequest { ReportingManagerId = managerA.ToString() },
 			JsonOptions);
 
 		await Client.PutAsJsonAsync(
 			$"{BaseUrl}/{empId}/reporting-manager",
-			new ReportingManagerRequest { ReportingManagerId = managerB },
+			new ReportingManagerRequest { ReportingManagerId = managerB.ToString() },
 			JsonOptions);
 
 		var getResponse = await Client.GetAsync($"{BaseUrl}/{empId}/reporting-manager");
@@ -153,11 +188,11 @@ public class ReportingManagerApi_Tests : ShikshaMitraApiTestBase
 
 		await Client.PutAsJsonAsync(
 			$"{BaseUrl}/{emp1}/reporting-manager",
-			new ReportingManagerRequest { ReportingManagerId = managerId },
+			new ReportingManagerRequest { ReportingManagerId = managerId.ToString() },
 			JsonOptions);
 		await Client.PutAsJsonAsync(
 			$"{BaseUrl}/{emp2}/reporting-manager",
-			new ReportingManagerRequest { ReportingManagerId = managerId },
+			new ReportingManagerRequest { ReportingManagerId = managerId.ToString() },
 			JsonOptions);
 
 		var response = await Client.GetAsync($"{BaseUrl}/reporting-manager/{managerId}/employees");

@@ -23,7 +23,6 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 [Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_AttendanceTracking.View)]
 public class AttendanceRegisterAppService(
 	IEmployeeAttendanceRepository employeeAttendanceRepository,
-	IRepository<Employee, Guid> employeeRepository,
 	IRepository<EducationMediumStage, Guid> mediumStageRepository,
 	IStaffAttendanceDayLockRepository staffAttendanceDayLockRepository,
 	IRepository<SalarySlip, Guid> salarySlipRepository,
@@ -31,6 +30,7 @@ public class AttendanceRegisterAppService(
 	IRepository<PayrollRunReview, Guid> payrollRunReviewRepository,
 	IUserScopeService userScopeService,
 	HrUserScopeAccessService hrScopeAccessService,
+	HrEmployeeScopeQueryService hrEmployeeScopeQueryService,
 	HrAuditWriter auditWriter)
 	: ApplicationService, IAttendanceRegisterAppService
 {
@@ -218,73 +218,79 @@ public class AttendanceRegisterAppService(
 		};
 	}
 
-	private async Task<IQueryable<RegisterQueryRow>> BuildFilteredQueryAsync(
+	private async Task<List<EmployeeProjection>> BuildFilteredEmployeesAsync(
 		GetAttendanceRegisterInput input,
 		DateOnly startDate,
 		DateOnly endDate,
 		UserScopeContext scope)
 	{
-		var attendanceQuery = await employeeAttendanceRepository.GetQueryableAsync();
-		var employeeQuery = await employeeRepository.GetQueryableAsync();
-		if (CurrentTenant.Id.HasValue)
-		{
-			attendanceQuery = attendanceQuery.Where(x => x.TenantId == CurrentTenant.Id);
-			employeeQuery = employeeQuery.Where(x => x.TenantId == CurrentTenant.Id);
-		}
-
-		attendanceQuery = attendanceQuery.Where(x => x.AttendanceDate >= startDate && x.AttendanceDate <= endDate);
-		if (input.EducationMediumStageId.HasValue)
-		{
-			attendanceQuery = attendanceQuery.Where(x => x.EducationMediumStageId == input.EducationMediumStageId);
-		}
-		else if (!HrUserScopeAccess.HasHrWideAccess(scope))
-		{
-			attendanceQuery = attendanceQuery.Where(x => x.EducationMediumStageId.HasValue && scope.MediumStageIds.Contains(x.EducationMediumStageId.Value));
-		}
+		var employeeQuery = await hrEmployeeScopeQueryService.BuildScopedEmployeeQueryAsync(
+			scope,
+			new HrEmployeeScopeOptions
+			{
+				EducationMediumStageId = input.EducationMediumStageId,
+				ActiveOnOrAfter = startDate,
+				JoinedOnOrBefore = endDate,
+				TreatNullStatusAsActive = true
+			});
 
 		if (input.EmployeeId.HasValue)
 		{
-			attendanceQuery = attendanceQuery.Where(x => x.EmployeeId == input.EmployeeId);
+			employeeQuery = employeeQuery.Where(x => x.Id == input.EmployeeId);
 		}
-		if (input.Status.HasValue)
-		{
-			attendanceQuery = attendanceQuery.Where(x => x.StatusType == input.Status);
-		}
-
-		var query = from a in attendanceQuery
-					join e in employeeQuery on a.EmployeeId equals e.Id
-					select new RegisterQueryRow { Attendance = a, Employee = e };
-
 		if (input.EmployeeGroup.HasValue)
 		{
-			query = query.Where(x => x.Employee.EmployeeGroup == input.EmployeeGroup);
+			employeeQuery = employeeQuery.Where(x => x.EmployeeGroup == input.EmployeeGroup);
 		}
 		if (input.IsTeaching.HasValue)
 		{
-			query = input.IsTeaching.Value
-				? query.Where(x => x.Employee.EmployeeGroup == EmployeeGroupType.Teaching)
-				: query.Where(x => x.Employee.EmployeeGroup != EmployeeGroupType.Teaching);
+			employeeQuery = input.IsTeaching.Value
+				? employeeQuery.Where(x => x.EmployeeGroup == EmployeeGroupType.Teaching)
+				: employeeQuery.Where(x => x.EmployeeGroup != EmployeeGroupType.Teaching);
 		}
 		if (!string.IsNullOrWhiteSpace(input.Department))
 		{
 			var department = input.Department.Trim();
-			query = query.Where(x => x.Employee.Department != null && x.Employee.Department.Contains(department));
+			employeeQuery = employeeQuery.Where(x => x.Department != null && x.Department.Contains(department));
 		}
 		if (input.RoleId.HasValue)
 		{
-			query = query.Where(x => x.Employee.RoleId == input.RoleId);
-		}
-		if (!string.IsNullOrWhiteSpace(input.Search))
-		{
-			var search = input.Search.Trim().ToLowerInvariant();
-			query = query.Where(x =>
-				((x.Employee.FirstName ?? "") + " " + (x.Employee.MiddleName ?? "") + " " + (x.Employee.LastName ?? "")).ToLower().Contains(search) ||
-				(x.Employee.EmployeeCode ?? "").ToLower().Contains(search) ||
-				(x.Employee.MobileNo ?? "").ToLower().Contains(search) ||
-				(x.Attendance.Remarks ?? "").ToLower().Contains(search));
+			employeeQuery = employeeQuery.Where(x => x.RoleId == input.RoleId);
 		}
 
-		return query;
+		var employees = await AsyncExecuter.ToListAsync(employeeQuery.Select(x => new EmployeeProjection
+		{
+			EmployeeId = x.Id,
+			EmployeeName = ((x.FirstName ?? "") + " " + (x.LastName ?? "")).Trim(),
+			EmployeeCode = x.EmployeeCode,
+			MobileNo = x.MobileNo,
+			Department = x.Department,
+			EmployeeGroup = x.EmployeeGroup,
+			RoleId = x.RoleId,
+			DateOfJoining = x.DateOfJoining,
+			CreationTime = x.CreationTime,
+			EmployeeStatusType = x.EmployeeStatusType,
+			StatusLastChangedAt = x.StatusLastChangedAt,
+			StatusEffectiveDate = x.StatusEffectiveDate
+		}));
+
+		if (employees.Count == 0)
+		{
+			return employees;
+		}
+
+		var employeeIds = employees.Select(x => x.EmployeeId).ToList();
+		var stageLookup = await hrEmployeeScopeQueryService.BuildEmployeeStageLookupAsync(employeeIds);
+
+		foreach (var employee in employees)
+		{
+			var stages = stageLookup.TryGetValue(employee.EmployeeId, out var assignedStages)
+				? assignedStages
+				: [];
+			employee.EducationMediumStageId = hrEmployeeScopeQueryService.ResolveDisplayStage(stages, scope, input.EducationMediumStageId);
+		}
+
+		return employees;
 	}
 
 	private async Task<(List<RegisterProjection> Rows, Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> LockLookup)> ResolveRegisterRowsAsync(GetAttendanceRegisterInput input)
@@ -296,26 +302,83 @@ public class AttendanceRegisterAppService(
 			await EnsureStageInScopeAsync(scope, input.EducationMediumStageId);
 		}
 
-		var query = await BuildFilteredQueryAsync(input, startDate, endDate, scope);
-		var allRowsForSummary = await AsyncExecuter.ToListAsync(query.Select(x => new RegisterProjection
-		{
-			AttendanceId = x.Attendance.Id,
-			EmployeeId = x.Attendance.EmployeeId,
-			AttendanceDate = x.Attendance.AttendanceDate,
-			Status = x.Attendance.StatusType,
-			EducationMediumStageId = x.Attendance.EducationMediumStageId,
-			EmployeeName = ((x.Employee.FirstName ?? "") + " " + (x.Employee.LastName ?? "")).Trim(),
-			EmployeeCode = x.Employee.EmployeeCode,
-			Department = x.Employee.Department,
-			EmployeeGroup = x.Employee.EmployeeGroup,
-			RoleId = x.Employee.RoleId,
-			TimeIn = x.Attendance.TimeIn,
-			TimeOut = x.Attendance.TimeOut,
-			Remarks = x.Attendance.Remarks
-		}));
+		var employees = await BuildFilteredEmployeesAsync(input, startDate, endDate, scope);
+		var allRowsForSummary = await BuildEmployeeDrivenRowsAsync(input, startDate, endDate, employees, scope);
 
 		var lockLookup = await BuildLockLookupAsync(allRowsForSummary);
 		return (ApplyPayrollStateFilter(allRowsForSummary, lockLookup, input.PayrollState), lockLookup);
+	}
+
+	private async Task<List<RegisterProjection>> BuildEmployeeDrivenRowsAsync(
+		GetAttendanceRegisterInput input,
+		DateOnly startDate,
+		DateOnly endDate,
+		List<EmployeeProjection> employees,
+		UserScopeContext scope)
+	{
+		if (employees.Count == 0)
+		{
+			return [];
+		}
+
+		var employeeIds = employees.Select(x => x.EmployeeId).ToList();
+		var attendanceQuery = await hrEmployeeScopeQueryService.BuildScopedAttendanceQueryAsync(scope, input.EducationMediumStageId);
+		attendanceQuery = attendanceQuery.Where(x =>
+			employeeIds.Contains(x.EmployeeId) &&
+			x.AttendanceDate >= startDate &&
+			x.AttendanceDate <= endDate);
+
+		var attendanceRows = await AsyncExecuter.ToListAsync(attendanceQuery);
+		var attendanceByEmployeeDate = attendanceRows
+			.GroupBy(x => (x.EmployeeId, x.AttendanceDate))
+			.ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.LastModificationTime ?? y.CreationTime).First());
+
+		var rows = new List<RegisterProjection>();
+		foreach (var employee in employees)
+		{
+			for (var date = startDate; date <= endDate; date = date.AddDays(1))
+			{
+				if (!IsEmployeeEligibleOnDate(employee, date))
+				{
+					continue;
+				}
+
+				attendanceByEmployeeDate.TryGetValue((employee.EmployeeId, date), out var attendance);
+				if (input.Status.HasValue && attendance?.StatusType != input.Status.Value)
+				{
+					continue;
+				}
+
+				rows.Add(new RegisterProjection
+				{
+					AttendanceId = attendance?.Id,
+					EmployeeId = employee.EmployeeId,
+					AttendanceDate = date,
+					Status = attendance == null
+						? AttendanceRegisterStatus.NotMarked
+						: MapRegisterStatus(attendance.StatusType),
+					IsMarked = attendance != null,
+					EducationMediumStageId = attendance?.EducationMediumStageId ?? employee.EducationMediumStageId,
+					EmployeeName = employee.EmployeeName,
+					EmployeeCode = employee.EmployeeCode,
+					MobileNo = employee.MobileNo,
+					Department = employee.Department,
+					EmployeeGroup = employee.EmployeeGroup,
+					RoleId = employee.RoleId,
+					TimeIn = attendance?.TimeIn,
+					TimeOut = attendance?.TimeOut,
+					Remarks = attendance?.Remarks
+				});
+			}
+		}
+
+		if (!string.IsNullOrWhiteSpace(input.Search))
+		{
+			var search = input.Search.Trim();
+			rows = rows.Where(x => MatchesSearch(x, search)).ToList();
+		}
+
+		return rows;
 	}
 
 	private async Task<Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo>> BuildLockLookupAsync(List<RegisterProjection> rows)
@@ -401,7 +464,7 @@ public class AttendanceRegisterAppService(
 	{
 		return state switch
 		{
-			AttendanceRegisterPayrollState.Editable => rows.Where(x => !IsPayrollLocked(x, lockLookup)).ToList(),
+			AttendanceRegisterPayrollState.Editable => rows.Where(x => x.IsMarked && !IsPayrollLocked(x, lockLookup)).ToList(),
 			AttendanceRegisterPayrollState.Locked => rows.Where(x => IsPayrollLocked(x, lockLookup)).ToList(),
 			_ => rows
 		};
@@ -416,11 +479,12 @@ public class AttendanceRegisterAppService(
 		return new AttendanceRegisterSummaryDto
 		{
 			StaffCount = staffCount,
-			Present = rows.Count(x => x.Status == EmployeeAttendanceStatusType.Present),
-			HalfDay = rows.Count(x => x.Status == EmployeeAttendanceStatusType.HalfDayLeave),
-			Absent = rows.Count(x => x.Status == EmployeeAttendanceStatusType.FullDayLeave),
+			Present = rows.Count(x => x.Status == AttendanceRegisterStatus.Present),
+			HalfDay = rows.Count(x => x.Status == AttendanceRegisterStatus.HalfDay),
+			Absent = rows.Count(x => x.Status == AttendanceRegisterStatus.Absent),
+			NotMarked = rows.Count(x => x.Status == AttendanceRegisterStatus.NotMarked),
 			Locked = rows.Count(x => IsLocked(x, lockLookup, dayLocks)),
-			Editable = rows.Count(x => !IsLocked(x, lockLookup, dayLocks)),
+			Editable = rows.Count(x => x.IsMarked && !IsLocked(x, lockLookup, dayLocks)),
 			MissingPunch = rows.Count(IsMissingPunch)
 		};
 	}
@@ -432,8 +496,8 @@ public class AttendanceRegisterAppService(
 	{
 		var first = rows.OrderBy(x => x.AttendanceDate).First();
 		var orderedRows = rows.OrderBy(x => x.AttendanceDate).ToList();
-		var absent = orderedRows.Count(x => x.Status == EmployeeAttendanceStatusType.FullDayLeave);
-		var halfDay = orderedRows.Count(x => x.Status == EmployeeAttendanceStatusType.HalfDayLeave);
+		var absent = orderedRows.Count(x => x.Status == AttendanceRegisterStatus.Absent);
+		var halfDay = orderedRows.Count(x => x.Status == AttendanceRegisterStatus.HalfDay);
 		var missingPunch = orderedRows.Count(IsMissingPunch);
 		var locked = orderedRows.Count(x => IsLocked(x, lockLookup, dayLocks));
 		return new GroupedRegisterProjection
@@ -446,10 +510,10 @@ public class AttendanceRegisterAppService(
 			EducationMediumStageId = first.EducationMediumStageId,
 			RoleId = first.RoleId,
 			RecordedDays = orderedRows.Count,
-			Present = orderedRows.Count(x => x.Status == EmployeeAttendanceStatusType.Present),
+			Present = orderedRows.Count(x => x.Status == AttendanceRegisterStatus.Present),
 			HalfDay = halfDay,
 			Absent = absent,
-			Editable = orderedRows.Count(x => !IsLocked(x, lockLookup, dayLocks)),
+			Editable = orderedRows.Count(x => x.IsMarked && !IsLocked(x, lockLookup, dayLocks)),
 			Locked = locked,
 			MissingPunch = missingPunch,
 			HasExceptions = absent > 0 || halfDay > 0 || missingPunch > 0 || locked > 0,
@@ -526,9 +590,10 @@ public class AttendanceRegisterAppService(
 			HoursWorked = CalculateHoursWorked(row.TimeIn, row.TimeOut),
 			Remarks = row.Remarks,
 			Status = row.Status,
+			IsMarked = row.IsMarked,
 			IsDayLocked = isDayLocked,
 			IsPayrollLocked = lockInfo.IsLocked,
-			CanEdit = !lockInfo.IsLocked && !isDayLocked,
+			CanEdit = row.IsMarked && !lockInfo.IsLocked && !isDayLocked,
 			LockReason = lockReason
 		};
 	}
@@ -699,29 +764,73 @@ public class AttendanceRegisterAppService(
 
 	private static string ToMonthYear(DateOnly date) => $"{date.Year:D4}-{date.Month:D2}";
 	private static DateOnly ParseMonthDate(string monthYear) => new(int.Parse(monthYear[..4]), int.Parse(monthYear[5..7]), 1);
+	private static AttendanceRegisterStatus MapRegisterStatus(EmployeeAttendanceStatusType status) =>
+		status switch
+		{
+			EmployeeAttendanceStatusType.Present => AttendanceRegisterStatus.Present,
+			EmployeeAttendanceStatusType.HalfDayLeave => AttendanceRegisterStatus.HalfDay,
+			EmployeeAttendanceStatusType.FullDayLeave => AttendanceRegisterStatus.Absent,
+			_ => AttendanceRegisterStatus.NotMarked
+		};
+
+	private static bool IsEmployeeEligibleOnDate(EmployeeProjection employee, DateOnly date)
+	{
+		var startDate = employee.DateOfJoining ?? DateOnly.FromDateTime(employee.CreationTime.Date);
+		if (startDate > date)
+		{
+			return false;
+		}
+
+		return EmployeeLifecycleEligibility.IsAttendanceEligibleOnDate(
+			employee.EmployeeStatusType,
+			employee.StatusEffectiveDate,
+			date);
+	}
+
 	private static bool IsPayrollLocked(RegisterProjection row, Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> lockLookup) =>
 		lockLookup.GetValueOrDefault((row.EmployeeId, ToMonthYear(row.AttendanceDate)), new PayrollLockInfo(false, null)).IsLocked;
 	private static bool IsLocked(RegisterProjection row, Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> lockLookup, HashSet<DateOnly> dayLocks) =>
 		dayLocks.Contains(row.AttendanceDate) || IsPayrollLocked(row, lockLookup);
 	private static bool IsMissingPunch(RegisterProjection row) =>
-		row.Status == EmployeeAttendanceStatusType.Present && (!row.TimeIn.HasValue || !row.TimeOut.HasValue);
+		row.Status == AttendanceRegisterStatus.Present && (!row.TimeIn.HasValue || !row.TimeOut.HasValue);
+	private static bool MatchesSearch(RegisterProjection row, string search) =>
+		Contains(row.EmployeeName, search) ||
+		Contains(row.EmployeeCode, search) ||
+		Contains(row.MobileNo, search) ||
+		Contains(row.Remarks, search);
+	private static bool Contains(string? value, string search) =>
+		!string.IsNullOrWhiteSpace(value) &&
+		value.Contains(search, StringComparison.OrdinalIgnoreCase);
 	private static int NormalizeMaxResultCount(int maxResultCount) => maxResultCount is <= 0 or > 500 ? 50 : maxResultCount;
 
-	private sealed class RegisterQueryRow
+	private sealed class EmployeeProjection
 	{
-		public EmployeeAttendance Attendance { get; set; } = default!;
-		public Employee Employee { get; set; } = default!;
+		public Guid EmployeeId { get; set; }
+		public string EmployeeName { get; set; } = string.Empty;
+		public string EmployeeCode { get; set; } = string.Empty;
+		public string? MobileNo { get; set; }
+		public string? Department { get; set; }
+		public EmployeeGroupType? EmployeeGroup { get; set; }
+		public Guid? EducationMediumStageId { get; set; }
+		public Guid? RoleId { get; set; }
+		public DateOnly? DateOfJoining { get; set; }
+		public DateTime CreationTime { get; set; }
+		public EmployeeStatusType? EmployeeStatusType { get; set; }
+		public DateTimeOffset? StatusLastChangedAt { get; set; }
+		public DateOnly? StatusEffectiveDate { get; set; }
 	}
 
 	private sealed class RegisterProjection
 	{
-		public Guid AttendanceId { get; set; }
+		public Guid? AttendanceId { get; set; }
 		public Guid EmployeeId { get; set; }
 		public DateOnly AttendanceDate { get; set; }
-		public EmployeeAttendanceStatusType Status { get; set; }
+		public AttendanceRegisterStatus Status { get; set; }
+		public bool IsMarked { get; set; }
 		public Guid? EducationMediumStageId { get; set; }
 		public string EmployeeName { get; set; } = string.Empty;
 		public string EmployeeCode { get; set; } = string.Empty;
+		public string? MobileNo { get; set; }
 		public string? Department { get; set; }
 		public EmployeeGroupType? EmployeeGroup { get; set; }
 		public Guid? RoleId { get; set; }

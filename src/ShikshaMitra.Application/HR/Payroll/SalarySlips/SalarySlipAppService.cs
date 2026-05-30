@@ -11,10 +11,13 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Diagnostics;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.Payroll.Settings;
 
 namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
@@ -31,6 +34,8 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 	private readonly IEmployeePayrollDetailsRepository _employeePayrollDetailsRepository;
 	private readonly SalarySlipManager _salarySlipManager;
 	private readonly PayslipPdfService _payslipPdfService;
+	private readonly HrPolicyResolver _hrPolicyResolver;
+	private readonly PayrollCalendarResolver _payrollCalendarResolver;
 	private readonly IUserScopeService _userScopeService;
 	private readonly HrUserScopeAccessService _hrScopeAccessService;
 	private readonly ILogger<SalarySlipAppService> _logger;
@@ -43,6 +48,8 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		IEmployeePayrollDetailsRepository employeePayrollDetailsRepository,
 		SalarySlipManager salarySlipManager,
 		PayslipPdfService payslipPdfService,
+		HrPolicyResolver hrPolicyResolver,
+		PayrollCalendarResolver payrollCalendarResolver,
 		IUserScopeService userScopeService,
 		HrUserScopeAccessService hrScopeAccessService,
 		ILogger<SalarySlipAppService> logger)
@@ -54,6 +61,8 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		_employeePayrollDetailsRepository = employeePayrollDetailsRepository;
 		_salarySlipManager = salarySlipManager;
 		_payslipPdfService = payslipPdfService;
+		_hrPolicyResolver = hrPolicyResolver;
+		_payrollCalendarResolver = payrollCalendarResolver;
 		_userScopeService = userScopeService;
 		_hrScopeAccessService = hrScopeAccessService;
 		_logger = logger;
@@ -85,6 +94,7 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 				employeeId,
 				monthYear,
 				forceRegenerate: false);
+			salarySlip = await EnsureDraftSalarySlipFreshAsync(salarySlip);
 
 			// Get employee for DTO mapping (already validated by Manager)
 			var employee = await _employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
@@ -301,6 +311,103 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		_logger.LogInformation("Salary slip deleted - Id: {Id}, EmployeeId: {EmployeeId}, MonthYear: {MonthYear}",
 			id, salarySlip.EmployeeId, salarySlip.MonthYear);
 	}
+
+	private async Task<SalarySlip> EnsureDraftSalarySlipFreshAsync(SalarySlip salarySlip)
+	{
+		if (salarySlip.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
+		{
+			return salarySlip;
+		}
+
+		var snapshot = await GetPayrollSnapshotAsync(salarySlip.EmployeeId, salarySlip.MonthYear);
+		if (snapshot != null)
+		{
+			if (!snapshot.IsLocked)
+			{
+				var resolvedPolicies = await ResolvePoliciesForMonthAsync(salarySlip.EmployeeId, salarySlip.MonthYear);
+				if (!SnapshotMatchesResolvedPolicies(snapshot, resolvedPolicies))
+				{
+					return await _salarySlipManager.GenerateOrGetSalarySlipAsync(
+						salarySlip.EmployeeId,
+						salarySlip.MonthYear,
+						forceRegenerate: true);
+				}
+			}
+
+			if (!SalarySlipMatchesSnapshot(salarySlip, snapshot))
+			{
+				return await _salarySlipManager.GenerateOrGetSalarySlipFromSnapshotAsync(
+					snapshot,
+					BuildSalarySlipLineItems(snapshot.EarningComponentsJson),
+					BuildSalarySlipLineItems(snapshot.DeductionComponentsJson),
+					ParseDayCalculationMode(snapshot.DayCalculationMode));
+			}
+
+			return salarySlip;
+		}
+
+		return await _salarySlipManager.GenerateOrGetSalarySlipAsync(
+			salarySlip.EmployeeId,
+			salarySlip.MonthYear,
+			forceRegenerate: true);
+	}
+
+	private async Task<HrResolvedPolicies> ResolvePoliciesForMonthAsync(Guid employeeId, string monthYear)
+	{
+		var year = int.Parse(monthYear[..4], CultureInfo.InvariantCulture);
+		var month = int.Parse(monthYear[5..7], CultureInfo.InvariantCulture);
+		var calendar = await _payrollCalendarResolver.ResolveAsync(year, month);
+		return await _hrPolicyResolver.ResolveAsync(
+			employeeId,
+			new DateTime(year, month, 1),
+			calendar.AcademicYearId);
+	}
+
+	private static bool SnapshotMatchesResolvedPolicies(
+		PayrollRunItemSnapshot snapshot,
+		HrResolvedPolicies resolvedPolicies) =>
+		snapshot.PayrollPolicyId == resolvedPolicies.PayrollPolicy.Id &&
+		snapshot.PayrollPolicyVersion == resolvedPolicies.PayrollPolicy.Version &&
+		snapshot.AttendancePolicyId == resolvedPolicies.AttendancePolicy.Id &&
+		snapshot.AttendancePolicyVersion == resolvedPolicies.AttendancePolicy.Version &&
+		snapshot.WorkCalendarPolicyId == resolvedPolicies.PayrollWorkCalendarPolicy.Id &&
+		snapshot.WorkCalendarPolicyVersion == resolvedPolicies.PayrollWorkCalendarPolicy.Version;
+
+	private static bool SalarySlipMatchesSnapshot(SalarySlip salarySlip, PayrollRunItemSnapshot snapshot) =>
+		salarySlip.PayrollPolicyId == snapshot.PayrollPolicyId &&
+		salarySlip.PayrollPolicyVersion == snapshot.PayrollPolicyVersion &&
+		salarySlip.AttendancePolicyId == snapshot.AttendancePolicyId &&
+		salarySlip.AttendancePolicyVersion == snapshot.AttendancePolicyVersion &&
+		salarySlip.WorkCalendarPolicyId == snapshot.WorkCalendarPolicyId &&
+		salarySlip.WorkCalendarPolicyVersion == snapshot.WorkCalendarPolicyVersion &&
+		salarySlip.PayrollBasisDays == snapshot.BasisDays &&
+		salarySlip.PayableDays == snapshot.PayableDays &&
+		salarySlip.ProrationFactor == snapshot.ProrationFactor &&
+		salarySlip.PayrollDayCalculationMode == ParseDayCalculationMode(snapshot.DayCalculationMode) &&
+		Math.Round(salarySlip.TotalEarning, 2, MidpointRounding.AwayFromZero) == Math.Round(snapshot.GrossSalary, 2, MidpointRounding.AwayFromZero) &&
+		Math.Round(salarySlip.TotalDeduction, 2, MidpointRounding.AwayFromZero) == Math.Round(snapshot.TotalDeduction, 2, MidpointRounding.AwayFromZero) &&
+		Math.Round(salarySlip.NetSalary, 2, MidpointRounding.AwayFromZero) == Math.Round(snapshot.NetPay, 2, MidpointRounding.AwayFromZero);
+
+	private static List<SalarySlipLineItem> BuildSalarySlipLineItems(string componentsJson)
+	{
+		var components = JsonSerializer.Deserialize<List<RunPayrollComponentItem>>(componentsJson)
+			?? new List<RunPayrollComponentItem>();
+		return components
+			.Select(x => new SalarySlipLineItem(
+				x.Name,
+				Math.Round((decimal) x.Amount, 2, MidpointRounding.AwayFromZero)))
+			.ToList();
+	}
+
+	private static DayCalculationType ParseDayCalculationMode(string value) => value switch
+	{
+		"working-days" => DayCalculationType.WorkingDays,
+		"total-month-days" => DayCalculationType.TotalMonthDays,
+		"manual-days" => DayCalculationType.ManualDays,
+		_ => throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat)
+			.WithData("reason", "Invalid payroll day calculation mode on salary slip snapshot.")
+			.WithData("dayCalculationMode", value)
+	};
 
 	/// <summary>
 	/// Maps SalarySlip entity to DTO with employee details and component metadata

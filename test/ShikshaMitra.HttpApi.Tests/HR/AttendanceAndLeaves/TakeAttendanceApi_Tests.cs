@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
@@ -92,7 +93,8 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		var leftRequest = new ChangeEmployeeStatusDto
 		{
 			EmployeeStatusType = EmployeeStatusType.Left,
-			Remarks = "Historical attendance regression"
+			Remarks = "Historical attendance regression",
+			EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow)
 		};
 		var statusResponse = await Client.PutAsJsonAsync($"/api/employees/{created.Id}/status", leftRequest, JsonOptions);
 		statusResponse.EnsureSuccessStatusCode();
@@ -114,13 +116,76 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Left_Employee_Historical_Attendance_Should_Remain_Visible_And_Editable()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var uniqueName = $"LeftEditableHistory{Guid.NewGuid():N}";
+		var historicalDate = DateTime.UtcNow.AddDays(-1);
+		var created = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			uniqueName,
+			dateOfJoining: DateTime.UtcNow.AddDays(-2));
+
+		var initialSave = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		{
+			AttendanceDate = historicalDate.ToString("dd-MM-yyyy"),
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = created.Id,
+					StatusWire = "PRESENT",
+					Remarks = "Saved before employee left"
+				}
+			]
+		}, JsonOptions);
+		initialSave.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var leftRequest = new ChangeEmployeeStatusDto
+		{
+			EmployeeStatusType = EmployeeStatusType.Left,
+			Remarks = "Historical attendance remains editable",
+			EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow)
+		};
+		var statusResponse = await Client.PutAsJsonAsync($"/api/employees/{created.Id}/status", leftRequest, JsonOptions);
+		statusResponse.EnsureSuccessStatusCode();
+
+		var getResponse = await Client.GetAsync(
+			$"{BaseUrl}/day?attendanceDate={historicalDate:dd-MM-yyyy}&skipCount=0&maxResultCount=20&search={Uri.EscapeDataString(created.FirstName)}");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await getResponse.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize day attendance response");
+		var row = payload.Items.Single(x => x.EmployeeId == created.Id);
+		row.Status.ShouldBe(TakeAttendanceStatus.Present);
+
+		var editResponse = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		{
+			AttendanceDate = historicalDate.ToString("dd-MM-yyyy"),
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = created.Id,
+					StatusWire = "ABSENT",
+					Remarks = "Historical correction after employee left"
+				}
+			]
+		}, JsonOptions);
+		editResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task SaveDay_Should_Reject_Left_Employee_On_Or_After_Status_Change_Date()
 	{
 		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"LeftReject{Guid.NewGuid():N}");
 		var leftRequest = new ChangeEmployeeStatusDto
 		{
 			EmployeeStatusType = EmployeeStatusType.Left,
-			Remarks = "Post-left attendance regression"
+			Remarks = "Post-left attendance regression",
+			EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1))
 		};
 		var statusResponse = await Client.PutAsJsonAsync($"/api/employees/{created.Id}/status", leftRequest, JsonOptions);
 		statusResponse.EnsureSuccessStatusCode();

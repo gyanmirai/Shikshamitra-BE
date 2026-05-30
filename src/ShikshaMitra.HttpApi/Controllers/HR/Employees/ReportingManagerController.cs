@@ -54,8 +54,15 @@ public class ReportingManagerController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status404NotFound)]
 	public virtual async Task<IActionResult> UpdateAsync(
 		[FromRoute, Required] Guid employeeId,
-		[FromBody, Required] ReportingManagerRequest request)
+		[FromBody] ReportingManagerRequest? request)
 	{
+		if (request?.ReportingManagerId == null ||
+		    !Guid.TryParse(request.ReportingManagerId, out var reportingManagerId) ||
+		    reportingManagerId == Guid.Empty)
+		{
+			return BadRequest(new { message = "Reporting manager is required." });
+		}
+
 		await _authorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 		var assignDto = ReportingManagerContractMapper.ToAssignDto(request);
 		await _reportingManagerAppService.AssignReportingManagerAsync(employeeId, assignDto);

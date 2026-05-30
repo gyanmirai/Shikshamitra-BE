@@ -69,6 +69,16 @@ public class CreateEmployeePersonalInfoDto : IValidatableObject
 	[MaxLength(256)]
 	public string? Email { get; set; }
 
+	[Required(ErrorMessage = "PAN number is required.")]
+	[MaxLength(10)]
+	[RegularExpression(@"^[A-Z]{5}[0-9]{4}[A-Z]$", ErrorMessage = "PAN must be in format AAAAA9999A.")]
+	public string PanNo { get; set; } = string.Empty;
+
+	[Required(ErrorMessage = "Aadhaar number is required.")]
+	[MaxLength(12)]
+	[RegularExpression(@"^\d{12}$", ErrorMessage = "Aadhaar number must be 12 digits.")]
+	public string AdharNo { get; set; } = string.Empty;
+
 	[MaxLength(256)]
 	public string? Department { get; set; }
 

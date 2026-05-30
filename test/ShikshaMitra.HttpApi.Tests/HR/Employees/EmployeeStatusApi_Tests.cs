@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.Employees.ReportingManagerInfo;
 using ShikshaMitra.HR.Employees.Status;
 using ShikshaMitra.HR.Payroll;
 using ShikshaMitra.HR.Payroll.SalaryStructure;
@@ -18,6 +19,7 @@ namespace ShikshaMitra.HR.Employees;
 public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 {
 	private const string BaseUrl = "/api/employees";
+	private static readonly DateOnly TestEffectiveDate = new(2026, 5, 31);
 
 	public EmployeeStatusApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
 
@@ -33,6 +35,7 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 		{
 			EmployeeStatusType = 1,
 			Remarks = "Going on sabbatical",
+			EffectiveDate = TestEffectiveDate
 		};
 
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", request, JsonOptions);
@@ -41,6 +44,25 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 		var body = await response.Content.ReadFromJsonAsync<EmployeeStatusUpdateResponse>(JsonOptions);
 		body.ShouldNotBeNull();
 		body.CurrentStatus.ShouldBe(1);
+		body.EffectiveDate.ShouldBe(TestEffectiveDate);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Non_Active_Status_Without_Effective_Date()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusNoEffectiveDate");
+
+		var response = await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{empId}/status",
+			new EmployeeStatusUpdateRequest
+			{
+				EmployeeStatusType = 1,
+				Remarks = "Missing effective date"
+			},
+			JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 	}
 
 	[Fact]
@@ -52,6 +74,7 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 		{
 			EmployeeStatusType = 1,
 			Remarks = "Seed inactive first",
+			EffectiveDate = TestEffectiveDate
 		};
 		(await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", toInactive, JsonOptions))
 			.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -78,6 +101,7 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 		{
 			EmployeeStatusType = 1,
 			Remarks = string.Empty,
+			EffectiveDate = TestEffectiveDate
 		};
 
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", request, JsonOptions);
@@ -133,7 +157,7 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusCycle");
 
-		var inactiveReq = new EmployeeStatusUpdateRequest { EmployeeStatusType = 1, Remarks = "Inactive" };
+		var inactiveReq = new EmployeeStatusUpdateRequest { EmployeeStatusType = 1, Remarks = "Inactive", EffectiveDate = TestEffectiveDate };
 		var r1 = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", inactiveReq, JsonOptions);
 		r1.StatusCode.ShouldBe(HttpStatusCode.OK);
 
@@ -228,7 +252,7 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 			JsonOptions);
 		salaryResp.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-		var toInactive = new EmployeeStatusUpdateRequest { EmployeeStatusType = 1, Remarks = "Inactive" };
+		var toInactive = new EmployeeStatusUpdateRequest { EmployeeStatusType = 1, Remarks = "Inactive", EffectiveDate = TestEffectiveDate };
 		(await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", toInactive, JsonOptions))
 			.StatusCode.ShouldBe(HttpStatusCode.OK);
 
@@ -243,7 +267,7 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Set_Left_And_Retired_Statuses()
 	{
 		var empLeft = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusLeft");
-		var leftReq = new EmployeeStatusUpdateRequest { EmployeeStatusType = 2, Remarks = "Employee left" };
+		var leftReq = new EmployeeStatusUpdateRequest { EmployeeStatusType = 2, Remarks = "Employee left", EffectiveDate = TestEffectiveDate };
 		var leftResp = await Client.PutAsJsonAsync($"{BaseUrl}/{empLeft}/status", leftReq, JsonOptions);
 		leftResp.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var leftBody = await leftResp.Content.ReadFromJsonAsync<EmployeeStatusUpdateResponse>(JsonOptions);
@@ -251,12 +275,84 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 		leftBody.CurrentStatus.ShouldBe(2);
 
 		var empRetired = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusRetired");
-		var retiredReq = new EmployeeStatusUpdateRequest { EmployeeStatusType = 3, Remarks = "Employee retired" };
+		var retiredReq = new EmployeeStatusUpdateRequest { EmployeeStatusType = 3, Remarks = "Employee retired", EffectiveDate = TestEffectiveDate };
 		var retiredResp = await Client.PutAsJsonAsync($"{BaseUrl}/{empRetired}/status", retiredReq, JsonOptions);
 		retiredResp.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var retiredBody = await retiredResp.Content.ReadFromJsonAsync<EmployeeStatusUpdateResponse>(JsonOptions);
 		retiredBody.ShouldNotBeNull();
 		retiredBody.CurrentStatus.ShouldBe(3);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Block_Non_Active_Status_For_Manager_With_Active_Direct_Reports()
+	{
+		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusMgrBlock");
+		var reportId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusMgrReport");
+
+		var assignResponse = await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{reportId}/reporting-manager",
+			new ReportingManagerRequest { ReportingManagerId = managerId.ToString() },
+			JsonOptions);
+		assignResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var response = await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{managerId}/status",
+			new EmployeeStatusUpdateRequest { EmployeeStatusType = 1, Remarks = "Going inactive", EffectiveDate = TestEffectiveDate },
+			JsonOptions);
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, rawPayload);
+		rawPayload.ShouldContain("HR:Employee:010032");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Allow_Non_Active_Status_After_Direct_Reports_Are_Reassigned()
+	{
+		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusMgrSwapOld");
+		var newManagerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusMgrSwapNew");
+		var reportId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusMgrSwapReport");
+
+		(await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{reportId}/reporting-manager",
+			new ReportingManagerRequest { ReportingManagerId = managerId.ToString() },
+			JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.OK);
+		(await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{reportId}/reporting-manager",
+			new ReportingManagerRequest { ReportingManagerId = newManagerId.ToString() },
+			JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var response = await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{managerId}/status",
+			new EmployeeStatusUpdateRequest { EmployeeStatusType = 1, Remarks = "No active reports now", EffectiveDate = TestEffectiveDate },
+			JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	[Theory]
+	[InlineData(2)]
+	[InlineData(3)]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Block_Left_And_Retired_Status_For_Manager_With_Active_Direct_Reports(int status)
+	{
+		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, $"StatusMgrBlock{status}");
+		var reportId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, $"StatusMgrReport{status}");
+
+		(await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{reportId}/reporting-manager",
+			new ReportingManagerRequest { ReportingManagerId = managerId.ToString() },
+			JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var response = await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{managerId}/status",
+			new EmployeeStatusUpdateRequest { EmployeeStatusType = status, Remarks = "Manager unavailable", EffectiveDate = TestEffectiveDate },
+			JsonOptions);
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, rawPayload);
+		rawPayload.ShouldContain("HR:Employee:010032");
 	}
 
 	[Fact]

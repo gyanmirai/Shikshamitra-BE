@@ -138,6 +138,8 @@ public class LeaveReportingChain_Tests : ShikshaMitraApplicationTestBase<Shiksha
 			LastName = "Employee",
 			MobileNo = "9876543210",
 			Email = email,
+			PanNo = UniquePan(),
+			AdharNo = UniqueAdhar(),
 			DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 5, 15)),
 			GenderType = GenderType.Male,
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),

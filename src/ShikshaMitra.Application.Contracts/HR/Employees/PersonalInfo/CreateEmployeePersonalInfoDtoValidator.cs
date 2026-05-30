@@ -16,6 +16,10 @@ public class CreateEmployeePersonalInfoDtoValidator : AbstractValidator<CreateEm
 		RuleFor(x => x.RoleId).NotEmpty();
 		RuleFor(x => x.Email).NotEmpty().WithMessage("Email is required.")
 			.EmailAddress().WithMessage("Invalid email address format.");
+		RuleFor(x => x.PanNo).NotEmpty().WithMessage("PAN number is required.")
+			.Matches(@"^[A-Z]{5}[0-9]{4}[A-Z]$").WithMessage("PAN must be in format AAAAA9999A.");
+		RuleFor(x => x.AdharNo).NotEmpty().WithMessage("Aadhaar number is required.")
+			.Matches(@"^\d{12}$").WithMessage("Aadhaar number must be 12 digits.");
 		RuleFor(x => x.ShiftId).Must(s => s.HasValue && s.Value != Guid.Empty)
 			.WithMessage("Shift is required.");
 		RuleFor(x => x.SecondaryMobileNo)

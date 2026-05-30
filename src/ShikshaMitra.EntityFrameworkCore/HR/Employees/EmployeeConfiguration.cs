@@ -89,6 +89,14 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 		builder.Property(e => e.MobileNo)
 			.HasMaxLength(20);
 
+		builder.Property(e => e.PanNo)
+			.IsRequired()
+			.HasMaxLength(10);
+
+		builder.Property(e => e.AdharNo)
+			.IsRequired()
+			.HasMaxLength(12);
+
 		builder.Property(e => e.ProfilePictureBlobName)
 			.HasMaxLength(512);
 
@@ -100,6 +108,16 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 			.IsUnique()
 			.HasDatabaseName("IX_Employees_TenantId_EmployeeCode_Unique");
 
+		builder.HasIndex(e => new { e.TenantId, e.PanNo })
+			.IsUnique()
+			.HasDatabaseName("IX_Employees_TenantId_PanNo_Unique")
+			.HasFilter("\"IsDeleted\" = false");
+
+		builder.HasIndex(e => new { e.TenantId, e.AdharNo })
+			.IsUnique()
+			.HasDatabaseName("IX_Employees_TenantId_AdharNo_Unique")
+			.HasFilter("\"IsDeleted\" = false");
+
 		builder.HasIndex(e => e.Email)
 			.HasDatabaseName("IX_Employees_Email");
 
@@ -108,6 +126,9 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 
 		builder.HasIndex(e => new { e.TenantId, e.EmployeeStatusType })
 			.HasDatabaseName("IX_Employees_TenantId_Status");
+
+		builder.HasIndex(e => new { e.TenantId, e.EmployeeStatusType, e.StatusEffectiveDate })
+			.HasDatabaseName("IX_Employees_TenantId_Status_EffectiveDate");
 
 		builder.HasIndex(e => e.ReportingManagerId)
 			.HasDatabaseName("IX_Employees_ReportingManagerId");

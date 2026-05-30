@@ -36,6 +36,10 @@ public class UpdateEmployeeBasicInfoDto : IValidatableObject
 
 	public string? Email { get; set; }
 
+	public string? PanNo { get; set; }
+
+	public string? AdharNo { get; set; }
+
 	public string? Department { get; set; }
 
 	public string? Designation { get; set; }

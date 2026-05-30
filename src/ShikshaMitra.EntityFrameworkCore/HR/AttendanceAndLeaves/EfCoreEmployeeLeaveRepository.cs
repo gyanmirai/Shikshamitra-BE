@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using System;
 using System.Collections.Generic;
@@ -93,6 +94,43 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 		return totalDays;
 	}
 
+	public async Task<List<PayrollApprovedLeaveRow>> GetApprovedPayrollLeaveRowsAsync(
+		IReadOnlyCollection<Guid> employeeIds,
+		DateTimeOffset rangeStart,
+		DateTimeOffset rangeEnd,
+		CancellationToken cancellationToken = default)
+	{
+		if (employeeIds.Count == 0)
+		{
+			return new List<PayrollApprovedLeaveRow>();
+		}
+
+		var dbContext = await GetDbContextAsync();
+		var dbSet = await GetDbSetAsync();
+		var employeeIdList = employeeIds.ToList();
+		var query = dbSet
+			.IgnoreAutoIncludes()
+			.AsNoTracking()
+			.Where(x =>
+				x.TenantId == CurrentTenant.Id &&
+				employeeIdList.Contains(x.EmployeeId) &&
+				x.Status == EmployeeLeaveStatusType.Approved);
+
+		if (dbContext.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true)
+		{
+			var sqliteRows = await ProjectPayrollLeaveRows(query)
+				.ToListAsync(cancellationToken);
+
+			return sqliteRows
+				.Where(x => x.StartDate <= rangeEnd && x.EndDate >= rangeStart)
+				.ToList();
+		}
+
+		return await ProjectPayrollLeaveRows(query
+				.Where(x => x.StartDate <= rangeEnd && x.EndDate >= rangeStart))
+			.ToListAsync(cancellationToken);
+	}
+
 	private static decimal GetApprovedUnits(EmployeeLeave leave) =>
 		leave.ApprovedLeaveUnits > 0
 			? leave.ApprovedLeaveUnits
@@ -100,6 +138,17 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 				leave.StartDate.DateTime,
 				leave.EndDate.DateTime,
 				leave.HalfDay);
+
+	private static IQueryable<PayrollApprovedLeaveRow> ProjectPayrollLeaveRows(IQueryable<EmployeeLeave> query)
+	{
+		return query.Select(x => new PayrollApprovedLeaveRow(
+			x.EmployeeId,
+			x.StartDate,
+			x.EndDate,
+			x.HalfDay,
+			x.ApprovedPaidType,
+			x.LeavePolicy != null ? x.LeavePolicy.PaidType : LeavePaidType.Unpaid));
+	}
 
 	public async Task<(int TotalCount, List<Guid> PageIds)> GetPagedIdsForManagementListAsync(
 		DateTime rangeStart,

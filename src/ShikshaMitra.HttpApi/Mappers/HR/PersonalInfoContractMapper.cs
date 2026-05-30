@@ -31,6 +31,8 @@ public static class PersonalInfoContractMapper
 			Email = request.Email,
 			MobileNo = request.MobileNo,
 			SecondaryMobileNo = request.SecondaryMobileNo,
+			PanNo = NormalizePan(request.PanNo),
+			AdharNo = request.AdharNo,
 			DateOfJoining = DateOnly.FromDateTime(request.Doj),
 			Department = request.Department?.ToString(),
 			RoleId = request.RoleId,
@@ -78,6 +80,8 @@ public static class PersonalInfoContractMapper
 			Email = request.Email,
 			MobileNo = request.MobileNo,
 			SecondaryMobileNo = request.SecondaryMobileNo,
+			PanNo = NormalizePan(request.PanNo),
+			AdharNo = request.AdharNo,
 			DateOfJoining = DateOnly.FromDateTime(request.Doj),
 			Department = request.Department?.ToString(),
 			RoleId = request.RoleId,
@@ -120,6 +124,8 @@ public static class PersonalInfoContractMapper
 			Email = dto.Email,
 			MobileNo = dto.MobileNo,
 			SecondaryMobileNo = dto.SecondaryMobileNo,
+			PanNo = dto.PanNo,
+			AdharNo = dto.AdharNo,
 			Doj = dto.DateOfJoining.HasValue ? dto.DateOfJoining.Value.ToDateTime(TimeOnly.MinValue) : DateTime.MinValue,
 			IsTeaching = dto.EmployeeGroup == EmployeeGroupType.Teaching,
 			Department = dto.Department,
@@ -139,6 +145,8 @@ public static class PersonalInfoContractMapper
 	}
 
 	#region Gender Mapping
+
+	private static string NormalizePan(string panNo) => panNo.Trim().ToUpperInvariant();
 
 	private static GenderType MapGender(int gender)
 	{

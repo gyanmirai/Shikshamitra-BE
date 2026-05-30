@@ -99,6 +99,8 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 			.ForMember(dest => dest.FirstName, opt => opt.MapFrom(src => src.FirstName ?? string.Empty))
 			.ForMember(dest => dest.LastName, opt => opt.MapFrom(src => src.LastName ?? string.Empty))
 			.ForMember(dest => dest.MobileNo, opt => opt.MapFrom(src => src.MobileNo ?? string.Empty))
+			.ForMember(dest => dest.PanNo, opt => opt.MapFrom(src => src.PanNo))
+			.ForMember(dest => dest.AdharNo, opt => opt.MapFrom(src => src.AdharNo))
 			.ForMember(dest => dest.FamilyCaste, opt => opt.MapFrom(src => src.FamilyCast))
 			.ForMember(dest => dest.Pincode, opt => opt.MapFrom(src => src.PinCode))
 			.ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role != null ? src.Role.Name : null))

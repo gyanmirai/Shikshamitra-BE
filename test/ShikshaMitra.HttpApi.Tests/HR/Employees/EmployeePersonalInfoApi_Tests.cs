@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.HR;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Infrastructure.Traits;
@@ -47,6 +48,8 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		body.ShouldNotBeNull();
 		body.Id.ShouldNotBe(Guid.Empty);
 		body.FirstName.ShouldContain("CreateTest");
+		body.PanNo.ShouldBe(personalInfo.PanNo);
+		body.AdharNo.ShouldBe(personalInfo.AdharNo);
 	}
 
 	[Fact]
@@ -91,6 +94,8 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 			ShiftId = EmployeeTestHelper.DefaultShiftId,
 			OrganizationIds = [EmployeeTestHelper.DefaultMediumStageId],
 			Email = TestDataHelper.UniqueEmail("upd"),
+			PanNo = TestDataHelper.UniquePan(),
+			AdharNo = TestDataHelper.UniqueAdhar(),
 			Gender = 2,
 		};
 
@@ -100,6 +105,8 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		var body = await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions);
 		body.ShouldNotBeNull();
 		body.LastName.ShouldBe("UpdatedDoe");
+		body.PanNo.ShouldBe(updateRequest.PanNo);
+		body.AdharNo.ShouldBe(updateRequest.AdharNo);
 	}
 
 	[Fact]
@@ -121,6 +128,8 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		body.MiddleName.ShouldBe("MiddleTest");
 		body.Address1.ShouldBe("123 Test Street");
 		body.City.ShouldBe("Mumbai");
+		body.PanNo.ShouldBe(personalInfo.PanNo);
+		body.AdharNo.ShouldBe(personalInfo.AdharNo);
 	}
 
 	#endregion
@@ -220,6 +229,66 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 			HttpStatusCode.InternalServerError);
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Fail_With_Invalid_Pan_And_Adhar()
+	{
+		var request = EmployeeTestHelper.BuildPersonalInfoRequest("BadIdentity");
+		request.PanNo = "BADPAN";
+		request.AdharNo = "123";
+
+		var jsonData = JsonSerializer.Serialize(request, JsonOptions);
+
+		using var content = new MultipartFormDataContent();
+		content.Add(new StringContent(jsonData), "data");
+
+		var response = await Client.PostAsync($"{BaseUrl}/personal-info", content);
+
+		response.StatusCode.ShouldBeOneOf(
+			HttpStatusCode.BadRequest,
+			HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Fail_With_Duplicate_Pan()
+	{
+		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "DupPan");
+		var request = EmployeeTestHelper.BuildPersonalInfoRequest("DupPanTwo");
+		request.PanNo = created.PanNo;
+
+		var jsonData = JsonSerializer.Serialize(request, JsonOptions);
+
+		using var content = new MultipartFormDataContent();
+		content.Add(new StringContent(jsonData), "data");
+
+		var response = await Client.PostAsync($"{BaseUrl}/personal-info", content);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.EmployeePanAlreadyExists);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Fail_With_Duplicate_Adhar()
+	{
+		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "DupAdhar");
+		var request = EmployeeTestHelper.BuildPersonalInfoRequest("DupAdharTwo");
+		request.AdharNo = created.AdharNo;
+
+		var jsonData = JsonSerializer.Serialize(request, JsonOptions);
+
+		using var content = new MultipartFormDataContent();
+		content.Add(new StringContent(jsonData), "data");
+
+		var response = await Client.PostAsync($"{BaseUrl}/personal-info", content);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.EmployeeAdharAlreadyExists);
+	}
+
 	#endregion
 
 	#region Tier 2 — Extended
@@ -249,6 +318,8 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		body.Address1.ShouldBe("123 Test Street");
 		body.City.ShouldBe("Mumbai");
 		body.PinCode.ShouldBe("400001");
+		body.PanNo.ShouldBe(updateRequest.PanNo);
+		body.AdharNo.ShouldBe(updateRequest.AdharNo);
 	}
 
 	#endregion

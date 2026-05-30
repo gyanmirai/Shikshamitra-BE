@@ -171,8 +171,8 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// </summary>
 	public void UpdateRemarks(string? remarks)
 	{
-		if (Status == SalarySlipStatus.Finalized)
-			throw new InvalidOperationException("Cannot update finalized salary slip");
+		if (IsImmutable())
+			throw new InvalidOperationException("Cannot update finalized or paid salary slip");
 
 		Remarks = remarks;
 	}
@@ -184,8 +184,8 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		List<SalarySlipLineItem> earnings,
 		List<SalarySlipLineItem> deductions)
 	{
-		if (Status == SalarySlipStatus.Finalized)
-			throw new InvalidOperationException("Cannot update finalized salary slip");
+		if (IsImmutable())
+			throw new InvalidOperationException("Cannot update finalized or paid salary slip");
 
 		Earnings = earnings ?? new List<SalarySlipLineItem>();
 		Deductions = deductions ?? new List<SalarySlipLineItem>();
@@ -202,8 +202,8 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		decimal factor,
 		DayCalculationType dayMode)
 	{
-		if (Status == SalarySlipStatus.Finalized)
-			throw new InvalidOperationException("Cannot update finalized salary slip");
+		if (IsImmutable())
+			throw new InvalidOperationException("Cannot update finalized or paid salary slip");
 
 		PayrollBasisDays = basisDays;
 		PayableDays = payableDays;
@@ -219,8 +219,8 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? workCalendarPolicyId,
 		int? workCalendarPolicyVersion)
 	{
-		if (Status == SalarySlipStatus.Finalized)
-			throw new InvalidOperationException("Cannot update finalized salary slip");
+		if (IsImmutable())
+			throw new InvalidOperationException("Cannot update finalized or paid salary slip");
 
 		PayrollPolicyId = payrollPolicyId;
 		PayrollPolicyVersion = payrollPolicyVersion;
@@ -229,6 +229,8 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		WorkCalendarPolicyId = workCalendarPolicyId;
 		WorkCalendarPolicyVersion = workCalendarPolicyVersion;
 	}
+
+	private bool IsImmutable() => Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid;
 }
 
 /// <summary>

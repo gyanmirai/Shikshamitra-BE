@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
@@ -11,6 +12,14 @@ public record LeaveManagementListFilters(
 	EmployeeLeaveStatusType? Status,
 	Guid? LeavePolicyId,
 	Guid? LeaveTypeMasterId);
+
+public record PayrollApprovedLeaveRow(
+	Guid EmployeeId,
+	DateTimeOffset StartDate,
+	DateTimeOffset EndDate,
+	bool HalfDay,
+	LeavePaidType? ApprovedPaidType,
+	LeavePaidType PolicyPaidType);
 
 public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 {
@@ -37,6 +46,12 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 	Task<decimal> GetApprovedLeaveDaysAsync(
 		Guid employeeId,
 		Guid leaveTypeId);
+
+	Task<List<PayrollApprovedLeaveRow>> GetApprovedPayrollLeaveRowsAsync(
+		IReadOnlyCollection<Guid> employeeIds,
+		DateTimeOffset rangeStart,
+		DateTimeOffset rangeEnd,
+		CancellationToken cancellationToken = default);
 
 	/// <summary>
 	/// Paged leave ids for management list: start date in [rangeStart, rangeEnd] (date inclusive), policy academic year, optional filters.

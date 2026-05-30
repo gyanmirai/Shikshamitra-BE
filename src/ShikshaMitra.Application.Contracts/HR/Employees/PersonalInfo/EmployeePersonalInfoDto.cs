@@ -64,6 +64,10 @@ public class EmployeePersonalInfoDto : EntityDto<Guid>
 
 	public string? Email { get; set; }
 
+	public string PanNo { get; set; } = string.Empty;
+
+	public string AdharNo { get; set; } = string.Empty;
+
 	#endregion
 
 	#region Employment Information

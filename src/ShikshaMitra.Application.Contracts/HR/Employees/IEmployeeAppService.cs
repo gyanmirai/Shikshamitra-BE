@@ -110,7 +110,7 @@ public interface
 	/// <param name="employeeStatusType">The new status type.</param>
 	/// <param name="changeReason">The reason for the status change.</param>
 	/// <returns>The updated Employee DTO.</returns>
-	Task<EmployeeDto> UpdateEmployeeStatus(Guid employeeId, EmployeeStatusType employeeStatusType, string? changeReason);
+	Task<EmployeeDto> UpdateEmployeeStatus(Guid employeeId, EmployeeStatusType employeeStatusType, string? changeReason, DateOnly? effectiveDate = null);
 
 	/// <summary>
 	/// Gets the complete payroll details for an employee including earnings and deductions.

@@ -134,7 +134,8 @@ public class HRDashboardAppService(
 			selectedMonthEndOffset);
 		var payroll = await BuildPayrollAsync(month);
 		var celebrations = BuildCelebrations(celebrationCandidates, dashboardDate);
-		var insights = BuildInsights(attendanceToday, leave, payroll, celebrations);
+		var inactiveReportingManagerIssue = await BuildInactiveReportingManagerIssueAsync(employeeQuery);
+		var insights = BuildInsights(attendanceToday, leave, payroll, celebrations, inactiveReportingManagerIssue);
 
 		return new HRDashboardSummaryDto
 		{
@@ -626,9 +627,23 @@ public class HRDashboardAppService(
 		HRDashboardAttendanceTodayDto attendanceToday,
 		HRDashboardLeaveDto leave,
 		HRDashboardPayrollDto payroll,
-		HRDashboardCelebrationsDto celebrations)
+		HRDashboardCelebrationsDto celebrations,
+		InactiveReportingManagerIssue inactiveReportingManagerIssue)
 	{
 		var insights = new List<HRDashboardInsightDto>();
+
+		if (inactiveReportingManagerIssue.ActiveDirectReportCount > 0)
+		{
+			insights.Add(new HRDashboardInsightDto
+			{
+				Severity = "critical",
+				Title = "Inactive reporting managers",
+				Summary = $"{inactiveReportingManagerIssue.ActiveDirectReportCount} active employee(s) report to {inactiveReportingManagerIssue.ManagerCount} inactive manager(s).",
+				Source = "employee.reporting-manager",
+				ActionLabel = "Review employees",
+				ActionHref = "/hr/employee?reportingManagerStatus=nonActive"
+			});
+		}
 
 		if (payroll.MissingAttendanceCount > 0)
 		{
@@ -709,6 +724,28 @@ public class HRDashboardAppService(
 		}
 
 		return insights;
+	}
+
+	private async Task<InactiveReportingManagerIssue> BuildInactiveReportingManagerIssueAsync(
+		IQueryable<Employee> employeeQuery)
+	{
+		var affectedRows = await AsyncExecuter.ToListAsync(
+			employeeQuery
+				.Where(e =>
+					e.EmployeeStatusType == EmployeeStatusType.Active &&
+					e.ReportingManagerId.HasValue &&
+					e.ReportingManager != null &&
+					e.ReportingManager.EmployeeStatusType.HasValue &&
+					e.ReportingManager.EmployeeStatusType.Value != EmployeeStatusType.Active)
+				.Select(e => new
+				{
+					e.Id,
+					ManagerId = e.ReportingManagerId!.Value
+				}));
+
+		return new InactiveReportingManagerIssue(
+			affectedRows.Count,
+			affectedRows.Select(x => x.ManagerId).Distinct().Count());
 	}
 
 	private static DateTime ParseDateOrDefault(string? value, DateTime fallback)
@@ -885,4 +922,8 @@ public class HRDashboardAppService(
 		Guid EmployeeId,
 		DateTimeOffset StartDate,
 		DateTimeOffset EndDate);
+
+	private sealed record InactiveReportingManagerIssue(
+		int ActiveDirectReportCount,
+		int ManagerCount);
 }

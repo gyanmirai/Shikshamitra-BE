@@ -2112,6 +2112,23 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "FinanceReceiptNumberSequences",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Year = table.Column<int>(type: "integer", nullable: false),
+                    Kind = table.Column<int>(type: "integer", nullable: false),
+                    NextValue = table.Column<long>(type: "bigint", nullable: false, defaultValue: 1L),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_FinanceReceiptNumberSequences", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "HR_AttendanceImportBatches",
                 columns: table => new
                 {
@@ -2228,6 +2245,35 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_HR_AuditEvents", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "HR_DashboardPreviews",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DashboardKey = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    PayloadJson = table.Column<string>(type: "jsonb", nullable: false),
+                    PayloadVersion = table.Column<int>(type: "integer", nullable: false),
+                    Status = table.Column<string>(type: "character varying(24)", maxLength: 24, nullable: false),
+                    LastRefreshedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    RefreshStartedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    RefreshRequestedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastError = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_HR_DashboardPreviews", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -2433,6 +2479,37 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_HR_PolicyVersions", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "HR_ReportExportJobs",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    RequestedByUserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ReportType = table.Column<string>(type: "character varying(96)", maxLength: 96, nullable: false),
+                    Format = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    FilterJson = table.Column<string>(type: "jsonb", nullable: false),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    BlobName = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    ErrorMessage = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
+                    StartedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    CompletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ExpiresAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_HR_ReportExportJobs", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -3612,6 +3689,7 @@ namespace ShikshaMitra.Migrations
                     EmployeeStatusType = table.Column<int>(type: "integer", nullable: true),
                     ChangeReason = table.Column<string>(type: "text", nullable: true),
                     StatusLastChangedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    StatusEffectiveDate = table.Column<DateOnly>(type: "date", nullable: true),
                     DateOfBirth = table.Column<DateOnly>(type: "date", nullable: true),
                     FamilyCast = table.Column<string>(type: "text", nullable: true),
                     CastType = table.Column<int>(type: "integer", nullable: true),
@@ -3622,6 +3700,8 @@ namespace ShikshaMitra.Migrations
                     MobileNo = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
                     SecondaryMobileNo = table.Column<string>(type: "text", nullable: true),
                     Email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    PanNo = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
+                    AdharNo = table.Column<string>(type: "character varying(12)", maxLength: 12, nullable: false),
                     Address1 = table.Column<string>(type: "text", nullable: true),
                     Address2 = table.Column<string>(type: "text", nullable: true),
                     Address3 = table.Column<string>(type: "text", nullable: true),
@@ -6484,15 +6564,34 @@ namespace ShikshaMitra.Migrations
                 column: "RoleId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Employees_TenantId_AdharNo_Unique",
+                table: "AppEmployees",
+                columns: new[] { "TenantId", "AdharNo" },
+                unique: true,
+                filter: "\"IsDeleted\" = false");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Employees_TenantId_EmployeeCode_Unique",
                 table: "AppEmployees",
                 columns: new[] { "TenantId", "EmployeeCode" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_Employees_TenantId_PanNo_Unique",
+                table: "AppEmployees",
+                columns: new[] { "TenantId", "PanNo" },
+                unique: true,
+                filter: "\"IsDeleted\" = false");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Employees_TenantId_Status",
                 table: "AppEmployees",
                 columns: new[] { "TenantId", "EmployeeStatusType" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Employees_TenantId_Status_EffectiveDate",
+                table: "AppEmployees",
+                columns: new[] { "TenantId", "EmployeeStatusType", "StatusEffectiveDate" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Employees_UserId",
@@ -7109,10 +7208,11 @@ namespace ShikshaMitra.Migrations
                 column: "ConcessionTypeId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_DueFees_StudentId_FeeHeadId_Month_Year",
+                name: "IX_DueFees_TenantId_StudentId_FeeHeadId_Month_Year",
                 table: "DueFees",
-                columns: new[] { "StudentId", "FeeHeadId", "Month", "Year" },
-                unique: true);
+                columns: new[] { "TenantId", "StudentId", "FeeHeadId", "Month", "Year" },
+                unique: true,
+                filter: "\"IsDeleted\" = false");
 
             migrationBuilder.CreateIndex(
                 name: "IX_FeeCollectionDueFeeAllocations_DueFeeId",
@@ -7223,6 +7323,12 @@ namespace ShikshaMitra.Migrations
                 column: "ReceiptBookId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_FinanceReceiptNumberSequences_Tenant_Year_Kind",
+                table: "FinanceReceiptNumberSequences",
+                columns: new[] { "TenantId", "Year", "Kind" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_HR_AttendanceImportBatches_ExternalCorrelationId",
                 table: "HR_AttendanceImportBatches",
                 column: "ExternalCorrelationId");
@@ -7295,6 +7401,17 @@ namespace ShikshaMitra.Migrations
                 columns: new[] { "TenantId", "EntityType", "EntityId", "OccurredAt" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_HR_DashboardPreviews_Status_RefreshStartedAt",
+                table: "HR_DashboardPreviews",
+                columns: new[] { "Status", "RefreshStartedAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_HR_DashboardPreviews_Tenant_Key",
+                table: "HR_DashboardPreviews",
+                columns: new[] { "TenantId", "DashboardKey" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_HR_PayrollAdjustments_Tenant_Month_Employee",
                 table: "HR_PayrollAdjustments",
                 columns: new[] { "TenantId", "MonthYear", "EmployeeId" });
@@ -7341,6 +7458,16 @@ namespace ShikshaMitra.Migrations
                 filter: "\"IsDeleted\" = false");
 
             migrationBuilder.CreateIndex(
+                name: "IX_HR_PolicyAssignments_AttendancePolicy_Impact",
+                table: "HR_PolicyAssignments",
+                columns: new[] { "TenantId", "AcademicYearId", "IsActive", "AttendancePolicyId" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_HR_PolicyAssignments_PayrollPolicy_Impact",
+                table: "HR_PolicyAssignments",
+                columns: new[] { "TenantId", "AcademicYearId", "IsActive", "PayrollPolicyId" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_HR_PolicyAssignments_Resolver",
                 table: "HR_PolicyAssignments",
                 columns: new[] { "AcademicYearId", "TargetType", "TargetKey", "EffectiveFrom", "EffectiveTo", "IsActive" });
@@ -7360,6 +7487,16 @@ namespace ShikshaMitra.Migrations
                 table: "HR_PolicyVersions",
                 columns: new[] { "TenantId", "PolicyType", "PolicyId", "VersionNumber" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_HR_ReportExportJobs_Tenant_Status_Expires",
+                table: "HR_ReportExportJobs",
+                columns: new[] { "TenantId", "Status", "ExpiresAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_HR_ReportExportJobs_Tenant_User_Created",
+                table: "HR_ReportExportJobs",
+                columns: new[] { "TenantId", "RequestedByUserId", "CreationTime" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_HR_SalarySlips_EmployeeId",
@@ -7873,6 +8010,9 @@ namespace ShikshaMitra.Migrations
                 name: "FeeStructureMetadatas");
 
             migrationBuilder.DropTable(
+                name: "FinanceReceiptNumberSequences");
+
+            migrationBuilder.DropTable(
                 name: "HR_AttendanceImportRows");
 
             migrationBuilder.DropTable(
@@ -7880,6 +8020,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "HR_AuditEvents");
+
+            migrationBuilder.DropTable(
+                name: "HR_DashboardPreviews");
 
             migrationBuilder.DropTable(
                 name: "HR_PayrollAdjustments");
@@ -7898,6 +8041,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "HR_PolicyVersions");
+
+            migrationBuilder.DropTable(
+                name: "HR_ReportExportJobs");
 
             migrationBuilder.DropTable(
                 name: "HR_SalarySlips");

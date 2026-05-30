@@ -41,6 +41,14 @@ public class CreateEmployeeBasicInfoDtoValidator : AbstractValidator<CreateEmplo
 			.EmailAddress()
 			.When(x => !string.IsNullOrEmpty(x.Email));
 
+		RuleFor(x => x.PanNo)
+			.NotEmpty().WithMessage("PAN number is required.")
+			.Must(BeValidPan).WithMessage("PAN must be in format AAAAA9999A.");
+
+		RuleFor(x => x.AdharNo)
+			.NotEmpty().WithMessage("Aadhaar number is required.")
+			.Matches(@"^\d{12}$").WithMessage("Aadhaar number must be 12 digits.");
+
 		RuleFor(x => x.Department).MaximumLength(256);
 		RuleFor(x => x.Designation).MaximumLength(256);
 		RuleFor(x => x.Qualification).MaximumLength(512);
@@ -54,4 +62,8 @@ public class CreateEmployeeBasicInfoDtoValidator : AbstractValidator<CreateEmplo
 		RuleFor(x => x.Address2).MaximumLength(512);
 		RuleFor(x => x.Address3).MaximumLength(512);
 	}
+
+	private static bool BeValidPan(string? panNo) =>
+		!string.IsNullOrWhiteSpace(panNo) &&
+		System.Text.RegularExpressions.Regex.IsMatch(panNo.Trim().ToUpperInvariant(), @"^[A-Z]{5}[0-9]{4}[A-Z]$");
 }

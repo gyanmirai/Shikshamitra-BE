@@ -108,7 +108,8 @@ internal static class HrPolicyMapping
 	{
 		"mark_absent" => AttendanceMissingPunchBehavior.MarkAbsent,
 		"mark_half_day" => AttendanceMissingPunchBehavior.MarkHalfDay,
-		_ => AttendanceMissingPunchBehavior.RequiresReview
+		"requires_review" or "" => AttendanceMissingPunchBehavior.RequiresReview,
+		_ => throw new BusinessException("ShikshaMitra:UnsupportedMissingPunchBehavior")
 	};
 
 	public static string MapMissingPunchBehavior(AttendanceMissingPunchBehavior value) => value switch
@@ -122,7 +123,8 @@ internal static class HrPolicyMapping
 	{
 		"deduct_half_day" => AttendancePenaltyType.DeductHalfDay,
 		"deduct_full_day" => AttendancePenaltyType.DeductFullDay,
-		_ => AttendancePenaltyType.None
+		"none" or "" => AttendancePenaltyType.None,
+		_ => throw new BusinessException("ShikshaMitra:UnsupportedAttendancePenaltyType")
 	};
 
 	public static string MapPenaltyType(AttendancePenaltyType value) => value switch
@@ -137,7 +139,8 @@ internal static class HrPolicyMapping
 		"1.5x" => AttendanceOvertimeRate.OnePointFiveX,
 		"2.0x" => AttendanceOvertimeRate.TwoX,
 		"flat" => AttendanceOvertimeRate.Flat,
-		_ => null
+		"" => null,
+		_ => throw new BusinessException("ShikshaMitra:UnsupportedAttendanceOvertimeRate")
 	};
 
 	public static string? MapOvertimeRate(AttendanceOvertimeRate? value) => value switch
@@ -152,7 +155,8 @@ internal static class HrPolicyMapping
 	{
 		"paid" => AttendanceHolidayWorkBehavior.Paid,
 		"ot_payout" => AttendanceHolidayWorkBehavior.OvertimePayout,
-		_ => AttendanceHolidayWorkBehavior.CompOff
+		"comp_off" or "" => AttendanceHolidayWorkBehavior.CompOff,
+		_ => throw new BusinessException("ShikshaMitra:UnsupportedAttendanceHolidayWorkBehavior")
 	};
 
 	public static string MapHolidayWorkBehavior(AttendanceHolidayWorkBehavior value) => value switch

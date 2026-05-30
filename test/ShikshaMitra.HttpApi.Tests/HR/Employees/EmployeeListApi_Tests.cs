@@ -90,7 +90,8 @@ public class EmployeeListApi_Tests : ShikshaMitraApiTestBase
 		var inactiveRequest = new EmployeeStatusUpdateRequest
 		{
 			EmployeeStatusType = 1,
-			Remarks = "Inactive employee should be excluded from active picker queries"
+			Remarks = "Inactive employee should be excluded from active picker queries",
+			EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow)
 		};
 		(await Client.PutAsJsonAsync($"{BaseUrl}/{inactiveEmployee.Id}/status", inactiveRequest, JsonOptions))
 			.EnsureSuccessStatusCode();

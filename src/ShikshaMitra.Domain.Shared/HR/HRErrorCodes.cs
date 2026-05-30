@@ -34,6 +34,10 @@ public static class HRErrorCodes
 	public const string FamilyPincodeTooLong = "HR:Employee:010023";
 	public const string EmployeeOrganizationRequired = "HR:Employee:010028";
 	public const string EmployeeOrganizationInvalid = "HR:Employee:010029";
+	public const string EmployeePanAlreadyExists = "HR:Employee:010030";
+	public const string EmployeeAdharAlreadyExists = "HR:Employee:010031";
+	public const string ReportingManagerHasActiveReports = "HR:Employee:010032";
+	public const string EmployeeStatusEffectiveDateRequired = "HR:Employee:010033";
 
 	// Employee — Documents
 	public const string EmployeeDocumentNotFound = "HR:Employee:010101";
@@ -146,6 +150,7 @@ public static class HRErrorCodes
 	public const string AttendanceImportMultiplePayrollMonths = "HR:Leave:020210";
 	public const string AttendanceImportInvalidSkipCount = "HR:Leave:020211";
 	public const string AttendanceImportInvalidMaxResultCount = "HR:Leave:020212";
+	public const string AttendanceImportDuplicateFileName = "HR:Leave:020213";
 
 	// ── Payroll: 03xxxx ──────────────────────────────────────────
 

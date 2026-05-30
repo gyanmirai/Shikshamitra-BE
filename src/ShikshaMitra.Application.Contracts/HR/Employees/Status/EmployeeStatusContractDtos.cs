@@ -15,6 +15,9 @@ public class EmployeeStatusUpdateRequest
 
 	[MaxLength(2000)]
 	public string? Remarks { get; set; }
+
+	/// <summary>Effective lifecycle/payroll date. Required for 1=Inactive, 2=Left, 3=Retired.</summary>
+	public DateOnly? EffectiveDate { get; set; }
 }
 
 /// <summary>
@@ -30,4 +33,6 @@ public class EmployeeStatusUpdateResponse
 	public int CurrentStatus { get; set; }
 
 	public DateTimeOffset UpdatedAt { get; set; }
+
+	public DateOnly? EffectiveDate { get; set; }
 }

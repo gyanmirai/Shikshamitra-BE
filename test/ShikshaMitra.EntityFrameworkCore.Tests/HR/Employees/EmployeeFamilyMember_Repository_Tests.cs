@@ -202,7 +202,9 @@ public class EmployeeFamilyMember_Repository_Tests : ShikshaMitraEntityFramework
 				middleName: null,
 				shortName: "TE",
 				employeeStatusType: EmployeeStatusType.Active,
-				dateOfBirth: new DateOnly(1990, 1, 1));
+				dateOfBirth: new DateOnly(1990, 1, 1),
+				panNo: UniquePan(),
+				adharNo: UniqueAdhar());
 
 			return await _employeeRepository.InsertAsync(employee, autoSave: true);
 		});

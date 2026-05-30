@@ -18,5 +18,7 @@ public class GetEmployeeListInput : PagedAndSortedResultRequestDto
 
     public string? Designation { get; set; }
 
+    public string? ReportingManagerStatus { get; set; }
+
     public string? Search { get; set; }
 }

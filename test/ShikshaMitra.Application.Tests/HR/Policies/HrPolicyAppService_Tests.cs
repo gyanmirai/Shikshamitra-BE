@@ -579,7 +579,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			FullDayThresholdPercentage = context.AttendancePolicy.FullDayThresholdPercentage,
 			HalfDayThresholdPercentage = context.AttendancePolicy.HalfDayThresholdPercentage,
 			AbsentThresholdPercentage = context.AttendancePolicy.AbsentThresholdPercentage,
-			MissingPunchBehavior = context.AttendancePolicy.MissingPunchBehavior,
+			MissingPunchBehavior = "mark_half_day",
 			ManualCorrectionAllowed = context.AttendancePolicy.ManualCorrectionAllowed,
 			GraceTime = 10,
 			MaxLateAllowedPerMonth = 3,
@@ -596,10 +596,65 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		});
 
 		updated.PenaltyType.ShouldBe("deduct_half_day");
+		updated.MissingPunchBehavior.ShouldBe("mark_half_day");
 		updated.OvertimeRate.ShouldBe("1.5x");
 		updated.HolidayWorkBehavior.ShouldBe("ot_payout");
 		updated.MinOvertimeMinutes.ShouldBe(30);
 		updated.SandwichRuleEnabled.ShouldBeTrue();
+	}
+
+	[Fact]
+	public async Task AttendancePolicy_Should_Reject_Unsupported_Advanced_Rule_Values()
+	{
+		var context = await CreatePolicyContextAsync();
+
+		async Task AssertUnsupportedAsync(
+			string? missingPunchBehavior = null,
+			string? penaltyType = null,
+			string? overtimeRate = null,
+			string? holidayWorkBehavior = null,
+			string? expectedCode = null)
+		{
+			var ex = await Should.ThrowAsync<BusinessException>(() => _attendancePolicies.UpdateAsync(context.AttendancePolicy.Id, new CreateUpdateAttendancePolicyDto
+			{
+				AcademicYearId = context.AcademicYearId,
+				WorkCalendarPolicyId = context.WorkCalendar.Id,
+				Name = context.AttendancePolicy.Name,
+				Status = context.AttendancePolicy.Status,
+				IsDefault = context.AttendancePolicy.IsDefault,
+				FullDayThresholdPercentage = context.AttendancePolicy.FullDayThresholdPercentage,
+				HalfDayThresholdPercentage = context.AttendancePolicy.HalfDayThresholdPercentage,
+				AbsentThresholdPercentage = context.AttendancePolicy.AbsentThresholdPercentage,
+				MissingPunchBehavior = missingPunchBehavior ?? context.AttendancePolicy.MissingPunchBehavior,
+				ManualCorrectionAllowed = context.AttendancePolicy.ManualCorrectionAllowed,
+				GraceTime = context.AttendancePolicy.GraceTime,
+				MaxLateAllowedPerMonth = context.AttendancePolicy.MaxLateAllowedPerMonth,
+				PenaltyType = penaltyType ?? context.AttendancePolicy.PenaltyType,
+				PenaltyCountThreshold = context.AttendancePolicy.PenaltyCountThreshold,
+				EarlyExitEnabled = true,
+				EarlyExitGraceTime = context.AttendancePolicy.EarlyExitGraceTime,
+				OvertimeEnabled = true,
+				OvertimeRate = overtimeRate ?? "1.5x",
+				MinOvertimeMinutes = context.AttendancePolicy.MinOvertimeMinutes ?? 30,
+				HolidayWorkBehavior = holidayWorkBehavior ?? context.AttendancePolicy.HolidayWorkBehavior,
+				SandwichRuleEnabled = context.AttendancePolicy.SandwichRuleEnabled,
+				PayrollPreviewEnabled = context.AttendancePolicy.PayrollPreviewEnabled
+			}));
+			ex.Code.ShouldBe(expectedCode);
+		}
+
+		await AssertUnsupportedAsync(
+			missingPunchBehavior: "ignore",
+			expectedCode: "ShikshaMitra:UnsupportedMissingPunchBehavior");
+		await AssertUnsupportedAsync(
+			penaltyType: "deduct_quarter_day",
+			expectedCode: "ShikshaMitra:UnsupportedAttendancePenaltyType");
+		await AssertUnsupportedAsync(
+			overtimeRate: "3.0x",
+			expectedCode: "ShikshaMitra:UnsupportedAttendanceOvertimeRate");
+		await AssertUnsupportedAsync(
+			holidayWorkBehavior: "ignore",
+			expectedCode: "ShikshaMitra:UnsupportedAttendanceHolidayWorkBehavior");
 	}
 
 	[Fact]
@@ -1114,6 +1169,47 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	}
 
 	[Fact]
+	public async Task EmployeeOverride_Upsert_Should_Be_Repeatable_For_Same_Employee_And_Range()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		var totalMonthPayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Total Month Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "total-month-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+
+		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, totalMonthPayroll.Id);
+		(await _assignments.GetEffectivePoliciesAsync(employee.Id, new DateTime(2026, 5, 1)))
+			.PayrollPolicy.Id.ShouldBe(totalMonthPayroll.Id);
+
+		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.PayrollPolicy.Id);
+		(await _assignments.GetEffectivePoliciesAsync(employee.Id, new DateTime(2026, 5, 1)))
+			.PayrollPolicy.Id.ShouldBe(context.PayrollPolicy.Id);
+
+		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, totalMonthPayroll.Id);
+		var effective = await _assignments.GetEffectivePoliciesAsync(employee.Id, new DateTime(2026, 5, 1));
+
+		effective.PayrollPolicy.Id.ShouldBe(totalMonthPayroll.Id);
+		var assignments = await _assignments.GetListAsync(new PolicyListRequestDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			TargetType = "employee",
+			MaxResultCount = 100
+		});
+		var employeeAssignments = assignments.Items
+			.Where(x => x.IsActive && x.TargetKey == employee.Id.ToString("D").ToLowerInvariant())
+			.ToList();
+		employeeAssignments.Count.ShouldBe(1);
+		employeeAssignments.Single().PayrollPolicyId.ShouldBe(totalMonthPayroll.Id);
+	}
+
+	[Fact]
 	public async Task Assignment_Should_Reject_Archived_Module_Policies()
 	{
 		var context = await CreatePolicyContextAsync();
@@ -1278,6 +1374,8 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			LastName = "Impact",
 			MobileNo = "9876543210",
 			Email = $"policy.impact.{_guidGenerator.Create():N}@test.com",
+			PanNo = UniquePan(),
+			AdharNo = UniqueAdhar(),
 			DateOfBirth = DateOnly.FromDateTime(new DateTime(1992, 3, 10)),
 			GenderType = GenderType.Male,
 			DateOfJoining = DateOnly.FromDateTime(new DateTime(2026, 4, 1)),
@@ -1287,6 +1385,20 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			OrganizationIds = [organizationId]
 		});
 	}
+
+	private Task<HrPolicyAssignmentDto> UpsertEmployeePayrollPolicyAsync(
+		PolicyContext context,
+		Guid employeeId,
+		Guid payrollPolicyId) =>
+		_assignments.UpsertEmployeeOverrideAsync(new UpsertEmployeePolicyOverrideDto
+		{
+			EmployeeId = employeeId,
+			AcademicYearId = context.AcademicYearId,
+			AttendancePolicyId = context.AttendancePolicy.Id,
+			PayrollPolicyId = payrollPolicyId,
+			EffectiveFrom = new DateTime(2026, 4, 1),
+			AssignmentReason = "Repeatable policy override regression"
+		});
 
 	private async Task<Guid> EnsureRoleExistsAsync()
 	{

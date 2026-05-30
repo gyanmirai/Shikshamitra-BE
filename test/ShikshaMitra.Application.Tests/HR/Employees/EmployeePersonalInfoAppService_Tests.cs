@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
+using ShikshaMitra.HR;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.EducationBoards;
@@ -50,6 +51,8 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 		result.Id.ShouldNotBe(Guid.Empty);
 		result.FirstName.ShouldBe(input.FirstName);
 		result.LastName.ShouldBe(input.LastName);
+		result.PanNo.ShouldBe(input.PanNo);
+		result.AdharNo.ShouldBe(input.AdharNo);
 		result.EmployeeCode.ShouldNotBeNullOrEmpty();
 	}
 
@@ -112,6 +115,8 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			LastName = created.LastName,
 			MobileNo = created.MobileNo,
 			Email = updatedEmail,
+			PanNo = created.PanNo,
+			AdharNo = created.AdharNo,
 			DateOfBirth = created.DateOfBirth,
 			GenderType = created.GenderType,
 			DateOfJoining = created.DateOfJoining,
@@ -122,7 +127,66 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 		});
 
 		result.Email.ShouldBe(updatedEmail);
+		result.PanNo.ShouldBe(created.PanNo);
+		result.AdharNo.ShouldBe(created.AdharNo);
 		result.EmployeeStatusType.ShouldBe(EmployeeStatusType.Active);
+	}
+
+	[Fact]
+	public async Task UpdateAsync_Should_Update_Pan_And_Adhar()
+	{
+		var created = await _personalInfoAppService.CreateAsync(
+			await BuildCreateDtoAsync($"identity.update.{Guid.NewGuid():N}@test.com"));
+		var panNo = UniquePan();
+		var adharNo = UniqueAdhar();
+
+		var result = await _personalInfoAppService.UpdateAsync(created.Id, new UpdateEmployeePersonalInfoDto
+		{
+			FirstName = created.FirstName,
+			LastName = created.LastName,
+			MobileNo = created.MobileNo,
+			Email = $"identity.updated.{Guid.NewGuid():N}@test.com",
+			PanNo = panNo,
+			AdharNo = adharNo,
+			DateOfBirth = created.DateOfBirth,
+			GenderType = created.GenderType,
+			DateOfJoining = created.DateOfJoining,
+			EmployeeStatusType = EmployeeStatusType.Active,
+			RoleId = created.RoleId,
+			ShiftId = created.ShiftId,
+			OrganizationIds = created.OrganizationIds
+		});
+
+		result.PanNo.ShouldBe(panNo);
+		result.AdharNo.ShouldBe(adharNo);
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Reject_Duplicate_Pan()
+	{
+		var first = await BuildCreateDtoAsync($"duplicate.pan.1.{Guid.NewGuid():N}@test.com");
+		await _personalInfoAppService.CreateAsync(first);
+		var second = await BuildCreateDtoAsync($"duplicate.pan.2.{Guid.NewGuid():N}@test.com");
+		second.PanNo = first.PanNo;
+
+		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(async () =>
+			await _personalInfoAppService.CreateAsync(second));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeePanAlreadyExists);
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Reject_Duplicate_Adhar()
+	{
+		var first = await BuildCreateDtoAsync($"duplicate.adhar.1.{Guid.NewGuid():N}@test.com");
+		await _personalInfoAppService.CreateAsync(first);
+		var second = await BuildCreateDtoAsync($"duplicate.adhar.2.{Guid.NewGuid():N}@test.com");
+		second.AdharNo = first.AdharNo;
+
+		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(async () =>
+			await _personalInfoAppService.CreateAsync(second));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeAdharAlreadyExists);
 	}
 
 	[Fact]
@@ -133,7 +197,8 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 		await _employeeStatusAppService.ChangeStatusAsync(created.Id, new ChangeEmployeeStatusDto
 		{
 			EmployeeStatusType = EmployeeStatusType.Inactive,
-			Remarks = "Temporarily inactive"
+			Remarks = "Temporarily inactive",
+			EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow)
 		});
 
 		var result = await _personalInfoAppService.UpdateAsync(created.Id, new UpdateEmployeePersonalInfoDto
@@ -142,6 +207,8 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			LastName = created.LastName,
 			MobileNo = created.MobileNo,
 			Email = $"inactive.updated.{Guid.NewGuid():N}@test.com",
+			PanNo = created.PanNo,
+			AdharNo = created.AdharNo,
 			DateOfBirth = created.DateOfBirth,
 			GenderType = created.GenderType,
 			DateOfJoining = created.DateOfJoining,
@@ -168,6 +235,8 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			LastName = "Employee",
 			MobileNo = "9876543210",
 			Email = email ?? $"test.emp.{Guid.NewGuid():N}@test.com",
+			PanNo = UniquePan(),
+			AdharNo = UniqueAdhar(),
 			DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 5, 15)),
 			GenderType = GenderType.Male,
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),

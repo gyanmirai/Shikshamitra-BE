@@ -5,16 +5,15 @@ using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
-using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 
 namespace ShikshaMitra.HR.Payroll.Services;
 
 public class PayrollApprovedLeaveResolver : DomainService
 {
-	private readonly IRepository<EmployeeLeave, Guid> _employeeLeaveRepository;
+	private readonly IEmployeeLeaveRepository _employeeLeaveRepository;
 
-	public PayrollApprovedLeaveResolver(IRepository<EmployeeLeave, Guid> employeeLeaveRepository)
+	public PayrollApprovedLeaveResolver(IEmployeeLeaveRepository employeeLeaveRepository)
 	{
 		_employeeLeaveRepository = employeeLeaveRepository;
 	}
@@ -34,23 +33,10 @@ public class PayrollApprovedLeaveResolver : DomainService
 		var lastDay = new DateTime(year, month, DateTime.DaysInMonth(year, month));
 		var rangeStart = new DateTimeOffset(firstDay);
 		var rangeEnd = new DateTimeOffset(lastDay.AddDays(1).AddTicks(-1));
-		var employeeIdSet = employeeIds.ToHashSet();
-		var leaveQuery = await _employeeLeaveRepository.GetQueryableAsync();
-		leaveQuery = leaveQuery.Where(x =>
-			x.TenantId == CurrentTenant.Id &&
-			employeeIdSet.Contains(x.EmployeeId) &&
-			x.Status == EmployeeLeaveStatusType.Approved &&
-			x.StartDate <= rangeEnd &&
-			x.EndDate >= rangeStart);
-
-		var approvedLeaves = await AsyncExecuter.ToListAsync(
-			leaveQuery.Select(x => new ApprovedLeaveRow(
-				x.EmployeeId,
-				x.StartDate,
-				x.EndDate,
-				x.HalfDay,
-				x.ApprovedPaidType,
-				x.LeavePolicy != null ? x.LeavePolicy.PaidType : LeavePaidType.Unpaid)),
+		var approvedLeaves = await _employeeLeaveRepository.GetApprovedPayrollLeaveRowsAsync(
+			employeeIds,
+			rangeStart,
+			rangeEnd,
 			cancellationToken);
 
 		var mutableResult = employeeIds.ToDictionary(
@@ -88,11 +74,4 @@ public class PayrollApprovedLeaveResolver : DomainService
 			x => (IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>)x.Value);
 	}
 
-	private sealed record ApprovedLeaveRow(
-		Guid EmployeeId,
-		DateTimeOffset StartDate,
-		DateTimeOffset EndDate,
-		bool HalfDay,
-		LeavePaidType? ApprovedPaidType,
-		LeavePaidType PolicyPaidType);
 }

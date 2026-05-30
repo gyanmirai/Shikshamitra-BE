@@ -7,7 +7,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Status;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
@@ -76,6 +78,83 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		var after = await GetAndReadAsync<RunPayrollReadinessSummary>(
 			$"{BaseUrl}/readiness?month=2026-04");
 		after.EmployeeCount.ShouldBe(before.EmployeeCount);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Register_Should_Include_Inactive_Employee_For_Effective_Month_Only()
+	{
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"PayrollInactiveFinal{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		await SetEmployeeStatusAsync(employee.Id, 1, new DateOnly(2026, 5, 31));
+
+		var mayPreview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-05&page=0&pageSize=500&forceRefresh=true");
+		mayPreview.Items.Any(x => x.EmployeeId == employee.Id).ShouldBeTrue();
+
+		var junePreview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-06&page=0&pageSize=500&forceRefresh=true");
+		junePreview.Items.Any(x => x.EmployeeId == employee.Id).ShouldBeFalse();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Register_Should_Show_Final_Month_Inactive_Employee_With_No_Attendance_Issue()
+	{
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"PayrollInactiveNoAttendance{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		await SetEmployeeStatusAsync(employee.Id, 1, new DateOnly(2026, 5, 31));
+
+		var mayPreview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-05&page=0&pageSize=500&forceRefresh=true");
+		var item = mayPreview.Items.Single(x => x.EmployeeId == employee.Id);
+		item.IssueCodes.ShouldContain("NO_ATTENDANCE");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Readiness_Should_Refresh_After_Mark_Attendance_Save()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"PayrollAttendanceRefresh{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		var before = await GetAndReadAsync<RunPayrollReadinessSummary>(
+			$"{BaseUrl}/readiness?month=2026-04");
+
+		var attendanceResponse = await Client.PostAsJsonAsync(
+			"/api/hr/attendance/take-attendance/day/save",
+			new TakeAttendanceSaveInput
+			{
+				AttendanceDate = "11-04-2026",
+				Entries =
+				[
+					new TakeAttendanceSaveEntryDto
+					{
+						EmployeeId = employee.Id,
+						StatusWire = "PRESENT",
+						Remarks = "Payroll readiness refresh regression"
+					}
+				]
+			},
+			JsonOptions);
+		attendanceResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var after = await GetAndReadAsync<RunPayrollReadinessSummary>(
+			$"{BaseUrl}/readiness?month=2026-04");
+
+		after.EmployeeCount.ShouldBe(before.EmployeeCount);
+		after.AttendanceFoundCount.ShouldBeGreaterThanOrEqualTo(before.AttendanceFoundCount + 1);
+		after.MissingAttendanceCount.ShouldBeLessThanOrEqualTo(Math.Max(0, before.MissingAttendanceCount - 1));
 	}
 
 	[Fact]
@@ -237,6 +316,20 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 				autoSave: false);
 			await uow.CompleteAsync();
 		}
+	}
+
+	private async Task SetEmployeeStatusAsync(Guid employeeId, int status, DateOnly effectiveDate)
+	{
+		var response = await Client.PutAsJsonAsync(
+			$"/api/employees/{employeeId}/status",
+			new EmployeeStatusUpdateRequest
+			{
+				EmployeeStatusType = status,
+				Remarks = "Payroll eligibility regression",
+				EffectiveDate = effectiveDate
+			},
+			JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
 
 	private async Task AssertNoStalePayrollRowsAsync(Guid employeeId, string monthYear)

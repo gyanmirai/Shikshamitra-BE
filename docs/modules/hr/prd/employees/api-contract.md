@@ -157,6 +157,8 @@ Create a new employee.
 | email | string | **yes** (create) | valid email, max 256; required when creating an employee (identity + welcome flow) |
 | mobileNo | string | yes | `^[6-9]\d{9}$`, max 15 |
 | secondaryMobileNo | string | no | max 15; if set, must use a different number than `mobileNo` (digits compared after normalization) |
+| panNo | string | yes | `^[A-Z]{5}[0-9]{4}[A-Z]$`; normalized to uppercase; unique per tenant among non-deleted employees |
+| adharNo | string | yes | `^\d{12}$`; unique per tenant among non-deleted employees |
 | doj | DateTime | yes | <= 1 year in future |
 | isTeaching | bool | yes | |
 | department | string | no | |
@@ -175,7 +177,7 @@ PersonalInfoResponse {
   id: Guid
   employeeCode: string
   fullName: string
-  ...all PersonalInfoRequest fields
+  ...all PersonalInfoRequest fields, including panNo and adharNo
 }
 ```
 

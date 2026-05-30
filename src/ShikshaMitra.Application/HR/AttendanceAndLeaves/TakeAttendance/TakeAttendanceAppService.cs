@@ -45,17 +45,8 @@ public class TakeAttendanceAppService(
 		var scope = await EnsureCanOperateAttendanceAsync();
 		var locked = await staffAttendanceDayLockRepository.FindAsync(dateOnly);
 
-		var empQuery = await employeeRepository.GetQueryableAsync();
-		var attendanceDateEndExclusive = date.Date.AddDays(1);
-		var attendanceDateEndExclusiveOffset = new DateTimeOffset(attendanceDateEndExclusive, TimeSpan.Zero);
-		empQuery = empQuery.Where(e =>
-			e.EmployeeStatusType == EmployeeStatusType.Active ||
-			(e.EmployeeStatusType == EmployeeStatusType.Left &&
-			 e.StatusLastChangedAt.HasValue &&
-			 e.StatusLastChangedAt.Value >= attendanceDateEndExclusiveOffset));
-		empQuery = empQuery.Where(e =>
-			(e.DateOfJoining.HasValue && e.DateOfJoining.Value <= dateOnly) ||
-			(!e.DateOfJoining.HasValue && e.CreationTime < attendanceDateEndExclusive));
+		var empQuery = (await employeeRepository.GetQueryableAsync())
+			.ApplyAttendanceDateEligibility(dateOnly);
 
 		if (CurrentTenant.Id.HasValue)
 		{
@@ -478,17 +469,10 @@ public class TakeAttendanceAppService(
 
 	private static bool IsEmployeeAttendanceEligibleOnDate(Employee employee, DateOnly attendanceDate)
 	{
-		if (employee.EmployeeStatusType == EmployeeStatusType.Active)
-		{
-			return true;
-		}
-
-		if (employee.EmployeeStatusType != EmployeeStatusType.Left || !employee.StatusLastChangedAt.HasValue)
-		{
-			return false;
-		}
-
-		return attendanceDate < DateOnly.FromDateTime(employee.StatusLastChangedAt.Value.Date);
+		return EmployeeLifecycleEligibility.IsAttendanceEligibleOnDate(
+			employee.EmployeeStatusType,
+			employee.StatusEffectiveDate,
+			attendanceDate);
 	}
 
 	private async Task InvalidatePayrollSnapshotsAsync(

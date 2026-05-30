@@ -159,7 +159,8 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		var inactiveRequest = new EmployeeStatusUpdateRequest
 		{
 			EmployeeStatusType = 1,
-			Remarks = "Inactive employee should not be selectable for leave"
+			Remarks = "Inactive employee should not be selectable for leave",
+			EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow)
 		};
 		(await Client.PutAsJsonAsync($"/api/employees/{inactiveEmployee.Id}/status", inactiveRequest, JsonOptions))
 			.EnsureSuccessStatusCode();

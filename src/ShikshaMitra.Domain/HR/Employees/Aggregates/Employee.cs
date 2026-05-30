@@ -29,6 +29,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public EmployeeStatusType? EmployeeStatusType { get; private set; }
 	public string? ChangeReason { get; private set; }
 	public DateTimeOffset? StatusLastChangedAt { get; private set; }
+	public DateOnly? StatusEffectiveDate { get; private set; }
 	public DateOnly? DateOfBirth { get; private set; }
 	public string? FamilyCast { get; private set; }
 	public CastType? CastType { get; private set; }
@@ -39,6 +40,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? MobileNo { get; private set; }
 	public string? SecondaryMobileNo { get; private set; }
 	public string? Email { get; private set; }
+	public string PanNo { get; private set; }
+	public string AdharNo { get; private set; }
 	public string? Address1 { get; private set; }
 	public string? Address2 { get; private set; }
 	public string? Address3 { get; private set; }
@@ -126,6 +129,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? mobileNo,
 		string? secondaryMobileNo,
 		string? email,
+		string panNo,
+		string adharNo,
 		string? address1,
 		string? address2,
 		string? address3,
@@ -164,6 +169,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		MobileNo = mobileNo;
 		SecondaryMobileNo = secondaryMobileNo;
 		Email = email;
+		PanNo = Check.NotNullOrWhiteSpace(panNo, nameof(panNo)).ToUpperInvariant();
+		AdharNo = Check.NotNullOrWhiteSpace(adharNo, nameof(adharNo));
 		Address1 = address1;
 		Address2 = address2;
 		Address3 = address3;
@@ -200,6 +207,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? mobileNo,
 		string? secondaryMobileNo,
 		string? email,
+		string? panNo,
+		string? adharNo,
 		string? address1,
 		string? address2,
 		string? address3,
@@ -233,6 +242,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		MobileNo = mobileNo;
 		SecondaryMobileNo = secondaryMobileNo;
 		Email = email;
+		PanNo = Check.NotNullOrWhiteSpace(panNo, nameof(panNo)).ToUpperInvariant();
+		AdharNo = Check.NotNullOrWhiteSpace(adharNo, nameof(adharNo));
 		Address1 = address1;
 		Address2 = address2;
 		Address3 = address3;
@@ -273,11 +284,15 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		return this;
 	}
 
-	internal Employee UpdateEmployeeStatus(EmployeeStatusType employeeStatusType, string changeReason)
+	internal Employee UpdateEmployeeStatus(
+		EmployeeStatusType employeeStatusType,
+		string changeReason,
+		DateOnly? statusEffectiveDate)
 	{
 		EmployeeStatusType = employeeStatusType;
 		ChangeReason = changeReason;
 		StatusLastChangedAt = DateTimeOffset.Now;
+		StatusEffectiveDate = employeeStatusType == Common.EmployeeStatusType.Active ? null : statusEffectiveDate;
 
 		return this;
 	}

@@ -9,8 +9,7 @@ namespace ShikshaMitra.HR.Employees.ReportingManagerInfo;
 /// </summary>
 public class ReportingManagerRequest
 {
-	[Required]
-	public Guid ReportingManagerId { get; set; }
+	public string? ReportingManagerId { get; set; }
 }
 
 /// <summary>

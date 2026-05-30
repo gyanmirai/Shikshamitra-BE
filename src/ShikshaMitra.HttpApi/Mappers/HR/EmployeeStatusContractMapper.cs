@@ -10,7 +10,8 @@ public static class EmployeeStatusContractMapper
 		return new ChangeEmployeeStatusDto
 		{
 			EmployeeStatusType = (EmployeeStatusType)request.EmployeeStatusType,
-			Remarks = request.Remarks
+			Remarks = request.Remarks,
+			EffectiveDate = request.EffectiveDate
 		};
 	}
 
@@ -21,7 +22,8 @@ public static class EmployeeStatusContractMapper
 			EmployeeId = dto.EmployeeId,
 			PreviousStatus = dto.PreviousStatus.HasValue ? (int)dto.PreviousStatus.Value : null,
 			CurrentStatus = (int)dto.CurrentStatus,
-			UpdatedAt = dto.UpdatedAt
+			UpdatedAt = dto.UpdatedAt,
+			EffectiveDate = dto.EffectiveDate
 		};
 	}
 }

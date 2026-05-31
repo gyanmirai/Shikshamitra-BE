@@ -1,103 +1,142 @@
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
-using ShikshaMitra.Common.PDF;
-using ShikshaMitra.Common.PDF.Elements;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.DependencyInjection;
-using IElement = ShikshaMitra.Common.PDF.Elements.IElement;
 
 namespace ShikshaMitra.Academic.Reports;
 
-public class AcademicPdfService(IPdfService pdfService) : ITransientDependency
+/// <summary>
+/// Generates styled PDF reports for curriculum report types.
+/// Uses QuestPDF Fluent API directly for a rich, professional layout.
+/// Header (navy banner + title) and footer (date left, page X of Y right) are shared across all report types.
+/// </summary>
+public class AcademicPdfService : ITransientDependency
 {
+    private const string AccentColor = "#1E3A5F";
+    private const string AccentLight = "#EEF2F7";
+    private const string AltRowBg = "#F8FAFC";
+    private const string BorderColor = "#CBD5E1";
+
+    public static bool IsCurriculumReport(string reportType) =>
+        reportType is AcademicReportTypes.ChapterProgressReport
+            or AcademicReportTypes.SubjectWiseChapterCoverage
+            or AcademicReportTypes.ChapterDescriptionSummary
+            or AcademicReportTypes.TimelineReport
+            or AcademicReportTypes.ClassWiseChapterAssignment
+            or AcademicReportTypes.CurriculumCompletionReport
+            or AcademicReportTypes.ChapterRevisionTracker;
+
     public async Task<byte[]> GenerateReportPdf(AcademicReportPreviewDto report)
     {
-        var columns = report.Columns.Select(c => new TableElement.Column
-        {
-            Type = TableElement.Column.ColumnType.Relative,
-            Size = 1
-        }).ToList();
+        return await Task.FromResult(GenerateInternal(report));
+    }
 
-        var cells = new List<Cell>();
-
-        // Header cells
-        uint colIndex = 1;
-        foreach (var col in report.Columns)
+    private byte[] GenerateInternal(AcademicReportPreviewDto report)
+    {
+        return Document.Create(container =>
         {
-            cells.Add(new Cell
+            container.Page(page =>
             {
-                Row = 1,
-                Column = colIndex++,
-                BackgroundColor = "#f3f4f6",
-                Padding = 4,
-                BorderWidth = 1,
-                BorderColor = "#e5e7eb",
-                Element = new TextElement
+                page.Size(PageSizes.A4.Landscape());
+                page.Margin(20);
+                page.DefaultTextStyle(x => x.FontSize(8.5f).FontColor(Colors.Grey.Darken4));
+
+                page.Header().Element(c => ComposeHeader(c, report));
+                page.Content().Element(c => ComposeTable(c, report));
+                page.Footer().Element(ComposeFooter);
+            });
+        }).GeneratePdf();
+    }
+
+    private static void ComposeHeader(IContainer container, AcademicReportPreviewDto report)
+    {
+        container.Background(AccentColor).Padding(14).Row(row =>
+        {
+            row.RelativeItem().Column(left =>
+            {
+                left.Item().Text(report.ReportType)
+                    .FontSize(16).Bold().FontColor(Colors.White);
+                left.Item().Text("Curriculum Report \u2022 School Management System")
+                    .FontSize(8).FontColor("#93C5FD");
+            });
+            row.ConstantItem(180).AlignRight().AlignMiddle().Column(right =>
+            {
+                right.Item().AlignRight().Text($"Generated: {DateTime.Now:dd MMM yyyy, hh:mm tt}")
+                    .FontSize(7.5f).FontColor("#BFDBFE");
+                right.Item().AlignRight().Text($"Records: {report.TotalCount}")
+                    .FontSize(7.5f).FontColor("#BFDBFE");
+            });
+        });
+    }
+
+    private static void ComposeTable(IContainer container, AcademicReportPreviewDto report)
+    {
+        if (report.Rows.Count == 0)
+        {
+            container.Background(AccentLight).Padding(20).AlignCenter()
+                .Text("No records found for the selected filters.")
+                .FontSize(10).FontColor(Colors.Grey.Medium);
+            return;
+        }
+
+        container.Table(table =>
+        {
+            table.ColumnsDefinition(cols =>
+            {
+                foreach (var _ in report.Columns)
+                    cols.RelativeColumn();
+            });
+
+            table.Header(header =>
+            {
+                foreach (var col in report.Columns)
                 {
-                    Text = col.Label ?? string.Empty,
-                    FontWeight = FontWeight.Bold,
-                    FontSize = 10
+                    header.Cell()
+                        .Background(AccentColor)
+                        .BorderBottom(1.5f).BorderColor(AccentColor)
+                        .PaddingHorizontal(8).PaddingVertical(7)
+                        .Text(col.Label)
+                        .FontSize(8).Bold().FontColor(Colors.White);
                 }
             });
-        }
 
-        // Data cells
-        uint rowIndex = 2;
-        foreach (var row in report.Rows.Take(200)) // Max limit to avoid exploding PDF in size randomly
-        {
-            colIndex = 1;
-            foreach (var col in report.Columns)
+            var rowIndex = 0;
+            foreach (var row in report.Rows)
             {
-                var textValue = row.TryGetValue(col.Id, out var val) ? val ?? string.Empty : string.Empty;
-                cells.Add(new Cell
+                var bg = rowIndex % 2 == 1 ? AltRowBg : "#FFFFFF";
+                foreach (var col in report.Columns)
                 {
-                    Row = rowIndex,
-                    Column = colIndex++,
-                    Padding = 4,
-                    BorderWidth = 1,
-                    BorderColor = "#e5e7eb",
-                    Element = new TextElement
-                    {
-                        Text = textValue,
-                        FontSize = 9
-                    }
-                });
+                    var value = row.TryGetValue(col.Id, out var v) ? v ?? string.Empty : string.Empty;
+                    table.Cell()
+                        .Background(bg)
+                        .BorderBottom(0.5f).BorderColor(BorderColor)
+                        .PaddingHorizontal(8).PaddingVertical(5)
+                        .Text(value)
+                        .FontSize(8).FontColor(Colors.Grey.Darken4);
+                }
+                rowIndex++;
             }
-            rowIndex++;
-        }
+        });
+    }
 
-        var table = new TableElement
+    private static void ComposeFooter(IContainer container)
+    {
+        container.Row(row =>
         {
-            Columns = columns,
-            Cells = cells,
-            BorderWidth = 1
-        };
-
-        var document = new PDFDocument
-        {
-            Page = new PageSpecs
+            row.RelativeItem().AlignLeft().Text($"Date: {DateTime.Now:dd MMM yyyy}")
+                .FontSize(7).FontColor(Colors.Grey.Medium);
+            row.RelativeItem().AlignRight().Text(text =>
             {
-                BackgroundColor = "#ffffff",
-                Margin = 20,
-                MarginUnit = Unit.Point,
-                Orientation = PageSpecs.PageOrientation.Landscape,
-                PageSize = "A4"
-            },
-            Header = new TextElement
-            {
-                Text = report.ReportType,
-                FontSize = 18,
-                FontWeight = FontWeight.Bold,
-                Alignment = TextAlignment.Center,
-                Padding = 10,
-                PaddingUnit = Unit.Point
-            },
-            Content = table
-        };
-
-        return await pdfService.GeneratePdfAsBytes(document);
+                text.Span("Page ").FontSize(7).FontColor(Colors.Grey.Medium);
+                text.CurrentPageNumber().FontSize(7).FontColor(Colors.Grey.Medium);
+                text.Span(" of ").FontSize(7).FontColor(Colors.Grey.Medium);
+                text.TotalPages().FontSize(7).FontColor(Colors.Grey.Medium);
+            });
+        });
     }
 }
+

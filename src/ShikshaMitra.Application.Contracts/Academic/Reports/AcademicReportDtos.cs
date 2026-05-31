@@ -25,6 +25,10 @@ public class AcademicReportFilterDto
     public List<Guid>? SubjectIds { get; set; }
     public List<Guid>? TeacherIds { get; set; }
     public List<Guid>? RoomIds { get; set; }
+    public Guid? ExamId { get; set; }
+    public string? Grade { get; set; }
+    public double? MinMarks { get; set; }
+    public double? MaxMarks { get; set; }
 
     /// <summary>
     /// Upcoming = 1, In Progress = 2, Completed = 3
@@ -115,4 +119,14 @@ public static class AcademicReportTypes
     public const string SubjectwiseTimetableDistribution = "Subject-wise Timetable Distribution";
     public const string FreePeriodsReport = "Free Periods Report";
     public const string TimetableChangeLog = "Timetable Change Log Report";
+
+    // Exam reports
+    public const string GenderWiseGradeAnalysis = "Gender Wise Grade Analysis";
+    public const string ResultStatisticsReport = "Result Statistics Report";
+    public const string ResultList = "Result List";
+    public const string GradewiseResultList = "Grade-wise Result List";
+    public const string MarksRangeResultList = "Marks Range Result List";
+    public const string SubjectwiseMarksReport = "Subject-wise Marks Report";
+    public const string DetailedResultSheet = "Detailed Result Sheet";
+    public const string ExamSummaryReport = "Exam Summary Report";
 }
